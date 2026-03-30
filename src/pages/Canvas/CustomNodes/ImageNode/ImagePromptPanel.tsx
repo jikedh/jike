@@ -84,7 +84,8 @@ export const ImagePromptPanel = ({ nodeId }: { nodeId: string }) => {
     const uploadedUrls = currentImageData?.uploadedUrls ?? []
   const imageUrls = currentImageData?.image_urls ?? []
     const promptDraftHtml = currentImageData?.promptDraftHtml ?? '<p></p>'
-    const isMidjourneyModel = model === 'midjourney'
+  // 判断是否为 Midjourney 系列模型（包括 midjourney 和 midjourney-niji7）
+  const isMidjourneyModel = model === 'midjourney' || model === 'midjourney-niji7'
   const midjourneyAdvanced = currentImageData?.midjourneyAdvanced ?? {
     referenceUrls: imageUrls,
     styleUrls: [],
@@ -508,10 +509,16 @@ export const ImagePromptPanel = ({ nodeId }: { nodeId: string }) => {
             return
         }
 
+      // 判断是否为 Midjourney Niji7 模型，如果是则在 prompt 最后拼接 --niji7 参数
+      const isNiji7Model = model === 'midjourney-niji7'
+      const finalPrompt = isNiji7Model ? `${mergedPrompt} --niji 7` : mergedPrompt
+      // 发送给后端的 model 字段：如果是 midjourney-niji7 则改为 midjourney
+      const backendModel = isNiji7Model ? 'midjourney' : model
+
       // 构建请求 payload（注意：n 固定为 1，通过多次调用实现多图生成）
       const buildPayload = (): any => ({
-            model,
-            prompt: mergedPrompt,
+        model: backendModel,
+        prompt: finalPrompt,
             size: ratio,
             resolution,
             aspectRatio,
