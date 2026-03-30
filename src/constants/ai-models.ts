@@ -111,8 +111,8 @@ export const VIDEO_DURATION_CONFIG = {
 export const IMAGE_MODELS = [
   // { id: 1, name: 'doubao-seedream-4-0', model: 'doubao-seedream-4-0', platform: 'Seedream' },
   // { id: 2, name: 'doubao-seedream-4-5', model: 'doubao-seedream-4-5', platform: 'Seedream' },
-  { id: 3, name: '豆包 Seedream 5.0', model: 'doubao-seedream-5-0', platform: 'Seedream' },
-  { id: 4, name: '谷歌 Gemini 3 Pro', model: 'gemini-3-pro-image-preview', platform: 'google' },
+  { id: 3, name: '谷歌 Gemini 3 Pro', model: 'gemini-3-pro-image-preview', platform: 'google' },
+  { id: 4, name: '豆包 Seedream 5.0', model: 'doubao-seedream-5-0', platform: 'Seedream' },
   { id: 5, name: 'Midjourney', model: 'midjourney', platform: 'midjourney' },
 ];
 
@@ -208,4 +208,4 @@ export const CANVAS_CHAT_MODELS = [
 ]
 
 /** 画布聊天默认模型 */
-export const DEFAULT_CANVAS_CHAT_MODEL = CANVAS_CHAT_MODELS[0].model
+export const DEFAULT_CANVAS_CHAT_MODEL = CANVAS_CHAT_MODELS[1].model
