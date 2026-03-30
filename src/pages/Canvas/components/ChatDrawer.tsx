@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { useResizableWidth } from '@/hooks/useResizableWidth'
 import { CANVAS_CHAT_PERSONAS, NO_CHAT_PERSONA_ID } from '@/constants/chat-personas'
 import { useChatSettingsStore } from '@/store/chatSettingsStore'
 import { cn } from '@/lib/utils'
@@ -38,6 +39,7 @@ export const ChatDrawer = ({
     clearLocalMessages,
     setMessages,
 }: ChatDrawerProps) => {
+    const { width, isResizing, handlePointerDown } = useResizableWidth()
     const { defaultPersonaId } = useChatSettingsStore()
 
     const [inputValue, setInputValue] = useState('')
@@ -160,8 +162,21 @@ export const ChatDrawer = ({
         <Drawer open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
             <DrawerContent
                 aria-label="AI 对话抽屉"
-          className="border-neutral-700 bg-neutral-900 text-neutral-100 transition-none"
-        >
+                className={cn(
+                    'border-neutral-700 bg-neutral-900 text-neutral-100 transition-none',
+                    isResizing && 'select-none',
+                )}
+                style={{ width: `${width + (showHistory ? 288 : 0)}px` }}
+            >
+                {/* Resize Handle */}
+                <div
+                    className={cn(
+                        'absolute top-0 left-0 z-50 h-full w-1 cursor-col-resize transition-colors hover:bg-blue-500/50',
+                        isResizing && 'bg-blue-500/50',
+                    )}
+                    onPointerDown={handlePointerDown}
+                />
+
                 <div className="flex h-full">
                     {/* Main Chat Area */}
                     <div className="flex h-full flex-1 flex-col border-r border-neutral-700">
