@@ -66,7 +66,7 @@ const sectionIdSet = new Set(settingSections.map((item) => item.id))
 
 export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
     const [activeSection, setActiveSection] = useState(settingSections[0].id)
-  const { defaultModel, defaultPersonaId, autoSaveEnabled, gridVisible, nodeSearchVisible, savePathJson, savePathImage, savePathVideo, savePathDraftCover, devToolsVisible, setDefaultModel, setDefaultPersonaId, setAutoSaveEnabled, setGridVisible, setNodeSearchVisible, setSavePathJson, setSavePathImage, setSavePathVideo, setSavePathDraftCover, setDevToolsVisible, resetToDefault } = useChatSettingsStore()
+    const { defaultModel, defaultPersonaId, autoSaveEnabled, gridVisible, nodeSearchVisible, devToolsVisible, setDefaultModel, setDefaultPersonaId, setAutoSaveEnabled, setGridVisible, setNodeSearchVisible, setDevToolsVisible, resetToDefault } = useChatSettingsStore()
     const { success, error } = useMessage()
     const exportCanvasData = useCanvasFlowStore((state) => state.exportCanvasData)
     const importCanvasData = useCanvasFlowStore((state) => state.importCanvasData)
@@ -224,9 +224,8 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
                                     </>
                                 )}
 
-                                {/* 通用设置 - 自动保存开关 + 保存路径 */}
-                                {activeSection === 'general' && (
-                                    <>
+                                    {/* 通用设置 - 自动保存开关 */}
+                                    {activeSection === 'general' && (
                                         <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
                                             <div className="flex items-center justify-between">
                                                 <div>
@@ -236,63 +235,6 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
                                                 <Switch checked={autoSaveEnabled} onCheckedChange={setAutoSaveEnabled} />
                                             </div>
                                         </section>
-                                        <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                                            <div className="mb-3">
-                                                <div className="text-sm font-medium text-slate-800">本地保存路径</div>
-                                                <div className="text-xs text-slate-500 mt-0.5">分别设置各类文件的本地保存目录路径</div>
-                                            </div>
-                                            <div className="space-y-3">
-                                                {/* 节点 JSON */}
-                                                <div>
-                                                    <div className="mb-1 text-xs font-medium text-slate-600">节点 JSON</div>
-                                                    <Input
-                                                        type="text"
-                                                        placeholder="例如：C:\Users\用户名\Documents\json"
-                                                        value={savePathJson}
-                                                        onChange={(e) => setSavePathJson(e.target.value)}
-                                                        className="h-9 border-slate-200 text-sm"
-                                                    />
-                                                    {savePathJson && <div className="mt-1 text-xs text-green-600">● {savePathJson}</div>}
-                                                </div>
-                                                {/* 图片 */}
-                                                <div>
-                                                    <div className="mb-1 text-xs font-medium text-slate-600">图片（Image）</div>
-                                                    <Input
-                                                        type="text"
-                                                        placeholder="例如：C:\Users\用户名\Pictures"
-                                                        value={savePathImage}
-                                                        onChange={(e) => setSavePathImage(e.target.value)}
-                                                        className="h-9 border-slate-200 text-sm"
-                                                    />
-                                                    {savePathImage && <div className="mt-1 text-xs text-green-600">● {savePathImage}</div>}
-                                                </div>
-                                                {/* 视频 */}
-                                                <div>
-                                                    <div className="mb-1 text-xs font-medium text-slate-600">视频（Video）</div>
-                                                    <Input
-                                                        type="text"
-                                                        placeholder="例如：C:\Users\用户名\Videos"
-                                                        value={savePathVideo}
-                                                        onChange={(e) => setSavePathVideo(e.target.value)}
-                                                        className="h-9 border-slate-200 text-sm"
-                                                    />
-                                                    {savePathVideo && <div className="mt-1 text-xs text-green-600">● {savePathVideo}</div>}
-                                                </div>
-                                                {/* 草稿封面 */}
-                                                <div>
-                                                    <div className="mb-1 text-xs font-medium text-slate-600">草稿封面（Draft Cover）</div>
-                                                    <Input
-                                                        type="text"
-                                                        placeholder="例如：C:\Users\用户名\Documents\covers"
-                                                        value={savePathDraftCover}
-                                                        onChange={(e) => setSavePathDraftCover(e.target.value)}
-                                                        className="h-9 border-slate-200 text-sm"
-                                                    />
-                                                    {savePathDraftCover && <div className="mt-1 text-xs text-green-600">● {savePathDraftCover}</div>}
-                                                </div>
-                                            </div>
-                                        </section>
-                                    </>
                                 )}
 
                                 {/* 画布设置 - 网格显示开关 */}
