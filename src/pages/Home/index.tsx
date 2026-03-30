@@ -8,7 +8,7 @@ const carouselCards = [
         id: 'left',
         type: 'cinema',
         title: 'CINEMA CENTRAL CINEMA',
-        imageUrl: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=60&w=520&auto=format&fit=crop',
+        imageUrl: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=800&auto=format&fit=crop',
         tags: ['AI增强', '4K输出'],
     },
     {
@@ -16,13 +16,13 @@ const carouselCards = [
         type: 'templates',
         titleEn: 'WORKFLOW TEMPLATES',
         titleCn: '全新小说/剧本模板库',
-        imageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=60&w=680&auto=format&fit=crop',
+        imageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1200&auto=format&fit=crop',
         tags: ['热门', '新功能'],
     },
     {
         id: 'right',
         type: 'circuit',
-        imageUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=60&w=520&auto=format&fit=crop',
+        imageUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=800&auto=format&fit=crop',
         tags: ['专业版'],
     },
 ]
@@ -238,13 +238,10 @@ const Card = ({ data }: { data: typeof carouselCards[0] }) => {
                 }
             `}
         >
-            {/* 图片背景 - 中间大图优先加载（LCP 元素），两侧图片懒加载 */}
+            {/* 图片背景 */}
             <img
                 src={data.imageUrl}
                 alt=""
-                loading={isCenter ? 'eager' : 'lazy'}
-                decoding={isCenter ? 'sync' : 'async'}
-                {...(isCenter ? { fetchPriority: 'high' as const } : {})}
                 className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
             />
 

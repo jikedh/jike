@@ -813,7 +813,10 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => ({
       nodes: [...state.nodes, newNode],
     }))
 
-    // 自动保存已由 useAutoSave hook 防抖处理，此处不再即时保存
+    // 自动保存
+    if (useChatSettingsStore.getState().autoSaveEnabled) {
+      get().saveGraph()
+    }
 
     return nextId
   },
@@ -954,7 +957,10 @@ duplicateNode: (nodeId: string) => {
       ),
     }))
 
-    // 自动保存已由 useAutoSave hook 防抖处理
+    // 自动保存
+    if (useChatSettingsStore.getState().autoSaveEnabled) {
+      get().saveGraph()
+    }
   },
 
   /**
@@ -1163,7 +1169,10 @@ duplicateNode: (nodeId: string) => {
       edges: [...state.edges, ...newEdges],
     }))
 
-    // 自动保存已由 useAutoSave hook 防抖处理
+    // 自动保存
+    if (useChatSettingsStore.getState().autoSaveEnabled) {
+      get().saveGraph()
+    }
   },
 
   /**

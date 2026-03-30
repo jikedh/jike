@@ -1,10 +1,9 @@
-import { NodeToolbar, Position, type NodeProps } from '@xyflow/react'
+import { NodeToolbar, Position, type NodeProps, useStore } from '@xyflow/react'
 import { memo } from 'react'
 
 import { ButtonHandle } from '@/components/button-handle'
 import { NodeContextMenu } from '@/pages/Canvas/components/NodeContextMenu'
 import { useNodeScale } from '@/hooks/useNodeScale'
-import { useSelectedNodesCount } from '@/hooks/useSelectedNodesCount'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { VideoNodeType } from '@/types/flow'
 
@@ -30,8 +29,8 @@ export const VideoNode = memo(({
     const { zoom } = useNodeScale()
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode)
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode)
-    // 获取选中节点数量，框选多节点时不显示工具栏（使用优化后的 Hook）
-    const selectedNodesCount = useSelectedNodesCount()
+    // 获取选中节点数量，框选多节点时不显示工具栏
+    const selectedNodesCount = useStore((state) => state.nodes.filter((n) => n.selected).length)
     const handleVisibilityClass = selected
         ? 'visible opacity-100'
         : 'invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100'

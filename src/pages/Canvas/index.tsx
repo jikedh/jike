@@ -8,7 +8,6 @@ import { CanvasChatToolbar } from './components/CanvasChatToolbar'
 import { ChatDrawer } from './components/ChatDrawer'
 import ReactFlowDevTools from './DevTools'
 import { useCanvasChat } from '@/hooks/useCanvasChat'
-import { useAutoSave } from '@/hooks/useAutoSave'
 import { useChatSettingsStore } from '@/store/chatSettingsStore'
 
 // 外部组件 - 提供 ReactFlowProvider 和工具栏
@@ -19,9 +18,6 @@ const CanvasPage = () => {
   const { messages, isLoading, sendMessage, stopMessage, clearLocalMessages, setMessages } = useCanvasChat()
   // 从设置 store 读取调试工具面板的显示状态
   const devToolsVisible = useChatSettingsStore((state) => state.devToolsVisible)
-
-  // 防抖自动保存：替代 store 中每次变化都立即写入 localStorage 的方式
-  useAutoSave(1000)
 
   return (
     <ReactFlowProvider>
