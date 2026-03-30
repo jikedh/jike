@@ -231,7 +231,7 @@ export const ImagePromptPanel = ({ nodeId }: { nodeId: string }) => {
                 },
                 {
                     type: 'text',
-                    text: ' ',
+                  text: ` ${selected.description} `,
                 },
             ])
             .run()

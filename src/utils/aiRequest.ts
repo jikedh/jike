@@ -2,6 +2,7 @@ import axios, { AxiosRequestConfig, AxiosInstance } from 'axios'
 
 // 从 utils 导入 API 密钥管理函数和环境检测函数
 import { getAiToken, getZeakaiToken, getBaseURL } from './utils'
+// import { filterRequestData } from './apiFieldFilter'
 
 // ===================== 服务基础配置 =====================
 
@@ -46,13 +47,19 @@ const createService = (serviceName: string, config: ServiceConfig): AxiosInstanc
     timeout: REQUEST_TIMEOUT,
   })
 
-  // 请求拦截器 - 动态设置 Authorization
+  // 请求拦截器 - 动态设置 Authorization 并过滤请求数据
   service.interceptors.request.use(
     (reqConfig) => {
       const token = config.getToken()
       if (token) {
         reqConfig.headers.Authorization = `Bearer ${token}`
       }
+
+      // 过滤请求数据，移除后端不需要的字段
+      // if (reqConfig.data && reqConfig.url) {
+      //   reqConfig.data = filterRequestData(reqConfig.url, reqConfig.data)
+      // }
+
       return reqConfig
     },
     (error) => Promise.reject(error)

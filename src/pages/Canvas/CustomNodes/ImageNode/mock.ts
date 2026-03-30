@@ -10,13 +10,6 @@ export const MENTION_MOCK = [
 ] as const
 
 export const COMMAND_MOCK = [
-    { id: 'c-1', label: '增强细节', command: '/enhance', description: '提升纹理、细节与锐度' },
-    { id: 'c-2', label: '电影级调色', command: '/cinematic', description: '应用电影感 LUT 色调' },
-    { id: 'c-3', label: '改为极简风', command: '/minimal', description: '降低元素密度，增强留白' },
-    { id: 'c-4', label: '加入景深', command: '/dof', description: '增加前后景层次与虚化' },
-    { id: 'c-5', label: '统一材质', command: '/material', description: '统一为金属/陶瓷等质感' },
-    { id: 'c-6', label: '提高对比度', command: '/contrast', description: '增强明暗关系与冲击力' },
-    { id: 'c-7', label: '改为写实摄影', command: '/realistic', description: '趋近真实镜头表达' },
-    { id: 'c-8', label: '改为插画风', command: '/illustration', description: '平涂/描边插画语言' },
-    { id: 'c-9', label: '自动重写提示词', command: '/rewrite', description: '按最佳实践重写文本' },
+    { id: 'c-1', label: '角色参考图', command: '/character-reference', description: '把人物图集合成特写+正面，生成一张面部特写（[此处自动插入角色的性格描述]）和它的全身图（最左边是超大的人物面部特写，右边放人物全身，生成一张图片，渐变色纯色背景，丰富的光影。' },
+    { id: 'c-2', label: '角色三视图', command: '/character-three-view', description: '- 把人物图集合成一个21:9的特写+三视图，生成一张面部特写（[此处自动插入角色的性格描述]）和全身三视图（最左边是超大的人物面部特写，右边放人物全身的正视图，侧视图，后视图），生成在一张图片里面，渐变色纯色背景，丰富的光影。' },
 ] as const
