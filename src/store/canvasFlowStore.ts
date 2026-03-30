@@ -47,9 +47,9 @@ const getNextNodePosition = (nodes: AllNodeType[]) => {
 
   return lastNode
     ? {
-        x: lastNode.position.x + 40,
-        y: lastNode.position.y + 40,
-      }
+      x: lastNode.position.x + 40,
+      y: lastNode.position.y + 40,
+    }
     : fallbackPosition
 }
 
@@ -107,6 +107,8 @@ type CanvasFlowState = {
   startImageGeneration: (nodeId: string, payload: any) => Promise<void>
   /** 手动停止图片轮询（防止内存泄露） */
   stopImagePolling: (nodeId: string) => void
+  /** 拆图：将图片节点拆分为宫格子图 */
+  splitImage: (nodeId: string, gridSize: 2 | 3 | 4) => void
   /** 更新视频节点数据（局部字段 patch） */
   updateVideoNodeData: (nodeId: string, patch: Partial<VideoGenerationNode>) => void
   /** 创建视频生成任务并启动轮询 */
@@ -882,78 +884,60 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => ({
    * 复制节点
    * @param nodeId 要复制的节点 ID
    */
-  duplicateNode: (nodeId: string) => {
-    const currentNode = get().nodes.find((node) => node.id === nodeId)
+duplicateNode: (nodeId: string) => {
+  const currentNode = get().nodes.find((node) => node.id === nodeId)
+  if (!currentNode) return
 
-    if (!currentNode) {
-      return
-    }
+  // 节点类型映射表，提升可维护性与可扩展性
+  const typeMap = {
+    noteNode: 'note',
+    imageNode: 'image',
+    videoNode: 'video',
+    agentNode: 'agent',
+  } as const
 
-    // 识别节点类型
-    let nodeType: NodeType = 'note'
-    if (currentNode.type === 'imageNode') {
-      nodeType = 'image'
-    } else if (currentNode.type === 'videoNode') {
-      nodeType = 'video'
-    } else if (currentNode.type === 'agentNode') {
-      nodeType = 'agent'
-    }
+  const nodeType = typeMap[currentNode.type] || 'note'
+  const newId = get().getNextNodeId(nodeType)
 
-    const newId = get().getNextNodeId(nodeType)
-    let duplicatedNode: AllNodeType
+  // 通用复制字段
+  const baseNode = {
+    id: newId,
+    type: currentNode.type,
+    position: {
+      x: currentNode.position.x + 40,
+      y: currentNode.position.y + 40,
+    },
+    data: {
+      ...currentNode.data,
+      createdAt: Date.now(), // 统一更新时间戳
+      // 对于 noteNode，下面会覆盖 isEditing
+    },
+    // 辅助UI统一置位（所有节点都选中且不在拖拽，不拆分放置，减少分支）
+    selected: true,
+    dragging: false,
+  }
 
-    if (currentNode.type === 'noteNode') {
-      duplicatedNode = {
-        id: newId,
-        type: currentNode.type,
-        position: {
-          x: currentNode.position.x + 40,
-          y: currentNode.position.y + 40,
-        },
+  // 仅 noteNode 有宽高字段和 isEditing 特殊属性，解构合并
+  const duplicatedNode = currentNode.type === 'noteNode'
+    ? {
+        ...baseNode,
         width: currentNode.width,
         height: currentNode.height,
         data: {
-          ...currentNode.data,
-          isEditing: false,
-          createdAt: Date.now(),
-        },
-        selected: false,
-        dragging: false,
-      }
-    } else {
-      duplicatedNode = {
-        id: newId,
-        type: currentNode.type,
-        position: {
-          x: currentNode.position.x + 40,
-          y: currentNode.position.y + 40,
-        },
-        data: {
-          ...currentNode.data,
-          createdAt: Date.now(),
+          ...baseNode.data,
+          isEditing: false, // note默认复制后不可编辑
         },
       }
+    : baseNode
+
+  set((state) => {
+    // 新节点插入时，所有节点selected统一置为false，只保留新节点选中
+    const nodes = state.nodes.map((node) => ({ ...node, selected: true }))
+    return {
+      nodes: [...nodes, duplicatedNode],
     }
-
-    set((state) => {
-      const nodes = state.nodes.map((node) => ({
-        ...node,
-        selected: false,
-      }))
-
-      return {
-        nodes: [
-          ...nodes,
-          {
-            ...duplicatedNode,
-            selected: true,
-            dragging: false,
-          },
-        ],
-      }
-    })
-  },
-
+  })
+},
   /**
    * 删除节点及其关联的所有边
    * @param nodeId 要删除的节点 ID
@@ -1105,6 +1089,90 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => ({
       imagePollingControllers.delete(taskId)
     })
     pendingTaskCounts.delete(nodeId)
+  },
+
+  /**
+   * 拆图：将图片节点拆分为宫格子图
+   * @param nodeId 源图片节点 ID
+   * @param gridSize 网格大小 (2=2x2, 3=3x3, 4=4x4)
+   */
+  splitImage: (nodeId: string, gridSize: 2 | 3 | 4) => {
+    const sourceNode = get().nodes.find((node) => node.id === nodeId)
+    if (!sourceNode || sourceNode.type !== 'imageNode') return
+
+    const sourceData = sourceNode.data as ImageGenerationNode
+    const sourceModel = sourceData.model || 'doubao-seedream-5-0'
+    // 获取源图片的 URL 作为参考图
+    const sourceImageUrl = sourceData.result?.data?.[0]?.url
+
+    const totalCells = gridSize * gridSize
+    const nodeWidth = 350 // 图片节点宽度
+    const nodeHeight = 280 // 图片节点高度
+    const gap = 20 // 节点间距
+
+    // 源节点右侧起始位置
+    const startX = sourceNode.position.x + (sourceNode.width ?? nodeWidth) + gap * 3
+    const startY = sourceNode.position.y
+
+    // 宫格名称映射
+    const gridNameMap: Record<number, string> = { 2: '四', 3: '九', 4: '十六' }
+    const gridName = gridNameMap[gridSize]
+
+    // 收集新创建的边
+    const newEdges: EdgeType[] = []
+
+    // 为每个宫格创建图片节点并启动生成任务
+    for (let i = 0; i < totalCells; i++) {
+      const row = Math.floor(i / gridSize) + 1
+      const col = (i % gridSize) + 1
+
+      // 计算节点在网格中的位置
+      const position = {
+        x: startX + (col - 1) * (nodeWidth + gap),
+        y: startY + (row - 1) * (nodeHeight + gap),
+      }
+
+      // 生成提示词（参考用户提供的模板）
+      const prompt = `这是一张${gridName}宫格的图片，中间是用白色分割线区分的。帮我把${gridName}宫格图中的第${row}行的第${col}列图片单独提取出来，放大为独立图片。与第1行的第1列图片保持完全相同的构图、色调，去除图片四个角落文字、字幕、标注，序号，高清优化图片所有细节，8K清晰度。`
+
+      // 创建新图片节点
+      const newId = get().addNode('image', position)
+
+      // 创建从源节点到新节点的边
+      newEdges.push({
+        id: `edge-${nodeId}-${newId}`,
+        source: nodeId,
+        target: newId,
+        sourceHandle: 'output',
+        targetHandle: 'input',
+      })
+
+      // 准备生成载荷
+      const payload: any = {
+        model: sourceModel,
+        prompt,
+        promptDraft: prompt,
+        promptDraftHtml: `<p>${prompt}</p>`,
+      }
+
+      // 如果源图片有 URL，添加为参考图
+      if (sourceImageUrl) {
+        payload.image_urls = [sourceImageUrl]
+      }
+
+      // 启动图片生成任务
+      get().startImageGeneration(newId, payload)
+    }
+
+    // 将新边添加到画布
+    set((state) => ({
+      edges: [...state.edges, ...newEdges],
+    }))
+
+    // 自动保存
+    if (useChatSettingsStore.getState().autoSaveEnabled) {
+      get().saveGraph()
+    }
   },
 
   /**

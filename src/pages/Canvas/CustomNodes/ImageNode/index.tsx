@@ -29,6 +29,7 @@ export const ImageNode = memo(({
     const { zoom } = useNodeScale()
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode)
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode)
+    const splitImage = useCanvasFlowStore((state) => state.splitImage)
     // 获取选中节点数量，框选多节点时不显示工具栏
     const selectedNodesCount = useStore((state) => state.nodes.filter((n) => n.selected).length)
     const handleVisibilityClass = selected
@@ -40,7 +41,11 @@ export const ImageNode = memo(({
     // console.log('图片节点重新渲染', id)
 
     return (
-        <NodeContextMenu onDuplicate={() => duplicateNode(id)} onDelete={() => deleteNode(id)}>
+        <NodeContextMenu
+            onDuplicate={() => duplicateNode(id)}
+            onDelete={() => deleteNode(id)}
+            onSplitImage={(gridSize) => splitImage(id, gridSize)}
+        >
         <div className="group/node relative">
             {/* 左侧输入 Handle */}
             <ButtonHandle
