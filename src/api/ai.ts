@@ -130,6 +130,23 @@ export function uploadImage(data: any) {
   })
 }
 
+/**
+ * 上传图片并获取 URL
+ * @param file 要上传的文件
+ * @returns 上传成功后的图片 URL，失败返回 undefined
+ */
+export async function uploadImageFile(file: File): Promise<string | undefined> {
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await uploadImage(formData)
+    return response.data.url
+  } catch (error) {
+    console.error('上传图片失败:', error)
+    return undefined
+  }
+}
+
 // ===================== Midjourney 相关 =====================
 
 // 提交 Midjourney imagine 任务

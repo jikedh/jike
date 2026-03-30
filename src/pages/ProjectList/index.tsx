@@ -4,7 +4,7 @@ import { Plus, Trash2, FileText as TextIcon, X, Pencil, Upload, X as CloseIcon }
 import { getProjectList, createProject, deleteProject, updateProject, type ProjectMeta } from '@/utils/projectStorage'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { uploadImageFile } from '@/utils/utils'
+import { uploadImageFile } from '@/api/ai'
 
 export default function ProjectListPage() {
     const navigate = useNavigate()
