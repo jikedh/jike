@@ -757,7 +757,6 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => ({
             iw: 0.5,
             sw: 100,
           },
-          templateId: 'none',
           status: GenerationStatus.COMPLETED,
           progress: 0,
           result: {
@@ -796,7 +795,6 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => ({
           promptDraftHtml: '<p></p>',
           aspect_ratio: '16:9',
           uploadedUrls: [],
-          templateId: 'none',
           status: GenerationStatus.COMPLETED,
           progress: 0,
           metadata: { size: '1280x720' },

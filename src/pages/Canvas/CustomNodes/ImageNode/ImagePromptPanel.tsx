@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { ImageGenerationNode, NoteNodeData } from '@/types/flow'
 
-import { COMMAND_MOCK, MENTION_MOCK, STYLE_TEMPLATE_MOCK } from './mock'
+import { COMMAND_MOCK, MENTION_MOCK } from './mock'
 import { IntegratedParamsPanel } from './components/IntegratedParamsPanel'
 import { MidjourneyAdvancedPanel } from './components/MidjourneyAdvancedPanel'
 

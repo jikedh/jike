@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { ImageGenerationNode, NoteNodeData, VideoGenerationNode } from '@/types/flow'
 
-import { COMMAND_MOCK, MENTION_MOCK, STYLE_TEMPLATE_MOCK } from '../ImageNode/mock'
+import { COMMAND_MOCK, MENTION_MOCK } from '../ImageNode/mock'
 import { VideoIntegratedParamsPanel } from './components/VideoIntegratedParamsPanel'
 
 export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
@@ -54,8 +54,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     const aspectRatio = currentVideoData?.aspect_ratio ?? '16:9'
     const videoSize = currentVideoData?.metadata?.size ?? '1280x720'
     const duration = currentVideoData?.duration ?? 5
-    const model = currentVideoData?.model ?? (VIDEO_MODELS[0]?.model ?? 'sora-2-pro')
-    const templateId = currentVideoData?.templateId ?? STYLE_TEMPLATE_MOCK[0].id
+  const model = currentVideoData?.model ?? (VIDEO_MODELS[0]?.model ?? 'sora-2-pro')
     const uploadedUrls = currentVideoData?.uploadedUrls ?? []
     const promptDraftHtml = currentVideoData?.promptDraftHtml ?? '<p></p>'
 
@@ -230,10 +229,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             )
         })
     }, [commandQuery])
-
-    const currentTemplate = useMemo(() => {
-        return STYLE_TEMPLATE_MOCK.find((item) => item.id === templateId) ?? STYLE_TEMPLATE_MOCK[0]
-    }, [templateId])
 
     const parentImageUrls = useMemo(() => {
         const parentIds = edges
@@ -469,15 +464,12 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             model,
             prompt: mergedPrompt,
             aspect_ratio: aspectRatio,
-            image_urls: referenceImageUrls,
-            style: currentTemplate.name,
+          image_urls: referenceImageUrls,
             promptDraft: editor?.getText() ?? '',
-            promptDraftHtml: editor?.getHTML() ?? '<p></p>',
-            templateId,
+          promptDraftHtml: editor?.getHTML() ?? '<p></p>',
             uploadedUrls,
             metadata: {
-                size: videoSize,
-                style: currentTemplate.name,
+              size: videoSize,
             },
         }
 

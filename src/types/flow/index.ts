@@ -45,7 +45,6 @@ export interface ImageGenerationNode {
     iw?: number // Midjourney 参考图权重（用于 --iw）
     sw?: number // Midjourney 风格权重（用于 --sw）
   }
-  templateId?: string; // 面板风格模板 ID
   // ---- 输出结果 ----
   result?: {
     type: string; // 结果类型
@@ -78,8 +77,6 @@ export interface VideoGenerationNode {
   aspect_ratio: string; // 宽高比，如 "16:9"
   image_urls?: string[]; // 参考图像 URL 列表
   uploadedUrls?: string[]; // 面板上传的参考图 URL 列表
-  templateId?: string; // 面板风格模板 ID
-  style?: string; // 视频风格
   status?: GenerationStatus; // 当前生成状态
   progress?: number; // 进度百分比（0-100）
   metadata: {

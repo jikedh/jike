@@ -1,20 +1,12 @@
 /**
  * 图片节点底部增强输入区 mock 数据
  * 说明：
- * - 本期保留 @mention 与 /command 与风格模板 mock。
+ * - 本期保留 @mention 与 /command mock。
  * - 参考图列表改为真实上传/父节点结果驱动，不再使用 mock。
  */
 
 export const MENTION_MOCK = [
-    { id: 'm-1', label: '产品经理-Luna', value: 'luna', description: '需求方向与用户场景' },
-    { id: 'm-2', label: '视觉设计-Ariel', value: 'ariel', description: '品牌与视觉风格' },
-    { id: 'm-3', label: '摄影参考库', value: 'photo-lib', description: '构图与光线参考' },
-    { id: 'm-4', label: '人物设定集', value: 'character-pack', description: '角色表情与姿态' },
-    { id: 'm-5', label: '材质参考库', value: 'material-lab', description: '金属/玻璃/织物质感' },
-    { id: 'm-6', label: '镜头语言指南', value: 'lens-guide', description: '景别、运动与焦段' },
-    { id: 'm-7', label: '品牌手册', value: 'brand-book', description: '品牌色与调性约束' },
-    { id: 'm-8', label: '内容审校机器人', value: 'review-bot', description: '敏感词与质量规则' },
-    { id: 'm-9', label: '脚本策划-Atlas', value: 'atlas', description: '叙事结构与镜头节奏' },
+    { id: 'm-1', label: '拆图3*3', value: 'caitu-3x3', description: '将一张图片拆分为3x3网格子图' },
 ] as const
 
 export const COMMAND_MOCK = [
@@ -27,52 +19,4 @@ export const COMMAND_MOCK = [
     { id: 'c-7', label: '改为写实摄影', command: '/realistic', description: '趋近真实镜头表达' },
     { id: 'c-8', label: '改为插画风', command: '/illustration', description: '平涂/描边插画语言' },
     { id: 'c-9', label: '自动重写提示词', command: '/rewrite', description: '按最佳实践重写文本' },
-] as const
-
-export const STYLE_TEMPLATE_MOCK = [
-    {
-        id: 's-1',
-        name: '商业大片',
-        promptPreview: '高级商业摄影，硬朗侧光，主体居中，背景干净，细节清晰，8k，电影级色彩。',
-    },
-    {
-        id: 's-2',
-        name: '日系清透',
-        promptPreview: '自然柔光，低饱和，清新留白，空气感，胶片颗粒轻微，柔和对比。',
-    },
-    {
-        id: 's-3',
-        name: '赛博夜景',
-        promptPreview: '霓虹主色，湿地反射，高对比夜景，体积雾，未来都市氛围。',
-    },
-    {
-        id: 's-4',
-        name: '极简产品',
-        promptPreview: '中性背景，干净构图，单一主物体，软箱打光，精致材质反射。',
-    },
-    {
-        id: 's-5',
-        name: '插画海报',
-        promptPreview: '高辨识图形语言，清晰轮廓，统一色板，平衡版式，视觉中心明确。',
-    },
-    {
-        id: 's-6',
-        name: '纪实街拍',
-        promptPreview: '抓拍瞬间，环境叙事，自然光，动态模糊轻微，真实生活氛围。',
-    },
-    {
-        id: 's-7',
-        name: '复古胶片',
-        promptPreview: '胶片色偏，柔和高光，颗粒感，轻微暗角，怀旧视觉语汇。',
-    },
-    {
-        id: 's-8',
-        name: '未来概念设定',
-        promptPreview: '工业细节，结构分明，科幻材质，蓝灰主调，概念设计图语言。',
-    },
-    {
-        id: 's-9',
-        name: '国风意境',
-        promptPreview: '东方美学，留白构图，水墨层次，柔和色阶，诗意氛围。',
-    },
 ] as const
