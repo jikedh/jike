@@ -252,32 +252,35 @@ export const MidjourneyAdvancedPanel = ({
                 isDragging={isDragging}
               />
               {/* 上方列表滑块 */}
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.1}
-                      value={topSliderValue}
-                      onChange={(event) => {
-                        const next = Number(event.target.value)
-                        if (!Number.isNaN(next)) {
-                          onChange?.({
-                            ...value,
-                            iw: next,
-                          })
-                        }
-                      }}
-                      className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-neutral-700 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="bg-neutral-800 text-neutral-200 border-neutral-700">
-                    <p>参考图权重</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <div className="flex items-center gap-2">
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.1}
+                        value={topSliderValue}
+                        onChange={(event) => {
+                          const next = Number(event.target.value)
+                          if (!Number.isNaN(next)) {
+                            onChange?.({
+                              ...value,
+                              iw: next,
+                            })
+                          }
+                        }}
+                        className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-neutral-700 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="bg-neutral-800 text-neutral-200 border-neutral-700">
+                      <p>参考图权重</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <span className="text-xs text-neutral-400 w-8 text-right">{topSliderValue.toFixed(1)}</span>
+              </div>
             </div>
 
 
@@ -291,32 +294,35 @@ export const MidjourneyAdvancedPanel = ({
                 isDragging={isDragging}
               />
               {/* 下方列表滑块 */}
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <input
-                      type="range"
-                      min={100}
-                      max={1000}
-                      step={50}
-                      value={bottomSliderValue}
-                      onChange={(event) => {
-                        const next = Number(event.target.value)
-                        if (!Number.isNaN(next)) {
-                          onChange?.({
-                            ...value,
-                            sw: next,
-                          })
-                        }
-                      }}
-                      className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-neutral-700 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
-                    />
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="bg-neutral-800 text-neutral-200 border-neutral-700">
-                    <p>风格权重</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <div className="flex items-center gap-2">
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <input
+                        type="range"
+                        min={100}
+                        max={1000}
+                        step={50}
+                        value={bottomSliderValue}
+                        onChange={(event) => {
+                          const next = Number(event.target.value)
+                          if (!Number.isNaN(next)) {
+                            onChange?.({
+                              ...value,
+                              sw: next,
+                            })
+                          }
+                        }}
+                        className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-neutral-700 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="bg-neutral-800 text-neutral-200 border-neutral-700">
+                      <p>风格权重</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <span className="text-xs text-neutral-400 w-10 text-right">{bottomSliderValue}</span>
+              </div>
             </div>
           </div>
         </DndContext>
