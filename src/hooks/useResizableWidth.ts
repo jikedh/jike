@@ -25,7 +25,7 @@ export const useResizableWidth = ({
         const handlePointerMove = (e: PointerEvent) => {
             // Calculate width from the right edge of the screen
             const newWidth = window.innerWidth - e.clientX
-            
+
             if (newWidth >= minWidth && newWidth <= maxWidth) {
                 setWidth(newWidth)
             } else if (newWidth < minWidth) {
@@ -38,11 +38,11 @@ export const useResizableWidth = ({
         const handlePointerUp = () => {
             setIsResizing(false)
         }
-
+// 这里有毒
         // Add global listeners
         document.addEventListener('pointermove', handlePointerMove)
         document.addEventListener('pointerup', handlePointerUp)
-        
+
         // Prevent text selection while resizing
         document.body.style.userSelect = 'none'
         document.body.style.cursor = 'col-resize'

@@ -66,16 +66,14 @@ export const ImageNode = memo(({
             />
 
             {/* 顶部工具栏：随视口缩放同步变化 */}
-            <NodeToolbar isVisible={shouldShowToolbar} position={Position.Top} offset={10 * zoom}>
-                <div style={{ transform: `scale(${zoom})`, transformOrigin: 'bottom center' }}>
+          <NodeToolbar isVisible={shouldShowToolbar} position={Position.Top} offset={10 * zoom}>
                     <ImageToolbar
                         nodeId={id}
                         data={data}
                         selected={selected}
                         onDuplicate={() => duplicateNode(id)}
                         onDelete={() => deleteNode(id)}
-                    />
-                </div>
+            />
             </NodeToolbar>
 
             {/* 底部增强输入区：随视口缩放同步变化 */}
@@ -83,10 +81,8 @@ export const ImageNode = memo(({
                 isVisible={shouldShowToolbar}
                 position={Position.Bottom}
                 offset={18 * zoom}
-            >
-                <div className="nodrag nopan nowheel" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
-                    <ImagePromptPanel nodeId={id} />
-                </div>
+          >
+            <ImagePromptPanel nodeId={id} />
             </NodeToolbar>
 
             <div
