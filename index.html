@@ -6,10 +6,45 @@
   <link rel="icon" type="image/png" href="/vite.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>芸芸</title>
+
+  <!-- DNS 预解析：提前解析 API 域名，减少首次请求延迟 -->
+  <link rel="dns-prefetch" href="https://toapis.com" />
+  <link rel="dns-prefetch" href="https://zeakai-api.api4midjourney.com" />
+  <link rel="dns-prefetch" href="https://images.unsplash.com" />
+
+  <!-- 预连接：对高频 API 域名建立早期连接 -->
+  <link rel="preconnect" href="https://toapis.com" crossorigin />
+
+  <!-- 预连接 Unsplash 图片 CDN（LCP 图片来源） -->
+  <link rel="preconnect" href="https://images.unsplash.com" crossorigin />
+
+  <!-- 预加载 LCP 图片：首页中间大图 -->
+  <link rel="preload" as="image" href="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=60&w=680&auto=format&fit=crop" fetchpriority="high" />
+
+  <!-- 关键 CSS 内联：避免 FOUC（无样式闪烁） -->
+  <style>
+    /* 首屏最小样式：背景色 + 加载动画，避免白屏 */
+    html, body { margin: 0; padding: 0; background: #0a0a0f; }
+    #root { min-height: 100vh; }
+    /* 首屏加载骨架 */
+    .app-loading {
+      display: flex; align-items: center; justify-content: center;
+      height: 100vh; width: 100vw; background: #0a0a0f;
+    }
+    .app-loading .spinner {
+      width: 32px; height: 32px; border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: rgba(255,255,255,0.8); border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
 </head>
 
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <!-- 首屏加载占位：JS 加载完成后会被 React 替换 -->
+    <div class="app-loading"><div class="spinner"></div></div>
+  </div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 

@@ -30,6 +30,7 @@ export const ImageTile = ({ url, index, isBroken, onError, className }: ImageTil
             alt={`生成图片-${index + 1}`}
             className={`h-full w-full object-cover ${className ?? ''}`}
             loading="lazy"
+            decoding="async"
             onError={() => onError(index)}
         />
     )
