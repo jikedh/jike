@@ -7,6 +7,7 @@ import {
     IconRefresh,
     IconSettings,
     IconSparkles,
+    IconTool,
 } from '@tabler/icons-react'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
@@ -14,6 +15,7 @@ import { useState } from 'react'
 import { cn } from '@/utils/utils'
 
 import './floatingSidebar.css'
+import useMessage from '@/hooks/useMessage'
 import { SettingsModal } from './SettingsModal'
 
 // 侧边栏动作项类型
@@ -55,6 +57,20 @@ const defaultItems: FloatingSidebarItem[] = [
         children: [
             { id: 'novel-to-script-agent', label: '小说转剧本智能助手' },
             { id: 'short-video-script-agent', label: '爆款短视频脚本智能助手' },
+        ],
+    },
+    {
+        id: 'efficiency-tools',
+        label: '效率工具',
+        icon: <IconTool size={20} />,
+        children: [
+            { id: 'script-outline', label: '剧本大纲' },
+            { id: 'script-hierarchy', label: '剧本分级' },
+            { id: 'character-design', label: '角色设计' },
+            { id: 'storyboard-design', label: '分镜图设计' },
+            { id: 'storyboard-breakdown', label: '分镜图拆解' },
+            { id: 'storyboard-video', label: '分镜视频生成' },
+            { id: 'drama-analysis', label: '剧目分析' },
         ],
     },
     // {
@@ -105,6 +121,7 @@ const getItemsByRole = (items: FloatingSidebarItem[], role: FloatingSidebarItem[
 export const FloatingSidebar = ({ items = defaultItems, onAction, className }: FloatingSidebarProps) => {
     const [expandedItemId, setExpandedItemId] = useState<string | null>(null)
     const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+    const { warning } = useMessage()
 
     // 顶部主操作。
     const primaryItems = getItemsByRole(items, 'primary')
@@ -136,6 +153,14 @@ export const FloatingSidebar = ({ items = defaultItems, onAction, className }: F
 
     // 处理子菜单项点击
     const handleSubItemClick = (subId: string) => {
+        // 效率工具的子选项显示开发中提示
+        if (subId.startsWith('script-') || subId.startsWith('character-') || 
+            subId.startsWith('storyboard-') || subId === 'drama-analysis') {
+            warning('该功能正在开发中', '敬请期待')
+            setExpandedItemId(null)
+            return
+        }
+        
         onAction?.(subId)
         setExpandedItemId(null)
     }
