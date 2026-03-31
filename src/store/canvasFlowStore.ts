@@ -108,7 +108,7 @@ type CanvasFlowState = {
   /** 手动停止图片轮询（防止内存泄露） */
   stopImagePolling: (nodeId: string) => void
   /** 拆图：将图片节点拆分为宫格子图 */
-  splitImage: (nodeId: string, gridSize: 2 | 3 | 4) => void
+  splitImage: (nodeId: string, gridSize: number) => void
   /** 更新视频节点数据（局部字段 patch） */
   updateVideoNodeData: (nodeId: string, patch: Partial<VideoGenerationNode>) => void
   /** 创建视频生成任务并启动轮询 */
@@ -1096,7 +1096,7 @@ duplicateNode: (nodeId: string) => {
    * @param nodeId 源图片节点 ID
    * @param gridSize 网格大小 (2=2x2, 3=3x3, 4=4x4)
    */
-  splitImage: (nodeId: string, gridSize: 2 | 3 | 4) => {
+  splitImage: (nodeId: string, gridSize: number) => {
     const sourceNode = get().nodes.find((node) => node.id === nodeId)
     if (!sourceNode || sourceNode.type !== 'imageNode') return
 

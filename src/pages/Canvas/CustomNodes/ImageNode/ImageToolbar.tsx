@@ -10,7 +10,7 @@ import {
     IconUpload,
     IconZoomIn,
 } from '@tabler/icons-react'
-import { useMemo, useRef, useState } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import Lightbox from 'yet-another-react-lightbox'
 // import Captions from 'yet-another-react-lightbox/plugins/captions'
@@ -43,7 +43,7 @@ type ActionKey = 'upload' | 'erase' | 'enhance' | 'outpaint' | 'crop' | 'downloa
  * - 处理工具栏按钮交互反馈
  * - 基于 yet-another-react-lightbox 提供放大查看能力
  */
-export const ImageToolbar = ({ nodeId, data, selected, onDuplicate, onDelete }: ImageToolbarProps) => {
+export const ImageToolbar = memo(({ nodeId, data, selected, onDuplicate, onDelete }: ImageToolbarProps) => {
     const [isLightboxOpen, setIsLightboxOpen] = useState(false)
     const [isUploading, setIsUploading] = useState(false)
 
@@ -219,4 +219,6 @@ export const ImageToolbar = ({ nodeId, data, selected, onDuplicate, onDelete }: 
             ) : null}
         </>
     )
-}
+})
+
+ImageToolbar.displayName = 'ImageToolbar'

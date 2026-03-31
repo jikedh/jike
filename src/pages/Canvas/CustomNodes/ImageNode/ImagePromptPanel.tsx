@@ -2,7 +2,7 @@ import { IconUpload } from '@tabler/icons-react'
 import Mention from '@tiptap/extension-mention'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 
 import { IMAGE_MODELS } from '@/constants/ai-models'
@@ -42,7 +42,7 @@ import { MidjourneyAdvancedPanel } from './components/MidjourneyAdvancedPanel'
 const IMAGE_COUNT_OPTIONS = [1, 2, 4] as const
 type ImageCount = typeof IMAGE_COUNT_OPTIONS[number]
 
-export const ImagePromptPanel = ({ nodeId }: { nodeId: string }) => {
+export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     // 上传中态，避免重复上传触发
     const [isUploading, setIsUploading] = useState(false)
   // 图片生成数量选择
@@ -751,4 +751,6 @@ export const ImagePromptPanel = ({ nodeId }: { nodeId: string }) => {
             </div>
         </div>
     )
-}
+})
+
+ImagePromptPanel.displayName = 'ImagePromptPanel'

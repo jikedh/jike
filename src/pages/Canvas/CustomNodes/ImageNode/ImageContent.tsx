@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { GenerationStatus } from '@/constants/enum'
 import type { ImageGenerationNode } from '@/types/flow'
 import { CollapsibleImageGallery } from './CollapsibleImageGallery'
@@ -14,7 +15,7 @@ type ImageContentProps = {
  * - 显示生成状态与进度条
  * - 处理错误状态展示
  */
-export const ImageContent = ({ data, onRetry }: ImageContentProps) => {
+export const ImageContent = memo(({ data, onRetry }: ImageContentProps) => {
     // 结果图片列表（支持多张）
     const images = data.result?.data?.filter((item) => item?.url).map((item) => item.url as string) ?? []
     const status = data.status ?? GenerationStatus.COMPLETED
@@ -72,4 +73,6 @@ export const ImageContent = ({ data, onRetry }: ImageContentProps) => {
             暂无图片
         </div>
     )
-}
+})
+
+ImageContent.displayName = 'ImageContent'

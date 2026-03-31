@@ -1,5 +1,5 @@
 import { NodeToolbar, Position, type NodeProps, useStore } from '@xyflow/react'
-import { memo } from 'react'
+import { memo, useCallback, useMemo } from 'react'
 
 import { ButtonHandle } from '@/components/button-handle'
 import { NodeContextMenu } from '@/pages/Canvas/components/NodeContextMenu'
@@ -30,21 +30,57 @@ export const ImageNode = memo(({
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode)
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode)
     const splitImage = useCanvasFlowStore((state) => state.splitImage)
-    // 获取选中节点数量，框选多节点时不显示工具栏
-    const selectedNodesCount = useStore((state) => state.nodes.filter((n) => n.selected).length)
-    const handleVisibilityClass = selected
-        ? 'visible opacity-100'
-        : 'invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100'
-    // 单选且未拖拽时显示工具栏
-    const shouldShowToolbar = selected && !isDragging && selectedNodesCount <= 1
 
-    // console.log('图片节点重新渲染', id)
+  // 使用 useStore 的 selector 精确订阅选中节点数量，避免订阅整个 nodes 数组
+  const selectedNodesCount = useStore((state) => {
+    let count = 0
+    for (const node of state.nodes) {
+      if (node.selected) count++
+    }
+    return count
+  })
+
+  // 使用 useMemo 缓存样式类名，避免每次渲染都重新拼接字符串
+  const handleVisibilityClass = useMemo(() =>
+    selected
+      ? 'visible opacity-100'
+        : 'invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100',
+      [selected]
+    )
+
+  // 使用 useMemo 缓存工具栏显示条件，避免每次渲染都重新计算
+  const shouldShowToolbar = useMemo(() =>
+    selected && !isDragging && selectedNodesCount <= 1,
+    [selected, isDragging, selectedNodesCount]
+  )
+
+  // 缓存传递给 ImageToolbar 的回调函数，避免 zoom 变化时触发子组件重新渲染
+  const handleDuplicate = useCallback(() => {
+    duplicateNode(id)
+  }, [duplicateNode, id])
+
+  const handleDelete = useCallback(() => {
+    deleteNode(id)
+  }, [deleteNode, id])
+
+  // 缓存传递给 NodeContextMenu 的回调函数
+  const handleContextMenuDuplicate = useCallback(() => {
+    duplicateNode(id)
+  }, [duplicateNode, id])
+
+  const handleContextMenuDelete = useCallback(() => {
+    deleteNode(id)
+  }, [deleteNode, id])
+
+  const handleContextMenuSplitImage = useCallback((gridSize: number) => {
+    splitImage(id, gridSize)
+  }, [splitImage, id])
 
     return (
         <NodeContextMenu
-            onDuplicate={() => duplicateNode(id)}
-            onDelete={() => deleteNode(id)}
-            onSplitImage={(gridSize) => splitImage(id, gridSize)}
+        onDuplicate={handleContextMenuDuplicate}
+        onDelete={handleContextMenuDelete}
+        onSplitImage={handleContextMenuSplitImage}
         >
         <div className="group/node relative">
             {/* 左侧输入 Handle */}
@@ -67,12 +103,12 @@ export const ImageNode = memo(({
 
             {/* 顶部工具栏：随视口缩放同步变化 */}
           <NodeToolbar isVisible={shouldShowToolbar} position={Position.Top} offset={10 * zoom}>
-                    <ImageToolbar
-                        nodeId={id}
-                        data={data}
-                        selected={selected}
-                        onDuplicate={() => duplicateNode(id)}
-                        onDelete={() => deleteNode(id)}
+            <ImageToolbar
+              nodeId={id}
+              data={data}
+              selected={selected}
+              onDuplicate={handleDuplicate}
+              onDelete={handleDelete}
             />
             </NodeToolbar>
 
