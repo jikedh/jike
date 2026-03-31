@@ -18,7 +18,7 @@ import { NodeSearch } from '@/components/node-search'
 import { ArrowLeft, Eye, EyeOff, Upload } from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
 
-import { nodeTypes } from '../constants/canvasConfig'
+import { nodeTypes, edgeTypes } from '../constants/canvasConfig'
 import { CanvasContextMenu, type CanvasNodeType } from './CanvasContextMenu'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import { useChatSettingsStore } from '@/store/chatSettingsStore'
@@ -285,6 +285,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     onNodeDragStart={handleNodeDragStart}
                     onNodeDragStop={handleNodeDragStop}
                     nodeTypes={nodeTypes}
+                    edgeTypes={edgeTypes}
                     nodesDraggable
                     fitView
                     minZoom={0.2}

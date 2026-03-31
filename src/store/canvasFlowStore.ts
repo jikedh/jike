@@ -91,6 +91,8 @@ type CanvasFlowState = {
   getNextNodeId: (nodeType: NodeType) => string
   /** 创建节点 */
   addNode: (nodeType: NodeType, position?: NodePosition, options?: AddNodeOptions) => string
+  /** 删除边 */
+  deleteEdge: (edgeId: string) => void
   /** 更新便签编辑态 */
   setNoteNodeEditing: (nodeId: string, isEditing: boolean) => void
   /** 更新便签内容 */
@@ -938,6 +940,21 @@ duplicateNode: (nodeId: string) => {
     }
   })
 },
+  /**
+   * 删除边
+   * @param edgeId 要删除的边 ID
+   */
+  deleteEdge: (edgeId: string) => {
+    set((state) => ({
+      edges: state.edges.filter((edge) => edge.id !== edgeId),
+    }))
+
+    // 自动保存
+    if (useChatSettingsStore.getState().autoSaveEnabled) {
+      get().saveGraph()
+    }
+  },
+
   /**
    * 删除节点及其关联的所有边
    * @param nodeId 要删除的节点 ID

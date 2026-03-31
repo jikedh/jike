@@ -3,6 +3,7 @@ import { ImageNode } from '../CustomNodes/ImageNode'
 import { VideoNode } from '../CustomNodes/VideoNode'
 import { AgentNode } from '../CustomNodes/AgentNode'
 import type { AgentPresetId } from '@/constants/agent-presets'
+import { CustomEdge } from '../CustomEdge/CustomEdge'
 
 /**
  * 自定义节点类型映射
@@ -14,6 +15,14 @@ export const nodeTypes = {
     imageNode: ImageNode,
     videoNode: VideoNode,
     agentNode: AgentNode,
+}
+
+/**
+ * 自定义边类型映射
+ * 使用 EdgeToolbar 在边的中心点显示删除按钮
+ */
+export const edgeTypes = {
+    default: CustomEdge,
 }
 
 /**
