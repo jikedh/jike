@@ -532,20 +532,23 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       // 发送给后端的 model 字段：如果是 midjourney-niji7 则改为 midjourney
       const backendModel = isNiji7Model ? 'midjourney' : model
 
-      // 构建请求 payload
-      const buildPayload = (): any => {
-        // 基础 payload
-        const basePayload: any = {
-          model: backendModel,
-          prompt: finalPrompt,
-          resolution,
-          n: 1,
-          image_urls: referenceImageUrls,
-          promptDraft: editor?.getText() ?? '',
-          promptDraftHtml: editor?.getHTML() ?? '<p></p>',
-          uploadedUrls,
-          metadata: {},
-        }
+        // 构建请求 payload
+        const buildPayload = (): any => {
+          // 基础 payload
+          const basePayload: any = {
+            // 请求使用 backendModel（后端统一使用 midjourney，Niji7 效果通过 prompt 参数控制）
+            model: backendModel,
+            // 保留原始 model 用于 UI 状态同步
+            originalModel: model,
+            prompt: finalPrompt,
+            resolution,
+            n: 1,
+            image_urls: referenceImageUrls,
+            promptDraft: editor?.getText() ?? '',
+            promptDraftHtml: editor?.getHTML() ?? '<p></p>',
+            uploadedUrls,
+            metadata: {},
+          }
 
         // 根据不同模型添加专属参数
         if (isSeedreamModel) {

@@ -1003,12 +1003,18 @@ duplicateNode: (nodeId: string) => {
     pendingTaskCounts.set(nodeId, currentCount + 1)
     const totalTaskCount = currentCount + 1
 
+    // 使用 originalModel 恢复原始模型状态（避免 payload 中的 backendModel 覆盖 UI 状态）
+    // 例如：midjourney-niji7 在发送给后端时会转为 midjourney，但需要保留原始值用于 UI 显示
+    const restoredModel = payload.originalModel ?? payload.model
+
     // 更新节点输入参数与状态
     // 保留已有的 result.data，实现图片叠加效果（方案一）
     set((state) => ({
       nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
         ...data,
         ...payload,
+        // 强制恢复原始模型，确保 UI 显示正确的模型名称
+        model: restoredModel,
         status: GenerationStatus.QUEUED,
         progress: 0,
         error: undefined,
