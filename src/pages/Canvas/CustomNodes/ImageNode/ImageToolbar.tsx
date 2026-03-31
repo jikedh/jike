@@ -1,7 +1,6 @@
 
 import {
     IconAspectRatio,
-    IconCopy,
     IconCrop,
     IconDownload,
     IconEraser,
@@ -30,7 +29,6 @@ type ImageToolbarProps = {
     nodeId: string
     data: ImageGenerationNode
     selected: boolean
-    onDuplicate?: () => void
     onDelete?: () => void
 }
 
@@ -43,7 +41,7 @@ type ActionKey = 'upload' | 'erase' | 'enhance' | 'outpaint' | 'crop' | 'downloa
  * - 处理工具栏按钮交互反馈
  * - 基于 yet-another-react-lightbox 提供放大查看能力
  */
-export const ImageToolbar = memo(({ nodeId, data, selected, onDuplicate, onDelete }: ImageToolbarProps) => {
+export const ImageToolbar = memo(({ nodeId, data, selected, onDelete }: ImageToolbarProps) => {
     const [isLightboxOpen, setIsLightboxOpen] = useState(false)
     const [isUploading, setIsUploading] = useState(false)
 
@@ -152,21 +150,6 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDuplicate, onDelet
             <div
                 className={`nodrag nopan nowheel inline-flex h-10 items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-800/95 px-2 shadow-md ${selected ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
             >
-                {/* 复制按钮 */}
-                <button
-                    type="button"
-                    onClick={onDuplicate}
-                    className="nodrag nopan nowheel inline-flex h-8 items-center gap-1 rounded-lg border border-transparent bg-neutral-700 px-2 text-xs font-medium text-neutral-200 transition-colors hover:border-neutral-500 hover:bg-neutral-600 hover:text-neutral-100 active:border-neutral-400 active:bg-neutral-500 active:text-neutral-50"
-                    title="复制节点"
-                    aria-label="复制节点"
-                >
-                    <IconCopy size={24} stroke={1.8} />
-                    <span>复制</span>
-                </button>
-
-                {/* 分隔线 */}
-                <div className="h-5 w-px bg-neutral-600" />
-
                 {toolbarActions.map((item) => {
                     const Icon = item.icon
                     const isActive = item.key === 'preview' ? isPreviewActive : false

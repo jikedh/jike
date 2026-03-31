@@ -933,13 +933,10 @@ duplicateNode: (nodeId: string) => {
       }
     : baseNode
 
-  set((state) => {
-    // 新节点插入时，所有节点selected统一置为false，只保留新节点选中
-    const nodes = state.nodes.map((node) => ({ ...node, selected: true }))
-    return {
-      nodes: [...nodes, duplicatedNode],
-    }
-  })
+  set((state) => ({
+    // 保持现有节点状态不变，添加新节点（新节点已有 selected: true）
+    nodes: [...state.nodes, duplicatedNode],
+  }))
 },
   /**
    * 删除边
