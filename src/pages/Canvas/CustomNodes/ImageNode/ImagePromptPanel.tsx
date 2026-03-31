@@ -285,7 +285,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         })
     }, [commandQuery])
 
-    // 沿着边找所有父节点，并合并其图片结果作为参考图来源
+    // 沿着边找所有父节点，并合并其第一张图片作为参考图来源
     const parentImageUrls = useMemo(() => {
         const parentIds = edges
             .filter((edge) => edge.target === nodeId)
@@ -304,11 +304,11 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             }
 
             const parentData = parentNode.data as ImageGenerationNode
-            parentData.result?.data?.forEach((item) => {
-                if (item?.url) {
-                    urls.push(item.url)
-                }
-            })
+            // 只取父节点的第一张图片 URL（result.data[0]）
+            const firstItem = parentData.result?.data?.[0]
+            if (firstItem?.url) {
+                urls.push(firstItem.url)
+            }
         })
 
         return urls
