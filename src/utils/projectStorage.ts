@@ -13,6 +13,7 @@ export type ProjectMeta = {
     id: string
     name: string
     createdAt: number
+    updatedAt: number
     coverUrl?: string
     description?: string
     type: 'video' | 'script'
@@ -29,7 +30,7 @@ type ProjectList = {
 const STORAGE_VERSION = 2
 
 /**
- * 获取所有项目列表（按创建顺序排列）
+ * 获取所有项目列表（按最后编辑时间倒序排列）
  */
 export const getProjectList = (): ProjectMeta[] => {
     try {
@@ -39,7 +40,12 @@ export const getProjectList = (): ProjectMeta[] => {
         const data = JSON.parse(raw) as ProjectList
         if (data.version !== STORAGE_VERSION) return []
 
-        return data.projects
+        // 按 updatedAt 降序排序，如果 updatedAt 不存在则回退到 createdAt
+        return data.projects.sort((a, b) => {
+            const timeA = a.updatedAt || a.createdAt
+            const timeB = b.updatedAt || b.createdAt
+            return timeB - timeA
+        })
     } catch {
         return []
     }
@@ -77,22 +83,29 @@ const getNextId = (): number => {
  * @param name 项目名称，可选，默认为 "项目 N"
  * @param coverUrl 封面图片 URL，可选
  * @param description 项目描述，可选
- * @returns 新创建的项目元数据
+ * @param type 项目类型
  */
-export const createProject = (name?: string, coverUrl?: string, description?: string, type: 'video' | 'script' = 'video'): ProjectMeta => {
+export const createProject = (
+    name?: string,
+    coverUrl?: string,
+    description?: string,
+    type: 'video' | 'script' = 'video'
+): ProjectMeta => {
+    const now = Date.now()
     const projects = getProjectList()
     const nextId = getNextId()
 
     const newProject: ProjectMeta = {
         id: String(nextId),
         name: name || `项目 ${nextId}`,
-        createdAt: Date.now(),
+        createdAt: now,
+        updatedAt: now,
         coverUrl,
         description,
         type,
     }
 
-    // 新项目添加到列表末尾
+    // 新项目添加到列表
     projects.push(newProject)
     saveProjectList(projects, nextId + 1)
 
@@ -100,26 +113,26 @@ export const createProject = (name?: string, coverUrl?: string, description?: st
 }
 
 /**
- * 更新项目（支持 name / coverUrl / description）
+ * 更新项目元数据并刷新最后编辑时间
  */
-export const updateProject = (
-    id: string,
-    updates: any
-): boolean => {
+export const updateProject = (projectId: string, updates: Partial<Omit<ProjectMeta, 'id' | 'createdAt'>>): void => {
     try {
         const raw = localStorage.getItem(PROJECT_LIST_KEY)
-        if (!raw) return false
+        if (!raw) return
 
         const data = JSON.parse(raw) as ProjectList
-        const index = data.projects.findIndex(p => p.id === id)
+        const projectIndex = data.projects.findIndex(p => p.id === projectId)
 
-        if (index === -1) return false
-
-        Object.assign(data.projects[index], updates)
-        localStorage.setItem(PROJECT_LIST_KEY, JSON.stringify(data))
-        return true
-    } catch {
-        return false
+        if (projectIndex !== -1) {
+            data.projects[projectIndex] = {
+                ...data.projects[projectIndex],
+                ...updates,
+                updatedAt: Date.now() // 强制更新编辑时间
+            }
+            saveProjectList(data.projects, data.nextId)
+        }
+    } catch (error: any) {
+        console.error('Failed to update project:', error)
     }
 }
 
