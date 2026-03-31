@@ -22,8 +22,9 @@ import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { ImageGenerationNode, NoteNodeData } from '@/types/flow'
 
 import { COMMAND_MOCK, MENTION_MOCK } from './mock'
-import { IntegratedParamsPanel } from './components/IntegratedParamsPanel'
 import { MidjourneyAdvancedPanel } from './components/MidjourneyAdvancedPanel'
+import { SeedreamParamsPanel } from './components/SeedreamParamsPanel'
+import { GeminiParamsPanel } from './components/GeminiParamsPanel'
 
 /**
  * 图片节点底部增强输入区
@@ -77,15 +78,31 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         return currentNode.data as ImageGenerationNode
     }, [currentNode])
 
-    const ratio = currentImageData?.size ?? '1024x1024'
+  // 统一使用 size 字段存储宽高比/画面比例
+    const size = currentImageData?.size ?? '1:1'
     const resolution = currentImageData?.resolution ?? '2K'
     const model = currentImageData?.model ?? 'doubao-seedream-5-0'
-    const aspectRatio = currentImageData?.aspectRatio ?? '1:1'
     const uploadedUrls = currentImageData?.uploadedUrls ?? []
   const imageUrls = currentImageData?.image_urls ?? []
     const promptDraftHtml = currentImageData?.promptDraftHtml ?? '<p></p>'
-  // 判断是否为 Midjourney 系列模型（包括 midjourney 和 midjourney-niji7）
-  const isMidjourneyModel = model === 'midjourney' || model === 'midjourney-niji7'
+
+    // ========== 模型专属参数 ==========
+    // 判断是否为 Midjourney 系列模型
+    const isMidjourneyModel = model === 'midjourney' || model === 'midjourney-niji7'
+    // 判断是否为 Seedream 5.0 模型
+    const isSeedreamModel = model === 'doubao-seedream-5-0'
+    // 判断是否为 Gemini 3 Pro 模型
+    const isGeminiModel = model === 'gemini-3-pro-image-preview'
+
+    // Seedream 5.0 专属参数
+    const sequentialImageGeneration = currentImageData?.sequentialImageGeneration ?? 'disabled'
+    const sequentialMaxImages = currentImageData?.sequentialMaxImages ?? 4
+    const watermark = currentImageData?.watermark ?? false
+
+    // Gemini 3 Pro 专属参数
+    const orientation = currentImageData?.orientation ?? 'landscape'
+
+    // Midjourney 高级参数
   const midjourneyAdvanced = currentImageData?.midjourneyAdvanced ?? {
     referenceUrls: imageUrls,
     styleUrls: [],
@@ -515,23 +532,54 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       // 发送给后端的 model 字段：如果是 midjourney-niji7 则改为 midjourney
       const backendModel = isNiji7Model ? 'midjourney' : model
 
-      // 构建请求 payload（注意：n 固定为 1，通过多次调用实现多图生成）
-      const buildPayload = (): any => ({
-        model: backendModel,
-        prompt: finalPrompt,
-            size: ratio,
+      // 构建请求 payload
+      const buildPayload = (): any => {
+        // 基础 payload
+        const basePayload: any = {
+          model: backendModel,
+          prompt: finalPrompt,
+          resolution,
+          n: 1,
+          image_urls: referenceImageUrls,
+          promptDraft: editor?.getText() ?? '',
+          promptDraftHtml: editor?.getHTML() ?? '<p></p>',
+          uploadedUrls,
+          metadata: {},
+        }
+
+        // 根据不同模型添加专属参数
+        if (isSeedreamModel) {
+          // Seedream 5.0: size 作为宽高比
+          basePayload.size = size
+          basePayload.metadata = {
             resolution,
-            aspectRatio,
-            n: 1,
-            image_urls: referenceImageUrls,
-            promptDraft: editor?.getText() ?? '',
-            promptDraftHtml: editor?.getHTML() ?? '<p></p>',
-            uploadedUrls,
-        midjourneyAdvanced,
-            metadata: {
-                resolution,
-            },
-        })
+            sequential_image_generation: sequentialImageGeneration,
+            sequential_image_generation_options: sequentialImageGeneration === 'auto' ? {
+              max_images: sequentialMaxImages,
+            } : undefined,
+            watermark,
+          }
+        } else if (isGeminiModel) {
+          // Gemini 3 Pro: size 作为画面比例
+          basePayload.size = size
+          basePayload.metadata = {
+            resolution,
+            orientation,
+          }
+        } else {
+          // 其他模型（Midjourney 等）
+          basePayload.size = size
+          basePayload.aspectRatio = currentImageData?.aspectRatio ?? '1:1'
+          basePayload.metadata = {
+            resolution,
+          }
+          if (isMidjourneyModel) {
+            basePayload.midjourneyAdvanced = midjourneyAdvanced
+          }
+        }
+
+        return basePayload
+      }
 
       // 显示总共需要生成的图片数量
       setGeneratingCount(imageCount)
@@ -663,57 +711,73 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             {/* 下方区域：参数控制区 */}
             <div className="rounded-2xl border border-neutral-700 bg-neutral-800/80 p-2.5">
                 <div className="flex items-center gap-2">
-                    {/* 整合参数面板 */}
-                    <IntegratedParamsPanel
-                        size={ratio}
-                        aspectRatio={aspectRatio}
-                        resolution={resolution}
-                        onSizeChange={(value) => updateImageNodeData(nodeId, { size: value })}
-                        onAspectRatioChange={(value) => updateImageNodeData(nodeId, { aspectRatio: value })}
-                        onResolutionChange={(value) => updateImageNodeData(nodeId, { resolution: value })}
-                    />
+                    {/* 生成模型 - 始终在最左侧 */}
+                    <Select
+                        value={model}
+                        onValueChange={(value) => {
+                            updateImageNodeData(nodeId, { model: value })
+                        }}
+                    >
+                        <SelectTrigger className="h-8 min-w-[160px] border-neutral-700 bg-neutral-900 text-xs text-neutral-100">
+                            <SelectValue placeholder="选择模型" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-neutral-800 border border-neutral-600">
+                            {IMAGE_MODELS.map((item) => (
+                                <SelectItem key={item.id} value={item.model} className="text-neutral-100 focus:bg-neutral-700 focus:text-neutral-100">
+                                    {item.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
 
-                    {/* 生成模型 */}
-                    <div className="flex items-center gap-2">
-
-                        <Select
-                            value={model}
-                            onValueChange={(value) => {
-                                updateImageNodeData(nodeId, { model: value })
-                            }}
-                        >
-                            <SelectTrigger className="h-8 min-w-[160px] border-neutral-700 bg-neutral-900 text-xs text-neutral-100">
-                                <SelectValue placeholder="选择模型" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-neutral-800 border border-neutral-600">
-                                {IMAGE_MODELS.map((item) => (
-                                    <SelectItem key={item.id} value={item.model} className="text-neutral-100 focus:bg-neutral-700 focus:text-neutral-100">
-                                        {item.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    {/* 根据模型动态渲染整合参数面板 */}
+                    {isSeedreamModel && (
+                        // Seedream 5.0 整合参数面板
+                        <SeedreamParamsPanel
+                            size={size}
+                            resolution={resolution}
+                            sequentialImageGeneration={sequentialImageGeneration}
+                            sequentialMaxImages={sequentialMaxImages}
+                            watermark={watermark}
+                            onSizeChange={(value) => updateImageNodeData(nodeId, { size: value })}
+                            onResolutionChange={(value) => updateImageNodeData(nodeId, { resolution: value })}
+                            onSequentialChange={(value) => updateImageNodeData(nodeId, { sequentialImageGeneration: value })}
+                            onSequentialMaxChange={(value) => updateImageNodeData(nodeId, { sequentialMaxImages: value })}
+                            onWatermarkChange={(value) => updateImageNodeData(nodeId, { watermark: value })}
+                        />
+                    )}
+                    {isGeminiModel && (
+                        // Gemini 3 Pro 整合参数面板
+                        <GeminiParamsPanel
+                            size={size}
+                            resolution={resolution}
+                            orientation={orientation}
+                            onSizeChange={(value) => updateImageNodeData(nodeId, { size: value })}
+                            onResolutionChange={(value) => updateImageNodeData(nodeId, { resolution: value })}
+                            onOrientationChange={(value) => updateImageNodeData(nodeId, { orientation: value })}
+                        />
+                    )}
 
                     {/* Midjourney 高级选项 - 仅在选择 Midjourney 模型时显示 */}
                     {isMidjourneyModel && (
                         <MidjourneyAdvancedPanel
-                referenceImageUrls={referenceImageUrls}
-                value={midjourneyAdvanced}
-                onChange={(next) => {
-                  updateImageNodeData(nodeId, {
-                    midjourneyAdvanced: {
-                      referenceUrls: next.referenceUrls ?? [],
-                      styleUrls: next.styleUrls ?? [],
-                      iw: next.iw ?? 0.5,
-                      sw: next.sw ?? 100,
-                    },
-                  })
-                }}
+                            referenceImageUrls={referenceImageUrls}
+                            value={midjourneyAdvanced}
+                            onChange={(next) => {
+                                updateImageNodeData(nodeId, {
+                                    midjourneyAdvanced: {
+                                        referenceUrls: next.referenceUrls ?? [],
+                                        styleUrls: next.styleUrls ?? [],
+                                        iw: next.iw ?? 0.5,
+                                        sw: next.sw ?? 100,
+                                    },
+                                })
+                            }}
                         />
                     )}
 
-            <div className="ml-auto flex items-center gap-2">
+                    {/* 数量选择和生成按钮 */}
+                    <div className="ml-auto flex items-center gap-2">
               {/* 数量选择按钮 */}
               <div className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-900 p-0.5">
                 {IMAGE_COUNT_OPTIONS.map((count) => (

@@ -1,0 +1,230 @@
+/**
+ * Seedream 5.0 整合参数面板组件
+ * 包含宽高比、分辨率、顺序生成、水印的可视化选择
+ * 适用于 doubao-seedream-5-0 模型
+ */
+
+import { IconSettings } from '@tabler/icons-react'
+
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { cn } from '@/lib/utils'
+
+import { AspectRatioIcon } from './AspectRatioIcon'
+
+// Seedream 5.0 宽高比选项（与类型定义保持一致）
+export const SEEDREAM_ASPECT_RATIOS = [
+  { label: '1:1', value: '1:1', description: '正方形' },
+  { label: '4:3', value: '4:3', description: '横向4:3' },
+  { label: '3:4', value: '3:4', description: '竖向3:4' },
+  { label: '16:9', value: '16:9', description: '横向宽屏' },
+  { label: '9:16', value: '9:16', description: '竖向长图' },
+  { label: '3:2', value: '3:2', description: '横向3:2' },
+  { label: '2:3', value: '2:3', description: '竖向2:3' },
+  { label: '21:9', value: '21:9', description: '超宽屏' },
+  { label: '9:21', value: '9:21', description: '超窄屏' },
+]
+
+// Seedream 5.0 分辨率选项
+export const SEEDREAM_RESOLUTIONS = [
+  { label: '2K', value: '2K', description: '标准分辨率' },
+  { label: '3K', value: '3K', description: '高清分辨率' },
+]
+
+type SeedreamParamsPanelProps = {
+  // 当前宽高比
+  size: string
+  // 当前分辨率
+  resolution: string
+  // 顺序图像生成模式
+  sequentialImageGeneration: string
+  // 顺序生成最大数量
+  sequentialMaxImages?: number
+  // 是否添加水印
+  watermark: boolean
+  // 更新宽高比
+  onSizeChange: (value: string) => void
+  // 更新分辨率
+  onResolutionChange: (value: string) => void
+  // 更新顺序生成模式
+  onSequentialChange: (value: string) => void
+  // 更新顺序生成最大数量
+  onSequentialMaxChange?: (value: number) => void
+  // 更新水印
+  onWatermarkChange: (value: boolean) => void
+}
+
+export const SeedreamParamsPanel = ({
+  size,
+  resolution,
+  sequentialImageGeneration,
+  sequentialMaxImages = 4,
+  watermark,
+  onSizeChange,
+  onResolutionChange,
+  onSequentialChange,
+  onSequentialMaxChange,
+  onWatermarkChange,
+}: SeedreamParamsPanelProps) => {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          unstyled
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 text-xs text-neutral-300 transition-colors hover:border-neutral-500 hover:text-neutral-100"
+        >
+          <IconSettings size={14} />
+          <span>整合参数</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="top"
+        className="w-96 border border-neutral-700 bg-neutral-900 p-3 shadow-xl"
+      >
+        <div className="space-y-4">
+          {/* 宽高比选择 */}
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-neutral-300">
+              宽高比
+            </label>
+            <div className="grid grid-cols-5 gap-2">
+              {SEEDREAM_ASPECT_RATIOS.map((item) => {
+                const isActive = size === item.value
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => onSizeChange(item.value)}
+                    className={cn(
+                      'flex flex-col items-center gap-1 rounded-lg border p-2 transition-all',
+                      isActive
+                        ? 'border-blue-500 bg-blue-500/10'
+                        : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750',
+                    )}
+                  >
+                    <AspectRatioIcon
+                      ratio={item.value}
+                      size={24}
+                      active={isActive}
+                    />
+                    <span
+                      className={cn(
+                        'text-[10px]',
+                        isActive ? 'text-blue-400' : 'text-neutral-400',
+                      )}
+                    >
+                      {item.label}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* 分辨率选择 */}
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-neutral-300">
+              分辨率
+            </label>
+            <div className="flex gap-2">
+              {SEEDREAM_RESOLUTIONS.map((item) => {
+                const isActive = resolution === item.value
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => onResolutionChange(item.value)}
+                    className={cn(
+                      'flex flex-1 flex-col items-center gap-0.5 rounded-lg border px-3 py-2 transition-all',
+                      isActive
+                        ? 'border-blue-500 bg-blue-500/10'
+                        : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'text-xs font-medium',
+                        isActive ? 'text-blue-400' : 'text-neutral-300',
+                      )}
+                    >
+                      {item.label}
+                    </span>
+                    <span className="text-[10px] text-neutral-500">
+                      {item.description}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* 顺序图像生成 */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-neutral-300">
+                顺序图像生成
+              </label>
+              <Switch
+                checked={sequentialImageGeneration === 'auto'}
+                onCheckedChange={(checked) =>
+                  onSequentialChange(checked ? 'auto' : 'disabled')
+                }
+                className="data-[state=checked]:bg-blue-500"
+              />
+            </div>
+            <p className="text-[10px] text-neutral-500">
+              启用后可生成多张风格一致的组图
+            </p>
+
+            {/* 顺序生成数量选择 - 仅在启用时显示 */}
+            {sequentialImageGeneration === 'auto' && (
+              <div className="flex items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800/50 p-2">
+                <span className="text-xs text-neutral-400">生成数量</span>
+                <div className="ml-auto flex gap-1">
+                  {[2, 4, 6, 8, 15].map((count) => (
+                    <button
+                      key={count}
+                      type="button"
+                      onClick={() => onSequentialMaxChange?.(count)}
+                      className={cn(
+                        'rounded-md px-2 py-1 text-xs transition-colors',
+                        sequentialMaxImages === count
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600',
+                      )}
+                    >
+                      {count}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 添加水印 */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <label className="text-xs font-medium text-neutral-300">
+                添加水印
+              </label>
+              <p className="text-[10px] text-neutral-500">
+                为生成的图像添加防伪标识
+              </p>
+            </div>
+            <Switch
+              checked={watermark}
+              onCheckedChange={onWatermarkChange}
+              className="data-[state=checked]:bg-blue-500"
+            />
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
