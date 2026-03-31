@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { FileText, Film, FolderOpen, Clock, Sparkles, TrendingUp, Zap, Layers } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import CreateProjectDialog from '@/components/CreateProjectDialog'
+import ProjectDialog from '@/components/ProjectDialog'
 
 // 顶部横向滑动卡片数据
 const carouselCards = [
@@ -189,10 +189,11 @@ export default function HomePage() {
             </main>
 
         {/* 创建项目弹窗 - 复用组件 */}
-        <CreateProjectDialog
+        {/* TODO */}
+        <ProjectDialog
           isOpen={isCreateDialogOpen}
           onClose={() => setIsCreateDialogOpen(false)}
-          onProjectCreated={handleProjectCreated}
+          onSuccess={handleProjectCreated}
         />
         </div>
     )
