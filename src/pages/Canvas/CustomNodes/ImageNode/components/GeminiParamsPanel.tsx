@@ -34,7 +34,7 @@ export const GEMINI_SIZES = [
 export const GEMINI_RESOLUTIONS = [
   { label: '1K', value: '1K', description: '默认分辨率' },
   { label: '2K', value: '2K', description: '标准分辨率' },
-  { label: '3K', value: '3K', description: '高清分辨率' },
+  { label: '4K', value: '4K', description: '高清分辨率' },
 ]
 
 // Gemini 3 Pro 图像方向选项

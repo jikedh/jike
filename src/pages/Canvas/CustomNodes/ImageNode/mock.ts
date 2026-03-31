@@ -12,4 +12,5 @@ export const MENTION_MOCK = [
 export const COMMAND_MOCK = [
     { id: 'c-1', label: '角色参考图', command: '/character-reference', description: '把人物图集合成特写+正面，生成一张面部特写（[此处自动插入角色的性格描述]）和它的全身图（最左边是超大的人物面部特写，右边放人物全身，生成一张图片，渐变色纯色背景，丰富的光影。' },
     { id: 'c-2', label: '角色三视图', command: '/character-three-view', description: '- 把人物图集合成一个21:9的特写+三视图，生成一张面部特写（[此处自动插入角色的性格描述]）和全身三视图（最左边是超大的人物面部特写，右边放人物全身的正视图，侧视图，后视图），生成在一张图片里面，渐变色纯色背景，丰富的光影。' },
+    { id: 'c-3', label: '多宫格电影分镜', command: '/character-multiple-grid', description: '基于用户上传的参考图，生成包含 9 种不同拍摄角度的电影分镜阵列。' },
 ] as const

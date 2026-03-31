@@ -778,24 +778,26 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
                     {/* 数量选择和生成按钮 */}
                     <div className="ml-auto flex items-center gap-2">
-              {/* 数量选择按钮 */}
-              <div className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-900 p-0.5">
-                {IMAGE_COUNT_OPTIONS.map((count) => (
-                  <button
-                    key={count}
-                    type="button"
-                    onClick={() => setImageCount(count)}
-                    disabled={isGenerating}
-                    className={`nodrag nopan nowheel inline-flex h-7 min-w-8 items-center justify-center rounded-md px-1.5 text-xs font-medium transition-colors ${imageCount === count
-                        ? 'bg-blue-600 text-white'
-                        : 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200'
-                      } ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    title={`生成 ${count} 张图片`}
-                  >
-                    {count}
-                  </button>
-                ))}
-              </div>
+                    {/* 数量选择按钮 - Midjourney 模型隐藏 */}
+                    {!isMidjourneyModel && (
+                        <div className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-900 p-0.5">
+                            {IMAGE_COUNT_OPTIONS.map((count) => (
+                                <button
+                                    key={count}
+                                    type="button"
+                                    onClick={() => setImageCount(count)}
+                                    disabled={isGenerating}
+                                    className={`nodrag nopan nowheel inline-flex h-7 min-w-8 items-center justify-center rounded-md px-1.5 text-xs font-medium transition-colors ${imageCount === count
+                                            ? 'bg-blue-600 text-white'
+                                            : 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200'
+                                        } ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    title={`生成 ${count} 张图片`}
+                                >
+                                    {count}
+                                </button>
+                            ))}
+                        </div>
+                    )}
 
               {/* 生成按钮 */}
                         <Button
