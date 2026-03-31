@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import { FileText, Film, FolderOpen, Clock, Sparkles, TrendingUp, Zap, Layers } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { createProject } from '@/utils/projectStorage'
+import CreateProjectDialog from '@/components/CreateProjectDialog'
 
 // 顶部横向滑动卡片数据
 const carouselCards = [
@@ -65,13 +66,26 @@ const quickActions = [
 
 export default function HomePage() {
     const navigate = useNavigate()
+  // 控制创建项目弹窗的显示状态
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
 
+  /**
+   * 处理功能面板点击事件
+   * 点击底部的"AI 文本与剧本创作"或"AI 视频与视觉工坊"时，打开创建项目弹窗
+   */
     const handleFeaturePanelClick = (panelId: string) => {
         if (panelId === 'video' || panelId === 'text') {
-            const newProject = createProject()
-            navigate(`/canvas/${newProject.id}`)
+          setIsCreateDialogOpen(true)
         }
     }
+
+  /**
+   * 项目创建成功后的回调
+   * 跳转到新创建的项目画布页面
+   */
+  const handleProjectCreated = (projectId: string) => {
+    navigate(`/canvas/${projectId}`)
+  }
 
     return (
         <div className="min-h-screen bg-[#0a0a0f] text-white flex flex-col overflow-hidden relative">
@@ -173,6 +187,13 @@ export default function HomePage() {
                     ))}
                 </section>
             </main>
+
+        {/* 创建项目弹窗 - 复用组件 */}
+        <CreateProjectDialog
+          isOpen={isCreateDialogOpen}
+          onClose={() => setIsCreateDialogOpen(false)}
+          onProjectCreated={handleProjectCreated}
+        />
         </div>
     )
 }
