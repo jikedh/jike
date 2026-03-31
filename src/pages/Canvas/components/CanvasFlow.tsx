@@ -10,10 +10,11 @@ import {
     useReactFlow,
     ControlButton,
     BackgroundVariant,
+    applyNodeChanges,
+    type NodeChange,
 } from '@xyflow/react'
 
 import { NodeSearch } from '@/components/node-search'
-import type { Node } from '@xyflow/react'
 import { ArrowLeft, Eye, EyeOff, Upload } from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
 
@@ -32,11 +33,11 @@ type CanvasFlowProps = {
 // 画布流组件：仅负责 ReactFlow 相关状态与渲染。
 export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     // 通过 zustand 读取图状态，避免业务动作散落在多个组件。
-    const nodes = useCanvasFlowStore((state) => state.nodes)
+    const zustandNodes = useCanvasFlowStore((state) => state.nodes)
     const edges = useCanvasFlowStore((state) => state.edges)
     const hydrated = useCanvasFlowStore((state) => state.hydrated)
     const currentProjectId = useCanvasFlowStore((state) => state.projectId)
-    const onNodesChange = useCanvasFlowStore((state) => state.onNodesChange)
+    const storeOnNodesChange = useCanvasFlowStore((state) => state.onNodesChange)
     const onEdgesChange = useCanvasFlowStore((state) => state.onEdgesChange)
     const onConnect = useCanvasFlowStore((state) => state.onConnect)
     const addNode = useCanvasFlowStore((state) => state.addNode)
@@ -44,7 +45,53 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     const gridVisible = useChatSettingsStore((state) => state.gridVisible)
     const nodeSearchVisible = useChatSettingsStore((state) => state.nodeSearchVisible)
     const { screenToFlowPosition } = useReactFlow<AllNodeType, EdgeType>()
-  const navigate = useNavigate()
+    const navigate = useNavigate()
+
+    // ==================== 拖动性能优化：本地 nodes 状态隔离 ====================
+    //
+    // 问题：ReactFlow 受控模式下，拖动时每帧调用 onNodesChange → Zustand set →
+    //       CanvasFlow 重渲染（因为订阅了 zustandNodes） → React DevTools 跟踪
+    //       每次重渲染开销 → 打开开发者工具时卡顿。
+    //
+    // 解法：维护本地 displayNodes 状态用于 ReactFlow 渲染：
+    //   - 拖动时：只更新本地 displayNodes（视觉流畅），不写入 Zustand（不触发全局重渲染）
+    //   - 拖动结束：同步最终位置到 Zustand（持久化）
+    //   - 外部变更（添加/删除节点、图片生成结果等）：Zustand 变化时同步到 displayNodes
+
+    const [displayNodes, setDisplayNodes] = useState<AllNodeType[]>(zustandNodes)
+    // 用 ref 而非 state 追踪拖动状态，避免引发额外渲染
+    const isDraggingRef = useRef(false)
+
+    // 当 Zustand nodes 发生外部变更时（非拖动），同步到 displayNodes
+    useEffect(() => {
+        if (!isDraggingRef.current) {
+            setDisplayNodes(zustandNodes)
+        }
+    }, [zustandNodes])
+
+    // 本地 onNodesChange：拖动中只更新 displayNodes，拖动结束才同步 Zustand
+    const onNodesChange = useCallback((changes: NodeChange<AllNodeType>[]) => {
+        // 始终更新本地显示状态，保证拖动视觉流畅
+        setDisplayNodes((prev) => applyNodeChanges(changes, prev))
+
+        // 过滤掉拖动进行中的位置变更，只把最终结果（dragging: false）和其他类型变更写入 Zustand
+        const persistableChanges = changes.filter(
+            (c) => !(c.type === 'position' && c.dragging === true)
+        )
+        if (persistableChanges.length > 0) {
+            storeOnNodesChange(persistableChanges)
+        }
+    }, [storeOnNodesChange])
+
+    const handleNodeDragStart = useCallback(() => {
+        isDraggingRef.current = true
+    }, [])
+
+    const handleNodeDragStop = useCallback(() => {
+        isDraggingRef.current = false
+        // ReactFlow 拖动结束时会自动触发 onNodesChange（dragging: false）
+        // 上面的 onNodesChange 已经将最终位置写入 Zustand，此处只需重置 ref 即可
+    }, [])
 
     // 当 projectId 变化时切换项目
     useEffect(() => {
@@ -227,7 +274,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
             >
                 <input {...getInputProps()} />
                 <ReactFlow<AllNodeType, EdgeType>
-                    nodes={nodes}
+                    nodes={displayNodes}
                     edges={edges}
                     onNodesChange={onNodesChange}
                     onEdgesChange={onEdgesChange}
@@ -235,6 +282,8 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     onConnectStart={handleConnectStart}
                     onPaneContextMenu={handlePaneContextMenu}
                     onConnectEnd={handleConnectEnd}
+                    onNodeDragStart={handleNodeDragStart}
+                    onNodeDragStop={handleNodeDragStop}
                     nodeTypes={nodeTypes}
                     nodesDraggable
                     fitView

@@ -46,8 +46,15 @@ export default function ChangeLogger({ limit = 20 }: ChangeLoggerProps) {
     const onNodesChangeLogger: OnNodesChange = (changes) => {
       userOnNodesChange(changes);
 
+      // 过滤掉拖动中的位置变更（dragging: true），避免每帧触发 setState 导致卡顿
+      const loggableChanges = changes.filter(
+        (c) => !(c.type === 'position' && 'dragging' in c && c.dragging === true)
+      );
+
+      if (loggableChanges.length === 0) return;
+
       setChanges((c) => {
-        changes.forEach((change) => {
+        loggableChanges.forEach((change) => {
           if (c.length >= limit) {
             c.pop();
           }

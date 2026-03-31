@@ -1284,6 +1284,9 @@ duplicateNode: (nodeId: string) => {
 
   /**
    * 处理节点变化事件（位置、尺寸、删除等）
+   *
+   * 注意：CanvasFlow 组件内部已做拖动优化（本地状态隔离），
+   * 拖动过程中不会调用此方法，只有拖动结束或其他变更时才调用。
    */
   onNodesChange: (changes) => {
     set((state) => ({
