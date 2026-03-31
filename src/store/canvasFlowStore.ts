@@ -989,6 +989,7 @@ duplicateNode: (nodeId: string) => {
     const totalTaskCount = currentCount + 1
 
     // 更新节点输入参数与状态
+    // 保留已有的 result.data，实现图片叠加效果（方案一）
     set((state) => ({
       nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
         ...data,
@@ -996,9 +997,10 @@ duplicateNode: (nodeId: string) => {
         status: GenerationStatus.QUEUED,
         progress: 0,
         error: undefined,
+        // 保留之前的图片数据，新生成的图片会追加到 result.data 中
         result: {
           type: 'image',
-          data: [],
+          data: data.result?.data ?? [],
         },
       })),
     }))
