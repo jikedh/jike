@@ -23,6 +23,7 @@ import type { ImageGenerationNode, NoteNodeData } from '@/types/flow'
 
 import { COMMAND_MOCK, MENTION_MOCK } from './mock'
 import { MidjourneyAdvancedPanel } from './components/MidjourneyAdvancedPanel'
+import { MidjourneyParamsPanel } from './components/MidjourneyParamsPanel'
 import { SeedreamParamsPanel } from './components/SeedreamParamsPanel'
 import { GeminiParamsPanel } from './components/GeminiParamsPanel'
 
@@ -528,7 +529,16 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
       // 判断是否为 Midjourney Niji7 模型，如果是则在 prompt 最后拼接 --niji7 参数
       const isNiji7Model = model === 'midjourney-niji7'
-      const finalPrompt = isNiji7Model ? `${mergedPrompt} --niji 7` : mergedPrompt
+      // 构建 Midjourney 模型的最终 prompt：添加 --ar 参数
+      let finalPrompt = mergedPrompt
+      if (isMidjourneyModel) {
+        // Midjourney 模型：在 prompt 末尾拼接 --ar 尺寸参数
+        finalPrompt = `${finalPrompt} --ar ${size}`
+        // 如果是 Niji7 模型，还需要拼接 --niji 7
+        if (isNiji7Model) {
+          finalPrompt = `${finalPrompt} --niji 7`
+        }
+      }
       // 发送给后端的 model 字段：如果是 midjourney-niji7 则改为 midjourney
       const backendModel = isNiji7Model ? 'midjourney' : model
 
@@ -758,6 +768,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                             onSizeChange={(value) => updateImageNodeData(nodeId, { size: value })}
                             onResolutionChange={(value) => updateImageNodeData(nodeId, { resolution: value })}
                             onOrientationChange={(value) => updateImageNodeData(nodeId, { orientation: value })}
+                        />
+                    )}
+
+                    {/* Midjourney 整合参数面板 - 仅在选择 Midjourney 模型时显示 */}
+                    {isMidjourneyModel && (
+                        <MidjourneyParamsPanel
+                            size={size}
+                            onSizeChange={(value) => updateImageNodeData(nodeId, { size: value })}
                         />
                     )}
 
