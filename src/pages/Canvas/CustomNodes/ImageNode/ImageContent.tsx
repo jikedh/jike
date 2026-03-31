@@ -6,6 +6,7 @@ import { CollapsibleImageGallery } from './CollapsibleImageGallery'
 type ImageContentProps = {
     data: ImageGenerationNode
     onRetry?: () => void
+    onReorder?: (fromIndex: number) => void
 }
 
 /**
@@ -14,10 +15,11 @@ type ImageContentProps = {
  * - 显示生成或上传的图片
  * - 显示生成状态与进度条
  * - 处理错误状态展示
+ * - 支持点击图片重新排序
  */
-export const ImageContent = memo(({ data, onRetry }: ImageContentProps) => {
-    // 结果图片列表（支持多张）
-    const images = data.result?.data?.filter((item) => item?.url).map((item) => item.url as string) ?? []
+export const ImageContent = memo(({ data, onRetry, onReorder }: ImageContentProps) => {
+    // 结果图片列表（支持多张），保留原始对象结构用于排序
+    const images = data.result?.data?.filter((item) => item?.url) ?? []
     const status = data.status ?? GenerationStatus.COMPLETED
     const progress = data.progress ?? 0
     const error = data.error
@@ -64,7 +66,7 @@ export const ImageContent = memo(({ data, onRetry }: ImageContentProps) => {
 
     // 已完成状态
     if (images.length > 0) {
-        return <CollapsibleImageGallery images={images} />
+        return <CollapsibleImageGallery images={images} onReorder={onReorder} />
     }
 
     // 空状态

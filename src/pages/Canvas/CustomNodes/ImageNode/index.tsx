@@ -18,6 +18,7 @@ import { ImageToolbar } from './ImageToolbar'
  * - 提供左右 Handle 用于流程连接
  * - 展示图片内容、生成状态与进度
  * - 提供工具栏操作（复制、删除、重新生成）
+ * - 支持点击图片重新排序（将点击的图片移到首位）
  */
 export const ImageNode = memo(({
     id,
@@ -30,6 +31,7 @@ export const ImageNode = memo(({
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode)
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode)
     const splitImage = useCanvasFlowStore((state) => state.splitImage)
+    const updateImageNodeData = useCanvasFlowStore((state) => state.updateImageNodeData)
 
   // 使用 useStore 的 selector 精确订阅选中节点数量，避免订阅整个 nodes 数组
   const selectedNodesCount = useStore((state) => {
@@ -75,6 +77,25 @@ export const ImageNode = memo(({
   const handleContextMenuSplitImage = useCallback((gridSize: number) => {
     splitImage(id, gridSize)
   }, [splitImage, id])
+
+  // 点击图片重新排序：将指定索引的图片移到首位
+  const handleReorder = useCallback((fromIndex: number) => {
+    const resultData = data.result?.data
+    if (!resultData || fromIndex <= 0 || fromIndex >= resultData.length) return
+
+    // 将被点击的图片元素移到数组首位
+    const newData = [...resultData]
+    const [movedItem] = newData.splice(fromIndex, 1)
+    newData.unshift(movedItem)
+
+    // 通过 store 更新节点数据
+    updateImageNodeData(id, {
+      result: {
+        type: data.result?.type ?? 'image',
+        data: newData,
+      },
+    })
+  }, [data.result, id, updateImageNodeData])
 
     return (
         <NodeContextMenu
@@ -130,7 +151,7 @@ export const ImageNode = memo(({
             >
                 {/* 图片内容区：提供明确高度基准，避免 h-full + absolute 链路在自适应场景下塌陷 */}
                 <div className="relative flex w-full min-h-62.5 aspect-7/5 overflow-hidden rounded-md bg-muted/10">
-                    <ImageContent data={data} />
+                    <ImageContent data={data} onReorder={handleReorder} />
                 </div>
             </div>
         </div>

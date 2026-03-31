@@ -3,6 +3,7 @@ type ImageTileProps = {
     index: number
     isBroken: boolean
     onError: (index: number) => void
+    onClick?: () => void
     className?: string
 }
 
@@ -10,8 +11,9 @@ type ImageTileProps = {
  * 单张图片单元
  * - 正常时渲染图片
  * - 加载失败时渲染占位块（避免网格塌陷）
+ * - 支持点击事件用于触发排序
  */
-export const ImageTile = ({ url, index, isBroken, onError, className }: ImageTileProps) => {
+export const ImageTile = ({ url, index, isBroken, onError, onClick, className }: ImageTileProps) => {
     if (isBroken) {
         return (
             <div
@@ -31,6 +33,8 @@ export const ImageTile = ({ url, index, isBroken, onError, className }: ImageTil
             className={`h-full w-full object-cover ${className ?? ''}`}
             loading="lazy"
             onError={() => onError(index)}
+            onClick={onClick}
+            style={{ cursor: onClick ? 'pointer' : undefined }}
         />
     )
 }
