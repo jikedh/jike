@@ -1,6 +1,5 @@
 // import aiService, { zeakaiRequest, getAiToken } from '@/utils/aiRequest'
 import { EventSourceParserStream } from 'eventsource-parser/stream'
-import type { submitMjImagineResponse, fetchMjTaskResponse } from '@/types/MJGeneration'
 import { aiService, zeakaiRequest } from '@/utils/aiRequest'
 import { getAiToken, getBaseURL } from '@/utils/utils'
 

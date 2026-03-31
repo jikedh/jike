@@ -1,135 +1,46 @@
-export interface submitMjImagineResponse {
-    /**
-     * 状态码，1(提交成功), 22(排队中), 23(队列已满，请稍后尝试),24(prompt包含敏感词),other(错误)
-     */
-    code: number;
-    /**
-     * 描述
-     */
-    description: string;
-    /**
-     * 任务id
-     */
-    result: string;
-    [property: string]: any;
+export interface MJRequest {
+  prompt: string; // 生成提示词，必填
+  mode?: string; // 调用模式，如 RELAX:慢速模式，FAST: 快速模式，默认RELAX
+  notifyHook?: string; // 结果回调地址
+  base64Array?: string[]; // 图片数据的base64字符串数组
+  state?: string; // 用于记录用户所需的自定义数据
+
 }
 
-
-
-/**
- * Request
- */
-export interface fetchMjTaskResponse {
-    /**
-     * 任务类型，可用值:IMAGINE,UPSCALE,VARIATION,ZOOM,PAN,DESCRIBE,BLEND,SHORTEN,SWAP_FACE
-     */
-    action: string;
-    /**
-     * 按钮数组，图片下方对应的各个按钮数组，需要点击按钮的时候，把customId传给action接口即可
-     */
-    buttons: Button[];
-    /**
-     * 任务耗费积分
-     */
-    cost: number;
-    /**
-     * 描述
-     */
-    description: string;
-    /**
-     * 失败原因
-     */
-    failReason: null;
-    /**
-     * 结束时间
-     */
-    finishTime: number;
-    /**
-     * 任务id
-     */
-    id: string;
-    /**
-     * 图片地址
-     */
-    // imageUrls: string[]; 这里的图片展示不出来，但是test里面的是可以展示出来的
-    imageUrl: string;
-    /**
-     * 任务进度
-     */
-    progress: string;
-    /**
-     * 提示词
-     */
-    prompt: string;
-    /**
-     * 提示词英文
-     */
-    promptEn: string;
-    /**
-     * 额外信息，任务的额外信息
-     */
-    properties: Properties;
-    /**
-     * 种子值，任务的种子值，没有的时候需要执行seed接口获取，可用于生成相似的图片
-     */
-    seed: string;
-    /**
-     * 开始执行时间
-     */
-    startTime: number;
-    /**
-     * 自定义参数
-     */
-    state: string;
-    /**
-     * 任务状态，可用值:NOT_START,SUBMITTED,MODAL,IN_PROGRESS,FAILURE,SUCCESS,CANCEL
-     */
-    status: string;
-    /**
-     * 提交时间
-     */
-    submitTime: number;
-    [property: string]: any;
-}
-
-export interface Button {
-    /**
-     * customId，customId对应具体的按钮，执行action接口的时候，需要传对应的参数
-     */
-    customId: string;
-    /**
-     * 图标，按钮对应图标
-     */
-    emoji: string;
-    /**
-     * 文本，按钮对应文本
-     */
-    label: string;
-    /**
-     * 样式，按钮对应样式
-     */
-    style: number;
-    /**
-     * 类型，按钮对应类型
-     */
-    type: number;
-    [property: string]: any;
-}
-
-/**
- * 额外信息，任务的额外信息
- */
-export interface Properties {
-    botType: string;
-    discordChannelId: string;
-    discordInstanceId: string;
-    finalPrompt: string;
-    flags: number;
-    messageContent: string;
-    messageHash: string;
-    messageId: string;
-    nonce: string;
-    notifyHook: string;
-    progressMessageId: string;
-    [property: string]: any;
+export interface MJResponse {
+  id: string; // 任务唯一标识符
+  mode: string; // 调用模式，如 RELAX（慢速模式）、FAST（快速模式）
+  action: string; // 操作类型，如 IMAGINE
+  status: string; // 任务状态，如 SUCCESS、FAILED
+  prompt: string; // 原始生成提示词
+  promptEn: string; // 英文提示词
+  description: string; // 任务描述
+  submitTime: number; // 任务提交时间（Unix 时间戳）
+  startTime: number; // 任务开始时间（Unix 时间戳）
+  finishTime: number; // 任务完成时间（Unix 时间戳）
+  progress: string; // 任务进度百分比，如 "100%"
+  cost: number; // 任务消耗费用
+  imageUrl: string; // 主要图片 URL
+  imageUrls: Array<{ url: string }>; // 图片 URL 数组
+  videoUrls: string[] | null; // 视频 URL 数组（可能为空）
+  failReason: string | null; // 失败原因（任务失败时才有值）
+  buttons: Array<{
+    customId: string; // 按钮自定义标识符
+    emoji: string; // 按钮表情图标
+    label: string; // 按钮标签文本
+    type: number; // 按钮类型
+    style: number; // 按钮样式
+  }>;
+  properties: {
+    // 扩展属性
+    nonce: string; // 随机数标识
+    botType: string; // 机器人类型，如 MID_JOURNEY
+    notifyHook: string; // 回调通知地址
+    finalPrompt: string; // 最终处理后的提示词
+    messageHash: string; // 消息哈希值
+    discordChannelId: string; // Discord 频道 ID
+    discordInstanceId: string; // Discord 实例 ID
+  };
+  state: string; // 自定义状态数据
+  seed: string; // 随机种子值
 }

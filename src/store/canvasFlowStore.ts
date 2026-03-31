@@ -379,7 +379,7 @@ const pollMjImageGeneration = async (
         return
       }
 
-      const response = await fetchMjTask(taskId)
+      const response: any = await fetchMjTask(taskId)
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId)
       if (!currentNode || currentNode.type !== 'imageNode') {
@@ -394,9 +394,10 @@ const pollMjImageGeneration = async (
         nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
           // 追加新结果到 result.data，而不是覆盖
           const existingData = data.result?.data ?? []
-          const newImageUrl = response.imageUrl
-          const mergedData = newImageUrl
-            ? [...existingData, { url: newImageUrl }]
+          // 使用 imageUrls 数组中的所有图片
+          const newImageUrls = response.imageUrls ?? []
+          const mergedData = newImageUrls.length > 0
+            ? [...existingData, ...newImageUrls]
             : existingData
 
           // 更新已完成数量
