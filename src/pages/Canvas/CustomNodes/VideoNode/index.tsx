@@ -62,12 +62,14 @@ export const VideoNode = memo(({
 
             {/* 顶部工具栏：随视口缩放同步变化 */}
           <NodeToolbar isVisible={shouldShowToolbar} position={Position.Top} offset={10 * zoom}>
+            <div style={{ transform: `scale(${zoom})`, transformOrigin: 'bottom center' }}>
                     <VideoToolbar
                         data={data}
                         selected={selected}
                         onDuplicate={() => duplicateNode(id)}
                         onDelete={() => deleteNode(id)}
             />
+            </div>
             </NodeToolbar>
 
             {/* 底部增强输入区：随视口缩放同步变化 */}
@@ -76,7 +78,9 @@ export const VideoNode = memo(({
                 position={Position.Bottom}
                 offset={18 * zoom}
           >
+            <div className="nodrag nopan nowheel" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
             <VideoPromptPanel nodeId={id} />
+            </div>
             </NodeToolbar>
 
             <div
