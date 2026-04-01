@@ -227,22 +227,25 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         }
 
         const selected = item as (typeof COMMAND_MOCK)[number]
-        const commandValue = selected.command.replace(/^\//, '')
+
+        // 根据命令自动设置 size
+        const commandSizeMap: Record<string, string> = {
+          'c-1': '4:3',   // 角色参考图
+          'c-2': '21:9',  // 角色三视图
+        }
+        const targetSize = commandSizeMap[selected.id]
+        if (targetSize) {
+          updateImageNodeData(nodeId, { size: targetSize })
+        }
+
+        // 只插入 description 作为文本，不再插入 slashCommand 节点显示 label
         editor
             ?.chain()
             .focus()
             .insertContentAt(triggerRangeRef.current, [
                 {
-                    type: 'slashCommand',
-                    attrs: {
-                        id: selected.id,
-                        label: selected.label,
-                        value: commandValue,
-                    },
-                },
-                {
                     type: 'text',
-                  text: ` ${selected.description} `,
+                    text: selected.description,
                 },
             ])
             .run()
