@@ -122,13 +122,13 @@ type CanvasFlowState = {
 // ==================== 图片生成轮询支持 ====================
 
 // 轮询频率（2 秒）
-const IMAGE_POLL_INTERVAL = 2000
+const IMAGE_POLL_INTERVAL = 10000
 // 轮询控制器：用于中止轮询（taskId -> AbortController）
 const imagePollingControllers = new Map<string, AbortController>()
 // 记录每个节点待完成的 task 数量（用于多图生成场景）
 const pendingTaskCounts = new Map<string, number>()
-// 视频轮询频率（2 秒）
-const VIDEO_POLL_INTERVAL = 2000
+// 视频轮询频率（15 秒）
+const VIDEO_POLL_INTERVAL = 10000
 // 视频轮询控制器：用于中止旧轮询
 const videoPollingControllers = new Map<string, AbortController>()
 

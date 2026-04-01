@@ -363,8 +363,26 @@ function ApiKeySection() {
   const [showZeakaiToken, setShowZeakaiToken] = useState(false)
   const { success, error } = useMessage()
 
-  // 初始化时从 localStorage 读取
+  // 初始化时自动将默认值写入 localStorage，确保状态一致
   useMemo(() => {
+    const storedAiToken = localStorage.getItem('yunyun_ai_token')
+    const storedZeakaiToken = localStorage.getItem('yunyun_zeakai_token')
+
+    // 如果 localStorage 中没有值，则使用默认值并写入 localStorage
+    if (!storedAiToken) {
+      const defaultAiToken = getAiToken()
+      if (defaultAiToken) {
+        localStorage.setItem('yunyun_ai_token', defaultAiToken)
+      }
+    }
+    if (!storedZeakaiToken) {
+      const defaultZeakaiToken = getZeakaiToken()
+      if (defaultZeakaiToken) {
+        localStorage.setItem('yunyun_zeakai_token', defaultZeakaiToken)
+      }
+    }
+
+    // 更新状态
     setAiTokenState(getAiToken())
     setZeakaiTokenState(getZeakaiToken())
   }, [])
@@ -434,6 +452,10 @@ function ApiKeySection() {
             <Button size="sm" variant="blue" onClick={handleClearAiToken}>
               清空
             </Button>
+            <Button size="sm" variant="default" onClick={() => window.open('https://toapis.com/', '_blank')}>
+              <IconDownload size={14} />
+              获取
+            </Button>
             {getAiToken() && (
               <span className="flex items-center text-xs text-green-600">
                 ● 已配置
@@ -472,6 +494,10 @@ function ApiKeySection() {
             </Button>
             <Button size="sm" variant="blue" onClick={handleClearZeakaiToken}>
               清空
+            </Button>
+            <Button size="sm" variant="default" onClick={() => window.open('https://zeakai-api.api4midjourney.com/', '_blank')}>
+              <IconDownload size={14} />
+              获取
             </Button>
             {getZeakaiToken() && (
               <span className="flex items-center text-xs text-green-600">

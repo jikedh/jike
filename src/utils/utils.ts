@@ -11,12 +11,17 @@ export function cn(...inputs: ClassValue[]) {
 const AI_TOKEN_KEY = 'yunyun_ai_token'
 const ZEAKAI_TOKEN_KEY = 'yunyun_zeakai_token'
 
+// 写死的默认服务密钥（用户首次使用时自动生效）
+// TODO: 请替换为实际的密钥值
+const DEFAULT_AI_TOKEN = 'sk-8ngj8WD671ZFioHc2qypEJFQwhWeims435RtteF28IPxgHWR'
+const DEFAULT_ZEAKAI_TOKEN = 'df3ddeb9-45da-4eb7-b49a-8ab32c8e4ebb'
+
 /**
  * 获取 AI 服务密钥
- * 优先从 localStorage 获取，如果没有则返回空字符串
+ * 优先从 localStorage 获取，如果没有则返回写死的默认值
  */
 export function getAiToken(): string {
-  return localStorage.getItem(AI_TOKEN_KEY) || ''
+  return localStorage.getItem(AI_TOKEN_KEY) || DEFAULT_AI_TOKEN
 }
 
 /**
@@ -28,10 +33,10 @@ export function setAiToken(token: string): void {
 
 /**
  * 获取 ZeakAI 服务密钥
- * 优先从 localStorage 获取，如果没有则返回空字符串
+ * 优先从 localStorage 获取，如果没有则返回写死的默认值
  */
 export function getZeakaiToken(): string {
-  return localStorage.getItem(ZEAKAI_TOKEN_KEY) || ''
+  return localStorage.getItem(ZEAKAI_TOKEN_KEY) || DEFAULT_ZEAKAI_TOKEN
 }
 
 /**
