@@ -90,6 +90,15 @@ export interface VideoGenerationNode {
     referenceImages?: string[]; // 素材/风格参考图 URL 数组
     compressionQuality?: string; // 视频压缩质量
     resizeMode?: string; // 图片调整模式
+    // Kling Video O1 专属扩展参数
+    mode?: string; // 生成模式：std(标准) | pro(专业)
+    watermark?: boolean; // 是否添加水印
+    video_list?: {
+      // 参考视频列表
+      video_url?: string; // 视频 URL
+      refer_type?: string; // 参考类型：base | feature
+      keep_original_sound?: string; // 是否保留原声：yes | no
+    }[];
   };
   audio?: boolean; // 是否生成音频（豆包 1.5 Pro 独有功能）
   camerafixed?: boolean; // 是否固定摄像头

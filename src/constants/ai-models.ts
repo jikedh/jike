@@ -70,6 +70,8 @@ export const VIDEO_MODELS = [
   { id: 11, name: 'Doubao Seedance 1.5 Pro', model: 'doubao-seedance-1-5-pro', platform: 'doubao', platformId: 2 },
   // xAI Grok 系列
   { id: 17, name: 'Grok Video 3', model: 'grok-video-3', platform: 'xai', platformId: 18 },
+  // Kling 系列
+  { id: 20, name: 'Kling Video O1', model: 'kling-video-o1', platform: 'kling', platformId: 14 },
   // MiniMax
   // { id: 12, name: 'MiniMax-Hailuo-02', model: 'MiniMax-Hailuo-02', platform: 'minimax', platformId: 12 },
   // Wan 系列

@@ -77,6 +77,26 @@ const veo3Strategy: VideoPayloadStrategy = {
 }
 
 /**
+ * Kling Video O1 策略
+ * 字段映射：model、prompt、mode、duration、aspect_ratio、image_urls、video_list、metadata
+ */
+const klingVideoO1Strategy: VideoPayloadStrategy = {
+  model: 'kling-video-o1',
+  buildPayload: (nodeData, { prompt, imageUrls }) => ({
+    model: 'kling-video-o1',
+    prompt,
+    mode: nodeData.metadata?.mode ?? 'std',
+    duration: nodeData.duration ?? 5,
+    aspect_ratio: nodeData.aspect_ratio ?? '16:9',
+    image_urls: imageUrls.length > 0 ? imageUrls : undefined,
+    video_list: nodeData.metadata?.video_list,
+    metadata: {
+      watermark: nodeData.metadata?.watermark,
+    },
+  }),
+}
+
+/**
  * 策略注册表
  */
 export const videoPayloadStrategies: Record<string, VideoPayloadStrategy> = {
@@ -84,6 +104,7 @@ export const videoPayloadStrategies: Record<string, VideoPayloadStrategy> = {
   'doubao-seedance-1-5-pro': doubaoSeedanceStrategy,
   'Veo3.1-quality-official': veo3Strategy,
   'Veo3.1-fast-official': veo3Strategy,
+  'kling-video-o1': klingVideoO1Strategy,
 }
 
 /**

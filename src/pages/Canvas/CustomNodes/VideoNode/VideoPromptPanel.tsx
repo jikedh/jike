@@ -25,6 +25,7 @@ import { COMMAND_MOCK, MENTION_MOCK } from '../ImageNode/mock'
 import { Seedance15ProParamsPanel } from './components/Seedance15ProParamsPanel'
 import { GrokVideoParamsPanel } from './components/GrokVideoParamsPanel'
 import { Veo3ParamsPanel } from './components/Veo3ParamsPanel'
+import { KlingVideoO1ParamsPanel } from './components/KlingVideoO1ParamsPanel'
 import { getVideoPayloadStrategy } from './strategies/videoPayloadStrategies'
 
 export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
@@ -678,6 +679,40 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                                     metadata: {
                                         ...(currentVideoData?.metadata ?? {}),
                                         resizeMode: value,
+                                    },
+                                })
+                            }}
+                        />
+                    ) : model === 'kling-video-o1' ? (
+                        <KlingVideoO1ParamsPanel
+                            mode={currentVideoData?.metadata?.mode}
+                            duration={currentVideoData?.duration}
+                            aspectRatio={aspectRatio}
+                            watermark={currentVideoData?.metadata?.watermark}
+                            videoList={currentVideoData?.metadata?.video_list}
+                            onModeChange={(value) => {
+                                updateVideoNodeData(nodeId, {
+                                    metadata: {
+                                        ...(currentVideoData?.metadata ?? {}),
+                                        mode: value,
+                                    },
+                                })
+                            }}
+                            onDurationChange={(value) => updateVideoNodeData(nodeId, { duration: value })}
+                            onAspectRatioChange={(value) => updateVideoNodeData(nodeId, { aspect_ratio: value })}
+                            onWatermarkChange={(value) => {
+                                updateVideoNodeData(nodeId, {
+                                    metadata: {
+                                        ...(currentVideoData?.metadata ?? {}),
+                                        watermark: value,
+                                    },
+                                })
+                            }}
+                            onVideoListChange={(value) => {
+                                updateVideoNodeData(nodeId, {
+                                    metadata: {
+                                        ...(currentVideoData?.metadata ?? {}),
+                                        video_list: value,
                                     },
                                 })
                             }}
