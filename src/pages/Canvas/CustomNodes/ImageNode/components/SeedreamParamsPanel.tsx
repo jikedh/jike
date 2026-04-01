@@ -1,6 +1,6 @@
 /**
  * Seedream 5.0 整合参数面板组件
- * 包含宽高比、分辨率、顺序生成、水印的可视化选择
+ * 包含宽高比、分辨率的可视化选择
  * 适用于 doubao-seedream-5-0 模型
  */
 
@@ -12,7 +12,6 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 
 import { AspectRatioIcon } from './AspectRatioIcon'
@@ -41,35 +40,17 @@ type SeedreamParamsPanelProps = {
   size: string
   // 当前分辨率
   resolution: string
-  // 顺序图像生成模式
-  sequentialImageGeneration: string
-  // 顺序生成最大数量
-  sequentialMaxImages?: number
-  // 是否添加水印
-  watermark: boolean
   // 更新宽高比
   onSizeChange: (value: string) => void
   // 更新分辨率
   onResolutionChange: (value: string) => void
-  // 更新顺序生成模式
-  onSequentialChange: (value: string) => void
-  // 更新顺序生成最大数量
-  onSequentialMaxChange?: (value: number) => void
-  // 更新水印
-  onWatermarkChange: (value: boolean) => void
 }
 
 export const SeedreamParamsPanel = ({
   size,
   resolution,
-  sequentialImageGeneration,
-  sequentialMaxImages = 4,
-  watermark,
   onSizeChange,
   onResolutionChange,
-  onSequentialChange,
-  onSequentialMaxChange,
-  onWatermarkChange,
 }: SeedreamParamsPanelProps) => {
   return (
     <Popover>
@@ -162,66 +143,6 @@ export const SeedreamParamsPanel = ({
                 )
               })}
             </div>
-          </div>
-
-          {/* 顺序图像生成 */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-neutral-300">
-                顺序图像生成
-              </label>
-              <Switch
-                checked={sequentialImageGeneration === 'auto'}
-                onCheckedChange={(checked) =>
-                  onSequentialChange(checked ? 'auto' : 'disabled')
-                }
-                className="data-[state=checked]:bg-blue-500"
-              />
-            </div>
-            <p className="text-[10px] text-neutral-500">
-              启用后可生成多张风格一致的组图
-            </p>
-
-            {/* 顺序生成数量选择 - 仅在启用时显示 */}
-            {sequentialImageGeneration === 'auto' && (
-              <div className="flex items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800/50 p-2">
-                <span className="text-xs text-neutral-400">生成数量</span>
-                <div className="ml-auto flex gap-1">
-                  {[2, 4, 6, 8, 15].map((count) => (
-                    <button
-                      key={count}
-                      type="button"
-                      onClick={() => onSequentialMaxChange?.(count)}
-                      className={cn(
-                        'rounded-md px-2 py-1 text-xs transition-colors',
-                        sequentialMaxImages === count
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-neutral-700 text-neutral-300 hover:bg-neutral-600',
-                      )}
-                    >
-                      {count}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 添加水印 */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <label className="text-xs font-medium text-neutral-300">
-                添加水印
-              </label>
-              <p className="text-[10px] text-neutral-500">
-                为生成的图像添加防伪标识
-              </p>
-            </div>
-            <Switch
-              checked={watermark}
-              onCheckedChange={onWatermarkChange}
-              className="data-[state=checked]:bg-blue-500"
-            />
           </div>
         </div>
       </PopoverContent>

@@ -87,23 +87,15 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const imageUrls = currentImageData?.image_urls ?? []
     const promptDraftHtml = currentImageData?.promptDraftHtml ?? '<p></p>'
 
-    // ========== 模型专属参数 ==========
-    // 判断是否为 Midjourney 系列模型
-    const isMidjourneyModel = model === 'midjourney' || model === 'midjourney-niji7'
-    // 判断是否为 Seedream 5.0 模型
-    const isSeedreamModel = model === 'doubao-seedream-5-0'
-    // 判断是否为 Gemini 3 Pro 模型
-    const isGeminiModel = model === 'gemini-3-pro-image-preview'
+  // ========== 模型专属参数 ==========
+  // 判断是否为 Midjourney 系列模型
+  const isMidjourneyModel = model === 'midjourney' || model === 'midjourney-niji7'
+  // 判断是否为 Seedream 5.0 模型
+  const isSeedreamModel = model === 'doubao-seedream-5-0'
+  // 判断是否为 Gemini 3 Pro 模型
+  const isGeminiModel = model === 'gemini-3-pro-image-preview'
 
-    // Seedream 5.0 专属参数
-    const sequentialImageGeneration = currentImageData?.sequentialImageGeneration ?? 'disabled'
-    const sequentialMaxImages = currentImageData?.sequentialMaxImages ?? 4
-    const watermark = currentImageData?.watermark ?? false
-
-    // Gemini 3 Pro 专属参数
-    const orientation = currentImageData?.orientation ?? 'landscape'
-
-    // Midjourney 高级参数
+  // Midjourney 高级参数
   const midjourneyAdvanced = currentImageData?.midjourneyAdvanced ?? {
     referenceUrls: imageUrls,
     styleUrls: [],
@@ -566,18 +558,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           basePayload.size = size
           basePayload.metadata = {
             resolution,
-            sequential_image_generation: sequentialImageGeneration,
-            sequential_image_generation_options: sequentialImageGeneration === 'auto' ? {
-              max_images: sequentialMaxImages,
-            } : undefined,
-            watermark,
           }
         } else if (isGeminiModel) {
           // Gemini 3 Pro: size 作为画面比例
           basePayload.size = size
           basePayload.metadata = {
             resolution,
-            orientation,
           }
         } else {
           // 其他模型（Midjourney 等）
@@ -749,14 +735,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                         <SeedreamParamsPanel
                             size={size}
                             resolution={resolution}
-                            sequentialImageGeneration={sequentialImageGeneration}
-                            sequentialMaxImages={sequentialMaxImages}
-                            watermark={watermark}
                             onSizeChange={(value) => updateImageNodeData(nodeId, { size: value })}
                             onResolutionChange={(value) => updateImageNodeData(nodeId, { resolution: value })}
-                            onSequentialChange={(value) => updateImageNodeData(nodeId, { sequentialImageGeneration: value })}
-                            onSequentialMaxChange={(value) => updateImageNodeData(nodeId, { sequentialMaxImages: value })}
-                            onWatermarkChange={(value) => updateImageNodeData(nodeId, { watermark: value })}
                         />
                     )}
                     {isGeminiModel && (
@@ -764,10 +744,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                         <GeminiParamsPanel
                             size={size}
                             resolution={resolution}
-                            orientation={orientation}
                             onSizeChange={(value) => updateImageNodeData(nodeId, { size: value })}
                             onResolutionChange={(value) => updateImageNodeData(nodeId, { resolution: value })}
-                            onOrientationChange={(value) => updateImageNodeData(nodeId, { orientation: value })}
                         />
                     )}
 

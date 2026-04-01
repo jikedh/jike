@@ -1,6 +1,6 @@
 /**
  * Gemini 3 Pro 整合参数面板组件
- * 包含图像尺寸、分辨率、图像方向的可视化选择
+ * 包含图像尺寸、分辨率的可视化选择
  * 适用于 gemini-3-pro-image-preview 模型
  */
 
@@ -37,34 +37,22 @@ export const GEMINI_RESOLUTIONS = [
   { label: '4K', value: '4K', description: '高清分辨率' },
 ]
 
-// Gemini 3 Pro 图像方向选项
-export const GEMINI_ORIENTATIONS = [
-  { label: '横向', value: 'landscape', icon: '━' },
-  { label: '纵向', value: 'portrait', icon: '┃' },
-]
-
 type GeminiParamsPanelProps = {
   // 当前图像尺寸
   size: string
   // 当前分辨率
   resolution: string
-  // 当前图像方向
-  orientation: string
   // 更新图像尺寸
   onSizeChange: (value: string) => void
   // 更新分辨率
   onResolutionChange: (value: string) => void
-  // 更新图像方向
-  onOrientationChange: (value: string) => void
 }
 
 export const GeminiParamsPanel = ({
   size,
   resolution,
-  orientation,
   onSizeChange,
   onResolutionChange,
-  onOrientationChange,
 }: GeminiParamsPanelProps) => {
   return (
     <Popover>
@@ -152,48 +140,6 @@ export const GeminiParamsPanel = ({
                     </span>
                     <span className="text-[10px] text-neutral-500">
                       {item.description}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* 图像方向选择 */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-neutral-300">
-              图像方向
-            </label>
-            <div className="flex gap-2">
-              {GEMINI_ORIENTATIONS.map((item) => {
-                const isActive = orientation === item.value
-                return (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => onOrientationChange(item.value)}
-                    className={cn(
-                      'flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 transition-all',
-                      isActive
-                        ? 'border-blue-500 bg-blue-500/10'
-                        : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'text-lg font-bold',
-                        isActive ? 'text-blue-400' : 'text-neutral-500',
-                      )}
-                    >
-                      {item.icon}
-                    </span>
-                    <span
-                      className={cn(
-                        'text-xs font-medium',
-                        isActive ? 'text-blue-400' : 'text-neutral-300',
-                      )}
-                    >
-                      {item.label}
                     </span>
                   </button>
                 )
