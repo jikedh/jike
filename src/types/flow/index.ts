@@ -99,6 +99,10 @@ export interface VideoGenerationNode {
       refer_type?: string; // 参考类型：base | feature
       keep_original_sound?: string; // 是否保留原声：yes | no
     }[];
+    // MiniMax Hailuo 2.3 专属扩展参数（严格遵循 API 字段命名）
+    first_frame_image?: string; // 首帧图片 URL
+    prompt_optimizer?: boolean; // 是否自动优化 prompt
+    fast_pretreatment?: boolean; // 是否快速预处理
   };
   audio?: boolean; // 是否生成音频（豆包 1.5 Pro 独有功能）
   camerafixed?: boolean; // 是否固定摄像头

@@ -97,6 +97,29 @@ const klingVideoO1Strategy: VideoPayloadStrategy = {
 }
 
 /**
+ * MiniMax Hailuo 2.3 策略
+ * 字段映射：model、prompt、duration、metadata
+ * 严格遵循 API 字段命名：first_frame_image、prompt_optimizer、fast_pretreatment
+ * 注意：参考图第一张会作为 first_frame_image 传递
+ */
+const minimaxHailuo23Strategy: VideoPayloadStrategy = {
+  model: 'MiniMax-Hailuo-2.3',
+  buildPayload: (nodeData, { prompt, imageUrls }) => ({
+    model: 'MiniMax-Hailuo-2.3',
+    prompt,
+    duration: nodeData.duration ?? 6,
+    metadata: {
+      resolution: nodeData.metadata?.resolution ?? '768p',
+      // 优先使用用户手动设置的 first_frame_image，否则使用参考图第一张
+      first_frame_image: nodeData.metadata?.first_frame_image ?? (imageUrls.length > 0 ? imageUrls[0] : undefined),
+      prompt_optimizer: nodeData.metadata?.prompt_optimizer ?? true,
+      fast_pretreatment: nodeData.metadata?.fast_pretreatment ?? false,
+      watermark: nodeData.metadata?.watermark ?? false,
+    },
+  }),
+}
+
+/**
  * 策略注册表
  */
 export const videoPayloadStrategies: Record<string, VideoPayloadStrategy> = {
@@ -105,6 +128,7 @@ export const videoPayloadStrategies: Record<string, VideoPayloadStrategy> = {
   'Veo3.1-quality-official': veo3Strategy,
   'Veo3.1-fast-official': veo3Strategy,
   'kling-video-o1': klingVideoO1Strategy,
+  'MiniMax-Hailuo-2.3': minimaxHailuo23Strategy,
 }
 
 /**

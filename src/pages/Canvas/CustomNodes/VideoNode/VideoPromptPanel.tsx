@@ -26,6 +26,7 @@ import { Seedance15ProParamsPanel } from './components/Seedance15ProParamsPanel'
 import { GrokVideoParamsPanel } from './components/GrokVideoParamsPanel'
 import { Veo3ParamsPanel } from './components/Veo3ParamsPanel'
 import { KlingVideoO1ParamsPanel } from './components/KlingVideoO1ParamsPanel'
+import { MinimaxHailuo23ParamsPanel } from './components/MinimaxHailuo23ParamsPanel'
 import { getVideoPayloadStrategy } from './strategies/videoPayloadStrategies'
 
 export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
@@ -715,6 +716,15 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                                         video_list: value,
                                     },
                                 })
+                            }}
+                        />
+                    ) : model === 'MiniMax-Hailuo-2.3' ? (
+                        <MinimaxHailuo23ParamsPanel
+                            duration={currentVideoData?.duration}
+                            metadata={currentVideoData?.metadata}
+                            onDurationChange={(value) => updateVideoNodeData(nodeId, { duration: value })}
+                            onMetadataChange={(metadata) => {
+                                updateVideoNodeData(nodeId, { metadata })
                             }}
                         />
                     ) : (
