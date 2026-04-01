@@ -83,6 +83,13 @@ export interface VideoGenerationNode {
     size?: string; // 视频尺寸，例如 "1920x1080", "720x720"
     resolution?: string; // 视频分辨率，如 "720p", "480p"
     seed?: number; // 随机种子，用于控制生成内容的随机性
+    // Veo3 专属扩展参数
+    generateAudio?: boolean; // 是否生成音频
+    negativePrompt?: string; // 负面提示词
+    personGeneration?: string; // 人物生成安全设置
+    referenceImages?: string[]; // 素材/风格参考图 URL 数组
+    compressionQuality?: string; // 视频压缩质量
+    resizeMode?: string; // 图片调整模式
   };
   audio?: boolean; // 是否生成音频（豆包 1.5 Pro 独有功能）
   camerafixed?: boolean; // 是否固定摄像头

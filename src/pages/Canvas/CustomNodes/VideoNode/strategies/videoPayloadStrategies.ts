@@ -51,11 +51,39 @@ const doubaoSeedanceStrategy: VideoPayloadStrategy = {
 }
 
 /**
+ * Veo 3 策略
+ * 字段映射：model、prompt、duration、size、resolution、image_urls（首帧参考图）
+ * metadata 包含 generateAudio、negativePrompt、personGeneration、referenceImages、
+ * compressionQuality、resizeMode 等扩展参数
+ */
+const veo3Strategy: VideoPayloadStrategy = {
+  model: 'Veo3.1-quality-official',
+  buildPayload: (nodeData, { prompt, imageUrls }) => ({
+    model: nodeData.model ?? 'Veo3.1-quality-official',
+    prompt,
+    duration: nodeData.duration,
+    size: nodeData.aspect_ratio,
+    resolution: nodeData.metadata?.resolution ?? '720p',
+    image_urls: imageUrls.length > 0 ? [imageUrls[0]] : undefined,
+    metadata: {
+      generateAudio: nodeData.metadata?.generateAudio,
+      negativePrompt: nodeData.metadata?.negativePrompt,
+      personGeneration: nodeData.metadata?.personGeneration,
+      referenceImages: nodeData.metadata?.referenceImages,
+      compressionQuality: nodeData.metadata?.compressionQuality,
+      resizeMode: nodeData.metadata?.resizeMode,
+    },
+  }),
+}
+
+/**
  * 策略注册表
  */
 export const videoPayloadStrategies: Record<string, VideoPayloadStrategy> = {
   'grok-video-3': grokVideoStrategy,
   'doubao-seedance-1-5-pro': doubaoSeedanceStrategy,
+  'Veo3.1-quality-official': veo3Strategy,
+  'Veo3.1-fast-official': veo3Strategy,
 }
 
 /**

@@ -64,10 +64,8 @@ export const VIDEO_MODELS = [
   // { id: 3, name: 'Sora 2 VIP(能进入回调，最后所有渠道都失败)', model: 'sora-2-vip', platform: 'openai', platformId: 1 },
   // { id: 4, name: 'Sora 2 Official(能用，进度完成不给我URL)', model: 'sora-2-official', platform: 'openai', platformId: 1 },
   // Google Veo 系列
-  // { id: 5, name: 'Veo 3.1 Fast(响应体不同于其他的，它把URL放到了metadata里面了)', model: 'veo3.1-fast', platform: 'google', platformId: 16 },
-  // { id: 6, name: 'Veo 3.1 Quality', model: 'veo3.1-quality', platform: 'google', platformId: 16 },
-  // { id: 7, name: 'Veo 3.1 Quality Official', model: 'Veo3.1-quality-official', platform: 'google', platformId: 16 },
-  // { id: 8, name: 'Veo 3.1 Fast Official', model: 'Veo3.1-fast-official', platform: 'google', platformId: 16 },
+  { id: 18, name: 'Veo 3.1 Quality', model: 'Veo3.1-quality-official', platform: 'google', platformId: 16 },
+  { id: 19, name: 'Veo 3.1 Fast', model: 'Veo3.1-fast-official', platform: 'google', platformId: 16 },
   // 字节豆包 Seedance 系列
   { id: 11, name: 'Doubao Seedance 1.5 Pro', model: 'doubao-seedance-1-5-pro', platform: 'doubao', platformId: 2 },
   // xAI Grok 系列

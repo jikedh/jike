@@ -24,6 +24,7 @@ import type { ImageGenerationNode, NoteNodeData, VideoGenerationNode } from '@/t
 import { COMMAND_MOCK, MENTION_MOCK } from '../ImageNode/mock'
 import { Seedance15ProParamsPanel } from './components/Seedance15ProParamsPanel'
 import { GrokVideoParamsPanel } from './components/GrokVideoParamsPanel'
+import { Veo3ParamsPanel } from './components/Veo3ParamsPanel'
 import { getVideoPayloadStrategy } from './strategies/videoPayloadStrategies'
 
 export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
@@ -607,6 +608,76 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                                     metadata: {
                                         ...(currentVideoData?.metadata ?? {}),
                                         resolution: value,
+                                    },
+                                })
+                            }}
+                        />
+                    ) : model.startsWith('Veo3') ? (
+                        <Veo3ParamsPanel
+                            aspectRatio={aspectRatio}
+                            duration={duration}
+                            resolution={resolution}
+                            generateAudio={currentVideoData?.metadata?.generateAudio}
+                            negativePrompt={currentVideoData?.metadata?.negativePrompt}
+                            personGeneration={currentVideoData?.metadata?.personGeneration}
+                            referenceImages={currentVideoData?.metadata?.referenceImages}
+                            compressionQuality={currentVideoData?.metadata?.compressionQuality}
+                            resizeMode={currentVideoData?.metadata?.resizeMode}
+                            onAspectRatioChange={(value) => updateVideoNodeData(nodeId, { aspect_ratio: value })}
+                            onDurationChange={(value) => updateVideoNodeData(nodeId, { duration: value })}
+                            onResolutionChange={(value) => {
+                                updateVideoNodeData(nodeId, {
+                                    metadata: {
+                                        ...(currentVideoData?.metadata ?? {}),
+                                        resolution: value,
+                                    },
+                                })
+                            }}
+                            onGenerateAudioChange={(value) => {
+                                updateVideoNodeData(nodeId, {
+                                    metadata: {
+                                        ...(currentVideoData?.metadata ?? {}),
+                                        generateAudio: value,
+                                    },
+                                })
+                            }}
+                            onNegativePromptChange={(value) => {
+                                updateVideoNodeData(nodeId, {
+                                    metadata: {
+                                        ...(currentVideoData?.metadata ?? {}),
+                                        negativePrompt: value,
+                                    },
+                                })
+                            }}
+                            onPersonGenerationChange={(value) => {
+                                updateVideoNodeData(nodeId, {
+                                    metadata: {
+                                        ...(currentVideoData?.metadata ?? {}),
+                                        personGeneration: value,
+                                    },
+                                })
+                            }}
+                            onReferenceImagesChange={(value) => {
+                                updateVideoNodeData(nodeId, {
+                                    metadata: {
+                                        ...(currentVideoData?.metadata ?? {}),
+                                        referenceImages: value,
+                                    },
+                                })
+                            }}
+                            onCompressionQualityChange={(value) => {
+                                updateVideoNodeData(nodeId, {
+                                    metadata: {
+                                        ...(currentVideoData?.metadata ?? {}),
+                                        compressionQuality: value,
+                                    },
+                                })
+                            }}
+                            onResizeModeChange={(value) => {
+                                updateVideoNodeData(nodeId, {
+                                    metadata: {
+                                        ...(currentVideoData?.metadata ?? {}),
+                                        resizeMode: value,
                                     },
                                 })
                             }}
