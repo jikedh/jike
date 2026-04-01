@@ -11,11 +11,13 @@ export interface DoubaoSeedance15ProRequest {
   }[]; // 与 image_urls 不能同时使用
   metadata?: {
     // 扩展参数
-    resolution?: string; // 视频分辨率，可选值："480p"(标清) | "720p"(高清，默认)，注意：1.5 Pro 不支持 1080p
+    resolution?: string; // 视频分辨率，可选值："480p"(标清) | "720p"(高清) | "1080p"(超清)
     seed?: number; // 种子整数，用于控制生成内容的随机性，取值范围：-1 ~ 2^32-1
     audio?: boolean; // 是否生成音频，默认 false，1.5 Pro 独有功能
     camerafixed?: boolean; // 是否固定摄像头，默认 false，设置为 true 时摄像头位置保持固定
   };
+  audio?: boolean; // 是否生成音频（快捷参数，等同于 metadata.audio）
+  camerafixed?: boolean; // 是否固定摄像头（快捷参数，等同于 metadata.camerafixed）
 }
 
 export interface DoubaoSeedance15ProResponse {

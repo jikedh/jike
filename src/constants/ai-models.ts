@@ -69,10 +69,9 @@ export const VIDEO_MODELS = [
   // { id: 7, name: 'Veo 3.1 Quality Official', model: 'Veo3.1-quality-official', platform: 'google', platformId: 16 },
   // { id: 8, name: 'Veo 3.1 Fast Official', model: 'Veo3.1-fast-official', platform: 'google', platformId: 16 },
   // 字节豆包 Seedance 系列
-  // TODO 这里先做成假的，后续再提花
-  { id: 9, name: 'Doubao Seedance 1.0 Pro Fast', model: 'doubao-seedance-1-0-pro-fast', platform: 'doubao', platformId: 2 },
-  { id: 10, name: 'Doubao Seedance 1.0 Pro Quality', model: 'doubao-seedance-1-0-pro-quality', platform: 'doubao', platformId: 2 },
   { id: 11, name: 'Doubao Seedance 1.5 Pro', model: 'doubao-seedance-1-5-pro', platform: 'doubao', platformId: 2 },
+  // xAI Grok 系列
+  { id: 17, name: 'Grok Video 3', model: 'grok-video-3', platform: 'xai', platformId: 18 },
   // MiniMax
   // { id: 12, name: 'MiniMax-Hailuo-02', model: 'MiniMax-Hailuo-02', platform: 'minimax', platformId: 12 },
   // Wan 系列
@@ -97,14 +96,25 @@ export const ASPECT_RATIOS = [
 export const VIDEO_ASPECT_RATIOS = [
   { label: '16:9', value: '16:9' },
   { label: '9:16', value: '9:16' },
+  { label: '1:1', value: '1:1' },
+  { label: '4:3', value: '4:3' },
+  { label: '3:4', value: '3:4' },
+  { label: '21:9', value: '21:9' },
 ];
 
-/** 视频节点时长配置 */
+/** 豆包 Seedance 1.5 Pro 视频分辨率配置 */
+export const VIDEO_RESOLUTIONS_15PRO = [
+  { label: '1080p (超清)', value: '1080p' },
+  { label: '720p (高清)', value: '720p' },
+  { label: '480p (标清)', value: '480p' },
+] as const;
+
+/** 视频节点时长配置（豆包 Seedance 1.5 Pro：4-12秒） */
 export const VIDEO_DURATION_CONFIG = {
-  min: 0,
-  max: 25,
+  min: 4,
+  max: 12,
   step: 1,
-  defaultValue: 0,
+  defaultValue: 5,
 } as const;
 
 /** 图片生成模型配置 */

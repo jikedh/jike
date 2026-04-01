@@ -5,7 +5,7 @@ import { IconUpload } from '@tabler/icons-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 
-import { VIDEO_MODELS } from '@/constants/ai-models'
+import { VIDEO_DURATION_CONFIG, VIDEO_MODELS } from '@/constants/ai-models'
 import {
     Select,
     SelectContent,
@@ -22,7 +22,8 @@ import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { ImageGenerationNode, NoteNodeData, VideoGenerationNode } from '@/types/flow'
 
 import { COMMAND_MOCK, MENTION_MOCK } from '../ImageNode/mock'
-import { VideoIntegratedParamsPanel } from './components/VideoIntegratedParamsPanel'
+import { Seedance15ProParamsPanel } from './components/Seedance15ProParamsPanel'
+import { GrokVideoParamsPanel } from './components/GrokVideoParamsPanel'
 
 export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     const [isUploading, setIsUploading] = useState(false)
@@ -53,10 +54,15 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
     const aspectRatio = currentVideoData?.aspect_ratio ?? '16:9'
     const videoSize = currentVideoData?.metadata?.size ?? '1280x720'
-    const duration = currentVideoData?.duration ?? 5
-  const model = currentVideoData?.model ?? (VIDEO_MODELS[0]?.model ?? 'sora-2-pro')
+    const duration = currentVideoData?.duration ?? VIDEO_DURATION_CONFIG.defaultValue
+    const model = currentVideoData?.model ?? (VIDEO_MODELS[0]?.model ?? 'doubao-seedance-1-5-pro')
     const uploadedUrls = currentVideoData?.uploadedUrls ?? []
     const promptDraftHtml = currentVideoData?.promptDraftHtml ?? '<p></p>'
+    // 1.5 Pro 专属参数
+    const resolution = currentVideoData?.metadata?.resolution ?? '720p'
+    const seed = currentVideoData?.metadata?.seed ?? -1
+    const audio = currentVideoData?.audio ?? false
+    const camerafixed = currentVideoData?.camerafixed ?? false
 
     const triggerRangeRef = useRef<{ from: number; to: number } | null>(null)
     const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -460,21 +466,44 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             return
         }
 
+        // 构建基础 payload，严格按照请求体类型定义
         const payload: any = {
             model,
             prompt: mergedPrompt,
-            aspect_ratio: aspectRatio,
-          image_urls: referenceImageUrls,
-            promptDraft: editor?.getText() ?? '',
-          promptDraftHtml: editor?.getHTML() ?? '<p></p>',
-            uploadedUrls,
             metadata: {
-              size: videoSize,
+                resolution,
+                seed,
             },
         }
 
+        // duration 仅在 > 0 时传递
         if (duration > 0) {
             payload.duration = duration
+        }
+
+        // aspect_ratio 通用参数
+        if (aspectRatio) {
+            payload.aspect_ratio = aspectRatio
+        }
+
+        // grok-video-3 使用 images，doubao-seedance 使用 image_urls
+        if (model === 'grok-video-3') {
+            if (referenceImageUrls.length > 0) {
+                payload.images = referenceImageUrls
+            }
+        } else {
+            // doubao-seedance-1-5-pro 使用 image_urls
+            if (referenceImageUrls.length > 0) {
+                payload.image_urls = referenceImageUrls
+            }
+        }
+
+        // audio 和 camerafixed 仅在需要时传递
+        if (audio) {
+            payload.audio = audio
+        }
+        if (camerafixed) {
+            payload.camerafixed = camerafixed
         }
 
         try {
@@ -578,43 +607,81 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             {/* 下方区域：参数控制区 */}
             <div className="rounded-2xl border border-neutral-700 bg-neutral-800/80 p-2.5">
                 <div className="flex items-center gap-2">
-                    {/* 整合参数面板 */}
-                    <VideoIntegratedParamsPanel
-                        aspectRatio={aspectRatio}
-                        videoSize={videoSize}
-                        duration={duration}
-                        onAspectRatioChange={(value) => updateVideoNodeData(nodeId, { aspect_ratio: value })}
-                        onVideoSizeChange={(value) => {
-                            updateVideoNodeData(nodeId, {
-                                metadata: {
-                                    ...(currentVideoData?.metadata ?? {}),
-                                    size: value,
-                                },
-                            })
-                        }}
-                        onDurationChange={(value) => updateVideoNodeData(nodeId, { duration: value })}
-                    />
-
                     {/* 生成模型 */}
-                    <div className="flex items-center gap-2">
-                        <Select
-                            value={model}
-                            onValueChange={(value) => {
-                                updateVideoNodeData(nodeId, { model: value })
+                    <Select
+                        value={model}
+                        onValueChange={(value) => {
+                            updateVideoNodeData(nodeId, { model: value })
+                        }}
+                    >
+                        <SelectTrigger className="h-8 min-w-[160px] border-neutral-700 bg-neutral-900 text-xs text-neutral-100">
+                            <SelectValue placeholder="选择模型" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-neutral-800 border border-neutral-600">
+                            {VIDEO_MODELS.map((item) => (
+                                <SelectItem key={item.id} value={item.model} className="text-neutral-100 focus:bg-neutral-700 focus:text-neutral-100">
+                                    {item.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    {/* 整合参数面板 - 根据模型类型条件渲染 */}
+                    {model === 'grok-video-3' ? (
+                        <GrokVideoParamsPanel
+                            aspectRatio={aspectRatio}
+                            duration={duration}
+                            resolution={resolution}
+                            onAspectRatioChange={(value) => updateVideoNodeData(nodeId, { aspect_ratio: value })}
+                            onDurationChange={(value) => updateVideoNodeData(nodeId, { duration: value })}
+                            onResolutionChange={(value) => {
+                                updateVideoNodeData(nodeId, {
+                                    metadata: {
+                                        ...(currentVideoData?.metadata ?? {}),
+                                        resolution: value,
+                                    },
+                                })
                             }}
-                        >
-                            <SelectTrigger className="h-8 min-w-[160px] border-neutral-700 bg-neutral-900 text-xs text-neutral-100">
-                                <SelectValue placeholder="选择模型" />
-                            </SelectTrigger>
-                            <SelectContent className="bg-neutral-800 border border-neutral-600">
-                                {VIDEO_MODELS.map((item) => (
-                                    <SelectItem key={item.id} value={item.model} className="text-neutral-100 focus:bg-neutral-700 focus:text-neutral-100">
-                                        {item.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                        />
+                    ) : (
+                        <Seedance15ProParamsPanel
+                            aspectRatio={aspectRatio}
+                            videoSize={videoSize}
+                            duration={duration}
+                            resolution={resolution}
+                            seed={seed}
+                            audio={audio}
+                            camerafixed={camerafixed}
+                            onAspectRatioChange={(value) => updateVideoNodeData(nodeId, { aspect_ratio: value })}
+                            onVideoSizeChange={(value) => {
+                                updateVideoNodeData(nodeId, {
+                                    metadata: {
+                                        ...(currentVideoData?.metadata ?? {}),
+                                        size: value,
+                                    },
+                                })
+                            }}
+                            onDurationChange={(value) => updateVideoNodeData(nodeId, { duration: value })}
+                            onResolutionChange={(value) => {
+                                updateVideoNodeData(nodeId, {
+                                    metadata: {
+                                        ...(currentVideoData?.metadata ?? {}),
+                                        resolution: value,
+                                    },
+                                })
+                            }}
+                            onSeedChange={(value) => {
+                                updateVideoNodeData(nodeId, {
+                                    metadata: {
+                                        ...(currentVideoData?.metadata ?? {}),
+                                        seed: value,
+                                    },
+                                })
+                            }}
+                            onAudioChange={(value) => updateVideoNodeData(nodeId, { audio: value })}
+                            onCameraFixedChange={(value) => updateVideoNodeData(nodeId, { camerafixed: value })}
+                        />
+                    )}
 
                     <div className="ml-auto">
                         <Button

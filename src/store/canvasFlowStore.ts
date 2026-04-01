@@ -794,7 +794,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => ({
         type: 'videoNode',
         position: nextPosition,
         data: {
-          model: 'doubao-seedance-1-0-pro-fast',
+          model: 'doubao-seedance-1-5-pro',
           prompt: '',
           promptDraft: '',
           promptDraftHtml: '<p></p>',

@@ -81,7 +81,11 @@ export interface VideoGenerationNode {
   progress?: number; // 进度百分比（0-100）
   metadata: {
     size?: string; // 视频尺寸，例如 "1920x1080", "720x720"
+    resolution?: string; // 视频分辨率，如 "720p", "480p"
+    seed?: number; // 随机种子，用于控制生成内容的随机性
   };
+  audio?: boolean; // 是否生成音频（豆包 1.5 Pro 独有功能）
+  camerafixed?: boolean; // 是否固定摄像头
 
   // ---- 输出结果 ----
   task_id?: string; // 任务 ID（用于轮询）对应响应结果里面的id字段
