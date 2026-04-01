@@ -24,6 +24,7 @@ import type { ImageGenerationNode, NoteNodeData, VideoGenerationNode } from '@/t
 import { COMMAND_MOCK, MENTION_MOCK } from '../ImageNode/mock'
 import { Seedance15ProParamsPanel } from './components/Seedance15ProParamsPanel'
 import { GrokVideoParamsPanel } from './components/GrokVideoParamsPanel'
+import { getVideoPayloadStrategy } from './strategies/videoPayloadStrategies'
 
 export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     const [isUploading, setIsUploading] = useState(false)
@@ -466,45 +467,12 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             return
         }
 
-        // 构建基础 payload，严格按照请求体类型定义
-        const payload: any = {
-            model,
+        // 使用策略模式构建 payload
+        const strategy = getVideoPayloadStrategy(model)
+        const payload = strategy.buildPayload(currentVideoData!, {
             prompt: mergedPrompt,
-            metadata: {
-                resolution,
-                seed,
-            },
-        }
-
-        // duration 仅在 > 0 时传递
-        if (duration > 0) {
-            payload.duration = duration
-        }
-
-        // aspect_ratio 通用参数
-        if (aspectRatio) {
-            payload.aspect_ratio = aspectRatio
-        }
-
-        // grok-video-3 使用 images，doubao-seedance 使用 image_urls
-        if (model === 'grok-video-3') {
-            if (referenceImageUrls.length > 0) {
-                payload.images = referenceImageUrls
-            }
-        } else {
-            // doubao-seedance-1-5-pro 使用 image_urls
-            if (referenceImageUrls.length > 0) {
-                payload.image_urls = referenceImageUrls
-            }
-        }
-
-        // audio 和 camerafixed 仅在需要时传递
-        if (audio) {
-            payload.audio = audio
-        }
-        if (camerafixed) {
-            payload.camerafixed = camerafixed
-        }
+            imageUrls: referenceImageUrls,
+        })
 
         try {
             await startVideoGeneration(nodeId, payload)
