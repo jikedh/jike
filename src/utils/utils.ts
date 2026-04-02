@@ -10,11 +10,13 @@ export function cn(...inputs: ClassValue[]) {
 // localStorage 中存储 API 密钥的键名
 const AI_TOKEN_KEY = 'yunyun_ai_token'
 const ZEAKAI_TOKEN_KEY = 'yunyun_zeakai_token'
+const KUAIZI_TOKEN_KEY = 'yunyun_kuaizi_token'
 
 // 写死的默认服务密钥（用户首次使用时自动生效）
 // TODO: 请替换为实际的密钥值
 const DEFAULT_AI_TOKEN = 'sk-8ngj8WD671ZFioHc2qypEJFQwhWeims435RtteF28IPxgHWR'
 const DEFAULT_ZEAKAI_TOKEN = 'df3ddeb9-45da-4eb7-b49a-8ab32c8e4ebb'
+const DEFAULT_KUAIZI_TOKEN = ''
 
 /**
  * 获取 AI 服务密钥
@@ -57,6 +59,28 @@ export function hasZeakaiToken(): boolean {
   return !!getZeakaiToken()
 }
 
+/**
+ * 获取快手 AI 服务密钥
+ * 优先从 localStorage 获取，如果没有则返回写死的默认值
+ */
+export function getKuaiziToken(): string {
+  return localStorage.getItem(KUAIZI_TOKEN_KEY) || DEFAULT_KUAIZI_TOKEN
+}
+
+/**
+ * 设置快手 AI 服务密钥
+ */
+export function setKuaiziToken(token: string): void {
+  localStorage.setItem(KUAIZI_TOKEN_KEY, token)
+}
+
+/**
+ * 检查是否已配置快手 AI 服务密钥
+ */
+export function hasKuaiziToken(): boolean {
+  return !!getKuaiziToken()
+}
+
 
 // ===================== 环境检测与基础URL配置 =====================
 
@@ -86,6 +110,7 @@ export const getBaseURL = (apiPath: string): string => {
     const apiServers: Record<string, string> = {
       ai: 'https://toapis.com',
       zeakai: 'https://zeakai-api.api4midjourney.com',
+      kuaizi: 'https://aiopenapi.kuaizi.cn',
     }
     return apiServers[apiPath] || '/'
   }

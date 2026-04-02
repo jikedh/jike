@@ -1,6 +1,6 @@
 // import aiService, { zeakaiRequest, getAiToken } from '@/utils/aiRequest'
 import { EventSourceParserStream } from 'eventsource-parser/stream'
-import { aiService, zeakaiRequest } from '@/utils/aiRequest'
+import { aiService, zeakaiRequest, kuaiziRequest } from '@/utils/aiRequest'
 import { getAiToken, getBaseURL } from '@/utils/utils'
 
 // ===================== 账户余额相关 =====================
@@ -162,5 +162,25 @@ export function fetchMjTask(id: string) {
   return zeakaiRequest({
     url: `/mj/task/${id}/fetch`,
     method: 'get'
+  })
+}
+
+// ===================== 快手 AI 视频相关 =====================
+
+// 创建快手视频生成任务
+export function createLzVideoTask(data: any) {
+  return kuaiziRequest({
+    url: '/ai-open-platform-api/v1/lz/video/task/create',
+    method: 'post',
+    data
+  })
+}
+
+// 查询快手视频生成任务状态
+export function getLzVideoTaskStatus(taskId: string) {
+  return kuaiziRequest({
+    url: '/ai-open-platform-api/v1/lz/video/task/status',
+    method: 'post',
+    data: { task_id: taskId }
   })
 }

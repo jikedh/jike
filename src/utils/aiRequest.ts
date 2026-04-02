@@ -1,7 +1,7 @@
 import axios, { AxiosRequestConfig, AxiosInstance } from 'axios'
 
 // 从 utils 导入 API 密钥管理函数和环境检测函数
-import { getAiToken, getZeakaiToken, getBaseURL } from './utils'
+import { getAiToken, getZeakaiToken, getKuaiziToken, getBaseURL } from './utils'
 // import { filterRequestData } from './apiFieldFilter'
 
 // ===================== 服务基础配置 =====================
@@ -30,6 +30,10 @@ const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
   zeakai: {
     baseURL: getBaseURL('zeakai'), // Electron: https://zeakai-api.api4midjourney.com, Web: /
     getToken: getZeakaiToken,
+  },
+  kuaizi: {
+    baseURL: getBaseURL('kuaizi'), // Electron: https://aiopenapi.kuaizi.cn, Web: /
+    getToken: getKuaiziToken,
   },
 }
 
@@ -78,6 +82,7 @@ const createService = (serviceName: string, config: ServiceConfig): AxiosInstanc
 
 const aiService = createService('ai', SERVICE_CONFIGS.ai)
 const zeakaiService = createService('zeakai', SERVICE_CONFIGS.zeakai)
+const kuaiziService = createService('kuaizi', SERVICE_CONFIGS.kuaizi)
 
 // ===================== 请求方法封装 =====================
 
@@ -95,8 +100,15 @@ const zeakaiRequest = async <T = any>(config: AxiosRequestConfig): Promise<T> =>
   return await zeakaiService.request(config)
 }
 
+/**
+ * 快手 AI 服务请求方法
+ */
+const kuaiziRequest = async <T = any>(config: AxiosRequestConfig): Promise<T> => {
+  return await kuaiziService.request(config)
+}
+
 // ===================== 导出 =====================
 
-export { aiService, zeakaiService }
+export { aiService, zeakaiService, kuaiziService }
 export default aiRequest
-export { zeakaiRequest }
+export { zeakaiRequest, kuaiziRequest }
