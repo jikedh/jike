@@ -1,90 +1,3 @@
-
-import { useCallback, useState } from 'react'
-import { useDropzone } from 'react-dropzone'
-import { Upload, FileIcon, X } from 'lucide-react'
-import { uploadFileToOSS } from '@/utils/oss'
-
-function UploadZone() {
-  const [uploading, setUploading] = useState(false)
-  const [file, setFile] = useState<{ url: string; name: string } | null>(null)
-  const [error, setError] = useState('')
-
-  const onDrop = useCallback(async (files: File[]) => {
-    if (files.length === 0) return
-    const target = files[0]
-    setUploading(true)
-    setError('')
-    setFile(null)
-
-    try {
-      const result = await uploadFileToOSS(target)
-      setFile(result)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '上传失败')
-    } finally {
-      setUploading(false)
-    }
-  }, [])
-
-  const dropzone = useDropzone({
-    onDrop,
-    multiple: false,
-    disabled: uploading,
-  })
-
-  const reset = () => {
-    setFile(null)
-    setError('')
-  }
-
-  return (
-    <div className="border-2 border-dashed border-white/[0.15] rounded-xl p-12 text-center">
-      <div
-        {...dropzone.getRootProps()}
-        className={`cursor-pointer ${uploading ? 'pointer-events-none opacity-60' : ''}`}
-      >
-        <input {...dropzone.getInputProps()} />
-        <Upload className="w-12 h-12 mx-auto mb-4 text-cyan-400/60" />
-        <p className="text-white/60">拖拽文件到此处，或点击选择</p>
-        <p className="text-xs text-white/40 mt-2">支持任意文件类型</p>
-      </div>
-
-      {/* 上传成功 */}
-      {file && (
-        <div className="mt-6">
-          <div className="flex items-center justify-center gap-3 p-4 bg-white/5 rounded-lg">
-            <FileIcon className="w-6 h-6 text-cyan-400/60" />
-            <div className="text-left">
-              <p className="text-sm text-white/80 truncate max-w-xs">{file.name}</p>
-              <p className="text-xs text-white/40 truncate max-w-xs">{file.url}</p>
-            </div>
-          </div>
-          <button
-            onClick={reset}
-            className="mt-4 px-4 py-2 text-sm bg-white/10 hover:bg-white/20 rounded-lg"
-          >
-            重新上传
-          </button>
-        </div>
-      )}
-
-      {/* 错误 */}
-      {error && (
-        <div className="mt-4 text-red-400">
-          <p>{error}</p>
-          <button
-            onClick={reset}
-            className="mt-2 px-4 py-2 text-sm bg-white/10 hover:bg-white/20 rounded-lg"
-          >
-            重试
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-
 export default function TestPage() {
   return (
     <div className="min-h-screen bg-[#050508] text-white flex flex-col overflow-hidden relative">
@@ -99,8 +12,13 @@ export default function TestPage() {
           </h1>
         </div>
 
-        <div className="max-w-xl mx-auto">
-          <UploadZone />
+        <div className="max-w-4xl mx-auto">
+          <video
+            src="https://files.toapis.com/images/cgt-20260403011807-grmfr/1775150332_d1a4021f.mp4"
+            controls
+            autoPlay
+            className="w-full rounded-lg"
+          />
         </div>
       </main>
     </div>

@@ -19,6 +19,8 @@ const DEFAULT_HEADERS = {
 type ServiceConfig = {
   baseURL: string
   getToken: () => string
+  authHeader?: string   // 自定义请求头名称，默认 'Authorization'
+  useBearer?: boolean   // 是否使用 Bearer 前缀，默认 true
 }
 
 // 服务配置映射
@@ -34,6 +36,8 @@ const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
   kuaizi: {
     baseURL: getBaseURL('kuaizi'), // Electron: https://aiopenapi.kuaizi.cn, Web: /
     getToken: getKuaiziToken,
+    authHeader: 'ApiKey',   // 使用 ApiKey 请求头
+    useBearer: false,       // 不使用 Bearer 前缀
   },
 }
 
@@ -51,12 +55,14 @@ const createService = (serviceName: string, config: ServiceConfig): AxiosInstanc
     timeout: REQUEST_TIMEOUT,
   })
 
-  // 请求拦截器 - 动态设置 Authorization 并过滤请求数据
+  // 请求拦截器 - 根据配置动态设置认证请求头
   service.interceptors.request.use(
     (reqConfig) => {
       const token = config.getToken()
       if (token) {
-        reqConfig.headers.Authorization = `Bearer ${token}`
+        const headerName = config.authHeader || 'Authorization'
+        const headerValue = config.useBearer !== false ? `Bearer ${token}` : token
+        reqConfig.headers[headerName] = headerValue
       }
 
       // 过滤请求数据，移除后端不需要的字段

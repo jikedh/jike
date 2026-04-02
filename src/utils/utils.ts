@@ -16,7 +16,7 @@ const KUAIZI_TOKEN_KEY = 'yunyun_kuaizi_token'
 // TODO: 请替换为实际的密钥值
 const DEFAULT_AI_TOKEN = 'sk-8ngj8WD671ZFioHc2qypEJFQwhWeims435RtteF28IPxgHWR'
 const DEFAULT_ZEAKAI_TOKEN = 'df3ddeb9-45da-4eb7-b49a-8ab32c8e4ebb'
-const DEFAULT_KUAIZI_TOKEN = ''
+const DEFAULT_KUAIZI_TOKEN = 'kz-XyWCfLd8q784ybb6PVo6OuDb2rkRJ8ShiCZNcvnus0'
 
 /**
  * 获取 AI 服务密钥

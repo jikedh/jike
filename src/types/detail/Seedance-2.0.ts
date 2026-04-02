@@ -5,7 +5,7 @@ export interface Seedance20Request {
    mode?: 'fast' | 'pro'; // 生成模式："fast"（默认）| "pro"
 
    images?: {
-      url: string; // 图片 URL（必填）
+      url: string; // 图片参考图 URL（必填）
       role?: 'first_frame' | 'last_frame' | 'reference_image'; // 图片角色：首帧/尾帧/参考图
    }[]; // 图片输入列表，最多 9 张
 
