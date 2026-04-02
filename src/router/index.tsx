@@ -3,6 +3,7 @@ import CanvasPage from '@/pages/Canvas'
 import HomePage from '@/pages/Home'
 import ProjectListPage from '@/pages/ProjectList'
 import TestPage from '@/pages/Test'
+import PanoramaDemo from '@/pages/Test/PanoramaDemo'
 import { SidebarCeBianLan } from '@/pages/Sidebar/SidebarCeBianLan'
 
 // 带侧边栏的布局组件
@@ -33,6 +34,10 @@ const router = createHashRouter([
       {
         path: '/projects',
         element: <ProjectListPage />
+      },
+      {
+        path: '/panorama',
+        element: <PanoramaDemo />
       },
       {
         path: '/test',

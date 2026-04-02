@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { LayoutDashboard, FolderOpen, TestTube, Settings } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, TestTube, Settings, CircleDot } from 'lucide-react'
 import { SidebarRoot } from './components/SidebarRoot'
 import { SidebarFooter } from './components/SidebarFooter'
 import { SidebarLogo } from './components/SidebarLogo'
@@ -18,6 +18,9 @@ export const SidebarCeBianLan = () => {
         break
       case 'projects':
         navigate('/projects')
+        break
+      case 'panorama':
+        navigate('/panorama')
         break
       case 'test':
         navigate('/test')
@@ -53,6 +56,12 @@ export const SidebarCeBianLan = () => {
           icon={<FolderOpen size={20} />}
           label="项目"
           onClick={() => handleNavClick('projects')}
+        />
+        <SidebarNavItem
+          id="panorama"
+          icon={<CircleDot size={20} />}
+          label="全景"
+          onClick={() => handleNavClick('panorama')}
         />
         <SidebarNavItem
           id="test"
