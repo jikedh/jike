@@ -51,6 +51,54 @@ const doubaoSeedanceStrategy: VideoPayloadStrategy = {
 }
 
 /**
+ * Seedance 2.0 图像角色映射
+ * 约定：按产品要求，所有参考图 role 统一使用 reference_image
+ */
+const buildSeedance20Images = (imageUrls: string[]) => {
+  return imageUrls
+    .filter((url) => Boolean(url))
+    .slice(0, 9)
+    .map((url) => ({
+      url,
+      role: 'reference_image',
+    }))
+}
+
+/**
+ * Doubao Seedance 2.0 策略
+ * 字段映射：使用 images（对象数组），并固定 generation_type=video
+ * 注意：input_type、seed、web_search 固定为默认值，不暴露给用户手动填写
+ */
+const doubaoSeedance20Strategy: VideoPayloadStrategy = {
+  model: 'doubao-seedance-2.0',
+  buildPayload: (nodeData, { prompt, imageUrls }) => {
+    const mode = nodeData.metadata?.mode ?? 'fast'
+    const minDuration = 4
+    const maxDuration = mode === 'pro' ? 15 : 12
+    const rawDuration = nodeData.duration ?? 8
+    const nextDuration = Math.min(Math.max(rawDuration, minDuration), maxDuration)
+
+    return {
+      model: 'doubao-seedance-2.0',
+      prompt,
+      generation_type: 'video',
+      // 固定默认值，不再从 metadata 读取
+      input_type: 'reference',
+      mode,
+      images: buildSeedance20Images(imageUrls),
+      resolution: nodeData.metadata?.resolution ?? '720p',
+      ratio: nodeData.aspect_ratio ?? '16:9',
+      duration: nextDuration,
+      generate_audio: nodeData.metadata?.generate_audio ?? true,
+      // 固定为 -1（随机种子），不暴露给用户
+      seed: -1,
+      // 固定为 false（联网搜索增强），不暴露给用户
+      web_search: false,
+    }
+  },
+}
+
+/**
  * Veo 3 策略
  * 字段映射：model、prompt、duration、size、resolution、image_urls（首帧参考图）
  * metadata 包含 generateAudio、negativePrompt、personGeneration、referenceImages、
@@ -125,6 +173,7 @@ const minimaxHailuo23Strategy: VideoPayloadStrategy = {
 export const videoPayloadStrategies: Record<string, VideoPayloadStrategy> = {
   'grok-video-3': grokVideoStrategy,
   'doubao-seedance-1-5-pro': doubaoSeedanceStrategy,
+  'doubao-seedance-2.0': doubaoSeedance20Strategy,
   'Veo3.1-quality-official': veo3Strategy,
   'Veo3.1-fast-official': veo3Strategy,
   'kling-video-o1': klingVideoO1Strategy,

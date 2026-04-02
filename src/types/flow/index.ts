@@ -103,6 +103,10 @@ export interface VideoGenerationNode {
     first_frame_image?: string; // 首帧图片 URL
     prompt_optimizer?: boolean; // 是否自动优化 prompt
     fast_pretreatment?: boolean; // 是否快速预处理
+    // Seedance 2.0 专属扩展参数
+    input_type?: 'reference' | 'first_last_frame'; // 输入类型
+    generate_audio?: boolean; // 是否生成同步音频
+    web_search?: boolean; // 是否启用联网搜索增强（仅 pro）
   };
   audio?: boolean; // 是否生成音频（豆包 1.5 Pro 独有功能）
   camerafixed?: boolean; // 是否固定摄像头

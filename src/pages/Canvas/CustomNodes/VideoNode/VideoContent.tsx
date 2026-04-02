@@ -66,8 +66,7 @@ export const VideoContent = ({ data, onRetry }: VideoContentProps) => {
             <video
                 src={videoUrl}
                 controls
-            className="nopan  block h-full w-full object-cover object-center"
-                crossOrigin="anonymous"
+                className="nopan  block h-full w-full object-cover object-center"
             >
                 你的浏览器不支持视频播放
             </video>

@@ -27,6 +27,7 @@ import { GrokVideoParamsPanel } from './components/GrokVideoParamsPanel'
 import { Veo3ParamsPanel } from './components/Veo3ParamsPanel'
 import { KlingVideoO1ParamsPanel } from './components/KlingVideoO1ParamsPanel'
 import { MinimaxHailuo23ParamsPanel } from './components/MinimaxHailuo23ParamsPanel'
+import { Seedance20ParamsPanel } from './components/Seedance20ParamsPanel'
 import { getVideoPayloadStrategy } from './strategies/videoPayloadStrategies'
 
 export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
@@ -67,6 +68,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     const seed = currentVideoData?.metadata?.seed ?? -1
     const audio = currentVideoData?.audio ?? false
     const camerafixed = currentVideoData?.camerafixed ?? false
+  const seedance20Metadata = currentVideoData?.metadata ?? {}
 
     const triggerRangeRef = useRef<{ from: number; to: number } | null>(null)
     const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -458,6 +460,13 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
     const suggestionItems = activeMode === 'mention' ? filteredMentionItems : filteredCommandItems
 
+  // 根据模式限制视频时长（fast: 4-12, pro: 4-15）
+  const clampSeedance20Duration = (value: number, mode: 'fast' | 'pro') => {
+    const min = 4
+    const max = mode === 'pro' ? 15 : 12
+    return Math.min(Math.max(value, min), max)
+  }
+
     const handleGenerate = async () => {
         const promptText = editor?.getText().trim() ?? ''
         const mergedPrompt = [...parentNoteContents, promptText]
@@ -727,6 +736,47 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                                 updateVideoNodeData(nodeId, { metadata })
                             }}
                         />
+                  ) : model === 'doubao-seedance-2.0' ? (
+                    <Seedance20ParamsPanel
+                      mode={(seedance20Metadata.mode as 'fast' | 'pro' | undefined) ?? 'fast'}
+                      duration={currentVideoData?.duration}
+                      aspectRatio={aspectRatio}
+                      resolution={(seedance20Metadata.resolution as '480p' | '720p' | undefined) ?? '720p'}
+                      generateAudio={seedance20Metadata.generate_audio}
+                      onModeChange={(value) => {
+                        const nextDuration = clampSeedance20Duration(currentVideoData?.duration ?? 8, value)
+                        updateVideoNodeData(nodeId, {
+                          duration: nextDuration,
+                          metadata: {
+                            ...seedance20Metadata,
+                            mode: value,
+                          },
+                        })
+                      }}
+                      onDurationChange={(value) => {
+                        const currentMode = (currentVideoData?.metadata?.mode ?? 'fast') as 'fast' | 'pro'
+                        updateVideoNodeData(nodeId, {
+                          duration: clampSeedance20Duration(value, currentMode),
+                        })
+                      }}
+                      onAspectRatioChange={(value) => updateVideoNodeData(nodeId, { aspect_ratio: value })}
+                      onResolutionChange={(value) => {
+                        updateVideoNodeData(nodeId, {
+                          metadata: {
+                            ...seedance20Metadata,
+                            resolution: value,
+                          },
+                        })
+                      }}
+                      onGenerateAudioChange={(value) => {
+                        updateVideoNodeData(nodeId, {
+                          metadata: {
+                            ...seedance20Metadata,
+                            generate_audio: value,
+                          },
+                        })
+                      }}
+                    />
                     ) : (
                         <Seedance15ProParamsPanel
                             aspectRatio={aspectRatio}

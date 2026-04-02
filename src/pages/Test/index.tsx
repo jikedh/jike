@@ -14,7 +14,7 @@ export default function TestPage() {
 
         <div className="max-w-4xl mx-auto">
           <video
-            src="https://files.toapis.com/images/cgt-20260403011807-grmfr/1775150332_d1a4021f.mp4"
+            src="https://files.toapis.com/images/cgt-20260403015959-krsds/1775152844_34e58360.mp4"
             controls
             autoPlay
             className="w-full rounded-lg"

@@ -8,7 +8,14 @@ import {
 } from '@xyflow/react'
 import { create } from 'zustand'
 
-import { createImageGeneration, createVideoGeneration, getImageTaskStatus, getVideoTaskStatus } from '@/api/ai'
+import {
+  createImageGeneration,
+  createLzVideoTask,
+  createVideoGeneration,
+  getImageTaskStatus,
+  getLzVideoTaskStatus,
+  getVideoTaskStatus,
+} from '@/api/ai'
 import { submitMjImagine, fetchMjTask } from '@/api/ai'
 import { useChatSettingsStore } from '@/store/chatSettingsStore'
 import { getAgentPresetById, type AgentPresetId } from '@/constants/agent-presets'
@@ -477,6 +484,7 @@ const pollMjImageGeneration = async (
 const pollVideoGeneration = async (
   taskId: string,
   nodeId: string,
+  model: string,
   signal: AbortSignal,
   setState: (updater: (state: CanvasFlowState) => Partial<CanvasFlowState>) => void,
   getState: () => CanvasFlowState
@@ -488,7 +496,8 @@ const pollVideoGeneration = async (
         return
       }
 
-      const response: any = await getVideoTaskStatus(taskId)
+      const isSeedance20 = model === 'doubao-seedance-2.0'
+      const response: any = isSeedance20 ? await getLzVideoTaskStatus(taskId) : await getVideoTaskStatus(taskId)
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId)
       if (!currentNode || currentNode.type !== 'videoNode') {
@@ -498,6 +507,55 @@ const pollVideoGeneration = async (
 
       setState((state) => ({
         nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => {
+          // Seedance2.0 走快手接口：状态字段位于 response.data
+          if (isSeedance20) {
+            const status = response?.data?.status
+            const progress = response?.data?.progress ?? 0
+            const resultUrl = response?.data?.video_url
+
+            if (status === 'succeeded') {
+              return {
+                ...data,
+                status: GenerationStatus.COMPLETED,
+                progress: 100,
+                task_id: response?.data?.task_id ?? taskId,
+                result: {
+                  type: 'video',
+                  data: resultUrl
+                    ? [
+                      {
+                        url: resultUrl,
+                        format: 'mp4',
+                      },
+                    ]
+                    : [],
+                },
+                error: undefined,
+              }
+            }
+
+            if (status === 'failed' || status === 'canceled') {
+              return {
+                ...data,
+                status: GenerationStatus.FAILED,
+                progress,
+                task_id: response?.data?.task_id ?? taskId,
+                error: {
+                  code: 'LZ_VIDEO_FAILED',
+                  message: response?.data?.error || response?.message || '生成失败，请稍后再试',
+                },
+              }
+            }
+
+            // queued/processing/running 统一按进行中处理
+            return {
+              ...data,
+              status: GenerationStatus.IN_PROGRESS,
+              progress,
+              task_id: response?.data?.task_id ?? taskId,
+            }
+          }
+
           if (response.status === 'completed') {
             return {
               ...data,
@@ -531,7 +589,9 @@ const pollVideoGeneration = async (
         }),
       }))
 
-      if (response.status === 'completed' || response.status === 'failed') {
+      const isSeedance20Completed = response?.data?.status === 'succeeded'
+      const isSeedance20Failed = response?.data?.status === 'failed' || response?.data?.status === 'canceled'
+      if ((model === 'doubao-seedance-2.0' && (isSeedance20Completed || isSeedance20Failed)) || (model !== 'doubao-seedance-2.0' && (response.status === 'completed' || response.status === 'failed'))) {
         stopVideoPollingInternal(nodeId)
         return
       }
@@ -1233,8 +1293,9 @@ duplicateNode: (nodeId: string) => {
     }))
 
     try {
-      const response: any = await createVideoGeneration(payload)
-      const taskId = response?.id
+      const isSeedance20 = payload?.model === 'doubao-seedance-2.0'
+      const response: any = isSeedance20 ? await createLzVideoTask(payload) : await createVideoGeneration(payload)
+      const taskId = isSeedance20 ? response?.data?.task_id : response?.id
 
       if (!taskId) {
         throw new Error('任务 ID 为空')
@@ -1252,7 +1313,7 @@ duplicateNode: (nodeId: string) => {
 
       const controller = new AbortController()
       videoPollingControllers.set(nodeId, controller)
-      pollVideoGeneration(taskId, nodeId, controller.signal, set, get)
+      pollVideoGeneration(taskId, nodeId, payload?.model, controller.signal, set, get)
     } catch (startError) {
       console.error('创建视频生成任务失败:', startError)
       set((state) => ({
