@@ -1,4 +1,3 @@
-import Mention from '@tiptap/extension-mention'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { IconUpload } from '@tabler/icons-react'
@@ -21,7 +20,6 @@ import { cn } from '@/lib/utils'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { ImageGenerationNode, NoteNodeData, VideoGenerationNode } from '@/types/flow'
 
-import { COMMAND_MOCK, MENTION_MOCK } from '../ImageNode/mock'
 import { Seedance15ProParamsPanel } from './components/Seedance15ProParamsPanel'
 import { GrokVideoParamsPanel } from './components/GrokVideoParamsPanel'
 import { Veo3ParamsPanel } from './components/Veo3ParamsPanel'
@@ -32,11 +30,6 @@ import { getVideoPayloadStrategy } from './strategies/videoPayloadStrategies'
 
 export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     const [isUploading, setIsUploading] = useState(false)
-
-    const [mentionQuery, setMentionQuery] = useState('')
-    const [commandQuery, setCommandQuery] = useState('')
-    const [activeMode, setActiveMode] = useState<'mention' | 'command' | null>(null)
-    const [activeIndex, setActiveIndex] = useState(0)
 
     const { success, error, warning } = useMessage()
 
@@ -70,177 +63,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     const camerafixed = currentVideoData?.camerafixed ?? false
   const seedance20Metadata = currentVideoData?.metadata ?? {}
 
-    const triggerRangeRef = useRef<{ from: number; to: number } | null>(null)
     const fileInputRef = useRef<HTMLInputElement | null>(null)
-
-    const resetSuggestionState = () => {
-        setActiveMode(null)
-        setMentionQuery('')
-        setCommandQuery('')
-        setActiveIndex(0)
-        triggerRangeRef.current = null
-    }
-
-    const getMentionLabel = (attrs: { id?: string; label?: string; value?: string }) => {
-        return attrs.label || attrs.value || attrs.id || ''
-    }
-
-    const disableBuiltInSuggestion = {
-        items: () => [],
-        render: () => ({
-            onStart: () => { },
-            onUpdate: () => { },
-            onKeyDown: () => false,
-            onExit: () => { },
-        }),
-    }
-
-    const mentionExtension = useMemo(() => {
-        return Mention.configure({
-            deleteTriggerWithBackspace: true,
-            HTMLAttributes: {
-                class: 'video-node-mention-pill',
-            },
-            renderText({ options, node }) {
-                const mentionLabel = getMentionLabel(node.attrs)
-                return `${options.suggestion.char}${mentionLabel}`
-            },
-            renderHTML({ options, node }) {
-                const mentionLabel = getMentionLabel(node.attrs)
-                return [
-                    'span',
-                    {
-                        ...options.HTMLAttributes,
-                        'data-mention-id': node.attrs.id,
-                        'data-mention-value': node.attrs.value,
-                        'data-mention-label': mentionLabel,
-                        contenteditable: 'false',
-                    },
-                    `${options.suggestion.char}${mentionLabel}`,
-                ]
-            },
-            suggestion: {
-                char: '@',
-                ...disableBuiltInSuggestion,
-            },
-        })
-    }, [])
-
-    const slashCommandExtension = useMemo(() => {
-        return Mention.extend({
-            name: 'slashCommand',
-        }).configure({
-            deleteTriggerWithBackspace: true,
-            HTMLAttributes: {
-                class: 'video-node-slash-pill',
-            },
-            renderText({ options, node }) {
-                const mentionLabel = getMentionLabel(node.attrs)
-                return `${options.suggestion.char}${mentionLabel}`
-            },
-            renderHTML({ options, node }) {
-                const mentionLabel = getMentionLabel(node.attrs)
-                return [
-                    'span',
-                    {
-                        ...options.HTMLAttributes,
-                        'data-mention-id': node.attrs.id,
-                        'data-mention-value': node.attrs.value,
-                        'data-mention-label': mentionLabel,
-                        contenteditable: 'false',
-                    },
-                    `${options.suggestion.char}${mentionLabel}`,
-                ]
-            },
-            suggestion: {
-                char: '/',
-                ...disableBuiltInSuggestion,
-            },
-        })
-    }, [])
-
-    const insertSuggestionNode = (
-        mode: 'mention' | 'command',
-        item: (typeof MENTION_MOCK)[number] | (typeof COMMAND_MOCK)[number],
-    ) => {
-        if (!triggerRangeRef.current) {
-            return
-        }
-
-        if (mode === 'mention') {
-            const selected = item as (typeof MENTION_MOCK)[number]
-            editor
-                ?.chain()
-                .focus()
-                .insertContentAt(triggerRangeRef.current, [
-                    {
-                        type: 'mention',
-                        attrs: {
-                            id: selected.id,
-                            label: selected.label,
-                            value: selected.value,
-                        },
-                    },
-                    {
-                        type: 'text',
-                        text: ' ',
-                    },
-                ])
-                .run()
-            return
-        }
-
-        const selected = item as (typeof COMMAND_MOCK)[number]
-        const commandValue = selected.command.replace(/^\//, '')
-        editor
-            ?.chain()
-            .focus()
-            .insertContentAt(triggerRangeRef.current, [
-                {
-                    type: 'slashCommand',
-                    attrs: {
-                        id: selected.id,
-                        label: selected.label,
-                        value: commandValue,
-                    },
-                },
-                {
-                    type: 'text',
-                    text: ' ',
-                },
-            ])
-            .run()
-    }
-
-    const filteredMentionItems = useMemo(() => {
-        const q = mentionQuery.trim().toLowerCase()
-        const all = [...MENTION_MOCK]
-        if (!q) {
-            return all
-        }
-        return all.filter((item) => {
-            return (
-                item.label.toLowerCase().includes(q) ||
-                item.value.toLowerCase().includes(q) ||
-                item.description.toLowerCase().includes(q)
-            )
-        })
-    }, [mentionQuery])
-
-    const filteredCommandItems = useMemo(() => {
-        const q = commandQuery.trim().toLowerCase()
-        const all = [...COMMAND_MOCK]
-        if (!q) {
-            return all
-        }
-        return all.filter((item) => {
-            return (
-                item.label.toLowerCase().includes(q) ||
-                item.command.toLowerCase().includes(q) ||
-                item.description.toLowerCase().includes(q)
-            )
-        })
-    }, [commandQuery])
 
     const parentImageUrls = useMemo(() => {
         const parentIds = edges
@@ -345,7 +168,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     }
 
     const editor = useEditor({
-        extensions: [StarterKit, mentionExtension, slashCommandExtension],
+        extensions: [StarterKit],
         content: promptDraftHtml,
         editorProps: {
             attributes: {
@@ -354,94 +177,12 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                     'focus:outline-none',
                 ),
             },
-            handleKeyDown: (_view, event) => {
-                const currentItems = activeMode === 'mention' ? filteredMentionItems : filteredCommandItems
-
-                if (!activeMode || currentItems.length === 0) {
-                    return false
-                }
-
-                if (event.key === 'ArrowDown') {
-                    event.preventDefault()
-                    setActiveIndex((prev) => (prev + 1) % currentItems.length)
-                    return true
-                }
-
-                if (event.key === 'ArrowUp') {
-                    event.preventDefault()
-                    setActiveIndex((prev) => (prev - 1 + currentItems.length) % currentItems.length)
-                    return true
-                }
-
-                if (event.key === 'Escape') {
-                    event.preventDefault()
-                    resetSuggestionState()
-                    return true
-                }
-
-                if (event.key === 'Enter') {
-                    event.preventDefault()
-                    if (activeMode === 'mention') {
-                        const selected = filteredMentionItems[activeIndex]
-                        if (selected) {
-                            insertSuggestionNode('mention', selected)
-                        }
-                    }
-
-                    if (activeMode === 'command') {
-                        const selected = filteredCommandItems[activeIndex]
-                        if (selected) {
-                            insertSuggestionNode('command', selected)
-                        }
-                    }
-
-                    resetSuggestionState()
-                    return true
-                }
-
-                return false
-            },
         },
         onUpdate: ({ editor: currentEditor }) => {
             updateVideoNodeData(nodeId, {
                 promptDraft: currentEditor.getText(),
                 promptDraftHtml: currentEditor.getHTML(),
             })
-
-            const { from } = currentEditor.state.selection
-            const plainText = currentEditor.state.doc.textBetween(0, from, '\n', '\0')
-            const mentionMatch = plainText.match(/(^|\s)@([^\s@]*)$/)
-            const commandMatch = plainText.match(/(^|\s)\/([^\s/]*)$/)
-
-            if (mentionMatch) {
-                setActiveMode('mention')
-                setMentionQuery(mentionMatch[2] ?? '')
-                setCommandQuery('')
-                setActiveIndex(0)
-
-                const triggerLength = `@${mentionMatch[2] ?? ''}`.length
-                triggerRangeRef.current = {
-                    from: Math.max(from - triggerLength, 0),
-                    to: from,
-                }
-                return
-            }
-
-            if (commandMatch) {
-                setActiveMode('command')
-                setCommandQuery(commandMatch[2] ?? '')
-                setMentionQuery('')
-                setActiveIndex(0)
-
-                const triggerLength = `/${commandMatch[2] ?? ''}`.length
-                triggerRangeRef.current = {
-                    from: Math.max(from - triggerLength, 0),
-                    to: from,
-                }
-                return
-            }
-
-            resetSuggestionState()
         },
     })
 
@@ -457,8 +198,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
         editor.commands.setContent(promptDraftHtml, { emitUpdate: false })
     }, [editor, promptDraftHtml])
-
-    const suggestionItems = activeMode === 'mention' ? filteredMentionItems : filteredCommandItems
 
   // 根据模式限制视频时长（fast: 4-12, pro: 4-15）
   const clampSeedance20Duration = (value: number, mode: 'fast' | 'pro') => {
@@ -497,7 +236,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
     return (
       <div className="nodrag nopan nowheel w-[700px] min-w-[700px] rounded-3xl border border-neutral-700 bg-[linear-gradient(160deg,rgba(38,38,38,0.98)_0%,rgba(30,30,30,0.97)_58%,rgba(23,23,23,0.96)_100%)] p-3 shadow-[0_22px_70px_rgba(0,0,0,0.35)] backdrop-blur-md" >
-            <div className="relative mb-3 rounded-2xl border border-neutral-700 bg-neutral-800/80 p-2">
+            <div className="mb-3 rounded-2xl border border-neutral-700 bg-neutral-800/80 p-2">
                 <EditorContent editor={editor} />
 
                 <div className="nodrag nopan nowheel mt-2.5 flex gap-2 overflow-x-auto pb-1">
@@ -538,50 +277,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                         </Button>
                     ))}
                 </div>
-
-                {activeMode && suggestionItems.length > 0 && (
-                    <div className="nodrag nopan nowheel absolute right-2 bottom-2 left-2 z-30 max-h-44 overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900 shadow-[0_14px_34px_rgba(0,0,0,0.45)]">
-                        {suggestionItems.map((item, index) => {
-                            const isActive = index === activeIndex
-                            const token = activeMode === 'mention' ? `@${item.value}` : item.command
-
-                            return (
-                                <Button
-                                    key={item.id}
-                                    unstyled
-                                    className={cn(
-                                        'flex w-full items-start justify-between gap-3 border-b border-neutral-800 px-3 py-2 text-left last:border-b-0',
-                                        isActive ? 'bg-neutral-700 text-neutral-100' : 'text-neutral-200 hover:bg-neutral-800',
-                                    )}
-                                    onMouseDown={(event) => {
-                                        event.preventDefault()
-                                        setActiveIndex(index)
-
-                                        if (!triggerRangeRef.current) {
-                                            return
-                                        }
-
-                                        if (activeMode === 'mention') {
-                                            insertSuggestionNode('mention', item)
-                                        } else {
-                                            insertSuggestionNode('command', item)
-                                        }
-
-                                        resetSuggestionState()
-                                    }}
-                                >
-                                    <div>
-                                        <div className="text-xs font-medium">{item.label}</div>
-                                        <div className="mt-0.5 text-[11px] text-neutral-400">{item.description}</div>
-                                    </div>
-                                    <span className="rounded-md border border-neutral-700 bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300">
-                                        {token}
-                                    </span>
-                                </Button>
-                            )
-                        })}
-                    </div>
-                )}
             </div>
 
             {/* 下方区域：参数控制区 */}
