@@ -1,5 +1,5 @@
-
 import {
+  Icon3dRotate,
     IconAspectRatio,
     IconCrop,
     IconDownload,
@@ -34,7 +34,7 @@ type ImageToolbarProps = {
     onDelete?: () => void
 }
 
-type ActionKey = 'upload' | 'erase' | 'enhance' | 'outpaint' | 'crop' | 'download' | 'preview'
+type ActionKey = 'upload' | 'erase' | 'enhance' | 'outpaint' | 'crop' | 'download' | 'preview' | 'panorama'
 
 /**
  * 图片节点工具栏组件
@@ -42,6 +42,7 @@ type ActionKey = 'upload' | 'erase' | 'enhance' | 'outpaint' | 'crop' | 'downloa
  * - 提供上传,擦除，增强，扩图，裁剪，下载,全屏查看的操作按钮
  * - 处理工具栏按钮交互反馈
  * - 基于 yet-another-react-lightbox 提供放大查看能力
+ * - 支持查看全景图功能
  */
 export const ImageToolbar = memo(({ nodeId, data, selected, onDelete }: ImageToolbarProps) => {
     const [isLightboxOpen, setIsLightboxOpen] = useState(false)
@@ -51,8 +52,9 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete }: ImageToo
     // 隐藏的文件输入框引用
     const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-    // 更新节点数据
+  // 更新节点数据 & 全景图查看器
     const updateImageNodeData = useCanvasFlowStore((state) => state.updateImageNodeData)
+  const openPanoramaViewer = useCanvasFlowStore((state) => state.openPanoramaViewer)
 
     // 获取所有图片 URL 数组
     const imageUrls = data.result?.data?.map((item) => item.url) ?? []
@@ -67,6 +69,7 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete }: ImageToo
             { key: 'crop' as const, label: '裁剪', icon: IconCrop },
             { key: 'download' as const, label: '下载', icon: IconDownload },
             { key: 'preview' as const, label: '放大查看', icon: IconZoomIn },
+          { key: 'panorama' as const, label: '查看全景图', icon: Icon3dRotate },
         ]
     }, [])
 
@@ -153,6 +156,17 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete }: ImageToo
             setIsLightboxOpen(true)
             return
         }
+
+      if (actionKey === 'panorama') {
+        if (!currentImageUrl) {
+          toast.info('暂无可查看图片')
+          return
+        }
+
+        // 打开全景图查看器
+        openPanoramaViewer(currentImageUrl)
+        return
+      }
 
         toast.info('功能开发中...')
     }

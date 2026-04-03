@@ -69,6 +69,11 @@ type CanvasFlowState = {
   hydrated: boolean
   // 当前项目 ID
   projectId: string | null
+  // 全景图查看器状态
+  panoramaViewer: {
+    open: boolean
+    imageUrl: string | null
+  }
 
   // === 基础流程事件 ===
   onNodesChange: (changes: NodeChange<AllNodeType>[]) => void
@@ -124,6 +129,12 @@ type CanvasFlowState = {
   startVideoGeneration: (nodeId: string, payload: any) => Promise<void>
   /** 手动停止视频轮询（防止内存泄露） */
   stopVideoPolling: (nodeId: string) => void
+
+  // === 全景图查看器 ===
+  /** 打开全景图查看器 */
+  openPanoramaViewer: (imageUrl: string) => void
+  /** 关闭全景图查看器 */
+  closePanoramaViewer: () => void
 }
 
 // ==================== 图片生成轮询支持 ====================
@@ -618,6 +629,11 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => ({
   nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1 },
   hydrated: false,
   projectId: null,
+  // 全景图查看器初始化
+  panoramaViewer: {
+    open: false,
+    imageUrl: null,
+  },
 
   // ==================== 持久化方法实现 ====================
 
@@ -1394,5 +1410,32 @@ duplicateNode: (nodeId: string) => {
     set((state) => ({
       edges: addEdge(connection, state.edges),
     }))
+  },
+
+  // ==================== 全景图查看器 ====================
+
+  /**
+   * 打开全景图查看器
+   * @param imageUrl 要查看的图片 URL
+   */
+  openPanoramaViewer: (imageUrl: string) => {
+    set({
+      panoramaViewer: {
+        open: true,
+        imageUrl,
+      },
+    })
+  },
+
+  /**
+   * 关闭全景图查看器
+   */
+  closePanoramaViewer: () => {
+    set({
+      panoramaViewer: {
+        open: false,
+        imageUrl: null,
+      },
+    })
   },
 }))
