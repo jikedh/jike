@@ -21,7 +21,7 @@ import Slideshow from 'yet-another-react-lightbox/plugins/slideshow'
 import Zoom from 'yet-another-react-lightbox/plugins/zoom'
 import { toast } from 'sonner'
 
-import { uploadImage } from '@/api/ai'
+import { uploadFileToOSS } from '@/utils/oss'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { ImageGenerationNode } from '@/types/flow'
 
@@ -83,15 +83,11 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete }: ImageToo
             return
         }
 
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('purpose', 'generation')
-
         setIsUploading(true)
 
         try {
-            const response = await uploadImage(formData)
-            const uploadedUrl = response?.data?.url
+            const result = await uploadFileToOSS(file)
+            const uploadedUrl = result.url
 
             if (!uploadedUrl) {
                 toast.warning('上传成功但未返回图片地址')

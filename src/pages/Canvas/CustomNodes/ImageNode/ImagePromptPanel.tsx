@@ -14,7 +14,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { uploadImage } from '@/api/ai'
+import { uploadFileToOSS } from '@/utils/oss'
 import { GenerationStatus } from '@/constants/enum'
 import useMessage from '@/hooks/useMessage'
 import { cn } from '@/lib/utils'
@@ -361,15 +361,11 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             return
         }
 
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('purpose', 'generation')
-
         setIsUploading(true)
 
         try {
-            const response = await uploadImage(formData)
-            const nextUrl = response?.data?.url
+            const result = await uploadFileToOSS(file)
+            const nextUrl = result.url
 
             if (!nextUrl) {
                 warning('上传成功但未返回图片地址')
