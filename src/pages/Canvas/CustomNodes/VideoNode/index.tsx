@@ -64,6 +64,7 @@ export const VideoNode = memo(({
           <NodeToolbar isVisible={shouldShowToolbar} position={Position.Top} offset={10 * zoom}>
             <div style={{ transform: `scale(${zoom})`, transformOrigin: 'bottom center' }}>
                     <VideoToolbar
+                            nodeId={id}
                         data={data}
                         selected={selected}
                         onDuplicate={() => duplicateNode(id)}

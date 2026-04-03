@@ -1,15 +1,16 @@
 import {
     IconAspectRatio,
     IconBrush,
-    IconCopy,
     IconCrop,
     IconDownload,
     IconEraser,
     IconSparkles,
     IconTrash,
+  IconUpload,
     IconZoomIn,
 } from '@tabler/icons-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import Lightbox from 'yet-another-react-lightbox'
 // import Captions from 'yet-another-react-lightbox/plugins/captions'
 import Download from 'yet-another-react-lightbox/plugins/download'
@@ -20,9 +21,13 @@ import Slideshow from 'yet-another-react-lightbox/plugins/slideshow'
 import Zoom from 'yet-another-react-lightbox/plugins/zoom'
 import { toast } from 'sonner'
 
+import { downloadImageFromUrl } from '@/lib/utils'
+import { uploadFileToOSS } from '@/utils/oss'
+import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { VideoGenerationNode } from '@/types/flow'
 
 type VideoToolbarProps = {
+  nodeId: string
     data: VideoGenerationNode
     selected: boolean
     zoom?: number
@@ -30,7 +35,7 @@ type VideoToolbarProps = {
     onDelete?: () => void
 }
 
-type ActionKey = 'repaint' | 'erase' | 'enhance' | 'outpaint' | 'crop' | 'download' | 'preview'
+type ActionKey = 'upload' | 'repaint' | 'erase' | 'enhance' | 'outpaint' | 'crop' | 'download' | 'preview'
 
 /**
  * 视频节点工具栏组件
@@ -40,12 +45,21 @@ type ActionKey = 'repaint' | 'erase' | 'enhance' | 'outpaint' | 'crop' | 'downlo
  * - 基于 yet-another-react-lightbox 提供放大查看能力
  */
 export const VideoToolbar = ({
+  nodeId,
     data,
     selected,
     onDuplicate,
     onDelete,
 }: VideoToolbarProps) => {
     const [isLightboxOpen, setIsLightboxOpen] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+    const [isDownloading, setIsDownloading] = useState(false)
+
+  // 隐藏的文件输入框引用：用于点击“上传”按钮时拉起文件选择器
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  // 更新视频节点数据：上传成功后将 URL 回填到当前节点
+  const updateVideoNodeData = useCanvasFlowStore((state) => state.updateVideoNodeData)
 
     // 对齐图片工具栏的数据组织方式，统一使用数组映射给 Lightbox
     const videoUrls = data.result?.data?.map((item) => item.url) ?? []
@@ -53,6 +67,7 @@ export const VideoToolbar = ({
 
     const toolbarActions = useMemo(() => {
         return [
+          { key: 'upload' as const, label: '上传', icon: IconUpload },
             { key: 'repaint' as const, label: '重绘', icon: IconBrush },
             { key: 'erase' as const, label: '擦除', icon: IconEraser },
             { key: 'enhance' as const, label: '增强', icon: IconSparkles },
@@ -63,7 +78,58 @@ export const VideoToolbar = ({
         ]
     }, [])
 
-    const handleAction = (actionKey: ActionKey) => {
+  // 触发文件选择
+  const handleUploadClick = () => {
+    if (isUploading) {
+      return
+    }
+
+    fileInputRef.current?.click()
+  }
+
+  // 处理文件上传：调用 OSS 上传并把返回 URL 追加到视频结果数组
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    setIsUploading(true)
+
+    try {
+      const result = await uploadFileToOSS(file)
+      const uploadedUrl = result.url
+
+      if (!uploadedUrl) {
+        toast.warning('上传成功但未返回视频地址')
+        return
+      }
+
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'mp4'
+      const currentData = data.result?.data ?? []
+
+      updateVideoNodeData(nodeId, {
+        result: {
+          type: 'video',
+          data: [...currentData, { url: uploadedUrl, format: fileExt }],
+        },
+      })
+      toast.success('上传成功')
+    } catch (uploadError) {
+      console.error('上传视频失败:', uploadError)
+      toast.error('上传失败，请重试')
+    } finally {
+      setIsUploading(false)
+      event.target.value = ''
+    }
+  }
+
+    const handleAction = async (actionKey: ActionKey) => {
+      if (actionKey === 'upload') {
+        handleUploadClick()
+        return
+      }
+
         if (actionKey === 'preview') {
             if (!currentVideoUrl) {
                 toast.info('暂无可预览视频')
@@ -71,6 +137,30 @@ export const VideoToolbar = ({
             }
 
             setIsLightboxOpen(true)
+            return
+        }
+
+        if (actionKey === 'download') {
+            if (!currentVideoUrl) {
+                toast.info('暂无可下载视频')
+                return
+            }
+
+            if (isDownloading) {
+                return
+            }
+
+            setIsDownloading(true)
+            try {
+                await downloadImageFromUrl(currentVideoUrl)
+                toast.success('下载成功')
+            } catch (error) {
+                const message = error instanceof Error ? error.message : '下载失败'
+                toast.error(message)
+                console.error('下载视频失败:', error)
+            } finally {
+                setIsDownloading(false)
+            }
             return
         }
 
@@ -82,39 +172,37 @@ export const VideoToolbar = ({
 
     return (
         <>
+        {/* 隐藏 input：通过工具栏“上传”按钮触发 */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+
             <div
                 className={`nodrag nopan nowheel inline-flex h-10 items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-800/95 px-2 shadow-md ${selected
                     ? 'translate-y-0 scale-100 opacity-100'
                     : '-translate-y-2 scale-95 opacity-0'
                     }`}
             >
-                {/* 复制按钮 */}
-                <button
-                    type="button"
-                    onClick={onDuplicate}
-                    className="nodrag nopan nowheel inline-flex h-8 items-center gap-1 rounded-lg border border-transparent bg-neutral-700 px-2 text-xs font-medium text-neutral-200 transition-colors hover:border-neutral-500 hover:bg-neutral-600 hover:text-neutral-100 active:border-neutral-400 active:bg-neutral-500 active:text-neutral-50"
-                    title="复制节点"
-                    aria-label="复制节点"
-                >
-                    <IconCopy size={24} stroke={1.8} />
-                    <span>复制</span>
-                </button>
-
-                {/* 分隔线 */}
-                <div className="h-5 w-px bg-neutral-600" />
-
                 {toolbarActions.map((item) => {
                     const Icon = item.icon
                     const isActive = item.key === 'preview' ? isPreviewActive : false
+                  const isDisabled = (item.key === 'download' && isDownloading) || (item.key === 'upload' && isUploading)
 
                     return (
                         <button
                             key={item.key}
                             type="button"
                             onClick={() => handleAction(item.key)}
-                            className={`nodrag nopan nowheel inline-flex h-8 items-center gap-1 rounded-lg border px-2 text-xs font-medium ${isActive
-                                ? 'border-neutral-500 bg-neutral-600 text-neutral-100'
-                                : 'border-transparent bg-neutral-700 text-neutral-200 hover:border-neutral-500 hover:bg-neutral-600 hover:text-neutral-100 active:border-neutral-400 active:bg-neutral-500 active:text-neutral-50'
+                            disabled={isDisabled}
+                            className={`nodrag nopan nowheel inline-flex h-8 items-center gap-1 rounded-lg border px-2 text-xs font-medium transition-colors ${isDisabled
+                                ? 'border-neutral-600 bg-neutral-600/50 text-neutral-400 cursor-not-allowed opacity-50'
+                                : isActive
+                                    ? 'border-neutral-500 bg-neutral-600 text-neutral-100'
+                                    : 'border-transparent bg-neutral-700 text-neutral-200 hover:border-neutral-500 hover:bg-neutral-600 hover:text-neutral-100 active:border-neutral-400 active:bg-neutral-500 active:text-neutral-50'
                                 }`}
                             title={item.label}
                             aria-label={item.label}

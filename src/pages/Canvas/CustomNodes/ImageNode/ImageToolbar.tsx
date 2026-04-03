@@ -22,6 +22,7 @@ import Zoom from 'yet-another-react-lightbox/plugins/zoom'
 import { toast } from 'sonner'
 
 import { uploadFileToOSS } from '@/utils/oss'
+import { downloadImageFromUrl } from '@/lib/utils'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { ImageGenerationNode } from '@/types/flow'
 
@@ -45,6 +46,7 @@ type ActionKey = 'upload' | 'erase' | 'enhance' | 'outpaint' | 'crop' | 'downloa
 export const ImageToolbar = memo(({ nodeId, data, selected, onDelete }: ImageToolbarProps) => {
     const [isLightboxOpen, setIsLightboxOpen] = useState(false)
     const [isUploading, setIsUploading] = useState(false)
+    const [isDownloading, setIsDownloading] = useState(false)
 
     // 隐藏的文件输入框引用
     const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -112,9 +114,33 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete }: ImageToo
         }
     }
 
-    const handleAction = (actionKey: ActionKey) => {
+    const handleAction = async (actionKey: ActionKey) => {
         if (actionKey === 'upload') {
             handleUploadClick()
+            return
+        }
+
+        if (actionKey === 'download') {
+            if (!currentImageUrl) {
+                toast.info('暂无可下载图片')
+                return
+            }
+
+            if (isDownloading) {
+                return
+            }
+
+            setIsDownloading(true)
+            try {
+                await downloadImageFromUrl(currentImageUrl)
+                toast.success('下载成功')
+            } catch (error) {
+                const message = error instanceof Error ? error.message : '下载失败'
+                toast.error(message)
+                console.error('下载图片失败:', error)
+            } finally {
+                setIsDownloading(false)
+            }
             return
         }
 
@@ -150,15 +176,19 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete }: ImageToo
                 {toolbarActions.map((item) => {
                     const Icon = item.icon
                     const isActive = item.key === 'preview' ? isPreviewActive : false
+                    const isDisabled = (item.key === 'download' && isDownloading) || (item.key === 'upload' && isUploading)
 
                     return (
                         <button
                             key={item.key}
                             type="button"
                             onClick={() => handleAction(item.key)}
-                            className={`nodrag nopan nowheel inline-flex h-8 items-center gap-1 rounded-lg border px-2 text-xs font-medium transition-colors ${isActive
-                                ? 'border-neutral-500 bg-neutral-600 text-neutral-100'
-                                : 'border-transparent bg-neutral-700 text-neutral-200 hover:border-neutral-500 hover:bg-neutral-600 hover:text-neutral-100 active:border-neutral-400 active:bg-neutral-500 active:text-neutral-50'
+                            disabled={isDisabled}
+                            className={`nodrag nopan nowheel inline-flex h-8 items-center gap-1 rounded-lg border px-2 text-xs font-medium transition-colors ${isDisabled
+                                ? 'border-neutral-600 bg-neutral-600/50 text-neutral-400 cursor-not-allowed opacity-50'
+                                : isActive
+                                    ? 'border-neutral-500 bg-neutral-600 text-neutral-100'
+                                    : 'border-transparent bg-neutral-700 text-neutral-200 hover:border-neutral-500 hover:bg-neutral-600 hover:text-neutral-100 active:border-neutral-400 active:bg-neutral-500 active:text-neutral-50'
                                 }`}
                             title={item.label}
                             aria-label={item.label}
