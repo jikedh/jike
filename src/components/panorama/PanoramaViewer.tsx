@@ -6,7 +6,6 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js"
 import { PanoramaCanvas } from "./PanoramaCanvas"
 import { PanoramaControls } from "./PanoramaControls"
 import { PanoramaLoading } from "./PanoramaLoading"
-import { PanoramaUpload } from "./PanoramaUpload"
 import { takeScreenshot, recenterCamera } from "@/lib/panorama"
 
 export interface PanoramaViewerProps {
@@ -17,52 +16,14 @@ export interface PanoramaViewerProps {
 
 export function PanoramaViewer({ open, onClose, initialImage }: PanoramaViewerProps) {
     // 状态管理
-    const [imageUrl, setImageUrl] = React.useState<string | null>(null)
-    const [isLoading, setIsLoading] = React.useState(false)
+    const [isLoading, setIsLoading] = React.useState(true)
     const [loadingText, setLoadingText] = React.useState("正在处理全景图...")
-    const [hasImage, setHasImage] = React.useState(false)
 
     // Three.js 引用
     const rendererRef = React.useRef<THREE.WebGLRenderer | null>(null)
     const cameraRef = React.useRef<THREE.PerspectiveCamera | null>(null)
     const sceneRef = React.useRef<THREE.Scene | null>(null)
     const controlsRef = React.useRef<OrbitControls | null>(null)
-
-    // 初始化图片
-    React.useEffect(() => {
-        if (open && initialImage) {
-            setImageUrl(initialImage)
-            setHasImage(true)
-        }
-    }, [open, initialImage])
-
-    // 弹窗关闭时清理
-    React.useEffect(() => {
-        if (!open) {
-            setImageUrl(null)
-            setHasImage(false)
-            setIsLoading(false)
-        }
-    }, [open])
-
-    // 文件选择处理
-    const handleFileSelect = React.useCallback((file: File) => {
-        const reader = new FileReader()
-        setIsLoading(true)
-
-        reader.onload = (e) => {
-            const result = e.target?.result as string
-            setImageUrl(result)
-            setHasImage(true)
-        }
-
-        reader.onerror = () => {
-            alert("读取文件出错！")
-            setIsLoading(false)
-        }
-
-        reader.readAsDataURL(file)
-    }, [])
 
     // 图片加载完成
     const handleImageLoaded = React.useCallback(() => {
@@ -131,19 +92,13 @@ export function PanoramaViewer({ open, onClose, initialImage }: PanoramaViewerPr
         }
     }, [])
 
-    // 更换图片
-    const handleChangeImage = React.useCallback(() => {
-        setImageUrl(null)
-        setHasImage(false)
-    }, [])
-
     if (!open) return null
 
     return (
         <div id="panorama-root" className="fixed inset-0 z-[100] bg-gray-950 overflow-hidden">
             {/* Three.js 渲染画布 */}
             <PanoramaCanvas
-                imageUrl={imageUrl}
+                imageUrl={initialImage || null}
                 onImageLoaded={handleImageLoaded}
                 onImageError={handleImageError}
                 rendererRef={rendererRef}
@@ -152,23 +107,18 @@ export function PanoramaViewer({ open, onClose, initialImage }: PanoramaViewerPr
                 controlsRef={controlsRef}
             />
 
-            {/* 上传界面 */}
-            {!hasImage && !isLoading && (
-                <PanoramaUpload onFileSelect={handleFileSelect} />
-            )}
-
             {/* 加载中 */}
             {isLoading && <PanoramaLoading text={loadingText} />}
 
-            {/* 控制面板 */}
-            {hasImage && !isLoading && (
+            {/* 控制面板 - 有图片且加载完成后显示 */}
+            {!isLoading && initialImage && (
                 <>
                     <PanoramaControls
                         onScreenshotSingle={handleScreenshotSingle}
                         onScreenshot4={handleScreenshot4}
                         onScreenshot12={handleScreenshot12}
                         onRecenter={handleRecenter}
-                        onChangeImage={handleChangeImage}
+                        onChangeImage={onClose}
                     />
 
                     {/* 关闭按钮 */}
