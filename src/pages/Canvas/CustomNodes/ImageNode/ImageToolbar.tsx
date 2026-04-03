@@ -29,6 +29,7 @@ type ImageToolbarProps = {
     nodeId: string
     data: ImageGenerationNode
     selected: boolean
+    onDuplicate?: () => void
     onDelete?: () => void
 }
 

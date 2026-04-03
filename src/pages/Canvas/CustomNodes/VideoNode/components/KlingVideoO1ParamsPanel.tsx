@@ -320,7 +320,7 @@ export const KlingVideoO1ParamsPanel = ({
                                             variant="blue"
                                             size="sm"
                                             onClick={handleAddVideo}
-                                            disabled={!currentVideo.video_url && videoList?.length >= 1}
+                                            disabled={!currentVideo.video_url && (videoList?.length ?? 0) >= 1}
                                             className="h-8 px-2 text-xs"
                                         >
                                             添加
