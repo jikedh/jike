@@ -12,6 +12,7 @@ import {
 import { useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import Lightbox from 'yet-another-react-lightbox'
+import Video from 'yet-another-react-lightbox/plugins/video'
 // import Captions from 'yet-another-react-lightbox/plugins/captions'
 import Download from 'yet-another-react-lightbox/plugins/download'
 import Fullscreen from 'yet-another-react-lightbox/plugins/fullscreen'
@@ -235,8 +236,8 @@ export const VideoToolbar = ({
                     close={() => {
                         setIsLightboxOpen(false)
                     }}
-                    slides={videoUrls.filter((url): url is string => !!url).map((url) => ({ src: url }))}
-                    plugins={[Fullscreen, Slideshow, Zoom, Share, Download]}
+                    slides={videoUrls.filter((url): url is string => !!url).map((url) => ({ type: 'video' as const, sources: [{ src: url, type: 'video/mp4' }] }))}
+                    plugins={[Video, Fullscreen, Slideshow, Zoom, Share, Download]}
                     zoom={{ maxZoomPixelRatio: 4, zoomInMultiplier: 2 }}
                     controller={{ closeOnBackdropClick: true }}
                 />
