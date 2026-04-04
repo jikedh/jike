@@ -608,8 +608,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           try {
               await startImageGeneration(nodeId, buildPayload())
               successCount++
-            } catch (generationError) {
-          console.error(`第 ${i + 1} 张图片生成任务创建失败:`, generationError)
+            } catch {
+          // 错误已由全局拦截器处理并在 ImageContent 中展示，此处不需要重复弹窗
           failCount++
         }
       }

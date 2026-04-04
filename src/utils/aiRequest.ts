@@ -2,6 +2,7 @@ import axios, { AxiosRequestConfig, AxiosInstance } from 'axios'
 
 // 从 utils 导入 API 密钥管理函数和环境检测函数
 import { getAiToken, getZeakaiToken, getKuaiziToken, getBaseURL } from './utils'
+import { handleRequestError } from './requestErrorHandler'
 // import { filterRequestData } from './apiFieldFilter'
 
 // ===================== 服务基础配置 =====================
@@ -78,7 +79,11 @@ const createService = (serviceName: string, config: ServiceConfig): AxiosInstanc
   // 响应拦截器 - 直接返回 response.data
   service.interceptors.response.use(
     (response) => response.data,
-    (error) => Promise.reject(error)
+    (error) => {
+      // 统一处理并提示网络/业务错误
+      handleRequestError(error)
+      return Promise.reject(error)
+    }
   )
 
   return service

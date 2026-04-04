@@ -57,7 +57,10 @@ export interface ImageGenerationNode {
   completedCount?: number; // 已完成图片数量（用于多图生成场景判断）
   error?: {
     code?: string; // 错误代码
-    message?: string; // 错误信息
+    message?: string; // 错误信息（兜底显示）
+    detail?: string; // 后端返回的详细错误信息（优先展示）
+    serverMessage?: string; // 原始后端错误消息
+    status?: number; // HTTP 状态码
   }; // 错误对象
   [key: string]: any; // React Flow 约束兼容
 }
@@ -113,7 +116,10 @@ export interface VideoGenerationNode {
   task_id?: string; // 任务 ID（用于轮询）对应响应结果里面的id字段
   error?: {
     code?: string; // 错误代码
-    message?: string; // 错误信息
+    message?: string; // 错误信息（兜底显示）
+    detail?: string; // 后端返回的详细错误信息（优先展示）
+    serverMessage?: string; // 原始后端错误消息
+    status?: number; // HTTP 状态码
   }; // 错误对象
     result?: {
     // 任务结果（仅成功时返回）

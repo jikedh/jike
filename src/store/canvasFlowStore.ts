@@ -23,6 +23,7 @@ import type { AllNodeType, EdgeType, ImageGenerationNode, VideoGenerationNode } 
 import { GenerationStatus } from '@/constants/enum'
 import { getCanvasDataKey } from '@/utils/projectStorage'
 import { buildMidjourneyPrompt } from '@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt'
+import { getRequestErrorMessage } from '@/utils/requestErrorHandler'
 
 // ==================== 持久化配置 ====================
 
@@ -610,6 +611,8 @@ const pollVideoGeneration = async (
   } catch (pollError) {
     console.error('视频生成轮询失败:', pollError)
     stopVideoPollingInternal(nodeId)
+    // 从 error 对象中提取后端返回的详细信息
+    const serverMessage = getRequestErrorMessage(pollError)
     setState((state) => ({
       nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
         ...data,
@@ -617,6 +620,8 @@ const pollVideoGeneration = async (
         error: {
           code: 'POLL_ERROR',
           message: '轮询失败，请稍后再试',
+          detail: serverMessage,
+          serverMessage,
         },
       })),
     }))
@@ -1237,6 +1242,8 @@ duplicateNode: (nodeId: string) => {
       } else {
         pendingTaskCounts.set(nodeId, remaining)
       }
+      // 从 error 对象中提取后端返回的详细信息
+      const serverMessage = getRequestErrorMessage(startError)
       set((state) => ({
         nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
           ...data,
@@ -1244,6 +1251,8 @@ duplicateNode: (nodeId: string) => {
           error: {
             code: 'CREATE_TASK_FAILED',
             message: startError instanceof Error ? startError.message : '创建任务失败，请稍后再试',
+            detail: serverMessage,
+            serverMessage,
           },
         })),
       }))
@@ -1405,6 +1414,8 @@ duplicateNode: (nodeId: string) => {
       pollVideoGeneration(taskId, nodeId, payload?.model, controller.signal, set, get)
     } catch (startError) {
       console.error('创建视频生成任务失败:', startError)
+      // 从 error 对象中提取后端返回的详细信息
+      const serverMessage = getRequestErrorMessage(startError)
       set((state) => ({
         nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
           ...data,
@@ -1412,6 +1423,8 @@ duplicateNode: (nodeId: string) => {
           error: {
             code: 'CREATE_TASK_FAILED',
             message: '创建任务失败，请稍后再试',
+            detail: serverMessage,
+            serverMessage,
           },
         })),
       }))

@@ -26,14 +26,15 @@ export const ImageContent = memo(({ data, onRetry, onReorder }: ImageContentProp
 
     // 错误状态
     if (status === GenerationStatus.FAILED) {
+        // 优先展示后端返回的详细错误信息，其次是 message，最后是兜底文案
+        const displayMessage = error?.detail || error?.serverMessage || error?.message || '生成失败，请稍后再试'
+        
         return (
           <div className="         h-full w-full flex flex-col items-center justify-center p-4 text-center bg-destructive/5">
                 <div className="text-sm font-medium text-destructive mb-2">生成失败</div>
-                {error?.message && (
-                    <div className="text-xs text-muted-foreground mb-3 line-clamp-2">
-                        {error.message}
-                    </div>
-                )}
+                <div className="text-xs text-muted-foreground mb-3 line-clamp-3 max-w-full px-2">
+                    {displayMessage}
+                </div>
                 {onRetry && (
                     <button
                         type="button"

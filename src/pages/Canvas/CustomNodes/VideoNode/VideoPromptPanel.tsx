@@ -314,13 +314,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             imageUrls: currentVideoData?.image_urls ?? [],
         })
 
-        try {
+
             await startVideoGeneration(nodeId, payload)
             success('已开始生成视频')
-        } catch (generationError: any) {
-            console.error('创建视频生成任务失败:', generationError)
-            error('创建任务失败，请稍后再试')
-        }
+
     }
 
     return (
