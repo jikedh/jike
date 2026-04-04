@@ -150,12 +150,17 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         // 渲染下拉列表
         render: () => {
           let component: ReactRenderer | null = null
+          let keyboardHandler: ((event: KeyboardEvent) => void) | null = null
+          let editorDom: HTMLElement | null = null
 
           return {
             onStart: (props) => {
               if (!props.clientRect) {
                 return
               }
+
+              // 保存 editor dom 引用用于清理
+              editorDom = props.editor.view.dom
 
               // 使用 ReactRenderer 创建 React 组件
               component = new ReactRenderer(VideoMentionList, {
@@ -172,6 +177,17 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
               // 更新位置
               updateSuggestionPosition(props.editor, component.element)
+
+              // 绑定键盘事件：上下键导航、Enter 选中
+              keyboardHandler = (event: KeyboardEvent) => {
+                const handled = component?.ref?.onKeyDown({ event })
+                // 如果键盘事件被处理，阻止默认行为和冒泡
+                if (handled) {
+                  event.preventDefault()
+                  event.stopPropagation()
+                }
+              }
+              editorDom.addEventListener('keydown', keyboardHandler, { capture: true })
             },
 
             onUpdate: (props) => {
@@ -187,6 +203,12 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             },
 
             onExit: () => {
+              // 清理键盘事件监听（从正确的 DOM 元素移除）
+              if (keyboardHandler && editorDom) {
+                editorDom.removeEventListener('keydown', keyboardHandler, { capture: true })
+                keyboardHandler = null
+                editorDom = null
+              }
               component?.destroy()
               component = null
             },
