@@ -66,6 +66,10 @@
   user-select: none;
 }
 
+.video-node-mention-pill__label {
+  line-height: 1;
+}
+
 .video-node-slash-pill {
   display: inline-flex;
   align-items: center;

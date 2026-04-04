@@ -1,5 +1,6 @@
-import { EditorContent, useEditor } from '@tiptap/react'
+import { EditorContent, useEditor, ReactRenderer } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import Mention from '@tiptap/extension-mention'
 import { IconUpload } from '@tabler/icons-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
@@ -16,9 +17,10 @@ import { Button } from '@/components/ui/button'
 import { uploadFileToOSS } from '@/utils/oss'
 import { GenerationStatus } from '@/constants/enum'
 import useMessage from '@/hooks/useMessage'
-import { cn } from '@/lib/utils'
+import { cn, toChineseNumber, getMentionLabel, updateSuggestionPosition } from '@/lib/utils'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { NoteNodeData, VideoGenerationNode } from '@/types/flow'
+import { VideoMentionList } from './VideoMentionList'
 
 import { Seedance15ProParamsPanel } from './components/Seedance15ProParamsPanel'
 import { GrokVideoParamsPanel } from './components/GrokVideoParamsPanel'
@@ -69,6 +71,20 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         return currentVideoData?.image_urls ?? []
     }, [currentVideoData?.image_urls])
 
+  // 将 image_urls 转换成提及候选项：缩略图 + 图片一/图片二...
+  const videoMentionItems = useMemo(() => {
+    return referenceImageUrls.map((url, index) => {
+      const label = `图片${toChineseNumber(index + 1)}`
+
+      return {
+        id: `video-image-${index}`,
+        label,
+        value: label,
+        thumbnail: url,
+      }
+    })
+  }, [referenceImageUrls])
+
     const parentNoteContents = useMemo(() => {
         const orderedParentIds: string[] = []
         const seenParentIds = new Set<string>()
@@ -97,6 +113,111 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         const status = currentNode.data.status
         return status === GenerationStatus.IN_PROGRESS || status === GenerationStatus.QUEUED
     }, [currentNode])
+
+  // 使用原生 Suggestion API，配合 Floating UI 实现动态定位
+  const mentionExtension = useMemo(() => {
+    return Mention.configure({
+      deleteTriggerWithBackspace: true,
+      HTMLAttributes: {
+        class: 'video-node-mention-pill',
+      },
+      // 纯文本导出用"图片一/图片二"，方便后续按文本解析。
+      renderText({ node }) {
+        return getMentionLabel(node.attrs)
+      },
+      renderHTML({ options, node }) {
+        const mentionLabel = getMentionLabel(node.attrs)
+
+        return [
+          'span',
+          {
+            ...options.HTMLAttributes,
+            'data-mention-id': node.attrs.id,
+            'data-mention-value': node.attrs.value,
+            'data-mention-label': mentionLabel,
+            contenteditable: 'false',
+          },
+          ['span', { class: 'video-node-mention-pill__label' }, mentionLabel],
+        ]
+      },
+      // 使用原生 Suggestion API
+      suggestion: {
+        char: '@',
+        // 返回候选项列表（不进行过滤，始终返回全量）
+        items: () => {
+          return videoMentionItems
+        },
+        // 渲染下拉列表
+        render: () => {
+          let component: ReactRenderer | null = null
+
+          return {
+            onStart: (props) => {
+              if (!props.clientRect) {
+                return
+              }
+
+              // 使用 ReactRenderer 创建 React 组件
+              component = new ReactRenderer(VideoMentionList, {
+                props,
+                editor: props.editor,
+              })
+
+              // 设置初始样式
+              component.element.style.position = 'absolute'
+              component.element.style.zIndex = '9999'
+
+              // 添加到 body（避免父容器 overflow 影响）
+              document.body.appendChild(component.element)
+
+              // 更新位置
+              updateSuggestionPosition(props.editor, component.element)
+            },
+
+            onUpdate: (props) => {
+              if (!props.clientRect) {
+                return
+              }
+
+              // 更新 props
+              component?.updateProps(props)
+
+              // 更新位置
+              updateSuggestionPosition(props.editor, component!.element)
+            },
+
+            onExit: () => {
+              component?.destroy()
+              component = null
+            },
+          }
+        },
+      },
+    })
+  }, [videoMentionItems])
+
+  // 处理选择候选项
+  const handleSelectSuggestion = (item: (typeof videoMentionItems)[number]) => {
+    editor
+      ?.chain()
+      .focus()
+      .insertContent([
+        {
+          type: 'mention',
+          attrs: {
+            id: item.id,
+            label: item.label,
+            value: item.value,
+            thumbnail: item.thumbnail,
+          },
+        },
+        {
+          type: 'text',
+          text: ' ',
+        },
+      ])
+      .run()
+  }
 
     const handleUploadClick = () => {
         if (isUploading) {
@@ -136,7 +257,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     }
 
     const editor = useEditor({
-        extensions: [StarterKit],
+      extensions: [StarterKit, mentionExtension],
         content: promptDraftHtml,
         editorProps: {
             attributes: {
@@ -204,7 +325,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
     return (
       <div className="nodrag nopan nowheel w-[700px] min-w-[700px] rounded-3xl border border-neutral-700 bg-[linear-gradient(160deg,rgba(38,38,38,0.98)_0%,rgba(30,30,30,0.97)_58%,rgba(23,23,23,0.96)_100%)] p-3 shadow-[0_22px_70px_rgba(0,0,0,0.35)] backdrop-blur-md" >
-            <div className="mb-3 rounded-2xl border border-neutral-700 bg-neutral-800/80 p-2">
+        <div className="relative mb-3 rounded-2xl border border-neutral-700 bg-neutral-800/80 p-2">
                 <EditorContent editor={editor} />
 
                 <div className="nodrag nopan nowheel mt-2.5 flex gap-2 overflow-x-auto pb-1">
