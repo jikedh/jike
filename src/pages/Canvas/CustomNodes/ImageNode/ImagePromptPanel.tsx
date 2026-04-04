@@ -83,8 +83,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     const size = currentImageData?.size ?? '1:1'
     const resolution = currentImageData?.resolution ?? '2K'
     const model = currentImageData?.model ?? 'doubao-seedream-5-0'
-    const uploadedUrls = currentImageData?.uploadedUrls ?? []
-  const imageUrls = currentImageData?.image_urls ?? []
+  const referenceImageUrls = currentImageData?.image_urls ?? []
     const promptDraftHtml = currentImageData?.promptDraftHtml ?? '<p></p>'
 
   // ========== 模型专属参数 ==========
@@ -97,7 +96,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
   // Midjourney 高级参数
   const midjourneyAdvanced = currentImageData?.midjourneyAdvanced ?? {
-    referenceUrls: imageUrls,
+    referenceUrls: referenceImageUrls,
     styleUrls: [],
     iw: 0.5,
     sw: 100,
@@ -331,10 +330,29 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             .filter((content) => Boolean(content)) as string[]
     }, [edges, nodes, nodeId])
 
-    // 参考图列表：上传图片 + 父节点结果（不去重，默认顺序）
-    const referenceImageUrls = useMemo(() => {
-        return [...uploadedUrls, ...parentImageUrls]
-    }, [uploadedUrls, parentImageUrls])
+  useEffect(() => {
+    if (!currentImageData) {
+      return
+    }
+
+    if (parentImageUrls.length === 0) {
+      return
+    }
+
+    const currentUrls = currentImageData.image_urls ?? []
+    const nextUrls = Array.from(new Set([...currentUrls, ...parentImageUrls]))
+
+    const unchanged = nextUrls.length === currentUrls.length
+      && nextUrls.every((url, index) => currentUrls[index] === url)
+
+    if (unchanged) {
+      return
+    }
+
+    updateImageNodeData(nodeId, {
+      image_urls: nextUrls,
+    })
+  }, [currentImageData, nodeId, parentImageUrls, updateImageNodeData])
 
     // 是否正在生成（用于按钮禁用态）
     const isGenerating = useMemo(() => {
@@ -354,7 +372,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         fileInputRef.current?.click()
     }
 
-    // 上传图片并回填到参考图列表
+  // 上传图片并回填到参image_urls: [...referenceImage
     const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0]
         if (!file) {
@@ -373,7 +391,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             }
 
             updateImageNodeData(nodeId, {
-                uploadedUrls: [...uploadedUrls, nextUrl],
+              image_urls: [...referenceImageUrls, nextUrl],
             })
             success('上传成功')
         } catch (uploadError) {
@@ -544,10 +562,9 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             prompt: finalPrompt,
             resolution,
             n: 1,
-            image_urls: referenceImageUrls,
+            image_urls: currentImageData?.image_urls ?? [],
             promptDraft: editor?.getText() ?? '',
             promptDraftHtml: editor?.getHTML() ?? '<p></p>',
-            uploadedUrls,
             metadata: {},
           }
 

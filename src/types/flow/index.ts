@@ -37,8 +37,7 @@ export interface ImageGenerationNode {
   resolution?: string; // 分辨率，如 "1K", "2K", "4K"
   quality?: string; // 图片质量，如 "standard", "hd"
   style?: string; // 图片风格
-  image_urls?: string[]; // 参考图片 URL 列表
-  uploadedUrls?: string[]; // 面板上传的参考图 URL 列表
+  image_urls?: string[]; // 参考图片 URL 列表（统一关键字段，包含上传和来自依赖节点的图片）
   midjourneyAdvanced?: {
     referenceUrls?: string[] // Midjourney 参考图列表（用于拼接前缀 URL）
     styleUrls?: string[] // Midjourney 风格图列表（用于 --sref）
@@ -76,7 +75,6 @@ export interface VideoGenerationNode {
   duration?: number; // 视频时长（秒）
   aspect_ratio: string; // 宽高比，如 "16:9"
   image_urls?: string[]; // 参考图像 URL 列表
-  uploadedUrls?: string[]; // 面板上传的参考图 URL 列表
   status?: GenerationStatus; // 当前生成状态
   progress?: number; // 进度百分比（0-100）
   metadata: {

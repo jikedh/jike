@@ -623,7 +623,64 @@ const pollVideoGeneration = async (
   }
 }
 
-export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => ({
+export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
+  /**
+   * 同步图片节点的 image_urls 依赖
+   * 支持 Image→Image 和 Image→Video 的边操作
+   * @param nodes 当前节点数组
+   * @param edge 要处理的边
+   * @param mode 'add' = 连接时合并, 'remove' = 删除时清理
+   */
+  const syncImageUrlsByEdge = (nodes: any[], edge: any, mode: 'add' | 'remove'): any[] => {
+    const sourceNode = nodes.find(n => n.id === edge.source)
+    const targetNode = nodes.find(n => n.id === edge.target)
+
+    // 只处理来自 imageNode 的关联，且目标是 imageNode 或 videoNode
+    if (!sourceNode || sourceNode.type !== 'imageNode') {
+      return nodes
+    }
+    if (!targetNode || (targetNode.type !== 'imageNode' && targetNode.type !== 'videoNode')) {
+      return nodes
+    }
+
+    // 从 source 的 result.data 提取 URL 字符串数组
+    const sourceData = sourceNode.data as any
+    const sourceUrls = (sourceData?.result?.data ?? []).map((item: any) => item.url).filter(Boolean)
+
+    if (sourceUrls.length === 0) {
+      return nodes
+    }
+
+    // 更新 target 的 image_urls 字段
+    return nodes.map(node => {
+      if (node.id !== targetNode.id) {
+        return node
+      }
+
+      const nodeData = node.data as any
+      const currentUrls = nodeData?.image_urls ?? []
+      let nextUrls: string[]
+
+      if (mode === 'add') {
+        // 连接时：合并去重
+        nextUrls = Array.from(new Set([...currentUrls, ...sourceUrls]))
+      } else {
+        // 删除时：移除 source URLs
+        const sourceUrlSet = new Set(sourceUrls)
+        nextUrls = currentUrls.filter(url => !sourceUrlSet.has(url))
+      }
+
+      return {
+        ...node,
+        data: {
+          ...nodeData,
+          image_urls: nextUrls,
+        },
+      }
+    })
+  }
+
+  return {
   nodes: [],
   edges: [],
   nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1 },
@@ -831,7 +888,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => ({
           prompt: '',
           promptDraft: '',
           promptDraftHtml: '<p></p>',
-          uploadedUrls: [],
+          image_urls: [],
           midjourneyAdvanced: {
             referenceUrls: [],
             styleUrls: [],
@@ -875,7 +932,6 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => ({
           promptDraft: '',
           promptDraftHtml: '<p></p>',
           aspect_ratio: '16:9',
-          uploadedUrls: [],
           status: GenerationStatus.COMPLETED,
           progress: 0,
           metadata: { size: '1280x720' },
@@ -1020,6 +1076,14 @@ duplicateNode: (nodeId: string) => {
    */
   deleteEdge: (edgeId: string) => {
     set((state) => ({
+      nodes: (() => {
+        const edgeToDelete = state.edges.find((edge) => edge.id === edgeId)
+        if (!edgeToDelete) {
+          return state.nodes
+        }
+
+        return syncImageUrlsByEdge(state.nodes, edgeToDelete, 'remove')
+      })(),
       edges: state.edges.filter((edge) => edge.id !== edgeId),
     }))
 
@@ -1031,6 +1095,7 @@ duplicateNode: (nodeId: string) => {
 
   /**
    * 删除节点及其关联的所有边
+   * 自动清理依赖该节点的下游节点（图片/视频）的 image_urls
    * @param nodeId 要删除的节点 ID
    */
   deleteNode: (nodeId: string) => {
@@ -1041,12 +1106,20 @@ duplicateNode: (nodeId: string) => {
     if (targetNode?.type === 'videoNode') {
       stopVideoPollingInternal(nodeId)
     }
-    set((state) => ({
-      nodes: state.nodes.filter((node) => node.id !== nodeId),
-      edges: state.edges.filter(
-        (edge) => edge.source !== nodeId && edge.target !== nodeId
-      ),
-    }))
+
+    set((state) => {
+      const removedEdges = state.edges.filter((edge) => edge.source === nodeId || edge.target === nodeId)
+      let nextNodes = state.nodes
+
+      removedEdges.forEach((edge) => {
+        nextNodes = syncImageUrlsByEdge(nextNodes, edge, 'remove')
+      })
+
+      return {
+        nodes: nextNodes.filter((node) => node.id !== nodeId),
+        edges: state.edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId),
+      }
+    })
 
     // 自动保存
     if (useChatSettingsStore.getState().autoSaveEnabled) {
@@ -1396,20 +1469,47 @@ duplicateNode: (nodeId: string) => {
 
   /**
    * 处理边变化事件
+   * 当删除连接到视频/图片节点的边时，同步清理 image_urls 中对应的 URL
    */
   onEdgesChange: (changes) => {
-    set((state) => ({
-      edges: applyEdgeChanges(changes, state.edges),
-    }))
+    set((state) => {
+      const removedEdgeIds = changes
+        .filter((change) => change.type === 'remove')
+        .map((change) => change.id)
+
+      if (removedEdgeIds.length === 0) {
+        return { edges: applyEdgeChanges(changes, state.edges) }
+      }
+
+      const removedEdges = state.edges.filter((edge) => removedEdgeIds.includes(edge.id))
+      let nextNodes = state.nodes
+
+      removedEdges.forEach((edge) => {
+        nextNodes = syncImageUrlsByEdge(nextNodes, edge, 'remove')
+      })
+
+      return {
+        edges: applyEdgeChanges(changes, state.edges),
+        nodes: nextNodes,
+      }
+    })
   },
 
   /**
    * 处理新连接创建事件
+   * 当连接到视频节点时，自动同步上游图片节点的 URL 到 image_urls
    */
   onConnect: (connection) => {
-    set((state) => ({
-      edges: addEdge(connection, state.edges),
-    }))
+    set((state) => {
+      const nextEdges = addEdge(connection, state.edges)
+      const currentEdgeIds = new Set(state.edges.map((edge) => edge.id))
+      const createdEdge = nextEdges.find((edge) => !currentEdgeIds.has(edge.id))
+
+      return {
+        nodes: createdEdge ? syncImageUrlsByEdge(state.nodes, createdEdge as EdgeType, 'add') : state.nodes,
+        edges: nextEdges,
+      }
+    })
   },
 
   // ==================== 全景图查看器 ====================
@@ -1438,4 +1538,4 @@ duplicateNode: (nodeId: string) => {
       },
     })
   },
-}))
+}})

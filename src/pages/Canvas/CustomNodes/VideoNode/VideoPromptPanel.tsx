@@ -18,7 +18,7 @@ import { GenerationStatus } from '@/constants/enum'
 import useMessage from '@/hooks/useMessage'
 import { cn } from '@/lib/utils'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
-import type { ImageGenerationNode, NoteNodeData, VideoGenerationNode } from '@/types/flow'
+import type { NoteNodeData, VideoGenerationNode } from '@/types/flow'
 
 import { Seedance15ProParamsPanel } from './components/Seedance15ProParamsPanel'
 import { GrokVideoParamsPanel } from './components/GrokVideoParamsPanel'
@@ -54,7 +54,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     const videoSize = currentVideoData?.metadata?.size ?? '1280x720'
     const duration = currentVideoData?.duration ?? VIDEO_DURATION_CONFIG.defaultValue
     const model = currentVideoData?.model ?? (VIDEO_MODELS[0]?.model ?? 'doubao-seedance-1-5-pro')
-    const uploadedUrls = currentVideoData?.uploadedUrls ?? []
     const promptDraftHtml = currentVideoData?.promptDraftHtml ?? '<p></p>'
     // 1.5 Pro 专属参数
     const resolution = currentVideoData?.metadata?.resolution ?? '720p'
@@ -65,33 +64,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
     const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-    const parentImageUrls = useMemo(() => {
-        const parentIds = edges
-            .filter((edge) => edge.target === nodeId)
-            .map((edge) => edge.source)
-
-        if (parentIds.length === 0) {
-            return [] as string[]
-        }
-
-        const urls: string[] = []
-
-        parentIds.forEach((parentId) => {
-            const parentNode = nodes.find((node) => node.id === parentId)
-            if (!parentNode || parentNode.type !== 'imageNode') {
-                return
-            }
-
-            const parentData = parentNode.data as ImageGenerationNode
-            parentData.result?.data?.forEach((item) => {
-                if (item?.url) {
-                    urls.push(item.url)
-                }
-            })
-        })
-
-        return urls
-    }, [edges, nodes, nodeId])
+    // 参考图列表：上游连接的图片 + 用户上传的图片
+    const referenceImageUrls = useMemo(() => {
+        return currentVideoData?.image_urls ?? []
+    }, [currentVideoData?.image_urls])
 
     const parentNoteContents = useMemo(() => {
         const orderedParentIds: string[] = []
@@ -112,10 +88,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             .map((node) => (node?.data as NoteNodeData).content?.trim())
             .filter((content) => Boolean(content)) as string[]
     }, [edges, nodes, nodeId])
-
-    const referenceImageUrls = useMemo(() => {
-        return [...uploadedUrls, ...parentImageUrls]
-    }, [uploadedUrls, parentImageUrls])
 
     const isGenerating = useMemo(() => {
         if (!currentNode || currentNode.type !== 'videoNode') {
@@ -151,7 +123,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             }
 
             updateVideoNodeData(nodeId, {
-                uploadedUrls: [...uploadedUrls, nextUrl],
+                image_urls: [...(currentVideoData?.image_urls ?? []), nextUrl],
             })
             success('上传成功')
         } catch (uploadError: any) {
@@ -218,7 +190,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         const strategy = getVideoPayloadStrategy(model)
         const payload = strategy.buildPayload(currentVideoData!, {
             prompt: mergedPrompt,
-            imageUrls: referenceImageUrls,
+            imageUrls: currentVideoData?.image_urls ?? [],
         })
 
         try {
