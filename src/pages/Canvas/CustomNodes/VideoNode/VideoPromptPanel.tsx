@@ -180,7 +180,8 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
               // 绑定键盘事件：上下键导航、Enter 选中
               keyboardHandler = (event: KeyboardEvent) => {
-                const handled = component?.ref?.onKeyDown({ event })
+                // 类型断言：ReactRenderer.ref 实际上是通过 forwardRef 暴露的 VideoMentionList 实例
+                const handled = (component?.ref as { onKeyDown?: (props: { event: KeyboardEvent }) => boolean })?.onKeyDown?.({ event })
                 // 如果键盘事件被处理，阻止默认行为和冒泡
                 if (handled) {
                   event.preventDefault()
