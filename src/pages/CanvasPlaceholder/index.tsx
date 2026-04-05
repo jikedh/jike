@@ -1,13 +1,13 @@
 /**
  * Canvas 页面占位组件
  * 用于 /canvas 路由的简单占位页面
+ * 样式与 ProjectList 页面保持一致
  */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Trash2, FileText as TextIcon, X, Pencil } from 'lucide-react'
+import { SquareDashedMousePointer, Plus, Play, Network, Clock, X, Pencil, Trash2, FileText } from 'lucide-react'
 import { getProjectList, deleteProject, type ProjectMeta } from '@/utils/projectStorage'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import ProjectDialog from '@/components/ProjectDialog'
 
 export default function CanvasPlaceholderPage() {
@@ -62,139 +62,177 @@ export default function CanvasPlaceholderPage() {
     setProjectToDelete(null)
   }
 
-    return (
-      <div className="min-h-screen bg-[#050508] text-white flex flex-col overflow-hidden relative">
-        {/* 背景光效 */}
-        <div className="absolute inset-0 -z-10">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,rgba(0,240,255,0.08)_0%,transparent_60%)]" />
-          <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
-            style={{
-              backgroundImage: 'linear-gradient(rgba(255,255,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,1) 1px, transparent 1px)',
-              backgroundSize: '30px 30px'
-            }}
-          />
+  // 格式化时间
+  const formatTime = (timestamp: number) => {
+    const now = Date.now()
+    const diff = now - timestamp
+    const minutes = Math.floor(diff / 60000)
+    const hours = Math.floor(diff / 3600000)
+    const days = Math.floor(diff / 86400000)
+
+    if (minutes < 60) return `${minutes}分钟前`
+    if (hours < 24) return `${hours}小时前`
+    if (days < 7) return `${days}天前`
+    return new Date(timestamp).toLocaleDateString()
+  }
+
+  return (
+    <div className="flex-1 bg-[#09090b] text-white flex flex-col h-full overflow-hidden relative">
+      {/* Header */}
+      <header className="h-16 border-b border-white/5 flex items-center justify-between px-6 shrink-0">
+        <div className="flex items-center">
+          <SquareDashedMousePointer className="w-5 h-5 mr-3 text-[#B43FEB]" />
+          <h1 className="text-lg font-medium">无限画布项目管理</h1>
+        </div>
+        <button
+          onClick={openCreateDialog}
+          className="bg-[#B43FEB] text-white hover:bg-[#9d35ce] px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 shadow-[0_0_20px_rgba(180,63,235,0.3)] cursor-pointer"
+        >
+          <Plus className="w-4 h-4" />
+          新建项目
+        </button>
+      </header>
+
+      {/* Content */}
+      <div className="flex-1 p-8 overflow-y-auto">
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-2">我的画布项目</h2>
+          <p className="text-sm text-white/50">管理和编辑您的节点工作流，点击播放按钮可预览生成结果。</p>
         </div>
 
-        {/* 主内容区 */}
-        <main className="flex-1 overflow-y-auto scroll-smooth p-8">
+        {/* 空状态提示 */}
+        {projects.length === 0 && (
+          <div className="text-center text-white/40 py-20">
+            <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
+            <p className="text-lg mb-2">还没有任何项目</p>
+            <p className="text-sm">点击右上角的「新建项目」按钮创建第一个项目</p>
+          </div>
+        )}
 
-
-          {/* 空状态提示 */}
-          {projects.length === 0 && (
-            <div className="text-center text-white/40 mt-20">
-              <p className="text-lg mb-2">还没有任何项目</p>
-              <p className="text-sm">点击右下角的 + 按钮创建第一个项目</p>
-            </div>
-          )}
-
-          {/* Grid布局 - 响应式展示项目卡片 */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4">
-            {/* 新建项目卡片 */}
+        {/* 项目网格 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {projects.map((project) => (
             <div
-              onClick={openCreateDialog}
-              className="relative aspect-square bg-[rgba(15,15,20,0.4)] border border-dashed border-white/20 rounded-xl cursor-pointer transition-all flex flex-col items-center justify-center gap-2 text-white/40 hover:border-[#00F0FF] hover:border-solid hover:bg-[rgba(0,240,255,0.05)] hover:text-[#00F0FF] hover:shadow-[0_0_20px_rgba(0,240,255,0.1)] group"
+              key={project.id}
+              onClick={() => handleProjectClick(project.id)}
+              className="bg-[#121214] border border-white/5 rounded-xl overflow-hidden group hover:border-[#B43FEB]/40 hover:shadow-[0_0_30px_rgba(180,63,235,0.15)] transition-all duration-300 cursor-pointer"
             >
-              <Plus size={32} />
-              <span className="text-sm tracking-wider">NEW PROJECT</span>
-            </div>
-
-            {/* 项目列表 */}
-            {projects.map((project) => (
-              <div
-                key={project.id}
-                onClick={() => handleProjectClick(project.id)}
-                className="relative aspect-square bg-[rgba(15,15,20,0.4)] border border-white/[0.08] rounded-xl cursor-pointer hover:border-[rgba(0,240,255,0.4)] hover:shadow-[0_10px_30px_rgba(0,240,255,0.1)] transition-all flex flex-col items-center justify-center p-4 group overflow-hidden"
-              >
-                {/* 类型标签 */}
-                <div className="absolute top-3 left-3 px-2 py-1 rounded text-[10px] tracking-wider backdrop-blur-sm flex items-center gap-1 bg-[rgba(0,240,255,0.1)] text-[#00F0FF] border border-[rgba(0,240,255,0.2)]">
-                  <TextIcon size={12} />
-                  <span>{project.type === 'video' ? '视频创作' : '剧本创作'}</span>
-                </div>
-
-                {/* 封面图 / 图标 */}
+              {/* Thumbnail */}
+              <div className="relative aspect-video overflow-hidden bg-white/5">
                 {project.coverUrl ? (
                   <img
                     src={project.coverUrl}
                     alt={project.name}
-                    className="w-16 h-16 rounded-lg object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none'
-                    }}
+                    className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
                   />
                 ) : (
-                  <TextIcon size={40} className="text-white/15 transition-all group-hover:text-[#00F0FF] group-hover:drop-shadow-[0_0_8px_#00F0FF]" />
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/5 to-white/[0.02]">
+                    <FileText className="w-12 h-12 text-white/20 group-hover:text-[#B43FEB]/50 transition-colors" />
+                  </div>
                 )}
 
-                {/* 项目名称 */}
-                <span className="text-sm font-medium text-white/80 text-center truncate w-full mt-3">
-                  {project.name}
-                </span>
-
-                {/* 操作按钮组 - 悬停时显示 */}
-                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {/* 编辑按钮 */}
+                {/* Overlay actions */}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
                   <button
-                    onClick={(e) => openEditDialog(e, project)}
-                    className="w-6 h-6 rounded-full bg-[#00F0FF]/20 text-[#00F0FF] hover:bg-[#00F0FF]/40 flex items-center justify-center"
-                    title="编辑项目"
+                    onClick={() => handleProjectClick(project.id)}
+                    className="w-10 h-10 rounded-full bg-[#B43FEB] text-white flex items-center justify-center hover:bg-[#9d35ce] transition-colors shadow-lg cursor-pointer"
                   >
-                    <Pencil size={12} />
-                  </button>
-                  {/* 删除按钮 */}
-                  <button
-                    onClick={(e) => openDeleteDialog(e, project)}
-                    className="w-6 h-6 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/40 flex items-center justify-center"
-                    title="删除项目"
-                  >
-                    <Trash2 size={12} />
+                    <Play className="w-4 h-4 ml-0.5" fill="currentColor" />
                   </button>
                 </div>
+
+                {/* More options button */}
+                <div className="absolute top-3 right-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => openEditDialog(e, project)}
+                    className="w-8 h-8 rounded-lg bg-black/50 text-white/70 hover:text-white hover:bg-black/70 flex items-center justify-center backdrop-blur-md border border-white/10 transition-colors cursor-pointer"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={(e) => openDeleteDialog(e, project)}
+                    className="w-8 h-8 rounded-lg bg-black/50 text-red-400/70 hover:text-red-400 hover:bg-red-500/20 flex items-center justify-center backdrop-blur-md border border-white/10 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Type tag */}
+                <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-[10px] font-medium text-[#B43FEB] border border-white/10 flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#B43FEB]"></div>
+                  {project.type === 'video' ? '视频创作' : '剧本创作'}
+                </div>
               </div>
-            ))}
-          </div>
-        </main>
 
-        {/* 项目弹窗（创建/编辑） */}
-        <ProjectDialog
-          isOpen={isProjectDialogOpen}
-          onClose={() => setIsProjectDialogOpen(false)}
-          project={projectToEdit}
-          onSuccess={refreshProjects}
-        />
+              {/* Info */}
+              <div className="p-4">
+                <h3 className="font-medium text-white/90 mb-3 truncate group-hover:text-white transition-colors">
+                  {project.name}
+                </h3>
+                <div className="flex items-center justify-between text-xs text-white/50">
+                  <div className="flex items-center gap-1.5">
+                    <Network className="w-3.5 h-3.5" />
+                    <span>节点工作流</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{formatTime(project.updatedAt || project.createdAt)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
-        {/* 删除确认弹窗 */}
-        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <DialogContent className="bg-[#0a0a0f] border-white/[0.08] p-6 w-[400px]">
-            <div className="flex items-center justify-between mb-6">
-              <DialogTitle className="text-white text-lg">删除项目</DialogTitle>
+      {/* 项目弹窗（创建/编辑） */}
+      <ProjectDialog
+        isOpen={isProjectDialogOpen}
+        onClose={() => setIsProjectDialogOpen(false)}
+        project={projectToEdit}
+        onSuccess={refreshProjects}
+      />
+
+      {/* 删除确认弹窗 */}
+      {isDeleteDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#121214] border border-white/10 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-white/5">
+              <h2 className="text-lg font-semibold text-white/90">删除项目</h2>
               <button
                 onClick={() => setIsDeleteDialogOpen(false)}
-                className="text-white/40 hover:text-white transition-colors"
+                className="text-white/50 hover:text-white transition-colors cursor-pointer"
               >
-                <X size={18} />
+                <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="py-4">
-              <p className="text-white/60">
-                确定要删除项目 <span className="font-medium text-white">"{projectToDelete?.name}"</span> 吗？删除后无法恢复。
+
+            {/* Modal Body */}
+            <div className="p-5">
+              <p className="text-white/60 text-sm">
+                确定要删除项目 <span className="font-medium text-white">「{projectToDelete?.name}」</span> 吗？删除后无法恢复。
               </p>
             </div>
-            <div className="flex gap-3">
-              <Button
-                className="flex-1 bg-white/[0.03] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.05] rounded-lg"
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 p-5 border-t border-white/5 bg-black/20">
+              <button
                 onClick={() => setIsDeleteDialogOpen(false)}
+                className="px-5 py-2.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
               >
                 取消
-              </Button>
-              <Button
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white rounded-lg"
+              </button>
+              <button
                 onClick={handleConfirmDelete}
+                className="px-5 py-2.5 rounded-lg text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors cursor-pointer"
               >
                 删除
-              </Button>
+              </button>
             </div>
-          </DialogContent>
-        </Dialog>
+          </div>
         </div>
-    )
+      )}
+    </div>
+  )
 }

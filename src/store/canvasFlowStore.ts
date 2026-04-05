@@ -1737,7 +1737,7 @@ duplicateNode: (nodeId: string) => {
     // 在节点变化后保存历史记录（排除拖动中的变化）
     const hasPositionChange = changes.some(c => c.type === 'position' && !c.dragging)
     const hasAddOrRemove = changes.some(c => c.type === 'add' || c.type === 'remove')
-    
+
     if (hasPositionChange || hasAddOrRemove) {
       setTimeout(() => get().saveToHistory(), 0)
     }

@@ -7,6 +7,9 @@ import { SidebarNav } from './components/SidebarNav'
 import { SidebarNavItem } from './components/SidebarNavItem'
 import { SidebarRoot } from './components/SidebarRoot'
 
+// 用户积分数据（后续接入后端）
+const USER_CREDITS = 1280
+
 // 侧边栏组件：统一走 Sidebar 上下文结构，保留当前分支的全新视觉样式。
 export const SidebarCeBianLan = () => {
   const navigate = useNavigate()
@@ -16,35 +19,25 @@ export const SidebarCeBianLan = () => {
     navigate(path)
   }
 
-  // 快速功能点击处理：暂时保留占位提示，后续可替换为真实能力入口。
-  const handleQuickClick = () => {
-    alert('功能正在开发中...')
-  }
-
   return (
     <SidebarRoot defaultActiveId="home">
-      {/* Logo 区域：使用 SVG 保持品牌图形一致性。 */}
-      <SidebarLogo label="即刻">
+      {/* Logo 区域：使用图片保持品牌图形一致性。 */}
         <button
           type="button"
           onClick={() => handleNavClick('/home')}
-          className="flex flex-col items-center justify-center"
+        className="mb-10 flex flex-col items-center justify-center px-2 text-center cursor-pointer group"
         >
-          <div className="flex h-10 w-10 items-center justify-center">
-            <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="logo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#6366F1" />
-                  <stop offset="100%" stopColor="#B43FEB" />
-                </linearGradient>
-              </defs>
-              <rect x="8" y="12" width="8" height="16" rx="2" fill="url(#logo-gradient)" />
-              <rect x="18" y="6" width="8" height="22" rx="2" fill="url(#logo-gradient)" />
-              <rect x="28" y="14" width="8" height="14" rx="2" fill="url(#logo-gradient)" />
-            </svg>
+        <div className="w-10 h-10 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+          <img
+            src="/icon.png"
+            alt="即刻"
+            className="w-full h-full object-contain"
+          />
           </div>
-        </button>
-      </SidebarLogo>
+        <span className="text-[14px] text-white/90 leading-tight font-normal tracking-widest mt-1">
+          即刻
+        </span>
+      </button>
 
       {/* 导航区域：保持单一职责，每个入口只负责自己的路由跳转。 */}
       <SidebarNav classNames={{ root: 'flex-1' }}>
@@ -56,16 +49,9 @@ export const SidebarCeBianLan = () => {
         <SidebarNavItem id="video" icon={<Film size={24} />} label="短片合成" onClick={() => handleNavClick('/video')} />
       </SidebarNav>
 
-      {/* 底部操作区：保留“快速”占位和设置入口。 */}
+      {/* 底部操作区：积分显示和设置入口。 */}
       <SidebarFooter classNames={{ root: 'mt-auto' }}>
-        <button
-          type="button"
-          onClick={handleQuickClick}
-          className="flex flex-col items-center justify-center rounded-xl px-2 py-3 text-white/50 transition-all hover:bg-white/5 hover:text-white/90"
-          title="快速"
-        >
-          <Zap size={24} />
-        </button>
+        <CreditsDisplay credits={USER_CREDITS} />
         <button
           type="button"
           onClick={() => handleNavClick('/settings')}
@@ -78,3 +64,18 @@ export const SidebarCeBianLan = () => {
     </SidebarRoot>
   )
 }
+
+// 积分显示组件
+interface CreditsDisplayProps {
+  credits: number
+}
+
+const CreditsDisplay = ({ credits }: CreditsDisplayProps) => (
+  <button className="flex flex-col items-center justify-center rounded-xl px-2 py-2 text-white/50 transition-all hover:bg-white/5 hover:text-white/90">
+    <div className="flex items-center gap-1.5">
+      <Zap className="w-4 h-4 text-amber-400" />
+      <span className="text-xs font-medium text-amber-400">{credits}</span>
+    </div>
+    <span className="text-[10px] text-white/30 mt-0.5">积分</span>
+  </button>
+)
