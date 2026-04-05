@@ -1,4 +1,9 @@
-import type { Area } from 'react-easy-crop'
+export type CropArea = {
+    x: number
+    y: number
+    width: number
+    height: number
+}
 
 /**
  * 加载图片资源并等待图片就绪。
@@ -20,7 +25,7 @@ const loadImage = (imageSrc: string) => {
  * 根据裁剪区域生成新的图片文件。
  * 这里直接使用 Canvas 进行像素级裁剪，输出 png 文件，方便后续复用现有 OSS 上传流程。
  */
-export const createCroppedImageFile = async (imageSrc: string, cropArea: Area, fileName: string) => {
+export const createCroppedImageFile = async (imageSrc: string, cropArea: CropArea, fileName: string) => {
     const sourceImage = await loadImage(imageSrc)
 
     const canvas = document.createElement('canvas')
