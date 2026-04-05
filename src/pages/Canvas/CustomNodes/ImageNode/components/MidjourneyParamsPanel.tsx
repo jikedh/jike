@@ -46,8 +46,8 @@ export const MidjourneyParamsPanel = ({
           unstyled
           className="flex h-8 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 text-xs text-neutral-300 transition-colors hover:border-neutral-500 hover:text-neutral-100"
         >
-          <IconSettings size={14} />
-          <span>整合参数</span>
+          <AspectRatioIcon ratio={size} size={16} />
+          <span>{size}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent

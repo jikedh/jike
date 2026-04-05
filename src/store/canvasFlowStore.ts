@@ -34,13 +34,13 @@ type CanvasPersistedState = {
   savedAt: number
   nodes: AllNodeType[]
   edges: EdgeType[]
-  nodeIdCounters: { note: number; image: number; video: number; agent: number }
+  nodeIdCounters: { note: number; image: number; video: number; agent: number; panorama: number }
 }
 
 /**
  * 节点类型标识符
  */
-type NodeType = 'note' | 'image' | 'video' | 'agent'
+type NodeType = 'note' | 'image' | 'video' | 'agent' | 'panorama'
 type NodePosition = { x: number; y: number }
 type AddNodeOptions = {
   agentPresetId?: AgentPresetId
@@ -76,6 +76,18 @@ type CanvasFlowState = {
     imageUrl: string | null
     sourceNodeId: string | null
   }
+
+  // === 剪贴板 ===
+  /** 剪贴板中的节点数据 */
+  clipboard: AllNodeType | null
+
+  // === 历史记录 ===
+  /** 历史记录栈 */
+  history: CanvasPersistedState[]
+  /** 当前历史记录索引 */
+  historyIndex: number
+  /** 最大历史记录数量 */
+  maxHistorySize: number
 
   // === 基础流程事件 ===
   onNodesChange: (changes: NodeChange<AllNodeType>[]) => void
@@ -132,11 +144,37 @@ type CanvasFlowState = {
   /** 手动停止视频轮询（防止内存泄露） */
   stopVideoPolling: (nodeId: string) => void
 
+  // === 任务管理 ===
+  /** 获取正在生成的任务数量 */
+  getGeneratingTasksCount: () => number
+  /** 取消所有正在生成的任务 */
+  cancelAllGeneratingTasks: () => void
+
+  // === 撤销/重做 ===
+  /** 撤销操作 */
+  undo: () => void
+  /** 重做操作 */
+  redo: () => void
+  /** 保存当前状态到历史记录 */
+  saveToHistory: () => void
+  /** 是否可以撤销 */
+  canUndo: () => boolean
+  /** 是否可以重做 */
+  canRedo: () => boolean
+
   // === 全景图查看器 ===
   /** 打开全景图查看器 */
   openPanoramaViewer: (imageUrl: string, sourceNodeId?: string) => void
   /** 关闭全景图查看器 */
   closePanoramaViewer: () => void
+
+  // === 剪贴板操作 ===
+  /** 复制选中的节点到剪贴板 */
+  copySelectedNode: () => void
+  /** 粘贴节点 */
+  pasteNode: () => void
+  /** 是否有可粘贴的节点 */
+  canPaste: () => boolean
 }
 
 // ==================== 图片生成轮询支持 ====================
@@ -641,11 +679,11 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
     const sourceNode = nodes.find(n => n.id === edge.source)
     const targetNode = nodes.find(n => n.id === edge.target)
 
-    // 只处理来自 imageNode 的关联，且目标是 imageNode 或 videoNode
+    // 只处理来自 imageNode 的关联，且目标是 imageNode、videoNode 或 panoramaNode
     if (!sourceNode || sourceNode.type !== 'imageNode') {
       return nodes
     }
-    if (!targetNode || (targetNode.type !== 'imageNode' && targetNode.type !== 'videoNode')) {
+    if (!targetNode || (targetNode.type !== 'imageNode' && targetNode.type !== 'videoNode' && targetNode.type !== 'panoramaNode')) {
       return nodes
     }
 
@@ -657,13 +695,36 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
       return nodes
     }
 
-    // 更新 target 的 image_urls 字段
+    // 更新 target 的字段
     return nodes.map(node => {
       if (node.id !== targetNode.id) {
         return node
       }
 
       const nodeData = node.data as any
+
+      // 对于 panoramaNode，更新 image_url 字段
+      if (node.type === 'panoramaNode') {
+        if (mode === 'add') {
+          return {
+            ...node,
+            data: {
+              ...nodeData,
+              image_url: sourceUrls[0], // 使用第一张图片
+            },
+          }
+        } else {
+          return {
+            ...node,
+            data: {
+              ...nodeData,
+              image_url: undefined,
+            },
+          }
+        }
+      }
+
+      // 对于 imageNode 和 videoNode，更新 image_urls 字段
       const currentUrls = nodeData?.image_urls ?? []
       let nextUrls: string[]
 
@@ -745,7 +806,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
   return {
   nodes: [],
   edges: [],
-  nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1 },
+  nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1 },
   hydrated: false,
   projectId: null,
   // 全景图查看器初始化
@@ -754,6 +815,12 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
     imageUrl: null,
     sourceNodeId: null,
   },
+  // 剪贴板初始化
+  clipboard: null,
+  // 历史记录初始化
+  history: [],
+  historyIndex: -1,
+  maxHistorySize: 50,
 
   // ==================== 持久化方法实现 ====================
 
@@ -786,7 +853,11 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           edges: [],
           nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1 },
           hydrated: true,
+          history: [],
+          historyIndex: -1,
         })
+        // 保存初始状态到历史记录
+        setTimeout(() => get().saveToHistory(), 0)
         return
       }
 
@@ -798,7 +869,11 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           edges: [],
           nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1 },
           hydrated: true,
+          history: [],
+          historyIndex: -1,
         })
+        // 保存初始状态到历史记录
+        setTimeout(() => get().saveToHistory(), 0)
         return
       }
 
@@ -808,7 +883,11 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
         edges: data.edges,
         nodeIdCounters: data.nodeIdCounters,
         hydrated: true,
+        history: [],
+        historyIndex: -1,
       })
+      // 保存初始状态到历史记录
+      setTimeout(() => get().saveToHistory(), 0)
     } catch {
       set({
         projectId,
@@ -816,7 +895,11 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
         edges: [],
         nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1 },
         hydrated: true,
+        history: [],
+        historyIndex: -1,
       })
+      // 保存初始状态到历史记录
+      setTimeout(() => get().saveToHistory(), 0)
     }
   },
 
@@ -946,8 +1029,10 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
         id: nextId,
         type: 'imageNode',
         position: nextPosition,
+        width: 350,
+        height: 250,
         data: {
-          model: 'doubao-seedream-5-0',
+          model: 'gemini-3-pro-image-preview',
           prompt: '',
           promptDraft: '',
           promptDraftHtml: '<p></p>',
@@ -984,11 +1069,27 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           createdAt: Date.now(),
         },
       }
+    } else if (nodeType === 'panorama') {
+      newNode = {
+        id: nextId,
+        type: 'panoramaNode',
+        position: nextPosition,
+        width: 400,
+        height: 300,
+        data: {
+          status: GenerationStatus.COMPLETED,
+          isFullscreen: false,
+          screenshots: [],
+          createdAt: Date.now(),
+        },
+      }
     } else {
       newNode = {
         id: nextId,
         type: 'videoNode',
         position: nextPosition,
+        width: 350,
+        height: 250,
         data: {
           model: 'doubao-seedance-1-5-pro',
           prompt: '',
@@ -1010,6 +1111,9 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
     set((state) => ({
       nodes: [...state.nodes, newNode],
     }))
+
+    // 保存历史记录
+    setTimeout(() => get().saveToHistory(), 0)
 
     // 自动保存
     if (useChatSettingsStore.getState().autoSaveEnabled) {
@@ -1092,6 +1196,7 @@ duplicateNode: (nodeId: string) => {
     imageNode: 'image',
     videoNode: 'video',
     agentNode: 'agent',
+    panoramaNode: 'panorama',
   } as const
 
   const nodeType = typeMap[currentNode.type] || 'note'
@@ -1132,6 +1237,9 @@ duplicateNode: (nodeId: string) => {
     // 保持现有节点状态不变，添加新节点（新节点已有 selected: true）
     nodes: [...state.nodes, duplicatedNode],
   }))
+
+  // 保存历史记录
+  setTimeout(() => get().saveToHistory(), 0)
 },
   /**
    * 删除边
@@ -1149,6 +1257,9 @@ duplicateNode: (nodeId: string) => {
       })(),
       edges: state.edges.filter((edge) => edge.id !== edgeId),
     }))
+
+    // 保存历史记录
+    setTimeout(() => get().saveToHistory(), 0)
 
     // 自动保存
     if (useChatSettingsStore.getState().autoSaveEnabled) {
@@ -1183,6 +1294,9 @@ duplicateNode: (nodeId: string) => {
         edges: state.edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId),
       }
     })
+
+    // 保存历史记录
+    setTimeout(() => get().saveToHistory(), 0)
 
     // 自动保存
     if (useChatSettingsStore.getState().autoSaveEnabled) {
@@ -1506,6 +1620,80 @@ duplicateNode: (nodeId: string) => {
     stopVideoPollingInternal(nodeId)
   },
 
+  // ==================== 任务管理 ====================
+
+  /**
+   * 获取正在生成的任务数量
+   */
+  getGeneratingTasksCount: () => {
+    const { nodes } = get()
+    let count = 0
+
+    nodes.forEach((node) => {
+      const status = node.data?.status
+      if (status === GenerationStatus.IN_PROGRESS || status === GenerationStatus.QUEUED) {
+        count++
+      }
+    })
+
+    return count
+  },
+
+  /**
+   * 取消所有正在生成的任务
+   */
+  cancelAllGeneratingTasks: () => {
+    const { nodes } = get()
+
+    // 收集需要停止轮询的节点
+    const imageNodesToStop: string[] = []
+    const videoNodesToStop: string[] = []
+
+    nodes.forEach((node) => {
+      const status = node.data?.status
+      if (status === GenerationStatus.IN_PROGRESS || status === GenerationStatus.QUEUED) {
+        if (node.type === 'imageNode') {
+          imageNodesToStop.push(node.id)
+        } else if (node.type === 'videoNode') {
+          videoNodesToStop.push(node.id)
+        }
+      }
+    })
+
+    // 停止所有轮询
+    imageNodesToStop.forEach((nodeId) => stopImagePollingInternal(nodeId))
+    videoNodesToStop.forEach((nodeId) => stopVideoPollingInternal(nodeId))
+
+    // 一次性更新所有节点状态
+    set((state) => ({
+      nodes: state.nodes.map((node) => {
+        const status = node.data?.status
+        if (status === GenerationStatus.IN_PROGRESS || status === GenerationStatus.QUEUED) {
+          if (node.type === 'imageNode') {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                status: GenerationStatus.FAILED,
+                error: { message: '任务已取消' },
+              },
+            }
+          } else if (node.type === 'videoNode') {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                status: GenerationStatus.FAILED,
+                error: { message: '任务已取消' },
+              },
+            }
+          }
+        }
+        return node
+      }),
+    }))
+  },
+
   // ==================== 导入导出方法实现 ====================
 
   /**
@@ -1545,6 +1733,14 @@ duplicateNode: (nodeId: string) => {
     set((state) => ({
       nodes: applyNodeChanges(changes, state.nodes),
     }))
+
+    // 在节点变化后保存历史记录（排除拖动中的变化）
+    const hasPositionChange = changes.some(c => c.type === 'position' && !c.dragging)
+    const hasAddOrRemove = changes.some(c => c.type === 'add' || c.type === 'remove')
+    
+    if (hasPositionChange || hasAddOrRemove) {
+      setTimeout(() => get().saveToHistory(), 0)
+    }
   },
 
   /**
@@ -1590,6 +1786,9 @@ duplicateNode: (nodeId: string) => {
         edges: nextEdges,
       }
     })
+
+    // 在连接创建后保存历史记录
+    setTimeout(() => get().saveToHistory(), 0)
   },
 
   // ==================== 全景图查看器 ====================
@@ -1619,5 +1818,163 @@ duplicateNode: (nodeId: string) => {
         sourceNodeId: null,
       },
     })
+  },
+
+  // ==================== 剪贴板操作 ====================
+
+  /**
+   * 复制选中的节点到剪贴板
+   */
+  copySelectedNode: () => {
+    const { nodes } = get()
+    const selectedNode = nodes.find(n => n.selected)
+    if (!selectedNode) return
+
+    // 深拷贝节点数据
+    const copiedNode = JSON.parse(JSON.stringify(selectedNode))
+    set({ clipboard: copiedNode })
+  },
+
+  /**
+   * 粘贴节点
+   */
+  pasteNode: () => {
+    const { clipboard, nodes, getNextNodeId } = get()
+    if (!clipboard) return
+
+    // 找到当前视口中的节点，计算偏移位置
+    const offset = 50
+    const newPosition = {
+      x: clipboard.position.x + offset,
+      y: clipboard.position.y + offset,
+    }
+
+    // 生成新的节点 ID
+    const newNodeId = getNextNodeId(clipboard.type as NodeType)
+
+    // 创建新节点
+    const newNode = {
+      ...clipboard,
+      id: newNodeId,
+      position: newPosition,
+      selected: false,
+      data: {
+        ...clipboard.data,
+      },
+    }
+
+    // 添加新节点
+    set({
+      nodes: [...nodes, newNode],
+    })
+
+    // 保存到历史记录
+    get().saveToHistory()
+  },
+
+  /**
+   * 是否有可粘贴的节点
+   */
+  canPaste: () => {
+    return get().clipboard !== null
+  },
+
+  // ==================== 撤销/重做 ====================
+
+  /**
+   * 保存当前状态到历史记录
+   */
+  saveToHistory: () => {
+    const state = get()
+    const { nodes, edges, nodeIdCounters, history, historyIndex, maxHistorySize } = state
+
+    const newHistoryEntry: CanvasPersistedState = {
+      version: CANVAS_STORAGE_VERSION,
+      savedAt: Date.now(),
+      nodes: JSON.parse(JSON.stringify(nodes)),
+      edges: JSON.parse(JSON.stringify(edges)),
+      nodeIdCounters: { ...nodeIdCounters },
+    }
+
+    // 确保 history 是数组
+    const currentHistory = Array.isArray(history) ? history : []
+
+    // 如果当前不在历史记录的末尾，删除后面的记录
+    const newHistory = historyIndex < currentHistory.length - 1
+      ? currentHistory.slice(0, historyIndex + 1)
+      : [...currentHistory]
+
+    // 添加新记录
+    newHistory.push(newHistoryEntry)
+
+    // 限制历史记录数量
+    if (newHistory.length > maxHistorySize) {
+      newHistory.shift()
+    }
+
+    set({
+      history: newHistory,
+      historyIndex: newHistory.length - 1,
+    })
+  },
+
+  /**
+   * 撤销操作
+   */
+  undo: () => {
+    const state = get()
+    const { history, historyIndex } = state
+
+    if (!Array.isArray(history) || historyIndex <= 0) {
+      return
+    }
+
+    const newIndex = historyIndex - 1
+    const historyEntry = history[newIndex]
+
+    set({
+      nodes: JSON.parse(JSON.stringify(historyEntry.nodes)),
+      edges: JSON.parse(JSON.stringify(historyEntry.edges)),
+      nodeIdCounters: { ...historyEntry.nodeIdCounters },
+      historyIndex: newIndex,
+    })
+  },
+
+  /**
+   * 重做操作
+   */
+  redo: () => {
+    const state = get()
+    const { history, historyIndex } = state
+
+    if (!Array.isArray(history) || historyIndex >= history.length - 1) {
+      return
+    }
+
+    const newIndex = historyIndex + 1
+    const historyEntry = history[newIndex]
+
+    set({
+      nodes: JSON.parse(JSON.stringify(historyEntry.nodes)),
+      edges: JSON.parse(JSON.stringify(historyEntry.edges)),
+      nodeIdCounters: { ...historyEntry.nodeIdCounters },
+      historyIndex: newIndex,
+    })
+  },
+
+  /**
+   * 是否可以撤销
+   */
+  canUndo: () => {
+    const { history, historyIndex } = get()
+    return Array.isArray(history) && historyIndex > 0
+  },
+
+  /**
+   * 是否可以重做
+   */
+  canRedo: () => {
+    const { history, historyIndex } = get()
+    return Array.isArray(history) && historyIndex < history.length - 1
   },
 }})

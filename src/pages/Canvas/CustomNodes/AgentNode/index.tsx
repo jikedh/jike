@@ -1,4 +1,4 @@
-import { Position, type NodeProps } from '@xyflow/react'
+import { Position, type NodeProps, useStore } from '@xyflow/react'
 import { memo } from 'react'
 
 import { ButtonHandle } from '@/components/button-handle'
@@ -8,6 +8,7 @@ import { getAgentPresetLabelById } from '@/constants/agent-presets'
 import { useAgentExecution } from '@/hooks/useAgentExecution'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { AgentNodeType } from '@/types/flow'
+import { cn } from '@/lib/utils'
 
 const areAgentNodePropsEqual = (prev: NodeProps<AgentNodeType>, next: NodeProps<AgentNodeType>) => {
     return (
@@ -54,12 +55,17 @@ export const AgentNode = memo(({ id, data, selected }: NodeProps<AgentNodeType>)
             />
 
             <div
-                className="relative flex h-48 w-48 items-center justify-center rounded-xl border bg-card  shadow-sm transition-transform duration-200 ease-in-out"
+                className={cn(
+                    "group/card relative flex h-48 w-48 items-center justify-center rounded-xl border bg-gradient-to-br from-[#141418] to-[#0d0d10] transition-all duration-300 ease-out",
+                    selected
+                        ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
+                        : "border-white/[0.06] hover:border-white/[0.12] hover:bg-gradient-to-br hover:from-[#18181c] hover:to-[#101014]"
+                )}
             >
-                <span className="absolute left-2 top-2 max-w-40 truncate rounded-md border bg-muted px-2 py-0.5 text-[11px] leading-4 text-muted-foreground">
+                <span className="absolute left-2 top-2 max-w-40 truncate rounded-md border border-white/10 bg-[#1a1a1d] px-2 py-0.5 text-[11px] leading-4 text-white/60">
                     {presetLabel}
                 </span>
-                <Button disabled={isGenerating} onClick={execute}>
+                <Button disabled={isGenerating} onClick={execute} className="bg-[#B43FEB] hover:bg-[#B43FEB]/80">
                     {isGenerating ? '生成中...' : '生成'}
                 </Button>
             </div>

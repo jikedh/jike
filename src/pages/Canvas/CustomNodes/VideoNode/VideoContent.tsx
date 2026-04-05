@@ -22,11 +22,10 @@ export const VideoContent = ({ data, onRetry }: VideoContentProps) => {
 
     // 错误状态
     if (status === GenerationStatus.FAILED) {
-        // 优先展示后端返回的详细错误信息，其次是 message，最后是兜底文案
         const displayMessage = error?.detail || error?.serverMessage || error?.message || '生成失败，请稍后再试'
         
         return (
-          <div className="nopan h-full w-full flex flex-col items-center justify-center p-4 text-center bg-destructive/5">
+            <div className="nopan h-full w-full flex flex-col items-center justify-center p-4 text-center bg-destructive/5">
                 <div className="text-sm font-medium text-destructive mb-2">生成失败</div>
                 <div className="text-xs text-muted-foreground mb-3 line-clamp-3 max-w-full px-2">
                     {displayMessage}
@@ -47,15 +46,13 @@ export const VideoContent = ({ data, onRetry }: VideoContentProps) => {
     // 加载中状态
     if (status === GenerationStatus.IN_PROGRESS || status === GenerationStatus.QUEUED) {
         return (
-          <div className="h-full w-full flex flex-col items-center justify-center p-4 bg-muted/20">
-                <div className="w-3/4 h-1 bg-muted rounded-full overflow-hidden mb-3">
-                    <div
-                        className="h-full bg-primary transition-all duration-300"
-                        style={{ width: `${progress}%` }}
-                    />
+            <div className="h-full w-full flex flex-col items-center justify-center p-4 bg-muted/20">
+                <div className="relative w-8 h-8 mb-3">
+                    <div className="absolute inset-0 border-2 border-primary/30 rounded-full"></div>
+                    <div className="absolute inset-0 border-2 border-transparent border-t-primary rounded-full animate-spin"></div>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                    {status === GenerationStatus.QUEUED ? '等待中...' : `生成中... ${progress}%`}
+                    生成中...
                 </div>
             </div>
         )
@@ -67,7 +64,7 @@ export const VideoContent = ({ data, onRetry }: VideoContentProps) => {
             <video
                 src={videoUrl}
                 controls
-                className="nopan  block h-full w-full object-cover object-center"
+                className="nodrag nopan block h-full w-full object-cover object-center"
             >
                 你的浏览器不支持视频播放
             </video>
@@ -76,7 +73,7 @@ export const VideoContent = ({ data, onRetry }: VideoContentProps) => {
 
     // 空状态
     return (
-      <div className="h-full w-full flex items-center justify-center p-4 text-center text-muted-foreground text-sm bg-muted/10">
+        <div className="h-full w-full flex items-center justify-center p-4 text-center text-muted-foreground text-sm bg-muted/10">
             暂无视频
         </div>
     )

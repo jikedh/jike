@@ -22,7 +22,7 @@ import Zoom from 'yet-another-react-lightbox/plugins/zoom'
 import { toast } from 'sonner'
 
 import { uploadFileToOSS } from '@/utils/oss'
-import { downloadImageFromUrl } from '@/lib/utils'
+import { cn, downloadImageFromUrl } from '@/lib/utils'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { ImageGenerationNode } from '@/types/flow'
 

@@ -26,6 +26,8 @@ import { MidjourneyAdvancedPanel } from './components/MidjourneyAdvancedPanel'
 import { MidjourneyParamsPanel } from './components/MidjourneyParamsPanel'
 import { SeedreamParamsPanel } from './components/SeedreamParamsPanel'
 import { GeminiParamsPanel } from './components/GeminiParamsPanel'
+import { AspectRatioIcon } from './components/AspectRatioIcon'
+import { PROMPT_PANEL_STYLES } from '../shared/promptPanelStyles'
 
 /**
  * 图片节点底部增强输入区
@@ -82,7 +84,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   // 统一使用 size 字段存储宽高比/画面比例
     const size = currentImageData?.size ?? '1:1'
     const resolution = currentImageData?.resolution ?? '2K'
-    const model = currentImageData?.model ?? 'doubao-seedream-5-0'
+    const model = currentImageData?.model ?? 'gemini-3-pro-image-preview'
   const referenceImageUrls = currentImageData?.image_urls ?? []
     const promptDraftHtml = currentImageData?.promptDraftHtml ?? '<p></p>'
 
@@ -193,6 +195,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     const triggerRangeRef = useRef<{ from: number; to: number } | null>(null)
     // 上传按钮对应的隐藏 input
     const fileInputRef = useRef<HTMLInputElement | null>(null)
+    // 建议面板容器 ref
+    const suggestionPanelRef = useRef<HTMLDivElement | null>(null)
 
     const insertSuggestionNode = (
         mode: 'mention' | 'command',
@@ -231,10 +235,20 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         const commandSizeMap: Record<string, string> = {
           'c-1': '4:3',   // 角色参考图
           'c-2': '21:9',  // 角色三视图
+          'c-4': '21:9',  // VR图
         }
         const targetSize = commandSizeMap[selected.id]
         if (targetSize) {
           updateImageNodeData(nodeId, { size: targetSize })
+        }
+
+        // 根据命令自动设置 resolution
+        const commandResolutionMap: Record<string, string> = {
+          'c-4': isGeminiModel ? '4K' : '3K',  // VR图：Gemini用4K，Seedream用3K
+        }
+        const targetResolution = commandResolutionMap[selected.id]
+        if (targetResolution) {
+          updateImageNodeData(nodeId, { resolution: targetResolution })
         }
 
         // 只插入 description 作为文本，不再插入 slashCommand 节点显示 label
@@ -523,6 +537,16 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
     const suggestionItems = activeMode === 'mention' ? filteredMentionItems : filteredCommandItems
 
+    // 当 activeIndex 改变时，自动滚动到选中的选项
+    useEffect(() => {
+        if (suggestionPanelRef.current && activeMode && suggestionItems.length > 0) {
+            const activeElement = suggestionPanelRef.current.children[activeIndex] as HTMLElement
+            if (activeElement) {
+                activeElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+            }
+        }
+    }, [activeIndex, activeMode, suggestionItems.length])
+
   // 点击生成：根据数量多次调用接口创建任务
     const handleGenerate = async () => {
         const promptText = editor?.getText().trim() ?? ''
@@ -628,17 +652,17 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     }
 
     return (
-      <div className="nodrag nopan nowheel w-170 rounded-3xl border border-neutral-700 bg-[linear-gradient(160deg,rgba(38,38,38,0.98)_0%,rgba(30,30,30,0.97)_58%,rgba(23,23,23,0.96)_100%)] p-3 shadow-[0_22px_70px_rgba(0,0,0,0.35)] backdrop-blur-md" >
+      <div className={PROMPT_PANEL_STYLES.container} style={{ pointerEvents: 'auto' }} >
 
             {/* 顶部区域：tiptap 增强输入区 */}
-            <div className="relative mb-3 rounded-2xl border border-neutral-700 bg-neutral-800/80 p-2">
+            <div className={PROMPT_PANEL_STYLES.inputArea}>
 
                 <EditorContent editor={editor} />
                 <div className="nodrag nopan nowheel flex gap-2 overflow-x-auto pb-1 mt-2.5">
                     {/* 上传按钮（固定为第一个） */}
                     <Button
                         unstyled
-                        className="nodrag nopan nowheel h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-dashed border-neutral-600 bg-neutral-800/90 text-neutral-300 transition-colors hover:border-neutral-400 hover:text-neutral-100"
+                        className={PROMPT_PANEL_STYLES.uploadButton}
                         onClick={handleUploadClick}
                         title={isUploading ? '上传中...' : '上传参考图'}
                         disabled={isUploading}
@@ -663,7 +687,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                         <Button
                             key={`${url}-${index}`}
                             unstyled
-                            className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-neutral-700 bg-neutral-800"
+                            className={PROMPT_PANEL_STYLES.referenceImageButton}
                             title="参考图"
                         >
                             <img
@@ -677,7 +701,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                 </div>
                 {/* 建议面板 */}
                 {activeMode && suggestionItems.length > 0 && (
-                    <div className="nodrag nopan nowheel absolute right-2 bottom-full left-2 z-30 mb-5 max-h-60 overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900 shadow-[0_14px_34px_rgba(0,0,0,0.45)]">
+                    <div ref={suggestionPanelRef} className="nodrag nopan nowheel absolute right-2 bottom-full left-2 z-30 mb-5 max-h-60 overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900 shadow-[0_14px_34px_rgba(0,0,0,0.45)]">
                         {suggestionItems.map((item, index) => {
                             const isActive = index === activeIndex
                             const title = item.label
@@ -724,7 +748,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             </div>
 
             {/* 下方区域：参数控制区 */}
-            <div className="rounded-2xl border border-neutral-700 bg-neutral-800/80 p-2.5">
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5">
                 <div className="flex items-center gap-2">
                     {/* 生成模型 - 始终在最左侧 */}
                     <Select
@@ -733,12 +757,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                             updateImageNodeData(nodeId, { model: value })
                         }}
                     >
-                        <SelectTrigger className="h-8 min-w-[160px] border-neutral-700 bg-neutral-900 text-xs text-neutral-100">
+                        <SelectTrigger className="h-8 min-w-[160px] border-white/[0.06] bg-white/[0.02] text-xs text-white/90 hover:border-[#B43FEB]/30">
                             <SelectValue placeholder="选择模型" />
                         </SelectTrigger>
-                        <SelectContent className="bg-neutral-800 border border-neutral-600">
+                        <SelectContent className="bg-[#09090b] border border-white/[0.06]">
                             {IMAGE_MODELS.map((item) => (
-                                <SelectItem key={item.id} value={item.model} className="text-neutral-100 focus:bg-neutral-700 focus:text-neutral-100">
+                                <SelectItem key={item.id} value={item.model} className={PROMPT_PANEL_STYLES.modelSelectItem}>
                                     {item.name}
                                 </SelectItem>
                             ))}
@@ -795,37 +819,37 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                     <div className="ml-auto flex items-center gap-2">
                     {/* 数量选择按钮 - Midjourney 模型隐藏 */}
                     {!isMidjourneyModel && (
-                        <div className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-900 p-0.5">
-                            {IMAGE_COUNT_OPTIONS.map((count) => (
-                                <button
-                                    key={count}
-                                    type="button"
-                                    onClick={() => setImageCount(count)}
-                                    disabled={isGenerating}
-                                    className={`nodrag nopan nowheel inline-flex h-7 min-w-8 items-center justify-center rounded-md px-1.5 text-xs font-medium transition-colors ${imageCount === count
-                                            ? 'bg-blue-600 text-white'
-                                            : 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200'
-                                        } ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    title={`生成 ${count} 张图片`}
-                                >
-                                    {count}
-                                </button>
-                            ))}
-                        </div>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const currentIndex = IMAGE_COUNT_OPTIONS.indexOf(imageCount)
+                                const nextIndex = (currentIndex + 1) % IMAGE_COUNT_OPTIONS.length
+                                setImageCount(IMAGE_COUNT_OPTIONS[nextIndex])
+                            }}
+                            disabled={isGenerating}
+                            className={cn(
+                                PROMPT_PANEL_STYLES.countButton,
+                                isGenerating && 'opacity-50 cursor-not-allowed'
+                            )}
+                            title={`当前生成 ${imageCount} 张图片，点击切换`}
+                        >
+                            <span>×</span>
+                            <span>{imageCount}</span>
+                        </button>
                     )}
 
               {/* 生成按钮 */}
                         <Button
                             type="button"
-                            variant="blue"
-                            size="sm"
+                            unstyled
+                            className={PROMPT_PANEL_STYLES.generateButton}
                             loading={isGenerating}
                             onClick={handleGenerate}
                             disabled={isUploading}
                         >
                 {isGenerating && generatingCount > 0
                   ? `生成中 (${generatingCount})`
-                  : `生成 ${imageCount > 1 ? `×${imageCount}` : ''}`}
+                  : '生成'}
                         </Button>
                     </div>
                 </div>

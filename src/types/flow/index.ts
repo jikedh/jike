@@ -55,6 +55,7 @@ export interface ImageGenerationNode {
   status?: GenerationStatus; // 当前生成状态
   progress?: number; // 进度百分比（0-100）
   completedCount?: number; // 已完成图片数量（用于多图生成场景判断）
+  isUpload?: boolean; // 是否为上传图片（用于区分加载中/生成中）
   error?: {
     code?: string; // 错误代码
     message?: string; // 错误信息（兜底显示）
@@ -161,6 +162,28 @@ export interface AgentNode {
   [key: string]: any; // React Flow 约束兼容
 }
 
+/**
+ * 全景图节点数据结构
+ * 用于处理和查看全景图
+ */
+export interface PanoramaNodeData {
+  // ---- 输入参数 ----
+  image_url?: string; // 输入图片 URL（来自连接的图片节点）
+  
+  // ---- 状态管理 ----
+  status?: GenerationStatus; // 当前状态
+  isFullscreen?: boolean; // 是否全屏查看
+  
+  // ---- 输出结果 ----
+  screenshots?: {
+    type: 'single' | '4grid' | '12grid'; // 截图类型
+    urls: string[]; // 截图 URL 列表
+    createdAt: number; // 创建时间
+  }[]; // 截图历史
+  
+  [key: string]: any; // React Flow 约束兼容
+}
+
 // ==================== 辅助类型 ====================
 
 
@@ -222,10 +245,12 @@ export type VideoNodeType = Node<VideoGenerationNode, "videoNode">;
 // 节点里面的 data 结构是 NoteNodeData
 export type NoteNodeType = Node<NoteNodeData, "noteNode">;
 export type AgentNodeType = Node<AgentNode, "agentNode">;
+// 全景图节点
+export type PanoramaNodeType = Node<PanoramaNodeData, "panoramaNode">;
 // React Flow 默认的节点类型
 export type DefaultNodeType = Node<any, "default">;
 
-export type AllNodeType = TextNodeType | ImageNodeType | VideoNodeType | NoteNodeType | AgentNodeType | DefaultNodeType;
+export type AllNodeType = TextNodeType | ImageNodeType | VideoNodeType | NoteNodeType | AgentNodeType | PanoramaNodeType | DefaultNodeType;
 export type EdgeType = Edge<EdgeDataType, "default">;
 
 // ==================== 流类型 ====================

@@ -2,6 +2,7 @@ import { NodeResizer, Position, type NodeProps, useStore } from '@xyflow/react'
 import { memo } from 'react'
 
 import { ButtonHandle } from '@/components/button-handle'
+import { cn } from '@/lib/utils'
 import { NodeContextMenu } from '@/pages/Canvas/components/NodeContextMenu'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { NoteNodeType } from '@/types/flow'
@@ -31,68 +32,71 @@ export const NoteNode = memo(({ id, data, selected, width, height, dragging }: N
     // console.log("文本节点重新渲染")
     return (
         <NodeContextMenu onDuplicate={() => duplicateNode(id)} onDelete={() => deleteNode(id)}>
-        <div className="group/node relative">
-            <NodeResizer
-                isVisible={selected && !isDragging}
-                lineClassName="!border !border-muted-foreground"
-                onResizeEnd={(_, { width, height }) => {
-                    resizeNoteNode(id, width, height)
-                }}
-            />
+            <div className="group/node relative">
+                <NodeResizer
+                    isVisible={selected && !isDragging}
+                    lineClassName="!border !border-[#B43FEB]/50"
+                    handleClassName="!w-5 !h-5 !bg-transparent !border-0"
+                    onResizeEnd={(_, { width, height }) => {
+                        resizeNoteNode(id, width, height)
+                    }}
+                />
 
-            {/* 左侧输入 Handle：用于接收其他节点连接。 */}
-            <ButtonHandle
-                type="target"
-                position={Position.Left}
-                id="input"
-                visible
-                className={`${handleVisibilityClass}`}
-            />
+                {/* 左侧输入 Handle：用于接收其他节点连接。 */}
+                <ButtonHandle
+                    type="target"
+                    position={Position.Left}
+                    id="input"
+                    visible
+                    className={`${handleVisibilityClass}`}
+                />
 
-            {/* 右侧输出 Handle：用于连接到其他节点。 */}
-            <ButtonHandle
-                type="source"
-                position={Position.Right}
-                id="output"
-                visible
-                className={` ${handleVisibilityClass}`}
-            />
+                {/* 右侧输出 Handle：用于连接到其他节点。 */}
+                <ButtonHandle
+                    type="source"
+                    position={Position.Right}
+                    id="output"
+                    visible
+                    className={` ${handleVisibilityClass}`}
+                />
 
-            <div
-                style={{
-                    width,
-                    height,
-                }}
-                className="relative flex h-full w-full flex-col gap-2 rounded-xl border"
-            >
-                {shouldShowToolbar ? (
-                    <NoteToolbar
-                        onDuplicate={() => {
-                            duplicateNode(id)
-                        }}
-                        onDelete={() => {
-                            deleteNode(id)
-                        }}
-                    />
-                ) : null}
+                <div
+                    style={{
+                        width,
+                        height,
+                    }}
+                    className={cn(
+                        'group/card relative flex h-full w-full flex-col gap-2 rounded-xl border bg-gradient-to-br from-[#141418] to-[#0d0d10] transition-all duration-300 ease-out',
+                        selected
+                            ? 'border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30'
+                            : 'border-white/[0.06] hover:border-white/[0.12] hover:bg-gradient-to-br hover:from-[#18181c] hover:to-[#101014]'
+                    )}
+                >
+                    {shouldShowToolbar ? (
+                        <NoteToolbar
+                            onDelete={() => {
+                                deleteNode(id)
+                            }}
+                        />
+                    ) : null}
 
-                <div className="flex h-full w-full overflow-hidden rounded-md bg-white ">
-                    <NoteContent
-                        content={data.content}
-                        isEditing={Boolean(data.isEditing)}
-                        onStartEdit={() => {
-                            setNoteNodeEditing(id, true)
-                        }}
-                        onStopEdit={() => {
-                            setNoteNodeEditing(id, false)
-                        }}
-                        onContentBlur={(value) => {
-                            updateNoteNodeContent(id, value)
-                        }}
-                    />
+                    <div className="flex h-full w-full overflow-hidden rounded-md bg-white ">
+                        <NoteContent
+                            content={data.content}
+                            isEditing={Boolean(data.isEditing)}
+                            onStartEdit={() => {
+                                setNoteNodeEditing(id, true)
+                            }}
+                            onStopEdit={() => {
+                                setNoteNodeEditing(id, false)
+                            }}
+                            onContentBlur={(value) => {
+                                updateNoteNodeContent(id, value)
+                            }}
+                        />
+                    </div>
                 </div>
             </div>
-        </div>
         </NodeContextMenu>
     )
 })

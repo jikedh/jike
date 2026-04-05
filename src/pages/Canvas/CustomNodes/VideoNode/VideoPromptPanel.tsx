@@ -28,6 +28,7 @@ import { Veo3ParamsPanel } from './components/Veo3ParamsPanel'
 import { KlingVideoO1ParamsPanel } from './components/KlingVideoO1ParamsPanel'
 import { MinimaxHailuo23ParamsPanel } from './components/MinimaxHailuo23ParamsPanel'
 import { Seedance20ParamsPanel } from './components/Seedance20ParamsPanel'
+import { PROMPT_PANEL_STYLES } from '../shared/promptPanelStyles'
 import { getVideoPayloadStrategy } from './strategies/videoPayloadStrategies'
 
 export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
@@ -344,14 +345,14 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     }
 
     return (
-      <div className="nodrag nopan nowheel w-[700px] min-w-[700px] rounded-3xl border border-neutral-700 bg-[linear-gradient(160deg,rgba(38,38,38,0.98)_0%,rgba(30,30,30,0.97)_58%,rgba(23,23,23,0.96)_100%)] p-3 shadow-[0_22px_70px_rgba(0,0,0,0.35)] backdrop-blur-md" >
-        <div className="relative mb-3 rounded-2xl border border-neutral-700 bg-neutral-800/80 p-2">
+      <div className={PROMPT_PANEL_STYLES.container} style={{ pointerEvents: 'auto' }} >
+        <div className={PROMPT_PANEL_STYLES.inputArea}>
                 <EditorContent editor={editor} />
 
                 <div className="nodrag nopan nowheel mt-2.5 flex gap-2 overflow-x-auto pb-1">
                     <Button
                         unstyled
-                        className="nodrag nopan nowheel h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-dashed border-neutral-600 bg-neutral-800/90 text-neutral-300 transition-colors hover:border-neutral-400 hover:text-neutral-100"
+                        className={PROMPT_PANEL_STYLES.uploadButton}
                         onClick={handleUploadClick}
                         title={isUploading ? '上传中...' : '上传参考图'}
                         disabled={isUploading}
@@ -374,7 +375,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                         <Button
                             key={`${url}-${index}`}
                             unstyled
-                            className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-neutral-700 bg-neutral-800"
+                            className={PROMPT_PANEL_STYLES.referenceImageButton}
                             title="参考图"
                         >
                             <img
@@ -389,7 +390,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             </div>
 
             {/* 下方区域：参数控制区 */}
-            <div className="rounded-2xl border border-neutral-700 bg-neutral-800/80 p-2.5">
+            <div className={PROMPT_PANEL_STYLES.controlArea}>
                 <div className="flex items-center gap-2">
                     {/* 生成模型 */}
                     <Select
@@ -398,12 +399,12 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                             updateVideoNodeData(nodeId, { model: value })
                         }}
                     >
-                        <SelectTrigger className="h-8 min-w-[160px] border-neutral-700 bg-neutral-900 text-xs text-neutral-100">
+                        <SelectTrigger className={PROMPT_PANEL_STYLES.modelSelect}>
                             <SelectValue placeholder="选择模型" />
                         </SelectTrigger>
-                        <SelectContent className="bg-neutral-800 border border-neutral-600">
+                        <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
                             {VIDEO_MODELS.map((item) => (
-                                <SelectItem key={item.id} value={item.model} className="text-neutral-100 focus:bg-neutral-700 focus:text-neutral-100">
+                                <SelectItem key={item.id} value={item.model} className={PROMPT_PANEL_STYLES.modelSelectItem}>
                                     {item.name}
                                 </SelectItem>
                             ))}
@@ -624,8 +625,8 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                     <div className="ml-auto">
                         <Button
                             type="button"
-                            variant="blue"
-                            size="sm"
+                            unstyled
+                            className={PROMPT_PANEL_STYLES.generateButton}
                             loading={isGenerating}
                             onClick={handleGenerate}
                             disabled={isUploading}

@@ -282,6 +282,58 @@
     animation-delay: 4s;
 }
 
+/* 画布光标样式 */
+.canvas-cursor-default .react-flow__pane {
+    cursor: default !important;
+}
+
+.canvas-cursor-pointer .react-flow__pane {
+    cursor: pointer !important;
+}
+
+.canvas-cursor-grabbing .react-flow__pane {
+    cursor: grabbing !important;
+}
+
+.canvas-cursor-zoom-in .react-flow__pane {
+    cursor: zoom-in !important;
+}
+
+/* 节点悬停光标样式 */
+.react-flow__node {
+    cursor: pointer !important;
+}
+
+/* 框选范围样式 */
+.react-flow__selection {
+    background: rgba(180, 63, 235, 0.1) !important;
+    border: 1px solid rgba(180, 63, 235, 0.4) !important;
+    border-radius: 4px;
+}
+
+/* 多选节点时的选中框样式 */
+.react-flow__nodesselection-rect {
+    background: rgba(180, 63, 235, 0.08) !important;
+    border: 1px dashed rgba(180, 63, 235, 0.5) !important;
+    border-radius: 8px;
+}
+
+/* NodeResizer 透明手柄样式 - 确保光标正确显示 */
+.react-flow__resize-control.handle {
+    background: transparent !important;
+    border: none !important;
+}
+
+.react-flow__resize-control.handle.top-left,
+.react-flow__resize-control.handle.bottom-right {
+    cursor: nwse-resize !important;
+}
+
+.react-flow__resize-control.handle.top-right,
+.react-flow__resize-control.handle.bottom-left {
+    cursor: nesw-resize !important;
+}
+
 /* 全景浏览器玻璃拟态面板 - 覆盖全局样式 */
 #panorama-root .glass-panel {
     background: rgba(255, 255, 255, 0.1);

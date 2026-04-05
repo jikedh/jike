@@ -21,7 +21,7 @@ export function ButtonHandle({
   showButton = false,
   visible,
   position = Position.Bottom,
-  followAreaSize = 64,
+  followAreaSize = 100,
   buttonSize = 28,
   children,
   ...props
@@ -128,8 +128,10 @@ export function ButtonHandle({
             >
               <div className="nodrag nopan pointer-events-none">
                 {children ?? (
-                  <div className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 bg-white text-sm font-medium text-slate-600 shadow-sm">
-                    +
+                  <div className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#B43FEB]/50 bg-[#1a1a1f] text-sm font-medium text-[#B43FEB] shadow-lg hover:border-[#B43FEB] hover:bg-[#B43FEB]/10 transition-all">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
                   </div>
                 )}
               </div>

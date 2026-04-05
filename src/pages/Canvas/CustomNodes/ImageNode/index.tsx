@@ -8,6 +8,7 @@ import { NodeContextMenu } from '@/pages/Canvas/components/NodeContextMenu'
 import { PanoramaViewer } from '@/components/panorama/PanoramaViewer'
 import { useNodeScale } from '@/hooks/useNodeScale'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
+import { cn } from '@/lib/utils'
 import { uploadFileToOSS } from '@/utils/oss'
 import { GenerationStatus } from '@/constants/enum'
 import type { ImageNodeType } from '@/types/flow'
@@ -202,16 +203,34 @@ export const ImageNode = memo(({
                         position={Position.Bottom}
                         offset={18 * zoom}
                     >
-                        <div className="nodrag nopan nowheel" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
+                        <div style={{ width: '700px', transform: `scale(${zoom})`, transformOrigin: 'top center', pointerEvents: 'none' }}>
                             <ImagePromptPanel nodeId={id} />
                         </div>
                     </NodeToolbar>
 
                     <div
-                        className="relative flex w-87.5 min-h-62.5 flex-col gap-2 rounded-xl border bg-card  shadow-sm transition-transform duration-200 ease-in-out"
+                        className={cn(
+                            'group/card relative flex w-87.5 h-62.5 flex-col rounded-xl border bg-linear-to-br from-[#141418] to-[#0d0d10] transition-all duration-300 ease-out',
+                            selected
+                                ? 'border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30'
+                                : 'border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]'
+                        )}
                     >
-                        {/* 图片内容区：提供明确高度基准，避免 h-full + absolute 链路在自适应场景下塌陷 */}
-                        <div className="relative flex w-full min-h-62.5 aspect-7/5 overflow-hidden rounded-md bg-muted/10">
+                        {/* 选中状态角落装饰 */}
+                        {selected && (
+                            <>
+                                <div className="absolute -top-px -left-px w-4 h-4 border-l-2 border-t-2 border-[#B43FEB] rounded-tl-xl" />
+                                <div className="absolute -top-px -right-px w-4 h-4 border-r-2 border-t-2 border-[#B43FEB] rounded-tr-xl" />
+                                <div className="absolute -bottom-px -left-px w-4 h-4 border-l-2 border-b-2 border-[#B43FEB] rounded-bl-xl" />
+                                <div className="absolute -bottom-px -right-px w-4 h-4 border-r-2 border-b-2 border-[#B43FEB] rounded-br-xl" />
+                            </>
+                        )}
+
+                        {/* 扫光效果 */}
+                        <div className="pointer-events-none absolute inset-0 rounded-xl bg-linear-to-tr from-transparent via-white/2 to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
+
+                        {/* 图片内容区 */}
+                        <div className="relative flex w-full min-h-62.5 aspect-7/5 overflow-hidden rounded-lg bg-black/30">
                             <ImageContent data={data} onReorder={handleReorder} />
                         </div>
                     </div>

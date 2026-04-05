@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useState, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
@@ -21,6 +21,17 @@ interface VideoMentionListProps extends SuggestionProps {}
 export const VideoMentionList = forwardRef<{ onKeyDown: (props: { event: KeyboardEvent }) => boolean }, VideoMentionListProps>(
   ({ items, command }, ref) => {
     const [selectedIndex, setSelectedIndex] = useState(0)
+    const listRef = useRef<HTMLDivElement | null>(null)
+
+    // 当 selectedIndex 改变时，自动滚动到选中的选项
+    useEffect(() => {
+      if (listRef.current) {
+        const activeElement = listRef.current.children[selectedIndex] as HTMLElement
+        if (activeElement) {
+          activeElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+        }
+      }
+    }, [selectedIndex])
 
     // 暴露 onKeyDown 方法给父组件
     useImperativeHandle(ref, () => ({
@@ -66,7 +77,7 @@ export const VideoMentionList = forwardRef<{ onKeyDown: (props: { event: Keyboar
     }
 
     return (
-      <div className="max-h-60 overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900 shadow-[0_14px_34px_rgba(0,0,0,0.45)]">
+      <div ref={listRef} className="max-h-60 overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900 shadow-[0_14px_34px_rgba(0,0,0,0.45)]">
         {items.map((item, index) => (
           <Button
             key={item.id}

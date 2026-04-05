@@ -12,6 +12,8 @@ import {
     BackgroundVariant,
     applyNodeChanges,
     type NodeChange,
+    SelectionMode,
+    ConnectionLineType,
 } from '@xyflow/react'
 
 import { NodeSearch } from '@/components/node-search'
@@ -25,6 +27,15 @@ import { useChatSettingsStore } from '@/store/chatSettingsStore'
 import { uploadImage } from '@/api/ai'
 import type { AllNodeType, EdgeType } from '@/types/flow'
 import { Button } from '@/components/ui/button'
+// import { useCanvasCursor } from '@/hooks/useCanvasCursor'
+import { GenerationStatus } from '@/constants/enum'
+import { getClosestAspectRatio, getImageDimensions } from '../CustomNodes/ImageNode/utils/aspectRatioUtils'
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogFooter,
+} from '@/components/ui/dialog'
 
 type CanvasFlowProps = {
     projectId: string | undefined
@@ -35,7 +46,6 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     // 通过 zustand 读取图状态，避免业务动作散落在多个组件。
     const zustandNodes = useCanvasFlowStore((state) => state.nodes)
     const edges = useCanvasFlowStore((state) => state.edges)
-    const hydrated = useCanvasFlowStore((state) => state.hydrated)
     const currentProjectId = useCanvasFlowStore((state) => state.projectId)
     const storeOnNodesChange = useCanvasFlowStore((state) => state.onNodesChange)
     const onEdgesChange = useCanvasFlowStore((state) => state.onEdgesChange)
@@ -46,6 +56,94 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     const nodeSearchVisible = useChatSettingsStore((state) => state.nodeSearchVisible)
     const { screenToFlowPosition } = useReactFlow<AllNodeType, EdgeType>()
     const navigate = useNavigate()
+    // const { cursorClass, setCursorMode, isCtrlPressed } = useCanvasCursor()
+
+    // 确认对话框状态
+    const [showExitDialog, setShowExitDialog] = useState(false)
+    const [generatingCount, setGeneratingCount] = useState(0)
+
+    // 获取正在生成的任务数量和取消方法
+    const getGeneratingTasksCount = useCanvasFlowStore((state) => state.getGeneratingTasksCount)
+    const cancelAllGeneratingTasks = useCanvasFlowStore((state) => state.cancelAllGeneratingTasks)
+
+    // 获取撤销/重做方法
+    const undo = useCanvasFlowStore((state) => state.undo)
+    const redo = useCanvasFlowStore((state) => state.redo)
+    const canUndo = useCanvasFlowStore((state) => state.canUndo)
+    const canRedo = useCanvasFlowStore((state) => state.canRedo)
+    const copySelectedNode = useCanvasFlowStore((state) => state.copySelectedNode)
+    const pasteNode = useCanvasFlowStore((state) => state.pasteNode)
+    const canPaste = useCanvasFlowStore((state) => state.canPaste)
+
+    // 处理键盘快捷键
+    const handleKeyDown = useCallback((event: KeyboardEvent) => {
+        // 检查是否在输入框中
+        const target = event.target as HTMLElement
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+            return
+        }
+
+        // Ctrl+Z 或 Cmd+Z：撤销
+        if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
+            event.preventDefault()
+            if (canUndo()) {
+                undo()
+            }
+        }
+
+        // Ctrl+Shift+Z 或 Cmd+Shift+Z 或 Ctrl+Y：重做
+        if ((event.ctrlKey || event.metaKey) && (event.key === 'y' || (event.key === 'z' && event.shiftKey))) {
+            event.preventDefault()
+            if (canRedo()) {
+                redo()
+            }
+        }
+
+        // Ctrl+C 或 Cmd+C：复制节点
+        if ((event.ctrlKey || event.metaKey) && event.key === 'c') {
+            event.preventDefault()
+            copySelectedNode()
+        }
+
+        // Ctrl+V 或 Cmd+V：粘贴节点
+        if ((event.ctrlKey || event.metaKey) && event.key === 'v') {
+            event.preventDefault()
+            if (canPaste()) {
+                pasteNode()
+            }
+        }
+    }, [undo, redo, canUndo, canRedo, copySelectedNode, pasteNode, canPaste])
+
+    // 监听键盘事件
+    useEffect(() => {
+        document.addEventListener('keydown', handleKeyDown)
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown)
+        }
+    }, [handleKeyDown])
+
+    // 处理返回按钮点击
+    const handleBackClick = useCallback(() => {
+        const count = getGeneratingTasksCount()
+        if (count > 0) {
+            setGeneratingCount(count)
+            setShowExitDialog(true)
+        } else {
+            navigate('/home')
+        }
+    }, [getGeneratingTasksCount, navigate])
+
+    // 确认退出
+    const handleConfirmExit = useCallback(() => {
+        cancelAllGeneratingTasks()
+        setShowExitDialog(false)
+        navigate('/home')
+    }, [cancelAllGeneratingTasks, navigate])
+
+    // 取消退出
+    const handleCancelExit = useCallback(() => {
+        setShowExitDialog(false)
+    }, [])
 
     // ==================== 拖动性能优化：本地 nodes 状态隔离 ====================
     //
@@ -69,6 +167,87 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         }
     }, [zustandNodes])
 
+    // 检测节点靠近并自动连接
+    const checkAutoConnect = useCallback(
+        (draggedNodeId: string, draggedNodePosition: { x: number; y: number }) => {
+            const allNodes = useCanvasFlowStore.getState().nodes
+            const draggedNode = allNodes.find((n) => n.id === draggedNodeId)
+            if (!draggedNode) return
+
+            const SNAP_DISTANCE = 120
+            const SNAP_OFFSET = 50
+            const draggedWidth = draggedNode.width || 175
+            const draggedHeight = draggedNode.height || 175
+            const draggedCenterX = draggedNodePosition.x + draggedWidth / 2
+            const draggedCenterY = draggedNodePosition.y + draggedHeight / 2
+
+            let nearestNode: typeof allNodes[0] | null = null
+            let nearestDistance = Infinity
+            let snapPosition: { x: number; y: number } | null = null
+
+            for (const targetNode of allNodes) {
+                if (targetNode.id === draggedNodeId) continue
+
+                const targetWidth = targetNode.width || 175
+                const targetHeight = targetNode.height || 175
+                const targetCenterX = targetNode.position.x + targetWidth / 2
+                const targetCenterY = targetNode.position.y + targetHeight / 2
+
+                const distance = Math.sqrt(
+                    Math.pow(draggedCenterX - targetCenterX, 2) +
+                    Math.pow(draggedCenterY - targetCenterY, 2)
+                )
+
+                if (distance < SNAP_DISTANCE && distance < nearestDistance) {
+                    nearestDistance = distance
+                    nearestNode = targetNode
+
+                    const isLeft = draggedCenterX < targetCenterX
+
+                    if (isLeft) {
+                        snapPosition = {
+                            x: targetNode.position.x - draggedWidth - SNAP_OFFSET,
+                            y: targetCenterY - draggedHeight / 2,
+                        }
+                    } else {
+                        snapPosition = {
+                            x: targetNode.position.x + targetWidth + SNAP_OFFSET,
+                            y: targetCenterY - draggedHeight / 2,
+                        }
+                    }
+                }
+            }
+
+            if (nearestNode && snapPosition) {
+                const existingEdges = useCanvasFlowStore.getState().edges
+                const hasConnection = existingEdges.some(
+                    (edge) =>
+                        (edge.source === draggedNodeId && edge.target === nearestNode.id) ||
+                        (edge.source === nearestNode.id && edge.target === draggedNodeId)
+                )
+
+                if (!hasConnection) {
+                    const isLeft = snapPosition.x < nearestNode.position.x
+                    onConnect({
+                        source: isLeft ? draggedNodeId : nearestNode.id,
+                        sourceHandle: 'output',
+                        target: isLeft ? nearestNode.id : draggedNodeId,
+                        targetHandle: 'input',
+                    })
+                }
+
+                const changes: NodeChange<AllNodeType>[] = [{
+                    id: draggedNodeId,
+                    type: 'position',
+                    position: snapPosition,
+                    dragging: false,
+                }]
+                storeOnNodesChange(changes)
+            }
+        },
+        [onConnect, storeOnNodesChange]
+    )
+
     // 本地 onNodesChange：拖动中只更新 displayNodes，拖动结束才同步 Zustand
     const onNodesChange = useCallback((changes: NodeChange<AllNodeType>[]) => {
         // 始终更新本地显示状态，保证拖动视觉流畅
@@ -81,7 +260,14 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         if (persistableChanges.length > 0) {
             storeOnNodesChange(persistableChanges)
         }
-    }, [storeOnNodesChange])
+
+        // 检测拖动结束时的自动连接
+        changes.forEach((change) => {
+            if (change.type === 'position' && change.dragging === false && change.position) {
+                checkAutoConnect(change.id, change.position)
+            }
+        })
+    }, [storeOnNodesChange, checkAutoConnect])
 
     const handleNodeDragStart = useCallback(() => {
         isDraggingRef.current = true
@@ -92,6 +278,21 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         // ReactFlow 拖动结束时会自动触发 onNodesChange（dragging: false）
         // 上面的 onNodesChange 已经将最终位置写入 Zustand，此处只需重置 ref 即可
     }, [])
+
+    // 点击画布空白区域时取消所有节点的选中状态
+    const handlePaneClick = useCallback(() => {
+        const allNodes = useCanvasFlowStore.getState().nodes
+        const selectedNodes = allNodes.filter((node) => node.selected)
+        
+        if (selectedNodes.length > 0) {
+            const changes: NodeChange<AllNodeType>[] = selectedNodes.map((node) => ({
+                id: node.id,
+                type: 'select',
+                selected: false,
+            }))
+            storeOnNodesChange(changes)
+        }
+    }, [storeOnNodesChange])
 
     // 当 projectId 变化时切换项目
     useEffect(() => {
@@ -121,7 +322,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         contextMenuTriggerRef.current?.dispatchEvent(contextMenuEvent)
     }, [])
 
-    const handlePaneContextMenu = useCallback((event) => {
+    const handlePaneContextMenu = useCallback((event: React.MouseEvent) => {
         pendingConnectRef.current = null
         setMenuScreenPosition({ x: event.clientX, y: event.clientY })
     }, [])
@@ -139,7 +340,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     }, [openContextMenuAt])
 
     const handleConnectStart = useCallback(
-        (_, params) => {
+        (_: unknown, params: { nodeId: string; handleId?: string | null; handleType: 'source' | 'target' }) => {
             if (!params?.nodeId || !params?.handleType) {
                 pendingConnectRef.current = null
                 return
@@ -161,21 +362,68 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                 return
             }
 
-            // 防止用户在非画布区域释放连接线时意外触发菜单,比如在侧边栏或其他 UI 上。我觉得这个没有必要要，反而会有性能问题
-            // if (event.target instanceof Element && !event.target.closest('.react-flow__pane')) {
-            //     pendingConnectRef.current = null
-            //     return
-            // }
-
             const pointer = 'changedTouches' in event ? event.changedTouches[0] : event
             if (!pointer) {
                 pendingConnectRef.current = null
                 return
             }
 
+            const pendingConnect = pendingConnectRef.current
+            if (pendingConnect) {
+                const allNodes = useCanvasFlowStore.getState().nodes
+                const pointerPos = screenToFlowPosition({ x: pointer.clientX, y: pointer.clientY })
+
+                for (const targetNode of allNodes) {
+                    if (targetNode.id === pendingConnect.nodeId) continue
+
+                    const nodeWidth = targetNode.width || 175
+                    const nodeHeight = targetNode.height || 175
+                    const nodeLeft = targetNode.position.x
+                    const nodeRight = targetNode.position.x + nodeWidth
+                    const nodeTop = targetNode.position.y
+                    const nodeBottom = targetNode.position.y + nodeHeight
+
+                    const isInsideNode =
+                        pointerPos.x >= nodeLeft &&
+                        pointerPos.x <= nodeRight &&
+                        pointerPos.y >= nodeTop &&
+                        pointerPos.y <= nodeBottom
+
+                    if (isInsideNode) {
+                        const existingEdges = useCanvasFlowStore.getState().edges
+                        const hasConnection = existingEdges.some(
+                            (edge) =>
+                                (edge.source === pendingConnect.nodeId && edge.target === targetNode.id) ||
+                                (edge.source === targetNode.id && edge.target === pendingConnect.nodeId)
+                        )
+
+                        if (!hasConnection) {
+                            if (pendingConnect.handleType === 'source') {
+                                onConnect({
+                                    source: pendingConnect.nodeId,
+                                    sourceHandle: pendingConnect.handleId ?? 'output',
+                                    target: targetNode.id,
+                                    targetHandle: 'input',
+                                })
+                            } else {
+                                onConnect({
+                                    source: targetNode.id,
+                                    sourceHandle: 'output',
+                                    target: pendingConnect.nodeId,
+                                    targetHandle: pendingConnect.handleId ?? 'input',
+                                })
+                            }
+                        }
+
+                        pendingConnectRef.current = null
+                        return
+                    }
+                }
+            }
+
             openContextMenuAt(pointer.clientX, pointer.clientY)
         },
-        [openContextMenuAt]
+        [screenToFlowPosition, onConnect, openContextMenuAt]
     )
 
     const handleCreateNodeFromMenu = useCallback(
@@ -221,6 +469,12 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
             for (const file of files) {
                 const newNodeId = addNode('image', flowPosition)
 
+                // 设置初始状态为加载中
+                updateImageNodeData(newNodeId, {
+                    status: GenerationStatus.IN_PROGRESS,
+                    isUpload: true,
+                })
+
                 // 偏移后续节点位置，避免重叠
                 flowPosition.x += 40
                 flowPosition.y += 40
@@ -234,15 +488,41 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     const imageUrl = response?.url || response?.data?.url
 
                     if (imageUrl) {
+                        // 获取图片尺寸并计算最接近的比例
+                        try {
+                            const dimensions = await getImageDimensions(imageUrl)
+                            const aspectRatio = getClosestAspectRatio(dimensions.width, dimensions.height)
+
+                            updateImageNodeData(newNodeId, {
+                                status: GenerationStatus.COMPLETED,
+                                size: aspectRatio,
+                                result: {
+                                    type: 'image',
+                                    data: [{ url: imageUrl }],
+                                },
+                            })
+                        } catch (error) {
+                            // 如果获取尺寸失败，使用默认比例
+                            updateImageNodeData(newNodeId, {
+                                status: GenerationStatus.COMPLETED,
+                                result: {
+                                    type: 'image',
+                                    data: [{ url: imageUrl }],
+                                },
+                            })
+                        }
+                    } else {
                         updateImageNodeData(newNodeId, {
-                            result: {
-                                type: 'image',
-                                data: [{ url: imageUrl }],
-                            },
+                            status: GenerationStatus.FAILED,
+                            error: { message: '上传失败，未获取到图片地址' },
                         })
                     }
                 } catch (error) {
                     console.error('图片上传失败:', error)
+                    updateImageNodeData(newNodeId, {
+                        status: GenerationStatus.FAILED,
+                        error: { message: '上传失败，请重试' },
+                    })
                 }
             }
         },
@@ -264,14 +544,50 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         },
     })
 
+    // 处理粘贴图片
+    const handlePaste = useCallback(
+        async (event: ClipboardEvent) => {
+            const items = event.clipboardData?.items
+            if (!items) return
+
+            const imageFiles: File[] = []
+            for (const item of items) {
+                if (item.type.startsWith('image/')) {
+                    const file = item.getAsFile()
+                    if (file) {
+                        imageFiles.push(file)
+                    }
+                }
+            }
+
+            if (imageFiles.length > 0) {
+                // 在画布中心位置创建节点
+                handleImageDrop(imageFiles, {
+                    x: window.innerWidth / 2,
+                    y: window.innerHeight / 2,
+                })
+            }
+        },
+        [handleImageDrop, screenToFlowPosition]
+    )
+
+    // 监听粘贴事件
+    useEffect(() => {
+        document.addEventListener('paste', handlePaste)
+        return () => {
+            document.removeEventListener('paste', handlePaste)
+        }
+    }, [handlePaste])
+
     return (
-        <CanvasContextMenu onCreateNode={handleCreateNodeFromMenu}>
-            <div
-                {...getRootProps()}
-                ref={contextMenuTriggerRef}
-                className="h-full w-full relative"
-                onDoubleClick={handleNativeDblClick}
-            >
+        <>
+            <CanvasContextMenu onCreateNode={handleCreateNodeFromMenu}>
+                <div
+                    {...getRootProps()}
+                    ref={contextMenuTriggerRef}
+                    className="h-full w-full relative"
+                    onDoubleClick={handleNativeDblClick}
+                >
                 <input {...getInputProps()} />
                 <ReactFlow<AllNodeType, EdgeType>
                     nodes={displayNodes}
@@ -284,6 +600,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     onConnectEnd={handleConnectEnd}
                     onNodeDragStart={handleNodeDragStart}
                     onNodeDragStop={handleNodeDragStop}
+                    onPaneClick={handlePaneClick}
                     nodeTypes={nodeTypes}
                     edgeTypes={edgeTypes}
                     nodesDraggable
@@ -294,7 +611,26 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     deleteKeyCode={['Backspace', 'Delete']}
                     panOnDrag={[1]}
                     selectionOnDrag={true}
+                    selectionMode={SelectionMode.Partial}
+                    multiSelectionKeyCode={['Shift']}
+                    panOnScroll={!isCtrlPressed}
+                    panOnScrollSpeed={0.5}
                     zoomOnDoubleClick={false}
+                    zoomOnScroll={isCtrlPressed}
+                    zoomOnPinch={true}
+                    preventScrolling={false}
+                    className={cursorClass}
+                    onMouseEnter={() => setCursorMode('default')}
+                    connectionLineType={ConnectionLineType.Bezier}
+                    connectionLineStyle={{ stroke: '#B43FEB', strokeWidth: 2, fill: 'none' }}
+                    snapToGrid={true}
+                    snapGrid={[20, 20]}
+                    connectionRadius={50}
+                    defaultEdgeOptions={{
+                        type: 'bezier',
+                        style: { stroke: '#B43FEB', strokeWidth: 2 },
+                        animated: false,
+                    }}
                 >
                     {gridVisible && <Background variant={BackgroundVariant.Dots} />}
                     <Controls>
@@ -336,7 +672,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
             <Button
               variant="default"
               size="sm"
-              onClick={() => navigate('/home')}
+              onClick={handleBackClick}
               className="flex items-center gap-2"
             >
               <ArrowLeft className="size-4" />
@@ -345,5 +681,41 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
           </div>
             </div>
         </CanvasContextMenu>
+
+        {/* 确认退出对话框 */}
+        <Dialog open={showExitDialog} onOpenChange={setShowExitDialog}>
+            <DialogContent className="bg-[#1a1a1f] border-white/10">
+                <DialogHeader>
+                    <h2 className="text-lg font-semibold text-white">确认离开</h2>
+                </DialogHeader>
+                <div className="py-4">
+                    <p className="text-sm text-gray-400">
+                        目前有 <span className="font-semibold text-[#B43FEB]">{generatingCount}</span> 个正在生成的任务，离开后这些任务将取消生成。
+                    </p>
+                    <p className="text-sm text-gray-400 mt-2">
+                        确定要离开吗？
+                    </p>
+                </div>
+                <DialogFooter className="border-white/10">
+                    <Button
+                        variant="default"
+                        size="sm"
+                        onClick={handleCancelExit}
+                        className="border border-white/10 bg-transparent hover:bg-white/5 text-gray-300"
+                    >
+                        取消
+                    </Button>
+                    <Button
+                        variant="default"
+                        size="sm"
+                        onClick={handleConfirmExit}
+                        className="bg-[#B43FEB] hover:bg-[#B43FEB]/80 text-white"
+                    >
+                        确认离开
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+        </>
     )
 }

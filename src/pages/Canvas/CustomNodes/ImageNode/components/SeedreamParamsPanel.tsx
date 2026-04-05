@@ -57,21 +57,21 @@ export const SeedreamParamsPanel = ({
       <PopoverTrigger asChild>
         <Button
           unstyled
-          className="flex h-8 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 text-xs text-neutral-300 transition-colors hover:border-neutral-500 hover:text-neutral-100"
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 text-xs text-white/70 transition-colors hover:border-[#B43FEB]/30 hover:text-white/90 hover:bg-white/[0.04]"
         >
-          <IconSettings size={14} />
-          <span>整合参数</span>
+          <AspectRatioIcon ratio={size} size={16} />
+          <span>{size} | {resolution}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent
         align="start"
         side="top"
-        className="w-96 border border-neutral-700 bg-neutral-900 p-3 shadow-xl"
+        className="w-96 border border-white/[0.06] bg-[#09090b] p-3 shadow-xl"
       >
         <div className="space-y-4">
           {/* 宽高比选择 */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-neutral-300">
+            <label className="text-xs font-medium text-white/70">
               宽高比
             </label>
             <div className="grid grid-cols-5 gap-2">
@@ -85,8 +85,8 @@ export const SeedreamParamsPanel = ({
                     className={cn(
                       'flex flex-col items-center gap-1 rounded-lg border p-2 transition-all',
                       isActive
-                        ? 'border-blue-500 bg-blue-500/10'
-                        : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750',
+                        ? 'border-[#B43FEB] bg-[#B43FEB]/10'
+                        : 'border-white/[0.06] bg-white/[0.02] hover:border-[#B43FEB]/30 hover:bg-white/[0.04]',
                     )}
                   >
                     <AspectRatioIcon
@@ -97,7 +97,7 @@ export const SeedreamParamsPanel = ({
                     <span
                       className={cn(
                         'text-[10px]',
-                        isActive ? 'text-blue-400' : 'text-neutral-400',
+                        isActive ? 'text-[#B43FEB]' : 'text-white/40',
                       )}
                     >
                       {item.label}

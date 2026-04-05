@@ -1,4 +1,4 @@
-import { IconPhoto, IconNote, IconVideo } from '@tabler/icons-react'
+import { IconEye, IconNote, IconPhoto, IconVideo } from '@tabler/icons-react'
 import type { PropsWithChildren } from 'react'
 
 import {
@@ -10,7 +10,7 @@ import {
     ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 
-export type CanvasNodeType = 'note' | 'image' | 'video'
+export type CanvasNodeType = 'note' | 'image' | 'video' | 'panorama'
 
 type CanvasContextMenuProps = PropsWithChildren<{
     onCreateNode: (nodeType: CanvasNodeType) => void
@@ -44,6 +44,13 @@ export const CanvasContextMenu = ({ children, onCreateNode, onOpenChange }: Canv
                 >
                     <IconVideo size={16} />
                     新建视频节点
+                </ContextMenuItem>
+                <ContextMenuItem
+                    className="text-white/80 hover:bg-white/10 hover:text-white focus:bg-white/10 focus:text-white rounded-md px-3 py-2 text-sm flex items-center gap-2 cursor-pointer"
+                    onSelect={() => onCreateNode('panorama')}
+                >
+                    <IconEye size={16} />
+                    新建全景图节点
                 </ContextMenuItem>
             </ContextMenuContent>
         </ContextMenu>

@@ -23,6 +23,13 @@ export function BaseHandle({
       }
       }
     >
+      {/* 扩大连接范围的不可见区域 */}
+      <div 
+        className="absolute -inset-6 rounded-full"
+        style={{
+          background: 'transparent',
+        }}
+      />
       {children}
     </Handle>
   );
