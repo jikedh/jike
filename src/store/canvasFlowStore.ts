@@ -685,6 +685,62 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
     })
   }
 
+  /**
+   * 当图片节点的 result.data 变化时，同步到所有下游子节点的 image_urls
+   * @param nodes 当前节点数组
+   * @param sourceNodeId 发生变化的图片节点 ID
+   * @param edges 当前边数组
+   * @returns 更新后的节点数组
+   */
+  const syncImageUrlsToDescendants = (nodes: any[], sourceNodeId: string, edges: any[]): any[] => {
+    // 找出所有以 sourceNodeId 为源的下游边
+    const downstreamEdges = edges.filter(edge => edge.source === sourceNodeId)
+    if (downstreamEdges.length === 0) {
+      return nodes
+    }
+
+    // 获取源节点的新图片 URL
+    const sourceNode = nodes.find(n => n.id === sourceNodeId)
+    if (!sourceNode || sourceNode.type !== 'imageNode') {
+      return nodes
+    }
+
+    const sourceData = sourceNode.data as any
+    const newUrls = (sourceData?.result?.data ?? [])
+      .map((item: any) => item.url)
+      .filter(Boolean)
+
+    if (newUrls.length === 0) {
+      return nodes
+    }
+
+    // 更新所有下游节点
+    return nodes.map(node => {
+      const isDownstream = downstreamEdges.some(edge => edge.target === node.id)
+      if (!isDownstream) {
+        return node
+      }
+
+      // 只同步到 imageNode 和 videoNode
+      if (node.type !== 'imageNode' && node.type !== 'videoNode') {
+        return node
+      }
+
+      const nodeData = node.data as any
+      const currentUrls = nodeData?.image_urls ?? []
+      // 合并去重，保留当前 URL 加上新的 URL
+      const nextUrls = Array.from(new Set([...currentUrls, ...newUrls]))
+
+      return {
+        ...node,
+        data: {
+          ...nodeData,
+          image_urls: nextUrls,
+        },
+      }
+    })
+  }
+
   return {
   nodes: [],
   edges: [],
@@ -1134,14 +1190,23 @@ duplicateNode: (nodeId: string) => {
 
   /**
    * 更新图片节点数据（局部 patch）
+   * 当 patch 包含 result 字段时，自动同步到下游子节点的 image_urls
    */
   updateImageNodeData: (nodeId, patch) => {
-    set((state) => ({
-      nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+    set((state) => {
+      // 先执行普通的 patch 更新
+      let nextNodes = updateImageNodeInList(state.nodes, nodeId, (data) => ({
         ...data,
         ...patch,
-      })),
-    }))
+      }))
+
+      // 如果 patch 中包含 result 变化，则同步到下游子节点
+      if (patch.result !== undefined) {
+        nextNodes = syncImageUrlsToDescendants(nextNodes, nodeId, state.edges)
+      }
+
+      return { nodes: nextNodes }
+    })
   },
 
   /**
