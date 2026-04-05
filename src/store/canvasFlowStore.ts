@@ -65,7 +65,7 @@ type CanvasFlowState = {
   nodes: AllNodeType[]
   edges: EdgeType[]
   // 各类型节点的自增计数器
-  nodeIdCounters: { note: number; image: number; video: number; agent: number }
+  nodeIdCounters: { note: number; image: number; video: number; agent: number; panorama: number }
   // 是否已完成数据恢复
   hydrated: boolean
   // 当前项目 ID
@@ -851,7 +851,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           projectId,
           nodes: [],
           edges: [],
-          nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1 },
+          nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1 },
           hydrated: true,
           history: [],
           historyIndex: -1,
@@ -867,7 +867,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           projectId,
           nodes: [],
           edges: [],
-          nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1 },
+          nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1 },
           hydrated: true,
           history: [],
           historyIndex: -1,
@@ -893,7 +893,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
         projectId,
         nodes: [],
         edges: [],
-        nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1 },
+        nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1 },
         hydrated: true,
         history: [],
         historyIndex: -1,
@@ -976,7 +976,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
     set({
       nodes: [],
       edges: [],
-      nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1 },
+      nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1 },
       hydrated: false,
       projectId: null,
     })

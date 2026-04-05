@@ -6,6 +6,7 @@ import {
     Controls,
     MiniMap,
     type FinalConnectionState,
+  type OnConnectStartParams,
     type InternalNode,
     useReactFlow,
     ControlButton,
@@ -27,7 +28,7 @@ import { useChatSettingsStore } from '@/store/chatSettingsStore'
 import { uploadImage } from '@/api/ai'
 import type { AllNodeType, EdgeType } from '@/types/flow'
 import { Button } from '@/components/ui/button'
-// import { useCanvasCursor } from '@/hooks/useCanvasCursor'
+import { useCanvasCursor } from '@/hooks/useCanvasCursor'
 import { GenerationStatus } from '@/constants/enum'
 import { getClosestAspectRatio, getImageDimensions } from '../CustomNodes/ImageNode/utils/aspectRatioUtils'
 import {
@@ -56,7 +57,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     const nodeSearchVisible = useChatSettingsStore((state) => state.nodeSearchVisible)
     const { screenToFlowPosition } = useReactFlow<AllNodeType, EdgeType>()
     const navigate = useNavigate()
-    // const { cursorClass, setCursorMode, isCtrlPressed } = useCanvasCursor()
+  const { cursorClass, setCursorMode, isCtrlPressed } = useCanvasCursor()
 
     // 确认对话框状态
     const [showExitDialog, setShowExitDialog] = useState(false)
@@ -283,7 +284,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     const handlePaneClick = useCallback(() => {
         const allNodes = useCanvasFlowStore.getState().nodes
         const selectedNodes = allNodes.filter((node) => node.selected)
-        
+
         if (selectedNodes.length > 0) {
             const changes: NodeChange<AllNodeType>[] = selectedNodes.map((node) => ({
                 id: node.id,
@@ -322,7 +323,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         contextMenuTriggerRef.current?.dispatchEvent(contextMenuEvent)
     }, [])
 
-    const handlePaneContextMenu = useCallback((event: React.MouseEvent) => {
+  const handlePaneContextMenu = useCallback((event: React.MouseEvent | MouseEvent) => {
         pendingConnectRef.current = null
         setMenuScreenPosition({ x: event.clientX, y: event.clientY })
     }, [])
@@ -340,7 +341,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     }, [openContextMenuAt])
 
     const handleConnectStart = useCallback(
-        (_: unknown, params: { nodeId: string; handleId?: string | null; handleType: 'source' | 'target' }) => {
+      (_: unknown, params: OnConnectStartParams) => {
             if (!params?.nodeId || !params?.handleType) {
                 pendingConnectRef.current = null
                 return
