@@ -29,9 +29,9 @@ export function getTargetPosition(yaw: number, pitch: number): THREE.Vector3 {
 }
 
 /**
- * 执行截图并触发下载
+ * 执行截图并返回图片数据，调用方决定后续是下载、上传还是写入节点。
  */
-export async function takeScreenshot(options: ScreenshotOptions): Promise<void> {
+export async function takeScreenshot(options: ScreenshotOptions): Promise<string> {
     const { type, renderer, camera, scene } = options
 
     // 保存当前状态
@@ -49,13 +49,12 @@ export async function takeScreenshot(options: ScreenshotOptions): Promise<void> 
         renderer.render(scene, camera)
 
         const dataURL = renderer.domElement.toDataURL("image/jpeg", 0.95)
-        downloadImage(dataURL, `panorama-single-${Date.now()}.jpg`)
 
         // 恢复状态
         renderer.setSize(origWidth, origHeight)
         camera.aspect = origAspect
         camera.updateProjectionMatrix()
-        return
+        return dataURL
     }
 
     // 多宫格截图
@@ -164,19 +163,9 @@ export async function takeScreenshot(options: ScreenshotOptions): Promise<void> 
 
     ctx.stroke()
 
-    // 导出并下载
+    // 返回最终合成的截图数据，交给调用方决定如何使用
     const finalDataURL = canvasObj.toDataURL("image/jpeg", 0.95)
-    downloadImage(finalDataURL, `panorama-${type}-${Date.now()}.jpg`)
-}
-
-/**
- * 触发图片下载
- */
-function downloadImage(dataURL: string, filename: string): void {
-    const link = document.createElement("a")
-    link.download = filename
-    link.href = dataURL
-    link.click()
+    return finalDataURL
 }
 
 /**

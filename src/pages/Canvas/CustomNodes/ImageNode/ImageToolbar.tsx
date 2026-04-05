@@ -177,10 +177,10 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete, onCrop }: 
                 return
             }
 
-                    // 打开全景图查看器
-                    openPanoramaViewer(currentImageUrl)
-                    return
-                }
+            // 打开全景图查看器，并把当前节点 ID 一起传过去，便于后续创建子节点
+            openPanoramaViewer(currentImageUrl, nodeId)
+            return
+        }
 
         toast.info('功能开发中...')
     }

@@ -74,6 +74,7 @@ type CanvasFlowState = {
   panoramaViewer: {
     open: boolean
     imageUrl: string | null
+    sourceNodeId: string | null
   }
 
   // === 基础流程事件 ===
@@ -133,7 +134,7 @@ type CanvasFlowState = {
 
   // === 全景图查看器 ===
   /** 打开全景图查看器 */
-  openPanoramaViewer: (imageUrl: string) => void
+  openPanoramaViewer: (imageUrl: string, sourceNodeId?: string) => void
   /** 关闭全景图查看器 */
   closePanoramaViewer: () => void
 }
@@ -751,6 +752,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
   panoramaViewer: {
     open: false,
     imageUrl: null,
+    sourceNodeId: null,
   },
 
   // ==================== 持久化方法实现 ====================
@@ -1596,11 +1598,12 @@ duplicateNode: (nodeId: string) => {
    * 打开全景图查看器
    * @param imageUrl 要查看的图片 URL
    */
-  openPanoramaViewer: (imageUrl: string) => {
+  openPanoramaViewer: (imageUrl: string, sourceNodeId?: string) => {
     set({
       panoramaViewer: {
         open: true,
         imageUrl,
+        sourceNodeId: sourceNodeId ?? null,
       },
     })
   },
@@ -1613,6 +1616,7 @@ duplicateNode: (nodeId: string) => {
       panoramaViewer: {
         open: false,
         imageUrl: null,
+        sourceNodeId: null,
       },
     })
   },

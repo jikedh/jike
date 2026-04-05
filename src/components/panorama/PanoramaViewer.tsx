@@ -3,6 +3,13 @@
 import * as React from "react"
 import * as THREE from "three"
 import { OrbitControls } from "three/addons/controls/OrbitControls.js"
+import { useReactFlow } from "@xyflow/react"
+import { toast } from "sonner"
+
+import { GenerationStatus } from "@/constants/enum"
+import { uploadFileToOSS } from "@/utils/oss"
+import type { AllNodeType, EdgeType } from "@/types/flow"
+import { useCanvasFlowStore } from "@/store/canvasFlowStore"
 import { PanoramaCanvas } from "./PanoramaCanvas"
 import { PanoramaControls } from "./PanoramaControls"
 import { PanoramaLoading } from "./PanoramaLoading"
@@ -12,9 +19,10 @@ export interface PanoramaViewerProps {
     open: boolean
     onClose: () => void
     initialImage?: string
+    sourceNodeId?: string | null
 }
 
-export function PanoramaViewer({ open, onClose, initialImage }: PanoramaViewerProps) {
+export function PanoramaViewer({ open, onClose, initialImage, sourceNodeId }: PanoramaViewerProps) {
     // 状态管理
     const [isLoading, setIsLoading] = React.useState(true)
     const [loadingText, setLoadingText] = React.useState("正在处理全景图...")
@@ -24,6 +32,102 @@ export function PanoramaViewer({ open, onClose, initialImage }: PanoramaViewerPr
     const cameraRef = React.useRef<THREE.PerspectiveCamera | null>(null)
     const sceneRef = React.useRef<THREE.Scene | null>(null)
     const controlsRef = React.useRef<OrbitControls | null>(null)
+
+    // 通过 React Flow 获取画布坐标转换能力，方便把新节点放到画布中心
+    const { screenToFlowPosition } = useReactFlow<AllNodeType, EdgeType>()
+
+    // 复用画布 store 中的节点操作能力
+    const addNode = useCanvasFlowStore((state) => state.addNode)
+    const updateImageNodeData = useCanvasFlowStore((state) => state.updateImageNodeData)
+    const onConnect = useCanvasFlowStore((state) => state.onConnect)
+    const closePanoramaViewer = useCanvasFlowStore((state) => state.closePanoramaViewer)
+
+    // 把截图结果转成 File，方便复用现有 OSS 上传能力
+    const dataUrlToFile = React.useCallback(async (dataUrl: string, fileName: string) => {
+        const response = await fetch(dataUrl)
+        const blob = await response.blob()
+
+        return new File([blob], fileName, {
+            type: blob.type || "image/jpeg",
+        })
+    }, [])
+
+    // 统一处理不同截图模式的后续动作，避免三个按钮各写一套逻辑
+    const createImageNodeFromScreenshot = React.useCallback(async (type: "single" | "4grid" | "12grid") => {
+        if (!rendererRef.current || !cameraRef.current || !sceneRef.current) {
+            return
+        }
+
+        if (!sourceNodeId) {
+            toast.error("未找到来源图片节点，无法生成新图片节点")
+            return
+        }
+
+        setLoadingText("正在生成新的图片节点...")
+        setIsLoading(true)
+
+        let createdNodeId: string | null = null
+
+        try {
+            // 先拿到截图数据，再上传到 OSS，最后写入图片节点
+            const dataUrl = await takeScreenshot({
+                type,
+                renderer: rendererRef.current,
+                camera: cameraRef.current,
+                scene: sceneRef.current,
+            })
+
+            const fileName = `panorama-${type}-${Date.now()}.jpg`
+            const file = await dataUrlToFile(dataUrl, fileName)
+            const uploadResult = await uploadFileToOSS(file)
+
+            if (!uploadResult.url) {
+                throw new Error("截图上传失败，未返回图片地址")
+            }
+
+            // 将新图片节点放到画布中心，方便用户继续编辑和查看
+            const centerPosition = screenToFlowPosition({
+                x: window.innerWidth / 2,
+                y: window.innerHeight / 2,
+            })
+
+            createdNodeId = addNode("image", centerPosition)
+
+            // 把上传后的截图写入新节点，并标记为已完成状态
+            updateImageNodeData(createdNodeId, {
+                image_urls: [uploadResult.url],
+                result: {
+                    type: "image",
+                    data: [{ url: uploadResult.url }],
+                },
+                status: GenerationStatus.COMPLETED,
+                progress: 100,
+            })
+
+            // 保留来源关系，方便后续在画布中追踪截图是从哪张图派生出来的
+            onConnect({
+                source: sourceNodeId,
+                sourceHandle: "output",
+                target: createdNodeId,
+                targetHandle: "input",
+            })
+
+            toast.success("截图已生成新的图片节点")
+
+            // 成功后关闭当前全景查看器
+            closePanoramaViewer()
+        } catch (error: any) {
+            console.error("生成全景截图节点失败:", error)
+
+            // 如果节点已经创建但后续步骤失败，尽量清理掉半成品节点，避免画布残留脏数据
+            if (createdNodeId) {
+                useCanvasFlowStore.getState().deleteNode(createdNodeId)
+            }
+
+            toast.error(error?.message || "生成图片节点失败，请重试")
+            setIsLoading(false)
+        }
+    }, [addNode, closePanoramaViewer, dataUrlToFile, onConnect, screenToFlowPosition, sourceNodeId, updateImageNodeData])
 
     // 图片加载完成
     const handleImageLoaded = React.useCallback(() => {
@@ -38,52 +142,16 @@ export function PanoramaViewer({ open, onClose, initialImage }: PanoramaViewerPr
 
     // 截图处理
     const handleScreenshotSingle = React.useCallback(() => {
-        if (!rendererRef.current || !cameraRef.current || !sceneRef.current) return
-        setLoadingText("正在生成截图...")
-        setIsLoading(true)
-
-        setTimeout(async () => {
-            await takeScreenshot({
-                type: "single",
-                renderer: rendererRef.current!,
-                camera: cameraRef.current!,
-                scene: sceneRef.current!,
-            })
-            setIsLoading(false)
-        }, 50)
-    }, [])
+        void createImageNodeFromScreenshot("single")
+    }, [createImageNodeFromScreenshot])
 
     const handleScreenshot4 = React.useCallback(() => {
-        if (!rendererRef.current || !cameraRef.current || !sceneRef.current) return
-        setLoadingText("正在生成截图...")
-        setIsLoading(true)
-
-        setTimeout(async () => {
-            await takeScreenshot({
-                type: "4grid",
-                renderer: rendererRef.current!,
-                camera: cameraRef.current!,
-                scene: sceneRef.current!,
-            })
-            setIsLoading(false)
-        }, 50)
-    }, [])
+        void createImageNodeFromScreenshot("4grid")
+    }, [createImageNodeFromScreenshot])
 
     const handleScreenshot12 = React.useCallback(() => {
-        if (!rendererRef.current || !cameraRef.current || !sceneRef.current) return
-        setLoadingText("正在生成截图...")
-        setIsLoading(true)
-
-        setTimeout(async () => {
-            await takeScreenshot({
-                type: "12grid",
-                renderer: rendererRef.current!,
-                camera: cameraRef.current!,
-                scene: sceneRef.current!,
-            })
-            setIsLoading(false)
-        }, 50)
-    }, [])
+        void createImageNodeFromScreenshot("12grid")
+    }, [createImageNodeFromScreenshot])
 
     // 重置视角
     const handleRecenter = React.useCallback(() => {
@@ -95,7 +163,7 @@ export function PanoramaViewer({ open, onClose, initialImage }: PanoramaViewerPr
     if (!open) return null
 
     return (
-        <div id="panorama-root" className="fixed inset-0 z-[100] bg-gray-950 overflow-hidden">
+        <div id="panorama-root" className="fixed inset-0 z-100 bg-gray-950 overflow-hidden">
             {/* Three.js 渲染画布 */}
             <PanoramaCanvas
                 imageUrl={initialImage || null}
