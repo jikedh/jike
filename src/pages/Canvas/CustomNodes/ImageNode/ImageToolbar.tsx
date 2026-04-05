@@ -27,6 +27,7 @@ import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { ImageGenerationNode } from '@/types/flow'
 
 import { ImageCropDialog } from './ImageCropDialog'
+import { InpaintDialog } from './InpaintDialog'
 
 type ImageToolbarProps = {
     nodeId: string
@@ -52,12 +53,17 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete, onCrop }: 
     const [isUploading, setIsUploading] = useState(false)
     const [isDownloading, setIsDownloading] = useState(false)
     const [isCropDialogOpen, setIsCropDialogOpen] = useState(false)
+    const [isInpaintDialogOpen, setIsInpaintDialogOpen] = useState(false)
+    const [isInpaintGenerating, setIsInpaintGenerating] = useState(false)
 
     // 隐藏的文件输入框引用
     const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   // 更新节点数据 & 全景图查看器
     const updateImageNodeData = useCanvasFlowStore((state) => state.updateImageNodeData)
+    const startImageGeneration = useCanvasFlowStore((state) => state.startImageGeneration)
+  const addNode = useCanvasFlowStore((state) => state.addNode)
+  const onConnect = useCanvasFlowStore((state) => state.onConnect)
   const openPanoramaViewer = useCanvasFlowStore((state) => state.openPanoramaViewer)
 
     // 获取所有图片 URL 数组
@@ -127,6 +133,16 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete, onCrop }: 
             return
         }
 
+        if (actionKey === 'erase') {
+            if (!currentImageUrl) {
+                toast.info('暂无可重绘图片')
+                return
+            }
+
+            setIsInpaintDialogOpen(true)
+            return
+        }
+
         if (actionKey === 'crop') {
             if (!currentImageUrl) {
                 toast.info('暂无可裁剪图片')
@@ -183,6 +199,64 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete, onCrop }: 
         }
 
         toast.info('功能开发中...')
+    }
+
+    const handleInpaintGenerate = async ({ file, prompt }: { file: File; prompt: string }) => {
+        const trimmedPrompt = prompt.trim()
+        if (!trimmedPrompt) {
+            toast.warning('请输入提示词')
+            return
+        }
+
+        const suffix = '修复 mask 区域，使其和周围环境自然融合，保留图像原有风格。'
+        const finalPrompt = `${trimmedPrompt} ${suffix}`
+
+        setIsInpaintGenerating(true)
+
+        try {
+            const uploadResult = await uploadFileToOSS(file)
+            const inpaintImageUrl = uploadResult.url
+
+            if (!inpaintImageUrl) {
+                toast.warning('上传成功但未返回图片地址')
+                return
+            }
+
+          const sourceNode = useCanvasFlowStore.getState().nodes.find((node) => node.id === nodeId)
+          if (!sourceNode || sourceNode.type !== 'imageNode') {
+            toast.error('当前图片节点不存在')
+            return
+          }
+
+          const childPosition = {
+            x: sourceNode.position.x + (sourceNode.width ?? 350) + 80,
+            y: sourceNode.position.y,
+          }
+
+          const childId = addNode('image', childPosition)
+
+          onConnect({
+            source: nodeId,
+            target: childId,
+            sourceHandle: 'output',
+            targetHandle: 'input',
+          })
+
+            // 固定豆包 Seedream，重绘场景走 image_urls 单图输入。
+          await startImageGeneration(childId, {
+              model: 'doubao-seedream-5-0',
+              prompt: finalPrompt,
+              image_urls: [inpaintImageUrl],
+            })
+
+            toast.success('已开始重绘生成')
+        } catch (error: any) {
+            console.error('重绘生成失败:', error)
+            toast.error(error?.message || '重绘生成失败，请重试')
+            throw error
+        } finally {
+            setIsInpaintGenerating(false)
+        }
     }
 
     const isPreviewActive = isLightboxOpen
@@ -268,6 +342,19 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete, onCrop }: 
 
                     await onCrop(file)
                 }}
+            />
+
+            <InpaintDialog
+                open={isInpaintDialogOpen}
+                imageUrl={currentImageUrl}
+                onOpenChange={(open) => {
+                    if (isInpaintGenerating) {
+                        return
+                    }
+
+                    setIsInpaintDialogOpen(open)
+                }}
+                onGenerate={handleInpaintGenerate}
             />
         </>
     )
