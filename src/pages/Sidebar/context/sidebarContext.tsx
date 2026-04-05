@@ -1,5 +1,6 @@
 import { SidebarContextValue } from '@/types/sidebar/sidebar'
-import { createContext, useContext, useState, useCallback, useMemo } from 'react'
+import { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 
 // 创建上下文
 const SidebarContext = createContext<SidebarContextValue | null>(null)
@@ -15,8 +16,19 @@ export const SidebarProvider = ({
   children,
   defaultActiveId
 }: SidebarProviderProps) => {
+  const location = useLocation()
   const [activeId, setActiveId] = useState<string | null>(defaultActiveId || null)
   const [collapsed, setCollapsed] = useState(false)
+
+  // 监听路由变化，自动更新活跃导航项
+  useEffect(() => {
+    const pathname = location.pathname
+    // 从路径中提取路由名称（例如 /canvas -> canvas）
+    const routeName = pathname.split('/').filter(Boolean)[0]
+    if (routeName) {
+      setActiveId(routeName)
+    }
+  }, [location.pathname])
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed(prev => !prev)

@@ -19,23 +19,28 @@ export const SidebarNavItem = ({
   }
 
   return (
-    <div
+    <button
       onClick={handleClick}
       className={cn(
-        'w-11 h-11 flex justify-center items-center cursor-pointer rounded-xl mb-3 transition-all relative',
+        'flex flex-col items-center justify-center py-3 px-2 rounded-xl transition-all duration-200 group w-16',
         isActive
-          ? 'text-[#00F0FF] bg-[rgba(0,240,255,0.08)] shadow-[inset_0_0_0_1px_rgba(0,240,255,0.2)] before:absolute before:left-[-14px] before:top-1/2 before:-translate-y-1/2 before:w-0.5 before:h-4 before:bg-[#00F0FF] before:shadow-[0_0_10px_#00F0FF]'
-          : 'text-white/40 hover:text-white hover:bg-white/5',
+          ? 'bg-[#B43FEB]/10 text-[#B43FEB]'
+          : 'text-white/50 hover:bg-white/5 hover:text-white/90',
         classNames?.root
       )}
       title={label}
       data-active={isActive}
     >
       {icon && (
-        <span className={cn(classNames?.icon)}>
+        <span className={cn('mb-1.5', classNames?.icon)}>
           {icon}
         </span>
       )}
-    </div>
+      {label && (
+        <span className="text-[11px] font-medium leading-tight">
+          {label}
+        </span>
+      )}
+    </button>
   )
 }

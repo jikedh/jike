@@ -1,9 +1,14 @@
 import { createHashRouter, RouterProvider, Outlet, Navigate } from 'react-router-dom'
 import CanvasPage from '@/pages/Canvas'
 import HomePage from '@/pages/Home'
-import ProjectListPage from '@/pages/ProjectList'
 import TestPage from '@/pages/Test'
 import PanoramaDemo from '@/pages/Test/PanoramaDemo'
+import CanvasPlaceholderPage from '@/pages/CanvasPlaceholder'
+import ScriptPage from '@/pages/Script'
+import AssetsPage from '@/pages/Assets'
+import VoicePage from '@/pages/Voice'
+import VideoPage from '@/pages/Video'
+import SettingsPage from '@/pages/Settings'
 import { SidebarCeBianLan } from '@/pages/Sidebar/SidebarCeBianLan'
 
 // 带侧边栏的布局组件
@@ -32,16 +37,36 @@ const router = createHashRouter([
         element: <HomePage />
       },
       {
-        path: '/projects',
-        element: <ProjectListPage />
-      },
-      {
         path: '/panorama',
         element: <PanoramaDemo />
       },
       {
         path: '/test',
         element: <TestPage />
+      },
+      {
+        path: '/canvas',
+        element: <CanvasPlaceholderPage />
+      },
+      {
+        path: '/script',
+        element: <ScriptPage />
+      },
+      {
+        path: '/assets',
+        element: <AssetsPage />
+      },
+      {
+        path: '/voice',
+        element: <VoicePage />
+      },
+      {
+        path: '/video',
+        element: <VideoPage />
+      },
+      {
+        path: '/settings',
+        element: <SettingsPage />
       }
     ]
   },

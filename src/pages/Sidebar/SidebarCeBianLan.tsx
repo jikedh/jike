@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { LayoutDashboard, FolderOpen, TestTube, Settings, CircleDot } from 'lucide-react'
+import { House, SquareDashedMousePointer, Type, Folder, Mic, Film, Zap, Settings } from 'lucide-react'
 import { SidebarRoot } from './components/SidebarRoot'
 import { SidebarFooter } from './components/SidebarFooter'
 import { SidebarLogo } from './components/SidebarLogo'
@@ -11,71 +11,91 @@ export const SidebarCeBianLan = () => {
   const navigate = useNavigate()
 
   // 导航处理
-  const handleNavClick = (id: string) => {
-    switch (id) {
-      case 'home':
-        navigate('/home')
-        break
-      case 'projects':
-        navigate('/projects')
-        break
-      case 'panorama':
-        navigate('/panorama')
-        break
-      case 'test':
-        navigate('/test')
-        break
-    }
+  const handleNavClick = (path: string) => {
+    navigate(path)
+  }
+
+  // 快速功能点击处理
+  const handleQuickClick = () => {
+    alert('功能正在开发中...')
   }
 
   return (
-    <SidebarRoot
-      defaultActiveId="home"
-      classNames={{
-        root: 'w-[72px] bg-black border-r border-white/[0.08]  flex flex-col items-center py-6 z-10'
-      }}
-    >
+    <SidebarRoot defaultActiveId="home">
       {/* Logo */}
-      <SidebarLogo classNames={{ root: 'w-8 h-8 text-[#00F0FF] drop-shadow-[0_0_8px_#00F0FF]' }}>
-        <svg viewBox="0 0 40 40" fill="currentColor">
-          <path d="M14 16C14 18.2091 12.2091 20 10 20C7.79086 20 6 18.2091 6 16C6 13.7909 7.79086 12 10 12C12.2091 12 14 13.7909 14 16Z" />
-          <path d="M22 12C26.4183 12 30 15.5817 30 20V24C30 28.4183 26.4183 32 22 32H14C9.58172 32 6 28.4183 6 24V24C6 24 6 24 6 24H14V20C14 15.5817 17.5817 12 22 12Z" />
-        </svg>
+      <SidebarLogo label="即刻">
+        <div className="w-10 h-10 flex items-center justify-center">
+          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* 彩色渐变 Logo */}
+            <defs>
+              <linearGradient id="logo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#6366F1" />
+                <stop offset="100%" stopColor="#B43FEB" />
+              </linearGradient>
+            </defs>
+            <rect x="8" y="12" width="8" height="16" rx="2" fill="url(#logo-gradient)" />
+            <rect x="18" y="6" width="8" height="22" rx="2" fill="url(#logo-gradient)" />
+            <rect x="28" y="14" width="8" height="14" rx="2" fill="url(#logo-gradient)" />
+          </svg>
+        </div>
       </SidebarLogo>
 
-      {/* 首页导航模块 */}
+      {/* 导航区域 */}
       <SidebarNav classNames={{ root: 'flex-1' }}>
         <SidebarNavItem
           id="home"
-          icon={<LayoutDashboard size={20} />}
+          icon={<House size={24} />}
           label="首页"
-          onClick={() => handleNavClick('home')}
+          onClick={() => handleNavClick('/home')}
         />
         <SidebarNavItem
-          id="projects"
-          icon={<FolderOpen size={20} />}
-          label="项目"
-          onClick={() => handleNavClick('projects')}
+          id="canvas"
+          icon={<SquareDashedMousePointer size={24} />}
+          label="画布"
+          onClick={() => handleNavClick('/canvas')}
         />
         <SidebarNavItem
-          id="panorama"
-          icon={<CircleDot size={20} />}
-          label="全景"
-          onClick={() => handleNavClick('panorama')}
+          id="script"
+          icon={<Type size={24} />}
+          label="剧本"
+          onClick={() => handleNavClick('/script')}
         />
         <SidebarNavItem
-          id="test"
-          icon={<TestTube size={20} />}
-          label="测试"
-          onClick={() => handleNavClick('test')}
+          id="assets"
+          icon={<Folder size={24} />}
+          label="资产库"
+          onClick={() => handleNavClick('/assets')}
+        />
+        <SidebarNavItem
+          id="voice"
+          icon={<Mic size={24} />}
+          label="配音工作室"
+          onClick={() => handleNavClick('/voice')}
+        />
+        <SidebarNavItem
+          id="video"
+          icon={<Film size={24} />}
+          label="短片合成"
+          onClick={() => handleNavClick('/video')}
         />
       </SidebarNav>
 
-      {/* 底部设置 */}
+      {/* 底部快捷按钮 */}
       <SidebarFooter classNames={{ root: 'mt-auto' }}>
-        <div className="w-11 h-11 flex justify-center items-center cursor-pointer rounded-xl text-white hover:text-white hover:bg-white/45 transition-all">
-          <Settings size={20} />
-        </div>
+        <button
+          onClick={handleQuickClick}
+          className="flex flex-col items-center justify-center py-3 px-2 rounded-xl text-white/50 hover:bg-white/5 hover:text-white/90 transition-all"
+          title="快速"
+        >
+          <Zap size={24} />
+        </button>
+        <button
+          onClick={() => handleNavClick('/settings')}
+          className="flex flex-col items-center justify-center py-3 px-2 rounded-xl text-white/50 hover:bg-white/5 hover:text-white/90 transition-all mt-4"
+          title="设置"
+        >
+          <Settings size={24} />
+        </button>
       </SidebarFooter>
     </SidebarRoot>
   )

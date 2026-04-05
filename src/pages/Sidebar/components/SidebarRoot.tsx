@@ -12,7 +12,7 @@ export const SidebarRoot = ({
     <SidebarProvider defaultActiveId={defaultActiveId}>
       <nav
         className={cn(
-          'flex flex-col items-center',
+          'w-24 h-screen bg-[#0a0a0a] border-r border-white/5 flex flex-col items-center py-6 shrink-0 z-50',
           classNames?.root
         )}
       >
