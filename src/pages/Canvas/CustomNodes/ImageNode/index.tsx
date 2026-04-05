@@ -1,12 +1,15 @@
 import { NodeToolbar, Position, type NodeProps, useStore } from '@xyflow/react'
 import { memo, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
+import { toast } from 'sonner'
 
 import { ButtonHandle } from '@/components/button-handle'
 import { NodeContextMenu } from '@/pages/Canvas/components/NodeContextMenu'
 import { PanoramaViewer } from '@/components/panorama/PanoramaViewer'
 import { useNodeScale } from '@/hooks/useNodeScale'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
+import { uploadFileToOSS } from '@/utils/oss'
+import { GenerationStatus } from '@/constants/enum'
 import type { ImageNodeType } from '@/types/flow'
 
 import { ImageContent } from './ImageContent'
@@ -33,8 +36,10 @@ export const ImageNode = memo(({
     const { zoom } = useNodeScale()
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode)
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode)
+    const addNode = useCanvasFlowStore((state) => state.addNode)
     const splitImage = useCanvasFlowStore((state) => state.splitImage)
     const updateImageNodeData = useCanvasFlowStore((state) => state.updateImageNodeData)
+    const onConnect = useCanvasFlowStore((state) => state.onConnect)
 
     // 全景图查看器状态
     const panoramaViewer = useCanvasFlowStore((state) => state.panoramaViewer)
@@ -84,6 +89,53 @@ export const ImageNode = memo(({
     const handleContextMenuSplitImage = useCallback((gridSize: number) => {
         splitImage(id, gridSize)
     }, [splitImage, id])
+
+    // 裁剪完成后：上传裁剪文件、创建子节点，并把裁剪结果挂到新节点上
+    const handleCrop = useCallback(async (file: File) => {
+        try {
+            const sourceNode = useCanvasFlowStore.getState().nodes.find((node) => node.id === id)
+            if (!sourceNode || sourceNode.type !== 'imageNode') {
+                throw new Error('当前图片节点不存在')
+            }
+
+            const uploadResult = await uploadFileToOSS(file)
+            if (!uploadResult.url) {
+                throw new Error('裁剪图片上传失败')
+            }
+
+            const childPosition = {
+                x: sourceNode.position.x + (sourceNode.width ?? 350) + 80,
+                y: sourceNode.position.y,
+            }
+
+            const childId = addNode('image', childPosition)
+
+            // 先建立父子连边，方便后续工作流继续沿用图结构。
+            onConnect({
+                source: id,
+                target: childId,
+                sourceHandle: 'output',
+                targetHandle: 'input',
+            })
+
+            // 再把裁剪后的图片写入子节点，让子节点本身就具备可展示的结果。
+            updateImageNodeData(childId, {
+                image_urls: [uploadResult.url],
+                result: {
+                    type: 'image',
+                    data: [{ url: uploadResult.url }],
+                },
+                status: GenerationStatus.COMPLETED,
+                progress: 100,
+            })
+
+            toast.success('裁剪成功')
+        } catch (error: any) {
+            console.error('裁剪图片失败:', error)
+            toast.error(error?.message || '裁剪失败，请重试')
+            throw error
+        }
+    }, [addNode, id, onConnect, updateImageNodeData])
 
     // 点击图片重新排序：将指定索引的图片移到首位
     const handleReorder = useCallback((fromIndex: number) => {
@@ -139,6 +191,7 @@ export const ImageNode = memo(({
                                 selected={selected}
                                 onDuplicate={handleDuplicate}
                                 onDelete={handleDelete}
+                                onCrop={handleCrop}
                             />
                         </div>
                     </NodeToolbar>

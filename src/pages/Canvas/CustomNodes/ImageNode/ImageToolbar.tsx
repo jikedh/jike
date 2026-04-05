@@ -26,12 +26,15 @@ import { downloadImageFromUrl } from '@/lib/utils'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { ImageGenerationNode } from '@/types/flow'
 
+import { ImageCropDialog } from './ImageCropDialog'
+
 type ImageToolbarProps = {
     nodeId: string
     data: ImageGenerationNode
     selected: boolean
     onDuplicate?: () => void
     onDelete?: () => void
+    onCrop?: (file: File) => Promise<void>
 }
 
 type ActionKey = 'upload' | 'erase' | 'enhance' | 'outpaint' | 'crop' | 'download' | 'preview' | 'panorama'
@@ -44,10 +47,11 @@ type ActionKey = 'upload' | 'erase' | 'enhance' | 'outpaint' | 'crop' | 'downloa
  * - 基于 yet-another-react-lightbox 提供放大查看能力
  * - 支持查看全景图功能
  */
-export const ImageToolbar = memo(({ nodeId, data, selected, onDelete }: ImageToolbarProps) => {
+export const ImageToolbar = memo(({ nodeId, data, selected, onDelete, onCrop }: ImageToolbarProps) => {
     const [isLightboxOpen, setIsLightboxOpen] = useState(false)
     const [isUploading, setIsUploading] = useState(false)
     const [isDownloading, setIsDownloading] = useState(false)
+    const [isCropDialogOpen, setIsCropDialogOpen] = useState(false)
 
     // 隐藏的文件输入框引用
     const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -123,6 +127,16 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete }: ImageToo
             return
         }
 
+        if (actionKey === 'crop') {
+            if (!currentImageUrl) {
+                toast.info('暂无可裁剪图片')
+                return
+            }
+
+            setIsCropDialogOpen(true)
+            return
+        }
+
         if (actionKey === 'download') {
             if (!currentImageUrl) {
                 toast.info('暂无可下载图片')
@@ -157,16 +171,16 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete }: ImageToo
             return
         }
 
-      if (actionKey === 'panorama') {
-        if (!currentImageUrl) {
-          toast.info('暂无可查看图片')
-          return
-        }
+        if (actionKey === 'panorama') {
+            if (!currentImageUrl) {
+                toast.info('暂无可查看图片')
+                return
+            }
 
-        // 打开全景图查看器
-        openPanoramaViewer(currentImageUrl)
-        return
-      }
+                    // 打开全景图查看器
+                    openPanoramaViewer(currentImageUrl)
+                    return
+                }
 
         toast.info('功能开发中...')
     }
@@ -190,7 +204,7 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete }: ImageToo
                 {toolbarActions.map((item) => {
                     const Icon = item.icon
                     const isActive = item.key === 'preview' ? isPreviewActive : false
-                    const isDisabled = (item.key === 'download' && isDownloading) || (item.key === 'upload' && isUploading)
+                    const isDisabled = (item.key === 'download' && isDownloading) || (item.key === 'upload' && isUploading) || (item.key === 'crop' && !currentImageUrl)
 
                     return (
                         <button
@@ -241,6 +255,20 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete }: ImageToo
                     controller={{ closeOnBackdropClick: true }}
                 />
             ) : null}
+
+            <ImageCropDialog
+                open={isCropDialogOpen}
+                imageUrl={currentImageUrl}
+                onOpenChange={setIsCropDialogOpen}
+                onConfirm={async (file) => {
+                    if (!onCrop) {
+                        toast.info('裁剪功能暂不可用')
+                        return
+                    }
+
+                    await onCrop(file)
+                }}
+            />
         </>
     )
 })
