@@ -12,7 +12,7 @@ export interface VideoMentionItem {
 // Tiptap Suggestion API 的 props 类型
 interface SuggestionProps {
   items: VideoMentionItem[]
-  command: (item: { id: string; label: string; value: string }) => void
+  command: (item: { id: string; label: string; value: string; thumbnail?: string }) => void
 }
 
 interface VideoMentionListProps extends SuggestionProps {}
@@ -67,8 +67,7 @@ export const VideoMentionList = forwardRef<{ onKeyDown: (props: { event: Keyboar
     const selectItem = (index: number) => {
       const item = items[index]
       if (item && command) {
-        // 传递 id 和 label 给 Tiptap command（Tiptap 需要这两个字段）
-        command({ id: item.id, label: item.label, value: item.value })
+        command({ id: item.id, label: item.label, value: item.value, thumbnail: item.thumbnail })
       }
     }
 

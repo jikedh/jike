@@ -117,17 +117,53 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
   // 使用原生 Suggestion API，配合 Floating UI 实现动态定位
   const mentionExtension = useMemo(() => {
-    return Mention.configure({
+    return Mention.extend({
+      addAttributes() {
+        return {
+          ...this.parent?.(),
+          thumbnail: {
+            default: null,
+            parseHTML: element => element.getAttribute('data-thumbnail'),
+            renderHTML: attributes => {
+              if (!attributes.thumbnail) {
+                return {}
+              }
+              return {
+                'data-thumbnail': attributes.thumbnail,
+              }
+            },
+          },
+        }
+      },
+      draggable: true,
+    }).configure({
       deleteTriggerWithBackspace: true,
       HTMLAttributes: {
         class: 'video-node-mention-pill',
+        draggable: 'true',
       },
-      // 纯文本导出用"图片一/图片二"，方便后续按文本解析。
       renderText({ node }) {
         return getMentionLabel(node.attrs)
       },
       renderHTML({ options, node }) {
         const mentionLabel = getMentionLabel(node.attrs)
+        const thumbnail = node.attrs.thumbnail as string | undefined
+
+        const children: any[] = []
+
+        if (thumbnail) {
+          children.push([
+            'img',
+            {
+              class: 'video-node-mention-pill__thumbnail',
+              src: thumbnail,
+              alt: mentionLabel,
+              draggable: 'false',
+            },
+          ])
+        }
+
+        children.push(['span', { class: 'video-node-mention-pill__label' }, mentionLabel])
 
         return [
           'span',
@@ -137,8 +173,9 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             'data-mention-value': node.attrs.value,
             'data-mention-label': mentionLabel,
             contenteditable: 'false',
+            draggable: 'true',
           },
-          ['span', { class: 'video-node-mention-pill__label' }, mentionLabel],
+          ...children,
         ]
       },
       // 使用原生 Suggestion API
@@ -281,7 +318,16 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     }
 
     const editor = useEditor({
-      extensions: [StarterKit, mentionExtension],
+      extensions: [
+        StarterKit.configure({
+          dropcursor: {
+            class: 'ProseMirror-dropcursor',
+            color: '#B43FEB',
+            width: 2,
+          },
+        }),
+        mentionExtension,
+      ],
         content: promptDraftHtml,
         editorProps: {
             attributes: {
@@ -311,6 +357,42 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
         editor.commands.setContent(promptDraftHtml, { emitUpdate: false })
     }, [editor, promptDraftHtml])
+
+  useEffect(() => {
+    if (!editor) return
+
+    const editorDom = editor.view.dom
+
+    const handleDragStart = (event: DragEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      const mentionPill = target.closest('.video-node-mention-pill')
+      if (mentionPill) {
+        mentionPill.classList.add('dragging')
+        event.dataTransfer?.setData('text/plain', mentionPill.getAttribute('data-mention-id') || '')
+      }
+    }
+
+    const handleDragEnd = (event: DragEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      const mentionPill = target.closest('.video-node-mention-pill')
+      if (mentionPill) {
+        mentionPill.classList.remove('dragging')
+      }
+      editorDom.querySelectorAll('.video-node-mention-pill.dragging').forEach((el) => {
+        el.classList.remove('dragging')
+      })
+    }
+
+    editorDom.addEventListener('dragstart', handleDragStart)
+    editorDom.addEventListener('dragend', handleDragEnd)
+
+    return () => {
+      editorDom.removeEventListener('dragstart', handleDragStart)
+      editorDom.removeEventListener('dragend', handleDragEnd)
+    }
+  }, [editor])
 
   // 根据模式限制视频时长（fast: 4-12, pro: 4-15）
   const clampSeedance20Duration = (value: number, mode: 'fast' | 'pro') => {
