@@ -106,12 +106,10 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
             copySelectedNode()
         }
 
-        // Ctrl+V 或 Cmd+V：粘贴节点
+        // Ctrl+V 或 Cmd+V：粘贴节点或图片
         if ((event.ctrlKey || event.metaKey) && event.key === 'v') {
-            event.preventDefault()
-            if (canPaste()) {
-                pasteNode()
-            }
+            // 不阻止默认行为，让 paste 事件处理图片粘贴
+            // paste 事件处理器会同时处理图片和节点粘贴
         }
     }, [undo, redo, canUndo, canRedo, copySelectedNode, pasteNode, canPaste])
 
@@ -548,8 +546,20 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     // 处理粘贴图片
     const handlePaste = useCallback(
         async (event: ClipboardEvent) => {
+            // 检查是否在输入框中
+            const target = event.target as HTMLElement
+            if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+                return
+            }
+
             const items = event.clipboardData?.items
-            if (!items) return
+            if (!items) {
+                // 没有剪贴板数据，尝试粘贴节点
+                if (canPaste()) {
+                    pasteNode()
+                }
+                return
+            }
 
             const imageFiles: File[] = []
             for (const item of items) {
@@ -562,14 +572,19 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
             }
 
             if (imageFiles.length > 0) {
-                // 在画布中心位置创建节点
+                // 有图片，在画布中心位置创建节点
+                event.preventDefault()
                 handleImageDrop(imageFiles, {
                     x: window.innerWidth / 2,
                     y: window.innerHeight / 2,
                 })
+            } else if (canPaste()) {
+                // 没有图片，尝试粘贴节点
+                event.preventDefault()
+                pasteNode()
             }
         },
-        [handleImageDrop, screenToFlowPosition]
+        [handleImageDrop, canPaste, pasteNode]
     )
 
     // 监听粘贴事件
