@@ -36,8 +36,12 @@ export const getRequestErrorMessage = (error: any): string => {
 
   if (isAxiosError(error)) {
     const { status, data } = error.response ?? {}
-    const serverMessage = data?.message || data?.msg || data?.error || data?.detail
-// 优先返回后端的错误，没有的话返回状态码的错误
+    let serverMessage = data?.message || data?.msg || data?.error || data?.detail
+    
+    if (serverMessage && typeof serverMessage !== 'string') {
+      serverMessage = JSON.stringify(serverMessage)
+    }
+    
     if (serverMessage) return serverMessage
     return getStatusText(status)
   }

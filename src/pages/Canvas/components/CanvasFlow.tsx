@@ -56,9 +56,10 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     const switchProject = useCanvasFlowStore((state) => state.switchProject)
     const gridVisible = useChatSettingsStore((state) => state.gridVisible)
     const nodeSearchVisible = useChatSettingsStore((state) => state.nodeSearchVisible)
-    const { screenToFlowPosition } = useReactFlow<AllNodeType, EdgeType>()
+    const reactFlowInstance = useReactFlow<AllNodeType, EdgeType>()
+    const { screenToFlowPosition } = reactFlowInstance
     const navigate = useNavigate()
-  const { cursorClass, setCursorMode, isCtrlPressed } = useCanvasCursor()
+  const { cursorClass, setCursorMode, isCtrlPressed, isSpacePressed } = useCanvasCursor()
 
     // 确认对话框状态
     const [showExitDialog, setShowExitDialog] = useState(false)
@@ -121,6 +122,46 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
             document.removeEventListener('keydown', handleKeyDown)
         }
     }, [handleKeyDown])
+
+    useEffect(() => {
+        const handleWheel = (event: WheelEvent) => {
+            if (event.ctrlKey || event.metaKey) {
+                event.preventDefault()
+                
+                const { zoom: currentZoom, x, y } = reactFlowInstance.getViewport()
+                const zoomStep = 0.15
+                const newZoom = event.deltaY < 0 
+                    ? Math.min(currentZoom * (1 + zoomStep), 2)
+                    : Math.max(currentZoom * (1 - zoomStep), 0.1)
+
+                const reactFlowBounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
+                const mouseX = event.clientX - reactFlowBounds.left
+                const mouseY = event.clientY - reactFlowBounds.top
+
+                const zoomRatio = newZoom / currentZoom
+                
+                const newX = mouseX - (mouseX - x) * zoomRatio
+                const newY = mouseY - (mouseY - y) * zoomRatio
+
+                reactFlowInstance.setViewport({
+                    x: newX,
+                    y: newY,
+                    zoom: newZoom,
+                }, { duration: 100 })
+            }
+        }
+
+        const reactFlowContainer = document.querySelector('.react-flow')
+        if (reactFlowContainer) {
+            reactFlowContainer.addEventListener('wheel', handleWheel as EventListener, { passive: false })
+        }
+
+        return () => {
+            if (reactFlowContainer) {
+                reactFlowContainer.removeEventListener('wheel', handleWheel as EventListener)
+            }
+        }
+    }, [reactFlowInstance])
 
     // 处理返回按钮点击
     const handleBackClick = useCallback(() => {
@@ -775,14 +816,14 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     onPaneClick={handlePaneClick}
                     nodeTypes={nodeTypes}
                     edgeTypes={edgeTypes}
-                    nodesDraggable
+                    nodesDraggable={!isSpacePressed}
                     fitView
                     minZoom={0.2}
                     maxZoom={2}
                     colorMode='dark'
                     deleteKeyCode={['Backspace', 'Delete']}
-                    panOnDrag={[1]}
-                    selectionOnDrag={true}
+                    panOnDrag={isSpacePressed ? true : [1]}
+                    selectionOnDrag={!isSpacePressed}
                     selectionMode={SelectionMode.Partial}
                     multiSelectionKeyCode={['Shift']}
                     panOnScroll={!isCtrlPressed}
@@ -803,6 +844,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                         style: { stroke: '#B43FEB', strokeWidth: 2 },
                         animated: false,
                     }}
+                    data-space-pressed={isSpacePressed ? 'true' : undefined}
                 >
                     {gridVisible && <Background variant={BackgroundVariant.Dots} />}
                     <Controls>

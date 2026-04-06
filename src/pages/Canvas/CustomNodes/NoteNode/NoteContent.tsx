@@ -1,4 +1,5 @@
 import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 type NoteContentProps = {
     content: string
@@ -8,7 +9,12 @@ type NoteContentProps = {
     onContentBlur: (value: string) => void
 }
 
-// 文本内容区：负责"编辑态 textarea"与"预览态 markdown"切换。
+const handleWheelCapture = (event: React.WheelEvent) => {
+    if (!(event.ctrlKey || event.metaKey)) {
+        event.stopPropagation()
+    }
+}
+
 export const NoteContent = ({
     content,
     isEditing,
@@ -22,22 +28,27 @@ export const NoteContent = ({
                 defaultValue={content}
                 maxLength={2500}
                 placeholder="双击开始输入或编辑 Markdown..."
-                className="note-scrollbar noflow nopan nodrag nowheel h-full w-full resize-none rounded-md border-0 bg-[#1f1f1f] p-2 text-sm text-white outline-none ring-0 placeholder:text-white/70"
+                className="note-scrollbar noflow nopan nodrag h-full w-full resize-none rounded-md border-0 bg-[#1f1f1f] p-2 text-sm text-white outline-none ring-0 placeholder:text-white/70"
                 onBlur={(event) => {
                     onContentBlur(event.target.value)
                     onStopEdit()
                 }}
+                onWheelCapture={handleWheelCapture}
             />
         )
     }
 
     return (
         <div
-            className="note-scrollbar noflow nopan nowheel h-full w-full overflow-auto rounded-md bg-[#1f1f1f] p-2 text-2xl prose prose-sm max-w-none text-white"
-            onDoubleClick={onStartEdit}
+            className="note-scrollbar noflow nopan nodrag h-full w-full overflow-auto rounded-md bg-[#1f1f1f] p-3 text-sm prose prose-invert prose-sm max-w-none text-white/90 [&_h1]:text-base [&_h1]:font-bold [&_h1]:text-white [&_h1]:mt-2 [&_h1]:mb-1 [&_h2]:text-sm [&_h2]:font-bold [&_h2]:text-white [&_h2]:mt-2 [&_h2]:mb-1 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-white [&_p]:my-1 [&_p]:leading-relaxed [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_strong]:text-white [&_code]:text-[#B43FEB] [&_pre]:bg-black/30 [&_pre]:p-2 [&_pre]:rounded [&_blockquote]:border-l-2 [&_blockquote]:border-[#B43FEB] [&_blockquote]:pl-3 [&_blockquote]:text-white/70"
+            onDoubleClick={(e) => {
+                e.stopPropagation()
+                onStartEdit()
+            }}
+            onWheelCapture={handleWheelCapture}
         >
             {content ? (
-                <Markdown>{content}</Markdown>
+                <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
             ) : (
                     <div className="opacity-70 text-white">双击开始输入或编辑 Markdown...</div>
             )}

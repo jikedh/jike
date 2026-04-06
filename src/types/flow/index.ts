@@ -164,6 +164,29 @@ export interface AgentNode {
 }
 
 /**
+ * 文本智能体预设类型
+ */
+export type TextAgentPresetId = 
+  | 'novel-to-script-agent' 
+  | 'short-video-storyboard' 
+  | 'jimeng-prompt' 
+  | 'novel-character-design'
+
+/**
+ * 文本智能体节点数据结构
+ */
+export interface TextAgentNodeData {
+  model: string;
+  presetId?: TextAgentPresetId;
+  useDefaultSystemPrompt: boolean;
+  customSystemPrompt?: string;
+  inputText?: string;
+  status?: 'idle' | 'generating' | 'success' | 'error';
+  error?: string;
+  [key: string]: any;
+}
+
+/**
  * 全景图节点数据结构
  * 用于处理和查看全景图
  */
@@ -293,6 +316,8 @@ export type VideoNodeType = Node<VideoGenerationNode, "videoNode">;
 // 节点里面的 data 结构是 NoteNodeData
 export type NoteNodeType = Node<NoteNodeData, "noteNode">;
 export type AgentNodeType = Node<AgentNode, "agentNode">;
+// 文本智能体节点
+export type TextAgentNodeType = Node<TextAgentNodeData, "textAgentNode">;
 // 全景图节点
 export type PanoramaNodeType = Node<PanoramaNodeData, "panoramaNode">;
 // 音频节点
@@ -300,7 +325,7 @@ export type AudioNodeType = Node<AudioGenerationNode, "audioNode">;
 // React Flow 默认的节点类型
 export type DefaultNodeType = Node<any, "default">;
 
-export type AllNodeType = TextNodeType | ImageNodeType | VideoNodeType | NoteNodeType | AgentNodeType | PanoramaNodeType | AudioNodeType | DefaultNodeType;
+export type AllNodeType = TextNodeType | ImageNodeType | VideoNodeType | NoteNodeType | AgentNodeType | TextAgentNodeType | PanoramaNodeType | AudioNodeType | DefaultNodeType;
 export type EdgeType = Edge<EdgeDataType, "default">;
 
 // ==================== 流类型 ====================

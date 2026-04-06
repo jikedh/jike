@@ -1,4 +1,4 @@
-import { IconEye, IconNote, IconPhoto, IconVideo, IconMusic } from '@tabler/icons-react'
+import { IconEye, IconNote, IconPhoto, IconVideo, IconMusic, IconBrain } from '@tabler/icons-react'
 import type { PropsWithChildren } from 'react'
 
 import {
@@ -10,7 +10,7 @@ import {
     ContextMenuTrigger,
 } from '@/components/ui/context-menu'
 
-export type CanvasNodeType = 'note' | 'image' | 'video' | 'panorama' | 'audio'
+export type CanvasNodeType = 'note' | 'image' | 'video' | 'panorama' | 'audio' | 'textAgent'
 
 type CanvasContextMenuProps = PropsWithChildren<{
     onCreateNode: (nodeType: CanvasNodeType) => void
@@ -30,6 +30,13 @@ export const CanvasContextMenu = ({ children, onCreateNode, onOpenChange }: Canv
                 >
                     <IconNote size={16} />
                     新建便签节点
+                </ContextMenuItem>
+                <ContextMenuItem
+                    className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
+                    onSelect={() => onCreateNode('textAgent')}
+                >
+                    <IconBrain size={16} />
+                    新建文本智能体
                 </ContextMenuItem>
                 <ContextMenuItem
                     className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"

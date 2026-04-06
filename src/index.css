@@ -365,6 +365,18 @@
     cursor: zoom-in !important;
 }
 
+/* 空格键按下时，整个画布显示抓手样式 */
+.react-flow[data-space-pressed="true"] {
+    cursor: grabbing !important;
+}
+
+.react-flow[data-space-pressed="true"] .react-flow__pane,
+.react-flow[data-space-pressed="true"] .react-flow__node,
+.react-flow[data-space-pressed="true"] .nodrag,
+.react-flow[data-space-pressed="true"] * {
+    cursor: grabbing !important;
+}
+
 /* 节点悬停光标样式 */
 .react-flow__node {
     cursor: pointer !important;
@@ -406,6 +418,11 @@
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* 空格键按下时，禁用 nodrag 元素的鼠标事件，允许画布平移 */
+.react-flow[data-space-pressed="true"] .nodrag {
+    pointer-events: none !important;
 }
 
 

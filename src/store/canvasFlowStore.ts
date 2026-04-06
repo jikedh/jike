@@ -40,10 +40,13 @@ type CanvasPersistedState = {
 /**
  * 节点类型标识符
  */
-type NodeType = 'note' | 'image' | 'video' | 'agent' | 'panorama' | 'audio'
+type NodeType = 'note' | 'image' | 'video' | 'agent' | 'panorama' | 'audio' | 'textAgent'
 type NodePosition = { x: number; y: number }
 type AddNodeOptions = {
   agentPresetId?: AgentPresetId
+  initialWidth?: number
+  initialHeight?: number
+  initialContent?: string
 }
 
 /**
@@ -147,6 +150,8 @@ type CanvasFlowState = {
   stopVideoPolling: (nodeId: string) => void
   /** 更新音频节点数据（局部字段 patch） */
   updateAudioNodeData: (nodeId: string, patch: Partial<AudioGenerationNode>) => void
+  /** 更新文本智能体节点数据（局部字段 patch） */
+  updateTextAgentNodeData: (nodeId: string, patch: Record<string, any>) => void
 
   // === 任务管理 ===
   /** 获取正在生成的任务数量 */
@@ -274,6 +279,26 @@ const updateAudioNodeInList = (
     return {
       ...node,
       data: updater(node.data as AudioGenerationNode),
+    }
+  })
+}
+
+/**
+ * 更新文本智能体节点数据的通用辅助函数
+ */
+const updateTextAgentNodeInList = (
+  nodes: AllNodeType[],
+  nodeId: string,
+  updater: (data: any) => any
+) => {
+  return nodes.map((node) => {
+    if (node.id !== nodeId || node.type !== 'textAgentNode') {
+      return node
+    }
+
+    return {
+      ...node,
+      data: updater(node.data),
     }
   })
 }
@@ -1040,11 +1065,11 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
         id: nextId,
         type: 'noteNode',
         position: nextPosition,
-        width: 280,
-        height: 180,
+        width: options?.initialWidth ?? 280,
+        height: options?.initialHeight ?? 180,
         data: {
-          content: '',
-          isEditing: true,
+          content: options?.initialContent ?? '',
+          isEditing: options?.initialContent ? false : true,
           createdAt: Date.now(),
         },
       }
@@ -1149,6 +1174,20 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
             type: 'audio',
             data: [],
           },
+          createdAt: Date.now(),
+        },
+      }
+    } else if (nodeType === 'textAgent') {
+      newNode = {
+        id: nextId,
+        type: 'textAgentNode',
+        position: nextPosition,
+        data: {
+          model: 'gemini-3.1-pro',
+          presetId: undefined,
+          useDefaultSystemPrompt: true,
+          customSystemPrompt: '',
+          status: 'idle',
           createdAt: Date.now(),
         },
       }
@@ -1672,6 +1711,15 @@ duplicateNode: (nodeId: string) => {
     }))
   },
 
+  updateTextAgentNodeData: (nodeId, patch) => {
+    set((state) => ({
+      nodes: updateTextAgentNodeInList(state.nodes, nodeId, (data) => ({
+        ...data,
+        ...patch,
+      })),
+    }))
+  },
+
   /**
    * 创建视频生成任务并启动轮询
    */
@@ -1759,7 +1807,12 @@ duplicateNode: (nodeId: string) => {
 
     nodes.forEach((node) => {
       const status = node.data?.status
+      // 图片/视频节点使用 GenerationStatus 枚举
       if (status === GenerationStatus.IN_PROGRESS || status === GenerationStatus.QUEUED) {
+        count++
+      }
+      // 文本智能体节点使用字符串状态
+      if (node.type === 'textAgentNode' && status === 'generating') {
         count++
       }
     })
@@ -1815,6 +1868,17 @@ duplicateNode: (nodeId: string) => {
                 error: { message: '任务已取消' },
               },
             }
+          }
+        }
+        // 文本智能体节点
+        if (node.type === 'textAgentNode' && status === 'generating') {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              status: 'error',
+              error: '任务已取消',
+            },
           }
         }
         return node

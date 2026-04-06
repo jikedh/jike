@@ -73,8 +73,8 @@ export interface LoginResponse {
 export async function getSceneQrcode(): Promise<SceneQrcodeResponse> {
   const res = await jikeingService.get('/v1/user/get-scene-qrcode')
   return {
-    scene_id: res.scene_id,
-    qrcode_image: res.qrcode_image?.trim().replace(/^`|`$/g, '')
+    scene_id: res.data.scene_id,
+    qrcode_image: res.data.qrcode_image?.trim().replace(/^`|`$/g, '')
   }
 }
 
