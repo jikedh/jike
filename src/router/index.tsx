@@ -9,6 +9,7 @@ import AssetsPage from '@/pages/Assets'
 import VoicePage from '@/pages/Voice'
 import VideoPage from '@/pages/Video'
 import SettingsPage from '@/pages/Settings'
+import LoginPage from '@/pages/Login'
 import { SidebarCeBianLan } from '@/pages/Sidebar/SidebarCeBianLan'
 
 // 带侧边栏的布局组件
@@ -26,11 +27,15 @@ const SidebarLayout = () => {
 
 const router = createHashRouter([
   {
+    path: '/login',
+    element: <LoginPage />
+  },
+  {
     element: <SidebarLayout />,
     children: [
       {
         path: '/',
-        element: <Navigate to="/home" replace />
+        element: <Navigate to="/login" replace />
       },
       {
         path: '/home',

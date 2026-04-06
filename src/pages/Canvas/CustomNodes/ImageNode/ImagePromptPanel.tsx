@@ -1,8 +1,8 @@
-import { IconUpload } from '@tabler/icons-react'
+import { IconUpload, IconX } from '@tabler/icons-react'
 import Mention from '@tiptap/extension-mention'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import type { ChangeEvent } from 'react'
 
 import { IMAGE_MODELS } from '@/constants/ai-models'
@@ -29,18 +29,33 @@ import { GeminiParamsPanel } from './components/GeminiParamsPanel'
 import { AspectRatioIcon } from './components/AspectRatioIcon'
 import { PROMPT_PANEL_STYLES } from '../shared/promptPanelStyles'
 
-/**
- * 图片节点底部增强输入区
- * 职责：
- * - 上区：展示参考图列表（mock）
- * - 中区：基于 tiptap 的富文本输入（最小可用）
- *   - 支持 @ 引用 mock 建议
- *   - 支持 / 命令 mock 建议
- * - 下区：参数控制（比例、分辨率、模型、风格模板）
- *
- * 说明：
- * - 本期所有状态均本地 useState 管理，后续可替换为 store/api。
- */
+const ReferenceItemWrapper = ({ 
+    children, 
+    onDisconnect,
+    className 
+}: { 
+    children: React.ReactNode
+    onDisconnect?: () => void
+    className?: string
+}) => {
+    return (
+        <div className={cn(PROMPT_PANEL_STYLES.referenceImageButton, 'group relative', className)}>
+            {children}
+            {onDisconnect && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        onDisconnect()
+                    }}
+                    className="absolute -right-1 -top-1 h-4 w-4 rounded-full bg-neutral-800 text-neutral-400 opacity-0 transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100 flex items-center justify-center"
+                    title="断开连接"
+                >
+                    <IconX size={10} />
+                </button>
+            )}
+        </div>
+    )
+}
 
 // 图片生成数量选项
 const IMAGE_COUNT_OPTIONS = [1, 2, 4] as const
@@ -67,6 +82,16 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     const edges = useCanvasFlowStore((state) => state.edges)
     const startImageGeneration = useCanvasFlowStore((state) => state.startImageGeneration)
     const updateImageNodeData = useCanvasFlowStore((state) => state.updateImageNodeData)
+    const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge)
+
+    const handleDisconnectNode = useCallback((sourceNodeId: string) => {
+        const edgeToDelete = edges.find(
+            (edge) => edge.source === sourceNodeId && edge.target === nodeId
+        )
+        if (edgeToDelete) {
+            deleteEdge(edgeToDelete.id)
+        }
+    }, [edges, nodeId, deleteEdge])
 
     // 当前节点状态（用于禁用生成按钮）
     const currentNode = useMemo(() => {
@@ -297,16 +322,16 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     }, [commandQuery])
 
     // 沿着边找所有父节点，并合并其第一张图片作为参考图来源
-    const parentImageUrls = useMemo(() => {
+    const parentImageNodes = useMemo(() => {
         const parentIds = edges
             .filter((edge) => edge.target === nodeId)
             .map((edge) => edge.source)
 
         if (parentIds.length === 0) {
-            return [] as string[]
+            return [] as { id: string; url: string }[]
         }
 
-        const urls: string[] = []
+        const result: { id: string; url: string }[] = []
 
         parentIds.forEach((parentId) => {
             const parentNode = nodes.find((node) => node.id === parentId)
@@ -315,15 +340,16 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             }
 
             const parentData = parentNode.data as ImageGenerationNode
-            // 只取父节点的第一张图片 URL（result.data[0]）
             const firstItem = parentData.result?.data?.[0]
             if (firstItem?.url) {
-                urls.push(firstItem.url)
+                result.push({ id: parentId, url: firstItem.url })
             }
         })
 
-        return urls
+        return result
     }, [edges, nodes, nodeId])
+
+    const parentImageUrls = useMemo(() => parentImageNodes.map(item => item.url), [parentImageNodes])
 
     // 收集父级便签内容：按入边顺序去重后提取 content
     const parentNoteContents = useMemo(() => {
@@ -685,21 +711,22 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                     />
 
                     {/* 参考图（上传 + 父节点结果） */}
-                    {referenceImageUrls.map((url, index) => (
-                        <Button
-                            key={`${url}-${index}`}
-                            unstyled
-                            className={PROMPT_PANEL_STYLES.referenceImageButton}
-                            title="参考图"
-                        >
-                            <img
-                                src={url}
-                                alt="参考图"
-                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
-                                loading="lazy"
-                            />
-                        </Button>
-                    ))}
+                    {referenceImageUrls.map((url, index) => {
+                        const parentNode = parentImageNodes.find(item => item.url === url)
+                        return (
+                            <ReferenceItemWrapper 
+                                key={`${url}-${index}`}
+                                onDisconnect={parentNode ? () => handleDisconnectNode(parentNode.id) : undefined}
+                            >
+                                <img
+                                    src={url}
+                                    alt="参考图"
+                                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+                                    loading="lazy"
+                                />
+                            </ReferenceItemWrapper>
+                        )
+                    })}
                 </div>
                 {/* 建议面板 */}
                 {activeMode && suggestionItems.length > 0 && (

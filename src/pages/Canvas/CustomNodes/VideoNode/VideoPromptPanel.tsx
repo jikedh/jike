@@ -1,8 +1,8 @@
 import { EditorContent, useEditor, ReactRenderer } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Mention from '@tiptap/extension-mention'
-import { IconUpload } from '@tabler/icons-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { IconUpload, IconX } from '@tabler/icons-react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import type { ChangeEvent } from 'react'
 
 import { VIDEO_DURATION_CONFIG, VIDEO_MODELS } from '@/constants/ai-models'
@@ -62,6 +62,34 @@ const VideoThumbnailButton = ({ videoUrl }: { videoUrl: string }) => {
     )
 }
 
+const ReferenceItemWrapper = ({ 
+    children, 
+    onDisconnect,
+    className 
+}: { 
+    children: React.ReactNode
+    onDisconnect?: () => void
+    className?: string
+}) => {
+    return (
+        <div className={cn(PROMPT_PANEL_STYLES.referenceImageButton, 'group relative', className)}>
+            {children}
+            {onDisconnect && (
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        onDisconnect()
+                    }}
+                    className="absolute -right-1 -top-1 h-4 w-4 rounded-full bg-neutral-800 text-neutral-400 opacity-0 transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100 flex items-center justify-center"
+                    title="断开连接"
+                >
+                    <IconX size={10} />
+                </button>
+            )}
+        </div>
+    )
+}
+
 export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     const [isUploading, setIsUploading] = useState(false)
 
@@ -71,6 +99,16 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     const edges = useCanvasFlowStore((state) => state.edges)
     const startVideoGeneration = useCanvasFlowStore((state) => state.startVideoGeneration)
     const updateVideoNodeData = useCanvasFlowStore((state) => state.updateVideoNodeData)
+    const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge)
+
+    const handleDisconnectNode = useCallback((sourceNodeId: string) => {
+        const edgeToDelete = edges.find(
+            (edge) => edge.source === sourceNodeId && edge.target === nodeId
+        )
+        if (edgeToDelete) {
+            deleteEdge(edgeToDelete.id)
+        }
+    }, [edges, nodeId, deleteEdge])
 
     const currentNode = useMemo(() => {
         return nodes.find((node) => node.id === nodeId)
@@ -594,27 +632,35 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                     />
 
                     {referenceImageUrls.map((url, index) => (
-                        <Button
-                            key={`${url}-${index}`}
-                            unstyled
-                            className={PROMPT_PANEL_STYLES.referenceImageButton}
-                            title="参考图"
-                        >
+                        <ReferenceItemWrapper key={`${url}-${index}`}>
                             <img
                                 src={url}
                                 alt="参考图"
                                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
                                 loading="lazy"
                             />
-                        </Button>
+                        </ReferenceItemWrapper>
+                    ))}
+
+                    {parentImageNodes.map((item, index) => (
+                        <ReferenceItemWrapper 
+                            key={`image-${item.id}-${index}`}
+                            onDisconnect={() => handleDisconnectNode(item.id)}
+                        >
+                            <img
+                                src={item.url!}
+                                alt="参考图"
+                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+                                loading="lazy"
+                            />
+                        </ReferenceItemWrapper>
                     ))}
 
                     {parentAudioNodes.map((item, index) => (
-                        <Button
+                        <ReferenceItemWrapper 
                             key={`audio-${item.id}-${index}`}
-                            unstyled
-                            className={cn(PROMPT_PANEL_STYLES.referenceImageButton, 'bg-[#B43FEB]/20 border-[#B43FEB]/40')}
-                            title="音频"
+                            className="bg-[#B43FEB]/20 border-[#B43FEB]/40"
+                            onDisconnect={() => handleDisconnectNode(item.id)}
                         >
                             <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] text-[#B43FEB]">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -624,18 +670,17 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                                 </svg>
                                 <span>音频</span>
                             </div>
-                        </Button>
+                        </ReferenceItemWrapper>
                     ))}
 
                     {parentVideoNodes.map((item, index) => (
-                        <Button
+                        <ReferenceItemWrapper 
                             key={`video-${item.id}-${index}`}
-                            unstyled
-                            className={cn(PROMPT_PANEL_STYLES.referenceImageButton, 'overflow-hidden')}
-                            title="视频"
+                            className="overflow-hidden"
+                            onDisconnect={() => handleDisconnectNode(item.id)}
                         >
                             <VideoThumbnailButton videoUrl={item.url!} />
-                        </Button>
+                        </ReferenceItemWrapper>
                     ))}
                 </div>
             </div>
