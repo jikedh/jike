@@ -21,8 +21,10 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@floating-ui/dom": "^1.7.6",
     "@floating-ui/react": "^0.27.19",
     "@fontsource-variable/geist": "^5.2.8",
+    "@radix-ui/react-slot": "^1.2.4",
     "@tabler/icons-react": "^3.40.0",
     "@tailwindcss/vite": "^4.1.18",
     "@tiptap/extension-mention": "^3.20.4",
@@ -70,6 +72,7 @@
     "electron-vite": "^5.0.0",
     "shadcn": "^4.1.0",
     "typescript": "~5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vite-plugin-obfuscator": "^1.0.5"
   }
 }

@@ -25,6 +25,7 @@ electron
 *.exe
 *.dmg
 *.deb
+release
 
 # Test & Docs
 coverage
