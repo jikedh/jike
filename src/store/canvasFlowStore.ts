@@ -1517,6 +1517,14 @@ duplicateNode: (nodeId: string) => {
         promptDraftHtml: `<p>${prompt}</p>`,
       }
 
+      // 继承源图片的比例设置
+      if (sourceData.size) {
+        payload.size = sourceData.size
+      }
+      if (sourceData.resolution) {
+        payload.resolution = sourceData.resolution
+      }
+
       // 如果源图片有 URL，添加为参考图
       if (sourceImageUrl) {
         payload.image_urls = [sourceImageUrl]

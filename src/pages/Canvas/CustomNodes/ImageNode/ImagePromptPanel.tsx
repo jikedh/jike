@@ -235,6 +235,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         const commandSizeMap: Record<string, string> = {
           'c-1': '4:3',   // 角色参考图
           'c-2': '21:9',  // 角色三视图
+          'c-3': '16:9',  // 多宫格电影分镜
           'c-4': '21:9',  // VR图
         }
         const targetSize = commandSizeMap[selected.id]
@@ -244,6 +245,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
         // 根据命令自动设置 resolution
         const commandResolutionMap: Record<string, string> = {
+          'c-3': '1K',  // 多宫格电影分镜
           'c-4': isGeminiModel ? '4K' : '3K',  // VR图：Gemini用4K，Seedream用3K
         }
         const targetResolution = commandResolutionMap[selected.id]
