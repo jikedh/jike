@@ -1,13 +1,20 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { IconX } from '@tabler/icons-react'
 import HomePage from '@/pages/Home'
 
 const LoginPage = () => {
+    const navigate = useNavigate()
     const [qrCodeUrl, setQrCodeUrl] = useState('')
 
     useEffect(() => {
         const timestamp = Date.now()
         setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=https://okjike.com/login?t=${timestamp}&color=000000&bgcolor=FFFFFF`)
     }, [])
+
+    const handleClose = () => {
+        navigate('/home')
+    }
 
     return (
         <div className="relative min-h-screen overflow-hidden">
@@ -18,13 +25,19 @@ const LoginPage = () => {
             </div>
 
             <div className="absolute inset-0 z-10 flex justify-center items-center">
-                <div className="w-[440px] h-[620px] relative overflow-hidden rounded-lg"
+                <div className="w-[440px] h-[620px] relative overflow-hidden rounded-lg group"
                     style={{
                         background: `radial-gradient(circle at 50% 0%, rgba(45, 52, 102, 0.5) 0%, transparent 60%),
                                     linear-gradient(180deg, #0f1123 0%, #04050b 100%)`,
                         boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05)'
                     }}
                 >
+                    <button
+                        onClick={handleClose}
+                        className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 transition-all duration-200 opacity-0 group-hover:opacity-100"
+                    >
+                        <IconX size={16} />
+                    </button>
                     <div className="flex flex-col items-center pt-[60px] relative z-10">
                         <header className="mb-[40px]">
                             <img 
