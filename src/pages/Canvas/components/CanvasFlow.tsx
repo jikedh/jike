@@ -628,7 +628,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     snapGrid={[20, 20]}
                     connectionRadius={50}
                     defaultEdgeOptions={{
-                        type: 'bezier',
+                        type: 'default',
                         style: { stroke: '#B43FEB', strokeWidth: 2 },
                         animated: false,
                     }}

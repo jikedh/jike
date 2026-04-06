@@ -1513,13 +1513,14 @@ duplicateNode: (nodeId: string) => {
       const payload: any = {
         model: sourceModel,
         prompt,
-        promptDraft: prompt,
-        promptDraftHtml: `<p>${prompt}</p>`,
+        n: 1,
+        metadata: {},
       }
 
       // 继承源图片的比例设置
       if (sourceData.size) {
         payload.size = sourceData.size
+        payload.metadata.resolution = sourceData.resolution
       }
       if (sourceData.resolution) {
         payload.resolution = sourceData.resolution
@@ -1529,6 +1530,9 @@ duplicateNode: (nodeId: string) => {
       if (sourceImageUrl) {
         payload.image_urls = [sourceImageUrl]
       }
+
+      // 调试：打印拆图 payload
+      console.log('[拆图] payload:', payload)
 
       // 启动图片生成任务
       get().startImageGeneration(newId, payload)
