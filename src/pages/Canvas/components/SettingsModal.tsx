@@ -137,14 +137,14 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
         <Modal open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
             <ModalContent aria-label="设置弹窗">
                 <div className="flex h-[min(76vh,720px)] flex-col">
-                    <header className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+                    <header className="flex items-start justify-between border-b border-white/5 px-6 py-5">
                         <div>
                             <ModalTitle>画布设置中心</ModalTitle>
                             <ModalDescription>当前均为占位配置，后续可逐项接入真实能力。</ModalDescription>
                         </div>
                         <button
                             type="button"
-                            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-white/50 transition-colors hover:bg-white/5 hover:text-white"
                             onClick={onClose}
                         >
                             <IconX size={18} />
@@ -152,10 +152,9 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
                     </header>
 
                     <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr]">
-                        <aside className="border-r border-slate-200 bg-slate-50/80 p-3">
+                        <aside className="border-r border-white/5 bg-black/20 p-3">
                             <div className="space-y-1">
                     {settingSections.map((section) => {
-                      // 根据不同分类使用不同的图标
                       const getIcon = () => {
                         if (section.id === 'apikey') return <IconKey size={14} />
                         if (section.id === 'data') return <IconDownload size={14} />
@@ -169,10 +168,10 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
                           key={section.id}
                           type="button"
                           className={cn(
-                            'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors',
+                            'flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors',
                             activeSection === section.id
-                              ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200'
-                              : 'text-slate-600 hover:bg-white hover:text-slate-900',
+                              ? 'bg-[#B43FEB]/10 text-[#B43FEB]'
+                              : 'text-white/60 hover:bg-white/5 hover:text-white/80',
                           )}
                           onClick={() => setActiveSection(section.id)}
                         >
@@ -184,15 +183,15 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
                             </div>
                         </aside>
 
-                        <main className="min-h-0 overflow-auto px-5 py-4">
+                        <main className="min-h-0 overflow-auto px-6 py-5">
                             <div className="space-y-3">
                                 {/* AI 助手 - 真实配置 */}
                                 {activeSection === 'ai' && (
                                     <>
-                                        <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                                            <div className="mb-2 text-sm font-medium text-slate-800">默认模型</div>
+                                        <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                                            <div className="mb-3 text-sm font-medium text-white/80">默认模型</div>
                                             <Select value={defaultModel} onValueChange={setDefaultModel}>
-                                                <SelectTrigger className="h-9 w-full border-slate-200 bg-white text-sm text-slate-700">
+                                                <SelectTrigger className="h-9 w-full border-white/10 bg-black/50 text-sm text-white">
                                                     <SelectValue placeholder="请选择模型" />
                                                 </SelectTrigger>
                                                 <SelectContent align="end" className="max-h-60">
@@ -205,10 +204,10 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
                                             </Select>
                                         </section>
 
-                                        <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                                            <div className="mb-2 text-sm font-medium text-slate-800">默认人设</div>
+                                        <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                                            <div className="mb-3 text-sm font-medium text-white/80">默认人设</div>
                                             <Select value={defaultPersonaId} onValueChange={(v) => setDefaultPersonaId(v as typeof defaultPersonaId)}>
-                                                <SelectTrigger className="h-9 w-full border-slate-200 bg-white text-sm text-slate-700">
+                                                <SelectTrigger className="h-9 w-full border-white/10 bg-black/50 text-sm text-white">
                                                     <SelectValue placeholder="请选择人设" />
                                                 </SelectTrigger>
                                                 <SelectContent align="end">
@@ -226,11 +225,11 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
 
                                     {/* 通用设置 - 自动保存开关 */}
                                     {activeSection === 'general' && (
-                                        <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                                        <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <div className="text-sm font-medium text-slate-800">自动保存</div>
-                                                    <div className="text-xs text-slate-500 mt-0.5">新建或删除节点时自动保存画布</div>
+                                                    <div className="text-sm font-medium text-white/80">自动保存</div>
+                                                    <div className="text-xs text-white/40 mt-1">新建或删除节点时自动保存画布</div>
                                                 </div>
                                                 <Switch checked={autoSaveEnabled} onCheckedChange={setAutoSaveEnabled} />
                                             </div>
@@ -240,30 +239,30 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
                                 {/* 画布设置 - 网格显示开关 */}
                                 {activeSection === 'canvas' && (
                                     <>
-                                        <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                                        <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <div className="text-sm font-medium text-slate-800">网格显示</div>
-                                                    <div className="text-xs text-slate-500 mt-0.5">控制画布背景网格线的显示</div>
+                                                    <div className="text-sm font-medium text-white/80">网格显示</div>
+                                                    <div className="text-xs text-white/40 mt-1">控制画布背景网格线的显示</div>
                                                 </div>
                                                 <Switch checked={gridVisible} onCheckedChange={setGridVisible} />
                                             </div>
                                         </section>
-                                        <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                                        <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <div className="text-sm font-medium text-slate-800">节点搜索栏显示</div>
-                                                    <div className="text-xs text-slate-500 mt-0.5">控制画布右上角节点搜索栏的显示</div>
+                                                    <div className="text-sm font-medium text-white/80">节点搜索栏显示</div>
+                                                    <div className="text-xs text-white/40 mt-1">控制画布右上角节点搜索栏的显示</div>
                                                 </div>
                                                 <Switch checked={nodeSearchVisible} onCheckedChange={setNodeSearchVisible} />
                                             </div>
                                         </section>
                                         {/* 调试工具面板开关 */}
-                                        <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                                        <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <div className="text-sm font-medium text-slate-800">调试工具面板</div>
-                                                    <div className="text-xs text-slate-500 mt-0.5">控制 ReactFlow 调试工具面板的显示</div>
+                                                    <div className="text-sm font-medium text-white/80">调试工具面板</div>
+                                                    <div className="text-xs text-white/40 mt-1">控制 ReactFlow 调试工具面板的显示</div>
                                                 </div>
                             <Switch checked={devToolsVisible} onCheckedChange={setDevToolsVisible} />
                                             </div>
@@ -278,8 +277,8 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
 
                                 {/* 数据与版本 - 导入导出 */}
                                 {activeSection === 'data' && (
-                                    <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                                        <div className="mb-2 text-sm font-medium text-slate-800">画布数据</div>
+                                    <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                                        <div className="mb-3 text-sm font-medium text-white/80">画布数据</div>
                                         <div className="flex gap-2">
                                             <Button size="sm" variant="blue" onClick={handleExport}>
                                                 <IconDownload size={14} />
@@ -301,13 +300,13 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
                                 )}
 
                                 {currentSectionItems.filter((item) => !(activeSection === 'general' && item.label === '自动保存')).map((item) => (
-                                    <section key={item.label} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                                        <div className="mb-2 text-sm font-medium text-slate-800">{item.label}</div>
+                                    <section key={item.label} className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                                        <div className="mb-3 text-sm font-medium text-white/80">{item.label}</div>
 
                                         {item.type === 'toggle' && (
-                                            <div className="flex items-center justify-between rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500">
+                                            <div className="flex items-center justify-between rounded-lg border border-dashed border-white/10 px-3 py-2 text-xs text-white/40">
                                                 <span>占位开关（暂不生效）</span>
-                                                <span className="rounded-md bg-slate-100 px-2 py-1">OFF</span>
+                                                <span className="rounded-md bg-white/5 px-2 py-1">OFF</span>
                                             </div>
                                         )}
                                     </section>
@@ -316,7 +315,7 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
                         </main>
                     </div>
 
-                    <footer className="flex items-center justify-between border-t border-slate-200 px-5 py-3">
+                    <footer className="flex items-center justify-between border-t border-white/5 px-6 py-4">
                         <Button variant="blue" size="sm" onClick={resetToDefault}>
                             <IconRestore size={14} />
                             恢复默认
@@ -423,10 +422,10 @@ function ApiKeySection() {
   return (
     <div className="space-y-4">
       {/* AI 服务密钥 */}
-      <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
         <div className="mb-3">
-          <div className="text-sm font-medium text-slate-800">AI 服务密钥</div>
-          <div className="text-xs text-slate-500 mt-0.5">用于文字对话、图片生成、视频生成等 API 调用</div>
+          <div className="text-sm font-medium text-white/80">AI 服务密钥</div>
+          <div className="text-xs text-white/40 mt-1">用于文字对话、图片生成、视频生成等 API 调用</div>
         </div>
         <div className="space-y-2">
           <div className="relative">
@@ -435,11 +434,11 @@ function ApiKeySection() {
               placeholder="请输入 AI 服务密钥 (sk-...)"
               value={aiToken}
               onChange={(e) => setAiTokenState(e.target.value)}
-              className="h-9 pr-10 border-slate-200 text-sm"
+              className="h-9 pr-10 border-white/10 bg-black/50 text-white placeholder:text-white/30"
             />
             <button
               type="button"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60"
               onClick={() => setShowAiToken(!showAiToken)}
             >
               {showAiToken ? <IconEyeOff size={16} /> : <IconEye size={16} />}
@@ -457,7 +456,7 @@ function ApiKeySection() {
               获取
             </Button>
             {getAiToken() && (
-              <span className="flex items-center text-xs text-green-600">
+              <span className="flex items-center text-xs text-green-400">
                 ● 已配置
               </span>
             )}
@@ -466,10 +465,10 @@ function ApiKeySection() {
       </section>
 
       {/* ZeakAI 服务密钥 (Midjourney) */}
-      <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
         <div className="mb-3">
-          <div className="text-sm font-medium text-slate-800">ZeakAI 服务密钥</div>
-          <div className="text-xs text-slate-500 mt-0.5">用于 Midjourney 图片生成 API 调用</div>
+          <div className="text-sm font-medium text-white/80">ZeakAI 服务密钥</div>
+          <div className="text-xs text-white/40 mt-1">用于 Midjourney 图片生成 API 调用</div>
         </div>
         <div className="space-y-2">
           <div className="relative">
@@ -478,11 +477,11 @@ function ApiKeySection() {
               placeholder="请输入 ZeakAI 服务密钥"
               value={zeakaiToken}
               onChange={(e) => setZeakaiTokenState(e.target.value)}
-              className="h-9 pr-10 border-slate-200 text-sm"
+              className="h-9 pr-10 border-white/10 bg-black/50 text-white placeholder:text-white/30"
             />
             <button
               type="button"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60"
               onClick={() => setShowZeakaiToken(!showZeakaiToken)}
             >
               {showZeakaiToken ? <IconEyeOff size={16} /> : <IconEye size={16} />}
@@ -500,7 +499,7 @@ function ApiKeySection() {
               获取
             </Button>
             {getZeakaiToken() && (
-              <span className="flex items-center text-xs text-green-600">
+              <span className="flex items-center text-xs text-green-400">
                 ● 已配置
               </span>
             )}
@@ -509,9 +508,9 @@ function ApiKeySection() {
       </section>
 
       {/* 说明 */}
-      <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
-        <div className="text-xs text-amber-800">
-          <div className="font-medium mb-1">💡 提示</div>
+      <div className="rounded-lg bg-[#B43FEB]/10 border border-[#B43FEB]/20 px-4 py-3">
+        <div className="text-xs text-white/70">
+          <div className="font-medium mb-1 text-[#B43FEB]">💡 提示</div>
           <div>• 密钥存储在浏览器本地，不会发送到服务器</div>
           <div>• 清除浏览器缓存会导致密钥丢失，请妥善保管</div>
           <div>• 生产环境建议通过 Nginx 配置环境变量添加密钥</div>

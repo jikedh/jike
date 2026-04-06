@@ -1,4 +1,4 @@
-import { useState, useCallback, type ReactNode } from 'react'
+import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import {
   IconDeviceFloppy,
   IconHistory,
@@ -127,6 +127,20 @@ export const FloatingSidebar = ({
   className,
 }: FloatingSidebarProps) => {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null)
+  const sidebarRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (expandedItemId && sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
+        setExpandedItemId(null)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [expandedItemId])
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const { warning } = useMessage()
 
@@ -178,6 +192,7 @@ export const FloatingSidebar = ({
   return (
     <>
       <aside
+        ref={sidebarRef}
         className={cn('canvas-floating-sidebar', className)}
         aria-label="画布悬浮侧边栏"
       >

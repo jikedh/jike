@@ -15,49 +15,43 @@ import {
 type NodeContextMenuProps = PropsWithChildren<{
     onDuplicate: () => void
     onDelete: () => void
-  /** 拆图回调，传入网格大小 (2=2x2, 3=3x3, 4=4x4) */
   onSplitImage?: (gridSize: 2 | 3 | 4) => void
 }>
 
-/**
- * 节点右键菜单组件
- * 提供复制、删除和拆图功能
- */
 export const NodeContextMenu = ({ children, onDuplicate, onDelete, onSplitImage }: NodeContextMenuProps) => {
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-            <ContextMenuContent className="w-44 bg-neutral-800/95 border-neutral-600">
+            <ContextMenuContent className="w-44 bg-[#121214] border border-white/10 rounded-xl shadow-2xl overflow-hidden p-1">
                 <ContextMenuItem
-                    className="text-neutral-200 focus:bg-neutral-700 focus:text-neutral-100 cursor-pointer"
+                    className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
                     onSelect={onDuplicate}
                 >
                     <IconCopy size={15} />
                     复制节点
                 </ContextMenuItem>
 
-          {/* 拆图子菜单 - 仅当 onSplitImage 存在时显示 */}
           {onSplitImage && (
             <ContextMenuSub>
-              <ContextMenuSubTrigger className="text-neutral-200 focus:bg-neutral-700 focus:text-neutral-100 cursor-pointer">
+              <ContextMenuSubTrigger className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors">
                 <IconLayoutGrid size={15} />
                 拆图
               </ContextMenuSubTrigger>
-              <ContextMenuSubContent className="w-36 bg-neutral-800/95 border-neutral-600">
+              <ContextMenuSubContent className="w-36 bg-[#121214] border border-white/10 rounded-xl shadow-2xl overflow-hidden p-1">
                 <ContextMenuItem
-                  className="text-neutral-200 focus:bg-neutral-700 focus:text-neutral-100 cursor-pointer"
+                  className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
                   onSelect={() => onSplitImage(2)}
                 >
                   2×2（4张）
                 </ContextMenuItem>
                 <ContextMenuItem
-                  className="text-neutral-200 focus:bg-neutral-700 focus:text-neutral-100 cursor-pointer"
+                  className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
                   onSelect={() => onSplitImage(3)}
                 >
                   3×3（9张）
                 </ContextMenuItem>
                 <ContextMenuItem
-                  className="text-neutral-200 focus:bg-neutral-700 focus:text-neutral-100 cursor-pointer"
+                  className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
                   onSelect={() => onSplitImage(4)}
                 >
                   4×4（16张）
@@ -66,9 +60,9 @@ export const NodeContextMenu = ({ children, onDuplicate, onDelete, onSplitImage 
             </ContextMenuSub>
           )}
 
-                <ContextMenuSeparator className="bg-neutral-600" />
+                <ContextMenuSeparator className="bg-white/5 h-px" />
                 <ContextMenuItem
-                    className="text-red-400 focus:bg-red-500/20 focus:text-red-300 cursor-pointer"
+                    className="text-red-400 hover:bg-red-500/20 hover:text-red-300 focus:bg-red-500/20 focus:text-red-300 rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
                     onSelect={onDelete}
                 >
                     <IconTrash size={15} />

@@ -92,26 +92,27 @@
 
 /* 子菜单面板 */
 .canvas-floating-sidebar .glass-panel {
-  background: #2a2a2d;
+  background: #121214;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  min-width: 144px;
-  padding: 8px 0;
+  min-width: 160px;
+  padding: 6px;
 }
 
 /* 子菜单项 */
 .canvas-floating-sidebar .glass-panel button {
   color: rgba(255, 255, 255, 0.8);
-  padding: 10px 16px;
+  padding: 10px 14px;
   text-align: left;
-  font-size: 14px;
+  font-size: 13px;
   width: 100%;
-  border-radius: 0;
+  border-radius: 8px;
   margin: 0;
+  transition: all 150ms ease;
 }
 
 .canvas-floating-sidebar .glass-panel button:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
+  background: rgba(180, 63, 235, 0.1);
+  color: #B43FEB;
 }
