@@ -171,7 +171,7 @@ export function fetchMjTask(id: string) {
 // 创建快手视频生成任务
 export function createLzVideoTask(data: any) {
   return kuaiziRequest({
-    url: '/ai-open-platform-api/v1/lz/video/task/create',
+    url: '/lz/video/task/create',
     method: 'post',
     data
   })
@@ -180,7 +180,7 @@ export function createLzVideoTask(data: any) {
 // 查询快手视频生成任务状态
 export function getLzVideoTaskStatus(taskId: string) {
   return kuaiziRequest({
-    url: '/ai-open-platform-api/v1/lz/video/task/status',
+    url: '/lz/video/task/status',
     method: 'post',
     data: { task_id: taskId }
   })

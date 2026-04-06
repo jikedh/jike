@@ -189,6 +189,17 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         .filter((item) => item.url)
     }, [edges, nodeId, nodes])
 
+    // 计算来自上游节点的图片 URL 集合（用于区分显示）
+    const parentImageNodeUrls = useMemo(() => {
+      return new Set(parentImageNodes.map((item) => item.url))
+    }, [parentImageNodes])
+
+    // 根据 URL 找到对应的上游节点 ID（用于断开连接）
+    const getParentNodeIdByUrl = useCallback((url: string) => {
+      const node = parentImageNodes.find((item) => item.url === url)
+      return node?.id
+    }, [parentImageNodes])
+
   // 将所有资源转换成提及候选项
   const videoMentionItems = useMemo(() => {
     const items: { id: string; label: string; value: string; thumbnail: string; type: 'image' | 'video' | 'audio' }[] = []
@@ -591,11 +602,24 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             return
         }
 
+        // 收集所有参考资源 URL
+        // 图片来源：用户上传的图片 + 上游图片节点（每个节点只取第一张）
+        const allImageUrls = [
+          ...(currentVideoData?.image_urls ?? []),
+          ...parentImageNodes.map((item) => item.url!),
+        ]
+        // 去重：避免同一张图片被重复添加
+        const uniqueImageUrls = [...new Set(allImageUrls)]
+        const allVideoUrls = parentVideoNodes.map((item) => item.url!)
+        const allAudioUrls = parentAudioNodes.map((item) => item.url!)
+
         // 使用策略模式构建 payload
         const strategy = getVideoPayloadStrategy(model)
         const payload = strategy.buildPayload(currentVideoData!, {
             prompt: mergedPrompt,
-            imageUrls: currentVideoData?.image_urls ?? [],
+            imageUrls: uniqueImageUrls,
+            videoUrls: allVideoUrls,
+            audioUrls: allAudioUrls,
         })
 
 
@@ -631,8 +655,14 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                         onChange={handleFileChange}
                     />
 
-                    {referenceImageUrls.map((url, index) => (
-                        <ReferenceItemWrapper key={`${url}-${index}`}>
+                    {referenceImageUrls.map((url, index) => {
+                      const isFromParent = parentImageNodeUrls.has(url)
+                      const parentNodeId = isFromParent ? getParentNodeIdByUrl(url) : undefined
+                      return (
+                        <ReferenceItemWrapper 
+                            key={`${url}-${index}`}
+                            onDisconnect={parentNodeId ? () => handleDisconnectNode(parentNodeId) : undefined}
+                        >
                             <img
                                 src={url}
                                 alt="参考图"
@@ -640,23 +670,11 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                                 loading="lazy"
                             />
                         </ReferenceItemWrapper>
-                    ))}
+                      )
+                    })}
 
-                    {parentImageNodes.map((item, index) => (
-                        <ReferenceItemWrapper 
-                            key={`image-${item.id}-${index}`}
-                            onDisconnect={() => handleDisconnectNode(item.id)}
-                        >
-                            <img
-                                src={item.url!}
-                                alt="参考图"
-                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
-                                loading="lazy"
-                            />
-                        </ReferenceItemWrapper>
-                    ))}
-
-                    {parentAudioNodes.map((item, index) => (
+                    {/* 音频参考：仅 Seedance 2.0 模型支持 */}
+                    {model === 'doubao-seedance-2.0' && parentAudioNodes.map((item, index) => (
                         <ReferenceItemWrapper 
                             key={`audio-${item.id}-${index}`}
                             className="bg-[#B43FEB]/20 border-[#B43FEB]/40"
@@ -673,7 +691,8 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                         </ReferenceItemWrapper>
                     ))}
 
-                    {parentVideoNodes.map((item, index) => (
+                    {/* 视频参考：仅 Seedance 2.0 模型支持 */}
+                    {model === 'doubao-seedance-2.0' && parentVideoNodes.map((item, index) => (
                         <ReferenceItemWrapper 
                             key={`video-${item.id}-${index}`}
                             className="overflow-hidden"

@@ -128,30 +128,48 @@ export const getVideoThumbnail = (videoUrl: string): Promise<string> => {
 
   return new Promise((resolve, reject) => {
     const video = document.createElement('video')
-    video.crossOrigin = 'anonymous'
-    video.src = videoUrl
-    video.currentTime = 0.1
     video.muted = true
+    video.playsInline = true
+    video.currentTime = 0.1
+
+    const cleanup = () => {
+      video.src = ''
+      video.load()
+      video.remove()
+    }
 
     video.onloadeddata = () => {
-      const canvas = document.createElement('canvas')
-      canvas.width = video.videoWidth || 320
-      canvas.height = video.videoHeight || 180
-      const ctx = canvas.getContext('2d')
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-        const thumbnail = canvas.toDataURL('image/jpeg', 0.7)
-        videoThumbnailCache.set(videoUrl, thumbnail)
-        resolve(thumbnail)
-      } else {
-        reject(new Error('无法创建 canvas 上下文'))
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = video.videoWidth || 320
+        canvas.height = video.videoHeight || 180
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+          const thumbnail = canvas.toDataURL('image/jpeg', 0.7)
+          videoThumbnailCache.set(videoUrl, thumbnail)
+          resolve(thumbnail)
+        } else {
+          reject(new Error('无法创建 canvas 上下文'))
+        }
+      } catch (err) {
+        reject(err)
+      } finally {
+        cleanup()
       }
-      video.remove()
     }
 
     video.onerror = () => {
-      video.remove()
+      cleanup()
       reject(new Error('视频加载失败'))
     }
+
+    video.onabort = () => {
+      cleanup()
+      reject(new Error('视频加载被中止'))
+    }
+
+    video.src = videoUrl
+    video.load()
   })
 }

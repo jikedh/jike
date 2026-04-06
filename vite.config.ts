@@ -69,8 +69,8 @@ export default defineConfig(({ command, mode }) => {
           timeout: 300000,
         },
         // 快手 AI 服务代理
-        '/ai-open-platform-api': {
-          target: 'https://aiopenapi.kuaizi.cn',
+        '/lz': {
+          target: 'https://aiopenapi.kuaizi.cn/ai-open-platform-api/v1',
           changeOrigin: true,
           // 超时设置（用于长时间运行的请求）
           timeout: 300000,

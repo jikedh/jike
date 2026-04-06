@@ -6,7 +6,7 @@ import type { VideoGenerationNode } from '@/types/flow'
  */
 export interface VideoPayloadStrategy {
   model: string
-  buildPayload: (nodeData: VideoGenerationNode, inputs: { prompt: string; imageUrls: string[] }) => Record<string, unknown>
+  buildPayload: (nodeData: VideoGenerationNode, inputs: { prompt: string; imageUrls: string[]; videoUrls?: string[]; audioUrls?: string[] }) => Record<string, unknown>
 }
 
 /**
@@ -65,13 +65,42 @@ const buildSeedance20Images = (imageUrls: string[]) => {
 }
 
 /**
+ * Seedance 2.0 视频角色映射
+ * 约定：所有参考视频 role 固定为 reference_video
+ */
+const buildSeedance20Videos = (videoUrls: string[]) => {
+  return videoUrls
+    .filter((url) => Boolean(url))
+    .slice(0, 3)
+    .map((url) => ({
+      url,
+      role: 'reference_video' as const,
+    }))
+}
+
+/**
+ * Seedance 2.0 音频角色映射
+ * 约定：所有参考音频 role 固定为 reference_audio
+ */
+const buildSeedance20Audios = (audioUrls: string[]) => {
+  return audioUrls
+    .filter((url) => Boolean(url))
+    .slice(0, 3)
+    .map((url) => ({
+      url,
+      role: 'reference_audio' as const,
+    }))
+}
+
+/**
  * Doubao Seedance 2.0 策略
  * 字段映射：使用 images（对象数组），并固定 generation_type=video
+ * 支持视频和音频输入（仅 pro 模式）
  * 注意：input_type、seed、web_search 固定为默认值，不暴露给用户手动填写
  */
 const doubaoSeedance20Strategy: VideoPayloadStrategy = {
   model: 'doubao-seedance-2.0',
-  buildPayload: (nodeData, { prompt, imageUrls }) => {
+  buildPayload: (nodeData, { prompt, imageUrls, videoUrls = [], audioUrls = [] }) => {
     const mode = nodeData.metadata?.mode ?? 'fast'
     const minDuration = 4
     const maxDuration = mode === 'pro' ? 15 : 12
@@ -79,7 +108,12 @@ const doubaoSeedance20Strategy: VideoPayloadStrategy = {
     const nextDuration = Math.min(Math.max(rawDuration, minDuration), maxDuration)
 
     const images = buildSeedance20Images(imageUrls)
+    const videos = buildSeedance20Videos(videoUrls)
+    const audios = buildSeedance20Audios(audioUrls)
     const hasImages = images.length > 0
+    const hasVideos = videos.length > 0
+    const hasAudios = audios.length > 0
+    const hasReferenceContent = hasImages || hasVideos || hasAudios
 
     return {
       model: 'doubao-seedance-2.0',
@@ -92,7 +126,10 @@ const doubaoSeedance20Strategy: VideoPayloadStrategy = {
       generate_audio: nodeData.metadata?.generate_audio ?? true,
       seed: -1,
       web_search: false,
-      ...(hasImages ? { input_type: 'reference' as const, images } : {}),
+      ...(hasReferenceContent ? { video_input_type: 'reference' as const } : {}),
+      ...(hasImages ? { images } : {}),
+      ...(hasVideos ? { videos } : {}),
+      ...(hasAudios ? { audios } : {}),
     }
   },
 }

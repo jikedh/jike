@@ -48,10 +48,12 @@ const createService = (serviceName: string, config: ServiceConfig): AxiosInstanc
       console.log(`[${serviceName}] baseURL:`, baseURL, '| url:', reqConfig.url)
 
       const token = config.getToken()
+      console.log(`[${serviceName}] token:`, token ? `${token.substring(0, 10)}...` : 'undefined')
       if (token) {
         const headerName = config.authHeader || 'Authorization'
         const headerValue = config.useBearer !== false ? `Bearer ${token}` : token
         reqConfig.headers[headerName] = headerValue
+        console.log(`[${serviceName}] auth header:`, headerName, '=', headerValue.substring(0, 20) + '...')
       }
 
       return reqConfig

@@ -786,10 +786,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                             updateImageNodeData(nodeId, { model: value })
                         }}
                     >
-                        <SelectTrigger className="h-8 min-w-[160px] border-white/[0.06] bg-white/[0.02] text-xs text-white/90 hover:border-[#B43FEB]/30">
+                        <SelectTrigger className={PROMPT_PANEL_STYLES.modelSelect}>
                             <SelectValue placeholder="选择模型" />
                         </SelectTrigger>
-                        <SelectContent className="bg-[#09090b] border border-white/[0.06]">
+                        <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
                             {IMAGE_MODELS.map((item) => (
                                 <SelectItem key={item.id} value={item.model} className={PROMPT_PANEL_STYLES.modelSelectItem}>
                                     {item.name}

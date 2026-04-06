@@ -22,7 +22,7 @@ import Slideshow from 'yet-another-react-lightbox/plugins/slideshow'
 import Zoom from 'yet-another-react-lightbox/plugins/zoom'
 import { toast } from 'sonner'
 
-import { downloadImageFromUrl } from '@/lib/utils'
+import { cn, downloadImageFromUrl } from '@/lib/utils'
 import { uploadFileToOSS } from '@/utils/oss'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { VideoGenerationNode } from '@/types/flow'
@@ -182,12 +182,7 @@ export const VideoToolbar = ({
           onChange={handleFileChange}
         />
 
-            <div
-                className={`nodrag nopan nowheel inline-flex h-10 items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-800/95 px-2 shadow-md ${selected
-                    ? 'translate-y-0 scale-100 opacity-100'
-                    : '-translate-y-2 scale-95 opacity-0'
-                    }`}
-            >
+            <div className="nodrag nopan nowheel inline-flex h-10 items-center gap-1 rounded-full bg-[#2a2a2d] border border-white/10 px-2 shadow-xl">
                 {toolbarActions.map((item) => {
                     const Icon = item.icon
                     const isActive = item.key === 'preview' ? isPreviewActive : false
@@ -199,34 +194,36 @@ export const VideoToolbar = ({
                             type="button"
                             onClick={() => handleAction(item.key)}
                             disabled={isDisabled}
-                            className={`nodrag nopan nowheel inline-flex h-8 items-center gap-1 rounded-lg border px-2 text-xs font-medium transition-colors ${isDisabled
-                                ? 'border-neutral-600 bg-neutral-600/50 text-neutral-400 cursor-not-allowed opacity-50'
-                                : isActive
-                                    ? 'border-neutral-500 bg-neutral-600 text-neutral-100'
-                                    : 'border-transparent bg-neutral-700 text-neutral-200 hover:border-neutral-500 hover:bg-neutral-600 hover:text-neutral-100 active:border-neutral-400 active:bg-neutral-500 active:text-neutral-50'
-                                }`}
+                            className={cn(
+                                "flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer",
+                                isDisabled
+                                    ? "text-white/30 cursor-not-allowed"
+                                    : isActive
+                                        ? "text-[#B43FEB]"
+                                        : "text-white/60 hover:text-white hover:bg-white/5"
+                            )}
                             title={item.label}
                             aria-label={item.label}
                         >
-                            <Icon size={24} stroke={1.8} />
-                            <span>{item.label}</span>
+                            <Icon size={16} stroke={1.5} />
+                            <span className="text-[10px]">{item.label}</span>
                         </button>
                     )
                 })}
 
                 {/* 分隔线 */}
-                <div className="h-5 w-px bg-neutral-600" />
+                <div className="w-px h-6 bg-white/10 mx-1" />
 
                 {/* 删除按钮 */}
                 <button
                     type="button"
                     onClick={onDelete}
-                    className="nodrag nopan nowheel inline-flex h-8 items-center gap-1 rounded-lg border border-transparent bg-neutral-700 px-2 text-xs font-medium text-neutral-200 transition-colors hover:border-red-500/40 hover:bg-red-500/20 hover:text-red-400 active:bg-red-500/30 active:text-red-300"
-                    title="删除节点"
+                    className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg text-xs text-white/60 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                    title="删除"
                     aria-label="删除节点"
                 >
-                    <IconTrash size={24} stroke={1.8} />
-                    <span>删除</span>
+                    <IconTrash size={16} stroke={1.5} />
+                    <span className="text-[10px]">删除</span>
                 </button>
             </div>
 

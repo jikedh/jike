@@ -112,7 +112,7 @@ export const getBaseURL = (apiPath: string): string => {
     const apiServers: Record<string, string> = {
       ai: 'https://toapis.com',
       zeakai: 'https://zeakai-api.api4midjourney.com',
-      kuaizi: 'https://aiopenapi.kuaizi.cn',
+      kuaizi: 'https://aiopenapi.kuaizi.cn/ai-open-platform-api/v1',
     }
     return apiServers[apiPath] || '/'
   }

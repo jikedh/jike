@@ -70,7 +70,7 @@ type CanvasFlowState = {
   nodes: AllNodeType[]
   edges: EdgeType[]
   // 各类型节点的自增计数器
-  nodeIdCounters: { note: number; image: number; video: number; agent: number; panorama: number; audio: number }
+  nodeIdCounters: { note: number; image: number; video: number; agent: number; panorama: number; audio: number; table: number }
   // 是否已完成数据恢复
   hydrated: boolean
   // 当前项目 ID

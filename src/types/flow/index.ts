@@ -79,6 +79,8 @@ export interface VideoGenerationNode {
   duration?: number; // 视频时长（秒）
   aspect_ratio: string; // 宽高比，如 "16:9"
   image_urls?: string[]; // 参考图像 URL 列表
+  video_urls?: string[]; // 参考视频 URL 列表（仅 Seedance 2.0 支持）
+  audio_urls?: string[]; // 参考音频 URL 列表（仅 Seedance 2.0 支持）
   status?: GenerationStatus; // 当前生成状态
   progress?: number; // 进度百分比（0-100）
   metadata: {
