@@ -1,4 +1,4 @@
-import { IconCopy, IconLayoutGrid, IconTrash } from '@tabler/icons-react'
+import { IconCopy, IconLayoutGrid, IconTrash, IconLayout } from '@tabler/icons-react'
 import type { PropsWithChildren } from 'react'
 
 import {
@@ -16,9 +16,11 @@ type NodeContextMenuProps = PropsWithChildren<{
     onDuplicate: () => void
     onDelete: () => void
   onSplitImage?: (gridSize: 2 | 3 | 4) => void
+  onSeparateToNodes?: () => void
+  hasMultipleResults?: boolean
 }>
 
-export const NodeContextMenu = ({ children, onDuplicate, onDelete, onSplitImage }: NodeContextMenuProps) => {
+export const NodeContextMenu = ({ children, onDuplicate, onDelete, onSplitImage, onSeparateToNodes, hasMultipleResults }: NodeContextMenuProps) => {
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
@@ -58,6 +60,16 @@ export const NodeContextMenu = ({ children, onDuplicate, onDelete, onSplitImage 
                 </ContextMenuItem>
               </ContextMenuSubContent>
             </ContextMenuSub>
+          )}
+
+          {onSeparateToNodes && hasMultipleResults && (
+            <ContextMenuItem
+              className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
+              onSelect={onSeparateToNodes}
+            >
+              <IconLayout size={15} />
+              独立为图片
+            </ContextMenuItem>
           )}
 
                 <ContextMenuSeparator className="bg-white/5 h-px" />

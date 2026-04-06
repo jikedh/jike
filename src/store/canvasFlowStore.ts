@@ -137,6 +137,8 @@ type CanvasFlowState = {
   stopImagePolling: (nodeId: string) => void
   /** 拆图：将图片节点拆分为宫格子图 */
   splitImage: (nodeId: string, gridSize: number) => void
+  /** 独立为图片：将节点中的多张图片/视频拆分为独立节点 */
+  separateToNodes: (nodeId: string) => void
   /** 更新视频节点数据（局部字段 patch） */
   updateVideoNodeData: (nodeId: string, patch: Partial<VideoGenerationNode>) => void
   /** 创建视频生成任务并启动轮询 */
@@ -1544,6 +1546,57 @@ duplicateNode: (nodeId: string) => {
     }))
 
     // 自动保存
+    if (useChatSettingsStore.getState().autoSaveEnabled) {
+      get().saveGraph()
+    }
+  },
+
+  /**
+   * 独立为图片：将节点中的多张图片/视频拆分为独立节点
+   * @param nodeId 源节点 ID
+   */
+  separateToNodes: (nodeId: string) => {
+    const sourceNode = get().nodes.find((node) => node.id === nodeId)
+    if (!sourceNode) return
+
+    const nodeType = sourceNode.type
+    const sourceData = sourceNode.data as ImageGenerationNode | VideoGenerationNode
+    const resultData = sourceData.result?.data
+
+    if (!resultData || resultData.length <= 1) return
+
+    const nodeWidth = nodeType === 'imageNode' ? 350 : 350
+    const nodeHeight = nodeType === 'imageNode' ? 280 : 250
+    const gap = 20
+
+    for (let i = 1; i < resultData.length; i++) {
+      const item = resultData[i]
+      if (!item?.url) continue
+
+      const position = {
+        x: sourceNode.position.x + (i - 1) * (nodeWidth + gap),
+        y: sourceNode.position.y + nodeHeight + gap,
+      }
+
+      const newNodeId = get().addNode('image', position)
+
+      get().updateImageNodeData(newNodeId, {
+        status: GenerationStatus.COMPLETED,
+        progress: 100,
+        result: {
+          type: 'image',
+          data: [{ url: item.url }],
+        },
+      })
+    }
+
+    get().updateImageNodeData(nodeId, {
+      result: {
+        type: sourceData.result?.type ?? 'image',
+        data: [resultData[0]],
+      },
+    })
+
     if (useChatSettingsStore.getState().autoSaveEnabled) {
       get().saveGraph()
     }

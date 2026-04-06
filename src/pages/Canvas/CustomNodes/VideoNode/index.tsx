@@ -30,6 +30,7 @@ export const VideoNode = memo(({
     const { zoom } = useNodeScale()
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode)
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode)
+    const separateToNodes = useCanvasFlowStore((state) => state.separateToNodes)
 
     // 使用 useStore 的 selector 精确订阅选中节点数量
     const selectedNodesCount = useStore((state) => {
@@ -63,10 +64,21 @@ export const VideoNode = memo(({
         deleteNode(id)
     }, [deleteNode, id])
 
+    const handleSeparateToNodes = useCallback(() => {
+        separateToNodes(id)
+    }, [separateToNodes, id])
+
+    const hasMultipleResults = (data.result?.data?.length ?? 0) > 1
+
     // console.log('视频节点重新渲染', id)
 
     return (
-        <NodeContextMenu onDuplicate={handleDuplicate} onDelete={handleDelete}>
+        <NodeContextMenu
+            onDuplicate={handleDuplicate}
+            onDelete={handleDelete}
+            onSeparateToNodes={handleSeparateToNodes}
+            hasMultipleResults={hasMultipleResults}
+        >
             <div className="group/node relative">
                 {/* 左侧输入 Handle */}
                 <ButtonHandle

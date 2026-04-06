@@ -39,6 +39,7 @@ export const ImageNode = memo(({
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode)
     const addNode = useCanvasFlowStore((state) => state.addNode)
     const splitImage = useCanvasFlowStore((state) => state.splitImage)
+    const separateToNodes = useCanvasFlowStore((state) => state.separateToNodes)
     const updateImageNodeData = useCanvasFlowStore((state) => state.updateImageNodeData)
     const onConnect = useCanvasFlowStore((state) => state.onConnect)
 
@@ -90,6 +91,12 @@ export const ImageNode = memo(({
     const handleContextMenuSplitImage = useCallback((gridSize: number) => {
         splitImage(id, gridSize)
     }, [splitImage, id])
+
+    const handleContextMenuSeparateToNodes = useCallback(() => {
+        separateToNodes(id)
+    }, [separateToNodes, id])
+
+    const hasMultipleResults = (data.result?.data?.length ?? 0) > 1
 
     // 裁剪完成后：上传裁剪文件、创建子节点，并把裁剪结果挂到新节点上
     const handleCrop = useCallback(async (file: File) => {
@@ -163,6 +170,8 @@ export const ImageNode = memo(({
                 onDuplicate={handleContextMenuDuplicate}
                 onDelete={handleContextMenuDelete}
                 onSplitImage={handleContextMenuSplitImage}
+                onSeparateToNodes={handleContextMenuSeparateToNodes}
+                hasMultipleResults={hasMultipleResults}
             >
                 <div className="group/node relative">
                     {/* 左侧输入 Handle */}
