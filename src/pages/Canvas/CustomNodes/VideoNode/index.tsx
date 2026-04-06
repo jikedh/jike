@@ -11,7 +11,6 @@ import type { VideoNodeType } from '@/types/flow'
 import { VideoContent } from './VideoContent'
 import { VideoPromptPanel } from './VideoPromptPanel'
 import { VideoToolbar } from './VideoToolbar'
-import { getNodeSizeByAspectRatio } from '../ImageNode/utils/aspectRatioUtils'
 
 /**
  * 视频节点组件
@@ -64,12 +63,6 @@ export const VideoNode = memo(({
         deleteNode(id)
     }, [deleteNode, id])
 
-    // 根据视频比例计算节点尺寸
-    const nodeSize = useMemo(() => {
-        const aspectRatio = data.aspect_ratio ?? '16:9'
-        return getNodeSizeByAspectRatio(aspectRatio)
-    }, [data.aspect_ratio])
-
     // console.log('视频节点重新渲染', id)
 
     return (
@@ -115,15 +108,11 @@ export const VideoNode = memo(({
 
                 <div
                     className={cn(
-                        'group/card relative flex flex-col rounded-xl border bg-linear-to-br from-[#141418] to-[#0d0d10] transition-all duration-300 ease-out',
+                        'group/card relative flex w-87.5 h-62.5 flex-col rounded-xl border bg-linear-to-br from-[#141418] to-[#0d0d10] transition-all duration-300 ease-out',
                         selected
                             ? 'border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30'
                             : 'border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]'
                     )}
-                    style={{
-                        width: `${nodeSize.width}px`,
-                        height: `${nodeSize.height}px`,
-                    }}
                 >
                     {/* 选中状态角落装饰 */}
                     {selected && (
