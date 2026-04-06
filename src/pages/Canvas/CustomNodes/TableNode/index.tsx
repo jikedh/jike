@@ -300,7 +300,7 @@ export const TableNode = memo(({ id, data, selected, width, height, dragging }: 
                 <h3 className="text-sm font-semibold text-white">{title || '角色设计表'}</h3>
               </div>
               
-              <div className="flex-1 overflow-auto p-2">
+              <div className="flex-1 overflow-auto p-2 nodrag nopan nowheel">
                 <div className="bg-[#1A1A1C] rounded-lg overflow-hidden h-full border border-white/[0.06]">
                   <table className="w-max min-w-full border-collapse text-left">
                     <thead className="sticky top-0 z-10 bg-[#1A1A1C]">

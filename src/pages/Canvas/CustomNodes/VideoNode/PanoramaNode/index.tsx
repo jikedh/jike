@@ -32,6 +32,13 @@ export const PanoramaNode = memo(({
     const canvasRef = useRef<HTMLDivElement>(null)
     const animationFrameRef = useRef<number | undefined>(undefined)
 
+    const fullscreenRendererRef = useRef<THREE.WebGLRenderer | null>(null)
+    const fullscreenCameraRef = useRef<THREE.PerspectiveCamera | null>(null)
+    const fullscreenSceneRef = useRef<THREE.Scene | null>(null)
+    const fullscreenControlsRef = useRef<OrbitControls | null>(null)
+    const fullscreenCanvasRef = useRef<HTMLDivElement>(null)
+    const fullscreenAnimationRef = useRef<number | undefined>(undefined)
+
     const [isFullscreen, setIsFullscreen] = useState(false)
 
     const selectedNodesCount = useStore((state) => {
@@ -376,6 +383,128 @@ export const PanoramaNode = memo(({
         }
     }, [data.image_url])
 
+    useEffect(() => {
+        if (!isFullscreen || !fullscreenCanvasRef.current || !data.image_url) {
+            return
+        }
+
+        if (fullscreenRendererRef.current) {
+            fullscreenRendererRef.current.dispose()
+            if (fullscreenCanvasRef.current.contains(fullscreenRendererRef.current.domElement)) {
+                fullscreenCanvasRef.current.removeChild(fullscreenRendererRef.current.domElement)
+            }
+        }
+        if (fullscreenAnimationRef.current) {
+            cancelAnimationFrame(fullscreenAnimationRef.current)
+        }
+
+        const scene = new THREE.Scene()
+        fullscreenSceneRef.current = scene
+
+        const width = window.innerWidth
+        const height = window.innerHeight
+        const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000)
+        camera.position.set(0, 0, 0.1)
+        fullscreenCameraRef.current = camera
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true })
+        renderer.setSize(width, height)
+        renderer.setPixelRatio(window.devicePixelRatio)
+        fullscreenCanvasRef.current.appendChild(renderer.domElement)
+        fullscreenRendererRef.current = renderer
+
+        const controls = new OrbitControls(camera, renderer.domElement)
+        controls.enableZoom = false
+        controls.enablePan = false
+        controls.rotateSpeed = -0.5
+        fullscreenControlsRef.current = controls
+
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        
+        img.onload = () => {
+            try {
+                const texture = new THREE.Texture(img)
+                texture.colorSpace = THREE.SRGBColorSpace
+                texture.needsUpdate = true
+                
+                const geometry = new THREE.SphereGeometry(500, 60, 40)
+                geometry.scale(-1, 1, 1)
+                const material = new THREE.MeshBasicMaterial({ map: texture })
+                const sphere = new THREE.Mesh(geometry, material)
+                scene.add(sphere)
+
+                const animate = () => {
+                    fullscreenAnimationRef.current = requestAnimationFrame(animate)
+                    controls.update()
+                    renderer.render(scene, camera)
+                }
+                animate()
+            } catch (error) {
+                console.error('PanoramaNode fullscreen: Failed to create texture:', error)
+            }
+        }
+        
+        img.onerror = () => {
+            const imgNoCors = new Image()
+            imgNoCors.onload = () => {
+                try {
+                    const canvas = document.createElement('canvas')
+                    canvas.width = imgNoCors.width
+                    canvas.height = imgNoCors.height
+                    const ctx = canvas.getContext('2d')
+                    if (ctx) {
+                        ctx.drawImage(imgNoCors, 0, 0)
+                        const texture = new THREE.CanvasTexture(canvas)
+                        texture.colorSpace = THREE.SRGBColorSpace
+                        
+                        const geometry = new THREE.SphereGeometry(500, 60, 40)
+                        geometry.scale(-1, 1, 1)
+                        const material = new THREE.MeshBasicMaterial({ map: texture })
+                        const sphere = new THREE.Mesh(geometry, material)
+                        scene.add(sphere)
+
+                        const animate = () => {
+                            fullscreenAnimationRef.current = requestAnimationFrame(animate)
+                            controls.update()
+                            renderer.render(scene, camera)
+                        }
+                        animate()
+                    }
+                } catch (err) {
+                    console.error('PanoramaNode fullscreen: Failed to create texture without CORS:', err)
+                }
+            }
+            imgNoCors.src = data.image_url!
+        }
+        
+        img.src = data.image_url
+
+        const handleResize = () => {
+            if (fullscreenRendererRef.current && fullscreenCameraRef.current) {
+                const w = window.innerWidth
+                const h = window.innerHeight
+                fullscreenRendererRef.current.setSize(w, h)
+                fullscreenCameraRef.current.aspect = w / h
+                fullscreenCameraRef.current.updateProjectionMatrix()
+            }
+        }
+        window.addEventListener('resize', handleResize)
+
+        return () => {
+            window.removeEventListener('resize', handleResize)
+            if (fullscreenAnimationRef.current) {
+                cancelAnimationFrame(fullscreenAnimationRef.current)
+            }
+            if (fullscreenRendererRef.current) {
+                fullscreenRendererRef.current.dispose()
+                if (fullscreenCanvasRef.current && fullscreenCanvasRef.current.contains(fullscreenRendererRef.current.domElement)) {
+                    fullscreenCanvasRef.current.removeChild(fullscreenRendererRef.current.domElement)
+                }
+            }
+        }
+    }, [isFullscreen, data.image_url])
+
     return (
         <>
             <NodeContextMenu
@@ -491,7 +620,7 @@ export const PanoramaNode = memo(({
 
             {isFullscreen && data.image_url && typeof document !== 'undefined' && createPortal(
                 <div className="fixed inset-0 z-[100] bg-gray-950 overflow-hidden">
-                    <div ref={canvasRef} className="w-full h-full" />
+                    <div ref={fullscreenCanvasRef} className="w-full h-full" />
                     <div className="fixed top-6 left-6 z-20 flex gap-2">
                         <button
                             onClick={() => setIsFullscreen(false)}

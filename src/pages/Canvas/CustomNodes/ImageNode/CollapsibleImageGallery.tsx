@@ -35,23 +35,20 @@ export const CollapsibleImageGallery = ({ images, onReorder }: CollapsibleImageG
 
     // 切换折叠/展开
   const handleToggleExpanded = (e: any) => {
-  // e.stopPropagation() // 阻止事件冒泡到父级节点
+        e.stopPropagation()
         setIsExpanded((prev) => !prev)
     }
 
-    // 记录失败索引，避免重复写入
     const handleImageError = (index: number) => {
         setBrokenImageIndexes((prev) => (prev.includes(index) ? prev : [...prev, index]))
     }
 
-    // 点击展开态中的图片，触发排序并收起
-    const handleImageClick = (index: number) => {
-        // 首位图片无需排序
+    const handleImageClick = (e: any, index: number) => {
+        e.stopPropagation()
         if (index === 0) return
         if (onReorder) {
             onReorder(index)
         }
-        // 收起图片集合
         setIsExpanded(false)
     }
 
@@ -102,7 +99,7 @@ export const CollapsibleImageGallery = ({ images, onReorder }: CollapsibleImageG
                                         index={index}
                                         isBroken={brokenImageIndexes.includes(index)}
                                         onError={handleImageError}
-                                        onClick={() => handleImageClick(index)}
+                                        onClick={(e) => handleImageClick(e, index)}
                                         className="rounded-md"
                                     />
                                 </div>

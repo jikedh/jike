@@ -3,16 +3,10 @@ type ImageTileProps = {
     index: number
     isBroken: boolean
     onError: (index: number) => void
-    onClick?: () => void
+    onClick?: (e: React.MouseEvent) => void
     className?: string
 }
 
-/**
- * 单张图片单元
- * - 正常时渲染图片
- * - 加载失败时渲染占位块（避免网格塌陷）
- * - 支持点击事件用于触发排序
- */
 export const ImageTile = ({ url, index, isBroken, onError, onClick, className }: ImageTileProps) => {
     if (isBroken) {
         return (

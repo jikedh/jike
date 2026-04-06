@@ -1597,43 +1597,37 @@ duplicateNode: (nodeId: string) => {
 
     const sourceData = sourceNode.data as ImageGenerationNode
     const sourceModel = sourceData.model || 'doubao-seedream-5-0'
-    // 获取源图片的 URL 作为参考图
     const sourceImageUrl = sourceData.result?.data?.[0]?.url
+    const sourcePrompt = sourceData.prompt || ''
 
     const totalCells = gridSize * gridSize
-    const nodeWidth = 350 // 图片节点宽度
-    const nodeHeight = 280 // 图片节点高度
-    const gap = 20 // 节点间距
+    const nodeWidth = 350
+    const nodeHeight = 280
+    const gap = 20
 
-    // 源节点右侧起始位置
     const startX = sourceNode.position.x + (sourceNode.width ?? nodeWidth) + gap * 3
     const startY = sourceNode.position.y
 
-    // 宫格名称映射
     const gridNameMap: Record<number, string> = { 2: '四', 3: '九', 4: '十六' }
     const gridName = gridNameMap[gridSize]
 
-    // 收集新创建的边
     const newEdges: EdgeType[] = []
 
-    // 为每个宫格创建图片节点并启动生成任务
     for (let i = 0; i < totalCells; i++) {
       const row = Math.floor(i / gridSize) + 1
       const col = (i % gridSize) + 1
 
-      // 计算节点在网格中的位置
       const position = {
         x: startX + (col - 1) * (nodeWidth + gap),
         y: startY + (row - 1) * (nodeHeight + gap),
       }
 
-      // 生成提示词（参考用户提供的模板）
-      const prompt = `这是一张${gridName}宫格的图片，中间是用白色分割线区分的。帮我把${gridName}宫格图中的第${row}行的第${col}列图片单独提取出来，放大为独立图片。与第${row}行的第${col}列图片保持完全相同的构图、色调，去除图片四个角落文字、字幕、标注，序号，高清优化图片所有细节，8K清晰度。`
+      const splitPrompt = `这是一张${gridName}宫格的图片，中间是用白色分割线区分的。帮我把${gridName}宫格图中的第${row}行的第${col}列图片单独提取出来，放大为独立图片。与第${row}行的第${col}列图片保持完全相同的构图、色调，去除图片四个角落文字、字幕、标注，序号，高清优化图片所有细节，8K清晰度。`
+      
+      const finalPrompt = sourcePrompt ? `${splitPrompt}\n\n原始提示词：${sourcePrompt}` : splitPrompt
 
-      // 创建新图片节点
       const newId = get().addNode('image', position)
 
-      // 创建从源节点到新节点的边
       newEdges.push({
         id: `edge-${nodeId}-${newId}`,
         source: nodeId,
@@ -1642,15 +1636,13 @@ duplicateNode: (nodeId: string) => {
         targetHandle: 'input',
       })
 
-      // 准备生成载荷
       const payload: any = {
         model: sourceModel,
-        prompt,
+        prompt: finalPrompt,
         n: 1,
         metadata: {},
       }
 
-      // 继承源图片的比例设置
       if (sourceData.size) {
         payload.size = sourceData.size
         payload.metadata.resolution = sourceData.resolution
@@ -1659,15 +1651,12 @@ duplicateNode: (nodeId: string) => {
         payload.resolution = sourceData.resolution
       }
 
-      // 如果源图片有 URL，添加为参考图
       if (sourceImageUrl) {
         payload.image_urls = [sourceImageUrl]
       }
 
-      // 调试：打印拆图 payload
       console.log('[拆图] payload:', payload)
 
-      // 启动图片生成任务
       get().startImageGeneration(newId, payload)
     }
 
