@@ -78,22 +78,21 @@ const doubaoSeedance20Strategy: VideoPayloadStrategy = {
     const rawDuration = nodeData.duration ?? 8
     const nextDuration = Math.min(Math.max(rawDuration, minDuration), maxDuration)
 
+    const images = buildSeedance20Images(imageUrls)
+    const hasImages = images.length > 0
+
     return {
       model: 'doubao-seedance-2.0',
       prompt,
       generation_type: 'video',
-      // 固定默认值，不再从 metadata 读取
-      input_type: 'reference',
       mode,
-      images: buildSeedance20Images(imageUrls),
       resolution: nodeData.metadata?.resolution ?? '720p',
       ratio: nodeData.aspect_ratio ?? '16:9',
       duration: nextDuration,
       generate_audio: nodeData.metadata?.generate_audio ?? true,
-      // 固定为 -1（随机种子），不暴露给用户
       seed: -1,
-      // 固定为 false（联网搜索增强），不暴露给用户
       web_search: false,
+      ...(hasImages ? { input_type: 'reference' as const, images } : {}),
     }
   },
 }

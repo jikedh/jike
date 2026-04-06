@@ -19,7 +19,7 @@ import {
 import { submitMjImagine, fetchMjTask } from '@/api/ai'
 import { useChatSettingsStore } from '@/store/chatSettingsStore'
 import { getAgentPresetById, type AgentPresetId } from '@/constants/agent-presets'
-import type { AllNodeType, EdgeType, ImageGenerationNode, VideoGenerationNode } from '@/types/flow'
+import type { AllNodeType, EdgeType, ImageGenerationNode, VideoGenerationNode, AudioGenerationNode } from '@/types/flow'
 import { GenerationStatus } from '@/constants/enum'
 import { getCanvasDataKey } from '@/utils/projectStorage'
 import { buildMidjourneyPrompt } from '@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt'
@@ -34,13 +34,13 @@ type CanvasPersistedState = {
   savedAt: number
   nodes: AllNodeType[]
   edges: EdgeType[]
-  nodeIdCounters: { note: number; image: number; video: number; agent: number; panorama: number }
+  nodeIdCounters: { note: number; image: number; video: number; agent: number; panorama: number; audio: number }
 }
 
 /**
  * 节点类型标识符
  */
-type NodeType = 'note' | 'image' | 'video' | 'agent' | 'panorama'
+type NodeType = 'note' | 'image' | 'video' | 'agent' | 'panorama' | 'audio'
 type NodePosition = { x: number; y: number }
 type AddNodeOptions = {
   agentPresetId?: AgentPresetId
@@ -65,7 +65,7 @@ type CanvasFlowState = {
   nodes: AllNodeType[]
   edges: EdgeType[]
   // 各类型节点的自增计数器
-  nodeIdCounters: { note: number; image: number; video: number; agent: number; panorama: number }
+  nodeIdCounters: { note: number; image: number; video: number; agent: number; panorama: number; audio: number }
   // 是否已完成数据恢复
   hydrated: boolean
   // 当前项目 ID
@@ -145,6 +145,8 @@ type CanvasFlowState = {
   startVideoGeneration: (nodeId: string, payload: any) => Promise<void>
   /** 手动停止视频轮询（防止内存泄露） */
   stopVideoPolling: (nodeId: string) => void
+  /** 更新音频节点数据（局部字段 patch） */
+  updateAudioNodeData: (nodeId: string, patch: Partial<AudioGenerationNode>) => void
 
   // === 任务管理 ===
   /** 获取正在生成的任务数量 */
@@ -252,6 +254,26 @@ const updateVideoNodeInList = (
     return {
       ...node,
       data: updater(node.data as VideoGenerationNode),
+    }
+  })
+}
+
+/**
+ * 更新音频节点数据的通用辅助函数
+ */
+const updateAudioNodeInList = (
+  nodes: AllNodeType[],
+  nodeId: string,
+  updater: (data: AudioGenerationNode) => AudioGenerationNode
+) => {
+  return nodes.map((node) => {
+    if (node.id !== nodeId || node.type !== 'audioNode') {
+      return node
+    }
+
+    return {
+      ...node,
+      data: updater(node.data as AudioGenerationNode),
     }
   })
 }
@@ -808,7 +830,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
   return {
   nodes: [],
   edges: [],
-  nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1 },
+  nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1 },
   hydrated: false,
   projectId: null,
   // 全景图查看器初始化
@@ -853,7 +875,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           projectId,
           nodes: [],
           edges: [],
-          nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1 },
+          nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1 },
           hydrated: true,
           history: [],
           historyIndex: -1,
@@ -869,7 +891,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           projectId,
           nodes: [],
           edges: [],
-          nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1 },
+          nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1 },
           hydrated: true,
           history: [],
           historyIndex: -1,
@@ -895,7 +917,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
         projectId,
         nodes: [],
         edges: [],
-        nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1 },
+        nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1 },
         hydrated: true,
         history: [],
         historyIndex: -1,
@@ -978,7 +1000,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
     set({
       nodes: [],
       edges: [],
-      nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1 },
+      nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1 },
       hydrated: false,
       projectId: null,
     })
@@ -988,7 +1010,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
 
   /**
    * 获取下一个指定类型的节点 ID
-    * @param nodeType 节点类型：'note' | 'image' | 'video' | 'agent'
+    * @param nodeType 节点类型：'note' | 'image' | 'video' | 'agent' | 'panorama' | 'audio'
    * @returns 新的节点 ID，如 'note-3', 'image-1' 等
    */
   getNextNodeId: (nodeType: NodeType) => {
@@ -1085,7 +1107,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           createdAt: Date.now(),
         },
       }
-    } else {
+    } else if (nodeType === 'video') {
       newNode = {
         id: nextId,
         type: 'videoNode',
@@ -1108,6 +1130,30 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           createdAt: Date.now(),
         },
       }
+    } else if (nodeType === 'audio') {
+      newNode = {
+        id: nextId,
+        type: 'audioNode',
+        position: nextPosition,
+        width: 350,
+        height: 250,
+        data: {
+          model: 'audio-upload',
+          prompt: '',
+          promptDraft: '',
+          promptDraftHtml: '<p></p>',
+          status: GenerationStatus.COMPLETED,
+          progress: 0,
+          isUpload: false,
+          result: {
+            type: 'audio',
+            data: [],
+          },
+          createdAt: Date.now(),
+        },
+      }
+    } else {
+      return ''
     }
 
     set((state) => ({
@@ -1615,6 +1661,18 @@ duplicateNode: (nodeId: string) => {
   },
 
   /**
+   * 更新音频节点数据（局部 patch）
+   */
+  updateAudioNodeData: (nodeId, patch) => {
+    set((state) => ({
+      nodes: updateAudioNodeInList(state.nodes, nodeId, (data) => ({
+        ...data,
+        ...patch,
+      })),
+    }))
+  },
+
+  /**
    * 创建视频生成任务并启动轮询
    */
   startVideoGeneration: async (nodeId, payload) => {
@@ -1638,7 +1696,12 @@ duplicateNode: (nodeId: string) => {
 
     try {
       const isSeedance20 = payload?.model === 'doubao-seedance-2.0'
+      console.log('[startVideoGeneration] model:', payload?.model, '| isSeedance20:', isSeedance20)
+      console.log('[startVideoGeneration] payload:', JSON.stringify(payload, null, 2))
+      
       const response: any = isSeedance20 ? await createLzVideoTask(payload) : await createVideoGeneration(payload)
+      console.log('[startVideoGeneration] response:', response)
+      
       const taskId = isSeedance20 ? response?.data?.task_id : response?.id
 
       if (!taskId) {
@@ -1841,6 +1904,29 @@ duplicateNode: (nodeId: string) => {
    * 当连接到视频节点时，自动同步上游图片节点的 URL 到 image_urls
    */
   onConnect: (connection) => {
+    const { nodes } = get()
+    
+    const sourceNode = nodes.find(n => n.id === connection.source)
+    const targetNode = nodes.find(n => n.id === connection.target)
+    
+    if (targetNode?.type === 'videoNode') {
+      const allowedSourceTypes = ['imageNode', 'videoNode', 'audioNode']
+      if (sourceNode && !allowedSourceTypes.includes(sourceNode.type || '')) {
+        console.warn('视频节点只能接受图片、视频、音频节点的输入')
+        return
+      }
+      
+      if (sourceNode?.type === 'audioNode') {
+        const audioData = sourceNode.data as AudioGenerationNode
+        const audioDuration = audioData.result?.data?.[0]?.duration || audioData.duration || 0
+        
+        if (audioDuration > 15) {
+          console.warn('音频时长超过15秒，无法连接到视频节点')
+          return
+        }
+      }
+    }
+    
     set((state) => {
       const nextEdges = addEdge(connection, state.edges)
       const currentEdgeIds = new Set(state.edges.map((edge) => edge.id))
@@ -1852,7 +1938,6 @@ duplicateNode: (nodeId: string) => {
       }
     })
 
-    // 在连接创建后保存历史记录
     setTimeout(() => get().saveToHistory(), 0)
   },
 

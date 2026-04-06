@@ -3,13 +3,14 @@ import { ImageNode } from '../CustomNodes/ImageNode'
 import { VideoNode } from '../CustomNodes/VideoNode'
 import { AgentNode } from '../CustomNodes/AgentNode'
 import { PanoramaNode } from '../CustomNodes/VideoNode/PanoramaNode'
+import { AudioNode } from '../CustomNodes/AudioNode'
 import type { AgentPresetId } from '@/constants/agent-presets'
 import { CustomEdge } from '../CustomEdge/CustomEdge'
 
 /**
  * 自定义节点类型映射
  * 以模块级常量定义，避免高频渲染时重复创建对象
- * 支持五种节点类型：noteNode、imageNode、videoNode、agentNode、panoramaNode
+ * 支持六种节点类型：noteNode、imageNode、videoNode、agentNode、panoramaNode、audioNode
  */
 export const nodeTypes = {
     noteNode: NoteNode,
@@ -17,6 +18,7 @@ export const nodeTypes = {
     videoNode: VideoNode,
     agentNode: AgentNode,
     panoramaNode: PanoramaNode,
+    audioNode: AudioNode,
 }
 
 /**

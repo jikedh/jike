@@ -81,6 +81,16 @@
   pointer-events: none;
 }
 
+.video-node-mention-pill__audio-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
 .video-node-mention-pill__label {
   line-height: 1;
 }

@@ -50,6 +50,7 @@ const DEFAULT_ITEMS: FloatingSidebarItem[] = [
       { id: 'create-note', label: '便签' },
       { id: 'create-image', label: '图片' },
       { id: 'create-video', label: '视频' },
+      { id: 'create-audio', label: '音频' },
     ],
   },
   {

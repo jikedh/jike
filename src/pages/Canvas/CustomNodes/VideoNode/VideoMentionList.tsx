@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useState, useRef } from 'react'
+import { IconMusic } from '@tabler/icons-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
@@ -7,12 +8,13 @@ export interface VideoMentionItem {
   label: string
   value: string
   thumbnail: string
+  type?: 'image' | 'video' | 'audio'
 }
 
 // Tiptap Suggestion API 的 props 类型
 interface SuggestionProps {
   items: VideoMentionItem[]
-  command: (item: { id: string; label: string; value: string; thumbnail?: string }) => void
+  command: (item: { id: string; label: string; value: string; thumbnail?: string; type?: 'image' | 'video' | 'audio' }) => void
 }
 
 interface VideoMentionListProps extends SuggestionProps {}
@@ -67,7 +69,7 @@ export const VideoMentionList = forwardRef<{ onKeyDown: (props: { event: Keyboar
     const selectItem = (index: number) => {
       const item = items[index]
       if (item && command) {
-        command({ id: item.id, label: item.label, value: item.value, thumbnail: item.thumbnail })
+        command({ id: item.id, label: item.label, value: item.value, thumbnail: item.thumbnail, type: item.type })
       }
     }
 
@@ -93,12 +95,18 @@ export const VideoMentionList = forwardRef<{ onKeyDown: (props: { event: Keyboar
               setSelectedIndex(index)
             }}
           >
-            <img
-              src={item.thumbnail}
-              alt={item.label}
-              className="h-7 w-7 shrink-0 rounded-md object-cover"
-              loading="lazy"
-            />
+            {item.type === 'audio' ? (
+              <div className="h-7 w-7 shrink-0 rounded-md bg-[#B43FEB]/20 flex items-center justify-center">
+                <IconMusic size={16} className="text-[#B43FEB]" />
+              </div>
+            ) : (
+              <img
+                src={item.thumbnail}
+                alt={item.label}
+                className="h-7 w-7 shrink-0 rounded-md object-cover"
+                loading="lazy"
+              />
+            )}
             <div className="text-xs font-medium">{item.label}</div>
           </Button>
         ))}

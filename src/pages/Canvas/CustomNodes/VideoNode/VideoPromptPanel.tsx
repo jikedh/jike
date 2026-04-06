@@ -19,7 +19,7 @@ import { GenerationStatus } from '@/constants/enum'
 import useMessage from '@/hooks/useMessage'
 import { cn, toChineseNumber, getMentionLabel, updateSuggestionPosition } from '@/lib/utils'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
-import type { NoteNodeData, VideoGenerationNode } from '@/types/flow'
+import type { NoteNodeData, VideoGenerationNode, ImageGenerationNode, AudioGenerationNode } from '@/types/flow'
 import { VideoMentionList } from './VideoMentionList'
 
 import { Seedance15ProParamsPanel } from './components/Seedance15ProParamsPanel'
@@ -72,19 +72,108 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         return currentVideoData?.image_urls ?? []
     }, [currentVideoData?.image_urls])
 
-  // 将 image_urls 转换成提及候选项：缩略图 + 图片一/图片二...
-  const videoMentionItems = useMemo(() => {
-    return referenceImageUrls.map((url, index) => {
-      const label = `图片${toChineseNumber(index + 1)}`
+    // 获取上游连接的视频节点
+    const parentVideoNodes = useMemo(() => {
+      const parentIds = edges
+        .filter((edge) => edge.target === nodeId)
+        .map((edge) => edge.source)
 
-      return {
+      return parentIds
+        .map((parentId) => nodes.find((node) => node.id === parentId))
+        .filter((node) => node?.type === 'videoNode')
+        .map((node) => ({
+          id: node.id,
+          url: (node.data as VideoGenerationNode).result?.data?.[0]?.url,
+        }))
+        .filter((item) => item.url)
+    }, [edges, nodeId, nodes])
+
+    // 获取上游连接的音频节点
+    const parentAudioNodes = useMemo(() => {
+      const parentIds = edges
+        .filter((edge) => edge.target === nodeId)
+        .map((edge) => edge.source)
+
+      return parentIds
+        .map((parentId) => nodes.find((node) => node.id === parentId))
+        .filter((node) => node?.type === 'audioNode')
+        .map((node) => ({
+          id: node.id,
+          url: (node.data as AudioGenerationNode).result?.data?.[0]?.url,
+        }))
+        .filter((item) => item.url)
+    }, [edges, nodeId, nodes])
+
+    // 获取上游连接的图片节点
+    const parentImageNodes = useMemo(() => {
+      const parentIds = edges
+        .filter((edge) => edge.target === nodeId)
+        .map((edge) => edge.source)
+
+      return parentIds
+        .map((parentId) => nodes.find((node) => node.id === parentId))
+        .filter((node) => node?.type === 'imageNode')
+        .map((node) => ({
+          id: node.id,
+          url: (node.data as ImageGenerationNode).result?.data?.[0]?.url,
+        }))
+        .filter((item) => item.url)
+    }, [edges, nodeId, nodes])
+
+  // 将所有资源转换成提及候选项
+  const videoMentionItems = useMemo(() => {
+    const items: { id: string; label: string; value: string; thumbnail: string; type: 'image' | 'video' | 'audio' }[] = []
+
+    // 添加图片（来自上传）
+    referenceImageUrls.forEach((url, index) => {
+      items.push({
         id: `video-image-${index}`,
-        label,
-        value: label,
+        label: `图片${toChineseNumber(index + 1)}`,
+        value: `图片${toChineseNumber(index + 1)}`,
         thumbnail: url,
-      }
+        type: 'image',
+      })
     })
-  }, [referenceImageUrls])
+
+    // 添加上游图片节点
+    parentImageNodes.forEach((item, index) => {
+      items.push({
+        id: `parent-image-${item.id}`,
+        label: `图片节点${toChineseNumber(index + 1)}`,
+        value: `图片节点${toChineseNumber(index + 1)}`,
+        thumbnail: item.url!,
+        type: 'image',
+      })
+    })
+
+    // 添加上游视频节点（仅 Seedance 2.0 模型支持 @视频）
+    if (model === 'doubao-seedance-2.0') {
+      parentVideoNodes.forEach((item, index) => {
+        items.push({
+          id: `parent-video-${item.id}`,
+          label: `视频${toChineseNumber(index + 1)}`,
+          value: `视频${toChineseNumber(index + 1)}`,
+          thumbnail: item.url!,
+          type: 'video',
+        })
+      })
+    }
+
+    // 添加上游音频节点（仅 Seedance 2.0 模型支持 @音频）
+    if (model === 'doubao-seedance-2.0') {
+      parentAudioNodes.forEach((item, index) => {
+        items.push({
+          id: `parent-audio-${item.id}`,
+          label: `音频${toChineseNumber(index + 1)}`,
+          value: `音频${toChineseNumber(index + 1)}`,
+          thumbnail: '/audio-icon.svg',
+          type: 'audio',
+        })
+      })
+    }
+
+    return items
+  }, [referenceImageUrls, parentImageNodes, parentVideoNodes, parentAudioNodes, model])
 
     const parentNoteContents = useMemo(() => {
         const orderedParentIds: string[] = []
@@ -133,6 +222,15 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
               }
             },
           },
+          type: {
+            default: 'image',
+            parseHTML: element => element.getAttribute('data-type') || 'image',
+            renderHTML: attributes => {
+              return {
+                'data-type': attributes.type || 'image',
+              }
+            },
+          },
         }
       },
       draggable: true,
@@ -148,10 +246,19 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       renderHTML({ options, node }) {
         const mentionLabel = getMentionLabel(node.attrs)
         const thumbnail = node.attrs.thumbnail as string | undefined
+        const mentionType = node.attrs.type as 'image' | 'video' | 'audio' | undefined
 
         const children: any[] = []
 
-        if (thumbnail) {
+        if (mentionType === 'audio') {
+          children.push([
+            'span',
+            {
+              class: 'video-node-mention-pill__audio-icon',
+            },
+            '🎵',
+          ])
+        } else if (thumbnail) {
           children.push([
             'img',
             {
@@ -172,6 +279,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             'data-mention-id': node.attrs.id,
             'data-mention-value': node.attrs.value,
             'data-mention-label': mentionLabel,
+            'data-type': mentionType || 'image',
             contenteditable: 'false',
             draggable: 'true',
           },
@@ -270,6 +378,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             label: item.label,
             value: item.value,
             thumbnail: item.thumbnail,
+            type: item.type,
           },
         },
         {
@@ -466,6 +575,24 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
                                 loading="lazy"
                             />
+                        </Button>
+                    ))}
+
+                    {parentAudioNodes.map((item, index) => (
+                        <Button
+                            key={`audio-${item.id}-${index}`}
+                            unstyled
+                            className={cn(PROMPT_PANEL_STYLES.referenceImageButton, 'bg-[#B43FEB]/20 border-[#B43FEB]/40')}
+                            title="音频"
+                        >
+                            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] text-[#B43FEB]">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M9 18V5l12-2v13" />
+                                    <circle cx="6" cy="18" r="3" />
+                                    <circle cx="18" cy="16" r="3" />
+                                </svg>
+                                <span>音频</span>
+                            </div>
                         </Button>
                     ))}
                 </div>

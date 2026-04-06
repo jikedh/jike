@@ -131,6 +131,7 @@ export interface VideoGenerationNode {
       format: string; // 视频格式（如 mp4）
     }[];
   };
+  isUpload?: boolean; // 是否为上传视频（用于区分加载中/生成中）
   [key: string]: any; // React Flow 约束兼容
 }
 
@@ -180,6 +181,53 @@ export interface PanoramaNodeData {
     urls: string[]; // 截图 URL 列表
     createdAt: number; // 创建时间
   }[]; // 截图历史
+  
+  [key: string]: any; // React Flow 约束兼容
+}
+
+/**
+ * 音频生成节点数据结构
+ * 用于 AI 音频生成任务
+ */
+export interface AudioGenerationNode {
+  // ---- 核心输入参数 ----
+  model: string; // 使用的模型
+  prompt?: string; // 生成提示词
+  promptDraft?: string; // 输入面板草稿文本
+  promptDraftHtml?: string; // 输入面板草稿富文本
+  duration?: number; // 音频时长（秒）
+  
+  // ---- 状态管理 ----
+  status?: GenerationStatus; // 当前生成状态
+  progress?: number; // 进度百分比（0-100）
+  isUpload?: boolean; // 是否为上传音频
+  
+  // ---- 输出结果 ----
+  task_id?: string; // 任务 ID（用于轮询）
+  result?: {
+    type: 'audio'; // 结果类型
+    data: {
+      url: string; // 生成的音频 URL
+      format?: string; // 音频格式（如 mp3, wav）
+      duration?: number; // 音频时长
+    }[];
+  };
+  
+  // ---- 裁剪信息 ----
+  trimInfo?: {
+    sourceNodeId?: string; // 源节点 ID
+    startTime?: number; // 裁剪开始时间
+    endTime?: number; // 裁剪结束时间
+  };
+  
+  // ---- 错误处理 ----
+  error?: {
+    code?: string;
+    message?: string;
+    detail?: string;
+    serverMessage?: string;
+    status?: number;
+  };
   
   [key: string]: any; // React Flow 约束兼容
 }
@@ -247,10 +295,12 @@ export type NoteNodeType = Node<NoteNodeData, "noteNode">;
 export type AgentNodeType = Node<AgentNode, "agentNode">;
 // 全景图节点
 export type PanoramaNodeType = Node<PanoramaNodeData, "panoramaNode">;
+// 音频节点
+export type AudioNodeType = Node<AudioGenerationNode, "audioNode">;
 // React Flow 默认的节点类型
 export type DefaultNodeType = Node<any, "default">;
 
-export type AllNodeType = TextNodeType | ImageNodeType | VideoNodeType | NoteNodeType | AgentNodeType | PanoramaNodeType | DefaultNodeType;
+export type AllNodeType = TextNodeType | ImageNodeType | VideoNodeType | NoteNodeType | AgentNodeType | PanoramaNodeType | AudioNodeType | DefaultNodeType;
 export type EdgeType = Edge<EdgeDataType, "default">;
 
 // ==================== 流类型 ====================

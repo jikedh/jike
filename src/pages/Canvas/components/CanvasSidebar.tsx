@@ -31,6 +31,9 @@ export const CanvasSidebar = () => {
                 case 'create-video':
                     addNode('video', centerFlowPosition)
                     break
+                case 'create-audio':
+                    addNode('audio', centerFlowPosition)
+                    break
                 case 'save':
                     saveGraph()
                     toast.success('画布已保存')

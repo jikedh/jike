@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button'
 import { useCanvasCursor } from '@/hooks/useCanvasCursor'
 import { GenerationStatus } from '@/constants/enum'
 import { getClosestAspectRatio, getImageDimensions } from '../CustomNodes/ImageNode/utils/aspectRatioUtils'
+import { uploadFileToOSS } from '@/utils/oss'
 import {
     Dialog,
     DialogContent,
@@ -528,22 +529,145 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         [addNode, screenToFlowPosition, updateImageNodeData]
     )
 
+    // ==================== 音频拖拽上传逻辑 ====================
+
+    const updateAudioNodeData = useCanvasFlowStore((state) => state.updateAudioNodeData)
+
+    // 处理音频文件上传并创建节点
+    const handleAudioDrop = useCallback(
+        async (files: File[], dropPosition: { x: number; y: number }) => {
+            const flowPosition = screenToFlowPosition(dropPosition)
+
+            for (const file of files) {
+                const newNodeId = addNode('audio', flowPosition)
+
+                updateAudioNodeData(newNodeId, {
+                    status: GenerationStatus.IN_PROGRESS,
+                    isUpload: true,
+                })
+
+                flowPosition.x += 40
+                flowPosition.y += 40
+
+                try {
+                    const result = await uploadFileToOSS(file)
+                    const url = result.url
+
+                    if (url) {
+                        updateAudioNodeData(newNodeId, {
+                            status: GenerationStatus.COMPLETED,
+                            progress: 100,
+                            isUpload: true,
+                            result: {
+                                type: 'audio',
+                                data: [{ url }],
+                            },
+                        })
+                    } else {
+                        updateAudioNodeData(newNodeId, {
+                            status: GenerationStatus.FAILED,
+                            error: { message: '上传失败，未获取到音频地址' },
+                        })
+                    }
+                } catch (error) {
+                    console.error('音频上传失败:', error)
+                    updateAudioNodeData(newNodeId, {
+                        status: GenerationStatus.FAILED,
+                        error: { message: '上传失败，请重试' },
+                    })
+                }
+            }
+        },
+        [addNode, screenToFlowPosition, updateAudioNodeData]
+    )
+
+    // ==================== 视频拖拽上传逻辑 ====================
+
+    const updateVideoNodeData = useCanvasFlowStore((state) => state.updateVideoNodeData)
+
+    const handleVideoDrop = useCallback(
+        async (files: File[], dropPosition: { x: number; y: number }) => {
+            const flowPosition = screenToFlowPosition(dropPosition)
+
+            for (const file of files) {
+                const newNodeId = addNode('video', flowPosition)
+
+                updateVideoNodeData(newNodeId, {
+                    status: GenerationStatus.IN_PROGRESS,
+                    isUpload: true,
+                })
+
+                flowPosition.x += 40
+                flowPosition.y += 40
+
+                try {
+                    const result = await uploadFileToOSS(file)
+                    const url = result.url
+
+                    if (url) {
+                        updateVideoNodeData(newNodeId, {
+                            status: GenerationStatus.COMPLETED,
+                            progress: 100,
+                            isUpload: true,
+                            result: {
+                                type: 'video',
+                                data: [{ url, format: file.type.split('/')[1] || 'mp4' }],
+                            },
+                        })
+                    } else {
+                        updateVideoNodeData(newNodeId, {
+                            status: GenerationStatus.FAILED,
+                            error: { message: '上传失败，未获取到视频地址' },
+                        })
+                    }
+                } catch (error) {
+                    console.error('视频上传失败:', error)
+                    updateVideoNodeData(newNodeId, {
+                        status: GenerationStatus.FAILED,
+                        error: { message: '上传失败，请重试' },
+                    })
+                }
+            }
+        },
+        [addNode, screenToFlowPosition, updateVideoNodeData]
+    )
+
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
-        accept: { 'image/*': [] },
+        accept: { 'image/*': [], 'audio/*': [], 'video/*': [] },
         noClick: true,
         noKeyboard: true,
         onDrop: (acceptedFiles, _rejectedFiles, event) => {
             const dropEvent = event as unknown as DragEvent
             if (dropEvent && 'clientX' in dropEvent && 'clientY' in dropEvent) {
-                handleImageDrop(acceptedFiles, {
-                    x: dropEvent.clientX,
-                    y: dropEvent.clientY,
-                })
+                const imageFiles = acceptedFiles.filter(f => f.type.startsWith('image/'))
+                const audioFiles = acceptedFiles.filter(f => f.type.startsWith('audio/'))
+                const videoFiles = acceptedFiles.filter(f => f.type.startsWith('video/'))
+                
+                if (imageFiles.length > 0) {
+                    handleImageDrop(imageFiles, {
+                        x: dropEvent.clientX,
+                        y: dropEvent.clientY,
+                    })
+                }
+                
+                if (audioFiles.length > 0) {
+                    handleAudioDrop(audioFiles, {
+                        x: dropEvent.clientX,
+                        y: dropEvent.clientY,
+                    })
+                }
+                
+                if (videoFiles.length > 0) {
+                    handleVideoDrop(videoFiles, {
+                        x: dropEvent.clientX,
+                        y: dropEvent.clientY,
+                    })
+                }
             }
         },
     })
 
-    // 处理粘贴图片
+    // 处理粘贴图片、音频和视频
     const handlePaste = useCallback(
         async (event: ClipboardEvent) => {
             // 检查是否在输入框中
@@ -562,11 +686,23 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
             }
 
             const imageFiles: File[] = []
+            const audioFiles: File[] = []
+            const videoFiles: File[] = []
             for (const item of items) {
                 if (item.type.startsWith('image/')) {
                     const file = item.getAsFile()
                     if (file) {
                         imageFiles.push(file)
+                    }
+                } else if (item.type.startsWith('audio/')) {
+                    const file = item.getAsFile()
+                    if (file) {
+                        audioFiles.push(file)
+                    }
+                } else if (item.type.startsWith('video/')) {
+                    const file = item.getAsFile()
+                    if (file) {
+                        videoFiles.push(file)
                     }
                 }
             }
@@ -578,13 +714,33 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     x: window.innerWidth / 2,
                     y: window.innerHeight / 2,
                 })
-            } else if (canPaste()) {
-                // 没有图片，尝试粘贴节点
+            }
+            
+            if (audioFiles.length > 0) {
+                // 有音频，在画布中心位置创建节点
+                event.preventDefault()
+                handleAudioDrop(audioFiles, {
+                    x: window.innerWidth / 2,
+                    y: window.innerHeight / 2,
+                })
+            }
+            
+            if (videoFiles.length > 0) {
+                // 有视频，在画布中心位置创建节点
+                event.preventDefault()
+                handleVideoDrop(videoFiles, {
+                    x: window.innerWidth / 2,
+                    y: window.innerHeight / 2,
+                })
+            }
+            
+            if (imageFiles.length === 0 && audioFiles.length === 0 && videoFiles.length === 0 && canPaste()) {
+                // 没有图片、音频和视频，尝试粘贴节点
                 event.preventDefault()
                 pasteNode()
             }
         },
-        [handleImageDrop, canPaste, pasteNode]
+        [handleImageDrop, handleAudioDrop, handleVideoDrop, canPaste, pasteNode]
     )
 
     // 监听粘贴事件
