@@ -39,6 +39,13 @@ export default defineConfig({
         // 超时设置（用于长时间运行的请求）
         timeout: 300000,
       },
+      // Jikeing 后端服务代理
+      '/api': {
+        target: 'http://localhost:9181',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+        timeout: 300000,
+      },
     },
   },
 })

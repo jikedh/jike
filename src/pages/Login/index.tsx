@@ -1,19 +1,106 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { IconX } from '@tabler/icons-react'
+import { IconRefresh } from '@tabler/icons-react'
 import HomePage from '@/pages/Home'
+import { getSceneQrcode, querySceneStatus, setJikeingToken, setJikeingUserId, getJikeingToken, type LoginResponse } from '@/api/jikeing'
 
 const LoginPage = () => {
     const navigate = useNavigate()
     const [qrCodeUrl, setQrCodeUrl] = useState('')
+    const [sceneId, setSceneId] = useState('')
+    const [status, setStatus] = useState<'loading' | 'waiting' | 'scanned' | 'success' | 'expired' | 'error'>('loading')
+    const [errorMsg, setErrorMsg] = useState('')
+    const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
-    useEffect(() => {
-        const timestamp = Date.now()
-        setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=https://okjike.com/login?t=${timestamp}&color=000000&bgcolor=FFFFFF`)
+    const fetchQrcode = useCallback(async () => {
+        setStatus('loading')
+        setErrorMsg('')
+        try {
+            const res = await getSceneQrcode()
+            setQrCodeUrl(res.qrcode_image)
+            setSceneId(res.scene_id)
+            setStatus('waiting')
+        } catch (error) {
+            console.error('获取二维码失败:', error)
+            setStatus('error')
+            setErrorMsg('获取二维码失败，请重试')
+        }
     }, [])
 
+    const stopPolling = useCallback(() => {
+        if (pollingRef.current) {
+            clearInterval(pollingRef.current)
+            pollingRef.current = null
+        }
+    }, [])
+
+    const startPolling = useCallback((sid: string) => {
+        stopPolling()
+        pollingRef.current = setInterval(async () => {
+            try {
+                const res: LoginResponse = await querySceneStatus(sid)
+                console.log('[轮询结果]', res)
+                if (res.status === -1) {
+                    setStatus('expired')
+                    stopPolling()
+                } else if (res.status === 0) {
+                    setStatus('waiting')
+                } else if (res.status === 1 && res.token) {
+                    setStatus('success')
+                    stopPolling()
+                    setJikeingToken(res.token)
+                    setJikeingUserId(res.id)
+                    setTimeout(() => {
+                        navigate('/home')
+                    }, 500)
+                }
+            } catch (error) {
+                console.error('查询状态失败:', error)
+            }
+        }, 2000)
+    }, [stopPolling, navigate])
+
+    useEffect(() => {
+        const token = getJikeingToken()
+        if (token) {
+            navigate('/home')
+            return
+        }
+        fetchQrcode()
+        return () => stopPolling()
+    }, [fetchQrcode, stopPolling, navigate])
+
+    useEffect(() => {
+        if (sceneId && status === 'waiting') {
+            startPolling(sceneId)
+        }
+    }, [sceneId, status, startPolling])
+
     const handleClose = () => {
+        stopPolling()
         navigate('/home')
+    }
+
+    const handleRefresh = () => {
+        stopPolling()
+        fetchQrcode()
+    }
+
+    const getStatusText = () => {
+        switch (status) {
+            case 'loading':
+                return '正在加载二维码...'
+            case 'waiting':
+                return '使用微信扫一扫登录'
+            case 'expired':
+                return '二维码已过期，请刷新'
+            case 'error':
+                return errorMsg || '加载失败，请重试'
+            case 'success':
+                return '登录成功，正在跳转...'
+            default:
+                return '使用微信扫一扫登录'
+        }
     }
 
     return (
@@ -32,12 +119,6 @@ const LoginPage = () => {
                         boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05)'
                     }}
                 >
-                    <button
-                        onClick={handleClose}
-                        className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10 transition-all duration-200 opacity-0 group-hover:opacity-100"
-                    >
-                        <IconX size={16} />
-                    </button>
                     <div className="flex flex-col items-center pt-[60px] relative z-10">
                         <header className="mb-[40px]">
                             <img 
@@ -69,26 +150,39 @@ const LoginPage = () => {
                             <div className="bg-white p-2 rounded-md relative mb-[40px]"
                                 style={{ boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)' }}
                             >
-                                {qrCodeUrl && (
-                                    <img
-                                        src={qrCodeUrl}
-                                        alt="微信登录二维码"
-                                        className="w-[170px] h-[170px] block"
-                                    />
+                                {status === 'loading' ? (
+                                    <div className="w-[170px] h-[170px] flex items-center justify-center bg-gray-100 rounded">
+                                        <div className="w-8 h-8 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                                    </div>
+                                ) : (
+                                    <>
+                                        <img
+                                            src={qrCodeUrl}
+                                            alt="微信登录二维码"
+                                            className="w-[170px] h-[170px] block"
+                                        />
+                                        {(status === 'expired' || status === 'error') && (
+                                            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center rounded">
+                                                <button
+                                                    onClick={handleRefresh}
+                                                    className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg text-gray-800 hover:bg-gray-100 transition-colors"
+                                                >
+                                                    <IconRefresh size={16} />
+                                                    刷新二维码
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 bg-white rounded-lg flex justify-center items-center"
                                     style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
                                 >
-                                    <div className="w-[18px] h-[18px] rounded-full relative -rotate-45"
-                                        style={{ background: 'linear-gradient(135deg, #00d2ff 0%, #ff3366 100%)' }}
-                                    >
-                                        <div className="absolute bottom-[2px] right-[2px] w-3 h-3 bg-[#0055ff] rounded-full" />
-                                    </div>
+                                    <img src="/icon.png" alt="芸起" className="w-6 h-6 object-contain" />
                                 </div>
                             </div>
 
-                            <div className="text-[#797c8f] text-sm tracking-wide">
-                                使用微信扫一扫登录
+                            <div className={`text-sm tracking-wide ${status === 'expired' || status === 'error' ? 'text-red-400' : 'text-[#797c8f]'}`}>
+                                {getStatusText()}
                             </div>
                         </div>
                     </div>
