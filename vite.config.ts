@@ -21,6 +21,7 @@ export default defineConfig(({ command, mode }) => {
       }
     },
     build: {
+      outDir: 'out',
       sourcemap,
       minify: 'terser',
       rollupOptions: {
@@ -62,9 +63,9 @@ export default defineConfig(({ command, mode }) => {
           // 超时设置（用于长时间运行的请求）
           timeout: 300000,
         },
-        // Jikeing 后端服务代理
+        // Jikeing 后端服务代理 - 统一使用云端
         '/api': {
-          target: isBuild ? 'https://api.jikeing.com' :'http://localhost:9181',
+          target: 'https://api.jikeing.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, ''),
           timeout: 300000,

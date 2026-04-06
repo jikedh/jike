@@ -3,6 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { IconRefresh } from '@tabler/icons-react'
 import HomePage from '@/pages/Home'
 import { getSceneQrcode, querySceneStatus, setJikeingToken, setJikeingUserId, getJikeingToken, type LoginResponse } from '@/api/jikeing'
+import logoImg from '@/assets/logo.png'
+import iconImg from '@/assets/icon.png'
+
+const MAX_RETRY_COUNT = 3
+const RETRY_DELAY = 1000
 
 const LoginPage = () => {
     const navigate = useNavigate()
@@ -11,20 +16,43 @@ const LoginPage = () => {
     const [status, setStatus] = useState<'loading' | 'waiting' | 'scanned' | 'success' | 'expired' | 'error'>('loading')
     const [errorMsg, setErrorMsg] = useState('')
     const pollingRef = useRef<NodeJS.Timeout | null>(null)
+    const retryCountRef = useRef(0)
 
     const fetchQrcode = useCallback(async () => {
         setStatus('loading')
         setErrorMsg('')
-        try {
-            const res = await getSceneQrcode()
-            setQrCodeUrl(res.qrcode_image)
-            setSceneId(res.scene_id)
-            setStatus('waiting')
-        } catch (error) {
-            console.error('获取二维码失败:', error)
-            setStatus('error')
-            setErrorMsg('获取二维码失败，请重试')
+        retryCountRef.current = 0
+        
+        const attemptFetch = async (): Promise<void> => {
+            try {
+                console.log('[登录] 尝试获取二维码, 重试次数:', retryCountRef.current)
+                const res = await getSceneQrcode()
+                
+                if (!res.qrcode_image || !res.scene_id) {
+                    throw new Error('二维码数据不完整')
+                }
+                
+                console.log('[登录] 获取二维码成功:', res.scene_id)
+                setQrCodeUrl(res.qrcode_image)
+                setSceneId(res.scene_id)
+                setStatus('waiting')
+                retryCountRef.current = 0
+            } catch (error) {
+                const err = error as Error
+                console.error('[登录] 获取二维码失败:', err.message)
+                
+                if (retryCountRef.current < MAX_RETRY_COUNT) {
+                    retryCountRef.current++
+                    setErrorMsg(`获取二维码失败，正在重试 (${retryCountRef.current}/${MAX_RETRY_COUNT})...`)
+                    setTimeout(attemptFetch, RETRY_DELAY)
+                } else {
+                    setStatus('error')
+                    setErrorMsg(err.message || '获取二维码失败，请重试')
+                }
+            }
         }
+        
+        await attemptFetch()
     }, [])
 
     const stopPolling = useCallback(() => {
@@ -36,26 +64,25 @@ const LoginPage = () => {
 
     const startPolling = useCallback((sid: string) => {
         stopPolling()
+        
         pollingRef.current = setInterval(async () => {
             try {
                 const res: LoginResponse = await querySceneStatus(sid)
                 console.log('[轮询结果]', res)
-                if (res.status === -1) {
-                    setStatus('expired')
-                    stopPolling()
-                } else if (res.status === 0) {
-                    setStatus('waiting')
-                } else if (res.status === 1 && res.token) {
+                
+                if (res.code === 200 && res.data?.token) {
                     setStatus('success')
                     stopPolling()
-                    setJikeingToken(res.token)
-                    setJikeingUserId(res.id)
+                    setJikeingToken(res.data.token)
+                    if (res.data.id) {
+                        setJikeingUserId(res.data.id)
+                    }
                     setTimeout(() => {
                         navigate('/home')
                     }, 500)
                 }
             } catch (error) {
-                console.error('查询状态失败:', error)
+                console.error('[登录] 查询状态失败:', error)
             }
         }, 2000)
     }, [stopPolling, navigate])
@@ -117,8 +144,8 @@ const LoginPage = () => {
                     <div className="flex flex-col items-center pt-[60px] relative z-10">
                         <header className="mb-[40px]">
                             <img 
-                                src="/logo.png" 
-                                alt="芸起" 
+                                src={logoImg} 
+                                alt="即刻" 
                                 className="h-[60px] object-contain"
                                 style={{ filter: 'drop-shadow(0 4px 12px rgba(0, 85, 255, 0.4))' }}
                             />
@@ -178,20 +205,29 @@ const LoginPage = () => {
                                     style={{ boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)' }}
                                 >
                                     {status === 'loading' ? (
-                                        <div className="w-[170px] h-[170px] flex items-center justify-center bg-gray-100 rounded">
+                                        <div className="w-[170px] h-[170px] flex flex-col items-center justify-center bg-gray-100 rounded gap-3">
                                             <div className="w-8 h-8 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                                            {retryCountRef.current > 0 && (
+                                                <span className="text-xs text-gray-500">
+                                                    重试中 ({retryCountRef.current}/{MAX_RETRY_COUNT})
+                                                </span>
+                                            )}
                                         </div>
                                     ) : (
                                         <img
                                             src={qrCodeUrl}
                                             alt="微信登录二维码"
                                             className="w-[170px] h-[170px] block"
+                                            onError={(e) => {
+                                                console.error('[登录] 二维码图片加载失败')
+                                                e.currentTarget.style.display = 'none'
+                                            }}
                                         />
                                     )}
                                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 bg-white rounded-lg flex justify-center items-center"
                                         style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
                                     >
-                                        <img src="/icon.png" alt="芸起" className="w-6 h-6 object-contain" />
+                                        <img src={iconImg} alt="即刻" className="w-6 h-6 object-contain" />
                                     </div>
                                 </div>
 

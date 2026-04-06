@@ -8,6 +8,7 @@ import icon from '../../resources/icon.png?asset'
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
+    title: '即刻',
     show: false,
     autoHideMenuBar: true,
     icon,
@@ -19,11 +20,8 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    // 启动时最大化窗口，提供全屏般的体验
     mainWindow.maximize()
     mainWindow.show()
-    // 启动时自动打开开发者工具
-    mainWindow.webContents.openDevTools()
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {

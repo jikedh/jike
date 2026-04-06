@@ -13,7 +13,7 @@ asarUnpack:
   - resources/**
 win:
   executableName: 即刻
-  icon: resources/icons/icon.ico
+  icon: resources/icons/icon.png
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
@@ -22,6 +22,3 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 npmRebuild: false
-# publish:
-  # provider: generic
-  # url: https://example.com/auto-updates

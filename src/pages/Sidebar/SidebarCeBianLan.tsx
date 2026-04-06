@@ -8,6 +8,7 @@ import { SidebarNavItem } from './components/SidebarNavItem'
 import { SidebarRoot } from './components/SidebarRoot'
 import { UserAvatarDropdown } from '@/components/UserAvatarDropdown'
 import { getJikeingUserId } from '@/api/jikeing'
+import iconImg from '@/assets/icon.png'
 
 const USER_CREDITS = 1280
 
@@ -28,7 +29,7 @@ export const SidebarCeBianLan = () => {
       >
         <div className="w-10 h-10 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
           <img
-            src="/icon.png"
+            src={iconImg}
             alt="即刻"
             className="w-full h-full object-contain"
           />
