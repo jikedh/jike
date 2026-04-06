@@ -37,6 +37,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogFooter,
+    DialogTitle,
 } from '@/components/ui/dialog'
 
 type CanvasFlowProps = {
@@ -900,7 +901,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         <Dialog open={showExitDialog} onOpenChange={setShowExitDialog}>
             <DialogContent className="bg-[#1a1a1f] border-white/10">
                 <DialogHeader>
-                    <h2 className="text-lg font-semibold text-white">确认离开</h2>
+                    <DialogTitle className="text-lg font-semibold text-white">确认离开</DialogTitle>
                 </DialogHeader>
                 <div className="py-4">
                     <p className="text-sm text-gray-400">

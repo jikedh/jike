@@ -176,16 +176,31 @@ export const TextAgentNode = memo(({ id, data, selected }: NodeProps<TextAgentNo
     abortControllerRef.current = abortController
 
     try {
-      const response = await createChatCompletion({
+      const requestBody = {
         model: currentModel,
         messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: inputContent },
+          { 
+            role: 'user', 
+            content: `${inputContent}\n\n${systemPrompt}` 
+          },
         ],
-      }, abortController.signal)
+      }
+
+      const response = await createChatCompletion(requestBody, abortController.signal)
 
       const resp = response as any
       
+      // 检查 API 错误响应
+      if (resp?.error) {
+        const errorData = resp.error
+        const errorMsg = typeof errorData?.message === 'string' 
+          ? errorData.message 
+          : (typeof errorData === 'string' ? errorData : JSON.stringify(errorData))
+        error('生成失败', errorMsg)
+        updateNodeData({ status: 'error', error: errorMsg })
+        return
+      }
+
       if (resp?.code && resp?.message) {
         const errorMsg = typeof resp.message === 'string' 
           ? resp.message 
@@ -195,7 +210,22 @@ export const TextAgentNode = memo(({ id, data, selected }: NodeProps<TextAgentNo
         return
       }
 
-      const generatedContent = resp?.choices?.[0]?.message?.content
+      // 提取 API 响应参数
+      const choice = resp?.choices?.[0]
+      const generatedContent = choice?.message?.content
+      const finishReason = choice?.finish_reason
+      const choiceIndex = choice?.index
+
+      // 检查结束原因
+      if (finishReason === 'content_filter') {
+        error('生成失败', '内容被安全过滤器拦截')
+        updateNodeData({ status: 'error', error: '内容被安全过滤器拦截' })
+        return
+      }
+
+      if (finishReason === 'length') {
+        warning('生成内容达到最大长度限制，可能不完整')
+      }
 
       if (!generatedContent) {
         error('生成失败', '未获取到有效内容')
@@ -203,41 +233,120 @@ export const TextAgentNode = memo(({ id, data, selected }: NodeProps<TextAgentNo
         return
       }
 
-      const calculateNoteSize = (content: string) => {
-        const charCount = content.length
-        const lineCount = content.split('\n').length
-        const avgCharsPerLine = 40
-        const estimatedLines = Math.max(lineCount, Math.ceil(charCount / avgCharsPerLine))
-        const width = Math.min(Math.max(280, Math.min(500, charCount * 2)), 500)
-        const height = Math.min(Math.max(180, estimatedLines * 24 + 40), 600)
-        return { width, height }
-      }
+      // 过滤掉模型的思考过程（<think...</think 标签内容）
+      const cleanContent = generatedContent
+        .replace(/<think[\s\S]*?<\/think>/gi, '')
+        .replace(/<thinking[\s\S]*?<\/thinking>/gi, '')
+        .trim()
 
-      const noteSize = calculateNoteSize(generatedContent)
+      if (!cleanContent) {
+        error('生成失败', '未获取到有效内容')
+        updateNodeData({ status: 'error', error: '未获取到有效内容' })
+        return
+      }
 
       const currentNode = nodes.find((n) => n.id === id)
       const nextPosition = currentNode
         ? {
-          x: currentNode.position.x + 320,
+          x: currentNode.position.x + 400,
           y: currentNode.position.y,
         }
         : undefined
 
-      const outputNoteId = addNode('note', nextPosition, {
-        initialWidth: noteSize.width,
-        initialHeight: noteSize.height,
-        initialContent: generatedContent,
-      })
-      setNoteNodeEditing(outputNoteId, false)
+      // 根据预设类型决定输出节点类型
+      if (presetId === 'novel-character-design') {
+        // 解析 Markdown 表格格式，转换为表格数据
+        const parseMarkdownTable = (markdown: string) => {
+          const characters: any[] = []
+          
+          // 匹配 Markdown 表格行
+          const lines = markdown.split('\n')
+          const tableRows: string[] = []
+          let inTable = false
+          
+          for (const line of lines) {
+            const trimmedLine = line.trim()
+            // 检测表格行（以 | 开头和结尾）
+            if (trimmedLine.startsWith('|') && trimmedLine.endsWith('|')) {
+              // 跳过分隔行（如 |---|---|）
+              if (/^\|[\s\-:|]+\|$/.test(trimmedLine)) {
+                continue
+              }
+              tableRows.push(trimmedLine)
+              inTable = true
+            } else if (inTable && trimmedLine === '') {
+              // 空行结束表格
+              break
+            }
+          }
+          
+          // 跳过表头行，从第二行开始解析数据
+          for (let i = 1; i < tableRows.length; i++) {
+            const row = tableRows[i]
+            // 分割单元格
+            const cells = row.split('|').map(cell => cell.trim()).filter(cell => cell !== '')
+            
+            if (cells.length >= 6) {
+              characters.push({
+                '姓名': cells[0],
+                '基础设定': cells[1],
+                '性格特征': cells[2],
+                '核心动机': cells[3],
+                '核心关系': cells[4],
+                '习惯和兴趣': cells[5],
+              })
+            }
+          }
+          
+          return characters
+        }
 
-      setTimeout(() => {
-        onConnect({
-          source: id,
-          sourceHandle: 'output',
-          target: outputNoteId,
-          targetHandle: 'input',
+        const tableRows = parseMarkdownTable(cleanContent)
+        
+        // 始终创建表格节点（即使没有解析到角色，也显示空表格）
+        const outputTableId = addNode('table', nextPosition, {
+          tableTitle: '角色设计表',
+          tableRows: tableRows,
         })
-      }, 100)
+
+        setTimeout(() => {
+          onConnect({
+            source: id,
+            sourceHandle: 'output',
+            target: outputTableId,
+            targetHandle: 'input',
+          })
+        }, 100)
+      } else {
+        // 其他预设类型输出便签节点
+        const calculateNoteSize = (content: string) => {
+          const charCount = content.length
+          const lineCount = content.split('\n').length
+          const avgCharsPerLine = 40
+          const estimatedLines = Math.max(lineCount, Math.ceil(charCount / avgCharsPerLine))
+          const width = Math.min(Math.max(280, Math.min(500, charCount * 2)), 500)
+          const height = Math.min(Math.max(180, estimatedLines * 24 + 40), 600)
+          return { width, height }
+        }
+
+        const noteSize = calculateNoteSize(cleanContent)
+
+        const outputNoteId = addNode('note', nextPosition, {
+          initialWidth: noteSize.width,
+          initialHeight: noteSize.height,
+          initialContent: cleanContent,
+        })
+        setNoteNodeEditing(outputNoteId, false)
+
+        setTimeout(() => {
+          onConnect({
+            source: id,
+            sourceHandle: 'output',
+            target: outputNoteId,
+            targetHandle: 'input',
+          })
+        }, 100)
+      }
 
       updateNodeData({ status: 'success' })
       success('生成成功')

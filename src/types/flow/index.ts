@@ -255,6 +255,32 @@ export interface AudioGenerationNode {
   [key: string]: any; // React Flow 约束兼容
 }
 
+/**
+ * 角色表格行数据
+ */
+export interface CharacterTableRow {
+  姓名: string;
+  基础设定: string;
+  性格特征: string;
+  核心动机: string;
+  弱点: string;
+  核心关系: string;
+  习惯和兴趣: string;
+  形象: string;
+}
+
+/**
+ * 表格节点数据结构
+ * 用于展示角色设计等表格数据
+ */
+export interface TableNodeData {
+  title: string;
+  columns: string[];
+  rows: CharacterTableRow[];
+  createdAt?: number;
+  [key: string]: any;
+}
+
 // ==================== 辅助类型 ====================
 
 
@@ -322,10 +348,12 @@ export type TextAgentNodeType = Node<TextAgentNodeData, "textAgentNode">;
 export type PanoramaNodeType = Node<PanoramaNodeData, "panoramaNode">;
 // 音频节点
 export type AudioNodeType = Node<AudioGenerationNode, "audioNode">;
+// 表格节点
+export type TableNodeType = Node<TableNodeData, "tableNode">;
 // React Flow 默认的节点类型
 export type DefaultNodeType = Node<any, "default">;
 
-export type AllNodeType = TextNodeType | ImageNodeType | VideoNodeType | NoteNodeType | AgentNodeType | TextAgentNodeType | PanoramaNodeType | AudioNodeType | DefaultNodeType;
+export type AllNodeType = TextNodeType | ImageNodeType | VideoNodeType | NoteNodeType | AgentNodeType | TextAgentNodeType | PanoramaNodeType | AudioNodeType | TableNodeType | DefaultNodeType;
 export type EdgeType = Edge<EdgeDataType, "default">;
 
 // ==================== 流类型 ====================

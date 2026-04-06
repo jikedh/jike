@@ -3,6 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "@xyflow/react/dist/style.css";
 @import "yet-another-react-lightbox/styles.css";
+@plugin "@tailwindcss/typography";
 
 /* TODO @ 和 / 提及的样式修改在这里，后续有空再修改 */
 .image-node-mention-pill {

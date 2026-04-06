@@ -103,6 +103,7 @@ export async function createChatCompletion(data: any, signal?: AbortSignal) {
     url: '/v1/chat/completions',
     method: 'post',
     data,
+    signal,
   })
 }
 

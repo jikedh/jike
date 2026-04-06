@@ -34,19 +34,21 @@ type CanvasPersistedState = {
   savedAt: number
   nodes: AllNodeType[]
   edges: EdgeType[]
-  nodeIdCounters: { note: number; image: number; video: number; agent: number; panorama: number; audio: number }
+  nodeIdCounters: { note: number; image: number; video: number; agent: number; panorama: number; audio: number; table: number }
 }
 
 /**
  * 节点类型标识符
  */
-type NodeType = 'note' | 'image' | 'video' | 'agent' | 'panorama' | 'audio' | 'textAgent'
+type NodeType = 'note' | 'image' | 'video' | 'agent' | 'panorama' | 'audio' | 'textAgent' | 'table'
 type NodePosition = { x: number; y: number }
 type AddNodeOptions = {
   agentPresetId?: AgentPresetId
   initialWidth?: number
   initialHeight?: number
   initialContent?: string
+  tableTitle?: string
+  tableRows?: any[]
 }
 
 /**
@@ -152,6 +154,8 @@ type CanvasFlowState = {
   updateAudioNodeData: (nodeId: string, patch: Partial<AudioGenerationNode>) => void
   /** 更新文本智能体节点数据（局部字段 patch） */
   updateTextAgentNodeData: (nodeId: string, patch: Record<string, any>) => void
+  /** 更新表格节点数据（局部字段 patch） */
+  updateTableNodeData: (nodeId: string, patch: Record<string, any>) => void
 
   // === 任务管理 ===
   /** 获取正在生成的任务数量 */
@@ -293,6 +297,23 @@ const updateTextAgentNodeInList = (
 ) => {
   return nodes.map((node) => {
     if (node.id !== nodeId || node.type !== 'textAgentNode') {
+      return node
+    }
+
+    return {
+      ...node,
+      data: updater(node.data),
+    }
+  })
+}
+
+const updateTableNodeInList = (
+  nodes: AllNodeType[],
+  nodeId: string,
+  updater: (data: any) => any
+) => {
+  return nodes.map((node) => {
+    if (node.id !== nodeId || node.type !== 'tableNode') {
       return node
     }
 
@@ -855,7 +876,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
   return {
   nodes: [],
   edges: [],
-  nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1 },
+  nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1, table: 1 },
   hydrated: false,
   projectId: null,
   // 全景图查看器初始化
@@ -900,7 +921,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           projectId,
           nodes: [],
           edges: [],
-          nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1 },
+          nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1, table: 1 },
           hydrated: true,
           history: [],
           historyIndex: -1,
@@ -916,7 +937,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           projectId,
           nodes: [],
           edges: [],
-          nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1 },
+          nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1, table: 1 },
           hydrated: true,
           history: [],
           historyIndex: -1,
@@ -928,7 +949,18 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
 
       set({
         projectId,
-        nodes: data.nodes,
+        nodes: data.nodes.map((node) => {
+          if (node.type === 'textAgentNode' && node.data?.status === 'generating') {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                status: 'idle',
+              },
+            }
+          }
+          return node
+        }),
         edges: data.edges,
         nodeIdCounters: data.nodeIdCounters,
         hydrated: true,
@@ -942,7 +974,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
         projectId,
         nodes: [],
         edges: [],
-        nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1 },
+        nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1, table: 1 },
         hydrated: true,
         history: [],
         historyIndex: -1,
@@ -1025,7 +1057,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
     set({
       nodes: [],
       edges: [],
-      nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1 },
+      nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1, table: 1 },
       hydrated: false,
       projectId: null,
     })
@@ -1035,7 +1067,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
 
   /**
    * 获取下一个指定类型的节点 ID
-    * @param nodeType 节点类型：'note' | 'image' | 'video' | 'agent' | 'panorama' | 'audio'
+    * @param nodeType 节点类型：'note' | 'image' | 'video' | 'agent' | 'panorama' | 'audio' | 'table'
    * @returns 新的节点 ID，如 'note-3', 'image-1' 等
    */
   getNextNodeId: (nodeType: NodeType) => {
@@ -1188,6 +1220,20 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           useDefaultSystemPrompt: true,
           customSystemPrompt: '',
           status: 'idle',
+          createdAt: Date.now(),
+        },
+      }
+    } else if (nodeType === 'table') {
+      newNode = {
+        id: nextId,
+        type: 'tableNode',
+        position: nextPosition,
+        width: options?.initialWidth ?? 800,
+        height: options?.initialHeight ?? 400,
+        data: {
+          title: options?.tableTitle ?? '角色设计表',
+          columns: ['姓名', '基础设定', '性格特征', '核心动机', '核心关系', '习惯和兴趣'],
+          rows: options?.tableRows ?? [],
           createdAt: Date.now(),
         },
       }
@@ -1714,6 +1760,15 @@ duplicateNode: (nodeId: string) => {
   updateTextAgentNodeData: (nodeId, patch) => {
     set((state) => ({
       nodes: updateTextAgentNodeInList(state.nodes, nodeId, (data) => ({
+        ...data,
+        ...patch,
+      })),
+    }))
+  },
+
+  updateTableNodeData: (nodeId, patch) => {
+    set((state) => ({
+      nodes: updateTableNodeInList(state.nodes, nodeId, (data) => ({
         ...data,
         ...patch,
       })),

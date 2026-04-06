@@ -5,6 +5,7 @@ import { AgentNode } from '../CustomNodes/AgentNode'
 import { TextAgentNode } from '../CustomNodes/TextAgentNode'
 import { PanoramaNode } from '../CustomNodes/VideoNode/PanoramaNode'
 import { AudioNode } from '../CustomNodes/AudioNode'
+import { TableNode } from '../CustomNodes/TableNode'
 import type { AgentPresetId } from '@/constants/agent-presets'
 import { CustomEdge } from '../CustomEdge/CustomEdge'
 
@@ -16,6 +17,7 @@ export const nodeTypes = {
     textAgentNode: TextAgentNode,
     panoramaNode: PanoramaNode,
     audioNode: AudioNode,
+    tableNode: TableNode,
 }
 
 /**
