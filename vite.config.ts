@@ -2,7 +2,6 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
-import obfuscator from 'vite-plugin-obfuscator'
 
 
 // https://vite.dev/config/
@@ -15,19 +14,7 @@ export default defineConfig(({ command, mode }) => {
     plugins: [
       react(),
       tailwindcss(),
-
-      // ✅ 只在生产环境混淆
-      !isServe &&
-      obfuscator({
-        include: ['out/renderer/assets/*.js'],
-        compact: true,
-        controlFlowFlattening: false,
-        deadCodeInjection: false,
-        stringArray: true,
-        stringArrayEncoding: ['base64'],
-        rotateStringArray: true
-      })
-    ].filter(Boolean),
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src')

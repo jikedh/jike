@@ -30,7 +30,7 @@ export const PanoramaNode = memo(({
     const sceneRef = useRef<THREE.Scene | null>(null)
     const controlsRef = useRef<OrbitControls | null>(null)
     const canvasRef = useRef<HTMLDivElement>(null)
-    const animationFrameRef = useRef<number>()
+    const animationFrameRef = useRef<number | undefined>(undefined)
 
     const [isFullscreen, setIsFullscreen] = useState(false)
 
