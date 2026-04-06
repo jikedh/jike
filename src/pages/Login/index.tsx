@@ -124,62 +124,82 @@ const LoginPage = () => {
                             />
                         </header>
 
-                        <div className="w-[330px] rounded-2xl flex flex-col items-center py-[35px] pb-[45px] relative z-10"
-                            style={{
-                                background: 'linear-gradient(145deg, rgba(26, 28, 51, 0.95) 0%, rgba(17, 18, 33, 0.95) 100%)',
-                                backdropFilter: 'blur(10px)',
-                                boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.08)',
-                                border: '1px solid rgba(255, 255, 255, 0.03)'
-                            }}
-                        >
-                            <div className="text-white text-base font-medium mb-[35px] relative pb-2 tracking-wider">
-                                微信登录
-                                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-[2px] rounded"
+                        {(status === 'expired' || status === 'error') ? (
+                            <div className="flex flex-col items-center">
+                                <div className="w-[330px] rounded-2xl flex flex-col items-center py-[50px] relative z-10"
                                     style={{
-                                        background: 'linear-gradient(90deg, #a053db 0%, #4c62fb 100%)',
-                                        boxShadow: '0 1px 4px rgba(76, 98, 251, 0.4)'
+                                        background: 'linear-gradient(145deg, rgba(26, 28, 51, 0.95) 0%, rgba(17, 18, 33, 0.95) 100%)',
+                                        backdropFilter: 'blur(10px)',
+                                        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.08)',
+                                        border: '1px solid rgba(255, 255, 255, 0.03)'
                                     }}
-                                />
-                            </div>
-
-                            <div className="bg-white p-2 rounded-md relative mb-[40px]"
-                                style={{ boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)' }}
-                            >
-                                {status === 'loading' ? (
-                                    <div className="w-[170px] h-[170px] flex items-center justify-center bg-gray-100 rounded">
-                                        <div className="w-8 h-8 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                                >
+                                    <div className="text-white text-base font-medium mb-[35px] relative pb-2 tracking-wider">
+                                        微信登录
+                                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-[2px] rounded"
+                                            style={{
+                                                background: 'linear-gradient(90deg, #a053db 0%, #4c62fb 100%)',
+                                                boxShadow: '0 1px 4px rgba(76, 98, 251, 0.4)'
+                                            }}
+                                        />
                                     </div>
-                                ) : (
-                                    <>
+                                    <button
+                                        onClick={handleRefresh}
+                                        className="flex items-center gap-2 px-6 py-3 bg-white rounded-lg text-gray-800 hover:bg-gray-100 transition-colors"
+                                    >
+                                        <IconRefresh size={18} />
+                                        刷新二维码
+                                    </button>
+                                    <div className="mt-4 text-sm text-red-400 tracking-wide">
+                                        {status === 'expired' ? '二维码已过期' : errorMsg || '加载失败'}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="w-[330px] rounded-2xl flex flex-col items-center py-[35px] pb-[45px] relative z-10"
+                                style={{
+                                    background: 'linear-gradient(145deg, rgba(26, 28, 51, 0.95) 0%, rgba(17, 18, 33, 0.95) 100%)',
+                                    backdropFilter: 'blur(10px)',
+                                    boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.08)',
+                                    border: '1px solid rgba(255, 255, 255, 0.03)'
+                                }}
+                            >
+                                <div className="text-white text-base font-medium mb-[35px] relative pb-2 tracking-wider">
+                                    微信登录
+                                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-[2px] rounded"
+                                        style={{
+                                            background: 'linear-gradient(90deg, #a053db 0%, #4c62fb 100%)',
+                                            boxShadow: '0 1px 4px rgba(76, 98, 251, 0.4)'
+                                        }}
+                                    />
+                                </div>
+
+                                <div className="bg-white p-2 rounded-md relative mb-[40px]"
+                                    style={{ boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)' }}
+                                >
+                                    {status === 'loading' ? (
+                                        <div className="w-[170px] h-[170px] flex items-center justify-center bg-gray-100 rounded">
+                                            <div className="w-8 h-8 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                                        </div>
+                                    ) : (
                                         <img
                                             src={qrCodeUrl}
                                             alt="微信登录二维码"
                                             className="w-[170px] h-[170px] block"
                                         />
-                                        {(status === 'expired' || status === 'error') && (
-                                            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center rounded">
-                                                <button
-                                                    onClick={handleRefresh}
-                                                    className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg text-gray-800 hover:bg-gray-100 transition-colors"
-                                                >
-                                                    <IconRefresh size={16} />
-                                                    刷新二维码
-                                                </button>
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 bg-white rounded-lg flex justify-center items-center"
-                                    style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
-                                >
-                                    <img src="/icon.png" alt="芸起" className="w-6 h-6 object-contain" />
+                                    )}
+                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 bg-white rounded-lg flex justify-center items-center"
+                                        style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+                                    >
+                                        <img src="/icon.png" alt="芸起" className="w-6 h-6 object-contain" />
+                                    </div>
+                                </div>
+
+                                <div className={`text-sm tracking-wide ${status === 'success' ? 'text-green-400' : 'text-[#797c8f]'}`}>
+                                    {getStatusText()}
                                 </div>
                             </div>
-
-                            <div className={`text-sm tracking-wide ${status === 'expired' || status === 'error' ? 'text-red-400' : 'text-[#797c8f]'}`}>
-                                {getStatusText()}
-                            </div>
-                        </div>
+                        )}
                     </div>
                 </div>
             </div>
