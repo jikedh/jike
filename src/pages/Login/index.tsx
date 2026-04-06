@@ -76,11 +76,6 @@ const LoginPage = () => {
         }
     }, [sceneId, status, startPolling])
 
-    const handleClose = () => {
-        stopPolling()
-        navigate('/home')
-    }
-
     const handleRefresh = () => {
         stopPolling()
         fetchQrcode()

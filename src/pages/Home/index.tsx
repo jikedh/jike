@@ -39,25 +39,25 @@ const HomePage = () => {
     {
       id: 1,
       title: '《全基地背叛》正片流',
-      image: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop',
+      image: 'https://picsum.photos/seed/betrayal/800/500',
       tag: 'Sora V1.5',
     },
     {
       id: 2,
       title: '第一集_剪辑版资产',
-      image: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=2048&auto=format&fit=crop',
+      image: 'https://picsum.photos/seed/episode1/800/500',
       tag: 'Midjourney V6',
     },
     {
       id: 3,
       title: '商业广告旁白扩写',
-      image: 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=2670&auto=format&fit=crop',
+      image: 'https://picsum.photos/seed/commercial/800/500',
       tag: 'Script Agent',
     },
     {
       id: 4,
       title: '赛博朋克环境空镜',
-      image: 'https://images.unsplash.com/photo-1605806616949-1e87b487cb2a?q=80&w=2670&auto=format&fit=crop',
+      image: 'https://picsum.photos/seed/cyberpunk/800/500',
       tag: 'Kling AI',
     },
   ]
@@ -68,7 +68,7 @@ const HomePage = () => {
       <div className="relative h-112.5 w-full flex flex-col items-center justify-center overflow-hidden">
         <div
           className="absolute inset-0 z-0 bg-cover bg-center opacity-30"
-          style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1598899134739-24c46f58b8c0?q=80&w=2656&auto=format&fit=crop")' }}
+          style={{ backgroundImage: 'url("https://picsum.photos/seed/hero/1920/800")' }}
         />
         <div className="absolute inset-0 z-0 bg-linear-to-b from-[#B43FEB]/5 via-[#09090b]/80 to-[#09090b]" />
 
