@@ -18,9 +18,16 @@ export default function CanvasPlaceholderPage() {
   const [projectToDelete, setProjectToDelete] = useState<ProjectMeta | null>(null)
   const [projectToEdit, setProjectToEdit] = useState<ProjectMeta | null>(null)
 
-  // 加载项目列表
   const refreshProjects = () => {
     setProjects(getProjectList())
+  }
+
+  const handleProjectSuccess = (projectId: string) => {
+    if (projectToEdit) {
+      refreshProjects()
+    } else {
+      navigate(`/canvas/${projectId}`)
+    }
   }
 
   useEffect(() => {
@@ -190,7 +197,7 @@ export default function CanvasPlaceholderPage() {
         isOpen={isProjectDialogOpen}
         onClose={() => setIsProjectDialogOpen(false)}
         project={projectToEdit}
-        onSuccess={refreshProjects}
+        onSuccess={handleProjectSuccess}
       />
 
       {/* 删除确认弹窗 */}

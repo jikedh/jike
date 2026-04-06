@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react'
 import { X, Upload, X as CloseIcon } from 'lucide-react'
 import { createProject, updateProject, type ProjectMeta } from '@/utils/projectStorage'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { uploadImageFile } from '@/api/ai'
 
 // 项目弹窗组件的props类型定义
@@ -135,53 +134,32 @@ export default function ProjectDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="bg-[#0a0a0f] border-white/[0.08] p-6 w-[420px]">
-        <div className="flex items-center justify-between mb-6">
-          <DialogTitle className="text-white text-lg">{isEdit ? '编辑项目' : '创建新项目'}</DialogTitle>
+      <DialogContent className="bg-[#121214] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col p-0">
+        <div className="flex items-center justify-between p-6 border-b border-white/5">
+          <DialogTitle className="text-lg font-semibold text-white/90">{isEdit ? '编辑项目' : '新建画布项目'}</DialogTitle>
           <button
             onClick={handleClose}
-            className="text-white/40 hover:text-white transition-colors"
+            className="text-white/50 hover:text-white transition-colors cursor-pointer"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
-        <div className="space-y-4">
-          {/* 项目名称输入 */}
+        <div className="p-6 space-y-5">
           <div>
-            <label className="block text-sm text-white/60 mb-2">项目名称{isEdit ? '' : '（可选）'}</label>
+            <label className="text-sm font-medium text-white/70 block mb-2">项目名称</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="输入项目名称..."
-              className="w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-white placeholder-white/30 outline-none focus:border-[#00F0FF] transition-colors"
+              placeholder="输入项目名称"
+              className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-[#B43FEB] focus:ring-1 focus:ring-[#B43FEB] outline-none transition-all"
             />
           </div>
 
-          {/* 项目类型选择 - 仅在创建模式下显示 */}
-          {!isEdit && (
-            <div>
-              <label className="block text-sm text-white/60 mb-2">项目类型</label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setType('video')}
-                  className={`flex-1 px-4 py-2 rounded-lg text-sm transition-all ${type === 'video' ? 'bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/50' : 'bg-white/[0.03] text-white/60 border border-white/[0.08]'}`}
-                >
-                  视频创作
-                </button>
-                <button
-                  onClick={() => setType('script')}
-                  className={`flex-1 px-4 py-2 rounded-lg text-sm transition-all ${type === 'script' ? 'bg-[#00F0FF]/20 text-[#00F0FF] border border-[#00F0FF]/50' : 'bg-white/[0.03] text-white/60 border border-white/[0.08]'}`}
-                >
-                  剧本创作
-                </button>
-              </div>
-            </div>
-          )}
+         
 
-          {/* 封面图上传 */}
           <div>
-            <label className="block text-sm text-white/60 mb-2">封面图（可选）</label>
+            <label className="text-sm font-medium text-white/70 block mb-2">封面图</label>
             <input
               ref={coverFileInputRef}
               type="file"
@@ -190,76 +168,70 @@ export default function ProjectDialog({
               className="hidden"
             />
 
-            {/* 预览区域 */}
             {(coverPreview || coverUrl) && (
               <div className="relative group mb-3">
                 <img
                   src={coverPreview || coverUrl}
                   alt="封面预览"
-                  className="w-full h-32 object-cover rounded-lg border border-white/[0.08]"
+                  className="w-full h-32 object-cover rounded-lg border border-white/10"
                 />
                 <button
                   onClick={handleRemoveCover}
-                  className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white/80 hover:bg-black/80 flex items-center justify-center"
+                  className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white/80 hover:bg-black/80 flex items-center justify-center cursor-pointer"
                 >
                   <CloseIcon size={14} />
                 </button>
               </div>
             )}
 
-            {/* 上传按钮 */}
             {!coverPreview && !coverUrl && (
               <button
                 type="button"
                 onClick={() => coverFileInputRef.current?.click()}
-                className="w-full px-4 py-8 bg-white/[0.03] border border-dashed border-white/20 rounded-lg text-white/40 hover:border-[#00F0FF] hover:text-[#00F0FF] hover:bg-[rgba(0,240,255,0.05)] transition-all flex flex-col items-center justify-center gap-2"
+                className="w-full h-32 border-2 border-dashed border-white/10 rounded-lg bg-black/30 flex flex-col items-center justify-center text-white/40 hover:text-white/70 hover:border-[#B43FEB]/50 hover:bg-[#B43FEB]/5 transition-all cursor-pointer group"
               >
-                <Upload size={24} />
-                <span className="text-sm">点击上传封面图</span>
+                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-2 group-hover:bg-[#B43FEB]/20 group-hover:text-[#B43FEB] transition-colors">
+                  <Upload size={20} />
+                </div>
+                <span className="text-xs">点击或拖拽上传封面图</span>
               </button>
             )}
 
-            {/* 更换按钮 */}
             {(coverPreview || coverUrl) && (
               <button
                 type="button"
                 onClick={() => coverFileInputRef.current?.click()}
-                className="w-full mt-2 px-4 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-white/60 hover:border-[#00F0FF] hover:text-[#00F0FF] transition-all text-sm"
+                className="w-full mt-2 px-4 py-2.5 bg-black/50 border border-white/10 rounded-lg text-white/60 hover:border-[#B43FEB] hover:text-[#B43FEB] transition-all text-sm cursor-pointer"
               >
                 更换封面
               </button>
             )}
           </div>
 
-          {/* 项目描述 */}
           <div>
-            <label className="block text-sm text-white/60 mb-2">项目描述（可选）</label>
+            <label className="text-sm font-medium text-white/70 block mb-2">项目描述</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="简要描述项目..."
-              rows={3}
-              className="w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-white placeholder-white/30 outline-none focus:border-[#00F0FF] transition-colors resize-none"
+              placeholder="简要描述这个工作流的用途..."
+              className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-[#B43FEB] focus:ring-1 focus:ring-[#B43FEB] outline-none transition-all h-24 resize-none"
             />
           </div>
-
-          {/* 操作按钮 */}
-          <div className="flex gap-3 pt-2">
-            <Button
-              className="flex-1 bg-white/[0.03] border border-white/[0.08] text-white/60 hover:text-white hover:bg-white/[0.05] rounded-lg"
-              onClick={handleClose}
-            >
-              取消
-            </Button>
-            <Button
-              variant="blue"
-              className="flex-1 rounded-lg"
-              onClick={handleConfirm}
-              disabled={isProcessing}
-            >
-              {isProcessing ? (isEdit ? '保存中...' : '创建中...') : (isEdit ? '保存' : '创建')}
-            </Button>
-          </div>
+        </div>
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-white/5 bg-black/20">
+          <button
+            onClick={handleClose}
+            className="px-5 py-2.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+          >
+            取消
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={isProcessing}
+            className="px-5 py-2.5 rounded-lg text-sm font-medium bg-[#B43FEB] text-white hover:bg-[#9d35ce] shadow-[0_0_15px_rgba(180,63,235,0.3)] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isProcessing ? (isEdit ? '保存中...' : '创建中...') : (isEdit ? '保存' : '创建项目')}
+          </button>
         </div>
       </DialogContent>
     </Dialog>

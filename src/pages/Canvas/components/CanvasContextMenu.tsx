@@ -21,32 +21,32 @@ export const CanvasContextMenu = ({ children, onCreateNode, onOpenChange }: Canv
     return (
         <ContextMenu onOpenChange={onOpenChange}>
             <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-            <ContextMenuContent className="w-52 bg-neutral-800/95 border-neutral-600">
-                <ContextMenuLabel className="text-neutral-300">创建节点</ContextMenuLabel>
-                <ContextMenuSeparator className="bg-neutral-600" />
+            <ContextMenuContent className="w-52 bg-[#121214] border border-white/10 rounded-xl shadow-2xl overflow-hidden p-1">
+                <ContextMenuLabel className="text-white/70 text-xs font-medium px-3 py-2">创建节点</ContextMenuLabel>
+                <ContextMenuSeparator className="bg-white/5 h-px" />
                 <ContextMenuItem
-                    className="text-neutral-200 focus:bg-neutral-700 focus:text-neutral-100"
+                    className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
                     onSelect={() => onCreateNode('note')}
                 >
                     <IconNote size={16} />
                     新建便签节点
                 </ContextMenuItem>
                 <ContextMenuItem
-                    className="text-neutral-200 focus:bg-neutral-700 focus:text-neutral-100"
+                    className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
                     onSelect={() => onCreateNode('image')}
                 >
                     <IconPhoto size={16} />
                     新建图片节点
                 </ContextMenuItem>
                 <ContextMenuItem
-                    className="text-neutral-200 focus:bg-neutral-700 focus:text-neutral-100"
+                    className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
                     onSelect={() => onCreateNode('video')}
                 >
                     <IconVideo size={16} />
                     新建视频节点
                 </ContextMenuItem>
                 <ContextMenuItem
-                    className="text-white/80 hover:bg-white/10 hover:text-white focus:bg-white/10 focus:text-white rounded-md px-3 py-2 text-sm flex items-center gap-2 cursor-pointer"
+                    className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
                     onSelect={() => onCreateNode('panorama')}
                 >
                     <IconEye size={16} />

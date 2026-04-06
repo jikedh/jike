@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight, Folder, Mic, SquareDashedMousePointer, Type } from 'lucide-react'
+import ProjectDialog from '@/components/ProjectDialog'
 
-// 首页组件：严格复刻"样式"工作区的首页视觉结构
 const HomePage = () => {
   const navigate = useNavigate()
+  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false)
   // 功能入口卡片的数据源，保持布局与文案和参考页一致
   const features = [
     {
@@ -78,7 +80,10 @@ const HomePage = () => {
           <h1 className="mb-10 text-5xl font-normal tracking-widest text-white drop-shadow-2xl md:text-6xl" style={{ fontFamily: 'var(--font-legendary)' }}>
             即刻点亮星漫，让万象入镜
           </h1>
-          <button className="cursor-pointer rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-black shadow-[0_0_30px_rgba(180,63,235,0.3)] hover:bg-white/90 hover:shadow-[0_0_50px_rgba(180,63,235,0.5)]">
+          <button
+            onClick={() => setIsProjectDialogOpen(true)}
+            className="cursor-pointer rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-black shadow-[0_0_30px_rgba(180,63,235,0.3)] hover:bg-white/90 hover:shadow-[0_0_50px_rgba(180,63,235,0.5)]"
+          >
             创建全新工作流
           </button>
         </div>
@@ -94,14 +99,20 @@ const HomePage = () => {
               <div
                 key={feature.id}
                 className="group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#121214] p-6 transition-all duration-300 hover:border-[#B43FEB] hover:bg-[#B43FEB]/5"
-                onClick={() => navigate(`/${feature.id}`)}
+                onClick={() => {
+                  if (feature.id === 'canvas') {
+                    setIsProjectDialogOpen(true)
+                  } else {
+                    navigate(`/${feature.id}`)
+                  }
+                }}
               >
-                          <div className="absolute inset-0 bg-linear-to-b from-[#B43FEB]/0 to-[#B43FEB]/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                          <Icon className="relative z-10 mb-6 h-6 w-6 text-white/70 transition-colors group-hover:text-[#B43FEB]" />
-                          <h3 className="relative z-10 mb-3 text-lg font-semibold text-white/90 transition-colors group-hover:text-white">{feature.title}</h3>
-                          <p className="relative z-10 text-sm leading-relaxed text-white/50 transition-colors group-hover:text-white/70">{feature.description}</p>
-                        </div>
-                      )
+                <div className="absolute inset-0 bg-linear-to-b from-[#B43FEB]/0 to-[#B43FEB]/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                <Icon className="relative z-10 mb-6 h-6 w-6 text-white/70 transition-colors group-hover:text-[#B43FEB]" />
+                <h3 className="relative z-10 mb-3 text-lg font-semibold text-white/90 transition-colors group-hover:text-white">{feature.title}</h3>
+                <p className="relative z-10 text-sm leading-relaxed text-white/50 transition-colors group-hover:text-white/70">{feature.description}</p>
+              </div>
+            )
                     })}
           </div>
 
@@ -133,7 +144,16 @@ const HomePage = () => {
             ))}
           </div>
         </div>
-        </div>
+
+        <ProjectDialog
+          isOpen={isProjectDialogOpen}
+          onClose={() => setIsProjectDialogOpen(false)}
+          onSuccess={(projectId) => {
+            setIsProjectDialogOpen(false)
+            navigate(`/canvas/${projectId}`)
+          }}
+        />
+      </div>
     )
 }
 
