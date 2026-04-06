@@ -76,7 +76,6 @@ export const updateSuggestionPosition = (editor: { view: any; state: { selection
  */
 export async function downloadImageFromUrl(imageUrl: string, filename?: string): Promise<void> {
   try {
-    // 获取图片 blob
     const response = await fetch(imageUrl, { mode: 'cors' })
 
     if (!response.ok) {
@@ -85,11 +84,9 @@ export async function downloadImageFromUrl(imageUrl: string, filename?: string):
 
     const blob = await response.blob()
 
-    // 生成文件名
     let finalFilename = filename
 
     if (!finalFilename) {
-      // 尝试从 URL 提取文件名
       try {
         const url = new URL(imageUrl)
         const pathname = url.pathname
@@ -99,17 +96,14 @@ export async function downloadImageFromUrl(imageUrl: string, filename?: string):
           finalFilename = basename
         }
       } catch {
-        // URL 解析失败，使用时间戳降级方案
       }
 
-      // 如果无法从 URL 提取文件名，使用时间戳 + 扩展名
       if (!finalFilename) {
         const ext = blob.type.split('/')[1] || 'jpg'
         finalFilename = `image-${Date.now()}.${ext}`
       }
     }
 
-    // 创建对象 URL 并下载
     const objectUrl = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = objectUrl
@@ -118,10 +112,46 @@ export async function downloadImageFromUrl(imageUrl: string, filename?: string):
     link.click()
     document.body.removeChild(link)
 
-    // 清理对象 URL
     URL.revokeObjectURL(objectUrl)
   } catch (error) {
     const message = error instanceof Error ? error.message : '未知错误'
     throw new Error(`下载失败: ${message}`)
   }
+}
+
+const videoThumbnailCache = new Map<string, string>()
+
+export const getVideoThumbnail = (videoUrl: string): Promise<string> => {
+  if (videoThumbnailCache.has(videoUrl)) {
+    return Promise.resolve(videoThumbnailCache.get(videoUrl)!)
+  }
+
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video')
+    video.crossOrigin = 'anonymous'
+    video.src = videoUrl
+    video.currentTime = 0.1
+    video.muted = true
+
+    video.onloadeddata = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = video.videoWidth || 320
+      canvas.height = video.videoHeight || 180
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        const thumbnail = canvas.toDataURL('image/jpeg', 0.7)
+        videoThumbnailCache.set(videoUrl, thumbnail)
+        resolve(thumbnail)
+      } else {
+        reject(new Error('无法创建 canvas 上下文'))
+      }
+      video.remove()
+    }
+
+    video.onerror = () => {
+      video.remove()
+      reject(new Error('视频加载失败'))
+    }
+  })
 }

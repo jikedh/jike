@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { uploadFileToOSS } from '@/utils/oss'
 import { GenerationStatus } from '@/constants/enum'
 import useMessage from '@/hooks/useMessage'
-import { cn, toChineseNumber, getMentionLabel, updateSuggestionPosition } from '@/lib/utils'
+import { cn, toChineseNumber, getMentionLabel, updateSuggestionPosition, getVideoThumbnail } from '@/lib/utils'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { NoteNodeData, VideoGenerationNode, ImageGenerationNode, AudioGenerationNode } from '@/types/flow'
 import { VideoMentionList } from './VideoMentionList'
@@ -30,6 +30,37 @@ import { MinimaxHailuo23ParamsPanel } from './components/MinimaxHailuo23ParamsPa
 import { Seedance20ParamsPanel } from './components/Seedance20ParamsPanel'
 import { PROMPT_PANEL_STYLES } from '../shared/promptPanelStyles'
 import { getVideoPayloadStrategy } from './strategies/videoPayloadStrategies'
+
+const VideoThumbnailButton = ({ videoUrl }: { videoUrl: string }) => {
+    const [thumbnail, setThumbnail] = useState<string | null>(null)
+
+    useEffect(() => {
+        getVideoThumbnail(videoUrl)
+            .then(setThumbnail)
+            .catch(() => {})
+    }, [videoUrl])
+
+    if (thumbnail) {
+        return (
+            <img
+                src={thumbnail}
+                alt="视频"
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+                loading="lazy"
+            />
+        )
+    }
+
+    return (
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] text-[#B43FEB]">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="23 7 16 12 23 17 23 7" />
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+            </svg>
+            <span>视频</span>
+        </div>
+    )
+}
 
 export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     const [isUploading, setIsUploading] = useState(false)
@@ -593,6 +624,17 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                                 </svg>
                                 <span>音频</span>
                             </div>
+                        </Button>
+                    ))}
+
+                    {parentVideoNodes.map((item, index) => (
+                        <Button
+                            key={`video-${item.id}-${index}`}
+                            unstyled
+                            className={cn(PROMPT_PANEL_STYLES.referenceImageButton, 'overflow-hidden')}
+                            title="视频"
+                        >
+                            <VideoThumbnailButton videoUrl={item.url!} />
                         </Button>
                     ))}
                 </div>

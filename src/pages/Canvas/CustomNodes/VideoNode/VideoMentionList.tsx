@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useState, useRef } from 'react'
-import { IconMusic } from '@tabler/icons-react'
-import { cn } from '@/lib/utils'
+import { IconMusic, IconVideo } from '@tabler/icons-react'
+import { cn, getVideoThumbnail } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
 export interface VideoMentionItem {
@@ -11,7 +11,6 @@ export interface VideoMentionItem {
   type?: 'image' | 'video' | 'audio'
 }
 
-// Tiptap Suggestion API 的 props 类型
 interface SuggestionProps {
   items: VideoMentionItem[]
   command: (item: { id: string; label: string; value: string; thumbnail?: string; type?: 'image' | 'video' | 'audio' }) => void
@@ -19,13 +18,38 @@ interface SuggestionProps {
 
 interface VideoMentionListProps extends SuggestionProps {}
 
-// 使用 forwardRef 以便父组件可以通过 ref 调用 onKeyDown
+const VideoThumbnail = ({ videoUrl }: { videoUrl: string }) => {
+  const [thumbnail, setThumbnail] = useState<string | null>(null)
+
+  useEffect(() => {
+    getVideoThumbnail(videoUrl)
+      .then(setThumbnail)
+      .catch(() => {})
+  }, [videoUrl])
+
+  if (thumbnail) {
+    return (
+      <img
+        src={thumbnail}
+        alt="视频缩略图"
+        className="h-7 w-7 shrink-0 rounded-md object-cover"
+        loading="lazy"
+      />
+    )
+  }
+
+  return (
+    <div className="h-7 w-7 shrink-0 rounded-md bg-[#B43FEB]/20 flex items-center justify-center">
+      <IconVideo size={14} className="text-[#B43FEB]" />
+    </div>
+  )
+}
+
 export const VideoMentionList = forwardRef<{ onKeyDown: (props: { event: KeyboardEvent }) => boolean }, VideoMentionListProps>(
   ({ items, command }, ref) => {
     const [selectedIndex, setSelectedIndex] = useState(0)
     const listRef = useRef<HTMLDivElement | null>(null)
 
-    // 当 selectedIndex 改变时，自动滚动到选中的选项
     useEffect(() => {
       if (listRef.current) {
         const activeElement = listRef.current.children[selectedIndex] as HTMLElement
@@ -35,7 +59,6 @@ export const VideoMentionList = forwardRef<{ onKeyDown: (props: { event: Keyboar
       }
     }, [selectedIndex])
 
-    // 暴露 onKeyDown 方法给父组件
     useImperativeHandle(ref, () => ({
       onKeyDown: ({ event }: { event: KeyboardEvent }) => {
         if (event.key === 'ArrowUp') {
@@ -61,7 +84,6 @@ export const VideoMentionList = forwardRef<{ onKeyDown: (props: { event: Keyboar
       },
     }))
 
-    // 当 items 变化时重置选中索引
     useEffect(() => {
       setSelectedIndex(0)
     }, [items])
@@ -99,6 +121,8 @@ export const VideoMentionList = forwardRef<{ onKeyDown: (props: { event: Keyboar
               <div className="h-7 w-7 shrink-0 rounded-md bg-[#B43FEB]/20 flex items-center justify-center">
                 <IconMusic size={16} className="text-[#B43FEB]" />
               </div>
+            ) : item.type === 'video' ? (
+              <VideoThumbnail videoUrl={item.thumbnail} />
             ) : (
               <img
                 src={item.thumbnail}
