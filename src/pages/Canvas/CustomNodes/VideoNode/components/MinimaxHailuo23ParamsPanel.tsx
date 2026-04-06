@@ -88,14 +88,14 @@ export const MinimaxHailuo23ParamsPanel = ({
                                         className={cn(
                                             'flex flex-col items-center gap-0.5 rounded-lg border px-5 py-2.5 transition-all',
                                             isActive
-                                                ? 'border-blue-500 bg-blue-500/10'
+                                                ? 'border-[#B43FEB] bg-[#B43FEB]/10'
                                                 : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750',
                                         )}
                                     >
                                         <span
                                             className={cn(
                                                 'text-sm font-medium',
-                                                isActive ? 'text-blue-400' : 'text-neutral-300',
+                                                isActive ? 'text-[#B43FEB]' : 'text-neutral-300',
                                             )}
                                         >
                                             {preset}s
@@ -123,7 +123,7 @@ export const MinimaxHailuo23ParamsPanel = ({
                         <Switch
                             checked={metadata?.prompt_optimizer ?? true}
                             onCheckedChange={(checked) => updateMetadata({ prompt_optimizer: checked })}
-                            className="data-[state=checked]:bg-blue-500"
+                            className="data-[state=checked]:bg-[#B43FEB]"
                         />
                     </div>
 
@@ -166,14 +166,14 @@ export const MinimaxHailuo23ParamsPanel = ({
                                                         'flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 transition-all',
                                                         isDisabled && 'cursor-not-allowed opacity-50',
                                                         isActive && !isDisabled
-                                                            ? 'border-blue-500 bg-blue-500/10'
+                                                            ? 'border-[#B43FEB] bg-[#B43FEB]/10'
                                                             : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750',
                                                     )}
                                                 >
                                                     <span
                                                         className={cn(
                                                             'text-xs',
-                                                            isActive && !isDisabled ? 'text-blue-400' : 'text-neutral-300',
+                                                            isActive && !isDisabled ? 'text-[#B43FEB]' : 'text-neutral-300',
                                                         )}
                                                     >
                                                         {item.label}
@@ -181,7 +181,7 @@ export const MinimaxHailuo23ParamsPanel = ({
                                                     <span
                                                         className={cn(
                                                             'text-[10px]',
-                                                            isActive && !isDisabled ? 'text-blue-400/70' : 'text-neutral-500',
+                                                            isActive && !isDisabled ? 'text-[#B43FEB]/70' : 'text-neutral-500',
                                                         )}
                                                     >
                                                         {item.desc}
@@ -205,7 +205,7 @@ export const MinimaxHailuo23ParamsPanel = ({
                                     <Switch
                                         checked={metadata?.fast_pretreatment ?? false}
                                         onCheckedChange={(checked) => updateMetadata({ fast_pretreatment: checked })}
-                                        className="data-[state=checked]:bg-blue-500 scale-90"
+                                        className="data-[state=checked]:bg-[#B43FEB] scale-90"
                                     />
                                 </div>
                             </div>

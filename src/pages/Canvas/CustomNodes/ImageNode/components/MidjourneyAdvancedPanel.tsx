@@ -107,7 +107,7 @@ const DroppableImageList = ({
       className={cn(
         'flex gap-2 rounded-lg border bg-neutral-800/50 p-2 pb-1 transition-colors',
         isDragging ? 'overflow-hidden' : 'overflow-x-auto overflow-y-hidden',
-        isOver ? 'border-blue-500 bg-neutral-800/80' : 'border-neutral-700'
+        isOver ? 'border-[#B43FEB] bg-neutral-800/80' : 'border-neutral-700'
       )}
     >
       {images.length > 0 ? (
@@ -139,8 +139,20 @@ export const MidjourneyAdvancedPanel = ({
   // 当前正在拖拽的图片
   const [activeId, setActiveId] = useState<string | null>(null)
   const isDragging = Boolean(activeId)
-  const topSliderValue = value?.iw ?? 0.5
+  const topSliderValue = value?.iw ?? 1
   const bottomSliderValue = value?.sw ?? 100
+  // 输入框编辑状态
+  const [topInputValue, setTopInputValue] = useState<string>(topSliderValue.toFixed(1))
+  const [bottomInputValue, setBottomInputValue] = useState<string>(String(bottomSliderValue))
+
+  // 同步外部值变化到本地状态
+  useEffect(() => {
+    setTopInputValue(topSliderValue.toFixed(1))
+  }, [topSliderValue])
+
+  useEffect(() => {
+    setBottomInputValue(String(bottomSliderValue))
+  }, [bottomSliderValue])
 
   useEffect(() => {
     const currentReferenceUrls = value?.referenceUrls ?? []
@@ -258,20 +270,21 @@ export const MidjourneyAdvancedPanel = ({
                     <TooltipTrigger asChild>
                       <input
                         type="range"
-                        min={0}
+                        min={0.1}
                         max={2}
                         step={0.1}
                         value={topSliderValue}
                         onChange={(event) => {
                           const next = Number(event.target.value)
                           if (!Number.isNaN(next)) {
+                            setTopInputValue(next.toFixed(1))
                             onChange?.({
                               ...value,
                               iw: next,
                             })
                           }
                         }}
-                        className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-neutral-700 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
+                        className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-neutral-700 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#B43FEB] [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
                       />
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="bg-neutral-800 text-neutral-200 border-neutral-700">
@@ -279,7 +292,35 @@ export const MidjourneyAdvancedPanel = ({
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                <span className="text-xs text-neutral-400 w-8 text-right">{topSliderValue.toFixed(1)}</span>
+                <input
+                  type="number"
+                  min={0.1}
+                  max={2}
+                  step={0.1}
+                  value={topInputValue}
+                  onChange={(event) => {
+                    setTopInputValue(event.target.value)
+                  }}
+                  onBlur={() => {
+                    const next = Number(topInputValue)
+                    if (!Number.isNaN(next)) {
+                      const clamped = Math.min(2, Math.max(0.1, next))
+                      setTopInputValue(clamped.toFixed(1))
+                      onChange?.({
+                        ...value,
+                        iw: clamped,
+                      })
+                    } else {
+                      setTopInputValue(topSliderValue.toFixed(1))
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.currentTarget.blur()
+                    }
+                  }}
+                  className="w-12 rounded border border-neutral-600 bg-neutral-800 px-1.5 py-0.5 text-right text-xs text-neutral-300 focus:border-[#B43FEB] focus:outline-none"
+                />
               </div>
             </div>
 
@@ -307,13 +348,14 @@ export const MidjourneyAdvancedPanel = ({
                         onChange={(event) => {
                           const next = Number(event.target.value)
                           if (!Number.isNaN(next)) {
+                            setBottomInputValue(String(next))
                             onChange?.({
                               ...value,
                               sw: next,
                             })
                           }
                         }}
-                        className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-neutral-700 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
+                        className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-neutral-700 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#B43FEB] [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
                       />
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="bg-neutral-800 text-neutral-200 border-neutral-700">
@@ -321,7 +363,35 @@ export const MidjourneyAdvancedPanel = ({
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                <span className="text-xs text-neutral-400 w-10 text-right">{bottomSliderValue}</span>
+                <input
+                  type="number"
+                  min={100}
+                  max={1000}
+                  step={1}
+                  value={bottomInputValue}
+                  onChange={(event) => {
+                    setBottomInputValue(event.target.value)
+                  }}
+                  onBlur={() => {
+                    const next = Number(bottomInputValue)
+                    if (!Number.isNaN(next)) {
+                      const clamped = Math.min(1000, Math.max(100, next))
+                      setBottomInputValue(String(clamped))
+                      onChange?.({
+                        ...value,
+                        sw: clamped,
+                      })
+                    } else {
+                      setBottomInputValue(String(bottomSliderValue))
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.currentTarget.blur()
+                    }
+                  }}
+                  className="w-14 rounded border border-neutral-600 bg-neutral-800 px-1.5 py-0.5 text-right text-xs text-neutral-300 focus:border-[#B43FEB] focus:outline-none"
+                />
               </div>
             </div>
           </div>

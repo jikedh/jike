@@ -87,7 +87,7 @@ export const GeminiParamsPanel = ({
                     className={cn(
                       'flex flex-col items-center gap-1 rounded-lg border p-2 transition-all',
                       isActive
-                        ? 'border-blue-500 bg-blue-500/10'
+                        ? 'border-[#B43FEB] bg-[#B43FEB]/10'
                         : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750',
                     )}
                   >
@@ -99,7 +99,7 @@ export const GeminiParamsPanel = ({
                     <span
                       className={cn(
                         'text-[10px]',
-                        isActive ? 'text-blue-400' : 'text-neutral-400',
+                        isActive ? 'text-[#B43FEB]' : 'text-neutral-400',
                       )}
                     >
                       {item.label}
@@ -126,14 +126,14 @@ export const GeminiParamsPanel = ({
                     className={cn(
                       'flex flex-1 flex-col items-center gap-0.5 rounded-lg border px-3 py-2 transition-all',
                       isActive
-                        ? 'border-blue-500 bg-blue-500/10'
+                        ? 'border-[#B43FEB] bg-[#B43FEB]/10'
                         : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500',
                     )}
                   >
                     <span
                       className={cn(
                         'text-xs font-medium',
-                        isActive ? 'text-blue-400' : 'text-neutral-300',
+                        isActive ? 'text-[#B43FEB]' : 'text-neutral-300',
                       )}
                     >
                       {item.label}

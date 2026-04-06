@@ -44,7 +44,7 @@ export const AspectRatioIcon = ({
     const offsetX = (size - rectWidth) / 2
     const offsetY = (size - rectHeight) / 2
 
-    const strokeColor = active ? '#3b82f6' : '#737373'
+    const strokeColor = active ? '#B43FEB' : '#737373'
     const strokeWidth = active ? 1.5 : 1
 
     return (

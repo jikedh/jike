@@ -116,14 +116,14 @@ export const Seedance20ParamsPanel = ({
                     className={cn(
                       'flex flex-col items-start gap-0.5 rounded-lg border px-4 py-2 transition-all',
                       isActive
-                        ? 'border-blue-500 bg-blue-500/10'
+                        ? 'border-[#B43FEB] bg-[#B43FEB]/10'
                         : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750',
                     )}
                   >
-                    <span className={cn('text-xs font-medium', isActive ? 'text-blue-400' : 'text-neutral-300')}>
+                    <span className={cn('text-xs font-medium', isActive ? 'text-[#B43FEB]' : 'text-neutral-300')}>
                       {item.label}
                     </span>
-                    <span className={cn('text-[10px]', isActive ? 'text-blue-400/70' : 'text-neutral-500')}>
+                    <span className={cn('text-[10px]', isActive ? 'text-[#B43FEB]/70' : 'text-neutral-500')}>
                       {item.desc}
                     </span>
                   </button>
@@ -150,7 +150,7 @@ export const Seedance20ParamsPanel = ({
                     onDurationChange(clampDuration(next, currentMode))
                   }
                 }}
-                className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-neutral-700 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500"
+                className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-neutral-700 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#B43FEB]"
               />
               <span className="min-w-13 rounded bg-neutral-800 px-2 py-1 text-center text-xs text-neutral-300">
                 {clampDuration(currentDuration, currentMode)}s
@@ -172,14 +172,14 @@ export const Seedance20ParamsPanel = ({
                     className={cn(
                       'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 transition-all',
                       isActive
-                        ? 'border-blue-500 bg-blue-500/10'
+                        ? 'border-[#B43FEB] bg-[#B43FEB]/10'
                         : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750',
                     )}
                   >
                     {item.value === 'adaptive' ? null : (
                       <AspectRatioIcon ratio={item.value} size={18} active={isActive} />
                     )}
-                    <span className={cn('text-[10px]', isActive ? 'text-blue-400' : 'text-neutral-300')}>
+                    <span className={cn('text-[10px]', isActive ? 'text-[#B43FEB]' : 'text-neutral-300')}>
                       {item.label}
                     </span>
                   </button>
@@ -202,14 +202,14 @@ export const Seedance20ParamsPanel = ({
                     className={cn(
                       'flex flex-col items-start gap-0.5 rounded-lg border px-4 py-2 transition-all',
                       isActive
-                        ? 'border-blue-500 bg-blue-500/10'
+                        ? 'border-[#B43FEB] bg-[#B43FEB]/10'
                         : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750',
                     )}
                   >
-                    <span className={cn('text-xs', isActive ? 'text-blue-400' : 'text-neutral-300')}>
+                    <span className={cn('text-xs', isActive ? 'text-[#B43FEB]' : 'text-neutral-300')}>
                       {item.label}
                     </span>
-                    <span className={cn('text-[10px]', isActive ? 'text-blue-400/70' : 'text-neutral-500')}>
+                    <span className={cn('text-[10px]', isActive ? 'text-[#B43FEB]/70' : 'text-neutral-500')}>
                       {item.desc}
                     </span>
                   </button>
@@ -227,7 +227,7 @@ export const Seedance20ParamsPanel = ({
             <Switch
               checked={generateAudio ?? true}
               onCheckedChange={onGenerateAudioChange}
-              className="data-[state=checked]:bg-blue-500"
+              className="data-[state=checked]:bg-[#B43FEB]"
             />
           </div>
         </div>

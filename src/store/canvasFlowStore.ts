@@ -1040,7 +1040,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           midjourneyAdvanced: {
             referenceUrls: [],
             styleUrls: [],
-            iw: 0.5,
+            iw: 1,
             sw: 100,
           },
           status: GenerationStatus.COMPLETED,

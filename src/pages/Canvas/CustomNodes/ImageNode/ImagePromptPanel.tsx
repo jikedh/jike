@@ -100,7 +100,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const midjourneyAdvanced = currentImageData?.midjourneyAdvanced ?? {
     referenceUrls: referenceImageUrls,
     styleUrls: [],
-    iw: 0.5,
+    iw: 1,
     sw: 100,
   }
 
@@ -809,7 +809,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                                     midjourneyAdvanced: {
                                         referenceUrls: next.referenceUrls ?? [],
                                         styleUrls: next.styleUrls ?? [],
-                                        iw: next.iw ?? 0.5,
+                                        iw: next.iw ?? 1,
                                         sw: next.sw ?? 100,
                                     },
                                 })

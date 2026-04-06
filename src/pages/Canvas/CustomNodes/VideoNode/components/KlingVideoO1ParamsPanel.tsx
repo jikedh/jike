@@ -153,14 +153,14 @@ export const KlingVideoO1ParamsPanel = ({
                                         className={cn(
                                             'flex flex-col items-start gap-0.5 rounded-lg border px-4 py-2.5 transition-all',
                                             isActive
-                                                ? 'border-blue-500 bg-blue-500/10'
+                                                ? 'border-[#B43FEB] bg-[#B43FEB]/10'
                                                 : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750',
                                         )}
                                     >
                                         <span
                                             className={cn(
                                                 'text-xs font-medium',
-                                                isActive ? 'text-blue-400' : 'text-neutral-300',
+                                                isActive ? 'text-[#B43FEB]' : 'text-neutral-300',
                                             )}
                                         >
                                             {item.label}
@@ -168,7 +168,7 @@ export const KlingVideoO1ParamsPanel = ({
                                         <span
                                             className={cn(
                                                 'text-[10px]',
-                                                isActive ? 'text-blue-400/70' : 'text-neutral-500',
+                                                isActive ? 'text-[#B43FEB]/70' : 'text-neutral-500',
                                             )}
                                         >
                                             {item.desc}
@@ -195,14 +195,14 @@ export const KlingVideoO1ParamsPanel = ({
                                         className={cn(
                                             'flex flex-col items-center gap-0.5 rounded-lg border px-5 py-2.5 transition-all',
                                             isActive
-                                                ? 'border-blue-500 bg-blue-500/10'
+                                                ? 'border-[#B43FEB] bg-[#B43FEB]/10'
                                                 : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750',
                                         )}
                                     >
                                         <span
                                             className={cn(
                                                 'text-sm font-medium',
-                                                isActive ? 'text-blue-400' : 'text-neutral-300',
+                                                isActive ? 'text-[#B43FEB]' : 'text-neutral-300',
                                             )}
                                         >
                                             {preset}s
@@ -232,7 +232,7 @@ export const KlingVideoO1ParamsPanel = ({
                                         className={cn(
                                             'flex flex-col items-center gap-0.5 rounded-lg border px-4 py-2 transition-all',
                                             isActive
-                                                ? 'border-blue-500 bg-blue-500/10'
+                                                ? 'border-[#B43FEB] bg-[#B43FEB]/10'
                                                 : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750',
                                         )}
                                     >
@@ -244,7 +244,7 @@ export const KlingVideoO1ParamsPanel = ({
                                         <span
                                             className={cn(
                                                 'text-[10px]',
-                                                isActive ? 'text-blue-400' : 'text-neutral-400',
+                                                isActive ? 'text-[#B43FEB]' : 'text-neutral-400',
                                             )}
                                         >
                                             {item.desc}
@@ -268,7 +268,7 @@ export const KlingVideoO1ParamsPanel = ({
                         <Switch
                             checked={watermark ?? true}
                             onCheckedChange={(checked) => onWatermarkChange?.(checked)}
-                            className="data-[state=checked]:bg-blue-500"
+                            className="data-[state=checked]:bg-[#B43FEB]"
                         />
                     </div>
 
@@ -358,14 +358,14 @@ export const KlingVideoO1ParamsPanel = ({
                                                                 className={cn(
                                                                     'flex flex-col items-start gap-0.5 rounded-lg border px-3 py-1.5 transition-all',
                                                                     isActive
-                                                                        ? 'border-blue-500 bg-blue-500/10'
+                                                                        ? 'border-[#B43FEB] bg-[#B43FEB]/10'
                                                                         : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750',
                                                                 )}
                                                             >
                                                                 <span
                                                                     className={cn(
                                                                         'text-[10px]',
-                                                                        isActive ? 'text-blue-400' : 'text-neutral-300',
+                                                                        isActive ? 'text-[#B43FEB]' : 'text-neutral-300',
                                                                     )}
                                                                 >
                                                                     {item.label}
@@ -373,7 +373,7 @@ export const KlingVideoO1ParamsPanel = ({
                                                                 <span
                                                                     className={cn(
                                                                         'text-[9px]',
-                                                                        isActive ? 'text-blue-400/70' : 'text-neutral-500',
+                                                                        isActive ? 'text-[#B43FEB]/70' : 'text-neutral-500',
                                                                     )}
                                                                 >
                                                                     {item.desc}
@@ -397,7 +397,7 @@ export const KlingVideoO1ParamsPanel = ({
                                                 <Switch
                                                     checked={(currentVideo.keep_original_sound ?? 'no') === 'yes'}
                                                     onCheckedChange={handleKeepSoundChange}
-                                                    className="data-[state=checked]:bg-blue-500 scale-90"
+                                                    className="data-[state=checked]:bg-[#B43FEB] scale-90"
                                                 />
                                             </div>
                                         </div>

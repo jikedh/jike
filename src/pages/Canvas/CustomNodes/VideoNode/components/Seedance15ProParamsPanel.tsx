@@ -143,7 +143,7 @@ export const Seedance15ProParamsPanel = ({
                                         className={cn(
                                             'flex flex-col items-center gap-1 rounded-lg border p-2 transition-all',
                                             isActive
-                                                ? 'border-blue-500 bg-blue-500/10'
+                                                ? 'border-[#B43FEB] bg-[#B43FEB]/10'
                                                 : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750',
                                         )}
                                     >
@@ -155,7 +155,7 @@ export const Seedance15ProParamsPanel = ({
                                         <span
                                             className={cn(
                                                 'text-[10px]',
-                                                isActive ? 'text-blue-400' : 'text-neutral-400',
+                                                isActive ? 'text-[#B43FEB]' : 'text-neutral-400',
                                             )}
                                         >
                                             {item.label}
@@ -182,14 +182,14 @@ export const Seedance15ProParamsPanel = ({
                                         className={cn(
                                             'flex flex-col items-center gap-0.5 rounded-lg border px-3 py-2 transition-all',
                                             isActive
-                                                ? 'border-blue-500 bg-blue-500/10'
+                                                ? 'border-[#B43FEB] bg-[#B43FEB]/10'
                                                 : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750',
                                         )}
                                     >
                                         <span
                                             className={cn(
                                                 'text-xs',
-                                                isActive ? 'text-blue-400' : 'text-neutral-300',
+                                                isActive ? 'text-[#B43FEB]' : 'text-neutral-300',
                                             )}
                                         >
                                             {item.label}
@@ -197,7 +197,7 @@ export const Seedance15ProParamsPanel = ({
                                         <span
                                             className={cn(
                                                 'text-[10px]',
-                                                isActive ? 'text-blue-400/70' : 'text-neutral-500',
+                                                isActive ? 'text-[#B43FEB]/70' : 'text-neutral-500',
                                             )}
                                         >
                                             {item.desc}
@@ -226,7 +226,7 @@ export const Seedance15ProParamsPanel = ({
                                             className={cn(
                                                 'rounded-lg border px-2.5 py-1.5 text-xs transition-all',
                                                 isActive
-                                                    ? 'border-blue-500 bg-blue-500/10 text-blue-400'
+                                                    ? 'border-[#B43FEB] bg-[#B43FEB]/10 text-[#B43FEB]'
                                                     : 'border-neutral-700 bg-neutral-800 text-neutral-300 hover:border-neutral-500 hover:text-neutral-100',
                                             )}
                                         >
@@ -249,7 +249,7 @@ export const Seedance15ProParamsPanel = ({
                                             onDurationChange(next)
                                         }
                                     }}
-                                    className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-neutral-700 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
+                                    className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-neutral-700 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#B43FEB] [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
                                 />
                                 <span className="min-w-[40px] rounded bg-neutral-800 px-2 py-1 text-center text-xs text-neutral-300">
                                     {duration}s
@@ -280,14 +280,14 @@ export const Seedance15ProParamsPanel = ({
                                             className={cn(
                                                 'flex flex-col items-center gap-0.5 rounded-lg border px-3 py-2 transition-all',
                                                 isActive
-                                                    ? 'border-blue-500 bg-blue-500/10'
+                                                    ? 'border-[#B43FEB] bg-[#B43FEB]/10'
                                                     : 'border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750',
                                             )}
                                         >
                                             <span
                                                 className={cn(
                                                     'text-xs',
-                                                    isActive ? 'text-blue-400' : 'text-neutral-300',
+                                                    isActive ? 'text-[#B43FEB]' : 'text-neutral-300',
                                                 )}
                                             >
                                                 {item.value}
@@ -295,7 +295,7 @@ export const Seedance15ProParamsPanel = ({
                                             <span
                                                 className={cn(
                                                     'text-[10px]',
-                                                    isActive ? 'text-blue-400/70' : 'text-neutral-500',
+                                                    isActive ? 'text-[#B43FEB]/70' : 'text-neutral-500',
                                                 )}
                                             >
                                                 {item.label.split(' ')[0]}
@@ -348,7 +348,7 @@ export const Seedance15ProParamsPanel = ({
                             <Switch
                                 checked={audio ?? false}
                                 onCheckedChange={(checked) => onAudioChange?.(checked)}
-                                className="data-[state=checked]:bg-blue-500"
+                                className="data-[state=checked]:bg-[#B43FEB]"
                             />
                         </div>
 
@@ -365,7 +365,7 @@ export const Seedance15ProParamsPanel = ({
                             <Switch
                                 checked={camerafixed ?? false}
                                 onCheckedChange={(checked) => onCameraFixedChange?.(checked)}
-                                className="data-[state=checked]:bg-blue-500"
+                                className="data-[state=checked]:bg-[#B43FEB]"
                             />
                         </div>
                     </div>
