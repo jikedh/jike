@@ -92,10 +92,10 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
             error('存储功能不可用')
             return
         }
-        
+
         const oldPath = storagePath
         const selectedPath = await window.storage.selectDirectory()
-        
+
         if (selectedPath && selectedPath !== oldPath) {
             if (oldPath) {
                 const migrateResult = await window.storage.migrateProjects(oldPath, selectedPath)
@@ -312,10 +312,10 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
                                     </>
                                 )}
 
-                    {/* API 密钥设置 */}
-                    {activeSection === 'apikey' && (
+                    {/* API 密钥设置 TODO */}
+                    {/* {activeSection === 'apikey' && (
                       <ApiKeySection />
-                    )}
+                    )} */}
 
                                 {/* 数据与版本 - 导入导出 */}
                                 {activeSection === 'data' && (
