@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { SquareDashedMousePointer, Plus, Play, Network, Clock, X, Pencil, Trash2, FileText } from 'lucide-react'
-import { getProjectListAsync, deleteProject, type ProjectMeta } from '@/utils/projectStorage'
+import { getProjectListAsync, deleteProject, getCoverImageUrl, type ProjectMeta } from '@/utils/projectStorage'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import ProjectDialog from '@/components/ProjectDialog'
 
@@ -127,17 +127,22 @@ export default function CanvasPlaceholderPage() {
             >
               {/* Thumbnail */}
               <div className="relative aspect-video overflow-hidden bg-white/5">
-                {project.coverUrl ? (
-                  <img
-                    src={project.coverUrl}
-                    alt={project.name}
-                    className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/5 to-white/[0.02]">
-                    <FileText className="w-12 h-12 text-white/20 group-hover:text-[#B43FEB]/50 transition-colors" />
-                  </div>
-                )}
+                {(() => {
+                  const localCoverUrl = getCoverImageUrl(project.id)
+                  const coverSrc = localCoverUrl || project.coverUrl
+                  
+                  return coverSrc ? (
+                    <img
+                      src={coverSrc}
+                      alt={project.name}
+                      className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/5 to-white/[0.02]">
+                      <FileText className="w-12 h-12 text-white/20 group-hover:text-[#B43FEB]/50 transition-colors" />
+                    </div>
+                  )
+                })()}
 
                 {/* Overlay actions */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">

@@ -20,6 +20,7 @@ export type StorageApi = {
   fileExists: (filePath: string) => Promise<boolean>
   listFiles: (dirPath: string) => Promise<{ success: boolean; files: FileInfo[]; error?: string }>
   downloadFile: (url: string, destPath: string) => Promise<{ success: boolean; path?: string; error?: string }>
+  renameDirectory: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>
   migrateProjects: (oldPath: string, newPath: string) => Promise<{ success: boolean; migratedCount?: number; error?: string }>
   getDefaultPath: () => Promise<string>
 }
@@ -35,6 +36,7 @@ const storageApi: StorageApi = {
   fileExists: (filePath) => ipcRenderer.invoke('storage:fileExists', filePath),
   listFiles: (dirPath) => ipcRenderer.invoke('storage:listFiles', dirPath),
   downloadFile: (url, destPath) => ipcRenderer.invoke('storage:downloadFile', url, destPath),
+  renameDirectory: (oldPath, newPath) => ipcRenderer.invoke('storage:renameDirectory', oldPath, newPath),
   migrateProjects: (oldPath, newPath) => ipcRenderer.invoke('storage:migrateProjects', oldPath, newPath),
   getDefaultPath: () => ipcRenderer.invoke('storage:getDefaultPath'),
 }

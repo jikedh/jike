@@ -49,13 +49,15 @@ export interface ImageGenerationNode {
     type: string; // 结果类型
     data?: {
       url?: string; // 图片 URL
+      relativePath?: string; // 本地相对路径
+      localFileName?: string; // 本地文件名
     }[]; // 图片数据列表（支持多张图片累积）
   }; // 生成结果
   // ---- 状态管理 ----
   status?: GenerationStatus; // 当前生成状态
   progress?: number; // 进度百分比（0-100）
   completedCount?: number; // 已完成图片数量（用于多图生成场景判断）
-  isUpload?: boolean; // 是否为上传图片（用于区分加载中/生成中）
+  isUpload?: boolean; // 是否为上传图片（用于区分加载中 / 生成中）
   error?: {
     code?: string; // 错误代码
     message?: string; // 错误信息（兜底显示）
@@ -131,6 +133,8 @@ export interface VideoGenerationNode {
       // 视频数据数组
       url: string; // 生成的视频 URL
       format: string; // 视频格式（如 mp4）
+      relativePath?: string; // 本地相对路径
+      localFileName?: string; // 本地文件名
     }[];
   };
   isUpload?: boolean; // 是否为上传视频（用于区分加载中/生成中）

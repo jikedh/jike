@@ -2,7 +2,7 @@ import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join, dirname, normalize } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { promises as fs } from 'fs'
-import { existsSync, mkdirSync, writeFileSync, readFileSync, unlinkSync, readdirSync, statSync } from 'fs'
+import { existsSync, mkdirSync, writeFileSync, readFileSync, unlinkSync, readdirSync, statSync, renameSync } from 'fs'
 // @ts-ignore
 import icon from '../../resources/icon.png?asset'
 
@@ -185,6 +185,32 @@ function setupIpcHandlers(): void {
       }
       writeFileSync(normalizedPath, Buffer.from(arrayBuffer))
       return { success: true, path: normalizedPath }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('storage:renameDirectory', async (_, oldPath: string, newPath: string) => {
+    try {
+      const normalizedOldPath = normalize(oldPath)
+      const normalizedNewPath = normalize(newPath)
+      
+      if (!existsSync(normalizedOldPath)) {
+        return { success: false, error: 'Source directory does not exist' }
+      }
+      
+      if (existsSync(normalizedNewPath)) {
+        return { success: false, error: 'Target directory already exists' }
+      }
+      
+      const parentDir = dirname(normalizedNewPath)
+      if (!existsSync(parentDir)) {
+        mkdirSync(parentDir, { recursive: true })
+      }
+      
+      renameSync(normalizedOldPath, normalizedNewPath)
+      
+      return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message }
     }

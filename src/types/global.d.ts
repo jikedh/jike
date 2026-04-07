@@ -30,3 +30,5 @@ declare global {
     storage: StorageApi
   }
 }
+
+export {}

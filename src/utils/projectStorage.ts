@@ -4,7 +4,7 @@
  * 支持 localStorage 和本地文件存储
  */
 
-import { localStorageService, generateFileName } from '@/services/localStorageService'
+import { localStorageService, generateFileName, generateSimpleFileName } from '@/services/localStorageService'
 
 const PROJECT_LIST_KEY = 'canvas-projects'
 const CANVAS_DATA_PREFIX = 'canvas-flow-data-'
@@ -16,6 +16,7 @@ export type ProjectMeta = {
     createdAt: number
     updatedAt: number
     coverUrl?: string
+    coverLocalPath?: string
     description?: string
     type: 'video' | 'script'
 }
@@ -73,6 +74,8 @@ export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
                                             name: canvasData.projectName || file.name,
                                             createdAt: canvasData.savedAt || file.modifiedAt || Date.now(),
                                             updatedAt: canvasData.savedAt || file.modifiedAt || Date.now(),
+                                            description: canvasData.description,
+                                            coverLocalPath: canvasData.coverLocalPath,
                                             type: 'video',
                                         }
                                         localFileProjects.push(newProject)
@@ -186,6 +189,7 @@ export const createProject = async (
                 savedAt: now,
                 projectId: String(nextId),
                 projectName: projectName,
+                description: description,
                 nodes: [],
                 edges: [],
                 nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1, table: 1 }
@@ -215,6 +219,57 @@ export const updateProject = (projectId: string, updates: Partial<Omit<ProjectMe
         }
     } catch (error: any) {
         console.error('Failed to update project:', error)
+    }
+}
+
+export const renameProject = async (projectId: string, newName: string): Promise<boolean> => {
+    try {
+        const raw = localStorage.getItem(PROJECT_LIST_KEY)
+        if (!raw) return false
+
+        const data = JSON.parse(raw) as ProjectList
+        const projectIndex = data.projects.findIndex(p => p.id === projectId)
+
+        if (projectIndex === -1) return false
+
+        const oldName = data.projects[projectIndex].name
+        
+        const existingNames = data.projects.filter(p => p.id !== projectId).map(p => p.name)
+        if (existingNames.includes(newName)) {
+            console.warn('Project name already exists:', newName)
+            return false
+        }
+
+        if (localStorageService.isAvailable()) {
+            const renameResult = await localStorageService.renameProject(oldName, newName)
+            if (!renameResult.success) {
+                console.error('Failed to rename project folder:', renameResult.error)
+                return false
+            }
+        }
+
+        data.projects[projectIndex] = {
+            ...data.projects[projectIndex],
+            name: newName,
+            updatedAt: Date.now()
+        }
+        saveProjectList(data.projects, data.nextId)
+
+        const canvasDataRaw = localStorage.getItem(getCanvasDataKey(projectId))
+        if (canvasDataRaw) {
+            try {
+                const canvasData = JSON.parse(canvasDataRaw)
+                canvasData.projectName = newName
+                await saveCanvasData(projectId, canvasData)
+            } catch (e) {
+                console.warn('Failed to update canvas data with new name:', e)
+            }
+        }
+
+        return true
+    } catch (error: any) {
+        console.error('Failed to rename project:', error)
+        return false
     }
 }
 
@@ -307,7 +362,7 @@ export const saveImageToLocal = async (
 
     if (!localStorageService.isAvailable()) return null
 
-    const fileName = generateFileName('img', extension)
+    const fileName = generateSimpleFileName(extension)
 
     if (typeof imageData === 'string') {
         const result = await localStorageService.downloadImage(project.name, fileName, imageData)
@@ -328,7 +383,7 @@ export const saveVideoToLocal = async (
 
     if (!localStorageService.isAvailable()) return null
 
-    const fileName = generateFileName('vid', extension)
+    const fileName = generateSimpleFileName(extension)
 
     if (typeof videoData === 'string') {
         const result = await localStorageService.downloadVideo(project.name, fileName, videoData)
@@ -349,7 +404,7 @@ export const saveAudioToLocal = async (
 
     if (!localStorageService.isAvailable()) return null
 
-    const fileName = generateFileName('aud', extension)
+    const fileName = generateSimpleFileName(extension)
 
     if (typeof audioData === 'string') {
         const result = await localStorageService.downloadAudio(project.name, fileName, audioData)
@@ -370,9 +425,9 @@ export const saveGeneratedImageToLocal = async (
 
     if (!localStorageService.isAvailable()) return null
 
-    const fileName = generateFileName('generate_image', extension)
+    const fileName = generateSimpleFileName(extension)
 
-    const result = await localStorageService.downloadImage(project.name, fileName, imageUrl)
+    const result = await localStorageService.downloadGeneratedImage(project.name, fileName, imageUrl)
     return result.success ? fileName : null
 }
 
@@ -386,28 +441,75 @@ export const saveGeneratedVideoToLocal = async (
 
     if (!localStorageService.isAvailable()) return null
 
-    const fileName = generateFileName('generate_video', extension)
+    const fileName = generateSimpleFileName(extension)
 
-    const result = await localStorageService.downloadVideo(project.name, fileName, videoUrl)
+    const result = await localStorageService.downloadGeneratedVideo(project.name, fileName, videoUrl)
     return result.success ? fileName : null
 }
 
-export const getLocalFilePath = (projectId: string, fileType: 'image' | 'video' | 'audio', fileName: string): string | null => {
+export const saveCoverImageToLocal = async (
+    projectId: string,
+    imageData: ArrayBuffer | string,
+    extension: string = 'png'
+): Promise<string | null> => {
     const project = getProjectById(projectId)
     if (!project) return null
 
-    const folder = fileType === 'image' ? 'images' : fileType === 'video' ? 'videos' : 'audio'
+    if (!localStorageService.isAvailable()) return null
+
+    if (typeof imageData === 'string') {
+        const result = await localStorageService.downloadCoverImage(project.name, imageData)
+        if (result.success) {
+            const ext = imageData.split('.').pop()?.toLowerCase() || 'png'
+            return `cover.${ext}`
+        }
+        return null
+    } else {
+        const result = await localStorageService.saveCoverImage(project.name, imageData, extension)
+        return result.success ? `cover.${extension}` : null
+    }
+}
+
+export const getLocalFilePath = (
+    projectId: string,
+    fileType: 'image' | 'video' | 'audio' | 'generate_image' | 'generate_video',
+    fileName: string
+): string | null => {
+    const project = getProjectById(projectId)
+    if (!project) return null
+
+    const folderMap: Record<string, string> = {
+        'image': 'image',
+        'video': 'video',
+        'audio': 'audio',
+        'generate_image': 'generate_image',
+        'generate_video': 'generate_video',
+    }
+
+    const folder = folderMap[fileType]
     return `${project.name}/${folder}/${fileName}`
 }
 
-export const getLocalFileAbsolutePath = (projectId: string, fileType: 'image' | 'video' | 'audio', fileName: string): string | null => {
+export const getLocalFileAbsolutePath = (
+    projectId: string,
+    fileType: 'image' | 'video' | 'audio' | 'generate_image' | 'generate_video',
+    fileName: string
+): string | null => {
     const project = getProjectById(projectId)
     if (!project) return null
 
     const basePath = localStorageService.getStoragePath()
     if (!basePath) return null
 
-    const folder = fileType === 'image' ? 'images' : fileType === 'video' ? 'videos' : 'audio'
+    const folderMap: Record<string, string> = {
+        'image': 'image',
+        'video': 'video',
+        'audio': 'audio',
+        'generate_image': 'generate_image',
+        'generate_video': 'generate_video',
+    }
+
+    const folder = folderMap[fileType]
     return `${basePath}/${project.name}/${folder}/${fileName}`
 }
 
@@ -416,4 +518,14 @@ export const getMediaUrl = (relativePath: string): string | null => {
     if (!basePath) return null
     
     return `${basePath}/${relativePath}`
+}
+
+export const getCoverImageUrl = (projectId: string): string | null => {
+    const project = getProjectById(projectId)
+    if (!project) return null
+
+    const basePath = localStorageService.getStoragePath()
+    if (!basePath) return null
+
+    return `${basePath}/${project.name}/cover.png`
 }

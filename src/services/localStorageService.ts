@@ -76,7 +76,21 @@ export const localStorageService = {
       return { success: false, error: 'Storage path not configured' }
     }
 
-    const filePath = joinPath(basePath, projectName, 'images', fileName)
+    const filePath = joinPath(basePath, projectName, 'image', fileName)
+    return window.storage.writeFile(filePath, buffer)
+  },
+
+  saveGeneratedImage: async (projectName: string, fileName: string, buffer: ArrayBuffer): Promise<LocalStorageResult> => {
+    if (!window.storage) {
+      return { success: false, error: 'Storage API not available' }
+    }
+
+    const basePath = localStorageService.getStoragePath()
+    if (!basePath) {
+      return { success: false, error: 'Storage path not configured' }
+    }
+
+    const filePath = joinPath(basePath, projectName, 'generate_image', fileName)
     return window.storage.writeFile(filePath, buffer)
   },
 
@@ -90,7 +104,21 @@ export const localStorageService = {
       return { success: false, error: 'Storage path not configured' }
     }
 
-    const filePath = joinPath(basePath, projectName, 'videos', fileName)
+    const filePath = joinPath(basePath, projectName, 'video', fileName)
+    return window.storage.writeFile(filePath, buffer)
+  },
+
+  saveGeneratedVideo: async (projectName: string, fileName: string, buffer: ArrayBuffer): Promise<LocalStorageResult> => {
+    if (!window.storage) {
+      return { success: false, error: 'Storage API not available' }
+    }
+
+    const basePath = localStorageService.getStoragePath()
+    if (!basePath) {
+      return { success: false, error: 'Storage path not configured' }
+    }
+
+    const filePath = joinPath(basePath, projectName, 'generate_video', fileName)
     return window.storage.writeFile(filePath, buffer)
   },
 
@@ -118,7 +146,21 @@ export const localStorageService = {
       return { success: false, error: 'Storage path not configured' }
     }
 
-    const filePath = joinPath(basePath, projectName, 'images', fileName)
+    const filePath = joinPath(basePath, projectName, 'image', fileName)
+    return window.storage.downloadFile(url, filePath)
+  },
+
+  downloadGeneratedImage: async (projectName: string, fileName: string, url: string): Promise<LocalStorageResult> => {
+    if (!window.storage) {
+      return { success: false, error: 'Storage API not available' }
+    }
+
+    const basePath = localStorageService.getStoragePath()
+    if (!basePath) {
+      return { success: false, error: 'Storage path not configured' }
+    }
+
+    const filePath = joinPath(basePath, projectName, 'generate_image', fileName)
     return window.storage.downloadFile(url, filePath)
   },
 
@@ -132,7 +174,21 @@ export const localStorageService = {
       return { success: false, error: 'Storage path not configured' }
     }
 
-    const filePath = joinPath(basePath, projectName, 'videos', fileName)
+    const filePath = joinPath(basePath, projectName, 'video', fileName)
+    return window.storage.downloadFile(url, filePath)
+  },
+
+  downloadGeneratedVideo: async (projectName: string, fileName: string, url: string): Promise<LocalStorageResult> => {
+    if (!window.storage) {
+      return { success: false, error: 'Storage API not available' }
+    }
+
+    const basePath = localStorageService.getStoragePath()
+    if (!basePath) {
+      return { success: false, error: 'Storage path not configured' }
+    }
+
+    const filePath = joinPath(basePath, projectName, 'generate_video', fileName)
     return window.storage.downloadFile(url, filePath)
   },
 
@@ -150,6 +206,35 @@ export const localStorageService = {
     return window.storage.downloadFile(url, filePath)
   },
 
+  saveCoverImage: async (projectName: string, buffer: ArrayBuffer, extension: string = 'png'): Promise<LocalStorageResult> => {
+    if (!window.storage) {
+      return { success: false, error: 'Storage API not available' }
+    }
+
+    const basePath = localStorageService.getStoragePath()
+    if (!basePath) {
+      return { success: false, error: 'Storage path not configured' }
+    }
+
+    const filePath = joinPath(basePath, projectName, `cover.${extension}`)
+    return window.storage.writeFile(filePath, buffer)
+  },
+
+  downloadCoverImage: async (projectName: string, url: string): Promise<LocalStorageResult> => {
+    if (!window.storage) {
+      return { success: false, error: 'Storage API not available' }
+    }
+
+    const basePath = localStorageService.getStoragePath()
+    if (!basePath) {
+      return { success: false, error: 'Storage path not configured' }
+    }
+
+    const ext = url.split('.').pop()?.toLowerCase() || 'png'
+    const filePath = joinPath(basePath, projectName, `cover.${ext}`)
+    return window.storage.downloadFile(url, filePath)
+  },
+
   listImages: async (projectName: string): Promise<LocalStorageResult> => {
     if (!window.storage) {
       return { success: false, error: 'Storage API not available' }
@@ -160,7 +245,21 @@ export const localStorageService = {
       return { success: false, error: 'Storage path not configured' }
     }
 
-    const dirPath = joinPath(basePath, projectName, 'images')
+    const dirPath = joinPath(basePath, projectName, 'image')
+    return window.storage.listFiles(dirPath)
+  },
+
+  listGeneratedImages: async (projectName: string): Promise<LocalStorageResult> => {
+    if (!window.storage) {
+      return { success: false, error: 'Storage API not available' }
+    }
+
+    const basePath = localStorageService.getStoragePath()
+    if (!basePath) {
+      return { success: false, error: 'Storage path not configured' }
+    }
+
+    const dirPath = joinPath(basePath, projectName, 'generate_image')
     return window.storage.listFiles(dirPath)
   },
 
@@ -174,7 +273,21 @@ export const localStorageService = {
       return { success: false, error: 'Storage path not configured' }
     }
 
-    const dirPath = joinPath(basePath, projectName, 'videos')
+    const dirPath = joinPath(basePath, projectName, 'video')
+    return window.storage.listFiles(dirPath)
+  },
+
+  listGeneratedVideos: async (projectName: string): Promise<LocalStorageResult> => {
+    if (!window.storage) {
+      return { success: false, error: 'Storage API not available' }
+    }
+
+    const basePath = localStorageService.getStoragePath()
+    if (!basePath) {
+      return { success: false, error: 'Storage path not configured' }
+    }
+
+    const dirPath = joinPath(basePath, projectName, 'generate_video')
     return window.storage.listFiles(dirPath)
   },
 
@@ -208,6 +321,22 @@ export const localStorageService = {
     return window.storage.fileExists(filePath)
   },
 
+  renameProject: async (oldName: string, newName: string): Promise<LocalStorageResult> => {
+    if (!window.storage) {
+      return { success: false, error: 'Storage API not available' }
+    }
+
+    const basePath = localStorageService.getStoragePath()
+    if (!basePath) {
+      return { success: false, error: 'Storage path not configured' }
+    }
+
+    return window.storage.renameDirectory(
+      joinPath(basePath, oldName),
+      joinPath(basePath, newName)
+    )
+  },
+
   getDefaultPath: async (): Promise<string> => {
     if (!window.storage) {
       return ''
@@ -223,14 +352,32 @@ export const generateFileName = (prefix: string, extension: string): string => {
   return `${prefix}_${timestamp}_${random}.${extension}`
 }
 
+export const generateSimpleFileName = (extension: string): string => {
+  const timestamp = Date.now()
+  const random = Math.random().toString(36).substring(2, 8)
+  return `${timestamp}_${random}.${extension}`
+}
+
 export const getImageLocalPath = (basePath: string, projectName: string, fileName: string): string => {
-  return joinPath(basePath, projectName, 'images', fileName)
+  return joinPath(basePath, projectName, 'image', fileName)
+}
+
+export const getGeneratedImageLocalPath = (basePath: string, projectName: string, fileName: string): string => {
+  return joinPath(basePath, projectName, 'generate_image', fileName)
 }
 
 export const getVideoLocalPath = (basePath: string, projectName: string, fileName: string): string => {
-  return joinPath(basePath, projectName, 'videos', fileName)
+  return joinPath(basePath, projectName, 'video', fileName)
+}
+
+export const getGeneratedVideoLocalPath = (basePath: string, projectName: string, fileName: string): string => {
+  return joinPath(basePath, projectName, 'generate_video', fileName)
 }
 
 export const getAudioLocalPath = (basePath: string, projectName: string, fileName: string): string => {
   return joinPath(basePath, projectName, 'audio', fileName)
+}
+
+export const getCoverImagePath = (basePath: string, projectName: string, extension: string = 'png'): string => {
+  return joinPath(basePath, projectName, `cover.${extension}`)
 }

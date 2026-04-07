@@ -1,24 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
 import { X, Upload, X as CloseIcon } from 'lucide-react'
-import { createProject, updateProject, type ProjectMeta } from '@/utils/projectStorage'
+import { createProject, updateProject, renameProject, saveCoverImageToLocal, getCoverImageUrl, type ProjectMeta } from '@/utils/projectStorage'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { uploadImageFile } from '@/api/ai'
 
-// 项目弹窗组件的props类型定义
 interface ProjectDialogProps {
-  /** 控制弹窗是否显示 */
   isOpen: boolean
-  /** 关闭弹窗的回调函数 */
   onClose: () => void
-  /** 编辑模式下的项目数据，如果不传则为创建模式 */
   project?: ProjectMeta | null
-  /** 操作成功后的回调函数 */
   onSuccess?: (projectId: string) => void
 }
 
-/**
- * 项目弹窗组件（支持创建和编辑）
- */
 export default function ProjectDialog({
   isOpen,
   onClose,
@@ -27,106 +18,114 @@ export default function ProjectDialog({
 }: ProjectDialogProps) {
   const isEdit = !!project
 
-  // 表单状态管理
   const [name, setName] = useState('')
   const [coverUrl, setCoverUrl] = useState('')
   const [description, setDescription] = useState('')
   const [type, setType] = useState<'video' | 'script'>('video')
   const [coverPreview, setCoverPreview] = useState('')
+  const [coverFile, setCoverFile] = useState<File | null>(null)
   const coverFileInputRef = useRef<HTMLInputElement>(null)
   const [isProcessing, setIsProcessing] = useState(false)
 
-  // 当 project 改变时（打开编辑弹窗），回显数据
   useEffect(() => {
     if (project) {
       setName(project.name)
-      setCoverUrl(project.coverUrl || '')
+      const localCover = getCoverImageUrl(project.id)
+      setCoverUrl(localCover || project.coverUrl || '')
       setDescription(project.description || '')
       setType(project.type)
-      setCoverPreview('') // 编辑时，如果有原有封面，直接显示 coverUrl
+      setCoverPreview('')
+      setCoverFile(null)
     } else {
       resetFormState()
     }
   }, [project, isOpen])
 
-  /**
-   * 重置表单状态到初始值
-   */
   const resetFormState = () => {
     setName('')
     setCoverUrl('')
     setDescription('')
     setType('video')
     setCoverPreview('')
+    setCoverFile(null)
     setIsProcessing(false)
     if (coverFileInputRef.current) {
       coverFileInputRef.current.value = ''
     }
   }
 
-  /**
-   * 处理封面文件选择
-   */
   const handleCoverFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
       const previewUrl = URL.createObjectURL(file)
       setCoverPreview(previewUrl)
+      setCoverFile(file)
     }
   }
 
-  /**
-   * 删除封面
-   */
   const handleRemoveCover = () => {
     setCoverPreview('')
+    setCoverFile(null)
     setCoverUrl('')
     if (coverFileInputRef.current) {
       coverFileInputRef.current.value = ''
     }
   }
 
-  /**
-   * 确认提交（创建或更新）
-   */
   const handleConfirm = async () => {
     setIsProcessing(true)
-    let finalCoverUrl = coverUrl
 
-    // 如果选择了新文件，先上传
-    if (coverPreview && coverFileInputRef.current?.files?.[0]) {
-      const uploadedUrl = await uploadImageFile(coverFileInputRef.current.files[0])
-      if (uploadedUrl) {
-        finalCoverUrl = uploadedUrl
+    try {
+      let resultId = ''
+
+      if (isEdit && project) {
+        const nameChanged = name !== project.name && name.trim() !== ''
+
+        if (nameChanged) {
+          const renameSuccess = await renameProject(project.id, name.trim())
+          if (!renameSuccess) {
+            console.error('Failed to rename project folder')
+            setIsProcessing(false)
+            return
+          }
+        }
+
+        if (coverFile) {
+          const arrayBuffer = await coverFile.arrayBuffer()
+          await saveCoverImageToLocal(project.id, arrayBuffer)
+        }
+
+        updateProject(project.id, {
+          name: name.trim(),
+          description: description || undefined,
+        })
+
+        resultId = project.id
+      } else {
+        const newProject = await createProject(
+          name || undefined,
+          undefined,
+          description || undefined,
+          type
+        )
+
+        if (coverFile) {
+          const arrayBuffer = await coverFile.arrayBuffer()
+          await saveCoverImageToLocal(newProject.id, arrayBuffer)
+        }
+
+        resultId = newProject.id
       }
-    }
 
-    let resultId = ''
-    if (isEdit && project) {
-      updateProject(project.id, {
-        name,
-        coverUrl: finalCoverUrl || undefined,
-        description: description || undefined,
-      })
-      resultId = project.id
-    } else {
-      const newProject = await createProject(
-        name || undefined,
-        finalCoverUrl || undefined,
-        description || undefined,
-        type
-      )
-      resultId = newProject.id
+      setIsProcessing(false)
+      onSuccess?.(resultId)
+      handleClose()
+    } catch (error) {
+      console.error('Failed to save project:', error)
+      setIsProcessing(false)
     }
-
-    setIsProcessing(false)
-    onSuccess?.(resultId)
-    handleClose()
   }
 
-  /**
-   * 处理弹窗关闭
-   */
   const handleClose = () => {
     if (!isEdit) resetFormState()
     onClose()
@@ -155,8 +154,6 @@ export default function ProjectDialog({
               className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-[#B43FEB] focus:ring-1 focus:ring-[#B43FEB] outline-none transition-all"
             />
           </div>
-
-         
 
           <div>
             <label className="text-sm font-medium text-white/70 block mb-2">封面图</label>

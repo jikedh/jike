@@ -429,7 +429,7 @@ const pollImageGeneration = async (
               
               if (fileName) {
                 // 获取相对路径
-                const relativePath = getLocalFilePath(projectId, 'image', fileName)
+                const relativePath = getLocalFilePath(projectId, 'generate_image', fileName)
                 
                 console.log('[pollImageGeneration] 图片已保存到本地:', fileName, relativePath)
                 
@@ -584,7 +584,7 @@ const pollMjImageGeneration = async (
               
               if (fileName) {
                 // 获取相对路径
-                const relativePath = getLocalFilePath(projectId, 'image', fileName)
+                const relativePath = getLocalFilePath(projectId, 'generate_image', fileName)
                 
                 console.log('[pollMjImageGeneration] 图片已保存到本地:', fileName, relativePath)
                 
@@ -734,7 +734,7 @@ const pollVideoGeneration = async (
               const fileName = await saveGeneratedVideoToLocal(projectId, resultUrl, 'mp4')
               
               if (fileName) {
-                const relativePath = getLocalFilePath(projectId, 'video', fileName)
+                const relativePath = getLocalFilePath(projectId, 'generate_video', fileName)
                 console.log('[pollVideoGeneration] 视频已保存到本地:', fileName, relativePath)
                 processedData = [{
                   url: resultUrl,
@@ -828,7 +828,7 @@ const pollVideoGeneration = async (
               const fileName = await saveGeneratedVideoToLocal(projectId, item.url, ext)
               
               if (fileName) {
-                const relativePath = getLocalFilePath(projectId, 'video', fileName)
+                const relativePath = getLocalFilePath(projectId, 'generate_video', fileName)
                 console.log('[pollVideoGeneration] 视频已保存到本地:', fileName, relativePath)
                 return {
                   ...item,
