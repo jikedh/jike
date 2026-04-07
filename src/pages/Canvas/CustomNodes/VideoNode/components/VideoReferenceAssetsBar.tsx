@@ -89,6 +89,7 @@ export const VideoReferenceAssetsBar = ({
     parentVideoNodes,
     model,
     onDisconnectNode,
+  onRemoveReferenceImage,
 }: {
     isUploading: boolean
     fileInputRef: RefObject<HTMLInputElement | null>
@@ -101,6 +102,7 @@ export const VideoReferenceAssetsBar = ({
     parentVideoNodes: { id: string; url: string }[]
     model: string
     onDisconnectNode: (sourceNodeId: string) => void
+    onRemoveReferenceImage: (url: string) => void
 }) => {
     return (
         <div className="nodrag nopan nowheel mt-2.5 flex gap-2 overflow-x-auto pb-1">
@@ -128,10 +130,19 @@ export const VideoReferenceAssetsBar = ({
             {referenceImageUrls.map((url, index) => {
                 const isFromParent = parentImageNodeUrls.has(url)
                 const parentNodeId = isFromParent ? parentImageNodeIdByUrl[url] : undefined
+              const handleRemove = () => {
+                if (parentNodeId) {
+                  onDisconnectNode(parentNodeId)
+                  return
+                }
+
+                onRemoveReferenceImage(url)
+              }
+
                 return (
                     <ReferenceItemWrapper
                         key={`${url}-${index}`}
-                        onDisconnect={parentNodeId ? () => onDisconnectNode(parentNodeId) : undefined}
+                    onDisconnect={handleRemove}
                     >
                         <img
                             src={url}

@@ -33,6 +33,21 @@ export const useVideoReferenceActions = ({
     }
   }, [edges, nodeId, deleteEdge])
 
+  /**
+   * 删除本地参考图（非上游节点继承）。
+   * 仅从当前视频节点的 image_urls 中移除对应 URL。
+   */
+  const handleRemoveReferenceImage = useCallback((targetUrl: string) => {
+    if (!targetUrl) {
+      return
+    }
+
+    const nextUrls = (currentImageUrls ?? []).filter((url) => url !== targetUrl)
+    updateVideoNodeData(nodeId, {
+      image_urls: nextUrls,
+    })
+  }, [currentImageUrls, nodeId, updateVideoNodeData])
+
   const handleUploadClick = useCallback(() => {
     if (isUploading) {
       return
@@ -74,6 +89,7 @@ export const useVideoReferenceActions = ({
     isUploading,
     fileInputRef,
     handleDisconnectNode,
+    handleRemoveReferenceImage,
     handleUploadClick,
     handleFileChange,
   }

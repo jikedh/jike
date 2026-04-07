@@ -46,7 +46,7 @@ const CanvasPage = () => {
         />
 
         {/* 调试工具面板：由设置中心控制显示/隐藏 */}
-        {devToolsVisible && <ReactFlowDevTools position="top-left" />}
+        {devToolsVisible && <ReactFlowDevTools position="top-right" />}
       </div>
     </ReactFlowProvider>
   )

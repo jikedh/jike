@@ -111,21 +111,33 @@ export const useVideoNodeReferences = ({
   const videoMentionItems = useMemo(() => {
     const items: VideoMentionCandidate[] = []
 
-    referenceImageUrls.forEach((url, index) => {
-      items.push({
+    // 统一“本地上传图”和“节点继承图”的命名风格：全部使用“图片X”。
+    // 同时按 URL 去重，避免同一张图在 @ 列表中出现两次。
+    const mergedImageSources = [
+      ...(referenceImageUrls ?? []).map((url, index) => ({
         id: `video-image-${index}`,
-        label: `图片${toChineseNumber(index + 1)}`,
-        value: `图片${toChineseNumber(index + 1)}`,
-        thumbnail: url,
-        type: 'image',
-      })
+        url,
+      })),
+      ...parentImageNodes.map((item) => ({
+        id: `parent-image-${item.id}`,
+        url: item.url,
+      })),
+    ]
+
+    const seenImageUrls = new Set<string>()
+    const unifiedImageSources = mergedImageSources.filter((item) => {
+      if (seenImageUrls.has(item.url)) {
+        return false
+      }
+      seenImageUrls.add(item.url)
+      return true
     })
 
-    parentImageNodes.forEach((item, index) => {
+    unifiedImageSources.forEach((item, index) => {
       items.push({
-        id: `parent-image-${item.id}`,
-        label: `图片节点${toChineseNumber(index + 1)}`,
-        value: `图片节点${toChineseNumber(index + 1)}`,
+        id: item.id,
+        label: `图片${toChineseNumber(index + 1)}`,
+        value: `图片${toChineseNumber(index + 1)}`,
         thumbnail: item.url,
         type: 'image',
       })

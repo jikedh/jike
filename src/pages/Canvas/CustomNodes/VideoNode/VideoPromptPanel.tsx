@@ -87,6 +87,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         isUploading,
         fileInputRef,
         handleDisconnectNode,
+      handleRemoveReferenceImage,
         handleUploadClick,
         handleFileChange,
     } = useVideoReferenceActions({
@@ -172,6 +173,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                   parentVideoNodes={parentVideoNodes}
                   model={model}
                   onDisconnectNode={handleDisconnectNode}
+            onRemoveReferenceImage={handleRemoveReferenceImage}
               />
           </div>
 
