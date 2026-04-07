@@ -1,7 +1,12 @@
 import { useMemo, useState } from 'react'
 import { ImageTile } from './ImageTile'
+import { getMediaUrl } from '@/utils/projectStorage'
 
-type ImageItem = { url?: string }
+type ImageItem = { 
+    url?: string
+    relativePath?: string
+    localFileName?: string
+}
 
 type CollapsibleImageGalleryProps = {
     images: ImageItem[]
@@ -13,6 +18,7 @@ type CollapsibleImageGalleryProps = {
  * - collapsed：仅展示封面图 + 右上角数量徽标
  * - expanded：2 列网格展示全部图片
  * - 点击展开态中的图片，可将其移动到首位作为新封面
+ * - 优先使用本地路径，如果不存在则使用远程 URL
  */
 export const CollapsibleImageGallery = ({ images, onReorder }: CollapsibleImageGalleryProps) => {
     // 默认折叠，仅展示封面
@@ -21,7 +27,17 @@ export const CollapsibleImageGallery = ({ images, onReorder }: CollapsibleImageG
     const [brokenImageIndexes, setBrokenImageIndexes] = useState<number[]>([])
 
     const totalCount = images.length
-    const coverImage = images[0]?.url ?? ''
+    
+    // 优先使用本地路径，否则使用远程 URL
+    const getDisplayUrl = (item: ImageItem): string => {
+        if (item.relativePath) {
+            const localUrl = getMediaUrl(item.relativePath)
+            if (localUrl) return localUrl
+        }
+        return item.url ?? ''
+    }
+    
+    const coverImage = getDisplayUrl(images[0] ?? {})
     const badgeText = `${totalCount}张`
 
     // 当前设计要求：1/2/3/4/5+ 都使用 2 列（1 张时为单列）
@@ -34,7 +50,7 @@ export const CollapsibleImageGallery = ({ images, onReorder }: CollapsibleImageG
     const expandedGridGapClass = totalCount > 4 ? 'gap-0.5' : 'gap-1'
 
     // 切换折叠/展开
-  const handleToggleExpanded = (e: any) => {
+    const handleToggleExpanded = (e: any) => {
         e.stopPropagation()
         setIsExpanded((prev) => !prev)
     }
@@ -59,8 +75,8 @@ export const CollapsibleImageGallery = ({ images, onReorder }: CollapsibleImageG
                 <button
                     type="button"
                     onClick={handleToggleExpanded}
-            onDoubleClick={(e) => e.stopPropagation()}
-            className=" absolute right-2 top-2 z-20 cursor-pointer rounded-lg bg-black/60 px-3 py-2 text-[11px] font-medium text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+                    onDoubleClick={(e) => e.stopPropagation()}
+                    className="absolute right-2 top-2 z-20 cursor-pointer rounded-lg bg-black/60 px-3 py-2 text-[11px] font-medium text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
                     aria-label={isExpanded ? `收起图片集合，共${badgeText}` : `展开图片集合，共${badgeText}`}
                 >
                     {badgeText}
@@ -95,7 +111,7 @@ export const CollapsibleImageGallery = ({ images, onReorder }: CollapsibleImageG
                             {images.map((item, index) => (
                                 <div key={`${item.url}-${index}`} className={totalCount === 1 ? 'min-h-0' : 'min-h-13'}>
                                     <ImageTile
-                                        url={item.url ?? ''}
+                                        url={getDisplayUrl(item)}
                                         index={index}
                                         isBroken={brokenImageIndexes.includes(index)}
                                         onError={handleImageError}

@@ -569,7 +569,11 @@ const pollMjImageGeneration = async (
       // SUCCESS 状态表示完成
       if (response.status === 'SUCCESS') {
         const projectId = getState().projectId
-        const newImageUrls = response.imageUrls ?? []
+        // imageUrls 可能是字符串数组或对象数组 { url: string }[]
+        const rawImageUrls = response.imageUrls ?? []
+        const newImageUrls: string[] = rawImageUrls.map((item: any) => 
+          typeof item === 'string' ? item : item?.url
+        ).filter(Boolean)
 
         // 处理每张生成的图片
         const processedResultData = await Promise.all(newImageUrls.map(async (url: string) => {

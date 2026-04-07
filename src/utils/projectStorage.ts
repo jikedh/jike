@@ -517,7 +517,9 @@ export const getMediaUrl = (relativePath: string): string | null => {
     const basePath = localStorageService.getStoragePath()
     if (!basePath) return null
     
-    return `${basePath}/${relativePath}`
+    // 在 Electron 中使用 file:// 协议加载本地文件
+    const fullPath = `${basePath}/${relativePath}`
+    return `file:///${fullPath.replace(/\\/g, '/')}`
 }
 
 export const getCoverImageUrl = (projectId: string): string | null => {
@@ -527,5 +529,7 @@ export const getCoverImageUrl = (projectId: string): string | null => {
     const basePath = localStorageService.getStoragePath()
     if (!basePath) return null
 
-    return `${basePath}/${project.name}/cover.png`
+    // 在 Electron 中使用 file:// 协议加载本地文件
+    const fullPath = `${basePath}/${project.name}/cover.png`
+    return `file:///${fullPath.replace(/\\/g, '/')}`
 }
