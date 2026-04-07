@@ -6,7 +6,7 @@ import { SidebarLogo } from './components/SidebarLogo'
 import { SidebarNav } from './components/SidebarNav'
 import { SidebarNavItem } from './components/SidebarNavItem'
 import { SidebarRoot } from './components/SidebarRoot'
-import { UserAvatarDropdown } from '@/components/UserAvatarDropdown'
+import { UserAvatarDropdown } from '@/pages/Sidebar/components/UserAvatarDropdown'
 import iconImg from '@/assets/icon.png'
 import { getJikeingUserId } from '@/utils/utils'
 
