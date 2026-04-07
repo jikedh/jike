@@ -837,7 +837,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     onMouseEnter={() => setCursorMode('default')}
                     connectionLineType={ConnectionLineType.Bezier}
                     connectionLineStyle={{ stroke: '#B43FEB', strokeWidth: 2, fill: 'none' }}
-                    snapToGrid={true}
+                    snapToGrid={false}
                     snapGrid={[20, 20]}
                     connectionRadius={50}
                     defaultEdgeOptions={{

@@ -128,6 +128,11 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             return
         }
 
+      // 防止连续点击触发重复请求
+      if (isGenerating) {
+        return
+      }
+
       const promptText = editorRef.current?.getPlainText() ?? ''
       const mergedPrompt = [...parentNoteContents, promptText]
           .map((content) => content.trim())
@@ -139,8 +144,34 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
           return
       }
 
+      // Seedance 2.0 在存在参考音频时仅允许使用 Pro 模式。
+      // 命中该条件时先提示用户，再自动修正为 Pro 并继续本次生成。
+      const isSeedance20Model = model === 'doubao-seedance-2.0'
+      const hasReferenceAudio = allAudioUrls.length > 0
+      const currentSeedanceMode = currentVideoData.metadata?.mode ?? 'fast'
+      const shouldForceProMode = isSeedance20Model && hasReferenceAudio && currentSeedanceMode !== 'pro'
+
+      let nextVideoData = currentVideoData
+      if (shouldForceProMode) {
+        warning('当存在音频的时候只能使用Pro模型')
+
+        const nextMetadata = {
+          ...(currentVideoData.metadata ?? {}),
+          mode: 'pro',
+        }
+
+        // 同步更新节点状态，保证 UI 与后续生成配置一致。
+        updateVideoNodeData(nodeId, { metadata: nextMetadata })
+
+        // 使用本地修正后的快照立即构建 payload，避免等待 store 异步回流。
+        nextVideoData = {
+          ...currentVideoData,
+          metadata: nextMetadata,
+        }
+      }
+
       const strategy = getVideoPayloadStrategy(model)
-      const payload = strategy.buildPayload(currentVideoData, {
+      const payload = strategy.buildPayload(nextVideoData, {
           prompt: mergedPrompt,
         imageUrls: allImageUrls,
         videoUrls: allVideoUrls,
@@ -149,7 +180,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
       await startVideoGeneration(nodeId, payload)
       success('已开始生成视频')
-  }, [currentVideoData, warning, parentNoteContents, model, allImageUrls, allVideoUrls, allAudioUrls, startVideoGeneration, nodeId, success])
+    }, [currentVideoData, warning, isGenerating, parentNoteContents, model, allImageUrls, allVideoUrls, allAudioUrls, updateVideoNodeData, startVideoGeneration, nodeId, success])
 
     return (
       <div className={PROMPT_PANEL_STYLES.container} style={{ pointerEvents: 'auto' }}>
