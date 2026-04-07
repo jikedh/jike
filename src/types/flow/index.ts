@@ -172,10 +172,10 @@ export interface AgentNode {
 /**
  * 文本智能体预设类型
  */
-export type TextAgentPresetId = 
-  | 'novel-to-script-agent' 
-  | 'short-video-storyboard' 
-  | 'jimeng-prompt' 
+export type TextAgentPresetId =
+  | 'novel-to-script-agent'
+  | 'short-video-storyboard'
+  | 'jimeng-prompt'
   | 'novel-character-design'
 
 /**
@@ -199,18 +199,18 @@ export interface TextAgentNodeData {
 export interface PanoramaNodeData {
   // ---- 输入参数 ----
   image_url?: string; // 输入图片 URL（来自连接的图片节点）
-  
+
   // ---- 状态管理 ----
   status?: GenerationStatus; // 当前状态
   isFullscreen?: boolean; // 是否全屏查看
-  
+
   // ---- 输出结果 ----
   screenshots?: {
     type: 'single' | '4grid' | '12grid'; // 截图类型
     urls: string[]; // 截图 URL 列表
     createdAt: number; // 创建时间
   }[]; // 截图历史
-  
+
   [key: string]: any; // React Flow 约束兼容
 }
 
@@ -225,12 +225,12 @@ export interface AudioGenerationNode {
   promptDraft?: string; // 输入面板草稿文本
   promptDraftHtml?: string; // 输入面板草稿富文本
   duration?: number; // 音频时长（秒）
-  
+
   // ---- 状态管理 ----
   status?: GenerationStatus; // 当前生成状态
   progress?: number; // 进度百分比（0-100）
   isUpload?: boolean; // 是否为上传音频
-  
+
   // ---- 输出结果 ----
   task_id?: string; // 任务 ID（用于轮询）
   result?: {
@@ -239,16 +239,18 @@ export interface AudioGenerationNode {
       url: string; // 生成的音频 URL
       format?: string; // 音频格式（如 mp3, wav）
       duration?: number; // 音频时长
+      relativePath?: string; // 本地相对路径
+      localFileName?: string; // 本地文件名
     }[];
   };
-  
+
   // ---- 裁剪信息 ----
   trimInfo?: {
     sourceNodeId?: string; // 源节点 ID
     startTime?: number; // 裁剪开始时间
     endTime?: number; // 裁剪结束时间
   };
-  
+
   // ---- 错误处理 ----
   error?: {
     code?: string;
@@ -257,7 +259,7 @@ export interface AudioGenerationNode {
     serverMessage?: string;
     status?: number;
   };
-  
+
   [key: string]: any; // React Flow 约束兼容
 }
 

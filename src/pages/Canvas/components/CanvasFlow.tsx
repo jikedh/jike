@@ -128,10 +128,10 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         const handleWheel = (event: WheelEvent) => {
             if (event.ctrlKey || event.metaKey) {
                 event.preventDefault()
-                
+
                 const { zoom: currentZoom, x, y } = reactFlowInstance.getViewport()
                 const zoomStep = 0.15
-                const newZoom = event.deltaY < 0 
+              const newZoom = event.deltaY < 0
                     ? Math.min(currentZoom * (1 + zoomStep), 2)
                     : Math.max(currentZoom * (1 - zoomStep), 0.1)
 
@@ -140,7 +140,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                 const mouseY = event.clientY - reactFlowBounds.top
 
                 const zoomRatio = newZoom / currentZoom
-                
+
                 const newX = mouseX - (mouseX - x) * zoomRatio
                 const newY = mouseY - (mouseY - y) * zoomRatio
 
@@ -518,12 +518,12 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                 const file = files[index]
                 const row = Math.floor(index / cols)
                 const col = index % cols
-                
+
                 const nodePosition = {
                     x: flowPosition.x + col * (nodeWidth + gap),
                     y: flowPosition.y + row * (nodeHeight + gap),
                 }
-                
+
                 const newNodeId = addNode('image', nodePosition)
 
                 // 设置初始状态为加载中
@@ -535,20 +535,20 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                 try {
                     // 获取文件扩展名
                     const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
-                    
+
                     // 读取文件为 ArrayBuffer
                     const arrayBuffer = await file.arrayBuffer()
-                    
+
                     // 存储到本地项目目录
                     const fileName = await saveImageToLocal(projectId || '', arrayBuffer, ext)
-                    
+
                     if (fileName) {
                         // 获取相对路径（用于存储到 canvas.json）
                         const relativePath = getLocalFilePath(projectId || '', 'image', fileName)
-                        
+
                         // 创建 blob URL 用于显示
                         const blobUrl = URL.createObjectURL(file)
-                        
+
                         // 获取图片尺寸并计算最接近的比例
                         try {
                             const dimensions = await getImageDimensions(blobUrl)
@@ -561,7 +561,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                                 localFileName: fileName,
                                 result: {
                                     type: 'image',
-                                    data: [{ url: blobUrl, relativePath, fileName }],
+                                  data: [{ url: blobUrl, relativePath, localFileName: fileName }],
                                 },
                             })
                         } catch (error) {
@@ -572,7 +572,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                                 localFileName: fileName,
                                 result: {
                                     type: 'image',
-                                    data: [{ url: blobUrl, relativePath, fileName }],
+                                  data: [{ url: blobUrl, relativePath, localFileName: fileName }],
                                 },
                             })
                         }
@@ -613,12 +613,12 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                 const file = files[index]
                 const row = Math.floor(index / cols)
                 const col = index % cols
-                
+
                 const nodePosition = {
                     x: flowPosition.x + col * (nodeWidth + gap),
                     y: flowPosition.y + row * (nodeHeight + gap),
                 }
-                
+
                 const newNodeId = addNode('audio', nodePosition)
 
                 updateAudioNodeData(newNodeId, {
@@ -629,20 +629,20 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                 try {
                     // 获取文件扩展名
                     const ext = file.name.split('.').pop()?.toLowerCase() || 'mp3'
-                    
+
                     // 读取文件为 ArrayBuffer
                     const arrayBuffer = await file.arrayBuffer()
-                    
+
                     // 存储到本地项目目录
                     const fileName = await saveAudioToLocal(projectId || '', arrayBuffer, ext)
-                    
+
                     if (fileName) {
                         // 获取相对路径（用于存储到 canvas.json）
                         const relativePath = getLocalFilePath(projectId || '', 'audio', fileName)
-                        
+
                         // 创建 blob URL 用于播放
                         const blobUrl = URL.createObjectURL(file)
-                        
+
                         updateAudioNodeData(newNodeId, {
                             status: GenerationStatus.COMPLETED,
                             progress: 100,
@@ -651,7 +651,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                             localFileName: fileName,
                             result: {
                                 type: 'audio',
-                                data: [{ url: blobUrl, relativePath, fileName }],
+                              data: [{ url: blobUrl, relativePath, localFileName: fileName }],
                             },
                         })
                     } else {
@@ -691,12 +691,12 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                 const file = files[index]
                 const row = Math.floor(index / cols)
                 const col = index % cols
-                
+
                 const nodePosition = {
                     x: flowPosition.x + col * (nodeWidth + gap),
                     y: flowPosition.y + row * (nodeHeight + gap),
                 }
-                
+
                 const newNodeId = addNode('video', nodePosition)
 
                 updateVideoNodeData(newNodeId, {
@@ -707,20 +707,20 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                 try {
                     // 获取文件扩展名
                     const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4'
-                    
+
                     // 读取文件为 ArrayBuffer
                     const arrayBuffer = await file.arrayBuffer()
-                    
+
                     // 存储到本地项目目录
                     const fileName = await saveVideoToLocal(projectId || '', arrayBuffer, ext)
-                    
+
                     if (fileName) {
                         // 获取相对路径（用于存储到 canvas.json）
                         const relativePath = getLocalFilePath(projectId || '', 'video', fileName)
-                        
+
                         // 创建 blob URL 用于播放
                         const blobUrl = URL.createObjectURL(file)
-                        
+
                         updateVideoNodeData(newNodeId, {
                             status: GenerationStatus.COMPLETED,
                             progress: 100,
@@ -729,7 +729,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                             localFileName: fileName,
                             result: {
                                 type: 'video',
-                                data: [{ url: blobUrl, relativePath, fileName, format: ext }],
+                              data: [{ url: blobUrl, relativePath, localFileName: fileName, format: ext }],
                             },
                         })
                     } else {
@@ -760,21 +760,21 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                 const imageFiles = acceptedFiles.filter(f => f.type.startsWith('image/'))
                 const audioFiles = acceptedFiles.filter(f => f.type.startsWith('audio/'))
                 const videoFiles = acceptedFiles.filter(f => f.type.startsWith('video/'))
-                
+
                 if (imageFiles.length > 0) {
                     handleImageDrop(imageFiles, {
                         x: dropEvent.clientX,
                         y: dropEvent.clientY,
                     })
                 }
-                
+
                 if (audioFiles.length > 0) {
                     handleAudioDrop(audioFiles, {
                         x: dropEvent.clientX,
                         y: dropEvent.clientY,
                     })
                 }
-                
+
                 if (videoFiles.length > 0) {
                     handleVideoDrop(videoFiles, {
                         x: dropEvent.clientX,
@@ -833,7 +833,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     y: window.innerHeight / 2,
                 })
             }
-            
+
             if (audioFiles.length > 0) {
                 // 有音频，在画布中心位置创建节点
                 event.preventDefault()
@@ -842,7 +842,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     y: window.innerHeight / 2,
                 })
             }
-            
+
             if (videoFiles.length > 0) {
                 // 有视频，在画布中心位置创建节点
                 event.preventDefault()
@@ -851,7 +851,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     y: window.innerHeight / 2,
                 })
             }
-            
+
             if (imageFiles.length === 0 && audioFiles.length === 0 && videoFiles.length === 0 && canPaste()) {
                 // 没有图片、音频和视频，尝试粘贴节点
                 event.preventDefault()

@@ -183,10 +183,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
               if (readResult.success && readResult.data) {
                 // 创建 File 对象
                 const ext = localFileInfo.fileName.split('.').pop() || 'png'
-                const arrayBuffer = readResult.data instanceof Uint8Array
-                  ? readResult.data.buffer
-                  : readResult.data
-                const file = new File([arrayBuffer], localFileInfo.fileName, { type: `image/${ext}` })
+                // 这里显式复制为 Uint8Array，避免 Buffer.buffer 的 ArrayBufferLike
+                // 进入 SharedArrayBuffer 分支导致 BlobPart 类型不兼容。
+                const fileBytes = new Uint8Array(readResult.data)
+                const file = new File([fileBytes], localFileInfo.fileName, { type: `image/${ext}` })
 
                 console.log('[VideoNode] 开始上传到 OSS, 文件大小:', file.size)
 

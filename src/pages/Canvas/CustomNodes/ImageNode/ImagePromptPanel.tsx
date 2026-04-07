@@ -343,11 +343,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             const parentData = parentNode.data as ImageGenerationNode
             const firstItem = parentData.result?.data?.[0]
             if (firstItem?.url) {
-                result.push({ 
-                    id: parentId, 
+              result.push({
+                id: parentId,
                     url: firstItem.url,
                     relativePath: firstItem.relativePath,
-                    fileName: firstItem.fileName,
+                  // 类型定义中为 localFileName，这里映射为 fileName 供后续本地文件上传逻辑复用。
+                  fileName: firstItem.localFileName,
                 })
             }
         })
@@ -618,7 +619,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
       // 构建本地文件映射：从 URL 到本地文件信息
       const localFileMap = new Map<string, { relativePath: string; fileName: string }>()
-      
+
       // 添加父节点的本地文件
       for (const parentItem of parentImageNodes) {
         if (parentItem.url && parentItem.relativePath && parentItem.fileName) {
@@ -630,14 +631,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       // 检查参考图是否是本地文件，如果是则先上传到 OSS
       let uploadedImageUrls: string[] = []
       const imageUrlsToProcess = currentImageData?.image_urls ?? []
-      
+
       console.log('[ImageNode] image_urls:', imageUrlsToProcess)
       console.log('[ImageNode] localFileMap keys:', Array.from(localFileMap.keys()))
-      
+
       for (const url of imageUrlsToProcess) {
         const localFileInfo = localFileMap.get(url)
         console.log('[ImageNode] 检查 URL:', url, '本地文件信息:', localFileInfo)
-        
+
         if (localFileInfo) {
           // 这是本地文件，需要上传到 OSS
           try {
@@ -645,25 +646,26 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               // 获取绝对路径
               const absolutePath = getMediaUrl(localFileInfo.relativePath)
               console.log('[ImageNode] 绝对路径:', absolutePath)
-              
+
               if (absolutePath) {
                 const readResult = await window.storage.readFile(absolutePath)
                 console.log('[ImageNode] 读取结果:', readResult.success, readResult.error)
-                
+
                 if (readResult.success && readResult.data) {
                   // 创建 File 对象
                   const ext = localFileInfo.fileName.split('.').pop() || 'png'
-                  const arrayBuffer = readResult.data instanceof Uint8Array 
-                    ? readResult.data.buffer 
-                    : readResult.data
-                  const file = new File([arrayBuffer], localFileInfo.fileName, { type: `image/${ext}` })
-                  
+                  // 先复制到新的 ArrayBuffer，避免把 Buffer / SharedArrayBuffer 直接传给 File
+                  const sourceBytes = new Uint8Array(readResult.data)
+                  const fileBuffer = new ArrayBuffer(sourceBytes.byteLength)
+                  new Uint8Array(fileBuffer).set(sourceBytes)
+                  const file = new File([fileBuffer], localFileInfo.fileName, { type: `image/${ext}` })
+
                   console.log('[ImageNode] 开始上传到 OSS, 文件大小:', file.size)
-                  
+
                   // 上传到 OSS
                   const ossResult = await uploadFileToOSS(file)
                   console.log('[ImageNode] OSS 上传结果:', ossResult)
-                  
+
                   if (ossResult.url) {
                     uploadedImageUrls.push(ossResult.url)
                     console.log('[ImageNode] 上传成功，OSS URL:', ossResult.url)
@@ -694,7 +696,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           uploadedImageUrls.push(url)
         }
       }
-      
+
       console.log('[ImageNode] 最终上传的 URL 列表:', uploadedImageUrls)
 
         // 构建请求 payload
@@ -871,7 +873,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             </div>
 
             {/* 下方区域：参数控制区 */}
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5">
+        <div className="rounded-xl border border-white/6 bg-white/2 p-2.5">
                 <div className="flex items-center gap-2">
                     {/* 生成模型 - 始终在最左侧 */}
                     <Select

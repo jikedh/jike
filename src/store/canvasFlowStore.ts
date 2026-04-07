@@ -415,7 +415,7 @@ const pollImageGeneration = async (
       if (response.status === 'completed') {
         const projectId = getState().projectId
         const newResultData = response.result?.data ?? []
-        
+
         // 处理每张生成的图片
         const processedResultData = await Promise.all(newResultData.map(async (item: any) => {
           if (item.url && projectId) {
@@ -423,16 +423,16 @@ const pollImageGeneration = async (
               // 从 URL 中提取扩展名
               const urlPath = new URL(item.url).pathname
               const ext = urlPath.split('.').pop()?.toLowerCase() || 'png'
-              
+
               // 下载并保存到本地
               const fileName = await saveGeneratedImageToLocal(projectId, item.url, ext)
-              
+
               if (fileName) {
                 // 获取相对路径
                 const relativePath = getLocalFilePath(projectId, 'generate_image', fileName)
-                
+
                 console.log('[pollImageGeneration] 图片已保存到本地:', fileName, relativePath)
-                
+
                 return {
                   ...item,
                   localFileName: fileName,
@@ -570,7 +570,7 @@ const pollMjImageGeneration = async (
       if (response.status === 'SUCCESS') {
         const projectId = getState().projectId
         const newImageUrls = response.imageUrls ?? []
-        
+
         // 处理每张生成的图片
         const processedResultData = await Promise.all(newImageUrls.map(async (url: string) => {
           if (url && projectId) {
@@ -578,16 +578,16 @@ const pollMjImageGeneration = async (
               // 从 URL 中提取扩展名
               const urlPath = new URL(url).pathname
               const ext = urlPath.split('.').pop()?.toLowerCase() || 'png'
-              
+
               // 下载并保存到本地
               const fileName = await saveGeneratedImageToLocal(projectId, url, ext)
-              
+
               if (fileName) {
                 // 获取相对路径
                 const relativePath = getLocalFilePath(projectId, 'generate_image', fileName)
-                
+
                 console.log('[pollMjImageGeneration] 图片已保存到本地:', fileName, relativePath)
-                
+
                 return {
                   url,
                   localFileName: fileName,
@@ -728,11 +728,11 @@ const pollVideoGeneration = async (
           // 下载并保存视频到本地
           const projectId = getState().projectId
           let processedData: any[] = [{ url: resultUrl, format: 'mp4' }]
-          
+
           if (projectId) {
             try {
               const fileName = await saveGeneratedVideoToLocal(projectId, resultUrl, 'mp4')
-              
+
               if (fileName) {
                 const relativePath = getLocalFilePath(projectId, 'generate_video', fileName)
                 console.log('[pollVideoGeneration] 视频已保存到本地:', fileName, relativePath)
@@ -819,14 +819,14 @@ const pollVideoGeneration = async (
       if (response.status === 'completed') {
         const projectId = getState().projectId
         const resultData = extractVideoResult(response)
-        
+
         // 处理每个生成的视频
         const processedResultData = await Promise.all(resultData.map(async (item: any) => {
           if (item.url && projectId) {
             try {
               const ext = item.format || 'mp4'
               const fileName = await saveGeneratedVideoToLocal(projectId, item.url, ext)
-              
+
               if (fileName) {
                 const relativePath = getLocalFilePath(projectId, 'generate_video', fileName)
                 console.log('[pollVideoGeneration] 视频已保存到本地:', fileName, relativePath)
@@ -1120,18 +1120,18 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
     }
 
     // 处理节点中的本地文件，将相对路径转换为可显示的 blob URL
-    const processedNodes = await Promise.all(data.nodes.map(async (node) => {
+    const processedNodes: AllNodeType[] = await Promise.all(data.nodes.map(async (node): Promise<AllNodeType> => {
       // 处理文本智能体节点的生成状态
       if (node.type === 'textAgentNode' && node.data?.status === 'generating') {
         return {
           ...node,
           data: {
             ...node.data,
-            status: 'idle',
+            status: 'idle' as const,
           },
         }
       }
-      
+
       // 处理图片节点的本地文件
       if (node.type === 'imageNode' && node.data?.result?.data) {
         const processedData = await Promise.all(node.data.result.data.map(async (item: any) => {
@@ -1141,8 +1141,11 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
               if (absolutePath) {
                 const readResult = await window.storage.readFile(absolutePath)
                 if (readResult.success && readResult.data) {
-                  const ext = item.fileName?.split('.').pop() || 'png'
-                  const blob = new Blob([readResult.data], { type: `image/${ext}` })
+                  const ext = (item.localFileName || item.fileName)?.split('.').pop() || 'png'
+                  // 复制到浏览器侧 Uint8Array，避免 Node Buffer 与 BlobPart 类型不兼容
+                  const fileBytes = new Uint8Array(readResult.data.length)
+                  fileBytes.set(readResult.data)
+                  const blob = new Blob([fileBytes], { type: `image/${ext}` })
                   const blobUrl = URL.createObjectURL(blob)
                   return { ...item, url: blobUrl }
                 }
@@ -1164,7 +1167,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           },
         }
       }
-      
+
       // 处理视频节点的本地文件
       if (node.type === 'videoNode' && node.data?.result?.data) {
         const processedData = await Promise.all(node.data.result.data.map(async (item: any) => {
@@ -1174,8 +1177,11 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
               if (absolutePath) {
                 const readResult = await window.storage.readFile(absolutePath)
                 if (readResult.success && readResult.data) {
-                  const ext = item.format || item.fileName?.split('.').pop() || 'mp4'
-                  const blob = new Blob([readResult.data], { type: `video/${ext}` })
+                  const ext = item.format || (item.localFileName || item.fileName)?.split('.').pop() || 'mp4'
+                  // 复制到浏览器侧 Uint8Array，避免 Node Buffer 与 BlobPart 类型不兼容
+                  const fileBytes = new Uint8Array(readResult.data.length)
+                  fileBytes.set(readResult.data)
+                  const blob = new Blob([fileBytes], { type: `video/${ext}` })
                   const blobUrl = URL.createObjectURL(blob)
                   return { ...item, url: blobUrl }
                 }
@@ -1197,7 +1203,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           },
         }
       }
-      
+
       // 处理音频节点的本地文件
       if (node.type === 'audioNode' && node.data?.result?.data) {
         const processedData = await Promise.all(node.data.result.data.map(async (item: any) => {
@@ -1207,8 +1213,11 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
               if (absolutePath) {
                 const readResult = await window.storage.readFile(absolutePath)
                 if (readResult.success && readResult.data) {
-                  const ext = item.fileName?.split('.').pop() || 'mp3'
-                  const blob = new Blob([readResult.data], { type: `audio/${ext}` })
+                  const ext = (item.localFileName || item.fileName)?.split('.').pop() || 'mp3'
+                  // 复制到浏览器侧 Uint8Array，避免 Node Buffer 与 BlobPart 类型不兼容
+                  const fileBytes = new Uint8Array(readResult.data.length)
+                  fileBytes.set(readResult.data)
+                  const blob = new Blob([fileBytes], { type: `audio/${ext}` })
                   const blobUrl = URL.createObjectURL(blob)
                   return { ...item, url: blobUrl }
                 }
@@ -1230,7 +1239,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           },
         }
       }
-      
+
       return node
     }))
 

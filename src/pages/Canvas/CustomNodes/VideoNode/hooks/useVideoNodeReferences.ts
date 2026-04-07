@@ -78,7 +78,8 @@ export const useVideoNodeReferences = ({
           id: node.id,
           url: firstItem?.url,
           relativePath: firstItem?.relativePath,
-          fileName: firstItem?.fileName,
+          // ImageGenerationNode 的结果字段是 localFileName，这里映射为 fileName 以兼容现有消费方。
+          fileName: firstItem?.localFileName,
         }
       })
       .filter((item) => item.url) as VideoReferenceItem[]
