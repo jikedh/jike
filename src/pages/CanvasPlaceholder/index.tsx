@@ -5,7 +5,7 @@
  */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { SquareDashedMousePointer, Plus, Play, Network, Clock, X, Pencil, Trash2, FileText } from 'lucide-react'
+import { SquareDashedMousePointer, Plus, Play, Network, Clock, X, Pencil, Trash2, FileText, Loader2 } from 'lucide-react'
 import { getProjectListAsync, deleteProject, getCoverImageUrl, type ProjectMeta } from '@/utils/projectStorage'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import ProjectDialog from '@/components/ProjectDialog'
@@ -17,6 +17,7 @@ export default function CanvasPlaceholderPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [projectToDelete, setProjectToDelete] = useState<ProjectMeta | null>(null)
   const [projectToEdit, setProjectToEdit] = useState<ProjectMeta | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const refreshProjects = async () => {
     const list = await getProjectListAsync()
@@ -61,13 +62,18 @@ export default function CanvasPlaceholderPage() {
   }
 
   // 确认删除项目
-  const handleConfirmDelete = () => {
-    if (projectToDelete) {
-      deleteProject(projectToDelete.id)
-      refreshProjects()
+  const handleConfirmDelete = async () => {
+    if (!projectToDelete) return
+    
+    setIsDeleting(true)
+    try {
+      await deleteProject(projectToDelete.id)
+      await refreshProjects()
+    } finally {
+      setIsDeleting(false)
+      setIsDeleteDialogOpen(false)
+      setProjectToDelete(null)
     }
-    setIsDeleteDialogOpen(false)
-    setProjectToDelete(null)
   }
 
   // 格式化时间
@@ -214,8 +220,9 @@ export default function CanvasPlaceholderPage() {
             <div className="flex items-center justify-between p-5 border-b border-white/5">
               <h2 className="text-lg font-semibold text-white/90">删除项目</h2>
               <button
-                onClick={() => setIsDeleteDialogOpen(false)}
-                className="text-white/50 hover:text-white transition-colors cursor-pointer"
+                onClick={() => !isDeleting && setIsDeleteDialogOpen(false)}
+                disabled={isDeleting}
+                className="text-white/50 hover:text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -232,15 +239,18 @@ export default function CanvasPlaceholderPage() {
             <div className="flex items-center justify-end gap-3 p-5 border-t border-white/5 bg-black/20">
               <button
                 onClick={() => setIsDeleteDialogOpen(false)}
-                className="px-5 py-2.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                disabled={isDeleting}
+                className="px-5 py-2.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 取消
               </button>
               <button
                 onClick={handleConfirmDelete}
-                className="px-5 py-2.5 rounded-lg text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors cursor-pointer"
+                disabled={isDeleting}
+                className="px-5 py-2.5 rounded-lg text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                删除
+                {isDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isDeleting ? '删除中...' : '删除'}
               </button>
             </div>
           </div>

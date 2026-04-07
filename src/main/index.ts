@@ -144,6 +144,19 @@ function setupIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('storage:deleteFolder', async (_, folderPath: string) => {
+    try {
+      const normalizedPath = normalize(folderPath)
+      if (existsSync(normalizedPath)) {
+        const { rmSync } = require('fs')
+        rmSync(normalizedPath, { recursive: true, force: true })
+      }
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
   ipcMain.handle('storage:fileExists', async (_, filePath: string) => {
     return existsSync(normalize(filePath))
   })

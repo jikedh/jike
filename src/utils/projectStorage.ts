@@ -283,7 +283,18 @@ export const deleteProject = async (id: string): Promise<boolean> => {
 
         if (index === -1) return false
 
-        const projectName = data.projects[index].name
+        const project = data.projects[index]
+        const projectName = project.name
+
+        // 删除本地文件夹
+        const basePath = localStorageService.getStoragePath()
+        if (basePath && window.storage) {
+            const projectPath = `${basePath}/${projectName}`
+            const deleteResult = await window.storage.deleteFolder(projectPath)
+            if (!deleteResult.success) {
+                console.error('Failed to delete project folder:', deleteResult.error)
+            }
+        }
 
         data.projects.splice(index, 1)
         localStorage.setItem(PROJECT_LIST_KEY, JSON.stringify(data))
