@@ -513,6 +513,13 @@ export const getLocalFileAbsolutePath = (
     return `${basePath}/${project.name}/${folder}/${fileName}`
 }
 
+export const getMediaPath = (relativePath: string): string | null => {
+    const basePath = localStorageService.getStoragePath()
+    if (!basePath) return null
+    
+    return `${basePath}/${relativePath}`
+}
+
 export const getMediaUrl = (relativePath: string): string | null => {
     const basePath = localStorageService.getStoragePath()
     if (!basePath) return null

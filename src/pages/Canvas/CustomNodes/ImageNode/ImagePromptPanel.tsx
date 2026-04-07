@@ -18,7 +18,7 @@ import { uploadFileToOSS } from '@/utils/oss'
 import { GenerationStatus } from '@/constants/enum'
 import useMessage from '@/hooks/useMessage'
 import { cn } from '@/lib/utils'
-import { getMediaUrl } from '@/utils/projectStorage'
+import { getMediaUrl, getMediaPath } from '@/utils/projectStorage'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { ImageGenerationNode, NoteNodeData } from '@/types/flow'
 
@@ -644,9 +644,9 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           // 这是本地文件，需要上传到 OSS
           try {
             if (window.storage) {
-              // 获取绝对路径
-              const absolutePath = getMediaUrl(localFileInfo.relativePath)
-              console.log('[ImageNode] 绝对路径:', absolutePath)
+              // 获取实际的文件系统路径（不是 file:// URL）
+              const absolutePath = getMediaPath(localFileInfo.relativePath)
+              console.log('[ImageNode] 文件系统路径:', absolutePath)
 
               if (absolutePath) {
                 const readResult = await window.storage.readFile(absolutePath)
