@@ -237,6 +237,15 @@ export const VideoPromptEditor = forwardRef<VideoPromptEditorHandle, VideoPrompt
                     'focus:outline-none',
                 ),
             },
+            handleKeyDown: (_view, event) => {
+                // 当焦点在视频提示词输入区时，空格仅用于输入，不向画布层冒泡。
+                if (event.code === 'Space' || event.key === ' ') {
+                    event.stopPropagation()
+                }
+
+                // 返回 false 让编辑器继续执行默认输入行为（插入空格字符）。
+                return false
+            },
         },
         onUpdate: ({ editor: currentEditor }) => {
             onDraftChange({

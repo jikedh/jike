@@ -1172,7 +1172,8 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
         width: 350,
         height: 250,
         data: {
-          model: 'doubao-seedance-1-5-pro',
+          // 新建视频节点默认模型：Doubao Seedance 2.0
+          model: 'doubao-seedance-2.0',
           prompt: '',
           promptDraft: '',
           promptDraftHtml: '<p></p>',
@@ -1623,7 +1624,7 @@ duplicateNode: (nodeId: string) => {
       }
 
       const splitPrompt = `这是一张${gridName}宫格的图片，中间是用白色分割线区分的。帮我把${gridName}宫格图中的第${row}行的第${col}列图片单独提取出来，放大为独立图片。与第${row}行的第${col}列图片保持完全相同的构图、色调，去除图片四个角落文字、字幕、标注，序号，高清优化图片所有细节，8K清晰度。`
-      
+
       const finalPrompt = sourcePrompt ? `${splitPrompt}\n\n原始提示词：${sourcePrompt}` : splitPrompt
 
       const newId = get().addNode('image', position)
@@ -1790,10 +1791,10 @@ duplicateNode: (nodeId: string) => {
       const isSeedance20 = payload?.model === 'doubao-seedance-2.0'
       console.log('[startVideoGeneration] model:', payload?.model, '| isSeedance20:', isSeedance20)
       console.log('[startVideoGeneration] payload:', JSON.stringify(payload, null, 2))
-      
+
       const response: any = isSeedance20 ? await createLzVideoTask(payload) : await createVideoGeneration(payload)
       console.log('[startVideoGeneration] response:', response)
-      
+
       const taskId = isSeedance20 ? response?.data?.task_id : response?.id
 
       if (!taskId) {
@@ -2013,28 +2014,28 @@ duplicateNode: (nodeId: string) => {
    */
   onConnect: (connection) => {
     const { nodes } = get()
-    
+
     const sourceNode = nodes.find(n => n.id === connection.source)
     const targetNode = nodes.find(n => n.id === connection.target)
-    
+
     if (targetNode?.type === 'videoNode') {
       const allowedSourceTypes = ['imageNode', 'videoNode', 'audioNode']
       if (sourceNode && !allowedSourceTypes.includes(sourceNode.type || '')) {
         console.warn('视频节点只能接受图片、视频、音频节点的输入')
         return
       }
-      
+
       if (sourceNode?.type === 'audioNode') {
         const audioData = sourceNode.data as AudioGenerationNode
         const audioDuration = audioData.result?.data?.[0]?.duration || audioData.duration || 0
-        
+
         if (audioDuration > 15) {
           console.warn('音频时长超过15秒，无法连接到视频节点')
           return
         }
       }
     }
-    
+
     set((state) => {
       const nextEdges = addEdge(connection, state.edges)
       const currentEdgeIds = new Set(state.edges.map((edge) => edge.id))

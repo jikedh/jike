@@ -29,11 +29,11 @@ import { GeminiParamsPanel } from './components/GeminiParamsPanel'
 import { AspectRatioIcon } from './components/AspectRatioIcon'
 import { PROMPT_PANEL_STYLES } from '../shared/promptPanelStyles'
 
-const ReferenceItemWrapper = ({ 
-    children, 
+const ReferenceItemWrapper = ({
+    children,
     onDisconnect,
-    className 
-}: { 
+    className
+}: {
     children: React.ReactNode
     onDisconnect?: () => void
     className?: string
@@ -456,6 +456,13 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                 ),
             },
             handleKeyDown: (_view, event) => {
+                // 当焦点在图片提示词输入区时，空格仅用于输入，不向画布层冒泡。
+                if (event.code === 'Space' || event.key === ' ') {
+                    event.stopPropagation()
+                    // 返回 false 让 TipTap 保持默认输入空格字符的行为。
+                    return false
+                }
+
                 const currentItems = activeMode === 'mention' ? filteredMentionItems : filteredCommandItems
 
                 if (!activeMode || currentItems.length === 0) {
@@ -714,7 +721,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                     {referenceImageUrls.map((url, index) => {
                         const parentNode = parentImageNodes.find(item => item.url === url)
                         return (
-                            <ReferenceItemWrapper 
+                            <ReferenceItemWrapper
                                 key={`${url}-${index}`}
                                 onDisconnect={parentNode ? () => handleDisconnectNode(parentNode.id) : undefined}
                             >
