@@ -69,6 +69,16 @@ export const updateSuggestionPosition = (editor: { view: any; state: { selection
 }
 
 /**
+ * Seedance 2.0 时长裁剪工具函数。
+ * fast 模式：4-12 秒；pro 模式：4-15 秒。
+ */
+export const clampSeedance20Duration = (value: number, mode: 'fast' | 'pro') => {
+  const min = 4
+  const max = mode === 'pro' ? 15 : 12
+  return Math.min(Math.max(value, min), max)
+}
+
+/**
  * 从网络 URL 下载图片
  * @param imageUrl 图片 URL
  * @param filename 可选的文件名，如果不提供则从 URL 自动提取或使用时间戳生成
