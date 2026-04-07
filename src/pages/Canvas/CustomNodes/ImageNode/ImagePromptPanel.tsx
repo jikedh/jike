@@ -630,7 +630,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
       // 检查参考图是否是本地文件，如果是则先上传到 OSS
       let uploadedImageUrls: string[] = []
-      const imageUrlsToProcess = currentImageData?.image_urls ?? []
+      // image_urls 传递界面当前显示的参考图列表（上传 + 父节点结果）
+      const imageUrlsToProcess = referenceImageUrls
 
       console.log('[ImageNode] image_urls:', imageUrlsToProcess)
       console.log('[ImageNode] localFileMap keys:', Array.from(localFileMap.keys()))
