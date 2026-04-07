@@ -19,6 +19,7 @@ import { clearProjectList } from '@/utils/projectStorage'
 type SettingsModalProps = {
     open: boolean
     onClose: () => void
+    isFirstLogin?: boolean
 }
 
 const settingSections = [
@@ -65,8 +66,8 @@ const sectionPlaceholderMap = {
 
 const sectionIdSet = new Set(settingSections.map((item) => item.id))
 
-export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
-    const [activeSection, setActiveSection] = useState(settingSections[0].id)
+export const SettingsModal = ({ open, onClose, isFirstLogin = false }: SettingsModalProps) => {
+    const [activeSection, setActiveSection] = useState(isFirstLogin ? 'data' : settingSections[0].id)
     const { defaultModel, defaultPersonaId, autoSaveEnabled, gridVisible, nodeSearchVisible, devToolsVisible, storagePath, setDefaultModel, setDefaultPersonaId, setAutoSaveEnabled, setGridVisible, setNodeSearchVisible, setDevToolsVisible, setStoragePath, resetToDefault } = useChatSettingsStore()
     const { success, error } = useMessage()
     const exportCanvasData = useCanvasFlowStore((state) => state.exportCanvasData)
@@ -176,14 +177,15 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
 
     return (
         <>
-        <Modal open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+        <Modal open={open} onOpenChange={(nextOpen) => !nextOpen && !isFirstLogin && onClose()}>
             <ModalContent aria-label="设置弹窗">
                 <div className="flex h-[min(76vh,720px)] flex-col">
                     <header className="flex items-start justify-between border-b border-white/5 px-6 py-5">
                         <div>
-                            <ModalTitle>画布设置中心</ModalTitle>
-                            <ModalDescription>当前均为占位配置，后续可逐项接入真实能力。</ModalDescription>
+                            <ModalTitle>{isFirstLogin ? '欢迎使用即刻' : '画布设置中心'}</ModalTitle>
+                            <ModalDescription>{isFirstLogin ? '请先设置项目存储路径，以便保存您的创作内容' : '当前均为占位配置，后续可逐项接入真实能力。'}</ModalDescription>
                         </div>
+                        {!isFirstLogin && (
                         <button
                             type="button"
                             className="flex h-8 w-8 items-center justify-center rounded-lg text-white/50 transition-colors hover:bg-white/5 hover:text-white"
@@ -191,9 +193,11 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
                         >
                             <IconX size={18} />
                         </button>
+                        )}
                     </header>
 
-                    <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr]">
+                    <div className={`grid min-h-0 flex-1 ${isFirstLogin ? '' : 'grid-cols-[220px_1fr]'}`}>
+                        {!isFirstLogin && (
                         <aside className="border-r border-white/5 bg-black/20 p-3">
                             <div className="space-y-1">
                     {settingSections.map((section) => {
@@ -224,6 +228,7 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
                     })}
                             </div>
                         </aside>
+                        )}
 
                         <main className="min-h-0 overflow-auto px-6 py-5">
                             <div className="space-y-3">
@@ -374,16 +379,20 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
                     </div>
 
                     <footer className="flex items-center justify-between border-t border-white/5 px-6 py-4">
+                        {!isFirstLogin && (
                         <Button variant="blue" size="sm" onClick={resetToDefault}>
                             <IconRestore size={14} />
                             恢复默认
                         </Button>
-                        <div className="flex items-center gap-2">
+                        )}
+                        <div className="flex items-center gap-2 ml-auto">
+                            {!isFirstLogin && (
                             <Button size="sm" onClick={onClose}>
                                 取消
                             </Button>
+                            )}
                             <Button size="sm" variant="blue" onClick={onClose}>
-                                保存
+                                {isFirstLogin ? '确认' : '保存'}
                             </Button>
                         </div>
                     </footer>

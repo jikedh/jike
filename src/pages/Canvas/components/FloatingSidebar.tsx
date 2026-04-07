@@ -88,12 +88,13 @@ const DEFAULT_ITEMS: FloatingSidebarItem[] = [
     icon: <IconRefresh size={20} />,
     role: 'bottom',
   },
-  {
-    id: 'settings',
-    label: '设置',
-    icon: <IconSettings size={20} />,
-    role: 'bottom',
-  },
+  // 设置按钮已移至首页侧边栏，暂时隐藏
+  // {
+  //   id: 'settings',
+  //   label: '设置',
+  //   icon: <IconSettings size={20} />,
+  //   role: 'bottom',
+  // },
 ]
 
 // ============================================================================
