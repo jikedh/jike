@@ -1,6 +1,6 @@
 // import aiService, { zeakaiRequest, getAiToken } from '@/utils/aiRequest'
 import { EventSourceParserStream } from 'eventsource-parser/stream'
-import { aiService, zeakaiRequest, kuaiziRequest } from '@/utils/aiRequest'
+import { aiService, zeakaiRequest, kuaiziRequest, jikeingService } from '@/utils/aiRequest'
 import { getAiToken, getBaseURL } from '@/utils/utils'
 
 // ===================== 账户余额相关 =====================
@@ -183,5 +183,25 @@ export function getLzVideoTaskStatus(taskId: string) {
     url: '/lz/video/task/status',
     method: 'post',
     data: { task_id: taskId }
+  })
+}
+
+// ===================== 极景二维码登录相关 =====================
+
+// 获取场景二维码
+export function getSceneQrcode(data?: any): any {
+  return jikeingService({
+    url: '/v1/user/get-scene-qrcode',
+    method: 'get',
+    params: data
+  })
+}
+
+// 查询场景状态
+export function querySceneStatus(sceneId: any): any {
+  return jikeingService({
+    url: '/v1/user/query-scene-status',
+    method: 'get',
+    params: { scene_id: sceneId }
   })
 }

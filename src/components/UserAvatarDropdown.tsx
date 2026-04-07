@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LogOut, User } from 'lucide-react'
-import { getJikeingToken, clearJikeingToken } from '@/api/jikeing'
+import { clearJikeingToken, getJikeingToken } from '@/utils/utils'
+// import { getJikeingToken, clearJikeingToken } from '@/utils/aiRequest'
 
 interface UserAvatarDropdownProps {
     userId?: string

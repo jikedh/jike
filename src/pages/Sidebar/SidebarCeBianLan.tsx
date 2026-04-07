@@ -7,8 +7,8 @@ import { SidebarNav } from './components/SidebarNav'
 import { SidebarNavItem } from './components/SidebarNavItem'
 import { SidebarRoot } from './components/SidebarRoot'
 import { UserAvatarDropdown } from '@/components/UserAvatarDropdown'
-import { getJikeingUserId } from '@/api/jikeing'
 import iconImg from '@/assets/icon.png'
+import { getJikeingUserId } from '@/utils/utils'
 
 const USER_CREDITS = 1280
 

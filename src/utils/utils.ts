@@ -82,6 +82,34 @@ export function hasKuaiziToken(): boolean {
 }
 
 
+// ===================== Jikeing Token 管理 =====================
+let jikeing_token = ''
+let jikeing_user_id = ''
+
+export function getJikeingToken(): string {
+  return jikeing_token
+}
+
+export function setJikeingToken(token: string): void {
+  jikeing_token = token
+}
+
+export function clearJikeingToken(): void {
+  jikeing_token = ''
+}
+
+export function getJikeingUserId(): string {
+  return jikeing_user_id
+}
+
+export function setJikeingUserId(userId: string | number): void {
+  jikeing_user_id = String(userId)
+}
+
+export function clearJikeingUserId(): void {
+  jikeing_user_id = ''
+}
+
 // ===================== 环境检测与基础URL配置 =====================
 
 /**

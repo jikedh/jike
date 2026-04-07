@@ -1,6 +1,6 @@
 import axios, { AxiosRequestConfig, AxiosInstance } from 'axios'
 
-import { getAiToken, getZeakaiToken, getKuaiziToken, getBaseURL } from './utils'
+import { getAiToken, getZeakaiToken, getKuaiziToken, getJikeingToken, getBaseURL } from './utils'
 import { handleRequestError } from './requestErrorHandler'
 
 const REQUEST_TIMEOUT = 300000
@@ -30,6 +30,12 @@ const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
     getBaseURL: () => getBaseURL('kuaizi'),
     getToken: getKuaiziToken,
     authHeader: 'ApiKey',
+    useBearer: false,
+  },
+  jikeing: {
+    getBaseURL: () => 'https://api.jikeing.com',
+    getToken: getJikeingToken,
+    authHeader: 'x-token',
     useBearer: false,
   },
 }
@@ -75,6 +81,7 @@ const createService = (serviceName: string, config: ServiceConfig): AxiosInstanc
 const aiService = createService('ai', SERVICE_CONFIGS.ai)
 const zeakaiService = createService('zeakai', SERVICE_CONFIGS.zeakai)
 const kuaiziService = createService('kuaizi', SERVICE_CONFIGS.kuaizi)
+const jikeingService = createService('jikeing', SERVICE_CONFIGS.jikeing)
 
 const aiRequest = async <T = any>(config: AxiosRequestConfig): Promise<T> => {
   return await aiService.request(config)
@@ -88,6 +95,10 @@ const kuaiziRequest = async <T = any>(config: AxiosRequestConfig): Promise<T> =>
   return await kuaiziService.request(config)
 }
 
-export { aiService, zeakaiService, kuaiziService }
+const jikeingRequest = async <T = any>(config: AxiosRequestConfig): Promise<T> => {
+  return await jikeingService.request(config)
+}
+
+export { aiService, zeakaiService, kuaiziService, jikeingService }
 export default aiRequest
-export { zeakaiRequest, kuaiziRequest }
+export { zeakaiRequest, kuaiziRequest, jikeingRequest }
