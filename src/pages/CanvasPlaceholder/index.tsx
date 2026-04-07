@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { SquareDashedMousePointer, Plus, Play, Network, Clock, X, Pencil, Trash2, FileText } from 'lucide-react'
-import { getProjectList, deleteProject, type ProjectMeta } from '@/utils/projectStorage'
+import { getProjectListAsync, deleteProject, type ProjectMeta } from '@/utils/projectStorage'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import ProjectDialog from '@/components/ProjectDialog'
 
@@ -18,8 +18,9 @@ export default function CanvasPlaceholderPage() {
   const [projectToDelete, setProjectToDelete] = useState<ProjectMeta | null>(null)
   const [projectToEdit, setProjectToEdit] = useState<ProjectMeta | null>(null)
 
-  const refreshProjects = () => {
-    setProjects(getProjectList())
+  const refreshProjects = async () => {
+    const list = await getProjectListAsync()
+    setProjects(list)
   }
 
   const handleProjectSuccess = (projectId: string) => {

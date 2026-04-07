@@ -1,5 +1,5 @@
-import { IconBolt, IconDownload, IconEye, IconEyeOff, IconKey, IconRestore, IconUpload, IconX } from '@tabler/icons-react'
-import { useMemo, useRef, useState } from 'react'
+import { IconBolt, IconDownload, IconEye, IconEyeOff, IconFolder, IconKey, IconRestore, IconUpload, IconX } from '@tabler/icons-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -14,6 +14,7 @@ import useMessage from '@/hooks/useMessage'
 import { cn } from '@/utils/utils'
 import { getAiToken, setAiToken, getZeakaiToken, setZeakaiToken } from '@/utils/utils'
 import { Input } from '@/components/ui/input'
+import { clearProjectList } from '@/utils/projectStorage'
 
 type SettingsModalProps = {
     open: boolean
@@ -66,7 +67,7 @@ const sectionIdSet = new Set(settingSections.map((item) => item.id))
 
 export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
     const [activeSection, setActiveSection] = useState(settingSections[0].id)
-    const { defaultModel, defaultPersonaId, autoSaveEnabled, gridVisible, nodeSearchVisible, devToolsVisible, setDefaultModel, setDefaultPersonaId, setAutoSaveEnabled, setGridVisible, setNodeSearchVisible, setDevToolsVisible, resetToDefault } = useChatSettingsStore()
+    const { defaultModel, defaultPersonaId, autoSaveEnabled, gridVisible, nodeSearchVisible, devToolsVisible, storagePath, setDefaultModel, setDefaultPersonaId, setAutoSaveEnabled, setGridVisible, setNodeSearchVisible, setDevToolsVisible, setStoragePath, resetToDefault } = useChatSettingsStore()
     const { success, error } = useMessage()
     const exportCanvasData = useCanvasFlowStore((state) => state.exportCanvasData)
     const importCanvasData = useCanvasFlowStore((state) => state.importCanvasData)
@@ -75,6 +76,47 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
     const [importConfirmOpen, setImportConfirmOpen] = useState(false)
     const [pendingImportData, setPendingImportData] = useState<any>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+
+    useEffect(() => {
+        if (open && !storagePath && window.storage) {
+            window.storage.getDefaultPath().then((defaultPath) => {
+                if (defaultPath) {
+                    setStoragePath(defaultPath)
+                }
+            })
+        }
+    }, [open, storagePath, setStoragePath])
+
+    const handleSelectStoragePath = async () => {
+        if (!window.storage) {
+            error('存储功能不可用')
+            return
+        }
+        
+        const oldPath = storagePath
+        const selectedPath = await window.storage.selectDirectory()
+        
+        if (selectedPath && selectedPath !== oldPath) {
+            if (oldPath) {
+                const migrateResult = await window.storage.migrateProjects(oldPath, selectedPath)
+                if (migrateResult.success) {
+                    setStoragePath(selectedPath)
+                    clearProjectList()
+                    if (migrateResult.migratedCount && migrateResult.migratedCount > 0) {
+                        success(`存储路径已更新，已迁移 ${migrateResult.migratedCount} 个项目`)
+                    } else {
+                        success('存储路径已更新')
+                    }
+                } else {
+                    error(`迁移失败: ${migrateResult.error}`)
+                }
+            } else {
+                setStoragePath(selectedPath)
+                clearProjectList()
+                success('存储路径已更新')
+            }
+        }
+    }
 
     const currentSectionItems = useMemo(() => {
         if (!sectionIdSet.has(activeSection)) {
@@ -277,26 +319,42 @@ export const SettingsModal = ({ open, onClose }: SettingsModalProps) => {
 
                                 {/* 数据与版本 - 导入导出 */}
                                 {activeSection === 'data' && (
-                                    <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
-                                        <div className="mb-3 text-sm font-medium text-white/80">画布数据</div>
-                                        <div className="flex gap-2">
-                                            <Button size="sm" variant="blue" onClick={handleExport}>
-                                                <IconDownload size={14} />
-                                                导出
-                                            </Button>
-                                            <Button size="sm" onClick={handleImportClick}>
-                                                <IconUpload size={14} />
-                                                导入
-                                            </Button>
-                                            <input
-                                                ref={fileInputRef}
-                                                type="file"
-                                                accept=".json"
-                                                className="hidden"
-                                                onChange={handleFileChange}
-                                            />
-                                        </div>
-                                    </section>
+                                    <>
+                                        <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                                            <div className="mb-3 text-sm font-medium text-white/80">项目存储路径</div>
+                                            <div className="text-xs text-white/40 mb-3">项目文件将存储在此路径下，包括画布数据、图片、视频和音频文件</div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex-1 rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm text-white/60 truncate">
+                                                    {storagePath || '未设置'}
+                                                </div>
+                                                <Button size="sm" variant="blue" onClick={handleSelectStoragePath}>
+                                                    <IconFolder size={14} />
+                                                    选择路径
+                                                </Button>
+                                            </div>
+                                        </section>
+                                        <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                                            <div className="mb-3 text-sm font-medium text-white/80">画布数据</div>
+                                            <div className="text-xs text-white/40 mb-3">导出或导入画布的 JSON 数据</div>
+                                            <div className="flex gap-2">
+                                                <Button size="sm" variant="blue" onClick={handleExport}>
+                                                    <IconDownload size={14} />
+                                                    导出
+                                                </Button>
+                                                <Button size="sm" onClick={handleImportClick}>
+                                                    <IconUpload size={14} />
+                                                    导入
+                                                </Button>
+                                                <input
+                                                    ref={fileInputRef}
+                                                    type="file"
+                                                    accept=".json"
+                                                    className="hidden"
+                                                    onChange={handleFileChange}
+                                                />
+                                            </div>
+                                        </section>
+                                    </>
                                 )}
 
                                 {currentSectionItems.filter((item) => !(activeSection === 'general' && item.label === '自动保存')).map((item) => (

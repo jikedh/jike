@@ -10,6 +10,8 @@ import type { AudioGenerationNode, ImageGenerationNode, NoteNodeData, VideoGener
 export interface VideoReferenceItem {
   id: string
   url: string
+  relativePath?: string
+  fileName?: string
 }
 
 /**
@@ -70,10 +72,15 @@ export const useVideoNodeReferences = ({
     return parentNodeIds
       .map((parentId) => nodes.find((node) => node.id === parentId))
       .filter((node) => node?.type === 'imageNode')
-      .map((node) => ({
-        id: node.id,
-        url: (node.data as ImageGenerationNode).result?.data?.[0]?.url,
-      }))
+      .map((node) => {
+        const firstItem = (node.data as ImageGenerationNode).result?.data?.[0]
+        return {
+          id: node.id,
+          url: firstItem?.url,
+          relativePath: firstItem?.relativePath,
+          fileName: firstItem?.fileName,
+        }
+      })
       .filter((item) => item.url) as VideoReferenceItem[]
   }, [parentNodeIds, nodes])
 

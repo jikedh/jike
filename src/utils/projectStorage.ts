@@ -1,14 +1,15 @@
 /**
  * 项目管理工具函数
- * 负责项目的创建、读取、更新、删除，所有数据存储在 localStorage
+ * 负责项目的创建、读取、更新、删除
+ * 支持 localStorage 和本地文件存储
  */
 
-// 项目列表存储 key
-const PROJECT_LIST_KEY = 'canvas-projects'
-// 画布数据存储 key 前缀
-const CANVAS_DATA_PREFIX = 'canvas-flow-data-'
+import { localStorageService, generateFileName } from '@/services/localStorageService'
 
-// 项目元数据类型
+const PROJECT_LIST_KEY = 'canvas-projects'
+const CANVAS_DATA_PREFIX = 'canvas-flow-data-'
+const CANVAS_FILE_NAME = 'canvas.json'
+
 export type ProjectMeta = {
     id: string
     name: string
@@ -19,19 +20,14 @@ export type ProjectMeta = {
     type: 'video' | 'script'
 }
 
-// 项目列表类型
 type ProjectList = {
     version: number
-    nextId: number // 下一个项目 ID
+    nextId: number
     projects: ProjectMeta[]
 }
 
-// 当前版本号
 const STORAGE_VERSION = 2
 
-/**
- * 获取所有项目列表（按最后编辑时间倒序排列）
- */
 export const getProjectList = (): ProjectMeta[] => {
     try {
         const raw = localStorage.getItem(PROJECT_LIST_KEY)
@@ -40,7 +36,6 @@ export const getProjectList = (): ProjectMeta[] => {
         const data = JSON.parse(raw) as ProjectList
         if (data.version !== STORAGE_VERSION) return []
 
-        // 按 updatedAt 降序排序，如果 updatedAt 不存在则回退到 createdAt
         return data.projects.sort((a, b) => {
             const timeA = a.updatedAt || a.createdAt
             const timeB = b.updatedAt || b.createdAt
@@ -51,9 +46,74 @@ export const getProjectList = (): ProjectMeta[] => {
     }
 }
 
-/**
- * 保存项目列表
- */
+export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
+    const localStorageProjects = getProjectList()
+    
+    const localFileProjects: ProjectMeta[] = []
+    
+    if (localStorageService.isAvailable()) {
+        const basePath = localStorageService.getStoragePath()
+        if (basePath && window.storage) {
+            try {
+                const listResult = await window.storage.listFiles(basePath)
+                if (listResult.success && listResult.files) {
+                    for (const file of listResult.files) {
+                        if (file.isDirectory) {
+                            const canvasPath = `${basePath}/${file.name}/canvas.json`
+                            const exists = await window.storage.fileExists(canvasPath)
+                            if (exists) {
+                                const readResult = await window.storage.readJson(canvasPath)
+                                if (readResult.success && readResult.data) {
+                                    const canvasData = readResult.data
+                                    const existingProject = localStorageProjects.find(p => p.name === file.name)
+                                    
+                                    if (!existingProject) {
+                                        const newProject: ProjectMeta = {
+                                            id: canvasData.projectId || `local-${file.name}`,
+                                            name: canvasData.projectName || file.name,
+                                            createdAt: canvasData.savedAt || file.modifiedAt || Date.now(),
+                                            updatedAt: canvasData.savedAt || file.modifiedAt || Date.now(),
+                                            type: 'video',
+                                        }
+                                        localFileProjects.push(newProject)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('Failed to scan local projects:', err)
+            }
+        }
+    }
+    
+    if (localFileProjects.length > 0) {
+        const maxId = Math.max(
+            ...localStorageProjects.map(p => parseInt(p.id) || 0),
+            ...localFileProjects.map(p => parseInt(p.id.replace('local-', '')) || 0),
+            0
+        )
+        const allProjects = [...localStorageProjects, ...localFileProjects]
+        saveProjectList(allProjects, maxId + 1)
+    }
+    
+    const allProjects = [...localStorageProjects, ...localFileProjects]
+    
+    const uniqueProjects = allProjects.reduce((acc: ProjectMeta[], project) => {
+        if (!acc.find(p => p.name === project.name)) {
+            acc.push(project)
+        }
+        return acc
+    }, [])
+    
+    return uniqueProjects.sort((a, b) => {
+        const timeA = a.updatedAt || a.createdAt
+        const timeB = b.updatedAt || b.createdAt
+        return timeB - timeA
+    })
+}
+
 const saveProjectList = (projects: ProjectMeta[], nextId: number): void => {
     const data: ProjectList = {
         version: STORAGE_VERSION,
@@ -63,9 +123,10 @@ const saveProjectList = (projects: ProjectMeta[], nextId: number): void => {
     localStorage.setItem(PROJECT_LIST_KEY, JSON.stringify(data))
 }
 
-/**
- * 获取下一个项目 ID
- */
+export const clearProjectList = (): void => {
+    localStorage.removeItem(PROJECT_LIST_KEY)
+}
+
 const getNextId = (): number => {
     try {
         const raw = localStorage.getItem(PROJECT_LIST_KEY)
@@ -78,26 +139,30 @@ const getNextId = (): number => {
     }
 }
 
-/**
- * 创建新项目
- * @param name 项目名称，可选，默认为 "项目 N"
- * @param coverUrl 封面图片 URL，可选
- * @param description 项目描述，可选
- * @param type 项目类型
- */
-export const createProject = (
+export const createProject = async (
     name?: string,
     coverUrl?: string,
     description?: string,
     type: 'video' | 'script' = 'video'
-): ProjectMeta => {
+): Promise<ProjectMeta> => {
     const now = Date.now()
-    const projects = getProjectList()
+    const existingProjects = await getProjectListAsync()
     const nextId = getNextId()
+
+    let projectName = name || `项目 ${nextId}`
+    
+    const existingNames = existingProjects.map(p => p.name)
+    if (existingNames.includes(projectName)) {
+        let counter = 1
+        while (existingNames.includes(`${projectName} (${counter})`)) {
+            counter++
+        }
+        projectName = `${projectName} (${counter})`
+    }
 
     const newProject: ProjectMeta = {
         id: String(nextId),
-        name: name || `项目 ${nextId}`,
+        name: projectName,
         createdAt: now,
         updatedAt: now,
         coverUrl,
@@ -105,16 +170,33 @@ export const createProject = (
         type,
     }
 
-    // 新项目添加到列表
-    projects.push(newProject)
-    saveProjectList(projects, nextId + 1)
+    const localStorageProjects = getProjectList()
+    localStorageProjects.push(newProject)
+    saveProjectList(localStorageProjects, nextId + 1)
+
+    localStorage.removeItem(getCanvasDataKey(String(nextId)))
+
+    if (localStorageService.isAvailable()) {
+        const basePath = localStorageService.getStoragePath()
+        if (basePath) {
+            await localStorageService.ensureProjectDir(basePath, projectName)
+            
+            const emptyCanvasData = {
+                version: 1,
+                savedAt: now,
+                projectId: String(nextId),
+                projectName: projectName,
+                nodes: [],
+                edges: [],
+                nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1, table: 1 }
+            }
+            await localStorageService.saveCanvasData(String(nextId), projectName, emptyCanvasData)
+        }
+    }
 
     return newProject
 }
 
-/**
- * 更新项目元数据并刷新最后编辑时间
- */
 export const updateProject = (projectId: string, updates: Partial<Omit<ProjectMeta, 'id' | 'createdAt'>>): void => {
     try {
         const raw = localStorage.getItem(PROJECT_LIST_KEY)
@@ -127,7 +209,7 @@ export const updateProject = (projectId: string, updates: Partial<Omit<ProjectMe
             data.projects[projectIndex] = {
                 ...data.projects[projectIndex],
                 ...updates,
-                updatedAt: Date.now() // 强制更新编辑时间
+                updatedAt: Date.now()
             }
             saveProjectList(data.projects, data.nextId)
         }
@@ -136,10 +218,7 @@ export const updateProject = (projectId: string, updates: Partial<Omit<ProjectMe
     }
 }
 
-/**
- * 删除项目（包括其画布数据）
- */
-export const deleteProject = (id: string): boolean => {
+export const deleteProject = async (id: string): Promise<boolean> => {
     try {
         const raw = localStorage.getItem(PROJECT_LIST_KEY)
         if (!raw) return false
@@ -149,11 +228,11 @@ export const deleteProject = (id: string): boolean => {
 
         if (index === -1) return false
 
-        // 删除项目元数据
+        const projectName = data.projects[index].name
+
         data.projects.splice(index, 1)
         localStorage.setItem(PROJECT_LIST_KEY, JSON.stringify(data))
 
-        // 删除项目画布数据
         localStorage.removeItem(getCanvasDataKey(id))
 
         return true
@@ -162,17 +241,179 @@ export const deleteProject = (id: string): boolean => {
     }
 }
 
-/**
- * 获取项目画布数据的存储 key
- */
 export const getCanvasDataKey = (projectId: string): string => {
     return `${CANVAS_DATA_PREFIX}${projectId}`
 }
 
-/**
- * 检查项目是否存在
- */
 export const projectExists = (id: string): boolean => {
     const projects = getProjectList()
     return projects.some(p => p.id === id)
+}
+
+export const getProjectById = (id: string): ProjectMeta | undefined => {
+    const projects = getProjectList()
+    return projects.find(p => p.id === id)
+}
+
+export const getProjectByName = (name: string): ProjectMeta | undefined => {
+    const projects = getProjectList()
+    return projects.find(p => p.name === name)
+}
+
+export const saveCanvasData = async (projectId: string, data: any): Promise<boolean> => {
+    const project = getProjectById(projectId)
+    if (!project) return false
+
+    localStorage.setItem(getCanvasDataKey(projectId), JSON.stringify(data))
+
+    if (localStorageService.isAvailable()) {
+        const result = await localStorageService.saveCanvasData(projectId, project.name, data)
+        return result.success
+    }
+
+    return true
+}
+
+export const loadCanvasData = async (projectId: string): Promise<any | null> => {
+    const project = getProjectById(projectId)
+    if (!project) return null
+
+    if (localStorageService.isAvailable()) {
+        const result = await localStorageService.loadCanvasData(project.name)
+        if (result.success && result.data) {
+            return result.data
+        }
+    }
+
+    const raw = localStorage.getItem(getCanvasDataKey(projectId))
+    if (raw) {
+        try {
+            return JSON.parse(raw)
+        } catch {
+            return null
+        }
+    }
+
+    return null
+}
+
+export const saveImageToLocal = async (
+    projectId: string,
+    imageData: ArrayBuffer | string,
+    extension: string = 'png'
+): Promise<string | null> => {
+    const project = getProjectById(projectId)
+    if (!project) return null
+
+    if (!localStorageService.isAvailable()) return null
+
+    const fileName = generateFileName('img', extension)
+
+    if (typeof imageData === 'string') {
+        const result = await localStorageService.downloadImage(project.name, fileName, imageData)
+        return result.success ? fileName : null
+    } else {
+        const result = await localStorageService.saveImage(project.name, fileName, imageData)
+        return result.success ? fileName : null
+    }
+}
+
+export const saveVideoToLocal = async (
+    projectId: string,
+    videoData: ArrayBuffer | string,
+    extension: string = 'mp4'
+): Promise<string | null> => {
+    const project = getProjectById(projectId)
+    if (!project) return null
+
+    if (!localStorageService.isAvailable()) return null
+
+    const fileName = generateFileName('vid', extension)
+
+    if (typeof videoData === 'string') {
+        const result = await localStorageService.downloadVideo(project.name, fileName, videoData)
+        return result.success ? fileName : null
+    } else {
+        const result = await localStorageService.saveVideo(project.name, fileName, videoData)
+        return result.success ? fileName : null
+    }
+}
+
+export const saveAudioToLocal = async (
+    projectId: string,
+    audioData: ArrayBuffer | string,
+    extension: string = 'mp3'
+): Promise<string | null> => {
+    const project = getProjectById(projectId)
+    if (!project) return null
+
+    if (!localStorageService.isAvailable()) return null
+
+    const fileName = generateFileName('aud', extension)
+
+    if (typeof audioData === 'string') {
+        const result = await localStorageService.downloadAudio(project.name, fileName, audioData)
+        return result.success ? fileName : null
+    } else {
+        const result = await localStorageService.saveAudio(project.name, fileName, audioData)
+        return result.success ? fileName : null
+    }
+}
+
+export const saveGeneratedImageToLocal = async (
+    projectId: string,
+    imageUrl: string,
+    extension: string = 'png'
+): Promise<string | null> => {
+    const project = getProjectById(projectId)
+    if (!project) return null
+
+    if (!localStorageService.isAvailable()) return null
+
+    const fileName = generateFileName('generate_image', extension)
+
+    const result = await localStorageService.downloadImage(project.name, fileName, imageUrl)
+    return result.success ? fileName : null
+}
+
+export const saveGeneratedVideoToLocal = async (
+    projectId: string,
+    videoUrl: string,
+    extension: string = 'mp4'
+): Promise<string | null> => {
+    const project = getProjectById(projectId)
+    if (!project) return null
+
+    if (!localStorageService.isAvailable()) return null
+
+    const fileName = generateFileName('generate_video', extension)
+
+    const result = await localStorageService.downloadVideo(project.name, fileName, videoUrl)
+    return result.success ? fileName : null
+}
+
+export const getLocalFilePath = (projectId: string, fileType: 'image' | 'video' | 'audio', fileName: string): string | null => {
+    const project = getProjectById(projectId)
+    if (!project) return null
+
+    const folder = fileType === 'image' ? 'images' : fileType === 'video' ? 'videos' : 'audio'
+    return `${project.name}/${folder}/${fileName}`
+}
+
+export const getLocalFileAbsolutePath = (projectId: string, fileType: 'image' | 'video' | 'audio', fileName: string): string | null => {
+    const project = getProjectById(projectId)
+    if (!project) return null
+
+    const basePath = localStorageService.getStoragePath()
+    if (!basePath) return null
+
+    const folder = fileType === 'image' ? 'images' : fileType === 'video' ? 'videos' : 'audio'
+    return `${basePath}/${project.name}/${folder}/${fileName}`
+}
+
+export const getMediaUrl = (relativePath: string): string | null => {
+    const basePath = localStorageService.getStoragePath()
+    if (!basePath) return null
+    
+    return `${basePath}/${relativePath}`
 }

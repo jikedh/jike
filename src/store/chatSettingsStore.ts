@@ -17,6 +17,8 @@ type ChatSettingsState = {
   nodeSearchVisible: boolean
   /** 调试工具面板显示开关*/
   devToolsVisible: boolean
+  /** 项目存储路径 */
+  storagePath: string
 }
 
 type ChatSettingsActions = {
@@ -26,6 +28,7 @@ type ChatSettingsActions = {
   setGridVisible: (visible: boolean) => void
   setNodeSearchVisible: (visible: boolean) => void
   setDevToolsVisible: (visible: boolean) => void
+  setStoragePath: (path: string) => void
   resetToDefault: () => void
 }
 
@@ -36,6 +39,7 @@ const INITIAL_STATE: ChatSettingsState = {
   gridVisible: true,
   nodeSearchVisible: false,
   devToolsVisible: false,
+  storagePath: '',
 }
 
 export const useChatSettingsStore = create<ChatSettingsState & ChatSettingsActions>()(
@@ -49,6 +53,7 @@ export const useChatSettingsStore = create<ChatSettingsState & ChatSettingsActio
       setGridVisible: (visible) => set({ gridVisible: visible }),
       setNodeSearchVisible: (visible) => set({ nodeSearchVisible: visible }),
       setDevToolsVisible: (visible) => set({ devToolsVisible: visible }),
+      setStoragePath: (path) => set({ storagePath: path }),
       resetToDefault: () => set(INITIAL_STATE),
     }),
     {

@@ -110,7 +110,7 @@ export default function ProjectDialog({
       })
       resultId = project.id
     } else {
-      const newProject = createProject(
+      const newProject = await createProject(
         name || undefined,
         finalCoverUrl || undefined,
         description || undefined,

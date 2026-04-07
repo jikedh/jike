@@ -1,16 +1,48 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-// Custom APIs for renderer
-const api = {}
+export type FileInfo = {
+  name: string
+  path: string
+  isDirectory: boolean
+  size: number
+  modifiedAt: number
+}
 
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
+export type StorageApi = {
+  selectDirectory: () => Promise<string | null>
+  ensureProjectDir: (basePath: string, projectName: string) => Promise<{ success: boolean; path?: string; error?: string }>
+  writeJson: (filePath: string, data: any) => Promise<{ success: boolean; error?: string }>
+  readJson: (filePath: string) => Promise<{ success: boolean; data: any; error?: string }>
+  writeFile: (filePath: string, buffer: ArrayBuffer) => Promise<{ success: boolean; error?: string }>
+  readFile: (filePath: string) => Promise<{ success: boolean; data: Buffer | null; error?: string }>
+  deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string }>
+  fileExists: (filePath: string) => Promise<boolean>
+  listFiles: (dirPath: string) => Promise<{ success: boolean; files: FileInfo[]; error?: string }>
+  downloadFile: (url: string, destPath: string) => Promise<{ success: boolean; path?: string; error?: string }>
+  migrateProjects: (oldPath: string, newPath: string) => Promise<{ success: boolean; migratedCount?: number; error?: string }>
+  getDefaultPath: () => Promise<string>
+}
+
+const storageApi: StorageApi = {
+  selectDirectory: () => ipcRenderer.invoke('storage:selectDirectory'),
+  ensureProjectDir: (basePath, projectName) => ipcRenderer.invoke('storage:ensureProjectDir', basePath, projectName),
+  writeJson: (filePath, data) => ipcRenderer.invoke('storage:writeJson', filePath, data),
+  readJson: (filePath) => ipcRenderer.invoke('storage:readJson', filePath),
+  writeFile: (filePath, buffer) => ipcRenderer.invoke('storage:writeFile', filePath, buffer),
+  readFile: (filePath) => ipcRenderer.invoke('storage:readFile', filePath),
+  deleteFile: (filePath) => ipcRenderer.invoke('storage:deleteFile', filePath),
+  fileExists: (filePath) => ipcRenderer.invoke('storage:fileExists', filePath),
+  listFiles: (dirPath) => ipcRenderer.invoke('storage:listFiles', dirPath),
+  downloadFile: (url, destPath) => ipcRenderer.invoke('storage:downloadFile', url, destPath),
+  migrateProjects: (oldPath, newPath) => ipcRenderer.invoke('storage:migrateProjects', oldPath, newPath),
+  getDefaultPath: () => ipcRenderer.invoke('storage:getDefaultPath'),
+}
+
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('api', api)
+    contextBridge.exposeInMainWorld('storage', storageApi)
   } catch (error) {
     console.error(error)
   }
@@ -18,5 +50,5 @@ if (process.contextIsolated) {
   // @ts-ignore (define in dts)
   window.electron = electronAPI
   // @ts-ignore (define in dts)
-  window.api = api
+  window.storage = storageApi
 }

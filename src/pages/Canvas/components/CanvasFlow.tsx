@@ -7,7 +7,7 @@ import {
     MiniMap,
     type FinalConnectionState,
   type OnConnectStartParams,
-    type InternalNode,
+  type InternalNode,
     useReactFlow,
     ControlButton,
     BackgroundVariant,
@@ -25,13 +25,13 @@ import { nodeTypes, edgeTypes } from '../constants/canvasConfig'
 import { CanvasContextMenu, type CanvasNodeType } from './CanvasContextMenu'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import { useChatSettingsStore } from '@/store/chatSettingsStore'
-import { uploadImage } from '@/api/ai'
 import type { AllNodeType, EdgeType } from '@/types/flow'
 import { Button } from '@/components/ui/button'
 import { useCanvasCursor } from '@/hooks/useCanvasCursor'
 import { GenerationStatus } from '@/constants/enum'
 import { getClosestAspectRatio, getImageDimensions } from '../CustomNodes/ImageNode/utils/aspectRatioUtils'
 import { uploadFileToOSS } from '@/utils/oss'
+import { saveImageToLocal, saveAudioToLocal, saveVideoToLocal, getProjectById, getLocalFilePath, getLocalFileAbsolutePath } from '@/utils/projectStorage'
 import {
     Dialog,
     DialogContent,
@@ -503,13 +503,28 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
 
     const updateImageNodeData = useCanvasFlowStore((state) => state.updateImageNodeData)
 
-    // 处理图片文件上传并创建节点
+    // 处理图片文件存储到本地项目目录
     const handleImageDrop = useCallback(
         async (files: File[], dropPosition: { x: number; y: number }) => {
             const flowPosition = screenToFlowPosition(dropPosition)
+            const projectId = useCanvasFlowStore.getState().projectId
 
-            for (const file of files) {
-                const newNodeId = addNode('image', flowPosition)
+            const nodeWidth = 350
+            const nodeHeight = 280
+            const gap = 20
+            const cols = 4
+
+            for (let index = 0; index < files.length; index++) {
+                const file = files[index]
+                const row = Math.floor(index / cols)
+                const col = index % cols
+                
+                const nodePosition = {
+                    x: flowPosition.x + col * (nodeWidth + gap),
+                    y: flowPosition.y + row * (nodeHeight + gap),
+                }
+                
+                const newNodeId = addNode('image', nodePosition)
 
                 // 设置初始状态为加载中
                 updateImageNodeData(newNodeId, {
@@ -517,53 +532,61 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     isUpload: true,
                 })
 
-                // 偏移后续节点位置，避免重叠
-                flowPosition.x += 40
-                flowPosition.y += 40
-
-                // 创建 FormData 上传
-                const formData = new FormData()
-                formData.append('file', file)
-
                 try {
-                    const response: any = await uploadImage(formData)
-                    const imageUrl = response?.url || response?.data?.url
-
-                    if (imageUrl) {
+                    // 获取文件扩展名
+                    const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
+                    
+                    // 读取文件为 ArrayBuffer
+                    const arrayBuffer = await file.arrayBuffer()
+                    
+                    // 存储到本地项目目录
+                    const fileName = await saveImageToLocal(projectId || '', arrayBuffer, ext)
+                    
+                    if (fileName) {
+                        // 获取相对路径（用于存储到 canvas.json）
+                        const relativePath = getLocalFilePath(projectId || '', 'image', fileName)
+                        
+                        // 创建 blob URL 用于显示
+                        const blobUrl = URL.createObjectURL(file)
+                        
                         // 获取图片尺寸并计算最接近的比例
                         try {
-                            const dimensions = await getImageDimensions(imageUrl)
+                            const dimensions = await getImageDimensions(blobUrl)
                             const aspectRatio = getClosestAspectRatio(dimensions.width, dimensions.height)
 
                             updateImageNodeData(newNodeId, {
                                 status: GenerationStatus.COMPLETED,
                                 size: aspectRatio,
+                                isLocalFile: true,
+                                localFileName: fileName,
                                 result: {
                                     type: 'image',
-                                    data: [{ url: imageUrl }],
+                                    data: [{ url: blobUrl, relativePath, fileName }],
                                 },
                             })
                         } catch (error) {
                             // 如果获取尺寸失败，使用默认比例
                             updateImageNodeData(newNodeId, {
                                 status: GenerationStatus.COMPLETED,
+                                isLocalFile: true,
+                                localFileName: fileName,
                                 result: {
                                     type: 'image',
-                                    data: [{ url: imageUrl }],
+                                    data: [{ url: blobUrl, relativePath, fileName }],
                                 },
                             })
                         }
                     } else {
                         updateImageNodeData(newNodeId, {
                             status: GenerationStatus.FAILED,
-                            error: { message: '上传失败，未获取到图片地址' },
+                            error: { message: '存储失败，请检查存储路径设置' },
                         })
                     }
                 } catch (error) {
-                    console.error('图片上传失败:', error)
+                    console.error('图片存储失败:', error)
                     updateImageNodeData(newNodeId, {
                         status: GenerationStatus.FAILED,
-                        error: { message: '上传失败，请重试' },
+                        error: { message: '存储失败，请重试' },
                     })
                 }
             }
@@ -575,47 +598,73 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
 
     const updateAudioNodeData = useCanvasFlowStore((state) => state.updateAudioNodeData)
 
-    // 处理音频文件上传并创建节点
+    // 处理音频文件存储到本地项目目录
     const handleAudioDrop = useCallback(
         async (files: File[], dropPosition: { x: number; y: number }) => {
             const flowPosition = screenToFlowPosition(dropPosition)
+            const projectId = useCanvasFlowStore.getState().projectId
 
-            for (const file of files) {
-                const newNodeId = addNode('audio', flowPosition)
+            const nodeWidth = 350
+            const nodeHeight = 120
+            const gap = 20
+            const cols = 4
+
+            for (let index = 0; index < files.length; index++) {
+                const file = files[index]
+                const row = Math.floor(index / cols)
+                const col = index % cols
+                
+                const nodePosition = {
+                    x: flowPosition.x + col * (nodeWidth + gap),
+                    y: flowPosition.y + row * (nodeHeight + gap),
+                }
+                
+                const newNodeId = addNode('audio', nodePosition)
 
                 updateAudioNodeData(newNodeId, {
                     status: GenerationStatus.IN_PROGRESS,
                     isUpload: true,
                 })
 
-                flowPosition.x += 40
-                flowPosition.y += 40
-
                 try {
-                    const result = await uploadFileToOSS(file)
-                    const url = result.url
-
-                    if (url) {
+                    // 获取文件扩展名
+                    const ext = file.name.split('.').pop()?.toLowerCase() || 'mp3'
+                    
+                    // 读取文件为 ArrayBuffer
+                    const arrayBuffer = await file.arrayBuffer()
+                    
+                    // 存储到本地项目目录
+                    const fileName = await saveAudioToLocal(projectId || '', arrayBuffer, ext)
+                    
+                    if (fileName) {
+                        // 获取相对路径（用于存储到 canvas.json）
+                        const relativePath = getLocalFilePath(projectId || '', 'audio', fileName)
+                        
+                        // 创建 blob URL 用于播放
+                        const blobUrl = URL.createObjectURL(file)
+                        
                         updateAudioNodeData(newNodeId, {
                             status: GenerationStatus.COMPLETED,
                             progress: 100,
                             isUpload: true,
+                            isLocalFile: true,
+                            localFileName: fileName,
                             result: {
                                 type: 'audio',
-                                data: [{ url }],
+                                data: [{ url: blobUrl, relativePath, fileName }],
                             },
                         })
                     } else {
                         updateAudioNodeData(newNodeId, {
                             status: GenerationStatus.FAILED,
-                            error: { message: '上传失败，未获取到音频地址' },
+                            error: { message: '存储失败，请检查存储路径设置' },
                         })
                     }
                 } catch (error) {
-                    console.error('音频上传失败:', error)
+                    console.error('音频存储失败:', error)
                     updateAudioNodeData(newNodeId, {
                         status: GenerationStatus.FAILED,
-                        error: { message: '上传失败，请重试' },
+                        error: { message: '存储失败，请重试' },
                     })
                 }
             }
@@ -627,46 +676,73 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
 
     const updateVideoNodeData = useCanvasFlowStore((state) => state.updateVideoNodeData)
 
+    // 处理视频文件存储到本地项目目录
     const handleVideoDrop = useCallback(
         async (files: File[], dropPosition: { x: number; y: number }) => {
             const flowPosition = screenToFlowPosition(dropPosition)
+            const projectId = useCanvasFlowStore.getState().projectId
 
-            for (const file of files) {
-                const newNodeId = addNode('video', flowPosition)
+            const nodeWidth = 350
+            const nodeHeight = 280
+            const gap = 20
+            const cols = 4
+
+            for (let index = 0; index < files.length; index++) {
+                const file = files[index]
+                const row = Math.floor(index / cols)
+                const col = index % cols
+                
+                const nodePosition = {
+                    x: flowPosition.x + col * (nodeWidth + gap),
+                    y: flowPosition.y + row * (nodeHeight + gap),
+                }
+                
+                const newNodeId = addNode('video', nodePosition)
 
                 updateVideoNodeData(newNodeId, {
                     status: GenerationStatus.IN_PROGRESS,
                     isUpload: true,
                 })
 
-                flowPosition.x += 40
-                flowPosition.y += 40
-
                 try {
-                    const result = await uploadFileToOSS(file)
-                    const url = result.url
-
-                    if (url) {
+                    // 获取文件扩展名
+                    const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4'
+                    
+                    // 读取文件为 ArrayBuffer
+                    const arrayBuffer = await file.arrayBuffer()
+                    
+                    // 存储到本地项目目录
+                    const fileName = await saveVideoToLocal(projectId || '', arrayBuffer, ext)
+                    
+                    if (fileName) {
+                        // 获取相对路径（用于存储到 canvas.json）
+                        const relativePath = getLocalFilePath(projectId || '', 'video', fileName)
+                        
+                        // 创建 blob URL 用于播放
+                        const blobUrl = URL.createObjectURL(file)
+                        
                         updateVideoNodeData(newNodeId, {
                             status: GenerationStatus.COMPLETED,
                             progress: 100,
                             isUpload: true,
+                            isLocalFile: true,
+                            localFileName: fileName,
                             result: {
                                 type: 'video',
-                                data: [{ url, format: file.type.split('/')[1] || 'mp4' }],
+                                data: [{ url: blobUrl, relativePath, fileName, format: ext }],
                             },
                         })
                     } else {
                         updateVideoNodeData(newNodeId, {
                             status: GenerationStatus.FAILED,
-                            error: { message: '上传失败，未获取到视频地址' },
+                            error: { message: '存储失败，请检查存储路径设置' },
                         })
                     }
                 } catch (error) {
-                    console.error('视频上传失败:', error)
+                    console.error('视频存储失败:', error)
                     updateVideoNodeData(newNodeId, {
                         status: GenerationStatus.FAILED,
-                        error: { message: '上传失败，请重试' },
+                        error: { message: '存储失败，请重试' },
                     })
                 }
             }

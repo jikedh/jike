@@ -21,7 +21,7 @@ import { useChatSettingsStore } from '@/store/chatSettingsStore'
 import { getAgentPresetById, type AgentPresetId } from '@/constants/agent-presets'
 import type { AllNodeType, EdgeType, ImageGenerationNode, VideoGenerationNode, AudioGenerationNode } from '@/types/flow'
 import { GenerationStatus } from '@/constants/enum'
-import { getCanvasDataKey } from '@/utils/projectStorage'
+import { getCanvasDataKey, saveCanvasData, loadCanvasData, getMediaUrl, saveGeneratedImageToLocal, saveGeneratedVideoToLocal, getLocalFilePath } from '@/utils/projectStorage'
 import { buildMidjourneyPrompt } from '@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt'
 import { getRequestErrorMessage } from '@/utils/requestErrorHandler'
 
@@ -101,7 +101,7 @@ type CanvasFlowState = {
 
   // === 持久化操作 ===
   /** 切换项目（加载项目数据） */
-  switchProject: (projectId: string) => void
+  switchProject: (projectId: string) => Promise<void>
   /** 保存当前图状态到 localStorage */
   saveGraph: () => void
   /** 从 localStorage 恢复图状态 */
@@ -411,19 +411,52 @@ const pollImageGeneration = async (
         return
       }
 
-      setState((state) => ({
-        nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-          // 追加新结果到 result.data，而不是覆盖
-          const existingData = data.result?.data ?? []
-          const newResultData = response.result?.data ?? []
-          const mergedData = [...existingData, ...newResultData]
+      // 如果生成完成，下载并保存图片到本地
+      if (response.status === 'completed') {
+        const projectId = getState().projectId
+        const newResultData = response.result?.data ?? []
+        
+        // 处理每张生成的图片
+        const processedResultData = await Promise.all(newResultData.map(async (item: any) => {
+          if (item.url && projectId) {
+            try {
+              // 从 URL 中提取扩展名
+              const urlPath = new URL(item.url).pathname
+              const ext = urlPath.split('.').pop()?.toLowerCase() || 'png'
+              
+              // 下载并保存到本地
+              const fileName = await saveGeneratedImageToLocal(projectId, item.url, ext)
+              
+              if (fileName) {
+                // 获取相对路径
+                const relativePath = getLocalFilePath(projectId, 'image', fileName)
+                
+                console.log('[pollImageGeneration] 图片已保存到本地:', fileName, relativePath)
+                
+                return {
+                  ...item,
+                  localFileName: fileName,
+                  relativePath,
+                }
+              }
+            } catch (saveError) {
+              console.error('[pollImageGeneration] 保存图片到本地失败:', saveError)
+            }
+          }
+          return item
+        }))
 
-          // 更新已完成数量
-          const completedCount = (data.completedCount ?? 0) + 1
-          // 判断是否所有任务都已完成
-          const allCompleted = completedCount >= totalTaskCount
+        setState((state) => ({
+          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+            // 追加新结果到 result.data，而不是覆盖
+            const existingData = data.result?.data ?? []
+            const mergedData = [...existingData, ...processedResultData]
 
-          if (response.status === 'completed') {
+            // 更新已完成数量
+            const completedCount = (data.completedCount ?? 0) + 1
+            // 判断是否所有任务都已完成
+            const allCompleted = completedCount >= totalTaskCount
+
             return {
               ...data,
               status: allCompleted ? GenerationStatus.COMPLETED : GenerationStatus.IN_PROGRESS,
@@ -435,9 +468,24 @@ const pollImageGeneration = async (
               completedCount,
               error: allCompleted ? undefined : data.error,
             }
-          }
+          }),
+        }))
 
-          if (response.status === 'failed') {
+        stopImagePollingInternal(taskId)
+        // 如果所有任务都完成了，清理计数
+        const currentData = getState().nodes.find((n) => n.id === nodeId)?.data as ImageGenerationNode
+        if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
+          pendingTaskCounts.delete(nodeId)
+        }
+        return
+      }
+
+      if (response.status === 'failed') {
+        setState((state) => ({
+          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+            const completedCount = (data.completedCount ?? 0) + 1
+            const allCompleted = completedCount >= totalTaskCount
+
             return {
               ...data,
               status: allCompleted ? GenerationStatus.FAILED : GenerationStatus.IN_PROGRESS,
@@ -448,25 +496,25 @@ const pollImageGeneration = async (
               },
               completedCount,
             }
-          }
+          }),
+        }))
 
-          return {
-            ...data,
-            status: GenerationStatus.IN_PROGRESS,
-            progress: response.progress ?? 0,
-          }
-        }),
-      }))
-
-      if (response.status === 'completed' || response.status === 'failed') {
         stopImagePollingInternal(taskId)
-        // 如果所有任务都完成了，清理计数
         const currentData = getState().nodes.find((n) => n.id === nodeId)?.data as ImageGenerationNode
         if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
           pendingTaskCounts.delete(nodeId)
         }
         return
       }
+
+      // 更新进度
+      setState((state) => ({
+        nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+          ...data,
+          status: GenerationStatus.IN_PROGRESS,
+          progress: response.progress ?? 0,
+        })),
+      }))
     }
   } catch (pollError) {
     console.error('图片生成轮询失败:', pollError)
@@ -518,23 +566,52 @@ const pollMjImageGeneration = async (
       // 从 progress 字符串（如 "50%"）提取数值
       const progressValue = parseInt(response.progress?.replace('%', '') || '0', 10)
 
-      setState((state) => ({
-        nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-          // 追加新结果到 result.data，而不是覆盖
-          const existingData = data.result?.data ?? []
-          // 使用 imageUrls 数组中的所有图片
-          const newImageUrls = response.imageUrls ?? []
-          const mergedData = newImageUrls.length > 0
-            ? [...existingData, ...newImageUrls]
-            : existingData
+      // SUCCESS 状态表示完成
+      if (response.status === 'SUCCESS') {
+        const projectId = getState().projectId
+        const newImageUrls = response.imageUrls ?? []
+        
+        // 处理每张生成的图片
+        const processedResultData = await Promise.all(newImageUrls.map(async (url: string) => {
+          if (url && projectId) {
+            try {
+              // 从 URL 中提取扩展名
+              const urlPath = new URL(url).pathname
+              const ext = urlPath.split('.').pop()?.toLowerCase() || 'png'
+              
+              // 下载并保存到本地
+              const fileName = await saveGeneratedImageToLocal(projectId, url, ext)
+              
+              if (fileName) {
+                // 获取相对路径
+                const relativePath = getLocalFilePath(projectId, 'image', fileName)
+                
+                console.log('[pollMjImageGeneration] 图片已保存到本地:', fileName, relativePath)
+                
+                return {
+                  url,
+                  localFileName: fileName,
+                  relativePath,
+                }
+              }
+            } catch (saveError) {
+              console.error('[pollMjImageGeneration] 保存图片到本地失败:', saveError)
+            }
+          }
+          return { url }
+        }))
 
-          // 更新已完成数量
-          const completedCount = (data.completedCount ?? 0) + 1
-          // 判断是否所有任务都已完成
-          const allCompleted = completedCount >= totalTaskCount
+        setState((state) => ({
+          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+            // 追加新结果到 result.data，而不是覆盖
+            const existingData = data.result?.data ?? []
+            const mergedData = [...existingData, ...processedResultData]
 
-          // SUCCESS 状态表示完成
-          if (response.status === 'SUCCESS') {
+            // 更新已完成数量
+            const completedCount = (data.completedCount ?? 0) + 1
+            // 判断是否所有任务都已完成
+            const allCompleted = completedCount >= totalTaskCount
+
             return {
               ...data,
               status: allCompleted ? GenerationStatus.COMPLETED : GenerationStatus.IN_PROGRESS,
@@ -546,10 +623,25 @@ const pollMjImageGeneration = async (
               completedCount,
               error: allCompleted ? undefined : data.error,
             }
-          }
+          }),
+        }))
 
-          // FAILURE 或 CANCEL 状态表示失败
-          if (response.status === 'FAILURE' || response.status === 'CANCEL') {
+        stopImagePollingInternal(taskId)
+        // 如果所有任务都完成了，清理计数
+        const currentData = getState().nodes.find((n) => n.id === nodeId)?.data as ImageGenerationNode
+        if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
+          pendingTaskCounts.delete(nodeId)
+        }
+        return
+      }
+
+      // FAILURE 或 CANCEL 状态表示失败
+      if (response.status === 'FAILURE' || response.status === 'CANCEL') {
+        setState((state) => ({
+          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+            const completedCount = (data.completedCount ?? 0) + 1
+            const allCompleted = completedCount >= totalTaskCount
+
             return {
               ...data,
               status: allCompleted ? GenerationStatus.FAILED : GenerationStatus.IN_PROGRESS,
@@ -560,28 +652,28 @@ const pollMjImageGeneration = async (
               },
               completedCount,
             }
-          }
+          }),
+        }))
 
-          // NOT_START、SUBMITTED、MODAL 状态为排队中
-          const isQueued = ['NOT_START', 'SUBMITTED', 'MODAL'].includes(response.status)
-
-          return {
-            ...data,
-            status: isQueued ? GenerationStatus.QUEUED : GenerationStatus.IN_PROGRESS,
-            progress: progressValue,
-          }
-        }),
-      }))
-
-      if (response.status === 'SUCCESS' || response.status === 'FAILURE' || response.status === 'CANCEL') {
         stopImagePollingInternal(taskId)
-        // 如果所有任务都完成了，清理计数
         const currentData = getState().nodes.find((n) => n.id === nodeId)?.data as ImageGenerationNode
         if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
           pendingTaskCounts.delete(nodeId)
         }
         return
       }
+
+      // 更新进度
+      // NOT_START、SUBMITTED、MODAL 状态为排队中
+      const isQueued = ['NOT_START', 'SUBMITTED', 'MODAL'].includes(response.status)
+
+      setState((state) => ({
+        nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+          ...data,
+          status: isQueued ? GenerationStatus.QUEUED : GenerationStatus.IN_PROGRESS,
+          progress: progressValue,
+        })),
+      }))
     }
   } catch (pollError) {
     console.error('Midjourney 图片生成轮询失败:', pollError)
@@ -626,96 +718,176 @@ const pollVideoGeneration = async (
         return
       }
 
-      setState((state) => ({
-        nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => {
-          // Seedance2.0 走快手接口：状态字段位于 response.data
-          if (isSeedance20) {
-            const status = response?.data?.status
-            const progress = response?.data?.progress ?? 0
-            const resultUrl = response?.data?.video_url
+      // Seedance2.0 走快手接口：状态字段位于 response.data
+      if (isSeedance20) {
+        const status = response?.data?.status
+        const progress = response?.data?.progress ?? 0
+        const resultUrl = response?.data?.video_url
 
-            if (status === 'succeeded') {
-              return {
-                ...data,
-                status: GenerationStatus.COMPLETED,
-                progress: 100,
-                task_id: response?.data?.task_id ?? taskId,
-                result: {
-                  type: 'video',
-                  data: resultUrl
-                    ? [
-                      {
-                        url: resultUrl,
-                        format: 'mp4',
-                      },
-                    ]
-                    : [],
-                },
-                error: undefined,
+        if (status === 'succeeded' && resultUrl) {
+          // 下载并保存视频到本地
+          const projectId = getState().projectId
+          let processedData: any[] = [{ url: resultUrl, format: 'mp4' }]
+          
+          if (projectId) {
+            try {
+              const fileName = await saveGeneratedVideoToLocal(projectId, resultUrl, 'mp4')
+              
+              if (fileName) {
+                const relativePath = getLocalFilePath(projectId, 'video', fileName)
+                console.log('[pollVideoGeneration] 视频已保存到本地:', fileName, relativePath)
+                processedData = [{
+                  url: resultUrl,
+                  format: 'mp4',
+                  localFileName: fileName,
+                  relativePath,
+                }]
               }
-            }
-
-            if (status === 'failed' || status === 'canceled') {
-              return {
-                ...data,
-                status: GenerationStatus.FAILED,
-                progress,
-                task_id: response?.data?.task_id ?? taskId,
-                error: {
-                  code: 'LZ_VIDEO_FAILED',
-                  message: response?.data?.error || response?.message || '生成失败，请稍后再试',
-                },
-              }
-            }
-
-            // queued/processing/running 统一按进行中处理
-            return {
-              ...data,
-              status: GenerationStatus.IN_PROGRESS,
-              progress,
-              task_id: response?.data?.task_id ?? taskId,
+            } catch (saveError) {
+              console.error('[pollVideoGeneration] 保存视频到本地失败:', saveError)
             }
           }
 
-          if (response.status === 'completed') {
-            return {
+          setState((state) => ({
+            nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
               ...data,
               status: GenerationStatus.COMPLETED,
               progress: 100,
-              task_id: response.id ?? taskId,
-              result: extractVideoResult(response),
+              task_id: response?.data?.task_id ?? taskId,
+              result: {
+                type: 'video',
+                data: processedData,
+              },
               error: undefined,
-            }
-          }
+            })),
+          }))
 
-          if (response.status === 'failed') {
-            return {
+          stopVideoPollingInternal(nodeId)
+          return
+        }
+
+        if (status === 'succeeded') {
+          setState((state) => ({
+            nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+              ...data,
+              status: GenerationStatus.COMPLETED,
+              progress: 100,
+              task_id: response?.data?.task_id ?? taskId,
+              result: {
+                type: 'video',
+                data: [],
+              },
+              error: undefined,
+            })),
+          }))
+
+          stopVideoPollingInternal(nodeId)
+          return
+        }
+
+        if (status === 'failed' || status === 'canceled') {
+          setState((state) => ({
+            nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
               ...data,
               status: GenerationStatus.FAILED,
-              progress: response.progress ?? 0,
-              task_id: response.id ?? taskId,
-              error: response.error ?? {
-                code: 'UNKNOWN_ERROR',
-                message: '生成失败，请稍后再试',
+              progress,
+              task_id: response?.data?.task_id ?? taskId,
+              error: {
+                code: 'LZ_VIDEO_FAILED',
+                message: response?.data?.error || response?.message || '生成失败，请稍后再试',
               },
-            }
-          }
+            })),
+          }))
 
-          return {
+          stopVideoPollingInternal(nodeId)
+          return
+        }
+
+        // queued/processing/running 统一按进行中处理
+        setState((state) => ({
+          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
             ...data,
             status: GenerationStatus.IN_PROGRESS,
-            progress: response.progress ?? 0,
-            task_id: response.id ?? taskId,
-          }
-        }),
-      }))
+            progress,
+            task_id: response?.data?.task_id ?? taskId,
+          })),
+        }))
+        continue
+      }
 
-      const isSeedance20Completed = response?.data?.status === 'succeeded'
-      const isSeedance20Failed = response?.data?.status === 'failed' || response?.data?.status === 'canceled'
-      if ((model === 'doubao-seedance-2.0' && (isSeedance20Completed || isSeedance20Failed)) || (model !== 'doubao-seedance-2.0' && (response.status === 'completed' || response.status === 'failed'))) {
+      // 其他模型
+      if (response.status === 'completed') {
+        const projectId = getState().projectId
+        const resultData = extractVideoResult(response)
+        
+        // 处理每个生成的视频
+        const processedResultData = await Promise.all(resultData.map(async (item: any) => {
+          if (item.url && projectId) {
+            try {
+              const ext = item.format || 'mp4'
+              const fileName = await saveGeneratedVideoToLocal(projectId, item.url, ext)
+              
+              if (fileName) {
+                const relativePath = getLocalFilePath(projectId, 'video', fileName)
+                console.log('[pollVideoGeneration] 视频已保存到本地:', fileName, relativePath)
+                return {
+                  ...item,
+                  localFileName: fileName,
+                  relativePath,
+                }
+              }
+            } catch (saveError) {
+              console.error('[pollVideoGeneration] 保存视频到本地失败:', saveError)
+            }
+          }
+          return item
+        }))
+
+        setState((state) => ({
+          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+            ...data,
+            status: GenerationStatus.COMPLETED,
+            progress: 100,
+            task_id: response.id ?? taskId,
+            result: {
+              type: 'video',
+              data: processedResultData,
+            },
+            error: undefined,
+          })),
+        }))
+
         stopVideoPollingInternal(nodeId)
         return
       }
+
+      if (response.status === 'failed') {
+        setState((state) => ({
+          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+            ...data,
+            status: GenerationStatus.FAILED,
+            progress: response.progress ?? 0,
+            task_id: response.id ?? taskId,
+            error: response.error ?? {
+              code: 'UNKNOWN_ERROR',
+              message: '生成失败，请稍后再试',
+            },
+          })),
+        }))
+
+        stopVideoPollingInternal(nodeId)
+        return
+      }
+
+      // 更新进度
+      setState((state) => ({
+        nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+          ...data,
+          status: GenerationStatus.IN_PROGRESS,
+          progress: response.progress ?? 0,
+          task_id: response.id ?? taskId,
+        })),
+      }))
     }
   } catch (pollError) {
     console.error('视频生成轮询失败:', pollError)
@@ -897,7 +1069,7 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
   /**
    * 切换项目（加载项目数据）
    */
-  switchProject: (projectId: string) => {
+  switchProject: async (projectId: string) => {
     const currentProjectId = get().projectId
     // 如果是同一个项目，不需要重新加载
     if (currentProjectId === projectId && get().hydrated) {
@@ -912,64 +1084,28 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
       stopVideoPollingInternal(nodeId)
     })
 
-    // 加载新项目数据
-    const storageKey = getCanvasDataKey(projectId)
+    // 尝试从本地文件加载
+    let data: CanvasPersistedState | null = null
     try {
-      const raw = localStorage.getItem(storageKey)
-      if (!raw) {
-        set({
-          projectId,
-          nodes: [],
-          edges: [],
-          nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1, table: 1 },
-          hydrated: true,
-          history: [],
-          historyIndex: -1,
-        })
-        // 保存初始状态到历史记录
-        setTimeout(() => get().saveToHistory(), 0)
-        return
-      }
+      data = await loadCanvasData(projectId) as CanvasPersistedState | null
+    } catch (err) {
+      console.warn('Failed to load canvas data from local file:', err)
+    }
 
-      const data = JSON.parse(raw) as CanvasPersistedState
-      if (data.version !== CANVAS_STORAGE_VERSION) {
-        set({
-          projectId,
-          nodes: [],
-          edges: [],
-          nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1, table: 1 },
-          hydrated: true,
-          history: [],
-          historyIndex: -1,
-        })
-        // 保存初始状态到历史记录
-        setTimeout(() => get().saveToHistory(), 0)
-        return
+    // 如果本地文件加载失败，尝试从 localStorage 加载
+    if (!data) {
+      const storageKey = getCanvasDataKey(projectId)
+      try {
+        const raw = localStorage.getItem(storageKey)
+        if (raw) {
+          data = JSON.parse(raw) as CanvasPersistedState
+        }
+      } catch (err) {
+        console.warn('Failed to load canvas data from localStorage:', err)
       }
+    }
 
-      set({
-        projectId,
-        nodes: data.nodes.map((node) => {
-          if (node.type === 'textAgentNode' && node.data?.status === 'generating') {
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                status: 'idle',
-              },
-            }
-          }
-          return node
-        }),
-        edges: data.edges,
-        nodeIdCounters: data.nodeIdCounters,
-        hydrated: true,
-        history: [],
-        historyIndex: -1,
-      })
-      // 保存初始状态到历史记录
-      setTimeout(() => get().saveToHistory(), 0)
-    } catch {
+    if (!data || data.version !== CANVAS_STORAGE_VERSION) {
       set({
         projectId,
         nodes: [],
@@ -979,13 +1115,139 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
         history: [],
         historyIndex: -1,
       })
-      // 保存初始状态到历史记录
       setTimeout(() => get().saveToHistory(), 0)
+      return
     }
+
+    // 处理节点中的本地文件，将相对路径转换为可显示的 blob URL
+    const processedNodes = await Promise.all(data.nodes.map(async (node) => {
+      // 处理文本智能体节点的生成状态
+      if (node.type === 'textAgentNode' && node.data?.status === 'generating') {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            status: 'idle',
+          },
+        }
+      }
+      
+      // 处理图片节点的本地文件
+      if (node.type === 'imageNode' && node.data?.result?.data) {
+        const processedData = await Promise.all(node.data.result.data.map(async (item: any) => {
+          if (item.relativePath && window.storage) {
+            try {
+              const absolutePath = getMediaUrl(item.relativePath)
+              if (absolutePath) {
+                const readResult = await window.storage.readFile(absolutePath)
+                if (readResult.success && readResult.data) {
+                  const ext = item.fileName?.split('.').pop() || 'png'
+                  const blob = new Blob([readResult.data], { type: `image/${ext}` })
+                  const blobUrl = URL.createObjectURL(blob)
+                  return { ...item, url: blobUrl }
+                }
+              }
+            } catch (err) {
+              console.warn('Failed to load local image:', err)
+            }
+          }
+          return item
+        }))
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            result: {
+              ...node.data.result,
+              data: processedData,
+            },
+          },
+        }
+      }
+      
+      // 处理视频节点的本地文件
+      if (node.type === 'videoNode' && node.data?.result?.data) {
+        const processedData = await Promise.all(node.data.result.data.map(async (item: any) => {
+          if (item.relativePath && window.storage) {
+            try {
+              const absolutePath = getMediaUrl(item.relativePath)
+              if (absolutePath) {
+                const readResult = await window.storage.readFile(absolutePath)
+                if (readResult.success && readResult.data) {
+                  const ext = item.format || item.fileName?.split('.').pop() || 'mp4'
+                  const blob = new Blob([readResult.data], { type: `video/${ext}` })
+                  const blobUrl = URL.createObjectURL(blob)
+                  return { ...item, url: blobUrl }
+                }
+              }
+            } catch (err) {
+              console.warn('Failed to load local video:', err)
+            }
+          }
+          return item
+        }))
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            result: {
+              ...node.data.result,
+              data: processedData,
+            },
+          },
+        }
+      }
+      
+      // 处理音频节点的本地文件
+      if (node.type === 'audioNode' && node.data?.result?.data) {
+        const processedData = await Promise.all(node.data.result.data.map(async (item: any) => {
+          if (item.relativePath && window.storage) {
+            try {
+              const absolutePath = getMediaUrl(item.relativePath)
+              if (absolutePath) {
+                const readResult = await window.storage.readFile(absolutePath)
+                if (readResult.success && readResult.data) {
+                  const ext = item.fileName?.split('.').pop() || 'mp3'
+                  const blob = new Blob([readResult.data], { type: `audio/${ext}` })
+                  const blobUrl = URL.createObjectURL(blob)
+                  return { ...item, url: blobUrl }
+                }
+              }
+            } catch (err) {
+              console.warn('Failed to load local audio:', err)
+            }
+          }
+          return item
+        }))
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            result: {
+              ...node.data.result,
+              data: processedData,
+            },
+          },
+        }
+      }
+      
+      return node
+    }))
+
+    set({
+      projectId,
+      nodes: processedNodes,
+      edges: data.edges,
+      nodeIdCounters: data.nodeIdCounters,
+      hydrated: true,
+      history: [],
+      historyIndex: -1,
+    })
+    setTimeout(() => get().saveToHistory(), 0)
   },
 
   /**
-   * 保存当前图状态到 localStorage
+   * 保存当前图状态到 localStorage 和本地文件
    */
   saveGraph: () => {
     const state = get()
@@ -1000,6 +1262,10 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
     }
     const storageKey = getCanvasDataKey(state.projectId)
     localStorage.setItem(storageKey, JSON.stringify(data))
+
+    saveCanvasData(state.projectId, data).catch((err) => {
+      console.warn('Failed to save canvas data to local file:', err)
+    })
   },
 
   /**
