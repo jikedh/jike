@@ -78,16 +78,35 @@ const audioBufferToWav = (buffer: AudioBuffer): Blob => {
   return new Blob([arrayBuffer], { type: 'audio/wav' })
 }
 
-const AudioContent = memo(({ 
-  data, 
-  isTrimming, 
-  trimStart, 
-  trimEnd, 
-  onTrimStartChange, 
+// 直接从原始 AudioBuffer 中截取指定时间区间，避免依赖实际播放时长。
+const sliceAudioBuffer = (audioContext: AudioContext, buffer: AudioBuffer, startTime: number, endTime: number) => {
+  const sampleRate = buffer.sampleRate
+  const startFrame = Math.max(0, Math.floor(startTime * sampleRate))
+  const endFrame = Math.min(buffer.length, Math.ceil(endTime * sampleRate))
+  const sliceLength = Math.max(1, endFrame - startFrame)
+
+  // 使用同样的采样率和声道数创建新的 AudioBuffer，确保导出结果时长和裁剪区间一致。
+  const slicedBuffer = audioContext.createBuffer(buffer.numberOfChannels, sliceLength, sampleRate)
+
+  for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+    // 直接复制目标时间段的采样数据，不经过播放或录音流程。
+    const sourceData = buffer.getChannelData(channel).subarray(startFrame, endFrame)
+    slicedBuffer.copyToChannel(sourceData, channel, 0)
+  }
+
+  return slicedBuffer
+}
+
+const AudioContent = memo(({
+  data,
+  isTrimming,
+  trimStart,
+  trimEnd,
+  onTrimStartChange,
   onTrimEndChange,
   onPreviewTrim,
   audioRef,
-}: { 
+}: {
   data: AudioNodeType['data']
   isTrimming: boolean
   trimStart: number
@@ -185,7 +204,7 @@ const AudioContent = memo(({
   const handleTimeUpdate = useCallback(() => {
     if (audioRef.current) {
       setCurrentTime(audioRef.current.currentTime)
-      
+
       if (isTrimming && audioRef.current.currentTime >= trimEnd) {
         audioRef.current.pause()
         setIsPlaying(false)
@@ -304,19 +323,19 @@ const AudioContent = memo(({
           >
             {isTrimming && (
               <>
-                <div 
+                <div
                   className="absolute top-0 bottom-0 bg-white/20"
                   style={{ left: 0, width: `${(trimStart / duration) * 100}%` }}
                 />
-                <div 
+                <div
                   className="absolute top-0 bottom-0 bg-[#B43FEB]/30"
                   style={{ left: `${(trimStart / duration) * 100}%`, width: `${((trimEnd - trimStart) / duration) * 100}%` }}
                 />
-                <div 
+                <div
                   className="absolute top-0 bottom-0 bg-white/20"
                   style={{ left: `${(trimEnd / duration) * 100}%`, width: `${100 - (trimEnd / duration) * 100}%` }}
                 />
-                <div 
+                <div
                   className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-[#B43FEB] rounded-full border-2 border-white cursor-ew-resize z-10"
                   style={{ left: `calc(${(trimStart / duration) * 100}% - 6px)` }}
                   onMouseDown={(e) => {
@@ -337,7 +356,7 @@ const AudioContent = memo(({
                     document.addEventListener('mouseup', handleUp)
                   }}
                 />
-                <div 
+                <div
                   className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-[#B43FEB] rounded-full border-2 border-white cursor-ew-resize z-10"
                   style={{ left: `calc(${(trimEnd / duration) * 100}% - 6px)` }}
                   onMouseDown={(e) => {
@@ -369,7 +388,7 @@ const AudioContent = memo(({
             {isTrimming && (
               <div
                 className="absolute h-full bg-white/50 rounded-full"
-                style={{ 
+                style={{
                   left: `${(trimStart / duration) * 100}%`,
                   width: `${((currentTime - trimStart) / (trimEnd - trimStart)) * ((trimEnd - trimStart) / duration) * 100}%`,
                   maxWidth: `${((trimEnd - trimStart) / duration) * 100}%`
@@ -639,8 +658,9 @@ export const AudioNode = memo(({
   const deleteNode = useCanvasFlowStore((state) => state.deleteNode)
   const addNode = useCanvasFlowStore((state) => state.addNode)
   const updateAudioNodeData = useCanvasFlowStore((state) => state.updateAudioNodeData)
-  const nodes = useCanvasFlowStore((state) => state.nodes)
+  const onConnect = useCanvasFlowStore((state) => state.onConnect)
   const { setNodes: setReactFlowNodes } = useReactFlow()
+  const { success, error: showError } = useMessage()
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const [isTrimming, setIsTrimming] = useState(false)
@@ -705,77 +725,21 @@ export const AudioNode = memo(({
     if (!audioUrl) return
 
     setIsTrimming(false)
-    updateAudioNodeData(id, {
-      status: GenerationStatus.IN_PROGRESS,
-      progress: 0,
-    })
+
+    let audioContext: AudioContext | null = null
 
     try {
-      const audio = audioRef.current
-      if (!audio) {
-        throw new Error('音频元素未找到')
+      // 先把原始音频完整拉取到内存，再基于 AudioBuffer 做裁剪。
+      audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const response = await fetch(audioUrl)
+
+      if (!response.ok) {
+        throw new Error('音频资源拉取失败，请稍后重试')
       }
 
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-      
-      let source: MediaElementAudioSourceNode
-      try {
-        source = audioContext.createMediaElementSource(audio)
-      } catch (e) {
-        audioContext.close()
-        throw new Error('无法访问音频数据，可能是跨域限制。请尝试重新上传音频后再裁剪。')
-      }
-      
-      const destination = audioContext.createMediaStreamDestination()
-      source.connect(destination)
-      source.connect(audioContext.destination)
-      
-      const mediaRecorder = new MediaRecorder(destination.stream, {
-        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
-          ? 'audio/webm;codecs=opus' 
-          : 'audio/webm'
-      })
-      
-      const chunks: Blob[] = []
-      
-      await new Promise<void>((resolve, reject) => {
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) {
-            chunks.push(e.data)
-          }
-        }
-        mediaRecorder.onstop = () => resolve()
-        mediaRecorder.onerror = () => reject(new Error('录音失败'))
-        
-        audio.currentTime = trimStart
-        
-        const startRecording = () => {
-          mediaRecorder.start()
-          audio.play()
-          
-          const checkTime = () => {
-            if (audio.currentTime >= trimEnd) {
-              audio.pause()
-              mediaRecorder.stop()
-            } else {
-              requestAnimationFrame(checkTime)
-            }
-          }
-          checkTime()
-        }
-        
-        if (audio.readyState >= 3) {
-          startRecording()
-        } else {
-          audio.oncanplay = startRecording
-          audio.load()
-        }
-      })
-
-      const webmBlob = new Blob(chunks, { type: 'audio/webm' })
-      
-      const arrayBuffer = await webmBlob.arrayBuffer()
-      const trimmedBuffer = await audioContext.decodeAudioData(arrayBuffer)
+      const arrayBuffer = await response.arrayBuffer()
+      const originalBuffer = await audioContext.decodeAudioData(arrayBuffer)
+      const trimmedBuffer = sliceAudioBuffer(audioContext, originalBuffer, trimStart, trimEnd)
       const wavBlob = audioBufferToWav(trimmedBuffer)
 
       const file = new File([wavBlob], `trimmed_audio_${Date.now()}.wav`, { type: 'audio/wav' })
@@ -783,7 +747,29 @@ export const AudioNode = memo(({
       const newAudioUrl = uploadResult.url
 
       if (newAudioUrl) {
-        updateAudioNodeData(id, {
+        const sourceNode = useCanvasFlowStore.getState().nodes.find((node) => node.id === id)
+        if (!sourceNode) {
+          throw new Error('当前音频节点不存在')
+        }
+
+        // 在原节点右侧创建一个新的子节点，保持原音频不变。
+        const childPosition = {
+          x: sourceNode.position.x + (sourceNode.width ?? 350) + 80,
+          y: sourceNode.position.y,
+        }
+
+        const childNodeId = addNode('audio', childPosition)
+
+        // 先建立父子节点之间的连线，形成明确的裁剪派生关系。
+        onConnect({
+          source: id,
+          target: childNodeId,
+          sourceHandle: 'output',
+          targetHandle: 'input',
+        })
+
+        // 将裁剪后的音频结果写入子节点，不改动源节点本身。
+        updateAudioNodeData(childNodeId, {
           status: GenerationStatus.COMPLETED,
           progress: 100,
           isUpload: true,
@@ -800,30 +786,25 @@ export const AudioNode = memo(({
             endTime: trimEnd,
           },
         })
-      } else {
-        updateAudioNodeData(id, {
-          status: GenerationStatus.FAILED,
-          error: { message: '裁剪后上传失败' },
-        })
-      }
 
-      audioContext.close()
+        success('裁剪成功，已生成子节点')
+      } else {
+        showError('裁剪后上传失败')
+      }
     } catch (error) {
       console.error('裁剪音频失败:', error)
       const errorMessage = error instanceof Error ? error.message : '裁剪音频失败，请重试'
-      updateAudioNodeData(id, {
-        status: GenerationStatus.FAILED,
-        error: { message: errorMessage },
-      })
+      showError(errorMessage)
+    } finally {
+      // 及时关闭音频上下文，避免浏览器里堆积音频资源。
+      await audioContext?.close()
     }
-  }, [trimStart, trimEnd, id, audioUrl, updateAudioNodeData, audioRef])
+  }, [trimStart, trimEnd, id, audioUrl, addNode, onConnect, success, showError, updateAudioNodeData])
 
   const canConfirmTrim = useMemo(() => {
     const trimDuration = trimEnd - trimStart
     return trimDuration > 0 && trimDuration <= 15
   }, [trimStart, trimEnd])
-
-  const isDraggable = !isTrimming
 
   return (
     <NodeContextMenu
@@ -884,8 +865,8 @@ export const AudioNode = memo(({
           <div className="pointer-events-none absolute inset-0 rounded-xl bg-linear-to-tr from-transparent via-white/2 to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
 
           <div className="relative flex h-full w-full overflow-hidden rounded-lg bg-black/30">
-            <AudioContent 
-              data={data} 
+            <AudioContent
+              data={data}
               isTrimming={isTrimming}
               trimStart={trimStart}
               trimEnd={trimEnd}
