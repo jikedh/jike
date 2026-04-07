@@ -42,6 +42,18 @@ export const VideoPromptEditor = forwardRef<VideoPromptEditorHandle, VideoPrompt
 
     const mentionExtension = useMemo(() => {
         return Mention.extend({
+          /**
+           * 兼容历史数据：早期实现将 data-type 用作资源类型（image/video/audio），
+           * 会导致 Mention 节点在 setContent 时无法被 Tiptap 正常识别。
+           * 这里改为按 data-mention-id 兜底解析，确保旧草稿也能恢复为 mention 节点。
+           */
+          parseHTML() {
+            return [
+              {
+                tag: 'span[data-mention-id]',
+              },
+            ]
+          },
             addAttributes() {
                 return {
                     ...this.parent?.(),
@@ -59,10 +71,23 @@ export const VideoPromptEditor = forwardRef<VideoPromptEditorHandle, VideoPrompt
                     },
                     type: {
                         default: 'image',
-                        parseHTML: (element) => element.getAttribute('data-type') || 'image',
+                      parseHTML: (element) => {
+                        // 新协议：data-mention-kind；兼容旧协议：data-type=image/video/audio
+                        const mentionKind = element.getAttribute('data-mention-kind')
+                        if (mentionKind) {
+                          return mentionKind
+                        }
+
+                        const legacyType = element.getAttribute('data-type')
+                        if (legacyType && legacyType !== 'mention') {
+                          return legacyType
+                        }
+
+                        return 'image'
+                      },
                         renderHTML: (attributes) => {
                             return {
-                                'data-type': attributes.type || 'image',
+                              'data-mention-kind': attributes.type || 'image',
                             }
                         },
                     },
@@ -111,10 +136,12 @@ export const VideoPromptEditor = forwardRef<VideoPromptEditorHandle, VideoPrompt
                     'span',
                     {
                         ...options.HTMLAttributes,
+                      // 保持 Tiptap Mention 的标准约定，避免再次被覆盖
+                      'data-type': 'mention',
                         'data-mention-id': node.attrs.id,
                         'data-mention-value': node.attrs.value,
                         'data-mention-label': mentionLabel,
-                        'data-type': mentionType || 'image',
+                      'data-mention-kind': mentionType || 'image',
                         contenteditable: 'false',
                         draggable: 'true',
                     },
