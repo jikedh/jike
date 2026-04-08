@@ -55,19 +55,11 @@ function setupIpcHandlers(): void {
 
   ipcMain.handle('storage:ensureProjectDir', async (_, basePath: string, projectName: string) => {
     const projectDir = normalize(join(basePath, projectName))
-    const imagesDir = join(projectDir, 'images')
-    const videosDir = join(projectDir, 'videos')
     const audioDir = join(projectDir, 'audio')
 
     try {
       if (!existsSync(projectDir)) {
         mkdirSync(projectDir, { recursive: true })
-      }
-      if (!existsSync(imagesDir)) {
-        mkdirSync(imagesDir, { recursive: true })
-      }
-      if (!existsSync(videosDir)) {
-        mkdirSync(videosDir, { recursive: true })
       }
       if (!existsSync(audioDir)) {
         mkdirSync(audioDir, { recursive: true })
@@ -207,22 +199,22 @@ function setupIpcHandlers(): void {
     try {
       const normalizedOldPath = normalize(oldPath)
       const normalizedNewPath = normalize(newPath)
-      
+
       if (!existsSync(normalizedOldPath)) {
         return { success: false, error: 'Source directory does not exist' }
       }
-      
+
       if (existsSync(normalizedNewPath)) {
         return { success: false, error: 'Target directory already exists' }
       }
-      
+
       const parentDir = dirname(normalizedNewPath)
       if (!existsSync(parentDir)) {
         mkdirSync(parentDir, { recursive: true })
       }
-      
+
       renameSync(normalizedOldPath, normalizedNewPath)
-      
+
       return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message }
@@ -233,34 +225,34 @@ function setupIpcHandlers(): void {
     try {
       const normalizedOldPath = normalize(oldPath)
       const normalizedNewPath = normalize(newPath)
-      
+
       if (!existsSync(normalizedOldPath)) {
         return { success: true, message: 'Old path does not exist, nothing to migrate' }
       }
-      
+
       if (!existsSync(normalizedNewPath)) {
         mkdirSync(normalizedNewPath, { recursive: true })
       }
-      
+
       const entries = readdirSync(normalizedOldPath, { withFileTypes: true })
       let migratedCount = 0
-      
+
       for (const entry of entries) {
         if (entry.isDirectory()) {
           const projectDir = join(normalizedOldPath, entry.name)
           const canvasFile = join(projectDir, 'canvas.json')
-          
+
           if (existsSync(canvasFile)) {
             const destDir = join(normalizedNewPath, entry.name)
-            
+
             if (!existsSync(destDir)) {
               mkdirSync(destDir, { recursive: true })
-              
+
               const subEntries = readdirSync(projectDir, { withFileTypes: true })
               for (const subEntry of subEntries) {
                 const srcPath = join(projectDir, subEntry.name)
                 const destPath = join(destDir, subEntry.name)
-                
+
                 if (subEntry.isDirectory()) {
                   mkdirSync(destPath, { recursive: true })
                   const files = readdirSync(srcPath)
@@ -280,7 +272,7 @@ function setupIpcHandlers(): void {
           }
         }
       }
-      
+
       return { success: true, migratedCount }
     } catch (error: any) {
       return { success: false, error: error.message }

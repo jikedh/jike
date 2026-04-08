@@ -16,11 +16,11 @@ export async function uploadFileToOSS(file: File) {
   const videoExts = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'flv']
   const audioExts = ['mp3', 'wav', 'ogg', 'aac', 'flac']
 
-  let directory = 'images'
+  let directory = 'image'
   if (videoExts.includes(ext)) {
-    directory = 'videos'
+    directory = 'video'
   } else if (audioExts.includes(ext)) {
-    directory = 'audios'
+    directory = 'audio'
   }
 
   const fileName = `${directory}/${timestamp}-${random}.${ext}`
