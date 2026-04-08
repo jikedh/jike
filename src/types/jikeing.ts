@@ -51,16 +51,3 @@ export interface UserInfo {
   materialMemberExpireAt?: string
   vipExpireAt?: string
 }
-
-export interface UserScoreBalanceResponse {
-  code: number
-  msg?: string
-  data?: {
-    vipScore?: number
-    forScore?: number
-    todayResigned?: boolean
-    vip_score?: number
-    for_score?: number
-    today_resigned?: boolean
-  }
-}

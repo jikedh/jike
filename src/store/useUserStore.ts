@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { getUserInfo, getUserScoreBalance } from '@/api/ai'
+import { getUserInfo } from '@/api/ai'
 import { setJikeingToken, setJikeingUserId, clearJikeingToken, clearJikeingUserId, getJikeingToken } from '@/utils/utils'
 import type { UserInfo } from '@/types/jikeing'
 
@@ -7,9 +7,6 @@ interface UserState {
   loginStatus: number
   userInfo: UserInfo | null
   vipLevel: number
-  vipScore: number
-  forScore: number
-  todayResigned: boolean
   isLoading: boolean
   dialogLoginStatus: boolean
 }
@@ -18,7 +15,6 @@ interface UserActions {
   setLoginStatus: (status: number) => void
   setUserInfo: (info: UserInfo | null) => void
   fetchUserInfo: () => Promise<void>
-  fetchScoreBalance: () => Promise<void>
   logout: () => Promise<void>
   setDialogLoginStatus: (show: boolean) => void
   isVipLevel3: () => boolean
@@ -29,9 +25,6 @@ const initialState: UserState = {
   loginStatus: 0,
   userInfo: null,
   vipLevel: 0,
-  vipScore: 0,
-  forScore: 0,
-  todayResigned: false,
   isLoading: false,
   dialogLoginStatus: false,
 }
@@ -95,7 +88,6 @@ export const useUserStore = create<UserState & UserActions>((set, get) => ({
           vipLevel,
           loginStatus: 1,
         })
-        get().fetchScoreBalance()
       } else {
         console.log('[fetchUserInfo] 获取用户信息失败，code:', res.code, 'msg:', res.msg)
         set({ loginStatus: 0, userInfo: null, vipLevel: 0 })
@@ -108,23 +100,6 @@ export const useUserStore = create<UserState & UserActions>((set, get) => ({
     }
   },
 
-  fetchScoreBalance: async () => {
-    try {
-      const res = await getUserScoreBalance()
-      console.log('[fetchScoreBalance] API 响应:', res)
-      if ((res.code === 10000 || res.code === 200) && res.data) {
-        const data = res.data
-        set({
-          vipScore: data.vipScore ?? data.vip_score ?? 0,
-          forScore: data.forScore ?? data.for_score ?? 0,
-          todayResigned: data.todayResigned ?? data.today_resigned ?? false,
-        })
-      }
-    } catch (error) {
-      console.warn('[fetchScoreBalance] 获取积分余额失败，使用默认值:', error)
-    }
-  },
-
   logout: async () => {
     clearJikeingToken()
     clearJikeingUserId()
@@ -132,9 +107,6 @@ export const useUserStore = create<UserState & UserActions>((set, get) => ({
       loginStatus: 0,
       userInfo: null,
       vipLevel: 0,
-      vipScore: 0,
-      forScore: 0,
-      todayResigned: false,
       dialogLoginStatus: false,
     })
   },

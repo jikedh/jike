@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Film, Folder, House, Mic, SquareDashedMousePointer, Type, Zap, Settings } from 'lucide-react'
+import { Film, Folder, House, Mic, SquareDashedMousePointer, Type, Settings } from 'lucide-react'
 
 import { SidebarFooter } from './components/SidebarFooter'
 import { SidebarLogo } from './components/SidebarLogo'
@@ -22,7 +22,7 @@ export const SidebarCeBianLan = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isFirstLoginModalOpen, setIsFirstLoginModalOpen] = useState(false)
 
-  const { vipScore, forScore, vipLevel, loginStatus, fetchUserInfo, fetchScoreBalance } = useUserStore()
+  const { loginStatus, fetchUserInfo } = useUserStore()
 
   useEffect(() => {
     if (token) {
@@ -77,9 +77,6 @@ export const SidebarCeBianLan = () => {
         </SidebarNav>
 
         <SidebarFooter classNames={{ root: 'mt-auto' }}>
-          {loginStatus === 1 && vipLevel > 1 && (
-            <CreditsDisplay credits={vipScore + forScore} />
-          )}
           <UserAvatarDropdown userId={userId} />
           <SettingsButton onClick={handleSettingsClick} />
         </SidebarFooter>
@@ -98,20 +95,6 @@ export const SidebarCeBianLan = () => {
     </>
   )
 }
-
-interface CreditsDisplayProps {
-  credits: number
-}
-
-const CreditsDisplay = ({ credits }: CreditsDisplayProps) => (
-  <button className="flex flex-col items-center justify-center rounded-xl px-2 py-2 text-white/50 transition-all hover:bg-white/5 hover:text-white/90">
-    <div className="flex items-center gap-1.5">
-      <Zap className="w-4 h-4 text-amber-400" />
-      <span className="text-xs font-medium text-amber-400">{credits}</span>
-    </div>
-    <span className="text-[10px] text-white/30 mt-0.5">积分</span>
-  </button>
-)
 
 interface SettingsButtonProps {
   onClick: () => void
