@@ -68,7 +68,7 @@ export const VIDEO_MODELS = [
   { id: 19, name: 'Veo 3.1 Fast', model: 'Veo3.1-fast-official', platform: 'google', platformId: 16 },
   // 字节豆包 Seedance 系列
   { id: 11, name: 'Doubao Seedance 1.5 Pro', model: 'doubao-seedance-1-5-pro', platform: 'doubao', platformId: 2 },
-  { id: 22, name: 'Doubao Seedance 2.0', model: 'doubao-seedance-2.0', platform: 'doubao', platformId: 2 },
+  // { id: 22, name: 'Doubao Seedance 2.0', model: 'doubao-seedance-2.0', platform: 'doubao', platformId: 2 },
   // xAI Grok 系列
   { id: 17, name: 'Grok Video 3', model: 'grok-video-3', platform: 'xai', platformId: 18 },
   // Kling 系列

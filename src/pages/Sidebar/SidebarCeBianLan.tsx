@@ -9,10 +9,10 @@ import { SidebarNavItem } from './components/SidebarNavItem'
 import { SidebarRoot } from './components/SidebarRoot'
 import { UserAvatarDropdown } from '@/pages/Sidebar/components/UserAvatarDropdown'
 import { SettingsModal } from '@/pages/Canvas/components/SettingsModal'
+import { useUserStore } from '@/store/useUserStore'
 import iconImg from '@/assets/icon.png'
 import { getJikeingUserId, getJikeingToken } from '@/utils/utils'
 
-const USER_CREDITS = 12800
 const FIRST_LOGIN_KEY = 'jike_first_login_completed'
 
 export const SidebarCeBianLan = () => {
@@ -22,14 +22,17 @@ export const SidebarCeBianLan = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isFirstLoginModalOpen, setIsFirstLoginModalOpen] = useState(false)
 
+  const { vipScore, forScore, vipLevel, loginStatus, fetchUserInfo, fetchScoreBalance } = useUserStore()
+
   useEffect(() => {
     if (token) {
+      fetchUserInfo()
       const hasCompletedFirstLogin = localStorage.getItem(FIRST_LOGIN_KEY)
       if (!hasCompletedFirstLogin) {
         setIsFirstLoginModalOpen(true)
       }
     }
-  }, [token])
+  }, [token, fetchUserInfo])
 
   const handleNavClick = (path: string) => {
     navigate(path)
@@ -74,7 +77,9 @@ export const SidebarCeBianLan = () => {
         </SidebarNav>
 
         <SidebarFooter classNames={{ root: 'mt-auto' }}>
-          <CreditsDisplay credits={USER_CREDITS} />
+          {loginStatus === 1 && vipLevel > 1 && (
+            <CreditsDisplay credits={vipScore + forScore} />
+          )}
           <UserAvatarDropdown userId={userId} />
           <SettingsButton onClick={handleSettingsClick} />
         </SidebarFooter>

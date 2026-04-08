@@ -13,9 +13,54 @@ export interface LoginResponse {
   modal?: boolean
   timestamp?: number
   data?: {
-    id: string
+    id: string | number
     token: string
     expireAt: number
     status: number
+  }
+}
+
+export interface UserInfoResponse {
+  code: number
+  msg?: string
+  data?: UserInfo
+}
+
+export interface UserInfo {
+  id: string | number
+  uuid: string
+  username: string
+  nickname: string
+  avatar: string
+  mobile?: string
+  roles?: string[] | string
+  role?: string
+  baidu_bind?: boolean
+  create_time?: string
+  is_plugin_member?: boolean
+  plugin_member_expire_at?: string
+  is_material_member?: boolean
+  material_member_expire_at?: string
+  vip_level?: number
+  vipLevel?: number
+  pluginMember?: boolean
+  materialMember?: boolean
+  aiGenMember?: boolean
+  imageSplitMember?: boolean
+  pluginMemberExpireAt?: string
+  materialMemberExpireAt?: string
+  vipExpireAt?: string
+}
+
+export interface UserScoreBalanceResponse {
+  code: number
+  msg?: string
+  data?: {
+    vipScore?: number
+    forScore?: number
+    todayResigned?: boolean
+    vip_score?: number
+    for_score?: number
+    today_resigned?: boolean
   }
 }

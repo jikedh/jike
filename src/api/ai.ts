@@ -205,3 +205,19 @@ export function querySceneStatus(sceneId: any): any {
     params: { scene_id: sceneId }
   })
 }
+
+// 获取用户信息（包含会员等级）
+export function getUserInfo(): any {
+  return jikeingService({
+    url: '/v1/user/info',
+    method: 'get'
+  })
+}
+
+// 获取用户积分余额
+export function getUserScoreBalance(): any {
+  return jikeingService({
+    url: '/userscore/v1/balance-info',
+    method: 'get'
+  })
+}

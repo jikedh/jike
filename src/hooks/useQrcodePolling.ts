@@ -33,6 +33,8 @@ export const useQrcodePolling = ({ onSuccess }: UseQrcodePollingOptions) => {
 
           if (res.code === 200 && res.data?.token) {
             stopPolling()
+            console.log('[登录成功] token:', res.data.token.substring(0, 20) + '...')
+            console.log('[登录成功] userId:', res.data.id)
             setJikeingToken(res.data.token)
             if (res.data.id) {
               setJikeingUserId(res.data.id)

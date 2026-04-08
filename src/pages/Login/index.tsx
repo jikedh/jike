@@ -5,6 +5,7 @@ import HomePage from '@/pages/Home'
 import { getSceneQrcode } from '@/api/ai'
 import { getJikeingToken } from '@/utils/utils'
 import { useQrcodePolling } from '@/hooks/useQrcodePolling'
+import { useUserStore } from '@/store/useUserStore'
 import logoImg from '@/assets/logo.png'
 import iconImg from '@/assets/icon.png'
 
@@ -53,6 +54,7 @@ const LoginPage = () => {
   const handlePollingSuccess = useCallback(
     (token: string, userId?: string) => {
       setStatus('success')
+      useUserStore.getState().fetchUserInfo()
       setTimeout(() => {
         navigate('/home')
       }, REDIRECT_DELAY)
@@ -104,6 +106,7 @@ const LoginPage = () => {
   useEffect(() => {
     const token = getJikeingToken()
     if (token) {
+      useUserStore.getState().fetchUserInfo()
       navigate('/home')
       return
     }

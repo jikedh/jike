@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { X, Upload, X as CloseIcon } from 'lucide-react'
 import { createProject, updateProject, renameProject, saveCoverImageToLocal, getCoverImageUrl, type ProjectMeta } from '@/utils/projectStorage'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { useUserStore } from '@/store/useUserStore'
+import { toast } from 'sonner'
 
 interface ProjectDialogProps {
   isOpen: boolean
@@ -73,6 +75,22 @@ export default function ProjectDialog({
   }
 
   const handleConfirm = async () => {
+    if (!isEdit) {
+      const canCreate = useUserStore.getState().canCreateProject()
+      if (!canCreate) {
+        const { loginStatus, vipLevel } = useUserStore.getState()
+        if (loginStatus !== 1) {
+          toast.error('请先登录')
+          useUserStore.getState().setDialogLoginStatus(true)
+        } else {
+          toast.error('权限不够，请联系管理员开通会员', {
+            description: `当前会员等级：LV${vipLevel}，需要会员等级：LV3`
+          })
+        }
+        return
+      }
+    }
+
     setIsProcessing(true)
 
     try {

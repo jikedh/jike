@@ -83,31 +83,31 @@ export function hasKuaiziToken(): boolean {
 
 
 // ===================== Jikeing Token 管理 =====================
-let jikeing_token = ''
-let jikeing_user_id = ''
+const JIKEING_TOKEN_KEY = 'jikeing_token'
+const JIKEING_USER_ID_KEY = 'jikeing_user_id'
 
 export function getJikeingToken(): string {
-  return jikeing_token
+  return localStorage.getItem(JIKEING_TOKEN_KEY) || ''
 }
 
 export function setJikeingToken(token: string): void {
-  jikeing_token = token
+  localStorage.setItem(JIKEING_TOKEN_KEY, token)
 }
 
 export function clearJikeingToken(): void {
-  jikeing_token = ''
+  localStorage.removeItem(JIKEING_TOKEN_KEY)
 }
 
 export function getJikeingUserId(): string {
-  return jikeing_user_id
+  return localStorage.getItem(JIKEING_USER_ID_KEY) || ''
 }
 
 export function setJikeingUserId(userId: string | number): void {
-  jikeing_user_id = String(userId)
+  localStorage.setItem(JIKEING_USER_ID_KEY, String(userId))
 }
 
 export function clearJikeingUserId(): void {
-  jikeing_user_id = ''
+  localStorage.removeItem(JIKEING_USER_ID_KEY)
 }
 
 // ===================== 环境检测与基础URL配置 =====================
