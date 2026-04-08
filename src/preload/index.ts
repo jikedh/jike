@@ -26,6 +26,10 @@ export type StorageApi = {
   getDefaultPath: () => Promise<string>
 }
 
+export type DebugApi = {
+  toggleDevTools: () => Promise<{ success: boolean; error?: string }>
+}
+
 const storageApi: StorageApi = {
   selectDirectory: () => ipcRenderer.invoke('storage:selectDirectory'),
   ensureProjectDir: (basePath, projectName) => ipcRenderer.invoke('storage:ensureProjectDir', basePath, projectName),
@@ -43,10 +47,16 @@ const storageApi: StorageApi = {
   getDefaultPath: () => ipcRenderer.invoke('storage:getDefaultPath'),
 }
 
+const debugApi: DebugApi = {
+  // 触发主进程切换 DevTools
+  toggleDevTools: () => ipcRenderer.invoke('debug:toggleDevTools'),
+}
+
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('storage', storageApi)
+    contextBridge.exposeInMainWorld('debug', debugApi)
   } catch (error) {
     console.error(error)
   }
@@ -55,4 +65,6 @@ if (process.contextIsolated) {
   window.electron = electronAPI
   // @ts-ignore (define in dts)
   window.storage = storageApi
+  // @ts-ignore (define in dts)
+  window.debug = debugApi
 }

@@ -29,6 +29,9 @@ declare global {
   interface Window {
     electron: ElectronAPI
     storage: StorageApi
+    debug: {
+      toggleDevTools: () => Promise<{ success: boolean; error?: string }>
+    }
   }
 }
 

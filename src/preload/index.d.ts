@@ -25,9 +25,14 @@ export type StorageApi = {
   getDefaultPath: () => Promise<string>
 }
 
+export type DebugApi = {
+  toggleDevTools: () => Promise<{ success: boolean; error?: string }>
+}
+
 declare global {
   interface Window {
     electron: ElectronAPI
     storage: StorageApi
+    debug: DebugApi
   }
 }

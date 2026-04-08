@@ -336,6 +336,16 @@ function setupIpcHandlers(): void {
   ipcMain.handle('storage:getDefaultPath', async () => {
     return join(app.getPath('documents'), 'jike-projects')
   })
+
+  // 切换 Electron 开发者工具面板
+  ipcMain.handle('debug:toggleDevTools', async () => {
+    if (!mainWindow?.webContents) {
+      return { success: false, error: 'Main window not found' }
+    }
+
+    mainWindow.webContents.toggleDevTools()
+    return { success: true }
+  })
 }
 
 app.whenReady().then(() => {
