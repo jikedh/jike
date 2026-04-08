@@ -203,8 +203,8 @@ const imagePollingControllers = new Map<string, AbortController>()
 const pendingTaskCounts = new Map<string, number>()
 // 视频轮询频率（10 秒）
 const VIDEO_POLL_INTERVAL = 10000
-// 视频生成超时时间（10 分钟）
-const VIDEO_TIMEOUT = 10 * 60 * 1000
+// 视频生成超时时间（30 分钟）
+const VIDEO_TIMEOUT = 30 * 60 * 1000
 // 视频轮询控制器：用于中止旧轮询
 const videoPollingControllers = new Map<string, AbortController>()
 

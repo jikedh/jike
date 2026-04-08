@@ -652,6 +652,18 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     // 获取文件扩展名
                     const ext = file.name.split('.').pop()?.toLowerCase() || 'mp3'
 
+                    // 上传到 OSS
+                    const ossResult = await uploadFileToOSS(file)
+                    const ossUrl = ossResult.url
+
+                    if (!ossUrl) {
+                        updateAudioNodeData(newNodeId, {
+                            status: GenerationStatus.FAILED,
+                            error: { message: '上传到 OSS 失败' },
+                        })
+                        continue
+                    }
+
                     // 读取文件为 ArrayBuffer
                     const arrayBuffer = await file.arrayBuffer()
 
@@ -662,9 +674,6 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                         // 获取相对路径（用于存储到 canvas.json）
                         const relativePath = getLocalFilePath(projectId || '', 'audio', fileName)
 
-                        // 创建 blob URL 用于播放
-                        const blobUrl = URL.createObjectURL(file)
-
                         updateAudioNodeData(newNodeId, {
                             status: GenerationStatus.COMPLETED,
                             progress: 100,
@@ -673,7 +682,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                             localFileName: fileName,
                             result: {
                                 type: 'audio',
-                              data: [{ url: blobUrl, relativePath, localFileName: fileName }],
+                                data: [{ url: ossUrl, relativePath, localFileName: fileName }],
                             },
                         })
                     } else {

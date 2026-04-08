@@ -36,8 +36,10 @@ jobs:
         with:
           name: release-windows
           path: |
-            dist/*.exe
-            dist/*.msi
+            release/*.exe
+            release/latest.yml
+            release/*.blockmap
+          if-no-files-found: error
           retention-days: 1
 
   release:
@@ -53,16 +55,18 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: release-windows
-          path: dist
+          path: release
 
       - name: List artifacts
-        run: ls -la dist/
+        run: ls -la release/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.exe
+            release/*.exe
+            release/latest.yml
+            release/*.blockmap
           generate_release_notes: true
           draft: false
           prerelease: false
