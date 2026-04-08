@@ -70,6 +70,12 @@ const getNextNodePosition = (nodes: AllNodeType[]) => {
 type CanvasFlowState = {
   nodes: AllNodeType[]
   edges: EdgeType[]
+  // 参考资源悬浮高亮：当前高亮的边 ID 列表
+  highlightedEdgeIds: string[]
+  // 参考资源悬浮高亮：当前高亮的来源节点 ID 列表
+  highlightedSourceNodeIds: string[]
+  // 参考资源悬浮引用计数（key=source__target）
+  referenceHoverRefCounts: Record<string, number>
   // 各类型节点的自增计数器
   nodeIdCounters: { note: number; image: number; video: number; agent: number; panorama: number; audio: number; table: number }
   // 是否已完成数据恢复
@@ -99,6 +105,10 @@ type CanvasFlowState = {
   onNodesChange: (changes: NodeChange<AllNodeType>[]) => void
   onEdgesChange: (changes: EdgeChange<EdgeType>[]) => void
   onConnect: (connection: Connection) => void
+  // 设置参考资源悬浮高亮（支持多项并发高亮）
+  setReferenceHoverHighlight: (sourceNodeId: string, targetNodeId: string, isHovering: boolean) => void
+  // 清空参考资源悬浮高亮
+  clearReferenceHoverHighlights: () => void
 
   // === 持久化操作 ===
   /** 切换项目（加载项目数据） */
@@ -364,6 +374,57 @@ const stopVideoPollingInternal = (nodeId: string) => {
 }
 
 /**
+ * 构建参考资源悬浮 key。
+ */
+const buildReferenceHoverKey = (sourceNodeId: string, targetNodeId: string) => {
+  return `${sourceNodeId}__${targetNodeId}`
+}
+
+/**
+ * 解析参考资源悬浮 key。
+ */
+const parseReferenceHoverKey = (key: string) => {
+  const [sourceNodeId, targetNodeId] = key.split('__')
+  return { sourceNodeId, targetNodeId }
+}
+
+/**
+ * 根据引用计数和当前边列表，重建高亮边与高亮来源节点。
+ * 会自动清理已失效的引用关系（例如边已删除）。
+ */
+const buildReferenceHighlightState = (referenceHoverRefCounts: Record<string, number>, edges: EdgeType[]) => {
+  const nextRefCounts: Record<string, number> = {}
+  const highlightedEdgeIdSet = new Set<string>()
+  const highlightedSourceNodeIdSet = new Set<string>()
+
+  Object.entries(referenceHoverRefCounts).forEach(([key, count]) => {
+    if (!count || count <= 0) {
+      return
+    }
+
+    const { sourceNodeId, targetNodeId } = parseReferenceHoverKey(key)
+    if (!sourceNodeId || !targetNodeId) {
+      return
+    }
+
+    const matchedEdges = edges.filter((edge) => edge.source === sourceNodeId && edge.target === targetNodeId)
+    if (matchedEdges.length === 0) {
+      return
+    }
+
+    nextRefCounts[key] = count
+    highlightedSourceNodeIdSet.add(sourceNodeId)
+    matchedEdges.forEach((edge) => highlightedEdgeIdSet.add(edge.id))
+  })
+
+  return {
+    referenceHoverRefCounts: nextRefCounts,
+    highlightedEdgeIds: Array.from(highlightedEdgeIdSet),
+    highlightedSourceNodeIds: Array.from(highlightedSourceNodeIdSet),
+  }
+}
+
+/**
  * 兼容多种视频响应结构，提取标准化结果
  */
 const extractVideoResult = (response: any) => {
@@ -516,7 +577,7 @@ const pollImageGeneration = async (
             processedResultData.forEach((item: any) => {
               if (item.url && item.url.includes('aliyuncs.com')) {
                 // 如果原始 URL 存在，缓存映射关系
-                const originalUrl = response.result?.data?.find((orig: any) => 
+                const originalUrl = response.result?.data?.find((orig: any) =>
                   orig.localFileName === item.localFileName || orig.relativePath === item.relativePath
                 )?.url
                 if (originalUrl) {
@@ -667,7 +728,7 @@ const pollMjImageGeneration = async (
         const projectId = getState().projectId
         // imageUrls 可能是字符串数组或对象数组 { url: string }[]
         const rawImageUrls = response.imageUrls ?? []
-        const newImageUrls: string[] = rawImageUrls.map((item: any) => 
+        const newImageUrls: string[] = rawImageUrls.map((item: any) =>
           typeof item === 'string' ? item : item?.url
         ).filter(Boolean).map((url: string) => url.trim().replace(/^`|`$/g, ''))
 
@@ -1200,6 +1261,9 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
   return {
   nodes: [],
   edges: [],
+  highlightedEdgeIds: [],
+  highlightedSourceNodeIds: [],
+  referenceHoverRefCounts: {},
   nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1, table: 1 },
   hydrated: false,
   projectId: null,
@@ -1262,6 +1326,9 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
         projectId,
         nodes: [],
         edges: [],
+        highlightedEdgeIds: [],
+        highlightedSourceNodeIds: [],
+        referenceHoverRefCounts: {},
         nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1, table: 1 },
         hydrated: true,
         history: [],
@@ -1399,6 +1466,9 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
       projectId,
       nodes: processedNodes,
       edges: data.edges,
+      highlightedEdgeIds: [],
+      highlightedSourceNodeIds: [],
+      referenceHoverRefCounts: {},
       nodeIdCounters: data.nodeIdCounters,
       hydrated: true,
       history: [],
@@ -1484,6 +1554,9 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
     set({
       nodes: [],
       edges: [],
+      highlightedEdgeIds: [],
+      highlightedSourceNodeIds: [],
+      referenceHoverRefCounts: {},
       nodeIdCounters: { note: 1, image: 1, video: 1, agent: 1, panorama: 1, audio: 1, table: 1 },
       hydrated: false,
       projectId: null,
@@ -1853,7 +1926,13 @@ duplicateNode: (nodeId: string) => {
 
         return syncImageUrlsByEdge(state.nodes, edgeToDelete, 'remove')
       })(),
-      edges: state.edges.filter((edge) => edge.id !== edgeId),
+      ...(() => {
+        const nextEdges = state.edges.filter((edge) => edge.id !== edgeId)
+        return {
+          edges: nextEdges,
+          ...buildReferenceHighlightState(state.referenceHoverRefCounts, nextEdges),
+        }
+      })(),
     }))
 
     // 保存历史记录
@@ -1889,7 +1968,13 @@ duplicateNode: (nodeId: string) => {
 
       return {
         nodes: nextNodes.filter((node) => node.id !== nodeId),
-        edges: state.edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId),
+        ...(() => {
+          const nextEdges = state.edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
+          return {
+            edges: nextEdges,
+            ...buildReferenceHighlightState(state.referenceHoverRefCounts, nextEdges),
+          }
+        })(),
       }
     })
 
@@ -1907,7 +1992,7 @@ duplicateNode: (nodeId: string) => {
    */
   updateImageNodeData: (nodeId, patch) => {
     set((state) => {
-      return { 
+      return {
         nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
           ...data,
           ...patch,
@@ -2443,12 +2528,16 @@ duplicateNode: (nodeId: string) => {
    */
   onEdgesChange: (changes) => {
     set((state) => {
+      const nextEdges = applyEdgeChanges(changes, state.edges)
       const removedEdgeIds = changes
         .filter((change) => change.type === 'remove')
         .map((change) => change.id)
 
       if (removedEdgeIds.length === 0) {
-        return { edges: applyEdgeChanges(changes, state.edges) }
+        return {
+          edges: nextEdges,
+          ...buildReferenceHighlightState(state.referenceHoverRefCounts, nextEdges),
+        }
       }
 
       const removedEdges = state.edges.filter((edge) => removedEdgeIds.includes(edge.id))
@@ -2459,8 +2548,9 @@ duplicateNode: (nodeId: string) => {
       })
 
       return {
-        edges: applyEdgeChanges(changes, state.edges),
+        edges: nextEdges,
         nodes: nextNodes,
+        ...buildReferenceHighlightState(state.referenceHoverRefCounts, nextEdges),
       }
     })
   },
@@ -2501,10 +2591,50 @@ duplicateNode: (nodeId: string) => {
       return {
         nodes: createdEdge ? syncImageUrlsByEdge(state.nodes, createdEdge as EdgeType, 'add') : state.nodes,
         edges: nextEdges,
+        ...buildReferenceHighlightState(state.referenceHoverRefCounts, nextEdges),
       }
     })
 
     setTimeout(() => get().saveToHistory(), 0)
+  },
+
+  /**
+   * 设置参考资源悬浮高亮（支持多项并发高亮）。
+   */
+  setReferenceHoverHighlight: (sourceNodeId, targetNodeId, isHovering) => {
+    if (!sourceNodeId || !targetNodeId) {
+      return
+    }
+
+    set((state) => {
+      const key = buildReferenceHoverKey(sourceNodeId, targetNodeId)
+      const currentCount = state.referenceHoverRefCounts[key] ?? 0
+      const nextCount = isHovering ? currentCount + 1 : Math.max(0, currentCount - 1)
+      const nextRefCounts = {
+        ...state.referenceHoverRefCounts,
+      }
+
+      if (nextCount <= 0) {
+        delete nextRefCounts[key]
+      } else {
+        nextRefCounts[key] = nextCount
+      }
+
+      return {
+        ...buildReferenceHighlightState(nextRefCounts, state.edges),
+      }
+    })
+  },
+
+  /**
+   * 清空参考资源悬浮高亮。
+   */
+  clearReferenceHoverHighlights: () => {
+    set({
+      highlightedEdgeIds: [],
+      highlightedSourceNodeIds: [],
+      referenceHoverRefCounts: {},
+    })
   },
 
   // ==================== 全景图查看器 ====================

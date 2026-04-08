@@ -37,6 +37,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   const startVideoGeneration = useCanvasFlowStore((state) => state.startVideoGeneration)
   const updateVideoNodeData = useCanvasFlowStore((state) => state.updateVideoNodeData)
   const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge)
+  const setReferenceHoverHighlight = useCanvasFlowStore((state) => state.setReferenceHoverHighlight)
 
   const currentNode = useMemo(() => {
     return nodes.find((node) => node.id === nodeId)
@@ -107,6 +108,17 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     const status = currentNode.data.status
     return status === GenerationStatus.IN_PROGRESS || status === GenerationStatus.QUEUED
   }, [currentNode])
+
+  /**
+   * 参考资源悬浮时，触发来源节点与连接边高亮。
+   */
+  const handleReferenceHoverChange = useCallback((sourceNodeId: string, isHovering: boolean) => {
+    if (!sourceNodeId) {
+      return
+    }
+
+    setReferenceHoverHighlight(sourceNodeId, nodeId, isHovering)
+  }, [nodeId, setReferenceHoverHighlight])
 
   /**
    * 编辑器草稿变化回调。
@@ -211,6 +223,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
           model={model}
           onDisconnectNode={handleDisconnectNode}
           onRemoveReferenceImage={handleRemoveReferenceImage}
+          onReferenceHoverChange={handleReferenceHoverChange}
         />
       </div>
 

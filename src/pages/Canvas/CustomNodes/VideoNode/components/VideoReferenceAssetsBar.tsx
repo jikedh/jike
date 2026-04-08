@@ -48,14 +48,22 @@ const VideoThumbnailButton = ({ videoUrl }: { videoUrl: string }) => {
 const ReferenceItemWrapper = ({
     children,
     onDisconnect,
+    onMouseEnter,
+    onMouseLeave,
     className,
 }: {
     children: ReactNode
     onDisconnect?: () => void
+        onMouseEnter?: () => void
+        onMouseLeave?: () => void
     className?: string
 }) => {
     return (
-        <div className={cn(PROMPT_PANEL_STYLES.referenceImageButton, 'group relative', className)}>
+        <div
+            className={cn(PROMPT_PANEL_STYLES.referenceImageButton, 'group relative', className)}
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
+        >
             {children}
             {onDisconnect && (
                 <button
@@ -89,7 +97,8 @@ export const VideoReferenceAssetsBar = ({
     parentVideoNodes,
     model,
     onDisconnectNode,
-  onRemoveReferenceImage,
+    onRemoveReferenceImage,
+    onReferenceHoverChange,
 }: {
     isUploading: boolean
     fileInputRef: RefObject<HTMLInputElement | null>
@@ -103,6 +112,7 @@ export const VideoReferenceAssetsBar = ({
     model: string
     onDisconnectNode: (sourceNodeId: string) => void
     onRemoveReferenceImage: (url: string) => void
+        onReferenceHoverChange: (sourceNodeId: string, isHovering: boolean) => void
 }) => {
     return (
         <div className="nodrag nopan nowheel mt-2.5 flex gap-2 overflow-x-auto pb-1">
@@ -142,7 +152,21 @@ export const VideoReferenceAssetsBar = ({
                 return (
                     <ReferenceItemWrapper
                         key={`${url}-${index}`}
-                    onDisconnect={handleRemove}
+                        onDisconnect={handleRemove}
+                        onMouseEnter={() => {
+                            if (!parentNodeId) {
+                                return
+                            }
+
+                            onReferenceHoverChange(parentNodeId, true)
+                        }}
+                        onMouseLeave={() => {
+                            if (!parentNodeId) {
+                                return
+                            }
+
+                            onReferenceHoverChange(parentNodeId, false)
+                        }}
                     >
                         <img
                             src={url}
@@ -159,6 +183,8 @@ export const VideoReferenceAssetsBar = ({
                     key={`audio-${item.id}-${index}`}
                     className="border-[#B43FEB]/40 bg-[#B43FEB]/20"
                     onDisconnect={() => onDisconnectNode(item.id)}
+                    onMouseEnter={() => onReferenceHoverChange(item.id, true)}
+                    onMouseLeave={() => onReferenceHoverChange(item.id, false)}
                 >
                     <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] text-[#B43FEB]">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -176,6 +202,8 @@ export const VideoReferenceAssetsBar = ({
                     key={`video-${item.id}-${index}`}
                     className="overflow-hidden"
                     onDisconnect={() => onDisconnectNode(item.id)}
+                    onMouseEnter={() => onReferenceHoverChange(item.id, true)}
+                    onMouseLeave={() => onReferenceHoverChange(item.id, false)}
                 >
                     <VideoThumbnailButton videoUrl={item.url} />
                 </ReferenceItemWrapper>

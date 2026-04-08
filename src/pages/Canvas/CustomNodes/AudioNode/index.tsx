@@ -659,6 +659,7 @@ export const AudioNode = memo(({
   const addNode = useCanvasFlowStore((state) => state.addNode)
   const updateAudioNodeData = useCanvasFlowStore((state) => state.updateAudioNodeData)
   const onConnect = useCanvasFlowStore((state) => state.onConnect)
+  const highlightedSourceNodeIds = useCanvasFlowStore((state) => state.highlightedSourceNodeIds)
   const { setNodes: setReactFlowNodes } = useReactFlow()
   const { success, error: showError } = useMessage()
 
@@ -705,6 +706,10 @@ export const AudioNode = memo(({
     selected && !isDragging && selectedNodesCount <= 1,
     [selected, isDragging, selectedNodesCount]
   )
+
+  const isSourceHighlighted = useMemo(() => {
+    return highlightedSourceNodeIds.includes(id)
+  }, [highlightedSourceNodeIds, id])
 
   const handleDuplicate = useCallback(() => {
     duplicateNode(id)
@@ -849,6 +854,8 @@ export const AudioNode = memo(({
             isTrimming && 'ring-2 ring-[#B43FEB]',
             selected
               ? 'border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30'
+              : isSourceHighlighted
+                ? 'border-[#B43FEB]/65 shadow-[0_0_18px_rgba(180,63,235,0.28),0_0_36px_rgba(180,63,235,0.12)] ring-1 ring-[#B43FEB]/20'
               : 'border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]'
           )}
           style={{ pointerEvents: 'auto' }}

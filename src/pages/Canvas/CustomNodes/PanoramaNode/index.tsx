@@ -611,7 +611,12 @@ export const PanoramaNode = memo(({
                             )}
                         </div>
 
-                        <div className="relative flex-1 overflow-hidden rounded-b-xl bg-black/30 nodrag nowheel">
+                        <div
+                            className={cn(
+                                "relative flex-1 overflow-hidden rounded-b-xl bg-black/30 nowheel",
+                                data.image_url && "nodrag"
+                            )}
+                        >
                             {data.image_url ? (
                                 <div ref={canvasRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
                             ) : (

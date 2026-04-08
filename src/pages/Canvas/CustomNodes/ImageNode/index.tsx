@@ -43,6 +43,7 @@ export const ImageNode = memo(({
     const separateToNodes = useCanvasFlowStore((state) => state.separateToNodes)
     const updateImageNodeData = useCanvasFlowStore((state) => state.updateImageNodeData)
     const onConnect = useCanvasFlowStore((state) => state.onConnect)
+    const highlightedSourceNodeIds = useCanvasFlowStore((state) => state.highlightedSourceNodeIds)
 
     // 全景图查看器状态
     const panoramaViewer = useCanvasFlowStore((state) => state.panoramaViewer)
@@ -70,6 +71,10 @@ export const ImageNode = memo(({
         selected && !isDragging && selectedNodesCount <= 1,
         [selected, isDragging, selectedNodesCount]
     )
+
+    const isSourceHighlighted = useMemo(() => {
+        return highlightedSourceNodeIds.includes(id)
+    }, [highlightedSourceNodeIds, id])
 
     // 缓存传递给 ImageToolbar 的回调函数，避免 zoom 变化时触发子组件重新渲染
     const handleDuplicate = useCallback(() => {
@@ -230,6 +235,8 @@ export const ImageNode = memo(({
                             'group/card relative flex w-87.5 h-62.5 flex-col rounded-xl border bg-linear-to-br from-[#141418] to-[#0d0d10] transition-all duration-300 ease-out',
                             selected
                                 ? 'border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30'
+                                : isSourceHighlighted
+                                    ? 'border-[#B43FEB]/65 shadow-[0_0_18px_rgba(180,63,235,0.28),0_0_36px_rgba(180,63,235,0.12)] ring-1 ring-[#B43FEB]/20'
                                 : 'border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]'
                         )}
                     >

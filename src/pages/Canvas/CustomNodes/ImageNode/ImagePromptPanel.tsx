@@ -34,14 +34,22 @@ import { PROMPT_PANEL_STYLES } from '../shared/promptPanelStyles'
 const ReferenceItemWrapper = ({
     children,
     onDisconnect,
+    onMouseEnter,
+    onMouseLeave,
     className
 }: {
     children: React.ReactNode
     onDisconnect?: () => void
+        onMouseEnter?: () => void
+        onMouseLeave?: () => void
     className?: string
 }) => {
     return (
-        <div className={cn(PROMPT_PANEL_STYLES.referenceImageButton, 'group relative', className)}>
+        <div
+            className={cn(PROMPT_PANEL_STYLES.referenceImageButton, 'group relative', className)}
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
+        >
             {children}
             {onDisconnect && (
                 <button
@@ -85,6 +93,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     const startImageGeneration = useCanvasFlowStore((state) => state.startImageGeneration)
     const updateImageNodeData = useCanvasFlowStore((state) => state.updateImageNodeData)
     const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge)
+    const setReferenceHoverHighlight = useCanvasFlowStore((state) => state.setReferenceHoverHighlight)
 
     const handleDisconnectNode = useCallback((sourceNodeId: string) => {
         const edgeToDelete = edges.find(
@@ -743,6 +752,20 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                             <ReferenceItemWrapper
                                 key={`${url}-${index}`}
                                 onDisconnect={parentNode ? () => handleDisconnectNode(parentNode.id) : undefined}
+                                onMouseEnter={() => {
+                                    if (!parentNode) {
+                                        return
+                                    }
+
+                                    setReferenceHoverHighlight(parentNode.id, nodeId, true)
+                                }}
+                                onMouseLeave={() => {
+                                    if (!parentNode) {
+                                        return
+                                    }
+
+                                    setReferenceHoverHighlight(parentNode.id, nodeId, false)
+                                }}
                             >
                                 <img
                                     src={url}

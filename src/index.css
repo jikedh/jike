@@ -135,6 +135,15 @@
   }
 }
 
+@keyframes reference-edge-dash {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
 .video-node-slash-pill {
   display: inline-flex;
   align-items: center;
