@@ -7,10 +7,12 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { ButtonHandle } from '@/components/button-handle'
 import { NodeContextMenu } from '@/pages/Canvas/components/NodeContextMenu'
 import { useNodeScale } from '@/hooks/useNodeScale'
+import { useMessage } from '@/hooks/useMessage'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { PanoramaNodeType } from '@/types/flow'
 import { GenerationStatus } from '@/constants/enum'
 import { cn } from '@/lib/utils'
+import { uploadPanoramaScreenshot } from '@/lib/panorama'
 
 export const PanoramaNode = memo(({
     id,
@@ -24,6 +26,7 @@ export const PanoramaNode = memo(({
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode)
     const addNode = useCanvasFlowStore((state) => state.addNode)
     const onConnect = useCanvasFlowStore((state) => state.onConnect)
+  const message = useMessage()
 
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
@@ -199,27 +202,30 @@ export const PanoramaNode = memo(({
         camera.quaternion.copy(origQuat)
         camera.updateProjectionMatrix()
 
-        const currentNode = useCanvasFlowStore.getState().nodes.find(n => n.id === id)
-        if (!currentNode) return
+      try {
+        const uploadedUrls = await Promise.all(
+          imageUrls.map((item) => uploadPanoramaScreenshot({ dataUrl: item, type }))
+        )
 
-        for (const url of imageUrls) {
+          const currentNode = useCanvasFlowStore.getState().nodes.find(n => n.id === id)
+          if (!currentNode) return
+
+          for (const url of uploadedUrls) {
             const newImageNodeId = addNode('image', {
-                x: currentNode.position.x + 250,
-                y: currentNode.position.y,
+              x: currentNode.position.x + 250,
+              y: currentNode.position.y,
             })
 
-            setTimeout(() => {
-                const { nodes, updateImageNodeData } = useCanvasFlowStore.getState()
-                const newNode = nodes.find(n => n.id === newImageNodeId)
-                if (newNode) {
-                    updateImageNodeData(newImageNodeId, {
-                        result: {
-                            type: 'image',
-                            data: [{ url }],
-                        },
-                        status: GenerationStatus.COMPLETED,
-                    })
-                }
+              const { updateImageNodeData } = useCanvasFlowStore.getState()
+              updateImageNodeData(newImageNodeId, {
+                  image_urls: [url],
+                  result: {
+                    type: 'image',
+                    data: [{ url }],
+                  },
+                  status: GenerationStatus.COMPLETED,
+                  progress: 100,
+                })
 
                 onConnect({
                     source: id,
@@ -227,9 +233,12 @@ export const PanoramaNode = memo(({
                     target: newImageNodeId,
                     targetHandle: 'input',
                 })
-            }, 100)
-        }
-    }, [id, data.image_url, addNode, onConnect])
+            }
+      } catch (error: any) {
+        console.error('PanoramaNode: Screenshot upload failed:', error)
+        message.error('截图上传失败，请重试')
+      }
+    }, [id, data.image_url, addNode, onConnect, message])
 
     const handleRecenter = useCallback(() => {
         if (cameraRef.current && controlsRef.current) {
@@ -288,20 +297,20 @@ export const PanoramaNode = memo(({
         controlsRef.current = controls
 
         console.log('PanoramaNode: Loading texture from', data.image_url)
-        
+
         // 使用 img 元素预加载图片，然后转换为 Three.js 纹理
         const loadImageWithImg = () => {
             const img = new Image()
             img.crossOrigin = 'anonymous'
-            
+
             img.onload = () => {
                 console.log('PanoramaNode: Image loaded successfully')
-                
+
                 try {
                     const texture = new THREE.Texture(img)
                     texture.colorSpace = THREE.SRGBColorSpace
                     texture.needsUpdate = true
-                    
+
                     const geometry = new THREE.SphereGeometry(500, 60, 40)
                     geometry.scale(-1, 1, 1)
                     const material = new THREE.MeshBasicMaterial({ map: texture })
@@ -318,17 +327,17 @@ export const PanoramaNode = memo(({
                     console.error('PanoramaNode: Failed to create texture:', error)
                 }
             }
-            
+
             img.onerror = (error) => {
                 console.error('PanoramaNode: Image load error:', error)
                 console.error('PanoramaNode: Failed to load image from:', data.image_url)
-                
+
                 // 尝试不带 CORS 加载
                 console.log('PanoramaNode: Trying without CORS...')
                 const imgNoCors = new Image()
                 imgNoCors.onload = () => {
                     console.log('PanoramaNode: Image loaded without CORS')
-                    
+
                     try {
                         // 创建 canvas 来转换图片
                         const canvas = document.createElement('canvas')
@@ -337,10 +346,10 @@ export const PanoramaNode = memo(({
                         const ctx = canvas.getContext('2d')
                         if (ctx) {
                             ctx.drawImage(imgNoCors, 0, 0)
-                            
+
                             const texture = new THREE.CanvasTexture(canvas)
                             texture.colorSpace = THREE.SRGBColorSpace
-                            
+
                             const geometry = new THREE.SphereGeometry(500, 60, 40)
                             geometry.scale(-1, 1, 1)
                             const material = new THREE.MeshBasicMaterial({ map: texture })
@@ -363,10 +372,10 @@ export const PanoramaNode = memo(({
                 }
                 imgNoCors.src = data.image_url!
             }
-            
+
             img.src = data.image_url!
         }
-        
+
         loadImageWithImg()
 
         return () => {
@@ -421,13 +430,13 @@ export const PanoramaNode = memo(({
 
         const img = new Image()
         img.crossOrigin = 'anonymous'
-        
+
         img.onload = () => {
             try {
                 const texture = new THREE.Texture(img)
                 texture.colorSpace = THREE.SRGBColorSpace
                 texture.needsUpdate = true
-                
+
                 const geometry = new THREE.SphereGeometry(500, 60, 40)
                 geometry.scale(-1, 1, 1)
                 const material = new THREE.MeshBasicMaterial({ map: texture })
@@ -444,7 +453,7 @@ export const PanoramaNode = memo(({
                 console.error('PanoramaNode fullscreen: Failed to create texture:', error)
             }
         }
-        
+
         img.onerror = () => {
             const imgNoCors = new Image()
             imgNoCors.onload = () => {
@@ -457,7 +466,7 @@ export const PanoramaNode = memo(({
                         ctx.drawImage(imgNoCors, 0, 0)
                         const texture = new THREE.CanvasTexture(canvas)
                         texture.colorSpace = THREE.SRGBColorSpace
-                        
+
                         const geometry = new THREE.SphereGeometry(500, 60, 40)
                         geometry.scale(-1, 1, 1)
                         const material = new THREE.MeshBasicMaterial({ map: texture })
@@ -477,7 +486,7 @@ export const PanoramaNode = memo(({
             }
             imgNoCors.src = data.image_url!
         }
-        
+
         img.src = data.image_url
 
         const handleResize = () => {

@@ -1,10 +1,17 @@
 import * as THREE from "three"
+import { uploadFileToOSS } from "@/utils/oss"
+import { compressImage, MAX_IMAGE_SIZE_MB } from "@/utils/imageCompress"
 
 export interface ScreenshotOptions {
     type: "single" | "4grid" | "12grid"
     renderer: THREE.WebGLRenderer
     camera: THREE.PerspectiveCamera
     scene: THREE.Scene
+}
+
+export interface UploadPanoramaScreenshotOptions {
+    dataUrl: string
+    type: "single" | "4grid" | "12grid"
 }
 
 /**
@@ -166,6 +173,34 @@ export async function takeScreenshot(options: ScreenshotOptions): Promise<string
     // 返回最终合成的截图数据，交给调用方决定如何使用
     const finalDataURL = canvasObj.toDataURL("image/jpeg", 0.95)
     return finalDataURL
+}
+
+/**
+ * 将全景截图 dataURL 上传到 OSS，并返回可直接回显的远程地址。
+ */
+export const uploadPanoramaScreenshot = async (options: UploadPanoramaScreenshotOptions) => {
+    const { dataUrl, type } = options
+
+    const response = await fetch(dataUrl)
+    const blob = await response.blob()
+
+    const fileName = `panorama-${type}-${Date.now()}.jpg`
+    const file = new File([blob], fileName, {
+        type: blob.type || "image/jpeg",
+    })
+
+    let fileToUpload = file
+    if (file.size > MAX_IMAGE_SIZE_MB) {
+        console.log(`[上传图片] 文件大小 ${(file.size / 1024 / 1024).toFixed(2)}MB 超过 10MB，开始压缩...`)
+        fileToUpload = await compressImage(file)
+    }
+
+    const uploadResult = await uploadFileToOSS(fileToUpload)
+    if (!uploadResult.url) {
+        throw new Error("截图上传失败，未返回图片地址")
+    }
+
+    return uploadResult.url
 }
 
 /**
