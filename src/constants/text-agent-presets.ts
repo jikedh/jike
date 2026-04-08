@@ -31,8 +31,8 @@ export const TEXT_AGENT_PRESETS: Record<TextAgentPresetId, {
   },
   'novel-character-design': {
     id: 'novel-character-design',
-    label: '小说角色设计',
-    description: '从小说中提取并设计角色档案（暂未实现表格功能）',
+    label: '角色设计',
+    description: '从小说或剧本中提取并设计角色原画设定表',
     model: 'gemini-3.1-pro',
     systemPrompt: SYSTEM_PROMPTS['novel-character-design'],
   },

@@ -192,14 +192,18 @@ type CanvasFlowState = {
 
 // ==================== 图片生成轮询支持 ====================
 
-// 轮询频率（2 秒）
+// 轮询频率（10 秒）
 const IMAGE_POLL_INTERVAL = 10000
+// 图片生成超时时间（5 分钟）
+const IMAGE_TIMEOUT = 5 * 60 * 1000
 // 轮询控制器：用于中止轮询（taskId -> AbortController）
 const imagePollingControllers = new Map<string, AbortController>()
 // 记录每个节点待完成的 task 数量（用于多图生成场景）
 const pendingTaskCounts = new Map<string, number>()
-// 视频轮询频率（15 秒）
+// 视频轮询频率（10 秒）
 const VIDEO_POLL_INTERVAL = 10000
+// 视频生成超时时间（10 分钟）
+const VIDEO_TIMEOUT = 10 * 60 * 1000
 // 视频轮询控制器：用于中止旧轮询
 const videoPollingControllers = new Map<string, AbortController>()
 
@@ -396,10 +400,37 @@ const pollImageGeneration = async (
   getState: () => CanvasFlowState,
   totalTaskCount: number // 用于判断是否所有任务都已完成
 ) => {
+  const startTime = Date.now()
   try {
     while (true) {
       await wait(IMAGE_POLL_INTERVAL, signal)
       if (signal.aborted) {
+        return
+      }
+
+      // 检查是否超时
+      if (Date.now() - startTime > IMAGE_TIMEOUT) {
+        console.error('[pollImageGeneration] 图片生成超时')
+        stopImagePollingInternal(taskId)
+        const currentData = getState().nodes.find((n) => n.id === nodeId)?.data as ImageGenerationNode
+        if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
+          pendingTaskCounts.delete(nodeId)
+        }
+        setState((state) => ({
+          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+            const completedCount = (data.completedCount ?? 0) + 1
+            const allCompleted = completedCount >= totalTaskCount
+            return {
+              ...data,
+              status: allCompleted ? GenerationStatus.FAILED : GenerationStatus.IN_PROGRESS,
+              error: {
+                code: 'TIMEOUT',
+                message: '图片生成超时，请稍后再试',
+              },
+              completedCount,
+            }
+          }),
+        }))
         return
       }
 
@@ -548,10 +579,37 @@ const pollMjImageGeneration = async (
   getState: () => CanvasFlowState,
   totalTaskCount: number
 ) => {
+  const startTime = Date.now()
   try {
     while (true) {
       await wait(IMAGE_POLL_INTERVAL, signal)
       if (signal.aborted) {
+        return
+      }
+
+      // 检查是否超时
+      if (Date.now() - startTime > IMAGE_TIMEOUT) {
+        console.error('[pollMjImageGeneration] 图片生成超时')
+        stopImagePollingInternal(taskId)
+        const currentData = getState().nodes.find((n) => n.id === nodeId)?.data as ImageGenerationNode
+        if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
+          pendingTaskCounts.delete(nodeId)
+        }
+        setState((state) => ({
+          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+            const completedCount = (data.completedCount ?? 0) + 1
+            const allCompleted = completedCount >= totalTaskCount
+            return {
+              ...data,
+              status: allCompleted ? GenerationStatus.FAILED : GenerationStatus.IN_PROGRESS,
+              error: {
+                code: 'TIMEOUT',
+                message: '图片生成超时，请稍后再试',
+              },
+              completedCount,
+            }
+          }),
+        }))
         return
       }
 
@@ -573,7 +631,7 @@ const pollMjImageGeneration = async (
         const rawImageUrls = response.imageUrls ?? []
         const newImageUrls: string[] = rawImageUrls.map((item: any) => 
           typeof item === 'string' ? item : item?.url
-        ).filter(Boolean)
+        ).filter(Boolean).map((url: string) => url.trim().replace(/^`|`$/g, ''))
 
         // 处理每张生成的图片
         const processedResultData = await Promise.all(newImageUrls.map(async (url: string) => {
@@ -706,10 +764,28 @@ const pollVideoGeneration = async (
   setState: (updater: (state: CanvasFlowState) => Partial<CanvasFlowState>) => void,
   getState: () => CanvasFlowState
 ) => {
+  const startTime = Date.now()
   try {
     while (true) {
       await wait(VIDEO_POLL_INTERVAL, signal)
       if (signal.aborted) {
+        return
+      }
+
+      // 检查是否超时
+      if (Date.now() - startTime > VIDEO_TIMEOUT) {
+        console.error('[pollVideoGeneration] 视频生成超时')
+        stopVideoPollingInternal(nodeId)
+        setState((state) => ({
+          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+            ...data,
+            status: GenerationStatus.FAILED,
+            error: {
+              code: 'TIMEOUT',
+              message: '视频生成超时，请稍后再试',
+            },
+          })),
+        }))
         return
       }
 
@@ -1633,18 +1709,55 @@ duplicateNode: (nodeId: string) => {
     dragging: false,
   }
 
-  // 仅 noteNode 有宽高字段和 isEditing 特殊属性，解构合并
-  const duplicatedNode = currentNode.type === 'noteNode'
-    ? {
-        ...baseNode,
-        width: currentNode.width,
-        height: currentNode.height,
-        data: {
-          ...baseNode.data,
-          isEditing: false, // note默认复制后不可编辑
+  let duplicatedNode: any
+
+  if (currentNode.type === 'noteNode') {
+    // noteNode 有宽高字段和 isEditing 特殊属性
+    duplicatedNode = {
+      ...baseNode,
+      width: currentNode.width,
+      height: currentNode.height,
+      data: {
+        ...baseNode.data,
+        isEditing: false, // note默认复制后不可编辑
+      },
+    }
+  } else if (currentNode.type === 'imageNode') {
+    // imageNode 复制时重置生成状态和参考图
+    duplicatedNode = {
+      ...baseNode,
+      data: {
+        ...baseNode.data,
+        status: 'idle',
+        result: undefined,
+        progress: 0,
+        image_urls: [], // 清空参考图（复制后没有连线）
+        midjourneyAdvanced: {
+          ...baseNode.data.midjourneyAdvanced,
+          referenceUrls: [],
+          styleUrls: [],
         },
-      }
-    : baseNode
+      },
+    }
+  } else if (currentNode.type === 'videoNode') {
+    // videoNode 复制时重置生成状态和参考图/视频/音频
+    duplicatedNode = {
+      ...baseNode,
+      data: {
+        ...baseNode.data,
+        status: 'idle',
+        result: undefined,
+        progress: 0,
+        task_id: undefined,
+        error: undefined,
+        image_urls: [], // 清空参考图
+        video_urls: [], // 清空参考视频
+        audio_urls: [], // 清空参考音频
+      },
+    }
+  } else {
+    duplicatedNode = baseNode
+  }
 
   set((state) => ({
     // 保持现有节点状态不变，添加新节点（新节点已有 selected: true）
@@ -2390,15 +2503,58 @@ duplicateNode: (nodeId: string) => {
     // 生成新的节点 ID
     const newNodeId = getNextNodeId(clipboard.type as NodeType)
 
-    // 创建新节点
-    const newNode = {
-      ...clipboard,
-      id: newNodeId,
-      position: newPosition,
-      selected: false,
-      data: {
-        ...clipboard.data,
-      },
+    // 创建新节点，根据节点类型重置特定字段
+    let newNode: any
+
+    if (clipboard.type === 'imageNode') {
+      // imageNode 粘贴时重置生成状态和参考图
+      newNode = {
+        ...clipboard,
+        id: newNodeId,
+        position: newPosition,
+        selected: false,
+        data: {
+          ...clipboard.data,
+          status: 'idle',
+          result: undefined,
+          progress: 0,
+          image_urls: [],
+          midjourneyAdvanced: {
+            ...clipboard.data.midjourneyAdvanced,
+            referenceUrls: [],
+            styleUrls: [],
+          },
+        },
+      }
+    } else if (clipboard.type === 'videoNode') {
+      // videoNode 粘贴时重置生成状态和参考图/视频/音频
+      newNode = {
+        ...clipboard,
+        id: newNodeId,
+        position: newPosition,
+        selected: false,
+        data: {
+          ...clipboard.data,
+          status: 'idle',
+          result: undefined,
+          progress: 0,
+          task_id: undefined,
+          error: undefined,
+          image_urls: [],
+          video_urls: [],
+          audio_urls: [],
+        },
+      }
+    } else {
+      newNode = {
+        ...clipboard,
+        id: newNodeId,
+        position: newPosition,
+        selected: false,
+        data: {
+          ...clipboard.data,
+        },
+      }
     }
 
     // 添加新节点

@@ -78,7 +78,7 @@ const HomePage = () => {
             工业级 AI 影视引擎
           </div>
           <h1 className="mb-10 text-5xl font-normal tracking-widest text-white drop-shadow-2xl md:text-6xl" style={{ fontFamily: 'var(--font-legendary)' }}>
-            即刻点亮星漫，让万象入镜
+            即刻点亮星漫，灵感破界而生
           </h1>
           <button
             onClick={() => setIsProjectDialogOpen(true)}
