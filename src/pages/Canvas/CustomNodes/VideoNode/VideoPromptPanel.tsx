@@ -55,7 +55,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     return currentVideoData?.image_urls ?? []
   }, [currentVideoData?.image_urls])
 
-  const model = currentVideoData?.model ?? (VIDEO_MODELS[0]?.model ?? 'doubao-seedance-2.0')
+  const model = currentVideoData?.model ?? (VIDEO_MODELS[0]?.model ?? 'doubao-seedance-1-5-pro')
   const aspectRatio = currentVideoData?.aspect_ratio ?? '16:9'
   const videoSize = currentVideoData?.metadata?.size ?? '1280x720'
   const duration = currentVideoData?.duration ?? VIDEO_DURATION_CONFIG.defaultValue

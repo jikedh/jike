@@ -1672,8 +1672,8 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
         width: 350,
         height: 250,
         data: {
-          // 新建视频节点默认模型：Doubao Seedance 2.0
-          model: 'doubao-seedance-2.0',
+          // 新建视频节点默认模型：Doubao Seedance 1.5 Pro
+          model: 'doubao-seedance-1-5-pro',
           prompt: '',
           promptDraft: '',
           promptDraftHtml: '<p></p>',
