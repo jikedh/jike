@@ -3,10 +3,64 @@ import { join, dirname, normalize } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { promises as fs } from 'fs'
 import { existsSync, mkdirSync, writeFileSync, readFileSync, unlinkSync, readdirSync, statSync, renameSync } from 'fs'
+import { autoUpdater } from 'electron-updater'
 // @ts-ignore
 import icon from '../../resources/icon.png?asset'
 
 let mainWindow: BrowserWindow | null = null
+
+function setupAutoUpdater(): void {
+  if (!app.isPackaged || process.platform !== 'win32') {
+    return
+  }
+
+  autoUpdater.autoDownload = true
+
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[autoUpdater] Checking for updates...')
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    console.log(`[autoUpdater] Update available: ${info.version}`)
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('[autoUpdater] No updates available')
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    console.log(`[autoUpdater] Download progress: ${progress.percent.toFixed(2)}%`)
+  })
+
+  autoUpdater.on('update-downloaded', async (info) => {
+    console.log(`[autoUpdater] Update downloaded: ${info.version}`)
+
+    if (!mainWindow) {
+      autoUpdater.quitAndInstall()
+      return
+    }
+
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      buttons: ['稍后重启', '立即重启'],
+      defaultId: 1,
+      cancelId: 0,
+      title: '发现新版本',
+      message: `新版本 ${info.version} 已下载完成`,
+      detail: '重启后将自动完成更新安装。'
+    })
+
+    if (result.response === 1) {
+      autoUpdater.quitAndInstall()
+    }
+  })
+
+  autoUpdater.on('error', (error) => {
+    console.error('[autoUpdater] Update error:', error)
+  })
+
+  void autoUpdater.checkForUpdates()
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -294,6 +348,7 @@ app.whenReady().then(() => {
   setupIpcHandlers()
 
   createWindow()
+  setupAutoUpdater()
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

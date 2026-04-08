@@ -71,6 +71,7 @@
     "@vitejs/plugin-react": "^5.1.1",
     "electron": "^39.2.6",
     "electron-builder": "^26.0.12",
+    "electron-updater": "^6.6.2",
     "electron-vite": "^5.0.0",
     "shadcn": "^4.1.0",
     "terser": "^5.46.1",
