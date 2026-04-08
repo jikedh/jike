@@ -12,7 +12,7 @@ import { SettingsModal } from '@/pages/Canvas/components/SettingsModal'
 import iconImg from '@/assets/icon.png'
 import { getJikeingUserId, getJikeingToken } from '@/utils/utils'
 
-const USER_CREDITS = 1280
+const USER_CREDITS = 12800
 const FIRST_LOGIN_KEY = 'jike_first_login_completed'
 
 export const SidebarCeBianLan = () => {
@@ -80,13 +80,13 @@ export const SidebarCeBianLan = () => {
         </SidebarFooter>
       </SidebarRoot>
 
-      <SettingsModal 
-        open={isSettingsOpen} 
-        onClose={() => setIsSettingsOpen(false)} 
+      <SettingsModal
+        open={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
 
-      <SettingsModal 
-        open={isFirstLoginModalOpen} 
+      <SettingsModal
+        open={isFirstLoginModalOpen}
         onClose={handleFirstLoginComplete}
         isFirstLogin={true}
       />
@@ -113,7 +113,7 @@ interface SettingsButtonProps {
 }
 
 const SettingsButton = ({ onClick }: SettingsButtonProps) => (
-  <button 
+  <button
     className="flex flex-col items-center justify-center rounded-xl px-2 py-2 text-white/50 transition-all hover:bg-white/5 hover:text-white/90"
     onClick={onClick}
   >
