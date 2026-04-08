@@ -16,6 +16,7 @@ export type StorageApi = {
   writeFile: (filePath: string, buffer: ArrayBuffer) => Promise<{ success: boolean; error?: string }>
   readFile: (filePath: string) => Promise<{ success: boolean; data: Buffer | null; error?: string }>
   deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string }>
+  deleteFolder: (folderPath: string) => Promise<{ success: boolean; error?: string }>
   fileExists: (filePath: string) => Promise<boolean>
   listFiles: (dirPath: string) => Promise<{ success: boolean; files: FileInfo[]; error?: string }>
   downloadFile: (url: string, destPath: string) => Promise<{ success: boolean; path?: string; error?: string }>
