@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { IconRefresh } from '@tabler/icons-react'
+import { IconRefresh, IconX } from '@tabler/icons-react'
 import HomePage from '@/pages/Home'
 import { getSceneQrcode } from '@/api/ai'
 import { getJikeingToken } from '@/utils/utils'
@@ -133,6 +133,15 @@ const LoginPage = () => {
         </div>
       </div>
 
+      {/* 关闭按钮 */}
+      <button
+        onClick={() => navigate('/home')}
+        className="absolute top-4 right-4 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors"
+        aria-label="关闭"
+      >
+        <IconX size={20} />
+      </button>
+
       {/* 登录卡片容器 */}
       <div className="absolute inset-0 z-10 flex justify-center items-center">
         <div
@@ -181,37 +190,37 @@ const LoginPage = () => {
                   </div>
                 </>
               ) : (
-                  <>
-                    {/* 二维码区域 */}
-                    <div className="bg-white p-2 rounded-md relative mb-[40px]" style={{ boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)' }}>
-                      {status === 'loading' ? (
-                        <div className="w-[170px] h-[170px] flex flex-col items-center justify-center bg-gray-100 rounded gap-3">
-                          <div className="w-8 h-8 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
-                          {retryCount > 0 && (
-                            <span className="text-xs text-gray-500">
-                              重试中 ({retryCount}/{MAX_RETRY_COUNT})
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <img
-                          src={qrCodeUrl}
-                          alt="微信登录二维码"
-                          className="w-[170px] h-[170px] block"
-                          onError={(e) => {
-                            console.error('[登录] 二维码图片加载失败')
-                            e.currentTarget.style.display = 'none'
-                          }}
-                        />
-                      )}
-                      {/* Logo 遮罩 */}
-                      <div
-                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 bg-white rounded-lg flex justify-center items-center"
-                        style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
-                      >
-                        <img src={iconImg} alt="即刻" className="w-6 h-6 object-contain" />
+                <>
+                  {/* 二维码区域 */}
+                  <div className="bg-white p-2 rounded-md relative mb-[40px]" style={{ boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)' }}>
+                    {status === 'loading' ? (
+                      <div className="w-[170px] h-[170px] flex flex-col items-center justify-center bg-gray-100 rounded gap-3">
+                        <div className="w-8 h-8 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                        {retryCount > 0 && (
+                          <span className="text-xs text-gray-500">
+                            重试中 ({retryCount}/{MAX_RETRY_COUNT})
+                          </span>
+                        )}
                       </div>
+                    ) : (
+                      <img
+                        src={qrCodeUrl}
+                        alt="微信登录二维码"
+                        className="w-[170px] h-[170px] block"
+                        onError={(e) => {
+                          console.error('[登录] 二维码图片加载失败')
+                          e.currentTarget.style.display = 'none'
+                        }}
+                      />
+                    )}
+                    {/* Logo 遮罩 */}
+                    <div
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 bg-white rounded-lg flex justify-center items-center"
+                      style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+                    >
+                      <img src={iconImg} alt="即刻" className="w-6 h-6 object-contain" />
                     </div>
+                  </div>
 
 
                 </>
