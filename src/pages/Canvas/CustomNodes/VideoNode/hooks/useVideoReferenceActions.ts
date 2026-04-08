@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react'
 
 import useMessage from '@/hooks/useMessage'
 import { uploadFileToOSS } from '@/utils/oss'
+import { compressImage, MAX_IMAGE_SIZE_MB } from '@/utils/imageCompress'
 
 /**
  * 参考资源交互 Hook。
@@ -64,7 +65,14 @@ export const useVideoReferenceActions = ({
     setIsUploading(true)
 
     try {
-      const result = await uploadFileToOSS(file)
+      // 检查文件大小，大于10MB时压缩
+      let fileToUpload = file
+      if (file.size > MAX_IMAGE_SIZE_MB) {
+        console.log(`[上传图片] 文件大小 ${(file.size / 1024 / 1024).toFixed(2)}MB 超过 10MB，开始压缩...`)
+        fileToUpload = await compressImage(file)
+      }
+
+      const result = await uploadFileToOSS(fileToUpload)
       const nextUrl = result.url
 
       if (!nextUrl) {

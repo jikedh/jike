@@ -38,6 +38,7 @@ export interface ImageGenerationNode {
   quality?: string; // 图片质量，如 "standard", "hd"
   style?: string; // 图片风格
   image_urls?: string[]; // 参考图片 URL 列表（统一关键字段，包含上传和来自依赖节点的图片）
+  ossUrlMap?: Record<string, string>; // 本地文件路径到 OSS URL 的映射缓存（避免重复上传）
   midjourneyAdvanced?: {
     referenceUrls?: string[] // Midjourney 参考图列表（用于拼接前缀 URL）
     styleUrls?: string[] // Midjourney 风格图列表（用于 --sref）

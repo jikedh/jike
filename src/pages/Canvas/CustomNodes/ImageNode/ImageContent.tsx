@@ -7,6 +7,8 @@ type ImageContentProps = {
     data: ImageGenerationNode
     onRetry?: () => void
     onReorder?: (fromIndex: number) => void
+    nodeId?: string
+    updateImageNodeData?: (nodeId: string, patch: any) => void
 }
 
 /**
@@ -17,7 +19,7 @@ type ImageContentProps = {
  * - 处理错误状态展示
  * - 支持点击图片重新排序
  */
-export const ImageContent = memo(({ data, onRetry, onReorder }: ImageContentProps) => {
+export const ImageContent = memo(({ data, onRetry, onReorder, nodeId, updateImageNodeData }: ImageContentProps) => {
     // 结果图片列表（支持多张），保留原始对象结构用于排序
     const images = data.result?.data?.filter((item) => item?.url) ?? []
     const status = data.status ?? GenerationStatus.COMPLETED
@@ -65,7 +67,7 @@ export const ImageContent = memo(({ data, onRetry, onReorder }: ImageContentProp
 
     // 已完成状态
     if (images.length > 0) {
-        return <CollapsibleImageGallery images={images} onReorder={onReorder} />
+        return <CollapsibleImageGallery images={images} onReorder={onReorder} nodeId={nodeId} updateImageNodeData={updateImageNodeData} />
     }
 
     // 空状态

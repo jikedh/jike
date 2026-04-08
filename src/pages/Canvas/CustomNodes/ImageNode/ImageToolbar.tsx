@@ -20,6 +20,7 @@ import Zoom from 'yet-another-react-lightbox/plugins/zoom'
 import { toast } from 'sonner'
 
 import { uploadFileToOSS } from '@/utils/oss'
+import { compressImage, MAX_IMAGE_SIZE_MB } from '@/utils/imageCompress'
 import { cn, downloadImageFromUrl } from '@/lib/utils'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { ImageGenerationNode } from '@/types/flow'
@@ -85,7 +86,14 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete, onCrop }: 
     setIsUploading(true)
 
     try {
-      const result = await uploadFileToOSS(file)
+      // 检查文件大小，大于10MB时压缩
+      let fileToUpload = file
+      if (file.size > MAX_IMAGE_SIZE_MB) {
+        console.log(`[上传图片] 文件大小 ${(file.size / 1024 / 1024).toFixed(2)}MB 超过 10MB，开始压缩...`)
+        fileToUpload = await compressImage(file)
+      }
+
+      const result = await uploadFileToOSS(fileToUpload)
       const uploadedUrl = result.url
 
       if (!uploadedUrl) {
@@ -192,7 +200,14 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete, onCrop }: 
     setIsInpaintGenerating(true)
 
     try {
-      const uploadResult = await uploadFileToOSS(file)
+      // 检查文件大小，大于10MB时压缩
+      let fileToUpload = file
+      if (file.size > MAX_IMAGE_SIZE_MB) {
+        console.log(`[上传图片] 文件大小 ${(file.size / 1024 / 1024).toFixed(2)}MB 超过 10MB，开始压缩...`)
+        fileToUpload = await compressImage(file)
+      }
+
+      const uploadResult = await uploadFileToOSS(fileToUpload)
       const inpaintImageUrl = uploadResult.url
 
       if (!inpaintImageUrl) {

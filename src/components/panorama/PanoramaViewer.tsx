@@ -8,6 +8,7 @@ import { toast } from "sonner"
 
 import { GenerationStatus } from "@/constants/enum"
 import { uploadFileToOSS } from "@/utils/oss"
+import { compressImage, MAX_IMAGE_SIZE_MB } from "@/utils/imageCompress"
 import type { AllNodeType, EdgeType } from "@/types/flow"
 import { useCanvasFlowStore } from "@/store/canvasFlowStore"
 import { PanoramaCanvas } from "./PanoramaCanvas"
@@ -79,7 +80,15 @@ export function PanoramaViewer({ open, onClose, initialImage, sourceNodeId }: Pa
 
             const fileName = `panorama-${type}-${Date.now()}.jpg`
             const file = await dataUrlToFile(dataUrl, fileName)
-            const uploadResult = await uploadFileToOSS(file)
+
+            // 检查文件大小，大于10MB时压缩
+            let fileToUpload = file
+            if (file.size > MAX_IMAGE_SIZE_MB) {
+                console.log(`[上传图片] 文件大小 ${(file.size / 1024 / 1024).toFixed(2)}MB 超过 10MB，开始压缩...`)
+                fileToUpload = await compressImage(file)
+            }
+
+            const uploadResult = await uploadFileToOSS(fileToUpload)
 
             if (!uploadResult.url) {
                 throw new Error("截图上传失败，未返回图片地址")

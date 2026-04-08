@@ -15,10 +15,11 @@ import {
 } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { uploadFileToOSS } from '@/utils/oss'
+import { compressImage, MAX_IMAGE_SIZE_MB } from '@/utils/imageCompress'
 import { GenerationStatus } from '@/constants/enum'
 import useMessage from '@/hooks/useMessage'
 import { cn } from '@/lib/utils'
-import { getMediaUrl, getMediaPath } from '@/utils/projectStorage'
+import { getMediaUrl } from '@/utils/projectStorage'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { ImageGenerationNode, NoteNodeData } from '@/types/flow'
 
@@ -345,11 +346,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             if (firstItem?.url) {
               result.push({
                 id: parentId,
-                    url: firstItem.url,
-                    relativePath: firstItem.relativePath,
-                  // 类型定义中为 localFileName，这里映射为 fileName 供后续本地文件上传逻辑复用。
-                  fileName: firstItem.localFileName,
-                })
+                url: firstItem.url,
+                relativePath: firstItem.relativePath,
+                fileName: firstItem.localFileName,
+              })
             }
         })
 
@@ -380,19 +380,18 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     }, [edges, nodes, nodeId])
 
   useEffect(() => {
-    if (!currentImageData) {
-      return
-    }
-
     if (parentImageUrls.length === 0) {
       return
     }
 
-    const currentUrls = currentImageData.image_urls ?? []
+    const currentUrls = referenceImageUrls
     const nextUrls = Array.from(new Set([...currentUrls, ...parentImageUrls]))
 
-    const unchanged = nextUrls.length === currentUrls.length
-      && nextUrls.every((url, index) => currentUrls[index] === url)
+    const currentSet = new Set(currentUrls)
+    const nextSet = new Set(nextUrls)
+
+    const unchanged = currentSet.size === nextSet.size
+      && [...currentSet].every(url => nextSet.has(url))
 
     if (unchanged) {
       return
@@ -401,7 +400,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     updateImageNodeData(nodeId, {
       image_urls: nextUrls,
     })
-  }, [currentImageData, nodeId, parentImageUrls, updateImageNodeData])
+  }, [referenceImageUrls, nodeId, parentImageUrls, updateImageNodeData])
 
     // 是否正在生成（用于按钮禁用态）
     const isGenerating = useMemo(() => {
@@ -431,7 +430,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         setIsUploading(true)
 
         try {
-            const result = await uploadFileToOSS(file)
+            // 检查文件大小，大于10MB时压缩
+            let fileToUpload = file
+            if (file.size > MAX_IMAGE_SIZE_MB) {
+                console.log(`[上传图片] 文件大小 ${(file.size / 1024 / 1024).toFixed(2)}MB 超过 10MB，开始压缩...`)
+                fileToUpload = await compressImage(file)
+            }
+
+            const result = await uploadFileToOSS(fileToUpload)
             const nextUrl = result.url
 
             if (!nextUrl) {
@@ -617,88 +623,11 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       // 发送给后端的 model 字段：如果是 midjourney-niji7 则改为 midjourney
       const backendModel = isNiji7Model ? 'midjourney' : model
 
-      // 构建本地文件映射：从 URL 到本地文件信息
-      const localFileMap = new Map<string, { relativePath: string; fileName: string }>()
+      // image_urls 直接使用界面当前显示的参考图列表（上传 + 父节点结果）
+      // 所有图片在上传时已经上传到 OSS，或是在线 URL，直接使用即可
+      const imageUrls = referenceImageUrls
 
-      // 添加父节点的本地文件
-      for (const parentItem of parentImageNodes) {
-        if (parentItem.url && parentItem.relativePath && parentItem.fileName) {
-          console.log('[ImageNode] 添加父节点本地文件到映射:', parentItem.url, parentItem.relativePath, parentItem.fileName)
-          localFileMap.set(parentItem.url, { relativePath: parentItem.relativePath, fileName: parentItem.fileName })
-        }
-      }
-
-      // 检查参考图是否是本地文件，如果是则先上传到 OSS
-      let uploadedImageUrls: string[] = []
-      // image_urls 传递界面当前显示的参考图列表（上传 + 父节点结果）
-      const imageUrlsToProcess = referenceImageUrls
-
-      console.log('[ImageNode] image_urls:', imageUrlsToProcess)
-      console.log('[ImageNode] localFileMap keys:', Array.from(localFileMap.keys()))
-
-      for (const url of imageUrlsToProcess) {
-        const localFileInfo = localFileMap.get(url)
-        console.log('[ImageNode] 检查 URL:', url, '本地文件信息:', localFileInfo)
-
-        if (localFileInfo) {
-          // 这是本地文件，需要上传到 OSS
-          try {
-            if (window.storage) {
-              // 获取实际的文件系统路径（不是 file:// URL）
-              const absolutePath = getMediaPath(localFileInfo.relativePath)
-              console.log('[ImageNode] 文件系统路径:', absolutePath)
-
-              if (absolutePath) {
-                const readResult = await window.storage.readFile(absolutePath)
-                console.log('[ImageNode] 读取结果:', readResult.success, readResult.error)
-
-                if (readResult.success && readResult.data) {
-                  // 创建 File 对象
-                  const ext = localFileInfo.fileName.split('.').pop() || 'png'
-                  // 先复制到新的 ArrayBuffer，避免把 Buffer / SharedArrayBuffer 直接传给 File
-                  const sourceBytes = new Uint8Array(readResult.data)
-                  const fileBuffer = new ArrayBuffer(sourceBytes.byteLength)
-                  new Uint8Array(fileBuffer).set(sourceBytes)
-                  const file = new File([fileBuffer], localFileInfo.fileName, { type: `image/${ext}` })
-
-                  console.log('[ImageNode] 开始上传到 OSS, 文件大小:', file.size)
-
-                  // 上传到 OSS
-                  const ossResult = await uploadFileToOSS(file)
-                  console.log('[ImageNode] OSS 上传结果:', ossResult)
-
-                  if (ossResult.url) {
-                    uploadedImageUrls.push(ossResult.url)
-                    console.log('[ImageNode] 上传成功，OSS URL:', ossResult.url)
-                  } else {
-                    error('上传参考图失败，请重试')
-                    return
-                  }
-                } else {
-                  error('读取本地参考图失败')
-                  return
-                }
-              } else {
-                error('获取本地参考图路径失败')
-                return
-              }
-            } else {
-              error('存储功能不可用，无法上传本地图片')
-              return
-            }
-          } catch (uploadError) {
-            console.error('上传本地图片到 OSS 失败:', uploadError)
-            error('上传参考图失败，请重试')
-            return
-          }
-        } else {
-          // 这是在线图片 URL，直接使用
-          console.log('[ImageNode] 使用在线 URL:', url)
-          uploadedImageUrls.push(url)
-        }
-      }
-
-      console.log('[ImageNode] 最终上传的 URL 列表:', uploadedImageUrls)
+      console.log('[ImageNode] 提交生成任务, image_urls:', imageUrls)
 
         // 构建请求 payload
         const buildPayload = (): any => {
@@ -711,7 +640,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             prompt: finalPrompt,
             resolution,
             n: 1,
-            image_urls: uploadedImageUrls,
+            image_urls: imageUrls,
             promptDraft: editor?.getText() ?? '',
             promptDraftHtml: editor?.getHTML() ?? '<p></p>',
             metadata: {},

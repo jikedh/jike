@@ -22,6 +22,7 @@ import { getAgentPresetById, type AgentPresetId } from '@/constants/agent-preset
 import type { AllNodeType, EdgeType, ImageGenerationNode, VideoGenerationNode, AudioGenerationNode } from '@/types/flow'
 import { GenerationStatus } from '@/constants/enum'
 import { getCanvasDataKey, saveCanvasData, loadCanvasData, getMediaUrl, saveGeneratedImageToLocal, saveGeneratedVideoToLocal, getLocalFilePath } from '@/utils/projectStorage'
+import { uploadFileToOSS } from '@/utils/oss'
 import { buildMidjourneyPrompt } from '@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt'
 import { getRequestErrorMessage } from '@/utils/requestErrorHandler'
 
@@ -464,8 +465,30 @@ const pollImageGeneration = async (
 
                 console.log('[pollImageGeneration] 图片已保存到本地:', fileName, relativePath)
 
+                // 上传到 OSS
+                let ossUrl: string | undefined
+                try {
+                  // 获取本地文件的绝对路径
+                  const absolutePath = getMediaUrl(relativePath)
+                  if (absolutePath && window.storage) {
+                    const readResult = await window.storage.readFile(absolutePath)
+                    if (readResult.success && readResult.data) {
+                      const fileBytes = new Uint8Array(readResult.data)
+                      const file = new File([fileBytes], fileName, { type: `image/${ext}` })
+                      const ossResult = await uploadFileToOSS(file)
+                      if (ossResult.url) {
+                        ossUrl = ossResult.url
+                        console.log('[pollImageGeneration] 图片已上传到 OSS:', ossUrl)
+                      }
+                    }
+                  }
+                } catch (ossError) {
+                  console.error('[pollImageGeneration] 上传图片到 OSS 失败:', ossError)
+                }
+
                 return {
                   ...item,
+                  url: ossUrl || item.url, // 使用 OSS URL，如果上传失败则使用原始 URL
                   localFileName: fileName,
                   relativePath,
                 }
@@ -488,6 +511,20 @@ const pollImageGeneration = async (
             // 判断是否所有任务都已完成
             const allCompleted = completedCount >= totalTaskCount
 
+            // 更新 ossUrlMap 缓存
+            const newOssUrlMap: Record<string, string> = { ...data.ossUrlMap }
+            processedResultData.forEach((item: any) => {
+              if (item.url && item.url.includes('aliyuncs.com')) {
+                // 如果原始 URL 存在，缓存映射关系
+                const originalUrl = response.result?.data?.find((orig: any) => 
+                  orig.localFileName === item.localFileName || orig.relativePath === item.relativePath
+                )?.url
+                if (originalUrl) {
+                  newOssUrlMap[originalUrl] = item.url
+                }
+              }
+            })
+
             return {
               ...data,
               status: allCompleted ? GenerationStatus.COMPLETED : GenerationStatus.IN_PROGRESS,
@@ -497,6 +534,7 @@ const pollImageGeneration = async (
                 data: mergedData,
               },
               completedCount,
+              ossUrlMap: newOssUrlMap,
               error: allCompleted ? undefined : data.error,
             }
           }),
@@ -650,8 +688,29 @@ const pollMjImageGeneration = async (
 
                 console.log('[pollMjImageGeneration] 图片已保存到本地:', fileName, relativePath)
 
+                // 上传到 OSS
+                let ossUrl: string | undefined
+                try {
+                  // 获取本地文件的绝对路径
+                  const absolutePath = getMediaUrl(relativePath)
+                  if (absolutePath && window.storage) {
+                    const readResult = await window.storage.readFile(absolutePath)
+                    if (readResult.success && readResult.data) {
+                      const fileBytes = new Uint8Array(readResult.data)
+                      const file = new File([fileBytes], fileName, { type: `image/${ext}` })
+                      const ossResult = await uploadFileToOSS(file)
+                      if (ossResult.url) {
+                        ossUrl = ossResult.url
+                        console.log('[pollMjImageGeneration] 图片已上传到 OSS:', ossUrl)
+                      }
+                    }
+                  }
+                } catch (ossError) {
+                  console.error('[pollMjImageGeneration] 上传图片到 OSS 失败:', ossError)
+                }
+
                 return {
-                  url,
+                  url: ossUrl || url, // 使用 OSS URL，如果上传失败则使用原始 URL
                   localFileName: fileName,
                   relativePath,
                 }
@@ -674,6 +733,18 @@ const pollMjImageGeneration = async (
             // 判断是否所有任务都已完成
             const allCompleted = completedCount >= totalTaskCount
 
+            // 更新 ossUrlMap 缓存
+            const newOssUrlMap: Record<string, string> = { ...data.ossUrlMap }
+            processedResultData.forEach((item: any, index: number) => {
+              if (item.url && item.url.includes('aliyuncs.com')) {
+                // 使用原始 URL 作为 key
+                const originalUrl = newImageUrls[index]
+                if (originalUrl) {
+                  newOssUrlMap[originalUrl] = item.url
+                }
+              }
+            })
+
             return {
               ...data,
               status: allCompleted ? GenerationStatus.COMPLETED : GenerationStatus.IN_PROGRESS,
@@ -683,6 +754,7 @@ const pollMjImageGeneration = async (
                 data: mergedData,
               },
               completedCount,
+              ossUrlMap: newOssUrlMap,
               error: allCompleted ? undefined : data.error,
             }
           }),
@@ -1832,22 +1904,15 @@ duplicateNode: (nodeId: string) => {
 
   /**
    * 更新图片节点数据（局部 patch）
-   * 当 patch 包含 result 字段时，自动同步到下游子节点的 image_urls
    */
   updateImageNodeData: (nodeId, patch) => {
     set((state) => {
-      // 先执行普通的 patch 更新
-      let nextNodes = updateImageNodeInList(state.nodes, nodeId, (data) => ({
-        ...data,
-        ...patch,
-      }))
-
-      // 如果 patch 中包含 result 变化，则同步到下游子节点
-      if (patch.result !== undefined) {
-        nextNodes = syncImageUrlsToDescendants(nextNodes, nodeId, state.edges)
+      return { 
+        nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+          ...data,
+          ...patch,
+        }))
       }
-
-      return { nodes: nextNodes }
     })
   },
 

@@ -31,6 +31,7 @@ import { useCanvasCursor } from '@/hooks/useCanvasCursor'
 import { GenerationStatus } from '@/constants/enum'
 import { getClosestAspectRatio, getImageDimensions } from '../CustomNodes/ImageNode/utils/aspectRatioUtils'
 import { uploadFileToOSS } from '@/utils/oss'
+import { compressImage, MAX_IMAGE_SIZE_MB } from '@/utils/imageCompress'
 import { saveImageToLocal, saveAudioToLocal, saveVideoToLocal, getProjectById, getLocalFilePath, getLocalFileAbsolutePath } from '@/utils/projectStorage'
 import {
     Dialog,
@@ -533,6 +534,25 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                 })
 
                 try {
+                    // 检查文件大小，大于10MB时压缩
+                    let fileToUpload = file
+                    if (file.size > MAX_IMAGE_SIZE_MB) {
+                        console.log(`[上传图片] 文件大小 ${(file.size / 1024 / 1024).toFixed(2)}MB 超过 10MB，开始压缩...`)
+                        fileToUpload = await compressImage(file)
+                    }
+
+                    // 上传到 OSS
+                    const ossResult = await uploadFileToOSS(fileToUpload)
+                    const ossUrl = ossResult.url
+
+                    if (!ossUrl) {
+                        updateImageNodeData(newNodeId, {
+                            status: GenerationStatus.FAILED,
+                            error: { message: '上传到 OSS 失败' },
+                        })
+                        continue
+                    }
+
                     // 获取文件扩展名
                     const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
 
@@ -559,9 +579,10 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                                 size: aspectRatio,
                                 isLocalFile: true,
                                 localFileName: fileName,
+                                image_urls: [ossUrl],
                                 result: {
                                     type: 'image',
-                                  data: [{ url: blobUrl, relativePath, localFileName: fileName }],
+                                    data: [{ url: ossUrl, relativePath, localFileName: fileName }],
                                 },
                             })
                         } catch (error) {
@@ -570,9 +591,10 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                                 status: GenerationStatus.COMPLETED,
                                 isLocalFile: true,
                                 localFileName: fileName,
+                                image_urls: [ossUrl],
                                 result: {
                                     type: 'image',
-                                  data: [{ url: blobUrl, relativePath, localFileName: fileName }],
+                                    data: [{ url: ossUrl, relativePath, localFileName: fileName }],
                                 },
                             })
                         }

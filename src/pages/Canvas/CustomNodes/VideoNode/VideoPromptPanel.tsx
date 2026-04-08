@@ -13,8 +13,6 @@ import {
 import useMessage from '@/hooks/useMessage'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { VideoGenerationNode } from '@/types/flow'
-import { uploadFileToOSS } from '@/utils/oss'
-import { getMediaUrl } from '@/utils/projectStorage'
 
 import { PROMPT_PANEL_STYLES } from '../shared/promptPanelStyles'
 import { getVideoPayloadStrategy } from './strategies/videoPayloadStrategies'
@@ -147,85 +145,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       return
     }
 
-    // 构建本地文件映射：从 URL 到本地文件信息
-    const localFileMap = new Map<string, { relativePath: string; fileName: string }>()
+    // 所有图片在上传时已经上传到 OSS，或是在线 URL，直接使用即可
+    const imageUrls = allImageUrls
 
-    // 添加父节点的本地文件
-    for (const parentItem of parentImageNodes) {
-      if (parentItem.url && parentItem.relativePath && parentItem.fileName) {
-        console.log('[VideoNode] 添加父节点本地文件到映射:', parentItem.url, parentItem.relativePath, parentItem.fileName)
-        localFileMap.set(parentItem.url, { relativePath: parentItem.relativePath, fileName: parentItem.fileName })
-      }
-    }
-
-    // 检查参考图是否是本地文件，如果是则先上传到 OSS
-    let processedImageUrls: string[] = []
-
-    console.log('[VideoNode] allImageUrls:', allImageUrls)
-    console.log('[VideoNode] localFileMap keys:', Array.from(localFileMap.keys()))
-
-    for (const url of allImageUrls) {
-      const localFileInfo = localFileMap.get(url)
-      console.log('[VideoNode] 检查 URL:', url, '本地文件信息:', localFileInfo)
-
-      if (localFileInfo) {
-        // 这是本地文件，需要上传到 OSS
-        try {
-          if (window.storage) {
-            // 获取绝对路径
-            const absolutePath = getMediaUrl(localFileInfo.relativePath)
-            console.log('[VideoNode] 绝对路径:', absolutePath)
-
-            if (absolutePath) {
-              const readResult = await window.storage.readFile(absolutePath)
-              console.log('[VideoNode] 读取结果:', readResult.success, readResult.error)
-
-              if (readResult.success && readResult.data) {
-                // 创建 File 对象
-                const ext = localFileInfo.fileName.split('.').pop() || 'png'
-                // 这里显式复制为 Uint8Array，避免 Buffer.buffer 的 ArrayBufferLike
-                // 进入 SharedArrayBuffer 分支导致 BlobPart 类型不兼容。
-                const fileBytes = new Uint8Array(readResult.data)
-                const file = new File([fileBytes], localFileInfo.fileName, { type: `image/${ext}` })
-
-                console.log('[VideoNode] 开始上传到 OSS, 文件大小:', file.size)
-
-                // 上传到 OSS
-                const ossResult = await uploadFileToOSS(file)
-                console.log('[VideoNode] OSS 上传结果:', ossResult)
-
-                if (ossResult.url) {
-                  processedImageUrls.push(ossResult.url)
-                  console.log('[VideoNode] 上传成功，OSS URL:', ossResult.url)
-                } else {
-                  warning('上传参考图失败，请重试')
-                  return
-                }
-              } else {
-                warning('读取本地参考图失败')
-                return
-              }
-            } else {
-              warning('获取本地参考图路径失败')
-              return
-            }
-          } else {
-            warning('存储功能不可用，无法上传本地图片')
-            return
-          }
-        } catch (uploadError) {
-          console.error('上传本地图片到 OSS 失败:', uploadError)
-          warning('上传参考图失败，请重试')
-          return
-        }
-      } else {
-        // 这是在线图片 URL，直接使用
-        console.log('[VideoNode] 使用在线 URL:', url)
-        processedImageUrls.push(url)
-      }
-    }
-
-    console.log('[VideoNode] 最终上传的 URL 列表:', processedImageUrls)
+    console.log('[VideoNode] 提交生成任务, image_urls:', imageUrls)
 
     // Seedance 2.0 在存在参考音频时仅允许使用 Pro 模式。
     // 命中该条件时先提示用户，再自动修正为 Pro 并继续本次生成。
@@ -256,7 +179,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     const strategy = getVideoPayloadStrategy(model)
     const payload = strategy.buildPayload(nextVideoData, {
       prompt: mergedPrompt,
-      imageUrls: processedImageUrls,
+      imageUrls: imageUrls,
       videoUrls: allVideoUrls,
       audioUrls: allAudioUrls,
     })

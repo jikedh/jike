@@ -73,12 +73,12 @@ export const useVideoNodeReferences = ({
       .map((parentId) => nodes.find((node) => node.id === parentId))
       .filter((node) => node?.type === 'imageNode')
       .map((node) => {
-        const firstItem = (node.data as ImageGenerationNode).result?.data?.[0]
+        const nodeData = node.data as ImageGenerationNode
+        const firstItem = nodeData.result?.data?.[0]
         return {
           id: node.id,
           url: firstItem?.url,
           relativePath: firstItem?.relativePath,
-          // ImageGenerationNode 的结果字段是 localFileName，这里映射为 fileName 以兼容现有消费方。
           fileName: firstItem?.localFileName,
         }
       })
