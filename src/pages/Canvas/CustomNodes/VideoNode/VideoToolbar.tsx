@@ -6,7 +6,7 @@ import {
     IconEraser,
     IconSparkles,
     IconTrash,
-  IconUpload,
+    IconUpload,
     IconZoomIn,
 } from '@tabler/icons-react'
 import { useMemo, useRef, useState } from 'react'

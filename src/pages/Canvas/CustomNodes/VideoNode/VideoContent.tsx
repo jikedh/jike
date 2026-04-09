@@ -13,7 +13,14 @@ export const VideoContent = ({ data, onRetry }: VideoContentProps) => {
     const progress = data.progress ?? 0
     const error = data.error
 
-    if (status === GenerationStatus.FAILED) {
+    // 判断是否应该显示失败状态：
+    // 1. 状态明确为 failed（API 返回失败）
+    // 2. 有错误信息且不是进行中/排队状态
+    // 注意：新创建的节点默认 status 是 COMPLETED，但没有 videoUrl 时应该显示"暂无视频"而非失败
+    const hasError = Boolean(error?.message || error?.detail || error?.serverMessage)
+    const isExplicitlyFailed = status === GenerationStatus.FAILED
+
+    if (isExplicitlyFailed || (hasError && status !== GenerationStatus.IN_PROGRESS && status !== GenerationStatus.QUEUED)) {
         const displayMessage = error?.detail || error?.serverMessage || error?.message || '生成失败，请稍后再试'
 
         return (

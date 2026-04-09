@@ -2,7 +2,10 @@ import type { VideoGenerationNode } from '@/types/flow'
 
 /**
  * 从视频节点结果中提取 URL 列表。
- * 优先使用标准结果结构 result.data，兼容 metadata.url 与部分历史字段。
+ * 同时检查 result.data 和 metadata.url，因为不同模型返回位置不同：
+ * - doubao-seedance-1-5-pro, Veo3: URL 在 metadata.url
+ * - Grok, kling-video-o1, minimax-hailuo-2-3: URL 在 result.data
+ * 两者都检查，返回所有非空 URL。
  */
 export const getVideoUrlsFromNodeData = (data?: Partial<VideoGenerationNode> | null) => {
   if (!data) {
@@ -13,17 +16,15 @@ export const getVideoUrlsFromNodeData = (data?: Partial<VideoGenerationNode> | n
     .map((item) => item?.url)
     .filter((url): url is string => Boolean(url))
 
-  // 标准结构优先，避免 metadata 旧值覆盖最新结果。
-  if (resultUrls.length > 0) {
-    return Array.from(new Set(resultUrls))
-  }
+  const metadataUrl = data.metadata?.url
+  const legacyUrl = (data as any)?.video_url
 
-  const fallbackUrls = [
-    data.metadata?.url,
-    (data as any)?.video_url,
-  ].filter((url): url is string => Boolean(url))
+  // 合并所有来源的 URL，去重后返回
+  const allUrls = [...resultUrls]
+  if (metadataUrl) allUrls.push(metadataUrl)
+  if (legacyUrl) allUrls.push(legacyUrl)
 
-  return Array.from(new Set(fallbackUrls))
+  return Array.from(new Set(allUrls))
 }
 
 /**

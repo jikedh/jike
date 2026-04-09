@@ -222,4 +222,4 @@ export const CANVAS_CHAT_MODELS = [
 ]
 
 /** 画布聊天默认模型 */
-export const DEFAULT_CANVAS_CHAT_MODEL = CANVAS_CHAT_MODELS[1].model
+export const DEFAULT_CANVAS_CHAT_MODEL = CANVAS_CHAT_MODELS[0].model
