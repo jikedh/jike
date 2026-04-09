@@ -22,13 +22,16 @@ export interface DoubaoSeedance15ProRequest {
 
 export interface DoubaoSeedance15ProResponse {
   id: string; // 任务唯一标识符，用于查询任务状态
-  object: string; // 对象类型，固定为 "generation.task"
-  model: string; // 使用的模型名称
+  object: string; // 对象类型（如 "video"）
+  model: string; // 使用的模型名称（如 "doubao-seedance-1-5-pro"）
   status: 'queued' | 'in_progress' | 'completed' | 'failed'; // 任务状态：queued-排队等待处理，in_progress-处理中，completed-成功完成，failed-失败
   progress: number; // 任务进度百分比（0-100）
   created_at: number; // 任务创建时间戳（Unix 时间戳）
+  completed_at?: number; // 任务完成时间戳（Unix 时间戳）
   metadata?: {
     // 任务元数据
-    seed?: number; // 使用的种子值
+    generate_audio?: boolean; // 是否生成音频
+    url?: string; // 视频 URL
+    seed?: number; // 种子值
   };
 }
