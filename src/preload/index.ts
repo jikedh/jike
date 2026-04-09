@@ -28,6 +28,7 @@ export type StorageApi = {
 
 export type DebugApi = {
   toggleDevTools: () => Promise<{ success: boolean; error?: string }>
+  isDev: () => Promise<boolean>
 }
 
 const storageApi: StorageApi = {
@@ -50,6 +51,8 @@ const storageApi: StorageApi = {
 const debugApi: DebugApi = {
   // 触发主进程切换 DevTools
   toggleDevTools: () => ipcRenderer.invoke('debug:toggleDevTools'),
+  // 检查是否为开发环境
+  isDev: () => ipcRenderer.invoke('debug:isDev'),
 }
 
 if (process.contextIsolated) {

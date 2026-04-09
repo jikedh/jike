@@ -31,7 +31,7 @@ const settingSections = [
     { id: 'collab', label: '协作通知' },
     { id: 'data', label: '数据与版本' },
     { id: 'shortcuts', label: '快捷键' },
-    { id: 'labs', label: '实验功能' },
+    { id: 'labs', label: '实验功能', devOnly: true },
     { id: 'about', label: '关于支持' },
 ]
 
@@ -68,6 +68,7 @@ const sectionIdSet = new Set(settingSections.map((item) => item.id))
 
 export const SettingsModal = ({ open, onClose, isFirstLogin = false }: SettingsModalProps) => {
     const [activeSection, setActiveSection] = useState(isFirstLogin ? 'data' : settingSections[0].id)
+    const [isDev, setIsDev] = useState(false)
     const { defaultModel, defaultPersonaId, autoSaveEnabled, gridVisible, nodeSearchVisible, devToolsVisible, storagePath, setDefaultModel, setDefaultPersonaId, setAutoSaveEnabled, setGridVisible, setNodeSearchVisible, setDevToolsVisible, setStoragePath, resetToDefault } = useChatSettingsStore()
     const { success, error } = useMessage()
     const exportCanvasData = useCanvasFlowStore((state) => state.exportCanvasData)
@@ -77,6 +78,26 @@ export const SettingsModal = ({ open, onClose, isFirstLogin = false }: SettingsM
     const [importConfirmOpen, setImportConfirmOpen] = useState(false)
     const [pendingImportData, setPendingImportData] = useState<any>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+
+    // 检测开发环境
+    useEffect(() => {
+        const checkDevEnvironment = async () => {
+            try {
+                const debugApi = (window as any).debug
+                if (debugApi?.isDev) {
+                    const isDevEnv = await debugApi.isDev()
+                    setIsDev(isDevEnv)
+                } else {
+                    // Web 版本或非 Electron 环境，假设为生产环境
+                    setIsDev(false)
+                }
+            } catch (e) {
+                // 出错时假设为生产环境
+                setIsDev(false)
+            }
+        }
+        checkDevEnvironment()
+    }, [])
 
     useEffect(() => {
         if (open && !storagePath && window.storage) {
@@ -218,7 +239,7 @@ export const SettingsModal = ({ open, onClose, isFirstLogin = false }: SettingsM
                         {!isFirstLogin && (
                         <aside className="border-r border-white/5 bg-black/20 p-3">
                             <div className="space-y-1">
-                    {settingSections.map((section) => {
+                    {settingSections.filter(section => !((section as any).devOnly && !isDev)).map((section) => {
                       const getIcon = () => {
                         if (section.id === 'apikey') return <IconKey size={14} />
                         if (section.id === 'data') return <IconDownload size={14} />
@@ -381,7 +402,7 @@ export const SettingsModal = ({ open, onClose, isFirstLogin = false }: SettingsM
                                 )}
 
                     {/* 实验功能 - Electron 开发者工具 */}
-                    {activeSection === 'labs' && (
+                    {activeSection === 'labs' && isDev && (
                       <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
                         <div className="mb-3 text-sm font-medium text-white/80">Electron 开发者工具</div>
                         <div className="text-xs text-white/40 mb-3">点击后可打开或关闭 Electron 控制台（DevTools）</div>

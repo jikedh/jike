@@ -347,6 +347,11 @@ function setupIpcHandlers(): void {
     mainWindow.webContents.toggleDevTools()
     return { success: true }
   })
+
+  // 检查是否为开发环境
+  ipcMain.handle('debug:isDev', async () => {
+    return is.dev
+  })
 }
 
 app.whenReady().then(() => {

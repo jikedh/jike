@@ -27,6 +27,7 @@ export type StorageApi = {
 
 export type DebugApi = {
   toggleDevTools: () => Promise<{ success: boolean; error?: string }>
+  isDev: () => Promise<boolean>
 }
 
 declare global {
