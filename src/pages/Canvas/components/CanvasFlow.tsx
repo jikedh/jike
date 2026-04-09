@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
     ReactFlow,
@@ -56,6 +56,8 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     const addNode = useCanvasFlowStore((state) => state.addNode)
     const switchProject = useCanvasFlowStore((state) => state.switchProject)
     const gridVisible = useChatSettingsStore((state) => state.gridVisible)
+  const snapToGrid = useChatSettingsStore((state) => state.snapToGrid)
+  const snapGridSize = useChatSettingsStore((state) => state.snapGridSize)
     const nodeSearchVisible = useChatSettingsStore((state) => state.nodeSearchVisible)
     const reactFlowInstance = useReactFlow<AllNodeType, EdgeType>()
     const { screenToFlowPosition } = reactFlowInstance
@@ -205,19 +207,40 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
   const [displayEdges, setDisplayEdges] = useState<EdgeType[]>(() =>
     useCanvasFlowStore.getState().edges
   )
+  const latestStoreNodesRef = useRef(useCanvasFlowStore.getState().nodes)
+  const latestStoreEdgesRef = useRef(useCanvasFlowStore.getState().edges)
     // 用 ref 而非 state 追踪拖动状态，避免引发额外渲染
     const isDraggingRef = useRef(false)
+
+  // 稳定 ReactFlow 对象型 props 的引用，避免每次 render 生成新对象导致子树无效更新
+  const connectionLineStyle = useMemo(
+    () => ({ stroke: '#B43FEB', strokeWidth: 2, fill: 'none' }),
+    []
+  )
+  const defaultEdgeOptions = useMemo(
+    () => ({
+      type: 'default',
+      style: { stroke: '#B43FEB', strokeWidth: 2 },
+      animated: false,
+    }),
+    []
+  )
 
   // 监听 Zustand 状态变化（外部变更如添加/删除节点、图片生成结果等）
     useEffect(() => {
       const unsubscribe = useCanvasFlowStore.subscribe(
-        // (state) => ({ nodes: state.nodes, edges: state.edges }),
         (newState) => {
-      // 只在非拖动时更新显示状态
-          if (!isDraggingRef.current) {
-                setDisplayNodes(newState.nodes)
-              }
-          setDisplayEdges(newState.edges)
+          // 只在非拖动时更新显示节点，并且仅在引用变化时 setState
+          if (!isDraggingRef.current && latestStoreNodesRef.current !== newState.nodes) {
+            latestStoreNodesRef.current = newState.nodes
+            setDisplayNodes(newState.nodes)
+          }
+
+          // 边数组仅在引用变化时更新，避免无效 setState
+          if (latestStoreEdgesRef.current !== newState.edges) {
+            latestStoreEdgesRef.current = newState.edges
+                      setDisplayEdges(newState.edges)
+                    }
         }
       )
       return unsubscribe
@@ -332,17 +355,31 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
       // 收集位置发生变化的节点
       const positionChanges: NodeChange<AllNodeType>[] = []
 
+      // 将节点位置对齐到网格点（当吸附开关开启时生效）
+      const alignPositionToGrid = (position: { x: number; y: number }) => {
+        if (!snapToGrid) {
+          return position
+        }
+
+        const [gridX, gridY] = snapGridSize
+        return {
+          x: Math.round(position.x / gridX) * gridX,
+          y: Math.round(position.y / gridY) * gridY,
+        }
+      }
+
       currentNodes.forEach((node) => {
+        const alignedPosition = alignPositionToGrid(node.position)
         const zustandNode = zustandStateNodes.find(n => n.id === node.id)
         if (zustandNode &&
-          (zustandNode.position.x !== node.position.x || zustandNode.position.y !== node.position.y)) {
+          (zustandNode.position.x !== alignedPosition.x || zustandNode.position.y !== alignedPosition.y)) {
           positionChanges.push({
             id: node.id,
             type: 'position',
-            position: node.position,
+            position: alignedPosition,
           })
-          // 检测拖动结束时的自动连接
-          checkAutoConnect(node.id, node.position)
+          // 使用对齐后坐标检测自动连接，避免吸附与连接计算不一致
+          checkAutoConnect(node.id, alignedPosition)
         }
       })
 
@@ -350,7 +387,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
       if (positionChanges.length > 0) {
         storeOnNodesChange(positionChanges)
       }
-    }, [reactFlowInstance, storeOnNodesChange, checkAutoConnect])
+    }, [reactFlowInstance, snapToGrid, snapGridSize, storeOnNodesChange, checkAutoConnect])
 
     // 点击画布空白区域时取消所有节点的选中状态
     const handlePaneClick = useCallback(() => {
@@ -973,15 +1010,12 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     className={cursorClass}
                     onMouseEnter={() => setCursorMode('default')}
                     connectionLineType={ConnectionLineType.Bezier}
-                    connectionLineStyle={{ stroke: '#B43FEB', strokeWidth: 2, fill: 'none' }}
-                    snapToGrid={false}
-                    snapGrid={[20, 20]}
+              connectionLineStyle={connectionLineStyle}
+              // 吸附开关与网格尺寸由设置中心驱动
+              snapToGrid={snapToGrid}
+              snapGrid={snapGridSize}
                     connectionRadius={50}
-                    defaultEdgeOptions={{
-                        type: 'default',
-                        style: { stroke: '#B43FEB', strokeWidth: 2 },
-                        animated: false,
-                    }}
+              defaultEdgeOptions={defaultEdgeOptions}
                     data-space-pressed={isSpacePressed ? 'true' : undefined}
                 >
                     {gridVisible && <Background variant={BackgroundVariant.Dots} />}

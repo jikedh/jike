@@ -69,7 +69,7 @@ const sectionIdSet = new Set(settingSections.map((item) => item.id))
 export const SettingsModal = ({ open, onClose, isFirstLogin = false }: SettingsModalProps) => {
     const [activeSection, setActiveSection] = useState(isFirstLogin ? 'data' : settingSections[0].id)
     const [isDev, setIsDev] = useState(false)
-    const { defaultModel, defaultPersonaId, autoSaveEnabled, gridVisible, nodeSearchVisible, devToolsVisible, storagePath, setDefaultModel, setDefaultPersonaId, setAutoSaveEnabled, setGridVisible, setNodeSearchVisible, setDevToolsVisible, setStoragePath, resetToDefault } = useChatSettingsStore()
+  const { defaultModel, defaultPersonaId, autoSaveEnabled, gridVisible, snapToGrid, nodeSearchVisible, devToolsVisible, storagePath, setDefaultModel, setDefaultPersonaId, setAutoSaveEnabled, setGridVisible, setSnapToGrid, setNodeSearchVisible, setDevToolsVisible, setStoragePath, resetToDefault } = useChatSettingsStore()
     const { success, error } = useMessage()
     const exportCanvasData = useCanvasFlowStore((state) => state.exportCanvasData)
     const importCanvasData = useCanvasFlowStore((state) => state.importCanvasData)
@@ -334,9 +334,19 @@ export const SettingsModal = ({ open, onClose, isFirstLogin = false }: SettingsM
                                                 <Switch checked={gridVisible} onCheckedChange={setGridVisible} />
                                             </div>
                                         </section>
-                                        <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
-                                            <div className="flex items-center justify-between">
+                        <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                          <div className="flex items-center justify-between">
                                                 <div>
+                              <div className="text-sm font-medium text-white/80">吸附网格</div>
+                              <div className="text-xs text-white/40 mt-1">拖拽节点时自动吸附到网格点(有助于提高性能)</div>
+                            </div>
+                            {/* 画布节点吸附网格开关 */}
+                            <Switch checked={snapToGrid} onCheckedChange={setSnapToGrid} />
+                          </div>
+                        </section>
+                        <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                          <div className="flex items-center justify-between">
+                            <div>
                                                     <div className="text-sm font-medium text-white/80">节点搜索栏显示</div>
                                                     <div className="text-xs text-white/40 mt-1">控制画布右上角节点搜索栏的显示</div>
                                                 </div>
@@ -413,7 +423,12 @@ export const SettingsModal = ({ open, onClose, isFirstLogin = false }: SettingsM
                       </section>
                     )}
 
-                                {currentSectionItems.filter((item) => !(activeSection === 'general' && item.label === '自动保存')).map((item) => (
+                    {currentSectionItems.filter((item) => {
+                      // 已接入真实功能的项不再走占位渲染
+                      if (activeSection === 'general' && item.label === '自动保存') return false
+                      if (activeSection === 'canvas' && (item.label === '网格显示' || item.label === '吸附网格')) return false
+                      return true
+                    }).map((item) => (
                                     <section key={item.label} className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
                                         <div className="mb-3 text-sm font-medium text-white/80">{item.label}</div>
 

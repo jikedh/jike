@@ -1,7 +1,7 @@
 import { BaseEdge, EdgeProps, getBezierPath } from '@xyflow/react'
 import { EdgeToolbar } from '@xyflow/react'
 import { ScissorsLineDashed } from 'lucide-react'
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 
@@ -9,16 +9,12 @@ import { useCanvasFlowStore } from '@/store/canvasFlowStore'
  * 自定义边组件
  * 在边的中心点显示工具栏，支持删除操作
  */
-export function CustomEdge(props: EdgeProps) {
+const CustomEdgeComponent = (props: EdgeProps) => {
   // 使用 getBezierPath 获取贝塞尔曲线路径和中心点坐标
   const [edgePath, centerX, centerY] = getBezierPath(props)
   // 从 store 获取删除边的方法
   const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge)
-  const highlightedEdgeIds = useCanvasFlowStore((state) => state.highlightedEdgeIds)
-
-  const isHighlighted = useMemo(() => {
-    return highlightedEdgeIds.includes(props.id)
-  }, [highlightedEdgeIds, props.id])
+  const isHighlighted = useCanvasFlowStore((state) => state.highlightedEdgeIds.includes(props.id))
 
   const edgeStyle = useMemo(() => {
     if (!isHighlighted) {
@@ -52,3 +48,5 @@ export function CustomEdge(props: EdgeProps) {
     </>
   )
 }
+
+export const CustomEdge = memo(CustomEdgeComponent)
