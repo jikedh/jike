@@ -10,6 +10,7 @@ import icon from '../../resources/icon.png?asset'
 let mainWindow: BrowserWindow | null = null
 
 function setupAutoUpdater(): void {
+  // 如果不是安装包运行或者平台不是 Windows，则不启用自动更新功能
   if (!app.isPackaged || process.platform !== 'win32') {
     return
   }
