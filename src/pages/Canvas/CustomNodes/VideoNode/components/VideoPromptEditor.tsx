@@ -233,7 +233,7 @@ export const VideoPromptEditor = forwardRef<VideoPromptEditorHandle, VideoPrompt
         editorProps: {
             attributes: {
                 class: cn(
-                    'nodrag nopan nowheel min-h-[88px] max-h-[220px] overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900/85 px-3 py-2 text-sm leading-6 text-neutral-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]',
+                    'nodrag nopan nowheel min-h-[88px] max-h-[220px] overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900/85 px-3 py-2 text-sm leading-6 text-neutral-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] cursor-text',
                     'focus:outline-none',
                 ),
             },

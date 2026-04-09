@@ -91,6 +91,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     const nodes = useCanvasFlowStore((state) => state.nodes)
     const edges = useCanvasFlowStore((state) => state.edges)
     const startImageGeneration = useCanvasFlowStore((state) => state.startImageGeneration)
+    const stopImagePolling = useCanvasFlowStore((state) => state.stopImagePolling)
     const updateImageNodeData = useCanvasFlowStore((state) => state.updateImageNodeData)
     const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge)
     const setReferenceHoverHighlight = useCanvasFlowStore((state) => state.setReferenceHoverHighlight)
@@ -473,7 +474,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         editorProps: {
             attributes: {
                 class: cn(
-                    'nodrag nopan nowheel min-h-[88px] max-h-[220px] overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900/85 px-3 py-2 text-sm leading-6 text-neutral-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]',
+                    'nodrag nopan nowheel min-h-[88px] max-h-[220px] overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900/85 px-3 py-2 text-sm leading-6 text-neutral-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] cursor-text',
                     'focus:outline-none',
                 ),
             },
@@ -714,6 +715,22 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         }
     }
 
+    /**
+     * 停止正在进行的图片生成轮询。
+     */
+    const handleStop = useCallback(() => {
+        if (!isGenerating) return
+        stopImagePolling(nodeId)
+        // 重置节点状态为完成，清除进度和结果
+        updateImageNodeData(nodeId, {
+            status: GenerationStatus.COMPLETED,
+            progress: 0,
+            result: undefined,
+            error: undefined,
+        })
+        success('已停止生成')
+    }, [isGenerating, stopImagePolling, nodeId, success, updateImageNodeData])
+
     return (
       <div className={PROMPT_PANEL_STYLES.container} style={{ pointerEvents: 'auto' }} >
 
@@ -916,19 +933,29 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                         </button>
                     )}
 
-              {/* 生成按钮 */}
-                        <Button
-                            type="button"
-                            unstyled
-                            className={PROMPT_PANEL_STYLES.generateButton}
-                            loading={isGenerating}
-                            onClick={handleGenerate}
-                            disabled={isUploading}
-                        >
-                {isGenerating && generatingCount > 0
-                  ? `生成中 (${generatingCount})`
-                  : '生成'}
-                        </Button>
+              {/* 生成/停止按钮 */}
+                        {isGenerating ? (
+                            <Button
+                                type="button"
+                                unstyled
+                                className={PROMPT_PANEL_STYLES.stopButton}
+                                onClick={handleStop}
+                            >
+                                停止
+                            </Button>
+                        ) : (
+                            <Button
+                                type="button"
+                                unstyled
+                                className={PROMPT_PANEL_STYLES.generateButton}
+                                onClick={handleGenerate}
+                                disabled={isUploading}
+                            >
+                                {generatingCount > 0
+                                    ? `生成中 (${generatingCount})`
+                                    : '生成'}
+                            </Button>
+                        )}
                     </div>
                 </div>
             </div>
