@@ -49,7 +49,8 @@ const createService = (serviceName: string, config: ServiceConfig): AxiosInstanc
 
   service.interceptors.request.use(
     (reqConfig) => {
-      const baseURL = config.getBaseURL()
+      // 请求级 baseURL 优先，未传时再使用服务默认 baseURL
+      const baseURL = reqConfig.baseURL || config.getBaseURL()
       reqConfig.baseURL = baseURL
 
       console.log(`[${serviceName}] baseURL:`, baseURL, '| url:', reqConfig.url)

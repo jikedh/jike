@@ -162,7 +162,7 @@ const LoginPage = () => {
             >
               {/* 标题 */}
               <div className="text-white text-base font-medium mb-[35px] relative pb-2 tracking-wider">
-                微信登录
+                微信登录11
                 <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-[2px] rounded" style={titleDecorationStyle} />
               </div>
 

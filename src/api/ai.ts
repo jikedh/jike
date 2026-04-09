@@ -191,6 +191,8 @@ export function getLzVideoTaskStatus(taskId: string) {
 // 获取场景二维码
 export function getSceneQrcode(data?: any): any {
   return jikeingService({
+    // 仅该接口走旧域名，避免受 jikeingService 全局 baseURL 影响
+    baseURL: 'https://api.jikeing.com',
     url: '/v1/user/get-scene-qrcode',
     method: 'get',
     params: data
@@ -200,6 +202,8 @@ export function getSceneQrcode(data?: any): any {
 // 查询场景状态
 export function querySceneStatus(sceneId: any): any {
   return jikeingService({
+    // 仅该接口走旧域名，避免受 jikeingService 全局 baseURL 影响
+    baseURL: 'https://api.jikeing.com',
     url: '/v1/user/query-scene-status',
     method: 'get',
     params: { scene_id: sceneId }
