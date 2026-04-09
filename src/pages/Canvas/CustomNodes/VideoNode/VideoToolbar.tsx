@@ -29,11 +29,8 @@ import type { VideoGenerationNode } from '@/types/flow'
 
 type VideoToolbarProps = {
   nodeId: string
-    data: VideoGenerationNode
-    selected: boolean
-    zoom?: number
-    onDuplicate?: () => void
-    onDelete?: () => void
+  data: VideoGenerationNode
+  onDelete?: () => void
 }
 
 type ActionKey = 'upload' | 'repaint' | 'erase' | 'enhance' | 'outpaint' | 'crop' | 'download' | 'preview'
@@ -47,10 +44,8 @@ type ActionKey = 'upload' | 'repaint' | 'erase' | 'enhance' | 'outpaint' | 'crop
  */
 export const VideoToolbar = ({
   nodeId,
-    data,
-    selected,
-    onDuplicate,
-    onDelete,
+  data,
+  onDelete,
 }: VideoToolbarProps) => {
     const [isLightboxOpen, setIsLightboxOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
@@ -195,7 +190,7 @@ export const VideoToolbar = ({
                             onClick={() => handleAction(item.key)}
                             disabled={isDisabled}
                             className={cn(
-                                "flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer",
+                              "flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer min-w-13",
                                 isDisabled
                                     ? "text-white/30 cursor-not-allowed"
                                     : isActive
@@ -206,19 +201,16 @@ export const VideoToolbar = ({
                             aria-label={item.label}
                         >
                             <Icon size={16} stroke={1.5} />
-                            <span className="text-[10px]">{item.label}</span>
+                        <span className="text-[10px] whitespace-nowrap">{item.label}</span>
                         </button>
                     )
                 })}
-
-                {/* 分隔线 */}
-                <div className="w-px h-6 bg-white/10 mx-1" />
 
                 {/* 删除按钮 */}
                 <button
                     type="button"
                     onClick={onDelete}
-                    className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg text-xs text-white/60 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+            className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg text-xs text-white/60 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer min-w-13"
                     title="删除"
                     aria-label="删除节点"
                 >

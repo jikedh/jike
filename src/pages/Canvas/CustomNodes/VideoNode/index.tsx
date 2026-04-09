@@ -1,10 +1,9 @@
-import { NodeToolbar, Position, type NodeProps, useStore } from '@xyflow/react'
+import { Position, type NodeProps, useStore } from '@xyflow/react'
 import { memo, useCallback, useMemo } from 'react'
 
 import { ButtonHandle } from '@/components/button-handle'
 import { cn } from '@/lib/utils'
 import { NodeContextMenu } from '@/pages/Canvas/components/NodeContextMenu'
-import { useNodeScale } from '@/hooks/useNodeScale'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { VideoNodeType } from '@/types/flow'
 
@@ -27,7 +26,6 @@ export const VideoNode = memo(({
     dragging
 }: NodeProps<VideoNodeType>) => {
     const isDragging = Boolean(dragging)
-    const { zoom } = useNodeScale()
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode)
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode)
     const separateToNodes = useCanvasFlowStore((state) => state.separateToNodes)
@@ -103,34 +101,25 @@ export const VideoNode = memo(({
                     className={`transition-opacity duration-150 ${handleVisibilityClass}`}
                 />
 
-                {/* 顶部工具栏：随视口缩放同步变化 */}
-                <NodeToolbar isVisible={shouldShowToolbar} position={Position.Top} offset={10 * zoom}>
-                    <div style={{ transform: `scale(${zoom})`, transformOrigin: 'bottom center' }}>
+                {/* 顶部工具栏：放在节点几何空间内，缩放时自动保持一致 */}
+                {shouldShowToolbar && (
+                    <div className="nodrag nopan nowheel absolute -top-12 left-1/2 z-50 -translate-x-1/2">
                         <VideoToolbar
                             nodeId={id}
                             data={data}
-                            selected={selected}
-                            onDuplicate={handleDuplicate}
                             onDelete={handleDelete}
                         />
                     </div>
-                </NodeToolbar>
-
-                {/* 底部增强输入区：随视口缩放同步变化 */}
-                <NodeToolbar isVisible={shouldShowToolbar} position={Position.Bottom} offset={18 * zoom}>
-                    <div style={{ width: '700px', transform: `scale(${zoom})`, transformOrigin: 'top center', pointerEvents: 'none' }}>
-                        <VideoPromptPanel nodeId={id} />
-                    </div>
-                </NodeToolbar>
+                )}
 
                 <div
                     className={cn(
-                        'group/card relative flex w-87.5 h-62.5 flex-col rounded-xl border bg-linear-to-br from-[#141418] to-[#0d0d10] transition-all duration-300 ease-out',
+                        'group/card relative mt-14 flex w-87.5 h-62.5 flex-col rounded-xl border bg-linear-to-br from-[#141418] to-[#0d0d10] transition-all duration-300 ease-out',
                         selected
                             ? 'border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30'
                             : isSourceHighlighted
                                 ? 'border-[#B43FEB]/65 shadow-[0_0_18px_rgba(180,63,235,0.28),0_0_36px_rgba(180,63,235,0.12)] ring-1 ring-[#B43FEB]/20'
-                            : 'border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]'
+                                : 'border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]'
                     )}
                 >
                     {/* 选中状态角落装饰 */}
@@ -151,6 +140,13 @@ export const VideoNode = memo(({
                         <VideoContent data={data} />
                     </div>
                 </div>
+
+                {/* 底部增强输入区：放在节点几何空间内，缩放时自动保持一致 */}
+                {shouldShowToolbar && (
+                    <div className="nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2">
+                        <VideoPromptPanel nodeId={id} />
+                    </div>
+                )}
             </div>
         </NodeContextMenu>
     )
