@@ -89,6 +89,7 @@ export interface VideoGenerationNode {
   metadata: {
     size?: string; // 视频尺寸，例如 "1920x1080", "720x720"
     resolution?: string; // 视频分辨率，如 "720p", "480p"
+    url?: string; // 兼容部分模型返回的元数据视频地址
     seed?: number; // 随机种子，用于控制生成内容的随机性
     // Veo3 专属扩展参数
     generateAudio?: boolean; // 是否生成音频

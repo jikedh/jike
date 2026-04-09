@@ -58,7 +58,19 @@ export const VideoToolbar = ({
   const updateVideoNodeData = useCanvasFlowStore((state) => state.updateVideoNodeData)
 
     // 对齐图片工具栏的数据组织方式，统一使用数组映射给 Lightbox
-    const videoUrls = data.result?.data?.map((item) => item.url) ?? []
+  // 并兼容 metadata.url 返回结构
+  const videoUrls = useMemo(() => {
+    const urls = (data.result?.data ?? []).map((item) => item.url).filter(Boolean)
+    if (urls.length > 0) {
+      return urls as string[]
+    }
+
+    if (data.metadata?.url) {
+      return [data.metadata.url]
+    }
+
+    return []
+  }, [data.result?.data, data.metadata?.url])
     const currentVideoUrl = videoUrls[0]
 
     const toolbarActions = useMemo(() => {

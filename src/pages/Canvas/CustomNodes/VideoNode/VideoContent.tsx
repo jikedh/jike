@@ -7,14 +7,14 @@ type VideoContentProps = {
 }
 
 export const VideoContent = ({ data, onRetry }: VideoContentProps) => {
-    const videoUrl = data.result?.data?.[0]?.url
+  const videoUrl = data.result?.data?.find((item) => !!item?.url)?.url || data.metadata?.url
     const status = data.status ?? GenerationStatus.COMPLETED
     const progress = data.progress ?? 0
     const error = data.error
 
     if (status === GenerationStatus.FAILED) {
         const displayMessage = error?.detail || error?.serverMessage || error?.message || '生成失败，请稍后再试'
-        
+
         return (
             <div className="nopan h-full w-full flex flex-col items-center justify-center p-4 text-center bg-destructive/5">
                 <div className="text-sm font-medium text-destructive mb-2">生成失败</div>

@@ -25,6 +25,7 @@ import { getCanvasDataKey, saveCanvasData, loadCanvasData, getMediaUrl, saveGene
 import { uploadFileToOSS } from '@/utils/oss'
 import { buildMidjourneyPrompt } from '@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt'
 import { getRequestErrorMessage } from '@/utils/requestErrorHandler'
+import { normalizeVideoTaskResponse } from '@/utils/video-response-normalizer'
 
 // ==================== 持久化配置 ====================
 
@@ -215,6 +216,8 @@ const pendingTaskCounts = new Map<string, number>()
 const VIDEO_POLL_INTERVAL = 10000
 // 视频生成超时时间（30 分钟）
 const VIDEO_TIMEOUT = 30 * 60 * 1000
+// 后端已完成但短时间未返回 URL 时，允许继续轮询一段时间
+const VIDEO_RESULT_WAIT_TIMEOUT = 10 * 1000
 // 视频轮询控制器：用于中止旧轮询
 const videoPollingControllers = new Map<string, AbortController>()
 
@@ -421,33 +424,6 @@ const buildReferenceHighlightState = (referenceHoverRefCounts: Record<string, nu
     referenceHoverRefCounts: nextRefCounts,
     highlightedEdgeIds: Array.from(highlightedEdgeIdSet),
     highlightedSourceNodeIds: Array.from(highlightedSourceNodeIdSet),
-  }
-}
-
-/**
- * 兼容多种视频响应结构，提取标准化结果
- */
-const extractVideoResult = (response: any) => {
-  if (response?.result?.data?.length) {
-    return response.result
-  }
-
-  const metadataUrl = response?.metadata?.url
-  if (metadataUrl) {
-    return {
-      type: 'video',
-      data: [
-        {
-          url: metadataUrl,
-          format: response?.metadata?.format ?? 'mp4',
-        },
-      ],
-    }
-  }
-
-  return {
-    type: 'video',
-    data: [],
   }
 }
 
@@ -898,6 +874,7 @@ const pollVideoGeneration = async (
   getState: () => CanvasFlowState
 ) => {
   const startTime = Date.now()
+  let missingResultUrlStartTime: number | null = null
   try {
     while (true) {
       await wait(VIDEO_POLL_INTERVAL, signal)
@@ -931,83 +908,37 @@ const pollVideoGeneration = async (
         return
       }
 
-      // Seedance2.0 走快手接口：状态字段位于 response.data
-      if (isSeedance20) {
-        const status = response?.data?.status
-        const progress = response?.data?.progress ?? 0
-        const resultUrl = response?.data?.video_url
+      const normalized = normalizeVideoTaskResponse(model, response)
+      const normalizedTaskId = normalized.taskId ?? taskId
 
-        if (status === 'succeeded' && resultUrl) {
-          // 下载并保存视频到本地
-          const projectId = getState().projectId
-          let processedData: any[] = [{ url: resultUrl, format: 'mp4' }]
-
-          if (projectId) {
-            try {
-              const fileName = await saveGeneratedVideoToLocal(projectId, resultUrl, 'mp4')
-
-              if (fileName) {
-                const relativePath = getLocalFilePath(projectId, 'generate_video', fileName)
-                console.log('[pollVideoGeneration] 视频已保存到本地:', fileName, relativePath)
-                processedData = [{
-                  url: resultUrl,
-                  format: 'mp4',
-                  localFileName: fileName,
-                  relativePath,
-                }]
-              }
-            } catch (saveError) {
-              console.error('[pollVideoGeneration] 保存视频到本地失败:', saveError)
-            }
+      if (normalized.status === GenerationStatus.COMPLETED) {
+        if (normalized.missingResultUrl) {
+          if (!missingResultUrlStartTime) {
+            missingResultUrlStartTime = Date.now()
           }
 
-          setState((state) => ({
-            nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-              ...data,
-              status: GenerationStatus.COMPLETED,
-              progress: 100,
-              task_id: response?.data?.task_id ?? taskId,
-              result: {
-                type: 'video',
-                data: processedData,
-              },
-              error: undefined,
-            })),
-          }))
+          if (Date.now() - missingResultUrlStartTime <= VIDEO_RESULT_WAIT_TIMEOUT) {
+            setState((state) => ({
+              nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+                ...data,
+                status: GenerationStatus.IN_PROGRESS,
+                progress: normalized.progress,
+                task_id: normalizedTaskId,
+              })),
+            }))
+            continue
+          }
 
-          stopVideoPollingInternal(nodeId)
-          return
-        }
-
-        if (status === 'succeeded') {
-          setState((state) => ({
-            nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-              ...data,
-              status: GenerationStatus.COMPLETED,
-              progress: 100,
-              task_id: response?.data?.task_id ?? taskId,
-              result: {
-                type: 'video',
-                data: [],
-              },
-              error: undefined,
-            })),
-          }))
-
-          stopVideoPollingInternal(nodeId)
-          return
-        }
-
-        if (status === 'failed' || status === 'canceled') {
+          const missingUrlErrorCode = isSeedance20 ? 'LZ_VIDEO_MISSING_URL' : 'VIDEO_MISSING_URL'
           setState((state) => ({
             nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
               ...data,
               status: GenerationStatus.FAILED,
-              progress,
-              task_id: response?.data?.task_id ?? taskId,
+              progress: normalized.progress,
+              task_id: normalizedTaskId,
               error: {
-                code: 'LZ_VIDEO_FAILED',
-                message: response?.data?.error || response?.message || '生成失败，请稍后再试',
+                code: missingUrlErrorCode,
+                message: '任务已完成但未返回视频地址，请稍后重试',
               },
             })),
           }))
@@ -1016,25 +947,10 @@ const pollVideoGeneration = async (
           return
         }
 
-        // queued/processing/running 统一按进行中处理
-        setState((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            status: GenerationStatus.IN_PROGRESS,
-            progress,
-            task_id: response?.data?.task_id ?? taskId,
-          })),
-        }))
-        continue
-      }
+        missingResultUrlStartTime = null
 
-      // 其他模型
-      if (response.status === 'completed') {
         const projectId = getState().projectId
-        const resultData = extractVideoResult(response)
-
-        // 处理每个生成的视频
-        const processedResultData = await Promise.all(resultData.map(async (item: any) => {
+        const processedResultData = await Promise.all(normalized.videoItems.map(async (item: any) => {
           if (item.url && projectId) {
             try {
               const ext = item.format || 'mp4'
@@ -1061,7 +977,7 @@ const pollVideoGeneration = async (
             ...data,
             status: GenerationStatus.COMPLETED,
             progress: 100,
-            task_id: response.id ?? taskId,
+            task_id: normalizedTaskId,
             result: {
               type: 'video',
               data: processedResultData,
@@ -1074,16 +990,17 @@ const pollVideoGeneration = async (
         return
       }
 
-      if (response.status === 'failed') {
+      if (normalized.status === GenerationStatus.FAILED) {
+        const failedErrorCode = isSeedance20 ? 'LZ_VIDEO_FAILED' : 'UNKNOWN_ERROR'
         setState((state) => ({
           nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
             ...data,
             status: GenerationStatus.FAILED,
-            progress: response.progress ?? 0,
-            task_id: response.id ?? taskId,
-            error: response.error ?? {
-              code: 'UNKNOWN_ERROR',
-              message: '生成失败，请稍后再试',
+            progress: normalized.progress,
+            task_id: normalizedTaskId,
+            error: {
+              code: failedErrorCode,
+              message: normalized.errorMessage || '生成失败，请稍后再试',
             },
           })),
         }))
@@ -1092,13 +1009,14 @@ const pollVideoGeneration = async (
         return
       }
 
-      // 更新进度
+      missingResultUrlStartTime = null
+
       setState((state) => ({
         nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
           ...data,
-          status: GenerationStatus.IN_PROGRESS,
-          progress: response.progress ?? 0,
-          task_id: response.id ?? taskId,
+          status: normalized.status,
+          progress: normalized.progress,
+          task_id: normalizedTaskId,
         })),
       }))
     }
