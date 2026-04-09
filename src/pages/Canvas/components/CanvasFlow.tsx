@@ -995,6 +995,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                     fitView
                     minZoom={0.2}
                     maxZoom={2}
+              onlyRenderVisibleElements
                     colorMode='dark'
                     deleteKeyCode={['Backspace', 'Delete']}
                     panOnDrag={isSpacePressed ? true : [1]}

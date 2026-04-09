@@ -2097,6 +2097,16 @@ duplicateNode: (nodeId: string) => {
         targetHandle: 'input',
       })
 
+      // 先将提示词回填到子图的文本输入区域
+      const promptDraftHtml = sourcePrompt
+        ? `<p>${finalPrompt}</p>`
+        : `<p>${splitPrompt}</p>`
+
+      get().updateImageNodeData(newId, {
+        promptDraft: finalPrompt,
+        promptDraftHtml,
+      })
+
       const payload: any = {
         model: sourceModel,
         prompt: finalPrompt,
