@@ -33,7 +33,8 @@ const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
     useBearer: false,
   },
   jikeing: {
-    getBaseURL: () => 'https://api.jikeing.com',
+    // getBaseURL: () => 'https://api.jikeing.com',
+    getBaseURL: () => 'https://api-v2.jikeing.com',
     getToken: getJikeingToken,
     authHeader: 'x-token',
     useBearer: false,

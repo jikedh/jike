@@ -221,3 +221,15 @@ export function getUserScoreBalance(): any {
     method: 'get'
   })
 }
+
+// 获取用户会员信息
+export function getMemberInfoByUUId(id: string): any {
+  return jikeingService({
+    url: `/get-member-info-by-uuid/${id}`,
+    method: 'get',
+    // params: { uuid: data.uuid || data }
+    // params: 1933128037681942528
+  })
+}
+
+
