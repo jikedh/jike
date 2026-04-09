@@ -31,8 +31,6 @@ import { InpaintDialog } from './InpaintDialog'
 type ImageToolbarProps = {
   nodeId: string
   data: ImageGenerationNode
-  selected: boolean
-  onDuplicate?: () => void
   onDelete?: () => void
   onCrop?: (file: File) => Promise<void>
 }
@@ -42,7 +40,7 @@ type ActionKey = 'upload' | 'erase' | 'enhance' | 'outpaint' | 'crop' | 'downloa
 /**
  * 图片节点工具栏组件
  */
-export const ImageToolbar = memo(({ nodeId, data, selected, onDelete, onCrop }: ImageToolbarProps) => {
+export const ImageToolbar = memo(({ nodeId, data, onDelete, onCrop }: ImageToolbarProps) => {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
@@ -264,7 +262,7 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete, onCrop }: 
         onChange={handleFileChange}
       />
 
-      <div className="nodrag nopan nowheel inline-flex h-10 items-center gap-1 rounded-full bg-[#2a2a2d] border border-white/10 px-2 shadow-xl">
+      <div className="nodrag nopan nowheel inline-flex h-10  items-center gap-2  rounded-full border border-white/10 bg-[#2a2a2d]/95 px-1.5 shadow-xl backdrop-blur-sm">
         {toolbarActions.map((item) => {
           const Icon = item.icon
           const isActive = item.key === 'preview' ? isPreviewActive : false
@@ -277,7 +275,7 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete, onCrop }: 
               onClick={() => handleAction(item.key)}
               disabled={isDisabled}
               className={cn(
-                "flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer",
+                "flex flex-col items-center gap-0.5 whitespace-nowrap px-2 py-1.5 rounded-lg text-xs leading-none transition-colors cursor-pointer",
                 isDisabled
                   ? "text-white/30 cursor-not-allowed"
                   : isActive
@@ -288,24 +286,24 @@ export const ImageToolbar = memo(({ nodeId, data, selected, onDelete, onCrop }: 
               aria-label={item.label}
             >
               <Icon size={16} stroke={1.5} />
-              <span className="text-[10px]">{item.label}</span>
+              <span className="text-[10px] leading-none">{item.label}</span>
             </button>
           )
         })}
 
         {/* 分隔线 */}
-        <div className="w-px h-6 bg-white/10 mx-1" />
+        <div className="w-px h-6 bg-white/10 mx-0.5" />
 
         {/* 删除按钮 */}
         <button
           type="button"
           onClick={onDelete}
-          className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg text-xs text-white/60 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+          className="flex flex-col items-center gap-0.5 whitespace-nowrap px-2 py-1.5 rounded-lg text-xs leading-none text-white/60 transition-colors cursor-pointer hover:text-red-400 hover:bg-red-500/10"
           title="删除"
           aria-label="删除节点"
         >
           <IconTrash size={16} stroke={1.5} />
-          <span className="text-[10px]">删除</span>
+          <span className="text-[10px] leading-none">删除</span>
         </button>
       </div>
 
