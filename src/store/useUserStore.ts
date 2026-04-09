@@ -124,6 +124,6 @@ export const useUserStore = create<UserState & UserActions>((set, get) => ({
     if (state.loginStatus !== 1) {
       return false
     }
-    return state.vipLevel >= 1
+    return state.vipLevel >= 3
   },
 }))
