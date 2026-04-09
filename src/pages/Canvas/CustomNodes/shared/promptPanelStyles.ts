@@ -32,6 +32,8 @@ export const PROMPT_PANEL_STYLES = {
 
   generateButton: 'bg-[#B43FEB] text-white hover:bg-[#B43FEB]/80 h-8 px-4 text-xs font-medium rounded-lg transition-colors active:scale-[0.97]',
 
+  stopButton: 'bg-red-500/80 text-white hover:bg-red-500 h-8 px-4 text-xs font-medium rounded-lg transition-colors active:scale-[0.97]',
+
   label: 'text-xs font-medium text-white/70',
 
   secondaryText: 'text-white/40',

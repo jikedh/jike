@@ -35,6 +35,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   const nodes = useCanvasFlowStore((state) => state.nodes)
   const edges = useCanvasFlowStore((state) => state.edges)
   const startVideoGeneration = useCanvasFlowStore((state) => state.startVideoGeneration)
+  const stopVideoPolling = useCanvasFlowStore((state) => state.stopVideoPolling)
   const updateVideoNodeData = useCanvasFlowStore((state) => state.updateVideoNodeData)
   const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge)
   const setReferenceHoverHighlight = useCanvasFlowStore((state) => state.setReferenceHoverHighlight)
@@ -130,6 +131,22 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       promptDraftHtml: payload.html,
     })
   }, [nodeId, updateVideoNodeData])
+
+  /**
+   * 停止正在进行的视频生成轮询。
+   */
+  const handleStop = useCallback(() => {
+    if (!isGenerating) return
+    stopVideoPolling(nodeId)
+    // 重置节点状态为完成，清除进度和结果
+    updateVideoNodeData(nodeId, {
+      status: GenerationStatus.COMPLETED,
+      progress: 0,
+      result: undefined,
+      error: undefined,
+    })
+    success('已停止生成')
+  }, [isGenerating, stopVideoPolling, nodeId, success, updateVideoNodeData])
 
   /**
    * 触发视频生成。
@@ -262,16 +279,26 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
           />
 
           <div className="ml-auto">
-            <Button
-              type="button"
-              unstyled
-              className={PROMPT_PANEL_STYLES.generateButton}
-              loading={isGenerating}
-              onClick={handleGenerate}
-              disabled={isUploading}
-            >
-              生成
-            </Button>
+            {isGenerating ? (
+              <Button
+                type="button"
+                unstyled
+                className={PROMPT_PANEL_STYLES.stopButton}
+                onClick={handleStop}
+              >
+                停止
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                unstyled
+                className={PROMPT_PANEL_STYLES.generateButton}
+                onClick={handleGenerate}
+                disabled={isUploading}
+              >
+                生成
+              </Button>
+            )}
           </div>
         </div>
       </div>
