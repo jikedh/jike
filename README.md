@@ -10,10 +10,10 @@
 
 ```bash
 # 构建镜像
-docker build -t yunyun .
+docker build -t jike .
 
 # 运行容器
-docker run -d -p 3004:3004 --name yunyun yunyun:latest
+docker run -d -p 3004:3004 --name jike jike:latest
 ```
 
 > 请确保本地 Node 版本为 24，并使用 npm 进行依赖管理。
@@ -22,4 +22,4 @@ docker run -d -p 3004:3004 --name yunyun yunyun:latest
 
 ## 线上访问地址
 
-- 项目部署地址：[https://yunyun-165954-5-1362504576.sh.run.tcloudbase.com/#/home](https://yunyun-165954-5-1362504576.sh.run.tcloudbase.com/#/home)
+- 项目部署地址：[https://jike-165954-5-1362504576.sh.run.tcloudbase.com/#/home](https://jike-165954-5-1362504576.sh.run.tcloudbase.com/#/home)

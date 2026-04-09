@@ -8,9 +8,9 @@ export function cn(...inputs: ClassValue[]) {
 // ===================== localStorage API 密钥管理 =====================
 
 // localStorage 中存储 API 密钥的键名
-const AI_TOKEN_KEY = 'yunyun_ai_token'
-const ZEAKAI_TOKEN_KEY = 'yunyun_zeakai_token'
-const KUAIZI_TOKEN_KEY = 'yunyun_kuaizi_token'
+const AI_TOKEN_KEY = 'jike_ai_token'
+const ZEAKAI_TOKEN_KEY = 'jike_zeakai_token'
+const KUAIZI_TOKEN_KEY = 'jike_kuaizi_token'
 
 // 写死的默认服务密钥（用户首次使用时自动生效）
 // TODO: 请替换为实际的密钥值
@@ -135,7 +135,7 @@ export const isElectron = (): boolean => {
 export const getBaseURL = (apiPath: string): string => {
   const electronMode = isElectron()
   console.log('[getBaseURL] apiPath:', apiPath, '| isElectron:', electronMode)
-  
+
   if (electronMode) {
     const apiServers: Record<string, string> = {
       ai: 'https://toapis.com',

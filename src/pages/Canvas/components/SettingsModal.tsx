@@ -461,20 +461,20 @@ function ApiKeySection() {
 
   // 初始化时自动将默认值写入 localStorage，确保状态一致
   useMemo(() => {
-    const storedAiToken = localStorage.getItem('yunyun_ai_token')
-    const storedZeakaiToken = localStorage.getItem('yunyun_zeakai_token')
+      const storedAiToken = localStorage.getItem('jike_ai_token')
+      const storedZeakaiToken = localStorage.getItem('jike_zeakai_token')
 
     // 如果 localStorage 中没有值，则使用默认值并写入 localStorage
     if (!storedAiToken) {
       const defaultAiToken = getAiToken()
       if (defaultAiToken) {
-        localStorage.setItem('yunyun_ai_token', defaultAiToken)
+          localStorage.setItem('jike_ai_token', defaultAiToken)
       }
     }
     if (!storedZeakaiToken) {
       const defaultZeakaiToken = getZeakaiToken()
       if (defaultZeakaiToken) {
-        localStorage.setItem('yunyun_zeakai_token', defaultZeakaiToken)
+          localStorage.setItem('jike_zeakai_token', defaultZeakaiToken)
       }
     }
 
@@ -506,13 +506,13 @@ function ApiKeySection() {
   // 清空密钥
   const handleClearAiToken = () => {
     setAiToken('')
-    localStorage.removeItem('yunyun_ai_token')
+      localStorage.removeItem('jike_ai_token')
     success('AI 服务密钥已清空')
   }
 
   const handleClearZeakaiToken = () => {
     setZeakaiToken('')
-    localStorage.removeItem('yunyun_zeakai_token')
+      localStorage.removeItem('jike_zeakai_token')
     success('ZeakAI 服务密钥已清空')
   }
 
