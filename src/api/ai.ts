@@ -217,7 +217,7 @@ export function getUserInfo(): any {
 // 获取用户积分余额
 export function getUserScoreBalance(): any {
   return jikeingService({
-    url: '/userscore/v1/balance-info',
+    url: '/userscore/v2/balance-info',
     method: 'get'
   })
 }

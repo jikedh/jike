@@ -67,6 +67,7 @@ export const useUserStore = create<UserState & UserActions>((set, get) => ({
 
       if ((res.code === 10000 || res.code === 200) && res.data) {
         const data = res.data
+        console.log('[fetchUserInfo] 原始用户数据:', data)
         const vipLevel = data.vip_level ?? data.vipLevel ?? 0
         const pluginMember = data.is_plugin_member ?? data.pluginMember ?? false
         const materialMember = data.is_material_member ?? data.materialMember ?? false
@@ -123,6 +124,6 @@ export const useUserStore = create<UserState & UserActions>((set, get) => ({
     if (state.loginStatus !== 1) {
       return false
     }
-    return state.vipLevel >= 3
+    return state.vipLevel >= 1
   },
 }))
