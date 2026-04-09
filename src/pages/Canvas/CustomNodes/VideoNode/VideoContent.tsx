@@ -1,5 +1,6 @@
 import { GenerationStatus } from '@/constants/enum'
 import type { VideoGenerationNode } from '@/types/flow'
+import { getPrimaryVideoUrlFromNodeData } from './utils/video-url'
 
 type VideoContentProps = {
     data: VideoGenerationNode
@@ -7,7 +8,7 @@ type VideoContentProps = {
 }
 
 export const VideoContent = ({ data, onRetry }: VideoContentProps) => {
-  const videoUrl = data.result?.data?.find((item) => !!item?.url)?.url || data.metadata?.url
+    const videoUrl = getPrimaryVideoUrlFromNodeData(data)
     const status = data.status ?? GenerationStatus.COMPLETED
     const progress = data.progress ?? 0
     const error = data.error

@@ -26,6 +26,7 @@ import { cn, downloadImageFromUrl } from '@/lib/utils'
 import { uploadFileToOSS } from '@/utils/oss'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import type { VideoGenerationNode } from '@/types/flow'
+import { getVideoUrlsFromNodeData } from './utils/video-url'
 
 type VideoToolbarProps = {
   nodeId: string
@@ -57,20 +58,10 @@ export const VideoToolbar = ({
   // 更新视频节点数据：上传成功后将 URL 回填到当前节点
   const updateVideoNodeData = useCanvasFlowStore((state) => state.updateVideoNodeData)
 
-    // 对齐图片工具栏的数据组织方式，统一使用数组映射给 Lightbox
-  // 并兼容 metadata.url 返回结构
+  // 统一走视频节点 URL 提取工具，避免不同组件口径不一致。
   const videoUrls = useMemo(() => {
-    const urls = (data.result?.data ?? []).map((item) => item.url).filter(Boolean)
-    if (urls.length > 0) {
-      return urls as string[]
-    }
-
-    if (data.metadata?.url) {
-      return [data.metadata.url]
-    }
-
-    return []
-  }, [data.result?.data, data.metadata?.url])
+    return getVideoUrlsFromNodeData(data)
+  }, [data])
     const currentVideoUrl = videoUrls[0]
 
     const toolbarActions = useMemo(() => {

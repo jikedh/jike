@@ -2,7 +2,10 @@ import { GenerationStatus } from '@/constants/enum'
 
 const standardInProgressStatusMap: Record<string, GenerationStatus> = {
   queued: GenerationStatus.QUEUED,
+  pending: GenerationStatus.QUEUED,
   in_progress: GenerationStatus.IN_PROGRESS,
+  processing: GenerationStatus.IN_PROGRESS,
+  running: GenerationStatus.IN_PROGRESS,
 }
 
 const seedance20InProgressStatusMap: Record<string, GenerationStatus> = {
@@ -10,6 +13,18 @@ const seedance20InProgressStatusMap: Record<string, GenerationStatus> = {
   processing: GenerationStatus.IN_PROGRESS,
   running: GenerationStatus.IN_PROGRESS,
 }
+
+const standardFailedStatusSet = new Set([
+  'failed',
+  'canceled',
+  'cancelled',
+  'error',
+])
+
+const standardCompletedStatusSet = new Set([
+  'completed',
+  'succeeded',
+])
 
 const normalizeResultItems = (items: any[]) => {
   return items
@@ -26,10 +41,11 @@ const extractStandardVideoItems = (response: any) => {
     return resultItems
   }
 
-  const metadataUrl = response?.metadata?.url
-  if (metadataUrl) {
+  // 标准任务的兼容路径（按优先级兜底）
+  const fallbackUrl = response?.metadata?.url || response?.data?.video_url || response?.data?.url
+  if (fallbackUrl) {
     return [{
-      url: metadataUrl,
+      url: fallbackUrl,
       format: response?.metadata?.format ?? 'mp4',
     }]
   }
@@ -75,7 +91,7 @@ export const normalizeVideoTaskResponse = (model: string, response: any) => {
     const progress = response?.data?.progress ?? 0
     const videoItems = extractSeedance20VideoItems(response)
 
-    if (rawStatus === 'succeeded') {
+    if (rawStatus === 'succeeded' || rawStatus === 'completed') {
       return {
         status: GenerationStatus.COMPLETED,
         progress: 100,
@@ -86,7 +102,7 @@ export const normalizeVideoTaskResponse = (model: string, response: any) => {
       }
     }
 
-    if (rawStatus === 'failed' || rawStatus === 'canceled') {
+    if (rawStatus === 'failed' || rawStatus === 'canceled' || rawStatus === 'cancelled' || rawStatus === 'error') {
       return {
         status: GenerationStatus.FAILED,
         progress,
@@ -111,7 +127,7 @@ export const normalizeVideoTaskResponse = (model: string, response: any) => {
   const taskId = response?.id
   const progress = response?.progress ?? 0
 
-  if (rawStatus === 'completed') {
+  if (standardCompletedStatusSet.has(rawStatus)) {
     const videoItems = extractStandardVideoItems(response)
     return {
       status: GenerationStatus.COMPLETED,
@@ -123,7 +139,7 @@ export const normalizeVideoTaskResponse = (model: string, response: any) => {
     }
   }
 
-  if (rawStatus === 'failed') {
+  if (standardFailedStatusSet.has(rawStatus)) {
     return {
       status: GenerationStatus.FAILED,
       progress,

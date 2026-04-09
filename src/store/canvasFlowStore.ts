@@ -991,7 +991,7 @@ const pollVideoGeneration = async (
       }
 
       if (normalized.status === GenerationStatus.FAILED) {
-        const failedErrorCode = isSeedance20 ? 'LZ_VIDEO_FAILED' : 'UNKNOWN_ERROR'
+        const failedErrorCode = isSeedance20 ? 'LZ_VIDEO_FAILED' : 'VIDEO_FAILED'
         setState((state) => ({
           nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
             ...data,

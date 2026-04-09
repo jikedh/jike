@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 
 import { toChineseNumber } from '@/lib/utils'
 import type { AudioGenerationNode, ImageGenerationNode, NoteNodeData, VideoGenerationNode } from '@/types/flow'
+import { getPrimaryVideoUrlFromNodeData } from '../utils/video-url'
 
 /**
  * 视频节点引用项类型。
@@ -52,7 +53,7 @@ export const useVideoNodeReferences = ({
       .filter((node) => node?.type === 'videoNode')
       .map((node) => ({
         id: node.id,
-        url: (node.data as VideoGenerationNode).result?.data?.[0]?.url,
+        url: getPrimaryVideoUrlFromNodeData(node.data as VideoGenerationNode),
       }))
       .filter((item) => item.url) as VideoReferenceItem[]
   }, [parentNodeIds, nodes])
