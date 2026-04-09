@@ -48,8 +48,7 @@ type CanvasFlowProps = {
 // 画布流组件：仅负责 ReactFlow 相关状态与渲染。
 export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     // 通过 zustand 读取图状态，避免业务动作散落在多个组件。
-    const zustandNodes = useCanvasFlowStore((state) => state.nodes)
-    const edges = useCanvasFlowStore((state) => state.edges)
+  // 注：nodes 和 edges 不在此订阅（高频变化），使用本地 displayNodes/displayEdges 和 getState() 获取
     const currentProjectId = useCanvasFlowStore((state) => state.projectId)
     const storeOnNodesChange = useCanvasFlowStore((state) => state.onNodesChange)
     const onEdgesChange = useCanvasFlowStore((state) => state.onEdgesChange)
@@ -199,16 +198,30 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     //   - 拖动结束：同步最终位置到 Zustand（持久化）
     //   - 外部变更（添加/删除节点、图片生成结果等）：Zustand 变化时同步到 displayNodes
 
-    const [displayNodes, setDisplayNodes] = useState<AllNodeType[]>(zustandNodes)
+  // 初始化本地状态
+  const [displayNodes, setDisplayNodes] = useState<AllNodeType[]>(() =>
+    useCanvasFlowStore.getState().nodes
+  )
+  const [displayEdges, setDisplayEdges] = useState<EdgeType[]>(() =>
+    useCanvasFlowStore.getState().edges
+  )
     // 用 ref 而非 state 追踪拖动状态，避免引发额外渲染
     const isDraggingRef = useRef(false)
 
-    // 当 Zustand nodes 发生外部变更时（非拖动），同步到 displayNodes
+  // 监听 Zustand 状态变化（外部变更如添加/删除节点、图片生成结果等）
     useEffect(() => {
-        if (!isDraggingRef.current) {
-            setDisplayNodes(zustandNodes)
+      const unsubscribe = useCanvasFlowStore.subscribe(
+        // (state) => ({ nodes: state.nodes, edges: state.edges }),
+        (newState) => {
+      // 只在非拖动时更新显示状态
+          if (!isDraggingRef.current) {
+                setDisplayNodes(newState.nodes)
+              }
+          setDisplayEdges(newState.edges)
         }
-    }, [zustandNodes])
+      )
+      return unsubscribe
+    }, [])
 
     // 检测节点靠近并自动连接
     const checkAutoConnect = useCallback(
@@ -291,26 +304,19 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         [onConnect, storeOnNodesChange]
     )
 
-    // 本地 onNodesChange：拖动中只更新 displayNodes，拖动结束才同步 Zustand
+  // 本地 onNodesChange：只负责更新 displayNodes，位置变更在拖动结束时处理
     const onNodesChange = useCallback((changes: NodeChange<AllNodeType>[]) => {
         // 始终更新本地显示状态，保证拖动视觉流畅
         setDisplayNodes((prev) => applyNodeChanges(changes, prev))
 
-        // 过滤掉拖动进行中的位置变更，只把最终结果（dragging: false）和其他类型变更写入 Zustand
-        const persistableChanges = changes.filter(
-            (c) => !(c.type === 'position' && c.dragging === true)
+      // 只处理非位置相关的变更（选中、删除等），位置变更在 handleNodeDragStop 中处理
+      const nonPositionChanges = changes.filter(
+        (c) => c.type !== 'position'
         )
-        if (persistableChanges.length > 0) {
-            storeOnNodesChange(persistableChanges)
+      if (nonPositionChanges.length > 0) {
+        storeOnNodesChange(nonPositionChanges)
         }
-
-        // 检测拖动结束时的自动连接
-        changes.forEach((change) => {
-            if (change.type === 'position' && change.dragging === false && change.position) {
-                checkAutoConnect(change.id, change.position)
-            }
-        })
-    }, [storeOnNodesChange, checkAutoConnect])
+    }, [storeOnNodesChange])
 
     const handleNodeDragStart = useCallback(() => {
         isDraggingRef.current = true
@@ -318,9 +324,33 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
 
     const handleNodeDragStop = useCallback(() => {
         isDraggingRef.current = false
-        // ReactFlow 拖动结束时会自动触发 onNodesChange（dragging: false）
-        // 上面的 onNodesChange 已经将最终位置写入 Zustand，此处只需重置 ref 即可
-    }, [])
+
+      // 从 ReactFlow 实例读取最新的节点状态
+      const currentNodes = reactFlowInstance.getNodes() as AllNodeType[]
+      const zustandStateNodes = useCanvasFlowStore.getState().nodes
+
+      // 收集位置发生变化的节点
+      const positionChanges: NodeChange<AllNodeType>[] = []
+
+      currentNodes.forEach((node) => {
+        const zustandNode = zustandStateNodes.find(n => n.id === node.id)
+        if (zustandNode &&
+          (zustandNode.position.x !== node.position.x || zustandNode.position.y !== node.position.y)) {
+          positionChanges.push({
+            id: node.id,
+            type: 'position',
+            position: node.position,
+          })
+          // 检测拖动结束时的自动连接
+          checkAutoConnect(node.id, node.position)
+        }
+      })
+
+      // 批量写入 Zustand
+      if (positionChanges.length > 0) {
+        storeOnNodesChange(positionChanges)
+      }
+    }, [reactFlowInstance, storeOnNodesChange, checkAutoConnect])
 
     // 点击画布空白区域时取消所有节点的选中状态
     const handlePaneClick = useCallback(() => {
@@ -912,7 +942,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                 <input {...getInputProps()} />
                 <ReactFlow<AllNodeType, EdgeType>
                     nodes={displayNodes}
-                    edges={edges}
+              edges={displayEdges}
                     onNodesChange={onNodesChange}
                     onEdgesChange={onEdgesChange}
                     onConnect={onConnect}
