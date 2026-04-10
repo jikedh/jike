@@ -63,11 +63,17 @@ export default defineConfig(({ command, mode }) => {
           // 超时设置（用于长时间运行的请求）
           timeout: 300000,
         },
-        // Jikeing 后端服务代理 - 统一使用云端
+      // Jikeing 后端服务代理 - 统一使用云端
         '/api': {
           target: 'https://api.jikeing.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, ''),
+          timeout: 300000,
+        },
+        // Yunwu AI 服务代理
+        '/yunwu': {
+          target: 'https://yunwu.ai',
+          changeOrigin: true,
           timeout: 300000,
         },
       },

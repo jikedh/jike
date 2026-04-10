@@ -91,6 +91,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     const nodes = useCanvasFlowStore((state) => state.nodes)
     const edges = useCanvasFlowStore((state) => state.edges)
     const startImageGeneration = useCanvasFlowStore((state) => state.startImageGeneration)
+  const startGeminiPro2Generation = useCanvasFlowStore((state) => state.startGeminiPro2Generation)
     const stopImagePolling = useCanvasFlowStore((state) => state.stopImagePolling)
     const updateImageNodeData = useCanvasFlowStore((state) => state.updateImageNodeData)
     const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge)
@@ -118,20 +119,42 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         return currentNode.data as ImageGenerationNode
     }, [currentNode])
 
+  // 从 currentImageData 获取基础字段
+  const model = currentImageData?.model ?? 'gemini-3-pro-image-preview'
+  const platform = currentImageData?.platform
+
+  // 根据 model 和 platform 找到对应的模型 id
+  // 新建节点时 platform 为 undefined，需要回退到只按 model 匹配
+  const currentModelId = (() => {
+    // 优先精确匹配 model + platform
+    const matched = IMAGE_MODELS.find(
+      (item) => item.model === model && item.platform === platform
+    )
+    if (matched) {
+      return matched.id
+    }
+    // 回退：只按 model 匹配（新建节点时 platform 为 undefined）
+    // 由于所有 IMAGE_MODELS 中的模型都有 platform 值，这里改为按 id 回退
+    // 找不到时返回 id=3（默认的"谷歌 Gemini 3 Pro"）
+    const fallback = IMAGE_MODELS.find((item) => item.model === model)
+    return fallback?.id ?? 3
+  })()
+
   // 统一使用 size 字段存储宽高比/画面比例
-    const size = currentImageData?.size ?? '1:1'
-    const resolution = currentImageData?.resolution ?? '2K'
-    const model = currentImageData?.model ?? 'gemini-3-pro-image-preview'
+  const size = currentImageData?.size ?? '1:1'
+  const resolution = currentImageData?.resolution ?? '2K'
   const referenceImageUrls = currentImageData?.image_urls ?? []
-    const promptDraftHtml = currentImageData?.promptDraftHtml ?? '<p></p>'
+  const promptDraftHtml = currentImageData?.promptDraftHtml ?? '<p></p>'
 
   // ========== 模型专属参数 ==========
   // 判断是否为 Midjourney 系列模型
   const isMidjourneyModel = model === 'midjourney' || model === 'midjourney-niji7'
   // 判断是否为 Seedream 5.0 模型
   const isSeedreamModel = model === 'doubao-seedream-5-0'
-  // 判断是否为 Gemini 3 Pro 模型
-  const isGeminiModel = model === 'gemini-3-pro-image-preview'
+  // 判断是否为 Gemini 3 Pro 模型（渠道一，原有模型）
+  const isGeminiModel = model === 'gemini-3-pro-image-preview' && currentImageData?.platform === 'google'
+  // 判断是否为 Gemini 3 Pro 渠道二
+  const isGeminiPro2Model = currentImageData?.platform === 'google_pro2'
 
   // Midjourney 高级参数
   const midjourneyAdvanced = currentImageData?.midjourneyAdvanced ?? {
@@ -691,14 +714,31 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       let successCount = 0
       let failCount = 0
 
-      // 多次调用接口，每次只生成 1 张图片
-      for (let i = 0; i < imageCount; i++) {
+      // Gemini 3 Pro 渠道二：直接调用专用接口（无需轮询）
+      if (isGeminiPro2Model) {
+        for (let i = 0; i < imageCount; i++) {
           try {
-              await startImageGeneration(nodeId, buildPayload())
-              successCount++
-            } catch {
-          // 错误已由全局拦截器处理并在 ImageContent 中展示，此处不需要重复弹窗
-          failCount++
+            const payload = buildPayload()
+            // 渠道二使用独立接口
+            await startGeminiPro2Generation(nodeId, {
+              ...payload,
+              platform: 'google_pro2', // 标识渠道二
+            })
+            successCount++
+          } catch {
+            failCount++
+          }
+        }
+      } else {
+        // 多次调用接口，每次只生成 1 张图片
+        for (let i = 0; i < imageCount; i++) {
+          try {
+            await startImageGeneration(nodeId, buildPayload())
+            successCount++
+          } catch {
+            // 错误已由全局拦截器处理并在 ImageContent 中展示，此处不需要重复弹窗
+            failCount++
+          }
         }
       }
 
@@ -847,9 +887,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                 <div className="flex items-center gap-2">
                     {/* 生成模型 - 始终在最左侧 */}
                     <Select
-                        value={model}
+              value={String(currentModelId)}
                         onValueChange={(value) => {
-                            updateImageNodeData(nodeId, { model: value })
+                          // 通过 id 精确查找模型配置
+                          const selectedModel = IMAGE_MODELS.find((item) => item.id === Number(value))
+                          updateImageNodeData(nodeId, {
+                            model: selectedModel?.model ?? value,
+                            platform: selectedModel?.platform,
+                          })
                         }}
                     >
                         <SelectTrigger className={PROMPT_PANEL_STYLES.modelSelect}>
@@ -857,7 +902,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                         </SelectTrigger>
                         <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
                             {IMAGE_MODELS.map((item) => (
-                                <SelectItem key={item.id} value={item.model} className={PROMPT_PANEL_STYLES.modelSelectItem}>
+                              <SelectItem key={item.id} value={String(item.id)} className={PROMPT_PANEL_STYLES.modelSelectItem}>
                                     {item.name}
                                 </SelectItem>
                             ))}

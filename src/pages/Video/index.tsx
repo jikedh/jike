@@ -5,7 +5,7 @@
 export default function VideoPage() {
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white flex items-center justify-center">
-      <h1 className="text-4xl font-bold">短片合成功能正在开发中！测试有没有自动更新</h1>
+      <h1 className="text-4xl font-bold">Test</h1>
     </div>
   )
 }

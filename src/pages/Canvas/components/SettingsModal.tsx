@@ -1,4 +1,4 @@
-import { IconBolt, IconDownload, IconEye, IconEyeOff, IconFolder, IconKey, IconRestore, IconUpload, IconX } from '@tabler/icons-react'
+import { IconBolt, IconDownload, IconFolder, IconRestore, IconUpload, IconX } from '@tabler/icons-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -12,8 +12,6 @@ import { Switch } from '@/components/ui/switch'
 import { useCanvasFlowStore } from '@/store/canvasFlowStore'
 import useMessage from '@/hooks/useMessage'
 import { cn } from '@/utils/utils'
-import { getAiToken, setAiToken, getZeakaiToken, setZeakaiToken } from '@/utils/utils'
-import { Input } from '@/components/ui/input'
 import { clearProjectList } from '@/utils/projectStorage'
 
 type SettingsModalProps = {
@@ -26,7 +24,6 @@ const settingSections = [
     { id: 'general', label: '通用设置' },
     { id: 'canvas', label: '画布设置' },
     { id: 'interaction', label: '节点交互' },
-  { id: 'apikey', label: 'API 密钥' },
     { id: 'ai', label: 'AI 助手' },
     { id: 'collab', label: '协作通知' },
     { id: 'data', label: '数据与版本' },
@@ -241,9 +238,7 @@ export const SettingsModal = ({ open, onClose, isFirstLogin = false }: SettingsM
                             <div className="space-y-1">
                     {settingSections.filter(section => !((section as any).devOnly && !isDev)).map((section) => {
                       const getIcon = () => {
-                        if (section.id === 'apikey') return <IconKey size={14} />
                         if (section.id === 'data') return <IconDownload size={14} />
-                        if (section.id === 'shortcuts') return <IconKey size={14} />
                         if (section.id === 'about') return <IconBolt size={14} />
                         return <IconBolt size={14} />
                       }
@@ -366,11 +361,6 @@ export const SettingsModal = ({ open, onClose, isFirstLogin = false }: SettingsM
                                     </>
                                 )}
 
-                    {/* API 密钥设置 TODO */}
-                    {/* {activeSection === 'apikey' && (
-                      <ApiKeySection />
-                    )} */}
-
                                 {/* 数据与版本 - 导入导出 */}
                                 {activeSection === 'data' && (
                                     <>
@@ -483,172 +473,4 @@ export const SettingsModal = ({ open, onClose, isFirstLogin = false }: SettingsM
         </Dialog>
         </>
     )
-}
-
-// ===================== API 密钥输入区域组件 =====================
-
-function ApiKeySection() {
-  // 状态管理
-  const [aiToken, setAiTokenState] = useState('')
-  const [zeakaiToken, setZeakaiTokenState] = useState('')
-  const [showAiToken, setShowAiToken] = useState(false)
-  const [showZeakaiToken, setShowZeakaiToken] = useState(false)
-  const { success, error } = useMessage()
-
-  // 初始化时自动将默认值写入 localStorage，确保状态一致
-  useMemo(() => {
-      const storedAiToken = localStorage.getItem('jike_ai_token')
-      const storedZeakaiToken = localStorage.getItem('jike_zeakai_token')
-
-    // 如果 localStorage 中没有值，则使用默认值并写入 localStorage
-    if (!storedAiToken) {
-      const defaultAiToken = getAiToken()
-      if (defaultAiToken) {
-          localStorage.setItem('jike_ai_token', defaultAiToken)
-      }
-    }
-    if (!storedZeakaiToken) {
-      const defaultZeakaiToken = getZeakaiToken()
-      if (defaultZeakaiToken) {
-          localStorage.setItem('jike_zeakai_token', defaultZeakaiToken)
-      }
-    }
-
-    // 更新状态
-    setAiTokenState(getAiToken())
-    setZeakaiTokenState(getZeakaiToken())
-  }, [])
-
-  // 保存 AI 密钥
-  const handleSaveAiToken = () => {
-    if (!aiToken.trim()) {
-      error('请输入 AI 服务密钥')
-      return
-    }
-    setAiToken(aiToken.trim())
-    success('AI 服务密钥已保存')
-  }
-
-  // 保存 ZeakAI 密钥
-  const handleSaveZeakaiToken = () => {
-    if (!zeakaiToken.trim()) {
-      error('请输入 ZeakAI 服务密钥')
-      return
-    }
-    setZeakaiToken(zeakaiToken.trim())
-    success('ZeakAI 服务密钥已保存')
-  }
-
-  // 清空密钥
-  const handleClearAiToken = () => {
-    setAiToken('')
-      localStorage.removeItem('jike_ai_token')
-    success('AI 服务密钥已清空')
-  }
-
-  const handleClearZeakaiToken = () => {
-    setZeakaiToken('')
-      localStorage.removeItem('jike_zeakai_token')
-    success('ZeakAI 服务密钥已清空')
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* AI 服务密钥 */}
-      <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
-        <div className="mb-3">
-          <div className="text-sm font-medium text-white/80">AI 服务密钥</div>
-          <div className="text-xs text-white/40 mt-1">用于文字对话、图片生成、视频生成等 API 调用</div>
-        </div>
-        <div className="space-y-2">
-          <div className="relative">
-            <Input
-              type={showAiToken ? 'text' : 'password'}
-              placeholder="请输入 AI 服务密钥 (sk-...)"
-              value={aiToken}
-              onChange={(e) => setAiTokenState(e.target.value)}
-              className="h-9 pr-10 border-white/10 bg-black/50 text-white placeholder:text-white/30"
-            />
-            <button
-              type="button"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60"
-              onClick={() => setShowAiToken(!showAiToken)}
-            >
-              {showAiToken ? <IconEyeOff size={16} /> : <IconEye size={16} />}
-            </button>
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="blue" onClick={handleSaveAiToken}>
-              保存
-            </Button>
-            <Button size="sm" variant="blue" onClick={handleClearAiToken}>
-              清空
-            </Button>
-            <Button size="sm" variant="default" onClick={() => window.open('https://toapis.com/', '_blank')}>
-              <IconDownload size={14} />
-              获取
-            </Button>
-            {getAiToken() && (
-              <span className="flex items-center text-xs text-green-400">
-                ● 已配置
-              </span>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* ZeakAI 服务密钥 (Midjourney) */}
-      <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
-        <div className="mb-3">
-          <div className="text-sm font-medium text-white/80">ZeakAI 服务密钥</div>
-          <div className="text-xs text-white/40 mt-1">用于 Midjourney 图片生成 API 调用</div>
-        </div>
-        <div className="space-y-2">
-          <div className="relative">
-            <Input
-              type={showZeakaiToken ? 'text' : 'password'}
-              placeholder="请输入 ZeakAI 服务密钥"
-              value={zeakaiToken}
-              onChange={(e) => setZeakaiTokenState(e.target.value)}
-              className="h-9 pr-10 border-white/10 bg-black/50 text-white placeholder:text-white/30"
-            />
-            <button
-              type="button"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60"
-              onClick={() => setShowZeakaiToken(!showZeakaiToken)}
-            >
-              {showZeakaiToken ? <IconEyeOff size={16} /> : <IconEye size={16} />}
-            </button>
-          </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="blue" onClick={handleSaveZeakaiToken}>
-              保存
-            </Button>
-            <Button size="sm" variant="blue" onClick={handleClearZeakaiToken}>
-              清空
-            </Button>
-            <Button size="sm" variant="default" onClick={() => window.open('https://zeakai-api.api4midjourney.com/', '_blank')}>
-              <IconDownload size={14} />
-              获取
-            </Button>
-            {getZeakaiToken() && (
-              <span className="flex items-center text-xs text-green-400">
-                ● 已配置
-              </span>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* 说明 */}
-      <div className="rounded-lg bg-[#B43FEB]/10 border border-[#B43FEB]/20 px-4 py-3">
-        <div className="text-xs text-white/70">
-          <div className="font-medium mb-1 text-[#B43FEB]">💡 提示</div>
-          <div>• 密钥存储在浏览器本地，不会发送到服务器</div>
-          <div>• 清除浏览器缓存会导致密钥丢失，请妥善保管</div>
-          <div>• 生产环境建议通过 Nginx 配置环境变量添加密钥</div>
-        </div>
-      </div>
-    </div>
-  )
 }

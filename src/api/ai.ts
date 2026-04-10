@@ -1,6 +1,6 @@
 // import aiService, { zeakaiRequest, getAiToken } from '@/utils/aiRequest'
 import { EventSourceParserStream } from 'eventsource-parser/stream'
-import { aiService, zeakaiRequest, kuaiziRequest, jikeingService } from '@/utils/aiRequest'
+import { aiService, zeakaiRequest, kuaiziRequest, jikeingService, yunwuRequest } from '@/utils/aiRequest'
 import { getAiToken, getBaseURL } from '@/utils/utils'
 
 // ===================== 账户余额相关 =====================
@@ -236,4 +236,37 @@ export function getMemberInfoByUUId(id: string): any {
   })
 }
 
+// ===================== Gemini 多模型内容生成相关 =====================
 
+/**
+ * Gemini 多模型内容生成接口
+ * 支持文本和图片输入，生成文本或图片内容
+ * API 端点: /v1beta/models/{modeName}:generateContent
+ * @param modeName 模型名称，如 gemini-2.5-flash-image、gemini-2.0-flash 等
+ * @param data 请求数据，包含 contents 等字段
+ * @param signal 可选的 AbortSignal 用于取消请求
+ */
+export function generateGeminiContent(modeName: string, data: any, signal?: AbortSignal) {
+  return yunwuRequest({
+    url: `/v1beta/models/${modeName}:generateContent`,
+    method: 'post',
+    data,
+    signal,
+  })
+}
+
+/**
+ * Gemini 多模型内容生成接口（流式响应版本）
+ * @param modeName 模型名称
+ * @param data 请求数据
+ * @param signal 可选的 AbortSignal
+ */
+export function generateGeminiContentStream(modeName: string, data: any, signal?: AbortSignal) {
+  return yunwuRequest({
+    url: `/v1beta/models/${modeName}:generateContent`,
+    method: 'post',
+    data: { ...data, stream: true },
+    signal,
+    responseType: 'stream',
+  })
+}

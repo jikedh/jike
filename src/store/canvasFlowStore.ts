@@ -16,13 +16,15 @@ import {
   getLzVideoTaskStatus,
   getVideoTaskStatus,
 } from '@/api/ai'
-import { submitMjImagine, fetchMjTask } from '@/api/ai'
+import { submitMjImagine, fetchMjTask, generateGeminiContent } from '@/api/ai'
 import { useChatSettingsStore } from '@/store/chatSettingsStore'
 import { getAgentPresetById, type AgentPresetId } from '@/constants/agent-presets'
 import type { AllNodeType, EdgeType, ImageGenerationNode, VideoGenerationNode, AudioGenerationNode } from '@/types/flow'
 import { GenerationStatus } from '@/constants/enum'
 import { getCanvasDataKey, saveCanvasData, loadCanvasData, getMediaUrl, saveGeneratedImageToLocal, saveGeneratedVideoToLocal, getLocalFilePath } from '@/utils/projectStorage'
+import type { GeminiYwResponseBody } from '@/types/detail/gemini-yw'
 import { uploadFileToOSS } from '@/utils/oss'
+import { uploadBase64ToOSS } from '@/utils/base64ToImage'
 import { buildMidjourneyPrompt } from '@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt'
 import { getRequestErrorMessage } from '@/utils/requestErrorHandler'
 import { normalizeVideoTaskResponse } from '@/utils/video-response-normalizer'
@@ -152,6 +154,8 @@ type CanvasFlowState = {
   startImageGeneration: (nodeId: string, payload: any) => Promise<void>
   /** 手动停止图片轮询（防止内存泄露） */
   stopImagePolling: (nodeId: string) => void
+  /** Gemini 3 Pro 渠道二：直接调用 API 并上传 OSS（无需轮询） */
+  startGeminiPro2Generation: (nodeId: string, payload: any) => Promise<void>
   /** 拆图：将图片节点拆分为宫格子图 */
   splitImage: (nodeId: string, gridSize: number) => void
   /** 独立为图片：将节点中的多张图片/视频拆分为独立节点 */
@@ -2045,6 +2049,168 @@ duplicateNode: (nodeId: string) => {
       imagePollingControllers.delete(taskId)
     })
     pendingTaskCounts.delete(nodeId)
+  },
+
+  /**
+   * Gemini 3 Pro 渠道二：直接调用 API 并上传 OSS（无需轮询）
+   * @param nodeId 节点 ID
+   * @param payload 包含 prompt, image_urls, size, resolution 等字段
+   */
+  startGeminiPro2Generation: async (nodeId, payload) => {
+    // 先中止旧轮询（清除该节点所有相关的 polling controller）
+    imagePollingControllers.forEach((controller, taskId) => {
+      controller.abort()
+      imagePollingControllers.delete(taskId)
+    })
+    pendingTaskCounts.delete(nodeId)
+
+    const { prompt, image_urls: imageUrls, size, resolution, promptDraft, promptDraftHtml } = payload
+
+    // 更新节点状态为排队中
+    set((state) => ({
+      nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+        ...data,
+        model: 'gemini-3-pro-image-preview',
+        originalModel: payload.originalModel ?? 'gemini-3-pro-image-preview',
+        prompt,
+        promptDraft: promptDraft ?? '',
+        promptDraftHtml: promptDraftHtml ?? '<p></p>',
+        size,
+        resolution,
+        status: GenerationStatus.QUEUED,
+        progress: 0,
+        error: undefined,
+        result: {
+          type: 'image',
+          data: data.result?.data ?? [],
+        },
+      })),
+    }))
+
+    try {
+      // 1. 将参考图 URL 转换为 Base64
+      const imageBase64s: string[] = []
+      for (const url of imageUrls) {
+        try {
+          const response = await fetch(url)
+          if (response.ok) {
+            const contentType = response.headers.get('content-type') || 'image/jpeg'
+            const arrayBuffer = await response.arrayBuffer()
+            const binary = btoa(
+              new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+            )
+            imageBase64s.push(`data:${contentType};base64,${binary}`)
+          }
+        } catch (err) {
+          console.error('[startGeminiPro2Generation] 转换参考图失败:', url, err)
+        }
+      }
+
+      // 2. 构造请求体
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const parts: any[] = imageBase64s.map((base64) => {
+        let mimeType = 'image/jpeg'
+        let data = base64
+        const dataUriMatch = base64.match(/^data:(image\/\w+);base64,(.+)$/)
+        if (dataUriMatch) {
+          mimeType = dataUriMatch[1]
+          data = dataUriMatch[2]
+        }
+        return {
+          inline_data: {
+            mime_type: mimeType,
+            data: data,
+          },
+          text: prompt, // 每个 part 都要包含重复的文本提示词
+        }
+      })
+
+      if (parts.length === 0) {
+        parts.push({ text: prompt })
+      }
+
+      const requestBody = {
+        contents: [{ parts }],
+        generationConfig: {
+          responseModalities: ['IMAGE'],
+        },
+      }
+
+      // 3. 更新状态为生成中
+      set((state) => ({
+        nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+          ...data,
+          status: GenerationStatus.IN_PROGRESS,
+          progress: 0,
+        })),
+      }))
+
+      // 4. 调用 API
+      const response: GeminiYwResponseBody = await generateGeminiContent(
+        'gemini-3-pro-image-preview',
+        requestBody
+      )
+
+      // 5. 解析响应，提取图片 Base64
+      const candidates = response.candidates ?? []
+      if (candidates.length === 0) {
+        throw new Error('API 返回为空')
+      }
+
+      const imageParts = candidates[0].content.parts.filter((p) => p.inlineData?.data)
+
+      // 6. 将每张图片上传到 OSS
+      const processedResultData = await Promise.all(
+        imageParts.map(async (part, index) => {
+          const base64Data = part.inlineData!.data
+          try {
+            const ossResult = await uploadBase64ToOSS(base64Data, `gemini-${Date.now()}-${index}`)
+            return {
+              url: ossResult.url,
+            }
+          } catch (ossError) {
+            console.error('[startGeminiPro2Generation] 上传图片到 OSS 失败:', ossError)
+            return {
+              url: `data:${part.inlineData!.mimeType};base64,${base64Data}`,
+            }
+          }
+        })
+      )
+
+      // 7. 更新节点状态为完成
+      set((state) => ({
+        nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+          const existingData = data.result?.data ?? []
+          const mergedData = [...existingData, ...processedResultData]
+          return {
+            ...data,
+            status: GenerationStatus.COMPLETED,
+            progress: 100,
+            result: {
+              type: 'image',
+              data: mergedData,
+            },
+            error: undefined,
+          }
+        }),
+      }))
+    } catch (startError) {
+      console.error('[startGeminiPro2Generation] Gemini 3 Pro 渠道二生成失败:', startError)
+      const serverMessage = getRequestErrorMessage(startError)
+      set((state) => ({
+        nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+          ...data,
+          status: GenerationStatus.FAILED,
+          error: {
+            code: 'GEMINI_PRO2_FAILED',
+            message: startError instanceof Error ? startError.message : '生成失败，请稍后再试',
+            detail: serverMessage,
+            serverMessage,
+          },
+        })),
+      }))
+      throw startError
+    }
   },
 
   /**

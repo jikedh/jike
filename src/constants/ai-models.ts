@@ -128,6 +128,7 @@ export const IMAGE_MODELS = [
   { id: 4, name: '豆包 Seedream 5.0', model: 'doubao-seedream-5-0', platform: 'Seedream' },
   { id: 5, name: 'Midjourney', model: 'midjourney', platform: 'midjourney' },
   { id: 6, name: 'Midjourney Niji7', model: 'midjourney-niji7', platform: 'midjourney' },
+  { id: 10, name: '谷歌 Gemini 3 Pro 渠道二', model: 'gemini-3-pro-image-preview', platform: 'google_pro2' },
 ];
 
 /** 图片尺寸配置 */
