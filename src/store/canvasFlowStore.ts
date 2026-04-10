@@ -2085,8 +2085,6 @@ duplicateNode: (nodeId: string) => {
 
       const splitPrompt = `这是一张${gridName}宫格的图片，中间是用白色分割线区分的。帮我把${gridName}宫格图中的第${row}行的第${col}列图片单独提取出来，放大为独立图片。与第${row}行的第${col}列图片保持完全相同的构图、色调，去除图片四个角落文字、字幕、标注，序号，高清优化图片所有细节，8K清晰度。`
 
-      const finalPrompt = sourcePrompt ? `${splitPrompt}\n\n原始提示词：${sourcePrompt}` : splitPrompt
-
       const newId = get().addNode('image', position)
 
       newEdges.push({
@@ -2098,18 +2096,14 @@ duplicateNode: (nodeId: string) => {
       })
 
       // 先将提示词回填到子图的文本输入区域
-      const promptDraftHtml = sourcePrompt
-        ? `<p>${finalPrompt}</p>`
-        : `<p>${splitPrompt}</p>`
-
       get().updateImageNodeData(newId, {
-        promptDraft: finalPrompt,
-        promptDraftHtml,
+        promptDraft: splitPrompt,
+        promptDraftHtml: `<p>${splitPrompt}</p>`,
       })
 
       const payload: any = {
         model: sourceModel,
-        prompt: finalPrompt,
+        prompt: splitPrompt,
         n: 1,
         metadata: {},
       }
