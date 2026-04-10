@@ -653,6 +653,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           finalPrompt = `${finalPrompt} --niji 7`
         }
       }
+        // Gemini 3 Pro 渠道二：在 prompt 末尾拼接 [尺寸:x:x] [分辨率:xK] 参数
+        if (isGeminiPro2Model) {
+            finalPrompt = `${finalPrompt} [尺寸:${size}] [分辨率:${resolution}]`
+        }
       // 发送给后端的 model 字段：如果是 midjourney-niji7 则改为 midjourney
       const backendModel = isNiji7Model ? 'midjourney' : model
 
@@ -921,6 +925,15 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                     )}
                     {isGeminiModel && (
                         // Gemini 3 Pro 整合参数面板
+                        <GeminiParamsPanel
+                            size={size}
+                            resolution={resolution}
+                            onSizeChange={(value) => updateImageNodeData(nodeId, { size: value })}
+                            onResolutionChange={(value) => updateImageNodeData(nodeId, { resolution: value })}
+                        />
+                    )}
+                    {isGeminiPro2Model && (
+                        // Gemini 3 Pro 渠道二整合参数面板（参数拼接到提示词）
                         <GeminiParamsPanel
                             size={size}
                             resolution={resolution}
