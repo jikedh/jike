@@ -7,47 +7,47 @@
 
 /* TODO @ 和 / 提及的样式修改在这里，后续有空再修改 */
 .image-node-mention-pill {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	border-radius: 999px;
-	border: 1px solid color-mix(in srgb, #4f46e5 22%, #c7d2fe 78%);
-	background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-	color: #3730a3;
-	font-weight: 600;
-	font-size: 12px;
-	line-height: 1;
-	padding: 4px 9px;
-	margin: 0 1px;
-	white-space: nowrap;
-	user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #4f46e5 22%, #c7d2fe 78%);
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  color: #3730a3;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 9px;
+  margin: 0 1px;
+  white-space: nowrap;
+  user-select: none;
 }
 
 .image-node-slash-pill {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	border-radius: 999px;
-	border: 1px solid color-mix(in srgb, #0f766e 22%, #99f6e4 78%);
-	background: linear-gradient(135deg, #ecfeff 0%, #ccfbf1 100%);
-	color: #115e59;
-	font-weight: 600;
-	font-size: 12px;
-	line-height: 1;
-	padding: 4px 9px;
-	margin: 0 1px;
-	white-space: nowrap;
-	user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, #0f766e 22%, #99f6e4 78%);
+  background: linear-gradient(135deg, #ecfeff 0%, #ccfbf1 100%);
+  color: #115e59;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 9px;
+  margin: 0 1px;
+  white-space: nowrap;
+  user-select: none;
 }
 
 .ProseMirror .image-node-mention-pill.ProseMirror-selectednode {
-	outline: 2px solid #6366f1;
-	outline-offset: 1px;
+  outline: 2px solid #6366f1;
+  outline-offset: 1px;
 }
 
 .ProseMirror .image-node-slash-pill.ProseMirror-selectednode {
-	outline: 2px solid #14b8a6;
-	outline-offset: 1px;
+  outline: 2px solid #14b8a6;
+  outline-offset: 1px;
 }
 
 .video-node-mention-pill {
@@ -55,9 +55,13 @@
   align-items: center;
   gap: 6px;
   border-radius: 8px;
-  border: 1px solid color-mix(in srgb, #B43FEB 30%, rgba(180, 63, 235, 0.3) 70%);
-  background: linear-gradient(135deg, rgba(180, 63, 235, 0.12) 0%, rgba(180, 63, 235, 0.08) 100%);
-  color: #B43FEB;
+  border: 1px solid color-mix(in srgb, #b43feb 30%, rgba(180, 63, 235, 0.3) 70%);
+  background: linear-gradient(
+    135deg,
+    rgba(180, 63, 235, 0.12) 0%,
+    rgba(180, 63, 235, 0.08) 100%
+  );
+  color: #b43feb;
   font-weight: 500;
   font-size: 12px;
   line-height: 1;
@@ -69,8 +73,12 @@
 }
 
 .video-node-mention-pill:hover {
-  background: linear-gradient(135deg, rgba(180, 63, 235, 0.2) 0%, rgba(180, 63, 235, 0.12) 100%);
-  border-color: color-mix(in srgb, #B43FEB 50%, rgba(180, 63, 235, 0.5) 50%);
+  background: linear-gradient(
+    135deg,
+    rgba(180, 63, 235, 0.2) 0%,
+    rgba(180, 63, 235, 0.12) 100%
+  );
+  border-color: color-mix(in srgb, #b43feb 50%, rgba(180, 63, 235, 0.5) 50%);
 }
 
 .video-node-mention-pill__thumbnail {
@@ -108,12 +116,12 @@
 }
 
 .ProseMirror-dropcursor::after {
-  content: '';
+  content: "";
   position: absolute;
   left: -2px;
   right: -2px;
   height: 2px;
-  background: #B43FEB;
+  background: #b43feb;
   border-radius: 1px;
   animation: dropcursor-pulse 1s ease-in-out infinite;
 }
@@ -127,7 +135,8 @@
 }
 
 @keyframes dropcursor-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {
@@ -162,7 +171,7 @@
 }
 
 .ProseMirror .video-node-mention-pill.ProseMirror-selectednode {
-  outline: 2px solid #B43FEB;
+  outline: 2px solid #b43feb;
   outline-offset: 1px;
 }
 
@@ -172,129 +181,129 @@
 }
 
 @theme inline {
-    --font-heading: var(--font-sans);
-    --font-sans: 'Geist Variable', sans-serif;
-  --font-legendary: 'Geist Variable', sans-serif;
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
-    --color-chart-5: var(--chart-5);
-    --color-chart-4: var(--chart-4);
-    --color-chart-3: var(--chart-3);
-    --color-chart-2: var(--chart-2);
-    --color-chart-1: var(--chart-1);
-    --color-ring: var(--ring);
-    --color-input: var(--input);
-    --color-border: var(--border);
-    --color-destructive: var(--destructive);
-    --color-accent-foreground: var(--accent-foreground);
-    --color-accent: var(--accent);
-    --color-muted-foreground: var(--muted-foreground);
-    --color-muted: var(--muted);
-    --color-secondary-foreground: var(--secondary-foreground);
-    --color-secondary: var(--secondary);
-    --color-primary-foreground: var(--primary-foreground);
-    --color-primary: var(--primary);
-    --color-popover-foreground: var(--popover-foreground);
-    --color-popover: var(--popover);
-    --color-card-foreground: var(--card-foreground);
-    --color-card: var(--card);
-    --color-foreground: var(--foreground);
-    --color-background: var(--background);
-    --radius-sm: calc(var(--radius) * 0.6);
-    --radius-md: calc(var(--radius) * 0.8);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) * 1.4);
-    --radius-2xl: calc(var(--radius) * 1.8);
-    --radius-3xl: calc(var(--radius) * 2.2);
-    --radius-4xl: calc(var(--radius) * 2.6);
+  --font-heading: var(--font-sans);
+  --font-sans: "Geist Variable", sans-serif;
+  --font-legendary: "Geist Variable", sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 :root {
-  --font-legendary: 'Geist Variable', sans-serif;
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+  --font-legendary: "Geist Variable", sans-serif;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
+  }
   body {
     @apply bg-background text-foreground;
-    }
+  }
   html {
     @apply font-sans;
-    }
+  }
 }
 
 @layer components {
@@ -320,120 +329,124 @@
 
 /* NoteNode 专用滚动条 */
 .note-scrollbar::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+  width: 6px;
+  height: 6px;
 }
 
 .note-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-
+  background: transparent;
 }
 
 .note-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.3);
-    border-radius: 3px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
 }
 
 .note-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.5);
 }
 
 /* 全景浏览器背景光晕动画 */
 @keyframes blob {
-    0% { transform: translate(0px, 0px) scale(1); }
-    33% { transform: translate(30px, -50px) scale(1.1); }
-    66% { transform: translate(-20px, 20px) scale(0.9); }
-    100% { transform: translate(0px, 0px) scale(1); }
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
 }
 
 .animate-blob {
-    animation: blob 7s infinite;
+  animation: blob 7s infinite;
 }
 
 .animation-delay-2000 {
-    animation-delay: 2s;
+  animation-delay: 2s;
 }
 
 .animation-delay-4000 {
-    animation-delay: 4s;
+  animation-delay: 4s;
 }
 
 /* 画布光标样式 */
 .canvas-cursor-default .react-flow__pane {
-    cursor: default !important;
+  cursor: default !important;
 }
 
 .canvas-cursor-pointer .react-flow__pane {
-    cursor: pointer !important;
+  cursor: pointer !important;
 }
 
 .canvas-cursor-grabbing .react-flow__pane {
-    cursor: grabbing !important;
+  cursor: grabbing !important;
 }
 
 .canvas-cursor-zoom-in .react-flow__pane {
-    cursor: zoom-in !important;
+  cursor: zoom-in !important;
 }
 
 /* 空格键按下时，整个画布显示抓手样式 */
 .react-flow[data-space-pressed="true"] {
-    cursor: grabbing !important;
+  cursor: grabbing !important;
 }
 
 .react-flow[data-space-pressed="true"] .react-flow__pane,
 .react-flow[data-space-pressed="true"] .react-flow__node,
 .react-flow[data-space-pressed="true"] .nodrag,
 .react-flow[data-space-pressed="true"] * {
-    cursor: grabbing !important;
+  cursor: grabbing !important;
 }
 
 /* 节点悬停光标样式 */
 .react-flow__node {
-    cursor: pointer !important;
+  cursor: pointer !important;
 }
 
 /* 框选范围样式 */
 .react-flow__selection {
-    background: rgba(180, 63, 235, 0.1) !important;
-    border: 1px solid rgba(180, 63, 235, 0.4) !important;
-    border-radius: 4px;
+  background: rgba(180, 63, 235, 0.1) !important;
+  border: 1px solid rgba(180, 63, 235, 0.4) !important;
+  border-radius: 4px;
 }
 
 /* 多选节点时的选中框样式 */
 .react-flow__nodesselection-rect {
-    background: rgba(180, 63, 235, 0.08) !important;
-    border: 1px dashed rgba(180, 63, 235, 0.5) !important;
-    border-radius: 8px;
+  background: rgba(180, 63, 235, 0.08) !important;
+  border: 1px dashed rgba(180, 63, 235, 0.5) !important;
+  border-radius: 8px;
 }
 
 /* NodeResizer 透明手柄样式 - 确保光标正确显示 */
 .react-flow__resize-control.handle {
-    background: transparent !important;
-    border: none !important;
+  background: transparent !important;
+  border: none !important;
 }
 
 .react-flow__resize-control.handle.top-left,
 .react-flow__resize-control.handle.bottom-right {
-    cursor: nwse-resize !important;
+  cursor: nwse-resize !important;
 }
 
 .react-flow__resize-control.handle.top-right,
 .react-flow__resize-control.handle.bottom-left {
-    cursor: nesw-resize !important;
+  cursor: nesw-resize !important;
 }
 
 /* 全景浏览器玻璃拟态面板 - 覆盖全局样式 */
 #panorama-root .glass-panel {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 /* 空格键按下时，禁用 nodrag 元素的鼠标事件，允许画布平移 */
 .react-flow[data-space-pressed="true"] .nodrag {
-    pointer-events: none !important;
+  pointer-events: none !important;
 }
-
-
-

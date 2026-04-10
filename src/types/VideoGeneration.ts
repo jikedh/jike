@@ -10,7 +10,7 @@ export interface VideoGenerationRequest {
   image_urls?: string[]; // 参考图像URL列表
   // 直接内联定义嵌套对象
   metadata?: {
-    n?:number; // 生成视频的数量
+    n?: number; // 生成视频的数量
     watermark?: boolean; // 是否添加水印
     hd?: boolean; // 是否生成高清版本
     private?: boolean; // 是否私密
@@ -22,7 +22,6 @@ export interface VideoGenerationRequest {
     character_created?: boolean; // 创建视频完成后，自动根据生成的视频创建角色
     character_from_task?: string; // 根据已经生成的任务 ID 来创建角色
   };
-
 }
 
 /**
@@ -33,11 +32,11 @@ export interface VideoGenerationResponse {
   id: string; // 任务唯一标识符，用于查询任务状态
   object: string; // 任务唯一标识符，用于查询任务状态
   model: string; // 模型
-  status: 'queued' | 'in_progress' | 'completed' | 'failed'; // 任务状态
+  status: "queued" | "in_progress" | "completed" | "failed"; // 任务状态
   progress?: number; // 任务进度，范围为0-100，表示任务完成的百分比
   created_at: number; // 创建时间戳
   metadata: {
-    size?:string; // 视频尺寸，例如 "1920x1080", "720x720"
+    size?: string; // 视频尺寸，例如 "1920x1080", "720x720"
   };
 }
 
@@ -49,7 +48,7 @@ export interface VideoTaskStatusResponse {
   id: string; // 任务唯一标识符
   object: string; // 对象类型，固定为 generation.task
   model: string; // 使用的视频生成模型
-  status: 'queued' | 'in_progress' | 'completed' | 'failed'; // 任务状态
+  status: "queued" | "in_progress" | "completed" | "failed"; // 任务状态
   progress: number; // 任务进度百分比（0-100）
   created_at: number; // 任务创建时间（Unix 时间戳）
   completed_at?: number; // 任务完成时间（Unix 时间戳，仅完成时返回）
@@ -69,4 +68,3 @@ export interface VideoTaskStatusResponse {
     message: string; // 错误描述
   };
 }
-

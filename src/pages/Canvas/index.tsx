@@ -1,23 +1,32 @@
-import { useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { ReactFlowProvider } from '@xyflow/react'
+import { useState } from "react";
+import { useParams } from "react-router-dom";
+import { ReactFlowProvider } from "@xyflow/react";
 
-import { CanvasFlow } from './components/CanvasFlow'
-import { CanvasSidebar } from './components/CanvasSidebar'
-import { CanvasChatToolbar } from './components/CanvasChatToolbar'
-import { ChatDrawer } from './components/ChatDrawer'
-import ReactFlowDevTools from './DevTools'
-import { useCanvasChat } from '@/hooks/useCanvasChat'
-import { useChatSettingsStore } from '@/store/chatSettingsStore'
+import { CanvasFlow } from "./components/CanvasFlow";
+import { CanvasSidebar } from "./components/CanvasSidebar";
+import { CanvasChatToolbar } from "./components/CanvasChatToolbar";
+import { ChatDrawer } from "./components/ChatDrawer";
+import ReactFlowDevTools from "./DevTools";
+import { useCanvasChat } from "@/hooks/useCanvasChat";
+import { useChatSettingsStore } from "@/store/chatSettingsStore";
 
 // 外部组件 - 提供 ReactFlowProvider 和工具栏
 const CanvasPage = () => {
   // 从路由参数获取项目 ID
-  const { projectId } = useParams<{ projectId: string }>()
-  const [isChatOpen, setIsChatOpen] = useState(false)
-  const { messages, isLoading, sendMessage, stopMessage, clearLocalMessages, setMessages } = useCanvasChat()
+  const { projectId } = useParams<{ projectId: string }>();
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const {
+    messages,
+    isLoading,
+    sendMessage,
+    stopMessage,
+    clearLocalMessages,
+    setMessages,
+  } = useCanvasChat();
   // 从设置 store 读取调试工具面板的显示状态
-  const devToolsVisible = useChatSettingsStore((state) => state.devToolsVisible)
+  const devToolsVisible = useChatSettingsStore(
+    (state) => state.devToolsVisible,
+  );
 
   return (
     <ReactFlowProvider>
@@ -49,7 +58,7 @@ const CanvasPage = () => {
         {devToolsVisible && <ReactFlowDevTools position="top-right" />}
       </div>
     </ReactFlowProvider>
-  )
-}
+  );
+};
 
-export default CanvasPage
+export default CanvasPage;

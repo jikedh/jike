@@ -4,7 +4,6 @@ export interface MJRequest {
   notifyHook?: string; // 结果回调地址
   base64Array?: string[]; // 图片数据的base64字符串数组
   state?: string; // 用于记录用户所需的自定义数据
-
 }
 
 export interface MJResponse {

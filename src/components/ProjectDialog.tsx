@@ -1,159 +1,168 @@
-import { useState, useRef, useEffect } from 'react'
-import { X, Upload, X as CloseIcon } from 'lucide-react'
-import { createProject, updateProject, renameProject, saveCoverImageToLocal, getCoverImageUrl, type ProjectMeta } from '@/utils/projectStorage'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { useUserStore } from '@/store/useUserStore'
-import { toast } from 'sonner'
+import { useState, useRef, useEffect } from "react";
+import { X, Upload, X as CloseIcon } from "lucide-react";
+import {
+  createProject,
+  updateProject,
+  renameProject,
+  saveCoverImageToLocal,
+  getCoverImageUrl,
+  type ProjectMeta,
+} from "@/utils/projectStorage";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { useUserStore } from "@/store/useUserStore";
+import { toast } from "sonner";
 
 interface ProjectDialogProps {
-  isOpen: boolean
-  onClose: () => void
-  project?: ProjectMeta | null
-  onSuccess?: (projectId: string) => void
+  isOpen: boolean;
+  onClose: () => void;
+  project?: ProjectMeta | null;
+  onSuccess?: (projectId: string) => void;
 }
 
 export default function ProjectDialog({
   isOpen,
   onClose,
   project,
-  onSuccess
+  onSuccess,
 }: ProjectDialogProps) {
-  const isEdit = !!project
+  const isEdit = !!project;
 
-  const [name, setName] = useState('')
-  const [coverUrl, setCoverUrl] = useState('')
-  const [description, setDescription] = useState('')
-  const [type, setType] = useState<'video' | 'script'>('video')
-  const [coverPreview, setCoverPreview] = useState('')
-  const [coverFile, setCoverFile] = useState<File | null>(null)
-  const coverFileInputRef = useRef<HTMLInputElement>(null)
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [name, setName] = useState("");
+  const [coverUrl, setCoverUrl] = useState("");
+  const [description, setDescription] = useState("");
+  const [type, setType] = useState<"video" | "script">("video");
+  const [coverPreview, setCoverPreview] = useState("");
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const coverFileInputRef = useRef<HTMLInputElement>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     if (project) {
-      setName(project.name)
-      const localCover = getCoverImageUrl(project.id)
-      setCoverUrl(localCover || project.coverUrl || '')
-      setDescription(project.description || '')
-      setType(project.type)
-      setCoverPreview('')
-      setCoverFile(null)
+      setName(project.name);
+      const localCover = getCoverImageUrl(project.id);
+      setCoverUrl(localCover || project.coverUrl || "");
+      setDescription(project.description || "");
+      setType(project.type);
+      setCoverPreview("");
+      setCoverFile(null);
     } else {
-      resetFormState()
+      resetFormState();
     }
-  }, [project, isOpen])
+  }, [project, isOpen]);
 
   const resetFormState = () => {
-    setName('')
-    setCoverUrl('')
-    setDescription('')
-    setType('video')
-    setCoverPreview('')
-    setCoverFile(null)
-    setIsProcessing(false)
+    setName("");
+    setCoverUrl("");
+    setDescription("");
+    setType("video");
+    setCoverPreview("");
+    setCoverFile(null);
+    setIsProcessing(false);
     if (coverFileInputRef.current) {
-      coverFileInputRef.current.value = ''
+      coverFileInputRef.current.value = "";
     }
-  }
+  };
 
   const handleCoverFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+    const file = e.target.files?.[0];
     if (file) {
-      const previewUrl = URL.createObjectURL(file)
-      setCoverPreview(previewUrl)
-      setCoverFile(file)
+      const previewUrl = URL.createObjectURL(file);
+      setCoverPreview(previewUrl);
+      setCoverFile(file);
     }
-  }
+  };
 
   const handleRemoveCover = () => {
-    setCoverPreview('')
-    setCoverFile(null)
-    setCoverUrl('')
+    setCoverPreview("");
+    setCoverFile(null);
+    setCoverUrl("");
     if (coverFileInputRef.current) {
-      coverFileInputRef.current.value = ''
+      coverFileInputRef.current.value = "";
     }
-  }
+  };
 
   const handleConfirm = async () => {
     if (!isEdit) {
-      const canCreate = useUserStore.getState().canCreateProject()
+      const canCreate = useUserStore.getState().canCreateProject();
       if (!canCreate) {
-        const { loginStatus, vipLevel } = useUserStore.getState()
+        const { loginStatus, vipLevel } = useUserStore.getState();
         if (loginStatus !== 1) {
-          toast.error('请先登录')
-          useUserStore.getState().setDialogLoginStatus(true)
+          toast.error("请先登录");
+          useUserStore.getState().setDialogLoginStatus(true);
         } else {
-          toast.error('权限不够，请联系管理员开通会员', {
-            description: `当前会员等级：LV${vipLevel}，需要会员等级：LV3`
-          })
+          toast.error("权限不够，请联系管理员开通会员", {
+            description: `当前会员等级：LV${vipLevel}，需要会员等级：LV3`,
+          });
         }
-        return
+        return;
       }
     }
 
-    setIsProcessing(true)
+    setIsProcessing(true);
 
     try {
-      let resultId = ''
+      let resultId = "";
 
       if (isEdit && project) {
-        const nameChanged = name !== project.name && name.trim() !== ''
+        const nameChanged = name !== project.name && name.trim() !== "";
 
         if (nameChanged) {
-          const renameSuccess = await renameProject(project.id, name.trim())
+          const renameSuccess = await renameProject(project.id, name.trim());
           if (!renameSuccess) {
-            console.error('Failed to rename project folder')
-            setIsProcessing(false)
-            return
+            console.error("Failed to rename project folder");
+            setIsProcessing(false);
+            return;
           }
         }
 
         if (coverFile) {
-          const arrayBuffer = await coverFile.arrayBuffer()
-          await saveCoverImageToLocal(project.id, arrayBuffer)
+          const arrayBuffer = await coverFile.arrayBuffer();
+          await saveCoverImageToLocal(project.id, arrayBuffer);
         }
 
         updateProject(project.id, {
           name: name.trim(),
           description: description || undefined,
-        })
+        });
 
-        resultId = project.id
+        resultId = project.id;
       } else {
         const newProject = await createProject(
           name || undefined,
           undefined,
           description || undefined,
-          type
-        )
+          type,
+        );
 
         if (coverFile) {
-          const arrayBuffer = await coverFile.arrayBuffer()
-          await saveCoverImageToLocal(newProject.id, arrayBuffer)
+          const arrayBuffer = await coverFile.arrayBuffer();
+          await saveCoverImageToLocal(newProject.id, arrayBuffer);
         }
 
-        resultId = newProject.id
+        resultId = newProject.id;
       }
 
-      setIsProcessing(false)
-      onSuccess?.(resultId)
-      handleClose()
+      setIsProcessing(false);
+      onSuccess?.(resultId);
+      handleClose();
     } catch (error) {
-      console.error('Failed to save project:', error)
-      setIsProcessing(false)
+      console.error("Failed to save project:", error);
+      setIsProcessing(false);
     }
-  }
+  };
 
   const handleClose = () => {
-    if (!isEdit) resetFormState()
-    onClose()
-  }
+    if (!isEdit) resetFormState();
+    onClose();
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="bg-[#121214] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col p-0">
         <div className="flex items-center justify-between p-6 border-b border-white/5">
-          <DialogTitle className="text-lg font-semibold text-white/90">{isEdit ? '编辑项目' : '新建画布项目'}</DialogTitle>
+          <DialogTitle className="text-lg font-semibold text-white/90">
+            {isEdit ? "编辑项目" : "新建画布项目"}
+          </DialogTitle>
           <button
             onClick={handleClose}
             className="text-white/50 hover:text-white transition-colors cursor-pointer"
@@ -163,7 +172,9 @@ export default function ProjectDialog({
         </div>
         <div className="p-6 space-y-5">
           <div>
-            <label className="text-sm font-medium text-white/70 block mb-2">项目名称</label>
+            <label className="text-sm font-medium text-white/70 block mb-2">
+              项目名称
+            </label>
             <input
               type="text"
               value={name}
@@ -174,7 +185,9 @@ export default function ProjectDialog({
           </div>
 
           <div>
-            <label className="text-sm font-medium text-white/70 block mb-2">封面图</label>
+            <label className="text-sm font-medium text-white/70 block mb-2">
+              封面图
+            </label>
             <input
               ref={coverFileInputRef}
               type="file"
@@ -224,7 +237,9 @@ export default function ProjectDialog({
           </div>
 
           <div>
-            <label className="text-sm font-medium text-white/70 block mb-2">项目描述</label>
+            <label className="text-sm font-medium text-white/70 block mb-2">
+              项目描述
+            </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -245,10 +260,16 @@ export default function ProjectDialog({
             disabled={isProcessing}
             className="px-5 py-2.5 rounded-lg text-sm font-medium bg-[#B43FEB] text-white hover:bg-[#9d35ce] shadow-[0_0_15px_rgba(180,63,235,0.3)] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isProcessing ? (isEdit ? '保存中...' : '创建中...') : (isEdit ? '保存' : '创建项目')}
+            {isProcessing
+              ? isEdit
+                ? "保存中..."
+                : "创建中..."
+              : isEdit
+                ? "保存"
+                : "创建项目"}
           </button>
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

@@ -55,7 +55,7 @@
 
 /* 主操作按钮 */
 .canvas-floating-sidebar__button--primary {
-  background: #B43FEB;
+  background: #b43feb;
   color: white;
   box-shadow: 0 0 20px rgba(180, 63, 235, 0.3);
 }
@@ -114,5 +114,5 @@
 
 .canvas-floating-sidebar .glass-panel button:hover {
   background: rgba(180, 63, 235, 0.1);
-  color: #B43FEB;
+  color: #b43feb;
 }

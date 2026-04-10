@@ -7,17 +7,20 @@
  * - 对外暴露消息列表、加载态及发送/清空方法，供 Canvas 页面复用。
  * - 支持聊天历史自动保存到 IndexedDB。
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { createChatCompletion } from '@/api/ai'
-import { DEFAULT_CANVAS_CHAT_MODEL } from '@/constants/ai-models'
-import { CANVAS_CHAT_PERSONAS, NO_CHAT_PERSONA_ID } from '@/constants/chat-personas'
-import useMessage from '@/hooks/useMessage'
+import { createChatCompletion } from "@/api/ai";
+import { DEFAULT_CANVAS_CHAT_MODEL } from "@/constants/ai-models";
+import {
+  CANVAS_CHAT_PERSONAS,
+  NO_CHAT_PERSONA_ID,
+} from "@/constants/chat-personas";
+import useMessage from "@/hooks/useMessage";
 import type {
   ChatPersonaId,
   NoteGenerationMessage,
   NoteGenerationRequest,
-} from '@/types/NoteGeneration'
+} from "@/types/NoteGeneration";
 
 /**
  * 根据人格 ID 查找人格配置。
@@ -27,11 +30,11 @@ import type {
  */
 const getPersonaById = (personaId: ChatPersonaId) => {
   if (personaId === NO_CHAT_PERSONA_ID) {
-    return null
+    return null;
   }
 
-  return CANVAS_CHAT_PERSONAS.find((item) => item.id === personaId) ?? null
-}
+  return CANVAS_CHAT_PERSONAS.find((item) => item.id === personaId) ?? null;
+};
 
 /**
  * 组装发送给模型的消息数组。
@@ -48,20 +51,20 @@ const buildRequestMessages = (
   personaId: ChatPersonaId,
   chatMessages: NoteGenerationMessage[],
 ): NoteGenerationMessage[] => {
-  const persona = getPersonaById(personaId)
+  const persona = getPersonaById(personaId);
 
   if (!persona) {
-    return chatMessages
+    return chatMessages;
   }
 
   return [
     {
-      role: 'system',
+      role: "system",
       content: persona.content,
     },
     ...chatMessages,
-  ]
-}
+  ];
+};
 
 /**
  * 画布聊天 Hook。
@@ -72,25 +75,25 @@ const buildRequestMessages = (
  */
 export const useCanvasChat = () => {
   /** 当前会话消息列表（仅前端内存态）。 */
-  const [messages, setMessages] = useState<NoteGenerationMessage[]>([])
+  const [messages, setMessages] = useState<NoteGenerationMessage[]>([]);
   /** 消息发送中的加载状态，避免重复提交。 */
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(false);
   /** 当前请求控制器（用于中断流式生成）。 */
-  const abortControllerRef = useRef<AbortController | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null);
   /** 统一消息提示能力（toast/snackbar）。 */
-  const { error } = useMessage()
+  const { error } = useMessage();
 
   const stopMessage = () => {
-    abortControllerRef.current?.abort()
-    abortControllerRef.current = null
-  }
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+  };
 
   useEffect(() => {
     return () => {
-      abortControllerRef.current?.abort()
-      abortControllerRef.current = null
-    }
-  }, [])
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+    };
+  }, []);
 
   /**
    * 发送一条用户消息并处理模型回复。
@@ -104,129 +107,132 @@ export const useCanvasChat = () => {
    * 实现思路：
    * 1) 先做输入裁剪与并发保护（空消息或加载中直接返回）；
    * 2) 先将用户消息追加到本地状态并置为 loading；
-  * 3) 组装请求（含可选 system 人格）并调用聊天接口；
-  * 4) 解析助手回复并写回本地状态；
-  * 5) 捕获异常并给出统一错误提示，最后重置 loading。
+   * 3) 组装请求（含可选 system 人格）并调用聊天接口；
+   * 4) 解析助手回复并写回本地状态；
+   * 5) 捕获异常并给出统一错误提示，最后重置 loading。
    *
    * 潜在风险：
    * - 当前基于闭包中的 `messages` 追加，极端高频并发下可能出现竞态；
    *   若后续支持并发发送，建议改为函数式 setState 或请求队列。
    */
   const sendMessage = async (payload: {
-    content: string
-    personaId: ChatPersonaId
-    model?: string
+    content: string;
+    personaId: ChatPersonaId;
+    model?: string;
   }) => {
-    const content = payload.content.trim()
+    const content = payload.content.trim();
     if (!content || isLoading) {
-      return
+      return;
     }
 
-    const model = payload.model || DEFAULT_CANVAS_CHAT_MODEL
+    const model = payload.model || DEFAULT_CANVAS_CHAT_MODEL;
     const userMessage: NoteGenerationMessage = {
-      role: 'user',
+      role: "user",
       content,
-    }
+    };
 
-    const nextMessages = [...messages, userMessage]
-    const assistantMessageIndex = nextMessages.length
+    const nextMessages = [...messages, userMessage];
+    const assistantMessageIndex = nextMessages.length;
     setMessages([
       ...nextMessages,
       {
-        role: 'assistant',
-        content: '',
+        role: "assistant",
+        content: "",
       },
-    ])
-    setIsLoading(true)
+    ]);
+    setIsLoading(true);
 
-    abortControllerRef.current?.abort()
-    const controller = new AbortController()
-    abortControllerRef.current = controller
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
       const requestPayload: NoteGenerationRequest = {
         model,
         messages: buildRequestMessages(payload.personaId, nextMessages),
         stream: true,
-      }
+      };
 
-      const stream = (await createChatCompletion(requestPayload, controller.signal)) as AsyncGenerator<string>
+      const stream = (await createChatCompletion(
+        requestPayload,
+        controller.signal,
+      )) as AsyncGenerator<string>;
       for await (const chunk of stream) {
         setMessages((prev) => {
-          const assistantMessage = prev[assistantMessageIndex]
-          if (!assistantMessage || assistantMessage.role !== 'assistant') {
-            return prev
+          const assistantMessage = prev[assistantMessageIndex];
+          if (!assistantMessage || assistantMessage.role !== "assistant") {
+            return prev;
           }
 
-          const updatedMessages = [...prev]
+          const updatedMessages = [...prev];
           updatedMessages[assistantMessageIndex] = {
             ...assistantMessage,
             content: `${assistantMessage.content}${chunk}`,
-          }
-          return updatedMessages
-        })
+          };
+          return updatedMessages;
+        });
       }
 
       setMessages((prev) => {
-        const assistantMessage = prev[assistantMessageIndex]
-        if (!assistantMessage || assistantMessage.role !== 'assistant') {
-          return prev
+        const assistantMessage = prev[assistantMessageIndex];
+        if (!assistantMessage || assistantMessage.role !== "assistant") {
+          return prev;
         }
 
         if (assistantMessage.content.trim()) {
-          return prev
+          return prev;
         }
 
-        const updatedMessages = [...prev]
+        const updatedMessages = [...prev];
         updatedMessages[assistantMessageIndex] = {
           ...assistantMessage,
-          content: '生成出现了点问题，未能获取到有效内容，请稍后再试~',
-        }
-        return updatedMessages
-      })
+          content: "生成出现了点问题，未能获取到有效内容，请稍后再试~",
+        };
+        return updatedMessages;
+      });
     } catch (chatError: any) {
-      if (chatError?.name === 'AbortError') {
+      if (chatError?.name === "AbortError") {
         setMessages((prev) => {
-          const assistantMessage = prev[assistantMessageIndex]
-          if (!assistantMessage || assistantMessage.role !== 'assistant') {
-            return prev
+          const assistantMessage = prev[assistantMessageIndex];
+          if (!assistantMessage || assistantMessage.role !== "assistant") {
+            return prev;
           }
 
-          const updatedMessages = [...prev]
+          const updatedMessages = [...prev];
           updatedMessages[assistantMessageIndex] = {
             ...assistantMessage,
             content: assistantMessage.content.trim()
               ? `${assistantMessage.content}\n\n（已停止生成）`
-              : '已停止生成。',
-          }
-          return updatedMessages
-        })
-        return
+              : "已停止生成。",
+          };
+          return updatedMessages;
+        });
+        return;
       }
 
-      console.error('聊天请求失败:', chatError)
-      error('对话失败，请稍后重试')
+      console.error("聊天请求失败:", chatError);
+      error("对话失败，请稍后重试");
 
       setMessages((prev) => {
-        const assistantMessage = prev[assistantMessageIndex]
-        if (!assistantMessage || assistantMessage.role !== 'assistant') {
-          return prev
+        const assistantMessage = prev[assistantMessageIndex];
+        if (!assistantMessage || assistantMessage.role !== "assistant") {
+          return prev;
         }
 
-        const updatedMessages = [...prev]
+        const updatedMessages = [...prev];
         updatedMessages[assistantMessageIndex] = {
           ...assistantMessage,
-          content: '生成出现了点问题，未能获取到有效内容，请稍后再试~',
-        }
-        return updatedMessages
-      })
+          content: "生成出现了点问题，未能获取到有效内容，请稍后再试~",
+        };
+        return updatedMessages;
+      });
     } finally {
       if (abortControllerRef.current === controller) {
-        abortControllerRef.current = null
+        abortControllerRef.current = null;
       }
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   /**
    * 清空当前 Hook 的本地会话状态。
@@ -234,16 +240,19 @@ export const useCanvasChat = () => {
    * @returns void
    */
   const clearLocalMessages = () => {
-    stopMessage()
-    setMessages([])
-  }
+    stopMessage();
+    setMessages([]);
+  };
 
   /**
    * 设置消息列表（用于从历史记录加载）。
    */
-  const setMessagesDirectly = useCallback((newMessages: NoteGenerationMessage[]) => {
-    setMessages(newMessages)
-  }, [])
+  const setMessagesDirectly = useCallback(
+    (newMessages: NoteGenerationMessage[]) => {
+      setMessages(newMessages);
+    },
+    [],
+  );
 
   return {
     messages,
@@ -252,5 +261,5 @@ export const useCanvasChat = () => {
     stopMessage,
     clearLocalMessages,
     setMessages: setMessagesDirectly,
-  }
-}
+  };
+};

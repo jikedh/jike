@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -7,64 +7,65 @@ import {
   pointerWithin,
   type DragStartEvent,
   type DragEndEvent,
-} from '@dnd-kit/core'
-import { useDraggable, useDroppable } from '@dnd-kit/core'
-import { CSS } from '@dnd-kit/utilities'
-import { IconEyeSpark, IconGripVertical } from '@tabler/icons-react'
+} from "@dnd-kit/core";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
+import { IconEyeSpark, IconGripVertical } from "@tabler/icons-react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/components/ui/popover'
+} from "@/components/ui/popover";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+} from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type MidjourneyAdvancedPanelProps = {
-  referenceImageUrls?: string[]
+  referenceImageUrls?: string[];
   value?: {
-    referenceUrls?: string[]
-    styleUrls?: string[]
-    iw?: number
-    sw?: number
-  }
+    referenceUrls?: string[];
+    styleUrls?: string[];
+    iw?: number;
+    sw?: number;
+  };
   onChange?: (next: {
-    referenceUrls?: string[]
-    styleUrls?: string[]
-    iw?: number
-    sw?: number
-  }) => void
-}
+    referenceUrls?: string[];
+    styleUrls?: string[];
+    iw?: number;
+    sw?: number;
+  }) => void;
+};
 
 // 可拖拽图片项组件
 const DraggableImageItem = ({
   url,
   dragId,
 }: {
-  url: string
-    dragId: string
+  url: string;
+  dragId: string;
 }) => {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: dragId,
-    data: { url },
-  })
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: dragId,
+      data: { url },
+    });
 
   const style = transform
     ? { transform: CSS.Translate.toString(transform) }
-    : undefined
+    : undefined;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        'group relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-neutral-700 bg-neutral-800',
-        isDragging && 'opacity-50'
+        "group relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-neutral-700 bg-neutral-800",
+        isDragging && "opacity-50",
       )}
     >
       <img
@@ -83,8 +84,8 @@ const DraggableImageItem = ({
         <IconGripVertical size={16} className="text-white" />
       </div>
     </div>
-  )
-}
+  );
+};
 
 // 可放置区域容器
 const DroppableImageList = ({
@@ -93,26 +94,30 @@ const DroppableImageList = ({
   emptyText,
   isDragging,
 }: {
-  id: string
-  images: string[]
-    emptyText: string
-    isDragging: boolean
+  id: string;
+  images: string[];
+  emptyText: string;
+  isDragging: boolean;
 }) => {
-  const { setNodeRef, isOver } = useDroppable({ id })
+  const { setNodeRef, isOver } = useDroppable({ id });
 
   return (
     <div
       ref={setNodeRef}
-      style={{ scrollbarGutter: 'stable both-edges' }}
+      style={{ scrollbarGutter: "stable both-edges" }}
       className={cn(
-        'flex gap-2 rounded-lg border bg-neutral-800/50 p-2 pb-1 transition-colors',
-        isDragging ? 'overflow-hidden' : 'overflow-x-auto overflow-y-hidden',
-        isOver ? 'border-[#B43FEB] bg-neutral-800/80' : 'border-neutral-700'
+        "flex gap-2 rounded-lg border bg-neutral-800/50 p-2 pb-1 transition-colors",
+        isDragging ? "overflow-hidden" : "overflow-x-auto overflow-y-hidden",
+        isOver ? "border-[#B43FEB] bg-neutral-800/80" : "border-neutral-700",
       )}
     >
       {images.length > 0 ? (
         images.map((url, index) => (
-          <DraggableImageItem key={`${id}-${index}-${url}`} url={url} dragId={`${id}-${index}-${url}`} />
+          <DraggableImageItem
+            key={`${id}-${index}-${url}`}
+            url={url}
+            dragId={`${id}-${index}-${url}`}
+          />
         ))
       ) : (
         <div className="flex h-14 flex-1 items-center justify-center text-xs text-neutral-500">
@@ -120,8 +125,8 @@ const DroppableImageList = ({
         </div>
       )}
     </div>
-  )
-}
+  );
+};
 
 /**
  * Midjourney 高级选项面板
@@ -134,35 +139,40 @@ export const MidjourneyAdvancedPanel = ({
   value,
   onChange,
 }: MidjourneyAdvancedPanelProps) => {
-  const topImages = value?.referenceUrls ?? []
-  const bottomImages = value?.styleUrls ?? []
+  const topImages = value?.referenceUrls ?? [];
+  const bottomImages = value?.styleUrls ?? [];
   // 当前正在拖拽的图片
-  const [activeId, setActiveId] = useState<string | null>(null)
-  const isDragging = Boolean(activeId)
-  const topSliderValue = value?.iw ?? 1
-  const bottomSliderValue = value?.sw ?? 100
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const isDragging = Boolean(activeId);
+  const topSliderValue = value?.iw ?? 1;
+  const bottomSliderValue = value?.sw ?? 100;
   // 输入框编辑状态
-  const [topInputValue, setTopInputValue] = useState<string>(topSliderValue.toFixed(1))
-  const [bottomInputValue, setBottomInputValue] = useState<string>(String(bottomSliderValue))
+  const [topInputValue, setTopInputValue] = useState<string>(
+    topSliderValue.toFixed(1),
+  );
+  const [bottomInputValue, setBottomInputValue] = useState<string>(
+    String(bottomSliderValue),
+  );
 
   // 同步外部值变化到本地状态
   useEffect(() => {
-    setTopInputValue(topSliderValue.toFixed(1))
-  }, [topSliderValue])
+    setTopInputValue(topSliderValue.toFixed(1));
+  }, [topSliderValue]);
 
   useEffect(() => {
-    setBottomInputValue(String(bottomSliderValue))
-  }, [bottomSliderValue])
+    setBottomInputValue(String(bottomSliderValue));
+  }, [bottomSliderValue]);
 
   useEffect(() => {
-    const currentReferenceUrls = value?.referenceUrls ?? []
-    const currentStyleUrls = value?.styleUrls ?? []
+    const currentReferenceUrls = value?.referenceUrls ?? [];
+    const currentStyleUrls = value?.styleUrls ?? [];
     const hasNewReference = referenceImageUrls.some(
-      (url) => !currentReferenceUrls.includes(url) && !currentStyleUrls.includes(url)
-    )
+      (url) =>
+        !currentReferenceUrls.includes(url) && !currentStyleUrls.includes(url),
+    );
 
     if (!hasNewReference) {
-      return
+      return;
     }
 
     onChange?.({
@@ -170,62 +180,68 @@ export const MidjourneyAdvancedPanel = ({
       referenceUrls: Array.from(
         new Set([
           ...currentReferenceUrls,
-          ...referenceImageUrls.filter((url) => !currentStyleUrls.includes(url)),
-        ])
+          ...referenceImageUrls.filter(
+            (url) => !currentStyleUrls.includes(url),
+          ),
+        ]),
       ),
-    })
-  }, [referenceImageUrls, onChange, value])
+    });
+  }, [referenceImageUrls, onChange, value]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8,
       },
-    })
-  )
+    }),
+  );
 
   // 处理拖拽开始
   const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string)
-  }
+    setActiveId(event.active.id as string);
+  };
 
   // 处理拖拽结束
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event
-    setActiveId(null)
+    const { active, over } = event;
+    setActiveId(null);
 
-    if (!over) return
+    if (!over) return;
 
-    const activeData = active.data.current as { url: string }
-    const overId = over.id as string
+    const activeData = active.data.current as { url: string };
+    const overId = over.id as string;
 
-    const url = activeData.url
-    if (!url) return
+    const url = activeData.url;
+    if (!url) return;
 
     // 确定目标容器
-    const isToBottom = overId === 'bottom-list'
-    const isToTop = overId === 'top-list'
+    const isToBottom = overId === "bottom-list";
+    const isToTop = overId === "top-list";
 
     if (isToBottom) {
       // 拖到下方列表
       onChange?.({
         ...value,
         referenceUrls: topImages.filter((u) => u !== url),
-        styleUrls: bottomImages.includes(url) ? bottomImages : [...bottomImages, url],
-      })
+        styleUrls: bottomImages.includes(url)
+          ? bottomImages
+          : [...bottomImages, url],
+      });
     } else if (isToTop) {
       // 拖到上方列表
       onChange?.({
         ...value,
         styleUrls: bottomImages.filter((u) => u !== url),
-        referenceUrls: topImages.includes(url) ? topImages : [...topImages, url],
-      })
+        referenceUrls: topImages.includes(url)
+          ? topImages
+          : [...topImages, url],
+      });
     }
-  }
+  };
 
   const handleDragCancel = () => {
-    setActiveId(null)
-  }
+    setActiveId(null);
+  };
 
   return (
     <Popover>
@@ -275,19 +291,22 @@ export const MidjourneyAdvancedPanel = ({
                         step={0.1}
                         value={topSliderValue}
                         onChange={(event) => {
-                          const next = Number(event.target.value)
+                          const next = Number(event.target.value);
                           if (!Number.isNaN(next)) {
-                            setTopInputValue(next.toFixed(1))
+                            setTopInputValue(next.toFixed(1));
                             onChange?.({
                               ...value,
                               iw: next,
-                            })
+                            });
                           }
                         }}
                         className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-neutral-700 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#B43FEB] [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
                       />
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-neutral-800 text-neutral-200 border-neutral-700">
+                    <TooltipContent
+                      side="bottom"
+                      className="bg-neutral-800 text-neutral-200 border-neutral-700"
+                    >
                       <p>参考图权重</p>
                     </TooltipContent>
                   </Tooltip>
@@ -299,24 +318,24 @@ export const MidjourneyAdvancedPanel = ({
                   step={0.1}
                   value={topInputValue}
                   onChange={(event) => {
-                    setTopInputValue(event.target.value)
+                    setTopInputValue(event.target.value);
                   }}
                   onBlur={() => {
-                    const next = Number(topInputValue)
+                    const next = Number(topInputValue);
                     if (!Number.isNaN(next)) {
-                      const clamped = Math.min(2, Math.max(0.1, next))
-                      setTopInputValue(clamped.toFixed(1))
+                      const clamped = Math.min(2, Math.max(0.1, next));
+                      setTopInputValue(clamped.toFixed(1));
                       onChange?.({
                         ...value,
                         iw: clamped,
-                      })
+                      });
                     } else {
-                      setTopInputValue(topSliderValue.toFixed(1))
+                      setTopInputValue(topSliderValue.toFixed(1));
                     }
                   }}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.currentTarget.blur()
+                    if (event.key === "Enter") {
+                      event.currentTarget.blur();
                     }
                   }}
                   className="w-12 rounded border border-neutral-600 bg-neutral-800 px-1.5 py-0.5 text-right text-xs text-neutral-300 focus:border-[#B43FEB] focus:outline-none"
@@ -324,10 +343,11 @@ export const MidjourneyAdvancedPanel = ({
               </div>
             </div>
 
-
             {/* 下方图片列表 */}
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-neutral-300">风格</label>
+              <label className="text-xs font-medium text-neutral-300">
+                风格
+              </label>
               <DroppableImageList
                 id="bottom-list"
                 images={bottomImages}
@@ -346,19 +366,22 @@ export const MidjourneyAdvancedPanel = ({
                         step={50}
                         value={bottomSliderValue}
                         onChange={(event) => {
-                          const next = Number(event.target.value)
+                          const next = Number(event.target.value);
                           if (!Number.isNaN(next)) {
-                            setBottomInputValue(String(next))
+                            setBottomInputValue(String(next));
                             onChange?.({
                               ...value,
                               sw: next,
-                            })
+                            });
                           }
                         }}
                         className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-neutral-700 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#B43FEB] [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
                       />
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-neutral-800 text-neutral-200 border-neutral-700">
+                    <TooltipContent
+                      side="bottom"
+                      className="bg-neutral-800 text-neutral-200 border-neutral-700"
+                    >
                       <p>风格权重</p>
                     </TooltipContent>
                   </Tooltip>
@@ -370,24 +393,24 @@ export const MidjourneyAdvancedPanel = ({
                   step={1}
                   value={bottomInputValue}
                   onChange={(event) => {
-                    setBottomInputValue(event.target.value)
+                    setBottomInputValue(event.target.value);
                   }}
                   onBlur={() => {
-                    const next = Number(bottomInputValue)
+                    const next = Number(bottomInputValue);
                     if (!Number.isNaN(next)) {
-                      const clamped = Math.min(1000, Math.max(100, next))
-                      setBottomInputValue(String(clamped))
+                      const clamped = Math.min(1000, Math.max(100, next));
+                      setBottomInputValue(String(clamped));
                       onChange?.({
                         ...value,
                         sw: clamped,
-                      })
+                      });
                     } else {
-                      setBottomInputValue(String(bottomSliderValue))
+                      setBottomInputValue(String(bottomSliderValue));
                     }
                   }}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.currentTarget.blur()
+                    if (event.key === "Enter") {
+                      event.currentTarget.blur();
                     }
                   }}
                   className="w-14 rounded border border-neutral-600 bg-neutral-800 px-1.5 py-0.5 text-right text-xs text-neutral-300 focus:border-[#B43FEB] focus:outline-none"
@@ -398,5 +421,5 @@ export const MidjourneyAdvancedPanel = ({
         </DndContext>
       </PopoverContent>
     </Popover>
-  )
-}
+  );
+};

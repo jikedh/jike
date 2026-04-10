@@ -3,72 +3,76 @@
  * POST /v1/chat/completions
  */
 export type NoteGenerationRequest = {
-	model: string // 模型名称
-	messages: {
-		role: 'system' | 'user' | 'assistant' | 'tool' // 消息角色
-		content: string // 消息内容
-		name?: string // 可选：消息发送者名称
-	}[] // 消息列表
-	temperature?: number // 采样温度，范围一般为 0~2
-	top_p?: number // 核采样参数
-	max_tokens?: number // 最大生成 token 数
-	n?: number // 返回候选数量
-	stream?: boolean // 是否流式返回
-	stop?: string | string[] // 停止词
-	presence_penalty?: number // 存在惩罚
-	frequency_penalty?: number // 频率惩罚
-	user?: string // 业务侧用户标识
-}
+  model: string; // 模型名称
+  messages: {
+    role: "system" | "user" | "assistant" | "tool"; // 消息角色
+    content: string; // 消息内容
+    name?: string; // 可选：消息发送者名称
+  }[]; // 消息列表
+  temperature?: number; // 采样温度，范围一般为 0~2
+  top_p?: number; // 核采样参数
+  max_tokens?: number; // 最大生成 token 数
+  n?: number; // 返回候选数量
+  stream?: boolean; // 是否流式返回
+  stop?: string | string[]; // 停止词
+  presence_penalty?: number; // 存在惩罚
+  frequency_penalty?: number; // 频率惩罚
+  user?: string; // 业务侧用户标识
+};
 
-export type NoteGenerationMessage = NoteGenerationRequest['messages'][number]
+export type NoteGenerationMessage = NoteGenerationRequest["messages"][number];
 
 /**
  * 笔记生成（聊天补全）- 响应体类型
  * POST /v1/chat/completions
  */
 export type NoteGenerationResponse = {
-	id: string // 响应唯一标识
-	object: string // 对象类型，通常为 chat.completion
-	created: number // 创建时间戳
-	model: string // 实际使用模型
-	choices: {
-		index: number // 候选序号
-		message: {
-			role: 'assistant' // 角色
-			content: string // 生成内容
-		} // 候选消息
-		finish_reason: 'stop' | 'length' | 'content_filter' | 'tool_calls' | null // 停止原因
-	}[] // 候选结果
-	usage: {
-		prompt_tokens: number // 输入 token 数
-		completion_tokens: number // 输出 token 数
-		total_tokens: number // 总 token 数
-	} // token 用量
-	system_fingerprint?: string // 可选：系统指纹
-	service_tier?: string // 可选：服务层级
-}
+  id: string; // 响应唯一标识
+  object: string; // 对象类型，通常为 chat.completion
+  created: number; // 创建时间戳
+  model: string; // 实际使用模型
+  choices: {
+    index: number; // 候选序号
+    message: {
+      role: "assistant"; // 角色
+      content: string; // 生成内容
+    }; // 候选消息
+    finish_reason: "stop" | "length" | "content_filter" | "tool_calls" | null; // 停止原因
+  }[]; // 候选结果
+  usage: {
+    prompt_tokens: number; // 输入 token 数
+    completion_tokens: number; // 输出 token 数
+    total_tokens: number; // 总 token 数
+  }; // token 用量
+  system_fingerprint?: string; // 可选：系统指纹
+  service_tier?: string; // 可选：服务层级
+};
 
 /**
  * 画布聊天的人设标识。
  * 说明：支持不选择人设（none）或选择 3 个 system 人设中的一个。
  */
-export type ChatPersonaId = 'none' | 'system-creative-writer' | 'system-product-mentor' | 'system-ops-assistant'
+export type ChatPersonaId =
+  | "none"
+  | "system-creative-writer"
+  | "system-product-mentor"
+  | "system-ops-assistant";
 
 /**
  * 画布聊天的 3 个 system 人设占位配置。
  * 说明：后续可直接替换 content，不影响业务调用逻辑。
  */
 export const NOTE_CHAT_SYSTEM_PERSONAS: {
-	id: Exclude<ChatPersonaId, 'none'>
-	label: string
-	role: 'system'
-	content: string
+  id: Exclude<ChatPersonaId, "none">;
+  label: string;
+  role: "system";
+  content: string;
 }[] = [
-	{
-		id: 'system-creative-writer',
-		label: '小说转剧本',
-		role: 'system',
-		content: `# Role: 爆款短剧编剧 (Short Drama Screenwriter)
+  {
+    id: "system-creative-writer",
+    label: "小说转剧本",
+    role: "system",
+    content: `# Role: 爆款短剧编剧 (Short Drama Screenwriter)
 
 ## Role Definition
 你是一位拥有10年经验的**爆款短剧/微短剧（Short Drama）编剧**。你擅长将网络小说改编为节奏紧凑、冲突激烈、视觉冲击力强的竖屏短剧剧本（抖音/TikTok/Reels风格）。你深知短剧的成功在于：**极致的人设、极简的剧情、极爽的情绪**。
@@ -144,12 +148,12 @@ export const NOTE_CHAT_SYSTEM_PERSONAS: {
 
 ---
 **现在，请等待用户输入小说原文，并开始改编。**`,
-	},
-	{
-		id: 'system-product-mentor',
-		label: '即梦系统提示词',
-		role: 'system',
-		content: `Profile:
+  },
+  {
+    id: "system-product-mentor",
+    label: "即梦系统提示词",
+    role: "system",
+    content: `Profile:
 你是即梦（Jimeng）Seedance 2.0 的首席影视级AI导演。你的任务是把简陋的文本剧本，转化为大白话、无废话、极具画面感的"视觉物理指令"。
 你具备顶级的影视工业化思维，在构思时会全面考量**[场景、时长、镜号、景别、画面、角度、运动、主体动作、信息点、声画关系、技参、转场]**。但你在最终输出时，绝不生硬罗列这些标签，而是将它们完美融合成一段极简、连贯、只描写物理动作和光影的直白段落，以最契合AI视频大模型的提示词形态呈现。
 
@@ -177,12 +181,12 @@ export const NOTE_CHAT_SYSTEM_PERSONAS: {
 📢 用户输入接口：
 导演就位。请发送您的 [剧本/镜头想法]。
 我将为您输出"内化专业维度、大白话、重物理、防崩坏"的极简即梦生成提示词。`,
-	},
-	{
-		id: 'system-ops-assistant',
-		label: '拉片',
-		role: 'system',
-		content: `告别流水账，要靠这种拉片级的分镜。分镜的长短、数量、景别、角度，都可以影响叙事效果。在蓝河兼一创作的《分镜:视频剪辑的基础》一书中，有上百个日常场景分镜说明。几乎包括了我们在日常生活中所有的情景。非常值得我们作为参考。
+  },
+  {
+    id: "system-ops-assistant",
+    label: "拉片",
+    role: "system",
+    content: `告别流水账，要靠这种拉片级的分镜。分镜的长短、数量、景别、角度，都可以影响叙事效果。在蓝河兼一创作的《分镜:视频剪辑的基础》一书中，有上百个日常场景分镜说明。几乎包括了我们在日常生活中所有的情景。非常值得我们作为参考。
 
 接下来，我们就按照导演拉片的精细度，根据我们的内容，来创作分镜：
 
@@ -193,5 +197,5 @@ export const NOTE_CHAT_SYSTEM_PERSONAS: {
 3. 剧情与剧情之间的连贯，要在场景改变后，给出一句话的衔接，照顾到物理空间的联想，不能不切实际的影响剧情。
 
 4. 根据景别、画面、角度、运动、主角动作、信息点、技参内容，给出分镜头绘画的提示词（Diffusion型或GPT4o或Imagen4），但不用在表格中，在全部创作完成后，提醒我是否需要，单独输出即可。`,
-	},
-]
+  },
+];

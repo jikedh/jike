@@ -2,26 +2,31 @@
  * 节点主体组件
  * 显示圆形节点区域，包含连接手柄和预设信息
  */
-import { Position } from '@xyflow/react'
-import { IconRefresh, IconBook, IconVideo, IconPhoto, IconUser } from '@tabler/icons-react'
-import { ButtonHandle } from '@/components/button-handle'
-import { cn } from '@/lib/utils'
-import { getTextAgentPresetLabelById } from '@/constants/text-agent-presets'
-import type { TextAgentPresetId } from '@/types/flow'
+import { Position } from "@xyflow/react";
+import {
+  IconRefresh,
+  IconBook,
+  IconVideo,
+  IconPhoto,
+  IconUser,
+} from "@tabler/icons-react";
+import { ButtonHandle } from "@/components/button-handle";
+import { cn } from "@/lib/utils";
+import type { TextAgentPresetId } from "@/types/flow";
 
 const PRESET_ICONS: Record<TextAgentPresetId, React.ReactNode> = {
-  'novel-to-script-agent': <IconBook size={18} />,
-  'short-video-storyboard': <IconVideo size={18} />,
-  'jimeng-prompt': <IconPhoto size={18} />,
-  'novel-character-design': <IconUser size={18} />,
-}
+  "novel-to-script-agent": <IconBook size={18} />,
+  "short-video-storyboard": <IconVideo size={18} />,
+  "jimeng-prompt": <IconPhoto size={18} />,
+  "novel-character-design": <IconUser size={18} />,
+};
 
 interface NodeBodyProps {
-  presetId: TextAgentPresetId | undefined
-  presetLabel: string
-  selected: boolean
-  isGenerating: boolean
-  onSwitchPreset: () => void
+  presetId: TextAgentPresetId | undefined;
+  presetLabel: string;
+  selected: boolean;
+  isGenerating: boolean;
+  onSwitchPreset: () => void;
 }
 
 export const NodeBody = ({
@@ -33,8 +38,8 @@ export const NodeBody = ({
 }: NodeBodyProps) => {
   // 手柄可见性控制
   const handleVisibilityClass = selected
-    ? 'visible opacity-100'
-    : 'invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100'
+    ? "visible opacity-100"
+    : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100";
 
   return (
     <div
@@ -42,7 +47,7 @@ export const NodeBody = ({
         "group/nodeBox relative w-[200px] h-[200px] bg-[#1a1a1c] rounded-xl flex items-center justify-center",
         selected
           ? "border-2 border-[#B43FEB] shadow-[0_0_20px_rgba(180,63,235,0.4),inset_0_0_10px_rgba(180,63,235,0.1)]"
-          : "border border-white/[0.08] hover:border-white/[0.15]"
+          : "border border-white/[0.08] hover:border-white/[0.15]",
       )}
     >
       {/* 输入手柄 */}
@@ -92,5 +97,5 @@ export const NodeBody = ({
         )}
       </div>
     </div>
-  )
-}
+  );
+};

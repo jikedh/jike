@@ -3,92 +3,109 @@
  * 用于 /canvas 路由的简单占位页面
  * 样式与 ProjectList 页面保持一致
  */
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { SquareDashedMousePointer, Plus, Play, Network, Clock, X, Pencil, Trash2, FileText, Loader2 } from 'lucide-react'
-import { getProjectListAsync, deleteProject, getCoverImageUrl, type ProjectMeta } from '@/utils/projectStorage'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import ProjectDialog from '@/components/ProjectDialog'
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  SquareDashedMousePointer,
+  Plus,
+  Play,
+  Network,
+  Clock,
+  X,
+  Pencil,
+  Trash2,
+  FileText,
+  Loader2,
+} from "lucide-react";
+import {
+  getProjectListAsync,
+  deleteProject,
+  getCoverImageUrl,
+  type ProjectMeta,
+} from "@/utils/projectStorage";
+import ProjectDialog from "@/components/ProjectDialog";
 
 export default function CanvasPlaceholderPage() {
-  const navigate = useNavigate()
-  const [projects, setProjects] = useState<ProjectMeta[]>([])
-  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [projectToDelete, setProjectToDelete] = useState<ProjectMeta | null>(null)
-  const [projectToEdit, setProjectToEdit] = useState<ProjectMeta | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
+  const navigate = useNavigate();
+  const [projects, setProjects] = useState<ProjectMeta[]>([]);
+  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<ProjectMeta | null>(
+    null,
+  );
+  const [projectToEdit, setProjectToEdit] = useState<ProjectMeta | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const refreshProjects = async () => {
-    const list = await getProjectListAsync()
-    setProjects(list)
-  }
+    const list = await getProjectListAsync();
+    setProjects(list);
+  };
 
   const handleProjectSuccess = (projectId: string) => {
     if (projectToEdit) {
-      refreshProjects()
+      refreshProjects();
     } else {
-      navigate(`/canvas/${projectId}`)
+      navigate(`/canvas/${projectId}`);
     }
-  }
+  };
 
   useEffect(() => {
-    refreshProjects()
-  }, [])
+    refreshProjects();
+  }, []);
 
   // 处理项目卡片点击
   const handleProjectClick = (projectId: string) => {
-    navigate(`/canvas/${projectId}`)
-  }
+    navigate(`/canvas/${projectId}`);
+  };
 
   // 打开创建项目弹窗
   const openCreateDialog = () => {
-    setProjectToEdit(null)
-    setIsProjectDialogOpen(true)
-  }
+    setProjectToEdit(null);
+    setIsProjectDialogOpen(true);
+  };
 
   // 打开编辑弹窗
   const openEditDialog = (e: React.MouseEvent, project: ProjectMeta) => {
-    e.stopPropagation()
-    setProjectToEdit(project)
-    setIsProjectDialogOpen(true)
-  }
+    e.stopPropagation();
+    setProjectToEdit(project);
+    setIsProjectDialogOpen(true);
+  };
 
   // 打开删除确认弹窗
   const openDeleteDialog = (e: React.MouseEvent, project: ProjectMeta) => {
-    e.stopPropagation()
-    setProjectToDelete(project)
-    setIsDeleteDialogOpen(true)
-  }
+    e.stopPropagation();
+    setProjectToDelete(project);
+    setIsDeleteDialogOpen(true);
+  };
 
   // 确认删除项目
   const handleConfirmDelete = async () => {
-    if (!projectToDelete) return
-    
-    setIsDeleting(true)
+    if (!projectToDelete) return;
+
+    setIsDeleting(true);
     try {
-      await deleteProject(projectToDelete.id)
-      await refreshProjects()
+      await deleteProject(projectToDelete.id);
+      await refreshProjects();
     } finally {
-      setIsDeleting(false)
-      setIsDeleteDialogOpen(false)
-      setProjectToDelete(null)
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+      setProjectToDelete(null);
     }
-  }
+  };
 
   // 格式化时间
   const formatTime = (timestamp: number) => {
-    const now = Date.now()
-    const diff = now - timestamp
-    const minutes = Math.floor(diff / 60000)
-    const hours = Math.floor(diff / 3600000)
-    const days = Math.floor(diff / 86400000)
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
 
-    if (minutes < 60) return `${minutes}分钟前`
-    if (hours < 24) return `${hours}小时前`
-    if (days < 7) return `${days}天前`
-    return new Date(timestamp).toLocaleDateString()
-  }
+    if (minutes < 60) return `${minutes}分钟前`;
+    if (hours < 24) return `${hours}小时前`;
+    if (days < 7) return `${days}天前`;
+    return new Date(timestamp).toLocaleDateString();
+  };
 
   return (
     <div className="flex-1 bg-[#09090b] text-white flex flex-col h-full overflow-hidden relative">
@@ -111,7 +128,9 @@ export default function CanvasPlaceholderPage() {
       <div className="flex-1 p-8 overflow-y-auto">
         <div className="mb-8">
           <h2 className="text-xl font-semibold mb-2">我的画布项目</h2>
-          <p className="text-sm text-white/50">管理和编辑您的节点工作流，点击播放按钮可预览生成结果。</p>
+          <p className="text-sm text-white/50">
+            管理和编辑您的节点工作流，点击播放按钮可预览生成结果。
+          </p>
         </div>
 
         {/* 空状态提示 */}
@@ -119,7 +138,9 @@ export default function CanvasPlaceholderPage() {
           <div className="text-center text-white/40 py-20">
             <FileText className="w-16 h-16 mx-auto mb-4 opacity-50" />
             <p className="text-lg mb-2">还没有任何项目</p>
-            <p className="text-sm">点击右上角的「新建项目」按钮创建第一个项目</p>
+            <p className="text-sm">
+              点击右上角的「新建项目」按钮创建第一个项目
+            </p>
           </div>
         )}
 
@@ -134,9 +155,9 @@ export default function CanvasPlaceholderPage() {
               {/* Thumbnail */}
               <div className="relative aspect-video overflow-hidden bg-white/5">
                 {(() => {
-                  const localCoverUrl = getCoverImageUrl(project.id)
-                  const coverSrc = localCoverUrl || project.coverUrl
-                  
+                  const localCoverUrl = getCoverImageUrl(project.id);
+                  const coverSrc = localCoverUrl || project.coverUrl;
+
                   return coverSrc ? (
                     <img
                       src={coverSrc}
@@ -147,7 +168,7 @@ export default function CanvasPlaceholderPage() {
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/5 to-white/[0.02]">
                       <FileText className="w-12 h-12 text-white/20 group-hover:text-[#B43FEB]/50 transition-colors" />
                     </div>
-                  )
+                  );
                 })()}
 
                 {/* Overlay actions */}
@@ -179,7 +200,7 @@ export default function CanvasPlaceholderPage() {
                 {/* Type tag */}
                 <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-[10px] font-medium text-[#B43FEB] border border-white/10 flex items-center gap-1">
                   <div className="w-1.5 h-1.5 rounded-full bg-[#B43FEB]"></div>
-                  {project.type === 'video' ? '视频创作' : '剧本创作'}
+                  {project.type === "video" ? "视频创作" : "剧本创作"}
                 </div>
               </div>
 
@@ -195,7 +216,9 @@ export default function CanvasPlaceholderPage() {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5" />
-                    <span>{formatTime(project.updatedAt || project.createdAt)}</span>
+                    <span>
+                      {formatTime(project.updatedAt || project.createdAt)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -231,7 +254,11 @@ export default function CanvasPlaceholderPage() {
             {/* Modal Body */}
             <div className="p-5">
               <p className="text-white/60 text-sm">
-                确定要删除项目 <span className="font-medium text-white">「{projectToDelete?.name}」</span> 吗？删除后无法恢复。
+                确定要删除项目{" "}
+                <span className="font-medium text-white">
+                  「{projectToDelete?.name}」
+                </span>{" "}
+                吗？删除后无法恢复。
               </p>
             </div>
 
@@ -250,12 +277,12 @@ export default function CanvasPlaceholderPage() {
                 className="px-5 py-2.5 rounded-lg text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isDeleting && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isDeleting ? '删除中...' : '删除'}
+                {isDeleting ? "删除中..." : "删除"}
               </button>
             </div>
           </div>
         </div>
       )}
     </div>
-  )
+  );
 }

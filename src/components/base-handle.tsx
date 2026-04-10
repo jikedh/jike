@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { Background, Handle, type HandleProps } from "@xyflow/react";
+import { Handle, type HandleProps } from "@xyflow/react";
 
 import { cn } from "@/lib/utils";
 
@@ -18,16 +18,15 @@ export function BaseHandle({
         className,
       )}
       style={{
-        background: 'none',
-        border: 'none',
-      }
-      }
+        background: "none",
+        border: "none",
+      }}
     >
       {/* 扩大连接范围的不可见区域 */}
-      <div 
+      <div
         className="absolute -inset-6 rounded-full"
         style={{
-          background: 'transparent',
+          background: "transparent",
         }}
       />
       {children}

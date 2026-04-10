@@ -1,39 +1,41 @@
-import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  type ReactNode,
+} from "react";
 import {
   IconDeviceFloppy,
-  IconHistory,
-  IconLayoutGrid,
-  IconMessageCircle,
   IconPlus,
   IconRefresh,
-  IconSettings,
   IconSparkles,
   IconTool,
-} from '@tabler/icons-react'
-import { cn } from '@/utils/utils'
-import useMessage from '@/hooks/useMessage'
-import { SettingsModal } from './SettingsModal'
-import './floatingSidebar.css'
+} from "@tabler/icons-react";
+import { cn } from "@/utils/utils";
+import useMessage from "@/hooks/useMessage";
+import { SettingsModal } from "./SettingsModal";
+import "./floatingSidebar.css";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface FloatingSidebarItem {
-  id: string
-  label: string
-  icon: ReactNode
-  onClick?: () => void
-  disabled?: boolean
-  active?: boolean
-  role?: 'primary' | 'default' | 'bottom'
-  children?: { id: string; label: string }[]
+  id: string;
+  label: string;
+  icon: ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  role?: "primary" | "default" | "bottom";
+  children?: { id: string; label: string }[];
 }
 
 export interface FloatingSidebarProps {
-  items?: FloatingSidebarItem[]
-  onAction?: (id: string) => void
-  className?: string
+  items?: FloatingSidebarItem[];
+  onAction?: (id: string) => void;
+  className?: string;
 }
 
 // ============================================================================
@@ -42,51 +44,51 @@ export interface FloatingSidebarProps {
 
 const DEFAULT_ITEMS: FloatingSidebarItem[] = [
   {
-    id: 'create',
-    label: '新增节点',
+    id: "create",
+    label: "新增节点",
     icon: <IconPlus stroke={2.5} size={22} />,
-    role: 'primary',
+    role: "primary",
     children: [
-      { id: 'create-note', label: '便签' },
-      { id: 'create-image', label: '图片' },
-      { id: 'create-video', label: '视频' },
-      { id: 'create-audio', label: '音频' },
+      { id: "create-note", label: "便签" },
+      { id: "create-image", label: "图片" },
+      { id: "create-video", label: "视频" },
+      { id: "create-audio", label: "音频" },
     ],
   },
   {
-    id: 'assistant',
-    label: '智能助手',
+    id: "assistant",
+    label: "智能助手",
     icon: <IconSparkles size={20} />,
     children: [
-      { id: 'novel-to-script-agent', label: '小说转剧本智能助手' },
-      { id: 'short-video-script-agent', label: '爆款短视频脚本智能助手' },
+      { id: "novel-to-script-agent", label: "小说转剧本智能助手" },
+      { id: "short-video-script-agent", label: "爆款短视频脚本智能助手" },
     ],
   },
   {
-    id: 'efficiency-tools',
-    label: '效率工具',
+    id: "efficiency-tools",
+    label: "效率工具",
     icon: <IconTool size={20} />,
     children: [
-      { id: 'script-outline', label: '剧本大纲' },
-      { id: 'script-hierarchy', label: '剧本分级' },
-      { id: 'character-design', label: '角色设计' },
-      { id: 'storyboard-design', label: '分镜图设计' },
-      { id: 'storyboard-breakdown', label: '分镜图拆解' },
-      { id: 'storyboard-video', label: '分镜视频生成' },
-      { id: 'drama-analysis', label: '剧目分析' },
+      { id: "script-outline", label: "剧本大纲" },
+      { id: "script-hierarchy", label: "剧本分级" },
+      { id: "character-design", label: "角色设计" },
+      { id: "storyboard-design", label: "分镜图设计" },
+      { id: "storyboard-breakdown", label: "分镜图拆解" },
+      { id: "storyboard-video", label: "分镜视频生成" },
+      { id: "drama-analysis", label: "剧目分析" },
     ],
   },
   {
-    id: 'save',
-    label: '保存画布',
+    id: "save",
+    label: "保存画布",
     icon: <IconDeviceFloppy size={20} />,
-    role: 'bottom',
+    role: "bottom",
   },
   {
-    id: 'reset',
-    label: '重置画布',
+    id: "reset",
+    label: "重置画布",
     icon: <IconRefresh size={20} />,
-    role: 'bottom',
+    role: "bottom",
   },
   // 设置按钮已移至首页侧边栏，暂时隐藏
   // {
@@ -95,7 +97,7 @@ const DEFAULT_ITEMS: FloatingSidebarItem[] = [
   //   icon: <IconSettings size={20} />,
   //   role: 'bottom',
   // },
-]
+];
 
 // ============================================================================
 // Helpers
@@ -103,13 +105,13 @@ const DEFAULT_ITEMS: FloatingSidebarItem[] = [
 
 const filterItemsByRole = (
   items: FloatingSidebarItem[],
-  role: FloatingSidebarItem['role']
+  role: FloatingSidebarItem["role"],
 ): FloatingSidebarItem[] => {
-  if (role === 'default') {
-    return items.filter((item) => !item.role || item.role === 'default')
+  if (role === "default") {
+    return items.filter((item) => !item.role || item.role === "default");
   }
-  return items.filter((item) => item.role === role)
-}
+  return items.filter((item) => item.role === role);
+};
 
 // ============================================================================
 // Components
@@ -128,74 +130,78 @@ export const FloatingSidebar = ({
   onAction,
   className,
 }: FloatingSidebarProps) => {
-  const [expandedItemId, setExpandedItemId] = useState<string | null>(null)
-  const sidebarRef = useRef<HTMLDivElement>(null)
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (expandedItemId && sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
-        setExpandedItemId(null)
+      if (
+        expandedItemId &&
+        sidebarRef.current &&
+        !sidebarRef.current.contains(event.target as Node)
+      ) {
+        setExpandedItemId(null);
       }
-    }
+    };
 
-    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [expandedItemId])
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const { warning } = useMessage()
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [expandedItemId]);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const { warning } = useMessage();
 
   // 分组
-  const primaryItems = filterItemsByRole(items, 'primary')
-  const defaultItems = filterItemsByRole(items, 'default')
-  const bottomItems = filterItemsByRole(items, 'bottom')
+  const primaryItems = filterItemsByRole(items, "primary");
+  const defaultItems = filterItemsByRole(items, "default");
+  const bottomItems = filterItemsByRole(items, "bottom");
 
   // 处理按钮点击
   const handleClick = useCallback(
     (item: FloatingSidebarItem) => {
-      if (item.disabled) return
+      if (item.disabled) return;
 
-      if (item.id === 'settings') {
-        setExpandedItemId(null)
-        setIsSettingsOpen(true)
-        return
+      if (item.id === "settings") {
+        setExpandedItemId(null);
+        setIsSettingsOpen(true);
+        return;
       }
 
       if (item.children) {
-        setExpandedItemId((prev) => (prev === item.id ? null : item.id))
+        setExpandedItemId((prev) => (prev === item.id ? null : item.id));
       } else {
-        item.onClick?.()
-        onAction?.(item.id)
+        item.onClick?.();
+        onAction?.(item.id);
       }
     },
-    [onAction]
-  )
+    [onAction],
+  );
 
   // 处理子菜单项点击
   const handleSubItemClick = useCallback(
     (subId: string) => {
       const isDevFeature =
-        subId.startsWith('script-') ||
-        subId.startsWith('character-') ||
-        subId.startsWith('storyboard-') ||
-        subId === 'drama-analysis'
+        subId.startsWith("script-") ||
+        subId.startsWith("character-") ||
+        subId.startsWith("storyboard-") ||
+        subId === "drama-analysis";
 
       if (isDevFeature) {
-        warning('该功能正在开发中', '敬请期待')
+        warning("该功能正在开发中", "敬请期待");
       } else {
-        onAction?.(subId)
+        onAction?.(subId);
       }
-      setExpandedItemId(null)
+      setExpandedItemId(null);
     },
-    [onAction, warning]
-  )
+    [onAction, warning],
+  );
 
   return (
     <>
       <aside
         ref={sidebarRef}
-        className={cn('canvas-floating-sidebar', className)}
+        className={cn("canvas-floating-sidebar", className)}
         aria-label="画布悬浮侧边栏"
       >
         {/* 顶部主操作 */}
@@ -225,23 +231,31 @@ export const FloatingSidebar = ({
         </div>
       </aside>
 
-      <SettingsModal open={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <SettingsModal
+        open={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </>
-  )
-}
+  );
+};
 
 // ============================================================================
 // Sub-Components
 // ============================================================================
 
 interface ItemGroupProps {
-  items: FloatingSidebarItem[]
-  expandedItemId: string | null
-  onItemClick: (item: FloatingSidebarItem) => void
-  onSubItemClick: (subId: string) => void
+  items: FloatingSidebarItem[];
+  expandedItemId: string | null;
+  onItemClick: (item: FloatingSidebarItem) => void;
+  onSubItemClick: (subId: string) => void;
 }
 
-const ItemGroup = ({ items, expandedItemId, onItemClick, onSubItemClick }: ItemGroupProps) => (
+const ItemGroup = ({
+  items,
+  expandedItemId,
+  onItemClick,
+  onSubItemClick,
+}: ItemGroupProps) => (
   <div className="canvas-floating-sidebar__group">
     {items.map((item) => (
       <SidebarButton
@@ -253,26 +267,31 @@ const ItemGroup = ({ items, expandedItemId, onItemClick, onSubItemClick }: ItemG
       />
     ))}
   </div>
-)
+);
 
 interface SidebarButtonProps {
-  item: FloatingSidebarItem
-  isExpanded: boolean
-  onClick: () => void
-  onSubItemClick: (subId: string) => void
+  item: FloatingSidebarItem;
+  isExpanded: boolean;
+  onClick: () => void;
+  onSubItemClick: (subId: string) => void;
 }
 
-const SidebarButton = ({ item, isExpanded, onClick, onSubItemClick }: SidebarButtonProps) => (
+const SidebarButton = ({
+  item,
+  isExpanded,
+  onClick,
+  onSubItemClick,
+}: SidebarButtonProps) => (
   <div className="relative">
     <button
       type="button"
       title={item.label}
       aria-label={item.label}
       className={cn(
-        'noflow nopan nodelete nodrag canvas-floating-sidebar__button',
-        item.id === 'create' && 'canvas-floating-sidebar__button--primary',
-        item.active && 'canvas-floating-sidebar__button--active',
-        item.disabled && 'canvas-floating-sidebar__button--disabled'
+        "noflow nopan nodelete nodrag canvas-floating-sidebar__button",
+        item.id === "create" && "canvas-floating-sidebar__button--primary",
+        item.active && "canvas-floating-sidebar__button--active",
+        item.disabled && "canvas-floating-sidebar__button--disabled",
       )}
       disabled={item.disabled}
       onClick={onClick}
@@ -285,11 +304,11 @@ const SidebarButton = ({ item, isExpanded, onClick, onSubItemClick }: SidebarBut
       <SubMenu items={item.children} onItemClick={onSubItemClick} />
     )}
   </div>
-)
+);
 
 interface SubMenuProps {
-  items: { id: string; label: string }[]
-  onItemClick: (id: string) => void
+  items: { id: string; label: string }[];
+  onItemClick: (id: string) => void;
 }
 
 const SubMenu = ({ items, onItemClick }: SubMenuProps) => (
@@ -305,4 +324,4 @@ const SubMenu = ({ items, onItemClick }: SubMenuProps) => (
       </button>
     ))}
   </div>
-)
+);

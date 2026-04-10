@@ -4,7 +4,7 @@
  */
 export const filterThinkingContent = (content: string): string => {
   return content
-    .replace(/<think[\s\S]*?<\/think>/gi, '')
-    .replace(/<thinking[\s\S]*?<\/thinking>/gi, '')
-    .trim()
-}
+    .replace(/<think[\s\S]*?<\/think>/gi, "")
+    .replace(/<thinking[\s\S]*?<\/thinking>/gi, "")
+    .trim();
+};

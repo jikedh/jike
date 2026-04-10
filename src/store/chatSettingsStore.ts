@@ -1,46 +1,46 @@
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
-import { DEFAULT_CANVAS_CHAT_MODEL } from '@/constants/ai-models'
-import type { ChatPersonaId } from '@/types/NoteGeneration'
+import { DEFAULT_CANVAS_CHAT_MODEL } from "@/constants/ai-models";
+import type { ChatPersonaId } from "@/types/NoteGeneration";
 
 type ChatSettingsState = {
   /** 默认对话模型 */
-  defaultModel: string
+  defaultModel: string;
   /** 默认人设 ID */
-  defaultPersonaId: ChatPersonaId
+  defaultPersonaId: ChatPersonaId;
   /** 自动保存开关 */
-  autoSaveEnabled: boolean
+  autoSaveEnabled: boolean;
   /** 网格显示开关 */
-  gridVisible: boolean
+  gridVisible: boolean;
   /** 节点是否吸附到网格 */
-  snapToGrid: boolean
+  snapToGrid: boolean;
   /** 网格吸附尺寸 [x, y] */
-  snapGridSize: [number, number]
+  snapGridSize: [number, number];
   /** 节点搜索栏显示开关 */
-  nodeSearchVisible: boolean
+  nodeSearchVisible: boolean;
   /** 调试工具面板显示开关*/
-  devToolsVisible: boolean
+  devToolsVisible: boolean;
   /** 项目存储路径 */
-  storagePath: string
-}
+  storagePath: string;
+};
 
 type ChatSettingsActions = {
-  setDefaultModel: (model: string) => void
-  setDefaultPersonaId: (personaId: ChatPersonaId) => void
-  setAutoSaveEnabled: (enabled: boolean) => void
-  setGridVisible: (visible: boolean) => void
-  setSnapToGrid: (enabled: boolean) => void
-  setSnapGridSize: (size: [number, number]) => void
-  setNodeSearchVisible: (visible: boolean) => void
-  setDevToolsVisible: (visible: boolean) => void
-  setStoragePath: (path: string) => void
-  resetToDefault: () => void
-}
+  setDefaultModel: (model: string) => void;
+  setDefaultPersonaId: (personaId: ChatPersonaId) => void;
+  setAutoSaveEnabled: (enabled: boolean) => void;
+  setGridVisible: (visible: boolean) => void;
+  setSnapToGrid: (enabled: boolean) => void;
+  setSnapGridSize: (size: [number, number]) => void;
+  setNodeSearchVisible: (visible: boolean) => void;
+  setDevToolsVisible: (visible: boolean) => void;
+  setStoragePath: (path: string) => void;
+  resetToDefault: () => void;
+};
 
 const INITIAL_STATE: ChatSettingsState = {
   defaultModel: DEFAULT_CANVAS_CHAT_MODEL,
-  defaultPersonaId: 'none',
+  defaultPersonaId: "none",
   autoSaveEnabled: true,
   gridVisible: true,
   // 默认开启吸附网格，提升节点排版一致性
@@ -49,10 +49,12 @@ const INITIAL_STATE: ChatSettingsState = {
   snapGridSize: [40, 40],
   nodeSearchVisible: false,
   devToolsVisible: false,
-  storagePath: '',
-}
+  storagePath: "",
+};
 
-export const useChatSettingsStore = create<ChatSettingsState & ChatSettingsActions>()(
+export const useChatSettingsStore = create<
+  ChatSettingsState & ChatSettingsActions
+>()(
   persist(
     (set) => ({
       ...INITIAL_STATE,
@@ -71,7 +73,7 @@ export const useChatSettingsStore = create<ChatSettingsState & ChatSettingsActio
       resetToDefault: () => set(INITIAL_STATE),
     }),
     {
-      name: 'canvas-chat-settings',
+      name: "canvas-chat-settings",
     },
   ),
-)
+);

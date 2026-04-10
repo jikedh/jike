@@ -1,4 +1,4 @@
-import { useNodes, ViewportPortal } from '@xyflow/react';
+import { useNodes, ViewportPortal } from "@xyflow/react";
 
 type NodeInfoProps = {
   id: string;
@@ -19,7 +19,7 @@ function NodeInfo({ id, type, x, y, width, height, data }: NodeInfoProps) {
     <div
       className="react-flow__devtools-nodeinfo"
       style={{
-        position: 'absolute',
+        position: "absolute",
         transform: `translate(${x}px, ${y + height}px)`,
         width: width * 2,
       }}
@@ -53,7 +53,7 @@ export default function NodeInspector() {
             <NodeInfo
               key={node.id}
               id={node.id}
-              type={node.type || 'default'}
+              type={node.type || "default"}
               x={x}
               y={y}
               width={width}

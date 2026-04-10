@@ -21,7 +21,7 @@ export interface ImageGenerationResponse {
   id: string; // 任务 ID
   object: string; // 对象类型
   model: string; // 模型名称
-  status: 'in_progress' | 'completed' | 'failed'; // 任务状态
+  status: "in_progress" | "completed" | "failed"; // 任务状态
   progress: number; // 进度百分比 (0-100)
   created_at: number; // 创建时间戳
   completed_at?: number; // 完成时间戳
@@ -75,30 +75,8 @@ export const IMAGE_MODEL_SCHEMAS: Record<string, any> = {
       image_urls: {
         type: "array",
         itemType: "string",
-        description: "参考图片 URL 列表"
-      }
-    }
-  }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        description: "参考图片 URL 列表",
+      },
+    },
+  },
+};

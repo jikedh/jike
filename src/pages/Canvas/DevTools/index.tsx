@@ -1,13 +1,23 @@
-import { useState, type Dispatch, type SetStateAction, type ReactNode, HTMLAttributes } from 'react';
-import { Panel, PanelPosition } from '@xyflow/react';
+import {
+  useState,
+  type Dispatch,
+  type SetStateAction,
+  type ReactNode,
+  HTMLAttributes,
+} from "react";
+import { Panel, PanelPosition } from "@xyflow/react";
 
-import NodeInspector from './NodeInspector';
-import ChangeLogger from './ChangeLogger';
-import MessageDemo from './MessageDemo';
+import NodeInspector from "./NodeInspector";
+import ChangeLogger from "./ChangeLogger";
+import MessageDemo from "./MessageDemo";
 
-import './style.css';
+import "./style.css";
 
-export default function ReactFlowDevTools({ position = 'top-left' }: { position?: PanelPosition }) {
+export default function ReactFlowDevTools({
+  position = "top-left",
+}: {
+  position?: PanelPosition;
+}) {
   const [nodeInspectorActive, setNodeInspectorActive] = useState(false);
   const [changeLoggerActive, setChangeLoggerActive] = useState(false);
   const [messageDemoActive, setMessageDemoActive] = useState(false);
@@ -15,13 +25,25 @@ export default function ReactFlowDevTools({ position = 'top-left' }: { position?
   return (
     <div className="react-flow__devtools">
       <Panel position={position}>
-        <DevToolButton setActive={setNodeInspectorActive} active={nodeInspectorActive} title="Toggle Node Inspector">
+        <DevToolButton
+          setActive={setNodeInspectorActive}
+          active={nodeInspectorActive}
+          title="Toggle Node Inspector"
+        >
           Node Inspector
         </DevToolButton>
-        <DevToolButton setActive={setChangeLoggerActive} active={changeLoggerActive} title="Toggle Change Logger">
+        <DevToolButton
+          setActive={setChangeLoggerActive}
+          active={changeLoggerActive}
+          title="Toggle Change Logger"
+        >
           Change Logger
         </DevToolButton>
-        <DevToolButton setActive={setMessageDemoActive} active={messageDemoActive} title="Toggle Message Demo">
+        <DevToolButton
+          setActive={setMessageDemoActive}
+          active={messageDemoActive}
+          title="Toggle Message Demo"
+        >
           Message Demo
         </DevToolButton>
       </Panel>
@@ -43,7 +65,11 @@ function DevToolButton({
   children: ReactNode;
 } & HTMLAttributes<HTMLButtonElement>) {
   return (
-    <button onClick={() => setActive((a) => !a)} className={active ? 'active' : ''} {...rest}>
+    <button
+      onClick={() => setActive((a) => !a)}
+      className={active ? "active" : ""}
+      {...rest}
+    >
       {children}
     </button>
   );

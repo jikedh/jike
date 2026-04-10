@@ -7,5 +7,5 @@ export default function VoicePage() {
     <div className="min-h-screen bg-[#0a0a0f] text-white flex items-center justify-center">
       <h1 className="text-4xl font-bold">配音工作室功能正在开发中！</h1>
     </div>
-  )
+  );
 }

@@ -1,14 +1,12 @@
-import {
-  useEffect,
-  useRef,
-} from "react";
+import { useEffect, useRef } from "react";
 import { Position, type HandleProps } from "@xyflow/react";
 import { BaseHandle } from "@/components/base-handle";
 
 const wrapperClassNames: Record<Position, string> = {
   [Position.Top]:
     "flex-col-reverse left-1/2 -translate-y-[calc(100%-1px)] -translate-x-1/2",
-  [Position.Bottom]: "flex-col left-1/2 translate-y-[1px] -translate-x-1/2 mt-1.5",
+  [Position.Bottom]:
+    "flex-col left-1/2 translate-y-[1px] -translate-x-1/2 mt-1.5",
   [Position.Left]:
     "flex-row-reverse top-1/2 -translate-x-[calc(100%-1px)] -translate-y-1/2",
   [Position.Right]: "top-1/2 -translate-y-1/2 translate-x-[1px] ",
@@ -27,9 +25,9 @@ export function ButtonHandle({
   ...props
 }: HandleProps & {
   showButton?: boolean;
-    visible?: boolean;
-    followAreaSize?: number;
-    buttonSize?: number;
+  visible?: boolean;
+  followAreaSize?: number;
+  buttonSize?: number;
 }) {
   const shouldShow = visible ?? showButton;
   const wrapperClassName = wrapperClassNames[position || Position.Bottom];
@@ -129,8 +127,18 @@ export function ButtonHandle({
               <div className="nodrag nopan pointer-events-none">
                 {children ?? (
                   <div className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#B43FEB]/50 bg-[#1a1a1f] text-sm font-medium text-[#B43FEB] shadow-lg hover:border-[#B43FEB] hover:bg-[#B43FEB]/10 transition-all">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 4v16m8-8H4"
+                      />
                     </svg>
                   </div>
                 )}

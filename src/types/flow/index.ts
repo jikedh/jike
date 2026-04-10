@@ -40,11 +40,11 @@ export interface ImageGenerationNode {
   image_urls?: string[]; // 参考图片 URL 列表（统一关键字段，包含上传和来自依赖节点的图片）
   ossUrlMap?: Record<string, string>; // 本地文件路径到 OSS URL 的映射缓存（避免重复上传）
   midjourneyAdvanced?: {
-    referenceUrls?: string[] // Midjourney 参考图列表（用于拼接前缀 URL）
-    styleUrls?: string[] // Midjourney 风格图列表（用于 --sref）
-    iw?: number // Midjourney 参考图权重（用于 --iw）
-    sw?: number // Midjourney 风格权重（用于 --sw）
-  }
+    referenceUrls?: string[]; // Midjourney 参考图列表（用于拼接前缀 URL）
+    styleUrls?: string[]; // Midjourney 风格图列表（用于 --sref）
+    iw?: number; // Midjourney 参考图权重（用于 --iw）
+    sw?: number; // Midjourney 风格权重（用于 --sw）
+  };
   // ---- 输出结果 ----
   result?: {
     type: string; // 结果类型
@@ -74,7 +74,6 @@ export interface ImageGenerationNode {
  * 用于 AI 视频生成任务
  */
 export interface VideoGenerationNode {
-
   model: string; // 使用的模型
   prompt: string; // 生成提示词
   promptDraft?: string; // 输入面板草稿文本
@@ -112,7 +111,7 @@ export interface VideoGenerationNode {
     prompt_optimizer?: boolean; // 是否自动优化 prompt
     fast_pretreatment?: boolean; // 是否快速预处理
     // Seedance 2.0 专属扩展参数
-    input_type?: 'reference' | 'first_last_frame'; // 输入类型
+    input_type?: "reference" | "first_last_frame"; // 输入类型
     generate_audio?: boolean; // 是否生成同步音频
     web_search?: boolean; // 是否启用联网搜索增强（仅 pro）
   };
@@ -128,7 +127,7 @@ export interface VideoGenerationNode {
     serverMessage?: string; // 原始后端错误消息
     status?: number; // HTTP 状态码
   }; // 错误对象
-    result?: {
+  result?: {
     // 任务结果（仅成功时返回）
     type: string; // 结果类型，固定为 video
     data: {
@@ -175,10 +174,10 @@ export interface AgentNode {
  * 文本智能体预设类型
  */
 export type TextAgentPresetId =
-  | 'novel-to-script-agent'
-  | 'short-video-storyboard'
-  | 'jimeng-prompt'
-  | 'novel-character-design'
+  | "novel-to-script-agent"
+  | "short-video-storyboard"
+  | "jimeng-prompt"
+  | "novel-character-design";
 
 /**
  * 文本智能体节点数据结构
@@ -189,7 +188,7 @@ export interface TextAgentNodeData {
   useDefaultSystemPrompt: boolean;
   customSystemPrompt?: string;
   inputText?: string;
-  status?: 'idle' | 'generating' | 'success' | 'error';
+  status?: "idle" | "generating" | "success" | "error";
   error?: string;
   [key: string]: any;
 }
@@ -208,7 +207,7 @@ export interface PanoramaNodeData {
 
   // ---- 输出结果 ----
   screenshots?: {
-    type: 'single' | '4grid' | '12grid'; // 截图类型
+    type: "single" | "4grid" | "12grid"; // 截图类型
     urls: string[]; // 截图 URL 列表
     createdAt: number; // 创建时间
   }[]; // 截图历史
@@ -236,7 +235,7 @@ export interface AudioGenerationNode {
   // ---- 输出结果 ----
   task_id?: string; // 任务 ID（用于轮询）
   result?: {
-    type: 'audio'; // 结果类型
+    type: "audio"; // 结果类型
     data: {
       url: string; // 生成的音频 URL
       format?: string; // 音频格式（如 mp3, wav）
@@ -293,8 +292,6 @@ export interface TableNodeData {
 
 // ==================== 辅助类型 ====================
 
-
-
 /**
  * API 类型定义（通用节点类型）
  * 用于表示任意 API 调用节点
@@ -310,8 +307,6 @@ export interface EdgeDataType {
   style?: Record<string, any>; // 边的样式
   [key: string]: any; // React Flow 约束兼容
 }
-
-
 
 /**
  * 构建状态类型
@@ -343,7 +338,6 @@ export interface FlowStyleType {
   flow_id: string; // 关联的流 ID
 }
 
-
 // 第一个泛型参数是定义节点 `data` 属性的类型，即节点携带的业务数据
 // 第二个泛型参数是 节点的类型标识符
 export type TextNodeType = Node<TextGenerationNode, "textNode">;
@@ -363,7 +357,17 @@ export type TableNodeType = Node<TableNodeData, "tableNode">;
 // React Flow 默认的节点类型
 export type DefaultNodeType = Node<any, "default">;
 
-export type AllNodeType = TextNodeType | ImageNodeType | VideoNodeType | NoteNodeType | AgentNodeType | TextAgentNodeType | PanoramaNodeType | AudioNodeType | TableNodeType | DefaultNodeType;
+export type AllNodeType =
+  | TextNodeType
+  | ImageNodeType
+  | VideoNodeType
+  | NoteNodeType
+  | AgentNodeType
+  | TextAgentNodeType
+  | PanoramaNodeType
+  | AudioNodeType
+  | TableNodeType
+  | DefaultNodeType;
 export type EdgeType = Edge<EdgeDataType, "default">;
 
 // ==================== 流类型 ====================
@@ -381,4 +385,4 @@ export type FlowType = {
   style?: FlowStyleType; // 流的样式配置
   updated_at?: string; // 最后更新时间
   date_created?: string; // 创建时间
-}
+};

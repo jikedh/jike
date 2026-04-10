@@ -1,5 +1,5 @@
 export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system'; // 角色
+  role: "user" | "assistant" | "system"; // 角色
   content: string; // 内容
 }
 
@@ -47,7 +47,13 @@ export interface GeminiImageGenerationRequest {
   image_num?: number; // 可选：生成数量 1~4，默认 1
   steps?: number; // 可选：推理步数，默认 20
   cfg_scale?: number; // 可选：引导系数（提示词遵循度），默认 7
-  sampler?: 'DDIM' | 'Euler' | 'EulerA' | 'DPM++ 2M' | 'DPM++ 2M Karras' | 'DPM++ SDE'; // 可选：采样器
+  sampler?:
+    | "DDIM"
+    | "Euler"
+    | "EulerA"
+    | "DPM++ 2M"
+    | "DPM++ 2M Karras"
+    | "DPM++ SDE"; // 可选：采样器
   seed?: number; // 可选：随机种子
   image_base64?: string; // 可选：输入图生图的 base64（图生图时使用）
   denoising_strength?: number; // 可选：图生图时的重绘强度 0~1，默认 0.7
@@ -60,7 +66,7 @@ export interface GeminiImageGenerationResponse {
   // 直接内联定义嵌套对象
   data: {
     task_id: string; // 任务 ID
-    status: 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED'; // 生成状态
+    status: "PENDING" | "PROCESSING" | "SUCCESS" | "FAILED"; // 生成状态
     images: string[]; // 生成的图片列表（base64 或 URL）
     seed: number; // 实际使用的种子
     cost_time?: number; // 耗时（秒）

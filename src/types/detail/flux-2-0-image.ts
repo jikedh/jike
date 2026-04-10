@@ -13,7 +13,7 @@ export interface Flux20ImageResponse {
   id: string; // 任务唯一标识符，用于查询任务状态
   object: string; // 对象类型，固定为 "generation.task"
   model: string; // 使用的模型名称
-  status: 'queued' | 'in_progress' | 'completed' | 'failed'; // 任务状态：queued-排队等待处理，in_progress-处理中，completed-成功完成，failed-失败
+  status: "queued" | "in_progress" | "completed" | "failed"; // 任务状态：queued-排队等待处理，in_progress-处理中，completed-成功完成，failed-失败
   progress: number; // 任务进度百分比（0-100）
   created_at: number; // 任务创建时间戳（Unix 时间戳）
   metadata?: {

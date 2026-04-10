@@ -1,60 +1,70 @@
-import { SidebarContextValue } from '@/types/sidebar/sidebar'
-import { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { SidebarContextValue } from "@/types/sidebar/sidebar";
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+} from "react";
+import { useLocation } from "react-router-dom";
 
 // 创建上下文
-const SidebarContext = createContext<SidebarContextValue | null>(null)
+const SidebarContext = createContext<SidebarContextValue | null>(null);
 
 // Provider 属性类型
 type SidebarProviderProps = {
-  children: React.ReactNode
-  defaultActiveId?: string
-}
+  children: React.ReactNode;
+  defaultActiveId?: string;
+};
 
 // Sidebar Provider 组件
 export const SidebarProvider = ({
   children,
-  defaultActiveId
+  defaultActiveId,
 }: SidebarProviderProps) => {
-  const location = useLocation()
-  const [activeId, setActiveId] = useState<string | null>(defaultActiveId || null)
-  const [collapsed, setCollapsed] = useState(false)
+  const location = useLocation();
+  const [activeId, setActiveId] = useState<string | null>(
+    defaultActiveId || null,
+  );
+  const [collapsed, setCollapsed] = useState(false);
 
   // 监听路由变化，自动更新活跃导航项
   useEffect(() => {
-    const pathname = location.pathname
+    const pathname = location.pathname;
     // 从路径中提取路由名称（例如 /canvas -> canvas）
-    const routeName = pathname.split('/').filter(Boolean)[0]
+    const routeName = pathname.split("/").filter(Boolean)[0];
     if (routeName) {
-      setActiveId(routeName)
+      setActiveId(routeName);
     }
-  }, [location.pathname])
+  }, [location.pathname]);
 
   const toggleCollapsed = useCallback(() => {
-    setCollapsed(prev => !prev)
-  }, [])
+    setCollapsed((prev) => !prev);
+  }, []);
 
-  const value = useMemo<SidebarContextValue>(() => ({
-    activeId,
-    setActiveId,
-    collapsed,
-    toggleCollapsed
-  }), [activeId, collapsed, toggleCollapsed])
+  const value = useMemo<SidebarContextValue>(
+    () => ({
+      activeId,
+      setActiveId,
+      collapsed,
+      toggleCollapsed,
+    }),
+    [activeId, collapsed, toggleCollapsed],
+  );
 
   return (
-    <SidebarContext.Provider value={value}>
-      {children}
-    </SidebarContext.Provider>
-  )
-}
+    <SidebarContext.Provider value={value}>{children}</SidebarContext.Provider>
+  );
+};
 
 // 自定义 hook 获取上下文值
 export const useSidebar = () => {
-  const context = useContext(SidebarContext)
+  const context = useContext(SidebarContext);
   if (!context) {
-    throw new Error('useSidebar must be used within a SidebarProvider')
+    throw new Error("useSidebar must be used within a SidebarProvider");
   }
-  return context
-}
+  return context;
+};
 
-export { SidebarContext }
+export { SidebarContext };
