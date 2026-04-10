@@ -14,7 +14,16 @@ import {
 import { autoUpdater } from "electron-updater";
 // @ts-ignore
 import icon from "../../resources/icon.png?asset";
-
+/**
+ * main 层：只做编排，不做业务细节
+ * 1. 创建窗口
+ * 2. 注册 IPC
+ * 3. 启动 updater
+ *
+ * 其余全部下沉到模块（ipc/storage/service.ts、updater/autoUpdater.ts）
+ *
+ *
+ */
 let mainWindow: BrowserWindow | null = null;
 
 function setupAutoUpdater(): void {

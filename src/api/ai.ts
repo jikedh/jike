@@ -8,6 +8,11 @@ import {
   yunwuRequest,
 } from "@/utils/aiRequest";
 import { getAiToken, getBaseURL } from "@/utils/utils";
+/**
+ *
+ * 为了兼容同一个接口的不同入参，暂定接口的入参和出参都为 any
+ * 不过类型定义文件是有的，位于 src/types 目录下面
+ */
 
 // ===================== 账户余额相关 =====================
 
