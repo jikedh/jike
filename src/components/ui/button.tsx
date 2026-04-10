@@ -11,6 +11,8 @@ const buttonVariants = cva(
       variant: {
         default: "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white border border-white/10",
         blue: "bg-[#B43FEB] text-white hover:bg-[#9d35ce] shadow-[0_0_15px_rgba(180,63,235,0.3)]",
+        // ghost: 透明背景按钮，hover 时显示半透明白色效果
+        ghost: "bg-transparent text-white/70 hover:bg-white/10 hover:text-white",
       },
       size: {
         default: "h-10 py-2 px-4",
