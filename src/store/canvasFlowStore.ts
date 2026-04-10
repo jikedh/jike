@@ -2419,8 +2419,18 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
         }
 
         // 2. 构造请求体
+        // 注意：text 和 inline_data 不能同时存在于同一个 part，必须拆成独立的 part
+        // 正确格式：第一个 part 放文本，后续 parts 放图片
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const parts: any[] = imageBase64s.map((base64) => {
+        const parts: any[] = [];
+
+        // 先添加文本 part
+        if (prompt) {
+          parts.push({ text: prompt });
+        }
+
+        // 再添加图片 parts（每个图片一个独立的 inline_data part）
+        for (const base64 of imageBase64s) {
           let mimeType = "image/jpeg";
           let data = base64;
           const dataUriMatch = base64.match(/^data:(image\/\w+);base64,(.+)$/);
@@ -2428,17 +2438,17 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
             mimeType = dataUriMatch[1];
             data = dataUriMatch[2];
           }
-          return {
+          parts.push({
             inline_data: {
               mime_type: mimeType,
               data: data,
             },
-            text: prompt, // 每个 part 都要包含重复的文本提示词
-          };
-        });
+          });
+        }
 
+        // 如果既没有文本也没有图片，则添加空文本
         if (parts.length === 0) {
-          parts.push({ text: prompt });
+          parts.push({ text: "" });
         }
 
         const requestBody = {

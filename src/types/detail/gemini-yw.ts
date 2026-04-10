@@ -1,3 +1,4 @@
+// 注意：text 和 inline_data 不能同时存在，应该拆成多个 part，一个 part 放图，一个 part 放文本
 export interface GeminiYwRequestBody {
   // 直接内联定义 contents 结构
   contents: {
@@ -14,6 +15,40 @@ export interface GeminiYwRequestBody {
     responseModalities: string[]; // 响应模态列表（例如 ["TEXT"]、["TEXT", "IMAGE"]）
   };
 }
+
+/**
+ *
+{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "图中的角色带着的都是红帽子"
+        },
+        {
+          "inline_data": {
+            "mime_type": "image/jpeg",
+            "data": "真实的base64数据"
+          }
+        },
+        {
+          "inline_data": {
+            "mime_type": "image/jpeg",
+            "data": "真实的base64数据"
+          }
+        }
+      ]
+    }
+  ],
+  "generationConfig": {
+    "responseModalities": ["IMAGE"],
+    "imageConfig": {
+      "aspectRatio": "1:1",
+      "imageSize": "2K"
+    }
+  }
+}
+ */
 
 // Gemini 响应体类型定义
 export interface GeminiYwResponseBody {
@@ -51,9 +86,3 @@ export interface GeminiYwResponseBody {
   responseId: string; // 响应 ID
 }
 
-/**
- * 构造 Gemini 3 Pro 渠道二 请求体
- * @param imageBase64s 参考图 Base64 字符串列表（支持带 data URI 前缀）
- * @param prompt 文本提示词
- * @returns GeminiYwRequestBody
- */
