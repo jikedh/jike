@@ -9,6 +9,7 @@ import {
   IconVideo,
   IconPhoto,
   IconUser,
+  IconBrandStorybook,
 } from "@tabler/icons-react";
 import { ButtonHandle } from "@/components/button-handle";
 import { cn } from "shared/lib/utils";
@@ -19,6 +20,7 @@ const PRESET_ICONS: Record<TextAgentPresetId, React.ReactNode> = {
   "short-video-storyboard": <IconVideo size={18} />,
   "jimeng-prompt": <IconPhoto size={18} />,
   "novel-character-design": <IconUser size={18} />,
+  "script-to-storyboard": <IconBrandStorybook size={18} />,
 };
 
 interface NodeBodyProps {

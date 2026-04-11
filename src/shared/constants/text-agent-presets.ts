@@ -39,6 +39,13 @@ export const TEXT_AGENT_PRESETS: Record<
     model: "gemini-3.1-pro",
     systemPrompt: SYSTEM_PROMPTS["novel-character-design"],
   },
+  "script-to-storyboard": {
+    id: "script-to-storyboard",
+    label: "剧本转分镜",
+    description: "将剧本或小说片段转化为AI视频分镜脚本，支持真人短剧和动漫风格",
+    model: "gemini-3.1-pro",
+    systemPrompt: SYSTEM_PROMPTS["script-to-storyboard"],
+  },
 };
 
 export const TEXT_AGENT_PRESET_LIST = Object.values(TEXT_AGENT_PRESETS);

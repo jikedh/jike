@@ -177,7 +177,8 @@ export type TextAgentPresetId =
   | "novel-to-script-agent"
   | "short-video-storyboard"
   | "jimeng-prompt"
-  | "novel-character-design";
+  | "novel-character-design"
+  | "script-to-storyboard";
 
 /**
  * 文本智能体节点数据结构

@@ -8,6 +8,7 @@ import {
   IconVideo,
   IconPhoto,
   IconUser,
+  IconBrandStorybook,
 } from "@tabler/icons-react";
 import { TEXT_AGENT_PRESET_LIST } from "shared/constants/text-agent-presets";
 import type { TextAgentPresetId } from "shared/types/flow";
@@ -17,6 +18,7 @@ const PRESET_ICONS: Record<TextAgentPresetId, React.ReactNode> = {
   "short-video-storyboard": <IconVideo size={18} />,
   "jimeng-prompt": <IconPhoto size={18} />,
   "novel-character-design": <IconUser size={18} />,
+  "script-to-storyboard": <IconBrandStorybook size={18} />,
 };
 
 interface PresetSelectorProps {
