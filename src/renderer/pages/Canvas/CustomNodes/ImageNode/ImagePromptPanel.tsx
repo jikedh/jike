@@ -111,18 +111,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     (state) => state.setReferenceHoverHighlight,
   );
 
-  const handleDisconnectNode = useCallback(
-    (sourceNodeId: string) => {
-      const edgeToDelete = edges.find(
-        (edge) => edge.source === sourceNodeId && edge.target === nodeId,
-      );
-      if (edgeToDelete) {
-        deleteEdge(edgeToDelete.id);
-      }
-    },
-    [edges, nodeId, deleteEdge],
-  );
-
   // 当前节点状态（用于禁用生成按钮）
   const currentNode = useMemo(() => {
     return nodes.find((node) => node.id === nodeId);
@@ -426,6 +414,56 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const parentImageUrls = useMemo(
     () => parentImageNodes.map((item) => item.url),
     [parentImageNodes],
+  );
+
+  // 断开连接时，同步清理 midjourneyAdvanced 中的 URL
+  const handleDisconnectNode = useCallback(
+    (sourceNodeId: string) => {
+      const edgeToDelete = edges.find(
+        (edge) => edge.source === sourceNodeId && edge.target === nodeId,
+      );
+      if (edgeToDelete) {
+        deleteEdge(edgeToDelete.id);
+      }
+
+      // 从 midjourneyAdvanced 中移除断开连接的父节点图片
+      // 通过 nodes 直接查找父节点，获取其第一张结果图的 URL
+      const parentNode = nodes.find((node) => node.id === sourceNodeId);
+      if (parentNode && parentNode.type === "imageNode") {
+        const parentData = parentNode.data as ImageGenerationNode;
+        const firstItem = parentData.result?.data?.[0];
+        if (firstItem?.url) {
+          const urlToRemove = firstItem.url;
+          // 直接从最新的 nodes 状态中获取当前的 midjourneyAdvanced，避免依赖旧状态
+          const currentNodeData = nodes.find((n) => n.id === nodeId);
+          const currentAdvanced = (
+            currentNodeData?.data as ImageGenerationNode
+          )?.midjourneyAdvanced;
+          if (currentAdvanced) {
+            const newReferenceUrls = (currentAdvanced.referenceUrls ?? []).filter(
+              (url) => url !== urlToRemove,
+            );
+            const newStyleUrls = (currentAdvanced.styleUrls ?? []).filter(
+              (url) => url !== urlToRemove,
+            );
+            updateImageNodeData(nodeId, {
+              midjourneyAdvanced: {
+                ...currentAdvanced,
+                referenceUrls: newReferenceUrls,
+                styleUrls: newStyleUrls,
+              },
+            });
+          }
+        }
+      }
+    },
+    [
+      edges,
+      nodeId,
+      deleteEdge,
+      nodes,
+      updateImageNodeData,
+    ],
   );
 
   // 收集父级便签内容：按入边顺序去重后提取 content
