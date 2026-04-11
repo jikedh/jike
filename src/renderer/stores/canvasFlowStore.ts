@@ -1,11 +1,4 @@
-import {
-  addEdge,
-  applyEdgeChanges,
-  applyNodeChanges,
-  type Connection,
-  type EdgeChange,
-  type NodeChange,
-} from "@xyflow/react";
+import { addEdge, applyEdgeChanges, applyNodeChanges } from "@xyflow/react";
 import { uploadFileToOSS } from "service/oss";
 import {
   getCanvasDataKey,
@@ -16,10 +9,7 @@ import {
   saveGeneratedImageToLocal,
   saveGeneratedVideoToLocal,
 } from "service/projectStorage";
-import {
-  type AgentPresetId,
-  getAgentPresetById,
-} from "shared/constants/agent-presets";
+import { getAgentPresetById } from "shared/constants/agent-presets";
 import { GenerationStatus } from "shared/constants/enum";
 import type { GeminiYwResponseBody } from "shared/types/detail/gemini-yw";
 import type {
@@ -29,6 +19,13 @@ import type {
   ImageGenerationNode,
   VideoGenerationNode,
 } from "shared/types/flow";
+import type {
+  AddNodeOptions,
+  CanvasFlowStoreType,
+  CanvasPersistedState,
+  NodePosition,
+  NodeType,
+} from "shared/types/zustand/canvas-flow";
 import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
 import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
@@ -51,44 +48,6 @@ import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 
 const CANVAS_STORAGE_VERSION = 1;
 
-type CanvasPersistedState = {
-  version: number;
-  savedAt: number;
-  nodes: AllNodeType[];
-  edges: EdgeType[];
-  nodeIdCounters: {
-    note: number;
-    image: number;
-    video: number;
-    agent: number;
-    panorama: number;
-    audio: number;
-    table: number;
-  };
-};
-
-/**
- * 节点类型标识符
- */
-type NodeType =
-  | "note"
-  | "image"
-  | "video"
-  | "agent"
-  | "panorama"
-  | "audio"
-  | "textAgent"
-  | "table";
-type NodePosition = { x: number; y: number };
-type AddNodeOptions = {
-  agentPresetId?: AgentPresetId;
-  initialWidth?: number;
-  initialHeight?: number;
-  initialContent?: string;
-  tableTitle?: string;
-  tableRows?: any[];
-};
-
 /**
  * 基于最后一个节点计算新节点位置
  */
@@ -102,167 +61,6 @@ const getNextNodePosition = (nodes: AllNodeType[]) => {
       y: lastNode.position.y + 40,
     }
     : fallbackPosition;
-};
-
-type CanvasFlowState = {
-  nodes: AllNodeType[];
-  edges: EdgeType[];
-  // 参考资源悬浮高亮：当前高亮的边 ID 列表
-  highlightedEdgeIds: string[];
-  // 参考资源悬浮高亮：当前高亮的来源节点 ID 列表
-  highlightedSourceNodeIds: string[];
-  // 参考资源悬浮引用计数（key=source__target）
-  referenceHoverRefCounts: Record<string, number>;
-  // 各类型节点的自增计数器
-  nodeIdCounters: {
-    note: number;
-    image: number;
-    video: number;
-    agent: number;
-    panorama: number;
-    audio: number;
-    table: number;
-  };
-  // 是否已完成数据恢复
-  hydrated: boolean;
-  // 当前项目 ID
-  projectId: string | null;
-  // 全景图查看器状态
-  panoramaViewer: {
-    open: boolean;
-    imageUrl: string | null;
-    sourceNodeId: string | null;
-  };
-
-  // === 剪贴板 ===
-  /** 剪贴板中的节点数据 */
-  clipboard: AllNodeType | null;
-
-  // === 历史记录 ===
-  /** 历史记录栈 */
-  history: CanvasPersistedState[];
-  /** 当前历史记录索引 */
-  historyIndex: number;
-  /** 最大历史记录数量 */
-  maxHistorySize: number;
-
-  // === 基础流程事件 ===
-  onNodesChange: (changes: NodeChange<AllNodeType>[]) => void;
-  onEdgesChange: (changes: EdgeChange<EdgeType>[]) => void;
-  onConnect: (connection: Connection) => void;
-  // 设置参考资源悬浮高亮（支持多项并发高亮）
-  setReferenceHoverHighlight: (
-    sourceNodeId: string,
-    targetNodeId: string,
-    isHovering: boolean,
-  ) => void;
-  // 清空参考资源悬浮高亮
-  clearReferenceHoverHighlights: () => void;
-
-  // === 持久化操作 ===
-  /** 切换项目（加载项目数据） */
-  switchProject: (projectId: string) => Promise<void>;
-  /** 保存当前图状态到 localStorage */
-  saveGraph: () => void;
-  /** 从 localStorage 恢复图状态 */
-  hydrateGraph: (projectId: string) => void;
-  /** 重置到上次保存的状态 */
-  resetToSavedGraph: () => void;
-  /** 画布状态（用于切换项目前） */
-  clearCanvas: () => void;
-
-  // === 导入导出操作 ===
-  /** 导出画布数据 */
-  exportCanvasData: () => CanvasPersistedState;
-  /** 导入画布数据 */
-  importCanvasData: (data: CanvasPersistedState) => void;
-
-  // === 通用节点操作 ===
-  /** 获取下一个指定类型的节点 ID（自增） */
-  getNextNodeId: (nodeType: NodeType) => string;
-  /** 创建节点 */
-  addNode: (
-    nodeType: NodeType,
-    position?: NodePosition,
-    options?: AddNodeOptions,
-  ) => string;
-  /** 删除边 */
-  deleteEdge: (edgeId: string) => void;
-  /** 更新便签编辑态 */
-  setNoteNodeEditing: (nodeId: string, isEditing: boolean) => void;
-  /** 更新便签内容 */
-  updateNoteNodeContent: (nodeId: string, content: string) => void;
-  /** 调整便签节点尺寸 */
-  resizeNoteNode: (nodeId: string, width: number, height: number) => void;
-  /** 复制节点 */
-  duplicateNode: (nodeId: string) => void;
-  /** 删除节点及其关联边 */
-  deleteNode: (nodeId: string) => void;
-  /** 更新图片节点数据（局部字段 patch） */
-  updateImageNodeData: (
-    nodeId: string,
-    patch: Partial<ImageGenerationNode>,
-  ) => void;
-  /** 创建图片生成任务并启动轮询 */
-  startImageGeneration: (nodeId: string, payload: any) => Promise<void>;
-  /** 手动停止图片轮询（防止内存泄露） */
-  stopImagePolling: (nodeId: string) => void;
-  /** Gemini 3 Pro 渠道二：直接调用 API 并上传 OSS（无需轮询） */
-  startGeminiPro2Generation: (nodeId: string, payload: any) => Promise<void>;
-  /** 拆图：将图片节点拆分为宫格子图 */
-  splitImage: (nodeId: string, gridSize: number) => void;
-  /** 独立为图片：将节点中的多张图片/视频拆分为独立节点 */
-  separateToNodes: (nodeId: string) => void;
-  /** 更新视频节点数据（局部字段 patch） */
-  updateVideoNodeData: (
-    nodeId: string,
-    patch: Partial<VideoGenerationNode>,
-  ) => void;
-  /** 创建视频生成任务并启动轮询 */
-  startVideoGeneration: (nodeId: string, payload: any) => Promise<void>;
-  /** 手动停止视频轮询（防止内存泄露） */
-  stopVideoPolling: (nodeId: string) => void;
-  /** 更新音频节点数据（局部字段 patch） */
-  updateAudioNodeData: (
-    nodeId: string,
-    patch: Partial<AudioGenerationNode>,
-  ) => void;
-  /** 更新文本智能体节点数据（局部字段 patch） */
-  updateTextAgentNodeData: (nodeId: string, patch: Record<string, any>) => void;
-  /** 更新表格节点数据（局部字段 patch） */
-  updateTableNodeData: (nodeId: string, patch: Record<string, any>) => void;
-
-  // === 任务管理 ===
-  /** 获取正在生成的任务数量 */
-  getGeneratingTasksCount: () => number;
-  /** 取消所有正在生成的任务 */
-  cancelAllGeneratingTasks: () => void;
-
-  // === 撤销/重做 ===
-  /** 撤销操作 */
-  undo: () => void;
-  /** 重做操作 */
-  redo: () => void;
-  /** 保存当前状态到历史记录 */
-  saveToHistory: () => void;
-  /** 是否可以撤销 */
-  canUndo: () => boolean;
-  /** 是否可以重做 */
-  canRedo: () => boolean;
-
-  // === 全景图查看器 ===
-  /** 打开全景图查看器 */
-  openPanoramaViewer: (imageUrl: string, sourceNodeId?: string) => void;
-  /** 关闭全景图查看器 */
-  closePanoramaViewer: () => void;
-
-  // === 剪贴板操作 ===
-  /** 复制选中的节点到剪贴板 */
-  copySelectedNode: () => void;
-  /** 粘贴节点 */
-  pasteNode: () => void;
-  /** 是否有可粘贴的节点 */
-  canPaste: () => boolean;
 };
 
 // ==================== 图片生成轮询支持 ====================
@@ -503,9 +301,9 @@ const pollImageGeneration = async (
   nodeId: string,
   signal: AbortSignal,
   setState: (
-    updater: (state: CanvasFlowState) => Partial<CanvasFlowState>,
+    updater: (state: CanvasFlowStoreType) => Partial<CanvasFlowStoreType>,
   ) => void,
-  getState: () => CanvasFlowState,
+  getState: () => CanvasFlowStoreType,
   totalTaskCount: number, // 用于判断是否所有任务都已完成
 ) => {
   const startTime = Date.now();
@@ -749,9 +547,9 @@ const pollMjImageGeneration = async (
   nodeId: string,
   signal: AbortSignal,
   setState: (
-    updater: (state: CanvasFlowState) => Partial<CanvasFlowState>,
+    updater: (state: CanvasFlowStoreType) => Partial<CanvasFlowStoreType>,
   ) => void,
-  getState: () => CanvasFlowState,
+  getState: () => CanvasFlowStoreType,
   totalTaskCount: number,
 ) => {
   const startTime = Date.now();
@@ -1007,9 +805,9 @@ const pollVideoGeneration = async (
   model: string,
   signal: AbortSignal,
   setState: (
-    updater: (state: CanvasFlowState) => Partial<CanvasFlowState>,
+    updater: (state: CanvasFlowStoreType) => Partial<CanvasFlowStoreType>,
   ) => void,
-  getState: () => CanvasFlowState,
+  getState: () => CanvasFlowStoreType,
 ) => {
   const startTime = Date.now();
   let missingResultUrlStartTime: number | null = null;
@@ -1199,7 +997,7 @@ const pollVideoGeneration = async (
   }
 };
 
-export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
+export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
   /**
    * 同步图片节点的 image_urls 依赖
    * 支持 Image→Image 和 Image→Video 的边操作
@@ -1407,6 +1205,20 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
     history: [],
     historyIndex: -1,
     maxHistorySize: 50,
+
+    // ── 配对 setter ───────────────────────────────
+    setNodes: (nodes) => set({ nodes }),
+    setEdges: (edges) => set({ edges }),
+    setHighlightedEdgeIds: (highlightedEdgeIds) => set({ highlightedEdgeIds }),
+    setHighlightedSourceNodeIds: (highlightedSourceNodeIds) =>
+      set({ highlightedSourceNodeIds }),
+    setNodeIdCounters: (nodeIdCounters) => set({ nodeIdCounters }),
+    setHydrated: (hydrated) => set({ hydrated }),
+    setProjectId: (projectId) => set({ projectId }),
+    setPanoramaViewer: (panoramaViewer) => set({ panoramaViewer }),
+    setClipboard: (clipboard) => set({ clipboard }),
+    setHistory: (history) => set({ history }),
+    setHistoryIndex: (historyIndex) => set({ historyIndex }),
 
     // ==================== 持久化方法实现 ====================
 

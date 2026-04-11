@@ -1,60 +1,35 @@
+import { DEFAULT_CANVAS_CHAT_MODEL } from "shared/constants/ai-models";
+import type { ChatPersonaId } from "shared/types/NoteGeneration";
+import type { ChatSettingsStoreType } from "shared/types/zustand/chat-settings";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import { DEFAULT_CANVAS_CHAT_MODEL } from "shared/constants/ai-models";
-import type { ChatPersonaId } from "shared/types/NoteGeneration";
-
-type ChatSettingsState = {
-  /** 默认对话模型 */
-  defaultModel: string;
-  /** 默认人设 ID */
-  defaultPersonaId: ChatPersonaId;
-  /** 自动保存开关 */
-  autoSaveEnabled: boolean;
-  /** 网格显示开关 */
-  gridVisible: boolean;
-  /** 节点是否吸附到网格 */
-  snapToGrid: boolean;
-  /** 网格吸附尺寸 [x, y] */
-  snapGridSize: [number, number];
-  /** 节点搜索栏显示开关 */
-  nodeSearchVisible: boolean;
-  /** 调试工具面板显示开关*/
-  devToolsVisible: boolean;
-  /** 项目存储路径 */
-  storagePath: string;
-};
-
-type ChatSettingsActions = {
-  setDefaultModel: (model: string) => void;
-  setDefaultPersonaId: (personaId: ChatPersonaId) => void;
-  setAutoSaveEnabled: (enabled: boolean) => void;
-  setGridVisible: (visible: boolean) => void;
-  setSnapToGrid: (enabled: boolean) => void;
-  setSnapGridSize: (size: [number, number]) => void;
-  setNodeSearchVisible: (visible: boolean) => void;
-  setDevToolsVisible: (visible: boolean) => void;
-  setStoragePath: (path: string) => void;
-  resetToDefault: () => void;
-};
-
-const INITIAL_STATE: ChatSettingsState = {
+const INITIAL_STATE: Pick<
+  ChatSettingsStoreType,
+  | "defaultModel"
+  | "defaultPersonaId"
+  | "autoSaveEnabled"
+  | "gridVisible"
+  | "snapToGrid"
+  | "snapGridSize"
+  | "nodeSearchVisible"
+  | "devToolsVisible"
+  | "storagePath"
+> = {
   defaultModel: DEFAULT_CANVAS_CHAT_MODEL,
-  defaultPersonaId: "none",
+  defaultPersonaId: "none" as ChatPersonaId,
   autoSaveEnabled: true,
   gridVisible: true,
   // 默认开启吸附网格，提升节点排版一致性
   snapToGrid: true,
   // 固定 40x40 网格步进（当前版本采用最小改动策略）
-  snapGridSize: [40, 40],
+  snapGridSize: [40, 40] as [number, number],
   nodeSearchVisible: false,
   devToolsVisible: false,
   storagePath: "",
 };
 
-export const useChatSettingsStore = create<
-  ChatSettingsState & ChatSettingsActions
->()(
+export const useChatSettingsStore = create<ChatSettingsStoreType>()(
   persist(
     (set) => ({
       ...INITIAL_STATE,

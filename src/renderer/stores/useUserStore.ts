@@ -1,31 +1,13 @@
-import { create } from "zustand";
-import { getUserInfo } from "@/api/ai";
+import type { UserStoreType } from "shared/types/zustand/user";
 import {
   clearJikeingToken,
   clearJikeingUserId,
   getJikeingToken,
 } from "shared/utils/utils";
-import type { UserInfo } from "shared/types/jikeing";
+import { create } from "zustand";
+import { getUserInfo } from "@/api/ai";
 
-interface UserState {
-  loginStatus: number;
-  userInfo: UserInfo | null;
-  vipLevel: number;
-  isLoading: boolean;
-  dialogLoginStatus: boolean;
-}
-
-interface UserActions {
-  setLoginStatus: (status: number) => void;
-  setUserInfo: (info: UserInfo | null) => void;
-  fetchUserInfo: () => Promise<void>;
-  logout: () => Promise<void>;
-  setDialogLoginStatus: (show: boolean) => void;
-  isVipLevel3: () => boolean;
-  canCreateProject: () => boolean;
-}
-
-const initialState: UserState = {
+const initialState: Pick<UserStoreType, 'loginStatus' | 'userInfo' | 'vipLevel' | 'isLoading' | 'dialogLoginStatus'> = {
   loginStatus: 0,
   userInfo: null,
   vipLevel: 0,
@@ -33,10 +15,14 @@ const initialState: UserState = {
   dialogLoginStatus: false,
 };
 
-export const useUserStore = create<UserState & UserActions>((set, get) => ({
+export const useUserStore = create<UserStoreType>((set, get) => ({
   ...initialState,
 
   setLoginStatus: (status) => set({ loginStatus: status }),
+
+  setVipLevel: (level) => set({ vipLevel: level }),
+
+  setIsLoading: (loading) => set({ isLoading: loading }),
 
   setUserInfo: (info) => {
     if (info) {
