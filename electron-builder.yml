@@ -23,7 +23,3 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 npmRebuild: false
-publish:
-  - provider: github
-    owner: 2026617199
-    repo: jike-release

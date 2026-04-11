@@ -70,5 +70,9 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: false
+          repo: 2026617199/jike-release
+          owner: 2026617199
+          tag_name: ${{ github.ref_name }}
+          release_name: 即刻 v${{ github.ref_name }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
