@@ -60,7 +60,15 @@ jobs:
       - name: List artifacts
         run: ls -la release/
 
+      - name: Debug - Check target repo
+        run: |
+          echo "=== Debug Info ==="
+          echo "Target repo: 2026617199/jike-release"
+          echo "Tag: ${{ github.ref_name }}"
+          echo "GH_TOKEN exists: ${{ secrets.GH_TOKEN != '' }}"
+
       - name: Create Release
+        id: create_release
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -76,3 +84,11 @@ jobs:
           release_name: 即刻 v${{ github.ref_name }}
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Debug - Check release result
+        if: always()
+        run: |
+          echo "=== Release Result ==="
+          echo "Release ID: ${{ steps.create_release.outputs.id }}"
+          echo "Release URL: ${{ steps.create_release.outputs.url }}"
+          echo "Release HTML URL: ${{ steps.create_release.outputs.html_url }}"
