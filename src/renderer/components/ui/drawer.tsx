@@ -1,9 +1,9 @@
 "use client";
 
-import * as React from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
+import * as React from "react";
 
-import { cn } from "shared/lib/utils";
+import { cn } from "shared/utils/utils";
 
 function Drawer({
   ...props

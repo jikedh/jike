@@ -10,9 +10,8 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-
-import { cn } from "shared/lib/utils";
 import type { ChatSessionMeta } from "service/chatHistoryStorage";
+import { cn } from "shared/utils/utils";
 
 type ChatHistoryPanelProps = {
   sessionList: ChatSessionMeta[]; // 会话列表

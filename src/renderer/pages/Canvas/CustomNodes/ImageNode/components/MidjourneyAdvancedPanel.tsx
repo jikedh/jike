@@ -1,16 +1,19 @@
-import { useEffect, useState } from "react";
 import {
   DndContext,
+  type DragEndEvent,
+  type DragStartEvent,
   PointerSensor,
+  pointerWithin,
+  useDraggable,
+  useDroppable,
   useSensor,
   useSensors,
-  pointerWithin,
-  type DragStartEvent,
-  type DragEndEvent,
 } from "@dnd-kit/core";
-import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { IconEyeSpark, IconGripVertical } from "@tabler/icons-react";
+import { useEffect, useState } from "react";
+import { cn } from "shared/utils/utils";
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -22,8 +25,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Button } from "@/components/ui/button";
-import { cn } from "shared/lib/utils";
 
 type MidjourneyAdvancedPanelProps = {
   referenceImageUrls?: string[];

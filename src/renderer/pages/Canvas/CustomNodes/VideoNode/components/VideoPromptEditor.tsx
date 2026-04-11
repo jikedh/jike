@@ -1,6 +1,6 @@
+import Mention from "@tiptap/extension-mention";
 import { EditorContent, ReactRenderer, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Mention from "@tiptap/extension-mention";
 import {
   forwardRef,
   useEffect,
@@ -13,7 +13,7 @@ import {
   cn,
   getMentionLabel,
   updateSuggestionPosition,
-} from "shared/lib/utils";
+} from "shared/utils/utils";
 import { VideoMentionList } from "../VideoMentionList";
 
 /**

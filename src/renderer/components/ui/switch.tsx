@@ -1,9 +1,9 @@
 "use client";
 
-import * as React from "react";
 import { Switch as SwitchPrimitive } from "radix-ui";
+import * as React from "react";
 
-import { cn } from "shared/lib/utils";
+import { cn } from "shared/utils/utils";
 
 const Switch = React.forwardRef<
   React.ComponentRef<typeof SwitchPrimitive.Root>,

@@ -1,8 +1,8 @@
 import { type NodeProps, NodeResizer, Position, useStore } from "@xyflow/react";
 import { memo, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
-import { cn } from "shared/lib/utils";
 import type { CharacterTableRow, TableNodeType } from "shared/types/flow";
+import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";

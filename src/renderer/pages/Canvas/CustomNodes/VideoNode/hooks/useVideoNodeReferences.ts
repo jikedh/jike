@@ -1,12 +1,11 @@
 import { useMemo } from "react";
-
-import { toChineseNumber } from "shared/lib/utils";
 import type {
   AudioGenerationNode,
   ImageGenerationNode,
   NoteNodeData,
   VideoGenerationNode,
 } from "shared/types/flow";
+import { toChineseNumber } from "shared/utils/utils";
 import { getPrimaryVideoUrlFromNodeData } from "../utils/video-url";
 
 /**

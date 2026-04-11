@@ -1,3 +1,7 @@
 {
-  "recommendations": ["biomejs.biome", "eamodio.gitlens"]
+  "recommendations": [
+    "biomejs.biome",
+    "eamodio.gitlens",
+    "editorconfig.editorconfig"
+  ]
 }

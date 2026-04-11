@@ -4,13 +4,13 @@
  * 适用于 midjourney 和 midjourney-niji7 模型
  */
 
+import { cn } from "shared/utils/utils";
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { cn } from "shared/lib/utils";
 
 import { AspectRatioIcon } from "./AspectRatioIcon";
 
