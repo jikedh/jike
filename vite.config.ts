@@ -13,7 +13,11 @@ export default defineConfig(({ command, mode }) => {
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
-        "@": path.resolve(__dirname, "./src"),
+        "@": path.resolve(__dirname, "./src/renderer"),
+        shared: path.resolve(__dirname, "./src/shared"),
+        service: path.resolve(__dirname, "./src/service"),
+        main: path.resolve(__dirname, "./src/main"),
+        preload: path.resolve(__dirname, "./src/preload"),
       },
     },
     build: {

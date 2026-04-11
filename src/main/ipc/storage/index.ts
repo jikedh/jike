@@ -11,7 +11,6 @@ import {
   renameSync,
 } from "fs";
 import { app } from "electron";
-import { is } from "@electron-toolkit/utils";
 
 /**
  * Storage IPC Handlers

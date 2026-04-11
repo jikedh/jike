@@ -20,7 +20,11 @@ export default defineConfig(({ mode }) => {
       },
       resolve: {
         alias: {
-          "@": resolve(__dirname, "src"),
+          "@": resolve(__dirname, "src/renderer"),
+          shared: resolve(__dirname, "src/shared"),
+          service: resolve(__dirname, "src/service"),
+          main: resolve(__dirname, "src/main"),
+          preload: resolve(__dirname, "src/preload"),
         },
       },
       plugins: [react(), tailwindcss()],
