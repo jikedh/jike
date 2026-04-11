@@ -69,25 +69,19 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v2
+        uses: ncipollo/release-action@v1
         with:
-          files: |
-            release/*.exe
-            release/latest.yml
-            release/*.blockmap
-          generate_release_notes: true
+          artifacts: "release/*.exe,release/latest.yml,release/*.blockmap"
+          repository: 2026617199/jike-release
+          tag: ${{ github.ref_name }}
+          name: 即刻 v${{ github.ref_name }}
+          generateReleaseNotes: true
           draft: false
           prerelease: false
-          repository: 2026617199/jike-release
-          tag_name: ${{ github.ref_name }}
-          release_name: 即刻 v${{ github.ref_name }}
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          token: ${{ secrets.GH_TOKEN }}
 
       - name: Debug - Check release result
         if: always()
         run: |
           echo "=== Release Result ==="
-          echo "Release ID: ${{ steps.create_release.outputs.id }}"
           echo "Release URL: ${{ steps.create_release.outputs.url }}"
-          echo "Release HTML URL: ${{ steps.create_release.outputs.html_url }}"
