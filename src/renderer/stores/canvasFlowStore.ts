@@ -27,6 +27,27 @@ import type {
   NodeType,
 } from "shared/types/zustand/canvas-flow";
 import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
+import {
+  buildReferenceHighlightState,
+  buildReferenceHoverKey,
+  getNextNodePosition,
+  IMAGE_POLL_INTERVAL,
+  IMAGE_TIMEOUT,
+  imagePollingControllers,
+  pendingTaskCounts,
+  stopImagePollingInternal,
+  stopVideoPollingInternal,
+  updateAudioNodeInList,
+  updateImageNodeInList,
+  updateTableNodeInList,
+  updateTextAgentNodeInList,
+  updateVideoNodeInList,
+  VIDEO_POLL_INTERVAL,
+  VIDEO_RESULT_WAIT_TIMEOUT,
+  VIDEO_TIMEOUT,
+  videoPollingControllers,
+  wait,
+} from "shared/utils/reactflowUtils";
 import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
 import { create } from "zustand";
@@ -47,251 +68,6 @@ import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 // ==================== 持久化配置 ====================
 
 const CANVAS_STORAGE_VERSION = 1;
-
-/**
- * 基于最后一个节点计算新节点位置
- */
-const getNextNodePosition = (nodes: AllNodeType[]) => {
-  const lastNode = nodes[nodes.length - 1];
-  const fallbackPosition = { x: 220, y: 180 };
-
-  return lastNode
-    ? {
-      x: lastNode.position.x + 40,
-      y: lastNode.position.y + 40,
-    }
-    : fallbackPosition;
-};
-
-// ==================== 图片生成轮询支持 ====================
-
-// 轮询频率（10 秒）
-const IMAGE_POLL_INTERVAL = 10000;
-// 图片生成超时时间（5 分钟）
-const IMAGE_TIMEOUT = 5 * 60 * 1000;
-// 轮询控制器：用于中止轮询（taskId -> AbortController）
-const imagePollingControllers = new Map<string, AbortController>();
-// 记录每个节点待完成的 task 数量（用于多图生成场景）
-const pendingTaskCounts = new Map<string, number>();
-// 视频轮询频率（10 秒）
-const VIDEO_POLL_INTERVAL = 10000;
-// 视频生成超时时间（30 分钟）
-const VIDEO_TIMEOUT = 30 * 60 * 1000;
-// 后端已完成但短时间未返回 URL 时，允许继续轮询一段时间
-const VIDEO_RESULT_WAIT_TIMEOUT = 10 * 1000;
-// 视频轮询控制器：用于中止旧轮询
-const videoPollingControllers = new Map<string, AbortController>();
-
-/**
- * 可中断等待函数
- */
-const wait = (ms: number, signal?: AbortSignal) => {
-  return new Promise<void>((resolve) => {
-    const timer = window.setTimeout(() => {
-      signal?.removeEventListener("abort", handleAbort);
-      resolve();
-    }, ms);
-
-    const handleAbort = () => {
-      window.clearTimeout(timer);
-      resolve();
-    };
-
-    if (signal?.aborted) {
-      handleAbort();
-      return;
-    }
-
-    signal?.addEventListener("abort", handleAbort, { once: true });
-  });
-};
-
-/**
- * 更新图片节点数据的通用辅助函数
- */
-const updateImageNodeInList = (
-  nodes: AllNodeType[],
-  nodeId: string,
-  updater: (data: ImageGenerationNode) => ImageGenerationNode,
-) => {
-  return nodes.map((node) => {
-    if (node.id !== nodeId || node.type !== "imageNode") {
-      return node;
-    }
-
-    return {
-      ...node,
-      data: updater(node.data as ImageGenerationNode),
-    };
-  });
-};
-
-/**
- * 更新视频节点数据的通用辅助函数
- */
-const updateVideoNodeInList = (
-  nodes: AllNodeType[],
-  nodeId: string,
-  updater: (data: VideoGenerationNode) => VideoGenerationNode,
-) => {
-  return nodes.map((node) => {
-    if (node.id !== nodeId || node.type !== "videoNode") {
-      return node;
-    }
-
-    return {
-      ...node,
-      data: updater(node.data as VideoGenerationNode),
-    };
-  });
-};
-
-/**
- * 更新音频节点数据的通用辅助函数
- */
-const updateAudioNodeInList = (
-  nodes: AllNodeType[],
-  nodeId: string,
-  updater: (data: AudioGenerationNode) => AudioGenerationNode,
-) => {
-  return nodes.map((node) => {
-    if (node.id !== nodeId || node.type !== "audioNode") {
-      return node;
-    }
-
-    return {
-      ...node,
-      data: updater(node.data as AudioGenerationNode),
-    };
-  });
-};
-
-/**
- * 更新文本智能体节点数据的通用辅助函数
- */
-const updateTextAgentNodeInList = (
-  nodes: AllNodeType[],
-  nodeId: string,
-  updater: (data: any) => any,
-) => {
-  return nodes.map((node) => {
-    if (node.id !== nodeId || node.type !== "textAgentNode") {
-      return node;
-    }
-
-    return {
-      ...node,
-      data: updater(node.data),
-    };
-  });
-};
-
-const updateTableNodeInList = (
-  nodes: AllNodeType[],
-  nodeId: string,
-  updater: (data: any) => any,
-) => {
-  return nodes.map((node) => {
-    if (node.id !== nodeId || node.type !== "tableNode") {
-      return node;
-    }
-
-    return {
-      ...node,
-      data: updater(node.data),
-    };
-  });
-};
-
-/**
- * 停止某个任务的图片轮询（只停止指定的 task）
- */
-const stopImagePollingInternal = (taskId: string) => {
-  const controller = imagePollingControllers.get(taskId);
-  if (controller) {
-    controller.abort();
-  }
-  imagePollingControllers.delete(taskId);
-};
-
-/**
- * 停止某个节点下所有图片任务的轮询（删除节点或清空画布时调用）
- */
-const stopAllImagePollingForNode = (nodeId: string) => {
-  // 遍历所有 controller，找到属于该 node 的（通过 taskId 特征或轮询中引用）
-  // 由于 taskId 散乱，这里通过 nodeId 参数传入后，由调用方负责中止
-  imagePollingControllers.forEach((controller, taskId) => {
-    controller.abort();
-    imagePollingControllers.delete(taskId);
-  });
-};
-
-/**
- * 停止某个节点的视频轮询
- */
-const stopVideoPollingInternal = (nodeId: string) => {
-  const controller = videoPollingControllers.get(nodeId);
-  if (controller) {
-    controller.abort();
-  }
-  videoPollingControllers.delete(nodeId);
-};
-
-/**
- * 构建参考资源悬浮 key。
- */
-const buildReferenceHoverKey = (sourceNodeId: string, targetNodeId: string) => {
-  return `${sourceNodeId}__${targetNodeId}`;
-};
-
-/**
- * 解析参考资源悬浮 key。
- */
-const parseReferenceHoverKey = (key: string) => {
-  const [sourceNodeId, targetNodeId] = key.split("__");
-  return { sourceNodeId, targetNodeId };
-};
-
-/**
- * 根据引用计数和当前边列表，重建高亮边与高亮来源节点。
- * 会自动清理已失效的引用关系（例如边已删除）。
- */
-const buildReferenceHighlightState = (
-  referenceHoverRefCounts: Record<string, number>,
-  edges: EdgeType[],
-) => {
-  const nextRefCounts: Record<string, number> = {};
-  const highlightedEdgeIdSet = new Set<string>();
-  const highlightedSourceNodeIdSet = new Set<string>();
-
-  Object.entries(referenceHoverRefCounts).forEach(([key, count]) => {
-    if (!count || count <= 0) {
-      return;
-    }
-
-    const { sourceNodeId, targetNodeId } = parseReferenceHoverKey(key);
-    if (!sourceNodeId || !targetNodeId) {
-      return;
-    }
-
-    const matchedEdges = edges.filter(
-      (edge) => edge.source === sourceNodeId && edge.target === targetNodeId,
-    );
-    if (matchedEdges.length === 0) {
-      return;
-    }
-
-    nextRefCounts[key] = count;
-    highlightedSourceNodeIdSet.add(sourceNodeId);
-    matchedEdges.forEach((edge) => highlightedEdgeIdSet.add(edge.id));
-  });
-
-  return {
-    referenceHoverRefCounts: nextRefCounts,
-    highlightedEdgeIds: Array.from(highlightedEdgeIdSet),
-    highlightedSourceNodeIds: Array.from(highlightedSourceNodeIdSet),
-  };
-};
 
 /**
  * 图片生成轮询逻辑
