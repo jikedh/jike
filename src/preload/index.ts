@@ -59,6 +59,23 @@ export type DebugApi = {
   isDev: () => Promise<boolean>;
 };
 
+export type DownloadApi = {
+  imageAsBuffer: (
+    url: string,
+  ) => Promise<{ success: boolean; data?: Uint8Array; error?: string }>;
+  imageAsBase64: (
+    url: string,
+  ) => Promise<{
+    success: boolean;
+    data?: { base64: string; mimeType: string };
+    error?: string;
+  }>;
+  imageToFile: (
+    url: string,
+    filePath: string,
+  ) => Promise<{ success: boolean; data?: { path: string }; error?: string }>;
+};
+
 const storageApi: StorageApi = {
   selectDirectory: () => ipcRenderer.invoke("storage:selectDirectory"),
   ensureProjectDir: (basePath, projectName) =>
@@ -90,11 +107,22 @@ const debugApi: DebugApi = {
   isDev: () => ipcRenderer.invoke("debug:isDev"),
 };
 
+const downloadApi: DownloadApi = {
+  // 下载图片作为 Buffer
+  imageAsBuffer: (url) => ipcRenderer.invoke("download:imageAsBuffer", url),
+  // 下载图片作为 Base64
+  imageAsBase64: (url) => ipcRenderer.invoke("download:imageAsBase64", url),
+  // 下载图片保存到文件
+  imageToFile: (url, filePath) =>
+    ipcRenderer.invoke("download:imageToFile", url, filePath),
+};
+
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld("electron", electronAPI);
     contextBridge.exposeInMainWorld("storage", storageApi);
     contextBridge.exposeInMainWorld("debug", debugApi);
+    contextBridge.exposeInMainWorld("download", downloadApi);
   } catch (error) {
     console.error(error);
   }
@@ -105,4 +133,6 @@ if (process.contextIsolated) {
   window.storage = storageApi;
   // @ts-ignore (define in dts)
   window.debug = debugApi;
+  // @ts-ignore (define in dts)
+  window.download = downloadApi;
 }

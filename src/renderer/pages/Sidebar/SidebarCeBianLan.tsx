@@ -108,7 +108,7 @@ export const SidebarCeBianLan = () => {
           <SidebarNavItem
             id="video"
             icon={<Film size={24} />}
-            label="短片合成"
+            label="短片合成11"
             onClick={() => handleNavClick("/video")}
           />
         </SidebarNav>

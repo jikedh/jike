@@ -15,7 +15,7 @@ import icon from "../../resources/icon.png?asset";
  */
 
 // 导入 IPC handlers
-import { registerStorageHandlers, registerDebugHandlers } from "./ipc";
+import { registerStorageHandlers, registerDebugHandlers, registerDownloadHandlers } from "./ipc";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -110,6 +110,7 @@ function createWindow(): void {
   // 注册 IPC handlers
   registerStorageHandlers();
   registerDebugHandlers();
+  registerDownloadHandlers();
 }
 
 app.whenReady().then(() => {
