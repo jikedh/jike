@@ -1824,96 +1824,38 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      * 复制节点
      * @param nodeId 要复制的节点 ID
      */
+    /**
+     * 复制节点
+     * @param nodeId 要复制的节点 ID
+     */
     duplicateNode: (nodeId: string) => {
-      const currentNode = get().nodes.find((node) => node.id === nodeId);
-      if (!currentNode) return;
+      const node = get().nodes.find((n) => n.id === nodeId);
+      if (!node) return;
 
-      // 节点类型映射表，提升可维护性与可扩展性
-      const typeMap = {
-        noteNode: "note",
-        imageNode: "image",
-        videoNode: "video",
-        agentNode: "agent",
-        panoramaNode: "panorama",
-      } as const;
+      const newId = get().getNextNodeId(node.type as NodeType);
 
-      const nodeType = typeMap[currentNode.type] || "note";
-      const newId = get().getNextNodeId(nodeType);
-
-      // 通用复制字段
-      const baseNode = {
+      const newNode = {
         id: newId,
-        type: currentNode.type,
+        type: node.type,
         position: {
-          x: currentNode.position.x + 40,
-          y: currentNode.position.y + 40,
+          x: node.position.x + 40,
+          y: node.position.y + 40,
         },
         data: {
-          ...currentNode.data,
-          createdAt: Date.now(), // 统一更新时间戳
-          // 对于 noteNode，下面会覆盖 isEditing
+          ...node.data,
+          createdAt: Date.now(),
         },
-        // 辅助UI统一置位（所有节点都选中且不在拖拽，不拆分放置，减少分支）
         selected: true,
         dragging: false,
-      };
-
-      let duplicatedNode: any;
-
-      if (currentNode.type === "noteNode") {
-        // noteNode 有宽高字段和 isEditing 特殊属性
-        duplicatedNode = {
-          ...baseNode,
-          width: currentNode.width,
-          height: currentNode.height,
-          data: {
-            ...baseNode.data,
-            isEditing: false, // note默认复制后不可编辑
-          },
-        };
-      } else if (currentNode.type === "imageNode") {
-        // imageNode 复制时重置生成状态和参考图
-        duplicatedNode = {
-          ...baseNode,
-          data: {
-            ...baseNode.data,
-            status: "idle",
-            result: undefined,
-            progress: 0,
-            image_urls: [], // 清空参考图（复制后没有连线）
-            midjourneyAdvanced: {
-              ...baseNode.data.midjourneyAdvanced,
-              referenceUrls: [],
-              styleUrls: [],
-            },
-          },
-        };
-      } else if (currentNode.type === "videoNode") {
-        // videoNode 复制时重置生成状态和参考图/视频/音频
-        duplicatedNode = {
-          ...baseNode,
-          data: {
-            ...baseNode.data,
-            status: "idle",
-            result: undefined,
-            progress: 0,
-            task_id: undefined,
-            error: undefined,
-            image_urls: [], // 清空参考图
-            video_urls: [], // 清空参考视频
-            audio_urls: [], // 清空参考音频
-          },
-        };
-      } else {
-        duplicatedNode = baseNode;
-      }
+        // 保留便签节点的宽高
+        ...(node.width !== undefined && { width: node.width }),
+        ...(node.height !== undefined && { height: node.height }),
+      } as AllNodeType;
 
       set((state) => ({
-        // 保持现有节点状态不变，添加新节点（新节点已有 selected: true）
-        nodes: [...state.nodes, duplicatedNode],
+        nodes: [...state.nodes, newNode],
       }));
 
-      // 保存历史记录
       setTimeout(() => get().saveToHistory(), 0);
     },
     /**
@@ -2966,76 +2908,29 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const { clipboard, nodes, getNextNodeId } = get();
       if (!clipboard) return;
 
-      // 找到当前视口中的节点，计算偏移位置
       const offset = 50;
-      const newPosition = {
-        x: clipboard.position.x + offset,
-        y: clipboard.position.y + offset,
-      };
+      const newId = getNextNodeId(clipboard.type as NodeType);
 
-      // 生成新的节点 ID
-      const newNodeId = getNextNodeId(clipboard.type as NodeType);
+      const newNode = {
+        id: newId,
+        type: clipboard.type,
+        position: {
+          x: clipboard.position.x + offset,
+          y: clipboard.position.y + offset,
+        },
+        data: {
+          ...clipboard.data,
+        },
+        selected: false,
+        // 保留原始节点的宽高
+        ...(clipboard.width !== undefined && { width: clipboard.width }),
+        ...(clipboard.height !== undefined && { height: clipboard.height }),
+      } as AllNodeType;
 
-      // 创建新节点，根据节点类型重置特定字段
-      let newNode: any;
-
-      if (clipboard.type === "imageNode") {
-        // imageNode 粘贴时重置生成状态和参考图
-        newNode = {
-          ...clipboard,
-          id: newNodeId,
-          position: newPosition,
-          selected: false,
-          data: {
-            ...clipboard.data,
-            status: "idle",
-            result: undefined,
-            progress: 0,
-            image_urls: [],
-            midjourneyAdvanced: {
-              ...clipboard.data.midjourneyAdvanced,
-              referenceUrls: [],
-              styleUrls: [],
-            },
-          },
-        };
-      } else if (clipboard.type === "videoNode") {
-        // videoNode 粘贴时重置生成状态和参考图/视频/音频
-        newNode = {
-          ...clipboard,
-          id: newNodeId,
-          position: newPosition,
-          selected: false,
-          data: {
-            ...clipboard.data,
-            status: "idle",
-            result: undefined,
-            progress: 0,
-            task_id: undefined,
-            error: undefined,
-            image_urls: [],
-            video_urls: [],
-            audio_urls: [],
-          },
-        };
-      } else {
-        newNode = {
-          ...clipboard,
-          id: newNodeId,
-          position: newPosition,
-          selected: false,
-          data: {
-            ...clipboard.data,
-          },
-        };
-      }
-
-      // 添加新节点
       set({
         nodes: [...nodes, newNode],
       });
 
-      // 保存到历史记录
       get().saveToHistory();
     },
 
