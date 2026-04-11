@@ -1,266 +1,327 @@
-# 即刻 (Jike) - 工作区 AI 助手指导
+---
+name: "Yunyun Workspace"
+description: "即刻 (Jike) Electron 桌面应用项目工作区指令"
+applyTo: "**"
+---
 
-> **项目**：视频工作流 Electron 应用
-> **版本**：1.1.4
-> **主要技术**：React 19 + TypeScript + Electron + Vite + Tailwind CSS
+# 即刻 (Jike) - 工作区指令
+
+## 项目概述
+
+这是一个基于 Electron 的桌面应用程序，用于视频工作流处理。项目采用 electron-vite 作为构建工具，React 19 作为前端框架，实现了主进程与渲染进程的分离架构。
 
 ---
 
-## 开发环境要求
+## 环境要求与运行命令
 
-### 核心依赖
-- **Node.js**：v24.x（必需）
-- **包管理器**：npm（非 pnpm）
-- **操作系统**：跨平台支持（Electron desktop app）
+### 环境要求
 
-### 关键开发脚本
+- **Node.js 版本**: 24
+- **包管理器**: npm（不是 pnpm）
+- **Electron 版本**: 39
+- **平台**: 主要支持 Windows
+
+### 运行命令
 
 | 命令 | 用途 |
 |------|------|
-| `npm run dev` | 启动 Web 开发服务器（Vite，端口 3004） |
-| `npm run dev:electron` | 启动 Electron 开发环境 |
-| `npm run build` | TypeScript 编译 + Vite 构建（输出到 `out/` 目录） |
-| `npm run build:win` | 构建 Windows 可执行文件（.exe） |
-| `npm run build:unpack` | 构建解包版本用于测试 |
-
-### Docker 部署
-```bash
-docker build -t jike .
-docker run -d -p 3004:3004 --name jike jike:latest
-```
+| `npm run dev:electron` | 以开发模式启动 Electron |
+| `npm run build` | 构建生产环境打包 |
+| `npm run build:win` | 构建 Windows 安装程序 |
+| `npm run check-format` | 检查代码格式 |
+| `npm run format` | 自动修复格式问题 |
+| `npm run lint` | 运行代码检查 |
 
 ---
 
-## 架构概览
+## 目录结构详解
 
-### 项目结构
 ```
 src/
-├── main/              # Electron 主进程
-├── preload/           # Electron 预加载脚本
-├── pages/             # 页面组件（路由）
-│   ├── Home/          # 首页
-│   ├── Canvas/        # 核心节点编辑画布
-│   ├── Settings/      # 设置页面
-│   ├── Assets/        # 资源管理
-│   └── Video/, Voice/ # 媒体生成
-├── components/        # 可复用 React 组件
-│   ├── base-handle.tsx       # 节点连接句柄
-│   ├── button-handle.tsx      # 按钮句柄
-│   ├── node-search.tsx        # 节点搜索工具
-│   ├── panorama/              # 全景图相关
-│   └── ui/                    # shadcn UI 组件
-├── hooks/             # 自定义 React Hooks
-│   ├── useCanvasChat.ts       # 画布聊天逻辑
-│   ├── useChatHistory.ts      # 聊天历史管理
-│   ├── useAgentExecution.ts   # 智能体执行
-│   └── useQrcodePolling.ts    # 二维码轮询
-├── store/             # Zustand 全局状态
-│   ├── canvasFlowStore.ts     # 节点流状态
-│   ├── chatSettingsStore.ts   # 聊天设置
-│   └── useUserStore.ts        # 用户信息
-├── services/          # 业务服务层
-├── utils/             # 工具函数
-│   ├── aiRequest.ts           # AI API 请求
-│   ├── chatHistoryStorage.ts  # 聊天历史持久化
-│   ├── oss.ts                 # 阿里 OSS 集成
-│   └── projectStorage.ts      # 项目数据持久化
-├── types/             # TypeScript 类型定义
-│   ├── flow/          # 流程图相关类型
-│   ├── ai.ts          # AI 模型和参数类型
-│   └── ImageGeneration.ts, VideoGeneration.ts 等
-├── constants/         # 常量配置
-│   ├── ai-models.ts           # AI 模型列表
-│   ├── agent-presets.ts       # 智能体预设
-│   ├── system-prompts.ts      # 系统提示词
-│   └── apiEndpoints.ts        # API 端点
-├── router/            # React Router 配置
-└── lib/               # 第三方库封装
-    ├── panorama.ts            # 全景库集成
-    └── utils.ts               # 通用库函数
+├── main/                    # Electron 主进程
+│   ├── index.ts            # 入口文件（窗口创建、IPC 注册、自动更新）
+│   ├── preload.ts           # Preload 脚本入口（兼容旧路径）
+│   ├── ipc/                 # IPC 处理器（按领域组织）
+│   │   ├── index.ts         # IPC 注册中心
+│   │   ├── ai/              # AI 相关处理器
+│   │   ├── debug/           # 调试相关
+│   │   ├── download/        # 下载相关
+│   │   ├── handler/         # 通用处理器
+│   │   │   ├── storage.ts   # 文件系统操作
+│   │   │   ├── media.ts     # 媒体处理
+│   │   │   ├── module.ts    # 模块管理
+│   │   │   └── service.ts   # 业务服务
+│   │   ├── media/           # 媒体相关
+│   │   ├── module/          # 模块相关
+│   │   ├── oss/             # 阿里云 OSS 相关
+│   │   ├── service/         # 服务相关
+│   │   ├── services/        # 业务服务
+│   │   ├── storage/          # 存储相关
+│   │   └── utils/            # IPC 工具
+│   └── utils/                # 主进程工具函数
+│       ├── downloadImage.ts # 图片下载工具
+│       └── utils.ts          # 通用工具
+│
+├── preload/                 # Context Bridge（仅暴露白名单 API）
+│   └── index.ts             # Preload 主文件
+│
+├── renderer/                # React 渲染进程
+│   ├── App.tsx              # 根组件
+│   ├── main.tsx            # React 入口
+│   ├── index.css           # 全局样式（Tailwind）
+│   ├── api/                # API 调用（AI 等）
+│   ├── assets/             # 静态资源
+│   ├── components/         # React 组件
+│   │   ├── base-handle.tsx  # 基础 Handle 组件（画布节点）
+│   │   ├── button-handle.tsx # 按钮 Handle
+│   │   ├── node-search.tsx  # 节点搜索
+│   │   ├── ProjectDialog.tsx # 项目对话框
+│   │   ├── panorama/        # 全景相关组件
+│   │   └── ui/              # shadcn/ui 风格基础组件
+│   ├── hooks/               # 自定义 Hooks
+│   │   ├── useAgentExecution.ts  # Agent 执行
+│   │   ├── useCanvasChat.ts     # 画布聊天
+│   │   ├── useCanvasCursor.ts   # 画布光标
+│   │   ├── useChatHistory.ts    # 聊天历史
+│   │   ├── useMessage.ts        # 消息处理
+│   │   ├── useNodeScale.ts      # 节点缩放
+│   │   ├── useQrcodePolling.ts  # 二维码轮询
+│   │   └── useResizableWidth.ts # 可调整宽度
+│   ├── pages/              # 页面组件
+│   ├── router/             # 路由配置
+│   └── store/              # Zustand 状态管理
+│
+├── shared/                  # 共享代码（主进程和渲染进程共用）
+│   ├── constants/           # 常量定义
+│   ├── lib/                # 库代码
+│   ├── types/              # TypeScript 类型定义
+│   └── utils/               # 工具函数
+│
+└── service/                 # 业务逻辑服务
+    ├── aiRequest.ts         # AI 请求服务
+    ├── chatHistoryStorage.ts # 聊天历史存储
+    ├── localStorageService.ts # 本地存储服务
+    ├── oss.ts               # OSS 服务
+    └── projectStorage.ts    # 项目存储服务
 ```
-
-### 核心技术栈
-- **UI 框架**：React 19 + React Router v7 + React DOM
-- **样式**：Tailwind CSS v4 + shadcn/ui + Framer Motion
-- **状态管理**：Zustand（轻量级，分布式 store）
-- **节点图编辑**：@xyflow/react（可视化流程编辑）
-- **拖拽**：@dnd-kit（drag-and-drop）
-- **文本编辑**：TipTap（富文本编辑器）
-- **3D 渲染**：Three.js
-- **桌面应用**：Electron v39 + electron-vite
-- **构建**：Vite v7 + electron-builder
-- **代码混淆**：vite-plugin-obfuscator（生产环境）
 
 ---
 
-## 开发约定与模式
+## 核心架构模式
 
-### 1. 状态管理（Zustand）
-采用 Zustand 做全局状态，store 分布在 `src/store/` 目录，遵循：
+### 主进程入口 (`src/main/index.ts`)
+
+主进程入口文件只负责三件事：
+
+1. **创建窗口** - 使用 `BrowserWindow` 并配置 preload 路径
+2. **注册 IPC** - 将 IPC 通道注册委托给 `src/main/ipc/` 下的各个领域处理器
+3. **启动更新器** - 初始化 electron-updater 并处理相关事件
 
 ```typescript
-// 示例模式（来自 canvasFlowStore.ts）
-const useCanvasFlowStore = create((set) => ({
-  nodes: [],
-  edges: [],
-  addNode: (node) => set((state) => ({ nodes: [...state.nodes, node] })),
-  // ...
-}));
+// 伪代码示例
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    preload: join(__dirname, '../preload/index.js')
+  })
+}
+
+function registerIpcHandlers() {
+  // 委托给各个领域
+  aiHandler.register()
+  downloadHandler.register()
+  storageHandler.register()
+}
+
+function initUpdater() {
+  autoUpdater.checkForUpdatesAndNotify()
+}
 ```
 
-**约定**：每个 store 是独立的，使用 `useXxxStore` 命名，组件通过 hooks 获取状态。
+### IPC 通信层 (`src/main/ipc/`)
 
-### 2. 自定义 Hooks（src/hooks/）
-提供业务逻辑的可复用 hooks，如：
-- `useCanvasChat`：管理画布聊天交互
-- `useAgentExecution`：执行智能体任务（生成图片、视频等）
-- `useQrcodePolling`：轮询二维码结果
+IPC 层采用领域驱动设计，每个领域有独立的目录：
 
-**约定**：Hook 处理副作用、网络请求、状态同步，保持组件简洁。
-
-### 3. API 请求与代理
-开发环境配置代理（vite.config.ts）：
-
-```
-/v1/        → https://toapis.com (AI 服务)
-/mj/        → https://zeakai-api.api4midjourney.com (Midjourney)
-/lz/        → https://aiopenapi.kuaizi.cn/ai-open-platform-api/v1 (快手 AI)
-/api/       → https://api.jikeing.com (后端 API)
-```
-
-**约定**：使用 `utils/aiRequest.ts` 封装 axios 请求，统一错误处理。
-
-### 4. 类型定义（src/types/）
-- 将所有 TypeScript 类型集中在 `src/types/` 目录
-- AI 相关：`ai.ts`, `ImageGeneration.ts`, `VideoGeneration.ts`, `MJGeneration.ts`
-- 流程图：`flow/` 子目录
-- component 相关：`components/` 子目录
-
-**约定**：优先导入 `@/types` 下的类型，减少循环依赖。
-
-### 5. 组件约定（src/components/）
-- 使用 **shadcn/ui** 组件库（已安装）
-- 自定义组件遵循单一职责原则
-- handle 相关组件（`base-handle.tsx`, `button-handle.tsx`）用于节点编辑器
-
-### 6. 路由使用（src/router/）
-React Router v7，页面组件在 `src/pages/` 目录，主页是 `Home`。
-
-### 7. 数据持久化（src/utils/）
-- `chatHistoryStorage.ts`：聊天历史（本地存储或 IndexedDB）
-- `projectStorage.ts`：项目数据保存
-- `oss.ts`：阿里 OSS 文件上传
-
-**约定**：使用 `idb-keyval` 做 IndexedDB 操作，`localStorageService` 做简单本地存储。
-
----
-
-## 日常开发流程
-
-### 启动开发环境
-```bash
-# 安装依赖（首次或有新增时）
-npm install
-
-# Web 版本开发（推荐）
-npm run dev           # 访问 http://localhost:3004
-
-# Electron 桌面版本开发
-npm run dev:electron  # 打开 Electron 窗口
-```
-
-### 常见开发任务
-
-#### 添加新页面
-1. 在 `src/pages/NewPage/` 创建新页面组件
-2. 在 `src/router/index.tsx` 添加路由
-3. 更新导航菜单（通常在 `Sidebar` 或 `Home`）
-
-#### 新增 AI 功能
-1. 在 `src/types/` 定义相关类型（如 `NewGeneration.ts`）
-2. 在 `src/constants/` 配置模型和提示词
-3. 在 `src/hooks/` 创建自定义 hook（如 `useNewExecution.ts`）
-4. 参考 `useAgentExecution.ts` 的模式，使用 `aiRequest.ts` 进行 API 调用
-
-#### 状态管理问题
-1. 使用 Zustand store（`src/store/`）管理复杂全局状态
-2. 局部状态使用 React `useState`
-3. 复杂副作用使用自定义 hook
-
-#### 样式修改
-- 使用 Tailwind CSS（v4）实用类
-- 组件样式优先使用 Tailwind，避免 CSS 文件
-- 复杂样式可在 `src/index.css` 添加全局样式
-
----
-
-## 常见问题与解决
-
-### 节点编辑器相关
-- **节点焦点问题**（需求清单中）：检查 `@xyflow/react` 事件处理，可能需要调整 blur/focus 事件触发时机
-- **拖拽动画**：利用 `@dnd-kit` 和 `framer-motion` 实现，参考 `base-handle.tsx`
-- **节点加载状态**：在节点数据中添加 `loading` 字段，渲染时根据状态显示加载动画
-
-### 长轮询中断（需求清单中）
-- 在 React 组件卸载时清理轮询：`useEffect` 返回清理函数
-- 参考 `useQrcodePolling.ts` 的实现模式
-
-### 图片展开效果（需求清单中）
-- 参考 TapNow 的展开样式，使用 `@floating-ui/react` 做浮层
-- 或使用 Framer Motion 动画实现展开效果
-
----
-
-## 构建与部署
-
-### 开发构建
-```bash
-npm run build
-# 输出到 out/ 目录
-# 生成 sourcemap（便于调试）
-```
-
-### 生产构建
-```bash
-npm run build:win     # 构建 Windows exe（使用 electron-builder）
-npm run build:unpack  # 解包测试
-```
-
-### Docker 部署
-```bash
-docker build -t jike .
-docker run -d -p 3004:3004 --name jike jike:latest
-```
-
-### 在线地址
-- 生产环境：https://jike-165954-5-1362504576.sh.run.tcloudbase.com/#/home
-
----
-
-## 关键文件速查表
-
-| 文件 | 用途 |
+| 目录 | 职责 |
 |------|------|
-| `vite.config.ts` | Vite 配置（代理、端口、构建选项） |
-| `electron.vite.config.ts` | Electron Vite 配置 |
-| `src/main/index.ts` | Electron 主进程入口 |
-| `src/preload/index.ts` | Electron 预加载脚本 |
-| `src/router/index.tsx` | 路由定义 |
-| `src/store/` | 全局状态（Zustand） |
-| `src/constants/` | 常量配置 |
-| `src/types/` | 类型定义 |
-| `src/hooks/` | 自定义 hooks |
-| `src/utils/aiRequest.ts` | AI API 请求封装 |
-| `tailwind.config.ts` | Tailwind 配置 |
+| `ai/` | AI 模型调用相关 |
+| `download/` | 文件下载相关 |
+| `handler/` | 通用业务处理器 |
+| `media/` | 媒体处理（视频、音频） |
+| `oss/` | 阿里云 OSS 上传下载 |
+| `storage/` | 本地文件存储 |
+
+### Preload 桥接层 (`src/preload/index.ts`)
+
+Preload 采用白名单模式，只暴露必要的 API 给渲染进程：
+
+- **禁止**直接暴露 `window.electron` 原始 API
+- 所有 API 必须通过 `contextBridge.exposeInMainWorld` 暴露
+- 每个暴露的方法必须标注清楚用途
+
+### 渲染进程 (`src/renderer/`)
+
+渲染进程采用 React 19 + TypeScript：
+
+- **状态管理**: Zustand（轻量级、无 boilerplate）
+- **样式**: Tailwind CSS 4 + shadcn/ui 组件风格
+- **画布**: @xyflow/react（节点式工作流编排）
+- **路由**: React Router DOM 7
 
 ---
 
-## 反馈与扩展
+## 技术栈详情
 
-本指导将随着项目演进而更新。如有遗漏或不清晰处，欢迎补充。
+| 类别 | 技术 |
+|------|------|
+| 运行时 | Node 24, Electron 39 |
+| 构建工具 | electron-vite 5, Vite |
+| 前端框架 | React 19.2, React DOM 19.2 |
+| 语言 | TypeScript |
+| 状态管理 | Zustand 5 |
+| UI 框架 | Radix UI, Tailwind CSS 4 |
+| 画布/节点 | @xyflow/react 12 |
+| 富文本编辑 | Tiptap 3 |
+| 3D 全景 | Three.js |
+| 拖拽 | @dnd-kit |
+| 图片裁剪 | react-easy-crop |
+| 代码格式 | Biome 2.1 |
+| 云存储 | ali-oss |
+| HTTP 客户端 | axios |
 
-**可能的后续自定义**：
-- 为特定功能模块（如视频生成、图片生成）创建专项指导
-- 为 Electron 主进程开发添加详细约定
-- 为测试策略添加指导（目前项目未见测试框架）
+---
+
+## 重要开发规范
+
+### 1. 路径处理
+
+**必须使用** `path.join` 处理路径，确保跨平台兼容：
+
+```typescript
+import { join } from 'path'
+const filePath = join(__dirname, 'relative/path')
+```
+
+**禁止使用** 硬编码路径分隔符（`/` 或 `\`）。
+
+### 2. 主进程判断
+
+生产环境与开发环境的差异化处理：
+
+```typescript
+import { app } from 'electron'
+
+if (app.isPackaged) {
+  // 生产环境逻辑
+} else {
+  // 开发环境逻辑
+}
+```
+
+### 3. IPC 通道定义
+
+IPC 通道必须在三处保持一致：
+
+| 位置 | 文件 | 作用 |
+|------|------|------|
+| 主进程 | `src/main/ipc/handler/*.ts` | 处理 IPC 请求 |
+| 注册 | `src/main/ipc/index.ts` | 注册通道 |
+| Preload | `src/preload/index.ts` | 暴露给渲染进程 |
+
+### 4. Preload 安全规范
+
+- **禁止**在 preload 中写业务逻辑
+- **禁止**直接暴露 Electron 原始 API
+- **禁止**使用 `eval` 或动态代码执行
+- 仅允许通过 `contextBridge` 暴露类型安全的接口
+
+---
+
+## 常见开发任务
+
+### 添加新的 IPC 通道
+
+假设要添加一个 `storage` 领域的 `saveProject` 通道：
+
+**步骤 1**: 在 `src/main/ipc/handler/storage.ts` 添加处理器
+
+```typescript
+// filepath: src/main/ipc/handler/storage.ts
+ipcMain.handle('storage:saveProject', async (event, projectId: string, data: object) => {
+  // 处理逻辑
+  return { success: true }
+})
+```
+
+**步骤 2**: 在 `src/main/ipc/index.ts` 注册
+
+```typescript
+// filepath: src/main/ipc/index.ts
+import { storageHandler } from './handler/storage'
+// 在 setupIpcHandlers 函数中
+storageHandler.register()
+```
+
+**步骤 3**: 在 `src/preload/index.ts` 暴露给渲染进程
+
+```typescript
+// filepath: src/preload/index.ts
+contextBridge.exposeInMainWorld('api', {
+  storage: {
+    saveProject: (projectId: string, data: object) => 
+      ipcRenderer.invoke('storage:saveProject', projectId, data)
+  }
+})
+```
+
+### 添加新的 UI 组件
+
+组件存放位置：`src/renderer/components/`
+
+基础组件模式参考：
+- `base-handle.tsx` - 画布节点基础 Handle
+- `button-handle.tsx` - 按钮 Handle
+- `ui/` 目录下参考 shadcn/ui 风格
+
+组件规范：
+- 使用 TypeScript 定义 props 类型
+- 使用 Tailwind CSS 样式
+- 导出函数式组件（React 19）
+
+### 添加新的 Hook
+
+Hooks 存放位置：`src/renderer/hooks/`
+
+命名规范：`use` + 功能名称（如 `useCanvasChat`）
+
+---
+
+## 相关文档
+
+| 文档 | 路径 | 说明 |
+|------|------|------|
+| 项目需求与待办 | [需求.md](./需求.md) | 项目需求列表和 TODO |
+| Electron 主进程 Agent | [.github/agents/electron-main.agent.md](./.github/agents/electron-main.agent.md) | 主进程专项 Agent |
+| API 字段过滤器 | [docs/api-field-filter.md](./docs/api-field-filter.md) | API 字段过滤说明 |
+
+---
+
+## 调试技巧
+
+### 主进程调试
+
+开发模式下可以使用 VS Code 调试配置：
+- 启动 `npm run dev:electron`
+- 在 VS Code 中附加到主进程端口
+
+### 渲染进程调试
+
+- 使用 DevTools（Electron 窗口中按 F12）
+- React DevTools 扩展
+
+### IPC 调试
+
+在 `src/main/ipc/index.ts` 中启用日志：
+```typescript
+console.log('[IPC]', channel, payload)
+```
+
