@@ -37,7 +37,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useCanvasCursor } from "@/hooks/useCanvasCursor";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import {
@@ -70,8 +69,6 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
   const reactFlowInstance = useReactFlow<AllNodeType, EdgeType>();
   const { screenToFlowPosition } = reactFlowInstance;
   const navigate = useNavigate();
-  const { cursorClass, setCursorMode, isCtrlPressed, isSpacePressed } =
-    useCanvasCursor();
 
   // 确认对话框状态
   const [showExitDialog, setShowExitDialog] = useState(false);
@@ -1119,25 +1116,23 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
             onPaneClick={handlePaneClick}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
-            nodesDraggable={!isSpacePressed}
+            nodesDraggable
             fitView
             minZoom={0.2}
             maxZoom={2}
             onlyRenderVisibleElements
             colorMode="dark"
             deleteKeyCode={["Backspace", "Delete"]}
-            panOnDrag={isSpacePressed ? true : [1]}
-            selectionOnDrag={!isSpacePressed}
+            panOnDrag={[1]}
+            selectionOnDrag
             selectionMode={SelectionMode.Partial}
             multiSelectionKeyCode={["Shift"]}
-            panOnScroll={!isCtrlPressed}
+            panOnScroll
             panOnScrollSpeed={0.5}
             zoomOnDoubleClick={false}
-            zoomOnScroll={isCtrlPressed}
+            zoomOnScroll
             zoomOnPinch={true}
             preventScrolling={false}
-            className={cursorClass}
-            onMouseEnter={() => setCursorMode("default")}
             connectionLineType={ConnectionLineType.Bezier}
             connectionLineStyle={connectionLineStyle}
             // 吸附开关与网格尺寸由设置中心驱动
@@ -1145,7 +1140,6 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
             snapGrid={snapGridSize}
             connectionRadius={50}
             defaultEdgeOptions={defaultEdgeOptions}
-            data-space-pressed={isSpacePressed ? "true" : undefined}
           >
             {gridVisible && <Background variant={BackgroundVariant.Dots} />}
             <Controls>
