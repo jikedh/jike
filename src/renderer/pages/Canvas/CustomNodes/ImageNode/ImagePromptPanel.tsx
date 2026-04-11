@@ -158,9 +158,11 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   // 判断是否为 Seedream 5.0 模型
   const isSeedreamModel = model === "doubao-seedream-5-0";
   // 判断是否为 Gemini 3 Pro 模型（渠道一，原有模型）
+  // 兼容新建节点时 platform 为 undefined 的情况（新建节点默认回退到渠道一）
   const isGeminiModel =
     model === "gemini-3-pro-image-preview" &&
-    currentImageData?.platform === "google";
+    (currentImageData?.platform === "google" ||
+      currentImageData?.platform === undefined);
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
 
