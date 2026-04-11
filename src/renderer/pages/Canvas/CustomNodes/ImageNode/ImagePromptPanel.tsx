@@ -438,13 +438,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           const urlToRemove = firstItem.url;
           // 直接从最新的 nodes 状态中获取当前的 midjourneyAdvanced，避免依赖旧状态
           const currentNodeData = nodes.find((n) => n.id === nodeId);
-          const currentAdvanced = (
-            currentNodeData?.data as ImageGenerationNode
-          )?.midjourneyAdvanced;
+          const currentAdvanced = (currentNodeData?.data as ImageGenerationNode)
+            ?.midjourneyAdvanced;
           if (currentAdvanced) {
-            const newReferenceUrls = (currentAdvanced.referenceUrls ?? []).filter(
-              (url) => url !== urlToRemove,
-            );
+            const newReferenceUrls = (
+              currentAdvanced.referenceUrls ?? []
+            ).filter((url) => url !== urlToRemove);
             const newStyleUrls = (currentAdvanced.styleUrls ?? []).filter(
               (url) => url !== urlToRemove,
             );
@@ -459,13 +458,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         }
       }
     },
-    [
-      edges,
-      nodeId,
-      deleteEdge,
-      nodes,
-      updateImageNodeData,
-    ],
+    [edges, nodeId, deleteEdge, nodes, updateImageNodeData],
   );
 
   // 收集父级便签内容：按入边顺序去重后提取 content

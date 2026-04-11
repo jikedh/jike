@@ -1,6 +1,9 @@
 import { useCallback, useMemo, useRef } from "react";
 
-import { VIDEO_DURATION_CONFIG, VIDEO_MODELS } from "shared/constants/ai-models";
+import {
+  VIDEO_DURATION_CONFIG,
+  VIDEO_MODELS,
+} from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import { Button } from "@/components/ui/button";
 import {

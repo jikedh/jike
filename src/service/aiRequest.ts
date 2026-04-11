@@ -1,14 +1,13 @@
-import axios, { AxiosRequestConfig, AxiosInstance } from "axios";
-
+import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
+import { handleRequestError } from "shared/utils/requestErrorHandler";
 import {
   getAiToken,
-  getZeakaiToken,
-  getKuaiziToken,
-  getJikeingToken,
-  getYunwuToken,
   getBaseURL,
+  getJikeingToken,
+  getKuaiziToken,
+  getYunwuToken,
+  getZeakaiToken,
 } from "shared/utils/utils";
-import { handleRequestError } from "shared/utils/requestErrorHandler";
 
 const REQUEST_TIMEOUT = 300000;
 

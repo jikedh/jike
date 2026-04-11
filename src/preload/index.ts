@@ -63,9 +63,7 @@ export type DownloadApi = {
   imageAsBuffer: (
     url: string,
   ) => Promise<{ success: boolean; data?: Uint8Array; error?: string }>;
-  imageAsBase64: (
-    url: string,
-  ) => Promise<{
+  imageAsBase64: (url: string) => Promise<{
     success: boolean;
     data?: { base64: string; mimeType: string };
     error?: string;

@@ -1,6 +1,5 @@
 "use client";
 
-
 interface PanoramaLoadingProps {
   text?: string;
 }

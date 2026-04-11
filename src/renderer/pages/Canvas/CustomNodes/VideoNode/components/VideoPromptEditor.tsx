@@ -9,7 +9,11 @@ import {
   useRef,
 } from "react";
 
-import { cn, getMentionLabel, updateSuggestionPosition } from "shared/lib/utils";
+import {
+  cn,
+  getMentionLabel,
+  updateSuggestionPosition,
+} from "shared/lib/utils";
 import { VideoMentionList } from "../VideoMentionList";
 
 /**

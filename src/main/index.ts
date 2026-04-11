@@ -15,7 +15,11 @@ import icon from "../../resources/icon.png?asset";
  */
 
 // 导入 IPC handlers
-import { registerStorageHandlers, registerDebugHandlers, registerDownloadHandlers } from "./ipc";
+import {
+  registerStorageHandlers,
+  registerDebugHandlers,
+  registerDownloadHandlers,
+} from "./ipc";
 
 let mainWindow: BrowserWindow | null = null;
 

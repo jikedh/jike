@@ -1306,11 +1306,15 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
 
       // 对于 imageNode，mode === "remove" 时也需要清理 midjourneyAdvanced 中的 URL
       let nextMidjourneyAdvanced = nodeData?.midjourneyAdvanced;
-      if (mode === "remove" && node.type === "imageNode" && nextMidjourneyAdvanced) {
+      if (
+        mode === "remove" &&
+        node.type === "imageNode" &&
+        nextMidjourneyAdvanced
+      ) {
         const sourceUrlSet = new Set(sourceUrls);
-        const newReferenceUrls = (nextMidjourneyAdvanced.referenceUrls ?? []).filter(
-          (url: string) => !sourceUrlSet.has(url),
-        );
+        const newReferenceUrls = (
+          nextMidjourneyAdvanced.referenceUrls ?? []
+        ).filter((url: string) => !sourceUrlSet.has(url));
         const newStyleUrls = (nextMidjourneyAdvanced.styleUrls ?? []).filter(
           (url: string) => !sourceUrlSet.has(url),
         );
@@ -1326,7 +1330,9 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
         data: {
           ...nodeData,
           image_urls: nextUrls,
-          ...(nextMidjourneyAdvanced && { midjourneyAdvanced: nextMidjourneyAdvanced }),
+          ...(nextMidjourneyAdvanced && {
+            midjourneyAdvanced: nextMidjourneyAdvanced,
+          }),
         },
       };
     });

@@ -1,6 +1,5 @@
 "use client";
 
-
 interface PanoramaControlsProps {
   onScreenshotSingle: () => void;
   onScreenshot4: () => void;
