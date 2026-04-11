@@ -5,6 +5,7 @@ import {
   VIDEO_MODELS,
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
+import type { VideoGenerationNode } from "shared/types/flow";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -14,17 +15,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import useMessage from "@/hooks/useMessage";
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
-import type { VideoGenerationNode } from "shared/types/flow";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
-import { getVideoPayloadStrategy } from "./strategies/videoPayloadStrategies";
-import { VideoPromptEditor } from "./components/VideoPromptEditor";
-import type { VideoPromptEditorHandle } from "./components/VideoPromptEditor";
-import { VideoReferenceAssetsBar } from "./components/VideoReferenceAssetsBar";
 import { VideoModelParamsPanel } from "./components/VideoModelParamsPanel";
+import type { VideoPromptEditorHandle } from "./components/VideoPromptEditor";
+import { VideoPromptEditor } from "./components/VideoPromptEditor";
+import { VideoReferenceAssetsBar } from "./components/VideoReferenceAssetsBar";
 import { useVideoNodeReferences } from "./hooks/useVideoNodeReferences";
 import { useVideoReferenceActions } from "./hooks/useVideoReferenceActions";
+import { getVideoPayloadStrategy } from "./strategies/videoPayloadStrategies";
 
 /**
  * 视频节点提示词面板（容器组件）。

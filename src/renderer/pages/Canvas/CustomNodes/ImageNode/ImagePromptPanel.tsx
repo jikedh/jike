@@ -2,10 +2,15 @@ import { IconUpload, IconX } from "@tabler/icons-react";
 import Mention from "@tiptap/extension-mention";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import type { ChangeEvent } from "react";
-
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { uploadFileToOSS } from "service/oss";
 import { IMAGE_MODELS } from "shared/constants/ai-models";
+import { GenerationStatus } from "shared/constants/enum";
+import { cn } from "shared/lib/utils";
+import type { ImageGenerationNode, NoteNodeData } from "shared/types/flow";
+import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -13,21 +18,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { uploadFileToOSS } from "service/oss";
-import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
-import { GenerationStatus } from "shared/constants/enum";
 import useMessage from "@/hooks/useMessage";
-import { cn } from "shared/lib/utils";
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
-import type { ImageGenerationNode, NoteNodeData } from "shared/types/flow";
-
-import { COMMAND_MOCK, MENTION_MOCK } from "./mock";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
+import { GeminiParamsPanel } from "./components/GeminiParamsPanel";
 import { MidjourneyAdvancedPanel } from "./components/MidjourneyAdvancedPanel";
 import { MidjourneyParamsPanel } from "./components/MidjourneyParamsPanel";
 import { SeedreamParamsPanel } from "./components/SeedreamParamsPanel";
-import { GeminiParamsPanel } from "./components/GeminiParamsPanel";
-import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
+import { COMMAND_MOCK, MENTION_MOCK } from "./mock";
 
 const ReferenceItemWrapper = ({
   children,
@@ -193,10 +191,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const disableBuiltInSuggestion = {
     items: () => [],
     render: () => ({
-      onStart: () => {},
-      onUpdate: () => {},
+      onStart: () => { },
+      onUpdate: () => { },
       onKeyDown: () => false,
-      onExit: () => {},
+      onExit: () => { },
     }),
   };
 

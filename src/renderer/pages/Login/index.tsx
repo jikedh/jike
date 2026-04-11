@@ -1,13 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { IconRefresh } from "@tabler/icons-react";
-import HomePage from "@/pages/Home";
-import { getSceneQrcode } from "@/api/ai";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getJikeingToken } from "shared/utils/utils";
-import { useQrcodePolling } from "@/hooks/useQrcodePolling";
-import { useUserStore } from "@/store/useUserStore";
-import logoImg from "@/assets/logo.png";
+import { getSceneQrcode } from "@/api/ai";
 import iconImg from "@/assets/icon.png";
+import logoImg from "@/assets/logo.png";
+import { useQrcodePolling } from "@/hooks/useQrcodePolling";
+import HomePage from "@/pages/Home";
+import { useUserStore } from "@/stores/useUserStore";
 
 // ===================== 常量配置 =====================
 const MAX_RETRY_COUNT = 3;
@@ -169,9 +169,8 @@ const LoginPage = () => {
 
             {/* 登录卡片 */}
             <div
-              className={`w-[330px] rounded-2xl flex flex-col items-center py-[35px] pb-[45px] relative z-10 ${
-                isErrorState ? "py-[50px]" : ""
-              }`}
+              className={`w-[330px] rounded-2xl flex flex-col items-center py-[35px] pb-[45px] relative z-10 ${isErrorState ? "py-[50px]" : ""
+                }`}
               style={cardStyle}
             >
               {/* 标题 */}

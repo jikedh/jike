@@ -1,14 +1,13 @@
+import { ReactFlowProvider } from "@xyflow/react";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import { ReactFlowProvider } from "@xyflow/react";
-
+import { useCanvasChat } from "@/hooks/useCanvasChat";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
+import { CanvasChatToolbar } from "./components/CanvasChatToolbar";
 import { CanvasFlow } from "./components/CanvasFlow";
 import { CanvasSidebar } from "./components/CanvasSidebar";
-import { CanvasChatToolbar } from "./components/CanvasChatToolbar";
 import { ChatDrawer } from "./components/ChatDrawer";
 import ReactFlowDevTools from "./DevTools";
-import { useCanvasChat } from "@/hooks/useCanvasChat";
-import { useChatSettingsStore } from "@/store/chatSettingsStore";
 
 // 外部组件 - 提供 ReactFlowProvider 和工具栏
 const CanvasPage = () => {

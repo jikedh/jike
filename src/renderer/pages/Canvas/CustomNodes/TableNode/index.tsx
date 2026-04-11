@@ -1,12 +1,11 @@
-import { NodeResizer, Position, type NodeProps, useStore } from "@xyflow/react";
-import { memo, useState, useCallback } from "react";
+import { type NodeProps, NodeResizer, Position, useStore } from "@xyflow/react";
+import { memo, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
-
-import { ButtonHandle } from "@/components/button-handle";
 import { cn } from "shared/lib/utils";
+import type { CharacterTableRow, TableNodeType } from "shared/types/flow";
+import { ButtonHandle } from "@/components/button-handle";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
-import type { TableNodeType, CharacterTableRow } from "shared/types/flow";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
 const TABLE_COLUMNS = [
   "姓名",

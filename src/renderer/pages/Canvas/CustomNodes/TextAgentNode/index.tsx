@@ -3,20 +3,18 @@
  * 用于 AI 文本生成的 React Flow 自定义节点
  */
 import { type NodeProps } from "@xyflow/react";
-import { memo, useState, useCallback, useEffect } from "react";
-
-import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
-import { useMessage } from "@/hooks/useMessage";
+import { memo, useCallback, useEffect, useState } from "react";
 import {
   getTextAgentPresetById,
   getTextAgentPresetLabelById,
 } from "shared/constants/text-agent-presets";
 import type { TextAgentNodeType, TextAgentPresetId } from "shared/types/flow";
-
-import { PresetSelector } from "./components/PresetSelector";
-import { NodeBody } from "./components/NodeBody";
+import { useMessage } from "@/hooks/useMessage";
+import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { ConfigPanel } from "./components/ConfigPanel";
+import { NodeBody } from "./components/NodeBody";
+import { PresetSelector } from "./components/PresetSelector";
 import { useTextAgentGenerate } from "./hooks/useTextAgentGenerate";
 
 // Props 比较函数，用于优化 memo 性能

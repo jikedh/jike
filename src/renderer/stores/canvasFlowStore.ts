@@ -6,45 +6,46 @@ import {
   type EdgeChange,
   type NodeChange,
 } from "@xyflow/react";
+import { uploadFileToOSS } from "service/oss";
+import {
+  getCanvasDataKey,
+  getLocalFilePath,
+  getMediaUrl,
+  loadCanvasData,
+  saveCanvasData,
+  saveGeneratedImageToLocal,
+  saveGeneratedVideoToLocal,
+} from "service/projectStorage";
+import {
+  type AgentPresetId,
+  getAgentPresetById,
+} from "shared/constants/agent-presets";
+import { GenerationStatus } from "shared/constants/enum";
+import type { GeminiYwResponseBody } from "shared/types/detail/gemini-yw";
+import type {
+  AllNodeType,
+  AudioGenerationNode,
+  EdgeType,
+  ImageGenerationNode,
+  VideoGenerationNode,
+} from "shared/types/flow";
+import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
+import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
+import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
 import { create } from "zustand";
-
 import {
   createImageGeneration,
   createLzVideoTask,
   createVideoGeneration,
+  fetchMjTask,
+  generateGeminiContent,
   getImageTaskStatus,
   getLzVideoTaskStatus,
   getVideoTaskStatus,
+  submitMjImagine,
 } from "@/api/ai";
-import { submitMjImagine, fetchMjTask, generateGeminiContent } from "@/api/ai";
-import { useChatSettingsStore } from "@/store/chatSettingsStore";
-import {
-  getAgentPresetById,
-  type AgentPresetId,
-} from "shared/constants/agent-presets";
-import type {
-  AllNodeType,
-  EdgeType,
-  ImageGenerationNode,
-  VideoGenerationNode,
-  AudioGenerationNode,
-} from "shared/types/flow";
-import { GenerationStatus } from "shared/constants/enum";
-import {
-  getCanvasDataKey,
-  saveCanvasData,
-  loadCanvasData,
-  getMediaUrl,
-  saveGeneratedImageToLocal,
-  saveGeneratedVideoToLocal,
-  getLocalFilePath,
-} from "service/projectStorage";
-import type { GeminiYwResponseBody } from "shared/types/detail/gemini-yw";
-import { uploadFileToOSS } from "service/oss";
-import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
 import { buildMidjourneyPrompt } from "@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt";
-import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
-import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 
 // ==================== 持久化配置 ====================
 
@@ -97,9 +98,9 @@ const getNextNodePosition = (nodes: AllNodeType[]) => {
 
   return lastNode
     ? {
-        x: lastNode.position.x + 40,
-        y: lastNode.position.y + 40,
-      }
+      x: lastNode.position.x + 40,
+      y: lastNode.position.y + 40,
+    }
     : fallbackPosition;
 };
 

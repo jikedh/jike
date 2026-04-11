@@ -9,23 +9,22 @@ import {
   IconUpload,
   IconZoomIn,
 } from "@tabler/icons-react";
-import { useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
+import { useMemo, useRef, useState } from "react";
+import { uploadFileToOSS } from "service/oss";
+import { cn, downloadImageFromUrl } from "shared/lib/utils";
+import type { VideoGenerationNode } from "shared/types/flow";
+import { toast } from "sonner";
 import Lightbox from "yet-another-react-lightbox";
-import Video from "yet-another-react-lightbox/plugins/video";
 // import Captions from 'yet-another-react-lightbox/plugins/captions'
 import Download from "yet-another-react-lightbox/plugins/download";
 import Fullscreen from "yet-another-react-lightbox/plugins/fullscreen";
 import Share from "yet-another-react-lightbox/plugins/share";
 import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
+import Video from "yet-another-react-lightbox/plugins/video";
 // import Thumbnails from 'yet-another-react-lightbox/plugins/thumbnails'
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
-import { toast } from "sonner";
-
-import { cn, downloadImageFromUrl } from "shared/lib/utils";
-import { uploadFileToOSS } from "service/oss";
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
-import type { VideoGenerationNode } from "shared/types/flow";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { getVideoUrlsFromNodeData } from "./utils/video-url";
 
 type VideoToolbarProps = {

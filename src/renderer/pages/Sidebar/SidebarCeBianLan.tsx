@@ -1,24 +1,23 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Film,
   Folder,
   House,
   Mic,
+  Settings,
   SquareDashedMousePointer,
   Type,
-  Settings,
 } from "lucide-react";
-
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { getJikeingToken, getJikeingUserId } from "shared/utils/utils";
+import iconImg from "@/assets/icon.png";
+import { SettingsModal } from "@/pages/Canvas/components/SettingsModal";
+import { UserAvatarDropdown } from "@/pages/Sidebar/components/UserAvatarDropdown";
+import { useUserStore } from "@/stores/useUserStore";
 import { SidebarFooter } from "./components/SidebarFooter";
 import { SidebarNav } from "./components/SidebarNav";
 import { SidebarNavItem } from "./components/SidebarNavItem";
 import { SidebarRoot } from "./components/SidebarRoot";
-import { UserAvatarDropdown } from "@/pages/Sidebar/components/UserAvatarDropdown";
-import { SettingsModal } from "@/pages/Canvas/components/SettingsModal";
-import { useUserStore } from "@/store/useUserStore";
-import iconImg from "@/assets/icon.png";
-import { getJikeingUserId, getJikeingToken } from "shared/utils/utils";
 
 const FIRST_LOGIN_KEY = "jike_first_login_completed";
 

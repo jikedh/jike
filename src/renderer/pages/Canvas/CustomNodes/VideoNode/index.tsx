@@ -1,11 +1,10 @@
-import { Position, type NodeProps, useStore } from "@xyflow/react";
+import { type NodeProps, Position, useStore } from "@xyflow/react";
 import { memo, useCallback, useMemo } from "react";
-
-import { ButtonHandle } from "@/components/button-handle";
 import { cn } from "shared/lib/utils";
-import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
 import type { VideoNodeType } from "shared/types/flow";
+import { ButtonHandle } from "@/components/button-handle";
+import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
 import { VideoContent } from "./VideoContent";
 import { VideoPromptPanel } from "./VideoPromptPanel";

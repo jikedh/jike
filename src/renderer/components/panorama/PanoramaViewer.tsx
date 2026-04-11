@@ -1,20 +1,19 @@
 "use client";
 
+import { useReactFlow } from "@xyflow/react";
 import * as React from "react";
+import { uploadFileToOSS } from "service/oss";
+import { GenerationStatus } from "shared/constants/enum";
+import { recenterCamera, takeScreenshot } from "shared/lib/panorama";
+import type { AllNodeType, EdgeType } from "shared/types/flow";
+import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
+import { toast } from "sonner";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { useReactFlow } from "@xyflow/react";
-import { toast } from "sonner";
-
-import { GenerationStatus } from "shared/constants/enum";
-import { uploadFileToOSS } from "service/oss";
-import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
-import type { AllNodeType, EdgeType } from "shared/types/flow";
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { PanoramaCanvas } from "./PanoramaCanvas";
 import { PanoramaControls } from "./PanoramaControls";
 import { PanoramaLoading } from "./PanoramaLoading";
-import { takeScreenshot, recenterCamera } from "shared/lib/panorama";
 
 export interface PanoramaViewerProps {
   open: boolean;

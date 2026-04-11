@@ -9,21 +9,20 @@ import {
   IconUpload,
   IconZoomIn,
 } from "@tabler/icons-react";
-import { memo, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
+import { memo, useMemo, useRef, useState } from "react";
+import { uploadFileToOSS } from "service/oss";
+import { cn, downloadImageFromUrl } from "shared/lib/utils";
+import type { ImageGenerationNode } from "shared/types/flow";
+import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
+import { toast } from "sonner";
 import Lightbox from "yet-another-react-lightbox";
 import Download from "yet-another-react-lightbox/plugins/download";
 import Fullscreen from "yet-another-react-lightbox/plugins/fullscreen";
 import Share from "yet-another-react-lightbox/plugins/share";
 import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
-import { toast } from "sonner";
-
-import { uploadFileToOSS } from "service/oss";
-import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
-import { cn, downloadImageFromUrl } from "shared/lib/utils";
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
-import type { ImageGenerationNode } from "shared/types/flow";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
 import { ImageCropDialog } from "./ImageCropDialog";
 import { InpaintDialog } from "./InpaintDialog";

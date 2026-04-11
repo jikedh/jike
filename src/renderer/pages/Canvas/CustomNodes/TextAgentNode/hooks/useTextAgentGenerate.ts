@@ -2,16 +2,16 @@
  * 文本智能体生成逻辑 hook
  * 处理生成流程、输入验证、输出节点创建等核心业务逻辑
  */
-import { useState, useCallback, useRef, useEffect } from "react";
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
-import { useMessage } from "@/hooks/useMessage";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { TextAgentNodeType, TextAgentPresetId } from "shared/types/flow";
 import { createChatCompletion } from "@/api/ai";
+import { useMessage } from "@/hooks/useMessage";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import {
-  parseMarkdownTable,
   calculateNoteSize,
   filterThinkingContent,
+  parseMarkdownTable,
 } from "../utils";
-import type { TextAgentPresetId, TextAgentNodeType } from "shared/types/flow";
 
 interface UseTextAgentGenerateProps {
   id: string;
@@ -94,9 +94,9 @@ export const useTextAgentGenerate = ({
       const currentNode = nodes.find((n) => n.id === id);
       const nextPosition = currentNode
         ? {
-            x: currentNode.position.x + 400,
-            y: currentNode.position.y,
-          }
+          x: currentNode.position.x + 400,
+          y: currentNode.position.y,
+        }
         : undefined;
 
       if (presetId === "novel-character-design") {

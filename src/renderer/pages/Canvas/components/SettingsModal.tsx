@@ -7,7 +7,13 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-
+import { clearProjectList } from "service/projectStorage";
+import { CANVAS_CHAT_MODELS } from "shared/constants/ai-models";
+import {
+  CANVAS_CHAT_PERSONAS,
+  NO_CHAT_PERSONA_ID,
+} from "shared/constants/chat-personas";
+import { cn } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,17 +36,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CANVAS_CHAT_MODELS } from "shared/constants/ai-models";
-import {
-  CANVAS_CHAT_PERSONAS,
-  NO_CHAT_PERSONA_ID,
-} from "shared/constants/chat-personas";
-import { useChatSettingsStore } from "@/store/chatSettingsStore";
 import { Switch } from "@/components/ui/switch";
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
 import useMessage from "@/hooks/useMessage";
-import { cn } from "shared/utils/utils";
-import { clearProjectList } from "service/projectStorage";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 
 type SettingsModalProps = {
   open: boolean;
@@ -197,7 +196,7 @@ export const SettingsModal = ({
 
     return (
       sectionPlaceholderMap[
-        activeSection as keyof typeof sectionPlaceholderMap
+      activeSection as keyof typeof sectionPlaceholderMap
       ] ?? []
     );
   }, [activeSection]);

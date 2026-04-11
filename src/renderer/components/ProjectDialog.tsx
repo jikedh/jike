@@ -1,16 +1,16 @@
-import { useState, useRef, useEffect } from "react";
-import { X, Upload, X as CloseIcon } from "lucide-react";
+import { X as CloseIcon, Upload, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import {
   createProject,
-  updateProject,
-  renameProject,
-  saveCoverImageToLocal,
   getCoverImageUrl,
   type ProjectMeta,
+  renameProject,
+  saveCoverImageToLocal,
+  updateProject,
 } from "service/projectStorage";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { useUserStore } from "@/store/useUserStore";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { useUserStore } from "@/stores/useUserStore";
 
 interface ProjectDialogProps {
   isOpen: boolean;

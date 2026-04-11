@@ -1,53 +1,51 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  type FinalConnectionState,
-  type OnConnectStartParams,
-  type InternalNode,
-  useReactFlow,
-  ControlButton,
-  BackgroundVariant,
   applyNodeChanges,
-  type NodeChange,
-  SelectionMode,
+  Background,
+  BackgroundVariant,
   ConnectionLineType,
+  ControlButton,
+  Controls,
+  type FinalConnectionState,
+  type InternalNode,
+  MiniMap,
+  type NodeChange,
+  type OnConnectStartParams,
+  ReactFlow,
+  SelectionMode,
+  useReactFlow,
 } from "@xyflow/react";
-
-import { NodeSearch } from "@/components/node-search";
 import { ArrowLeft, Eye, EyeOff, Upload } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
-
-import { nodeTypes, edgeTypes } from "../constants/canvasConfig";
-import { CanvasContextMenu, type CanvasNodeType } from "./CanvasContextMenu";
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
-import { useChatSettingsStore } from "@/store/chatSettingsStore";
-import type { AllNodeType, EdgeType } from "shared/types/flow";
-import { Button } from "@/components/ui/button";
-import { useCanvasCursor } from "@/hooks/useCanvasCursor";
+import { useNavigate } from "react-router-dom";
+import { uploadFileToOSS } from "service/oss";
+import {
+  getLocalFilePath,
+  saveAudioToLocal,
+  saveImageToLocal,
+  saveVideoToLocal,
+} from "service/projectStorage";
 import { GenerationStatus } from "shared/constants/enum";
+import type { AllNodeType, EdgeType } from "shared/types/flow";
+import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
+import { NodeSearch } from "@/components/node-search";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useCanvasCursor } from "@/hooks/useCanvasCursor";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import {
   getClosestAspectRatio,
   getImageDimensions,
 } from "../CustomNodes/ImageNode/utils/aspectRatioUtils";
-import { uploadFileToOSS } from "service/oss";
-import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
-import {
-  saveImageToLocal,
-  saveAudioToLocal,
-  saveVideoToLocal,
-  getLocalFilePath,
-} from "service/projectStorage";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogFooter,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { edgeTypes, nodeTypes } from "../constants/canvasConfig";
+import { CanvasContextMenu, type CanvasNodeType } from "./CanvasContextMenu";
 
 type CanvasFlowProps = {
   projectId: string | undefined;
@@ -319,7 +317,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
 
         const distance = Math.sqrt(
           Math.pow(draggedCenterX - targetCenterX, 2) +
-            Math.pow(draggedCenterY - targetCenterY, 2),
+          Math.pow(draggedCenterY - targetCenterY, 2),
         );
 
         if (distance < SNAP_DISTANCE && distance < nearestDistance) {

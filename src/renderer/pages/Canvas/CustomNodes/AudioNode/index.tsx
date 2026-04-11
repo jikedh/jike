@@ -1,32 +1,31 @@
 import {
+  IconCheck,
+  IconCut,
+  IconDownload,
+  IconMusic,
+  IconPlayerPause,
+  IconPlayerPlay,
+  IconTrash,
+  IconUpload,
+  IconX,
+} from "@tabler/icons-react";
+import {
+  type NodeProps,
   NodeToolbar,
   Position,
-  type NodeProps,
-  useStore,
   useReactFlow,
+  useStore,
 } from "@xyflow/react";
-import { memo, useCallback, useMemo, useRef, useState, useEffect } from "react";
-import {
-  IconMusic,
-  IconUpload,
-  IconPlayerPlay,
-  IconPlayerPause,
-  IconTrash,
-  IconDownload,
-  IconCut,
-  IconX,
-  IconCheck,
-} from "@tabler/icons-react";
-
-import { ButtonHandle } from "@/components/button-handle";
-import { cn } from "shared/lib/utils";
-import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
-import { useNodeScale } from "@/hooks/useNodeScale";
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
-import type { AudioNodeType } from "shared/types/flow";
-import { GenerationStatus } from "shared/constants/enum";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
+import { GenerationStatus } from "shared/constants/enum";
+import { cn } from "shared/lib/utils";
+import type { AudioNodeType } from "shared/types/flow";
+import { ButtonHandle } from "@/components/button-handle";
 import useMessage from "@/hooks/useMessage";
+import { useNodeScale } from "@/hooks/useNodeScale";
+import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
 const formatTime = (time: number) => {
   const minutes = Math.floor(time / 60);
@@ -1010,7 +1009,7 @@ export const AudioNode = memo(
                 trimEnd={trimEnd}
                 onTrimStartChange={setTrimStart}
                 onTrimEndChange={setTrimEnd}
-                onPreviewTrim={() => {}}
+                onPreviewTrim={() => { }}
                 audioRef={audioRef}
               />
             </div>

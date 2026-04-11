@@ -1,12 +1,11 @@
-import { useCallback } from "react";
 import { useReactFlow } from "@xyflow/react";
-import { toast } from "sonner";
-
-import { FloatingSidebar } from "./FloatingSidebar";
-import type { FloatingSidebarProps } from "./FloatingSidebar";
-import { assistantActionToPresetId } from "../constants/canvasConfig";
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
+import { useCallback } from "react";
 import type { AllNodeType, EdgeType } from "shared/types/flow";
+import { toast } from "sonner";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { assistantActionToPresetId } from "../constants/canvasConfig";
+import type { FloatingSidebarProps } from "./FloatingSidebar";
+import { FloatingSidebar } from "./FloatingSidebar";
 
 export const CanvasSidebar = () => {
   const addNode = useCanvasFlowStore((state) => state.addNode);

@@ -1,10 +1,9 @@
 import { useCallback, useState } from "react";
-
+import type { AllNodeType, EdgeType } from "shared/types/flow";
+import type { NoteGenerationRequest } from "shared/types/NoteGeneration";
 import { createChatCompletion } from "@/api/ai";
 import { useMessage } from "@/hooks/useMessage";
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
-import type { NoteGenerationRequest } from "shared/types/NoteGeneration";
-import type { AllNodeType, EdgeType } from "shared/types/flow";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
 /**
  * 获取父便签节点
@@ -112,9 +111,9 @@ export const useAgentExecution = (options: {
       const currentNode = nodes.find((node) => node.id === nodeId);
       const nextPosition = currentNode
         ? {
-            x: currentNode.position.x + 320,
-            y: currentNode.position.y,
-          }
+          x: currentNode.position.x + 320,
+          y: currentNode.position.y,
+        }
         : undefined;
 
       // 创建新便签节点

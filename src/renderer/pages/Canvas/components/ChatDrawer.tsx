@@ -4,14 +4,22 @@
  */
 import {
   IconClock,
-  IconPlus,
   IconPlayerStop,
+  IconPlus,
   IconSend,
   IconTrash,
   IconX,
 } from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-
+import {
+  CANVAS_CHAT_PERSONAS,
+  NO_CHAT_PERSONA_ID,
+} from "shared/constants/chat-personas";
+import { cn } from "shared/lib/utils";
+import type {
+  ChatPersonaId,
+  NoteGenerationMessage,
+} from "shared/types/NoteGeneration";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import {
   Select,
@@ -21,21 +29,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useResizableWidth } from "@/hooks/useResizableWidth";
-import {
-  CANVAS_CHAT_PERSONAS,
-  NO_CHAT_PERSONA_ID,
-} from "shared/constants/chat-personas";
-import { useChatSettingsStore } from "@/store/chatSettingsStore";
-import { cn } from "shared/lib/utils";
-import type {
-  ChatPersonaId,
-  NoteGenerationMessage,
-} from "shared/types/NoteGeneration";
 import { useChatHistory } from "@/hooks/useChatHistory";
-
-import { ChatMessageList } from "./ChatMessageList";
+import { useResizableWidth } from "@/hooks/useResizableWidth";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { ChatHistoryPanel } from "./ChatHistoryPanel";
+import { ChatMessageList } from "./ChatMessageList";
 
 type ChatDrawerProps = {
   open: boolean;

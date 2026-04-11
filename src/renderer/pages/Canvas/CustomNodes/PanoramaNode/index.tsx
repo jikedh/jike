@@ -1,18 +1,17 @@
-import { NodeToolbar, Position, type NodeProps, useStore } from "@xyflow/react";
-import { memo, useCallback, useMemo, useRef, useState, useEffect } from "react";
+import { type NodeProps, NodeToolbar, Position, useStore } from "@xyflow/react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { GenerationStatus } from "shared/constants/enum";
+import { uploadPanoramaScreenshot } from "shared/lib/panorama";
+import { cn } from "shared/lib/utils";
+import type { PanoramaNodeType } from "shared/types/flow";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-
 import { ButtonHandle } from "@/components/button-handle";
-import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
-import { useNodeScale } from "@/hooks/useNodeScale";
 import { useMessage } from "@/hooks/useMessage";
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
-import type { PanoramaNodeType } from "shared/types/flow";
-import { GenerationStatus } from "shared/constants/enum";
-import { cn } from "shared/lib/utils";
-import { uploadPanoramaScreenshot } from "shared/lib/panorama";
+import { useNodeScale } from "@/hooks/useNodeScale";
+import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
 export const PanoramaNode = memo(
   ({ id, data, selected, dragging }: NodeProps<PanoramaNodeType>) => {
@@ -278,7 +277,6 @@ export const PanoramaNode = memo(
     }, [isFullscreen]);
 
     useEffect(() => {
-
       if (!canvasRef.current || !data.image_url) {
         return;
       }
@@ -318,7 +316,6 @@ export const PanoramaNode = memo(
         img.crossOrigin = "anonymous";
 
         img.onload = () => {
-
           try {
             const texture = new THREE.Texture(img);
             texture.colorSpace = THREE.SRGBColorSpace;
@@ -349,7 +346,6 @@ export const PanoramaNode = memo(
           );
           const imgNoCors = new Image();
           imgNoCors.onload = () => {
-
             try {
               // 创建 canvas 来转换图片
               const canvas = document.createElement("canvas");

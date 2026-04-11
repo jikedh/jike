@@ -1,9 +1,8 @@
-import { BaseEdge, EdgeProps, getBezierPath } from "@xyflow/react";
-import { EdgeToolbar } from "@xyflow/react";
+import { BaseEdge, EdgeProps, EdgeToolbar, getBezierPath } from "@xyflow/react";
 import { ScissorsLineDashed } from "lucide-react";
 import { memo, useMemo } from "react";
 
-import { useCanvasFlowStore } from "@/store/canvasFlowStore";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
 /**
  * 自定义边组件
