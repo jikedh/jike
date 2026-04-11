@@ -201,8 +201,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     // 所有图片在上传时已经上传到 OSS，或是在线 URL，直接使用即可
     const imageUrls = allImageUrls;
 
-    console.log("[VideoNode] 提交生成任务, image_urls:", imageUrls);
-
     // Seedance 2.0 在存在参考音频时仅允许使用 Pro 模式。
     // 命中该条件时先提示用户，再自动修正为 Pro 并继续本次生成。
     const isSeedance20Model = model === "doubao-seedance-2.0";

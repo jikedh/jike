@@ -13,7 +13,6 @@ function App() {
   useEffect(() => {
     const token = getJikeingToken();
     if (token) {
-      console.log("[App] 检测到已存储的 token，自动获取用户信息");
       fetchUserInfo();
     }
   }, [fetchUserInfo]);

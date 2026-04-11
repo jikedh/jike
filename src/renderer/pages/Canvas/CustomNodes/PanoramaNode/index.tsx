@@ -278,13 +278,8 @@ export const PanoramaNode = memo(
     }, [isFullscreen]);
 
     useEffect(() => {
-      console.log("PanoramaNode useEffect triggered:", {
-        hasCanvas: !!canvasRef.current,
-        imageUrl: data.image_url,
-      });
 
       if (!canvasRef.current || !data.image_url) {
-        console.log("PanoramaNode: Missing canvas or image_url");
         return;
       }
 
@@ -317,15 +312,12 @@ export const PanoramaNode = memo(
       controls.rotateSpeed = -0.5;
       controlsRef.current = controls;
 
-      console.log("PanoramaNode: Loading texture from", data.image_url);
-
       // 使用 img 元素预加载图片，然后转换为 Three.js 纹理
       const loadImageWithImg = () => {
         const img = new Image();
         img.crossOrigin = "anonymous";
 
         img.onload = () => {
-          console.log("PanoramaNode: Image loaded successfully");
 
           try {
             const texture = new THREE.Texture(img);
@@ -355,12 +347,8 @@ export const PanoramaNode = memo(
             "PanoramaNode: Failed to load image from:",
             data.image_url,
           );
-
-          // 尝试不带 CORS 加载
-          console.log("PanoramaNode: Trying without CORS...");
           const imgNoCors = new Image();
           imgNoCors.onload = () => {
-            console.log("PanoramaNode: Image loaded without CORS");
 
             try {
               // 创建 canvas 来转换图片
@@ -406,7 +394,6 @@ export const PanoramaNode = memo(
       loadImageWithImg();
 
       return () => {
-        console.log("PanoramaNode: Cleaning up");
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
         }

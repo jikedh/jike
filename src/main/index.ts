@@ -32,25 +32,18 @@ function setupAutoUpdater(): void {
   autoUpdater.autoDownload = true;
 
   autoUpdater.on("checking-for-update", () => {
-    console.log("[autoUpdater] Checking for updates...");
   });
 
   autoUpdater.on("update-available", (info) => {
-    console.log(`[autoUpdater] Update available: ${info.version}`);
   });
 
   autoUpdater.on("update-not-available", () => {
-    console.log("[autoUpdater] No updates available");
   });
 
   autoUpdater.on("download-progress", (progress) => {
-    console.log(
-      `[autoUpdater] Download progress: ${progress.percent.toFixed(2)}%`,
-    );
   });
 
   autoUpdater.on("update-downloaded", async (info) => {
-    console.log(`[autoUpdater] Update downloaded: ${info.version}`);
 
     if (!mainWindow) {
       autoUpdater.quitAndInstall();

@@ -75,14 +75,12 @@ export function clearJikeingUserId(): void {
  */
 export const isElectron = (): boolean => {
   if (typeof window !== "undefined" && (window as any).electron) {
-    console.log("[isElectron] detected via window.electron");
     return true;
   }
   if (
     typeof navigator !== "undefined" &&
     navigator.userAgent.toLowerCase().includes("electron")
   ) {
-    console.log("[isElectron] detected via userAgent");
     return true;
   }
   return false;
@@ -95,7 +93,6 @@ export const isElectron = (): boolean => {
  */
 export const getBaseURL = (apiPath: string): string => {
   const electronMode = isElectron();
-  console.log("[getBaseURL] apiPath:", apiPath, "| isElectron:", electronMode);
 
   if (electronMode) {
     const apiServers: Record<string, string> = {

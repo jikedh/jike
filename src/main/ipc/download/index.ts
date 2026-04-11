@@ -65,6 +65,4 @@ export function registerDownloadHandlers(): void {
       }
     },
   );
-
-  console.log("[IPC] 图片下载 handlers 注册完成");
 }

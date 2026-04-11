@@ -581,12 +581,6 @@ const pollImageGeneration = async (
                     fileName,
                   );
 
-                  console.log(
-                    "[pollImageGeneration] 图片已保存到本地:",
-                    fileName,
-                    relativePath,
-                  );
-
                   // 上传到 OSS
                   let ossUrl: string | undefined;
                   try {
@@ -603,10 +597,6 @@ const pollImageGeneration = async (
                         const ossResult = await uploadFileToOSS(file);
                         if (ossResult.url) {
                           ossUrl = ossResult.url;
-                          console.log(
-                            "[pollImageGeneration] 图片已上传到 OSS:",
-                            ossUrl,
-                          );
                         }
                       }
                     }
@@ -848,12 +838,6 @@ const pollMjImageGeneration = async (
                     fileName,
                   );
 
-                  console.log(
-                    "[pollMjImageGeneration] 图片已保存到本地:",
-                    fileName,
-                    relativePath,
-                  );
-
                   // 上传到 OSS
                   let ossUrl: string | undefined;
                   try {
@@ -870,10 +854,6 @@ const pollMjImageGeneration = async (
                         const ossResult = await uploadFileToOSS(file);
                         if (ossResult.url) {
                           ossUrl = ossResult.url;
-                          console.log(
-                            "[pollMjImageGeneration] 图片已上传到 OSS:",
-                            ossUrl,
-                          );
                         }
                       }
                     }
@@ -1130,11 +1110,6 @@ const pollVideoGeneration = async (
                     projectId,
                     "generate_video",
                     fileName,
-                  );
-                  console.log(
-                    "[pollVideoGeneration] 视频已保存到本地:",
-                    fileName,
-                    relativePath,
                   );
                   return {
                     ...item,
@@ -2651,8 +2626,6 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
           payload.image_urls = [sourceImageUrl];
         }
 
-        console.log("[拆图] payload:", payload);
-
         get().startImageGeneration(newId, payload);
       }
 
@@ -2786,21 +2759,10 @@ export const useCanvasFlowStore = create<CanvasFlowState>((set, get) => {
 
       try {
         const isSeedance20 = payload?.model === "doubao-seedance-2.0";
-        console.log(
-          "[startVideoGeneration] model:",
-          payload?.model,
-          "| isSeedance20:",
-          isSeedance20,
-        );
-        console.log(
-          "[startVideoGeneration] payload:",
-          JSON.stringify(payload, null, 2),
-        );
 
         const response: any = isSeedance20
           ? await createLzVideoTask(payload)
           : await createVideoGeneration(payload);
-        console.log("[startVideoGeneration] response:", response);
 
         const taskId = isSeedance20 ? response?.data?.task_id : response?.id;
 

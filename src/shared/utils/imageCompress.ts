@@ -8,10 +8,6 @@ export const compressImage = async (
     return file;
   }
 
-  console.log(
-    `[压缩图片] 原始大小: ${(file.size / 1024 / 1024).toFixed(2)}MB，开始压缩...`,
-  );
-
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
@@ -43,9 +39,6 @@ export const compressImage = async (
                 type: "image/jpeg",
                 lastModified: Date.now(),
               });
-              console.log(
-                `[压缩图片] 压缩后大小: ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`,
-              );
               resolve(compressedFile);
               return;
             }

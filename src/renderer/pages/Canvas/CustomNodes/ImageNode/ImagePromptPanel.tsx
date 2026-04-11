@@ -540,9 +540,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       // 检查文件大小，大于10MB时压缩
       let fileToUpload = file;
       if (file.size > MAX_IMAGE_SIZE_MB) {
-        console.log(
-          `[上传图片] 文件大小 ${(file.size / 1024 / 1024).toFixed(2)}MB 超过 10MB，开始压缩...`,
-        );
         fileToUpload = await compressImage(file);
       }
 
@@ -756,8 +753,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     // image_urls 直接使用界面当前显示的参考图列表（上传 + 父节点结果）
     // 所有图片在上传时已经上传到 OSS，或是在线 URL，直接使用即可
     const imageUrls = referenceImageUrls;
-
-    console.log("[ImageNode] 提交生成任务, image_urls:", imageUrls);
 
     // 构建请求 payload
     const buildPayload = (): any => {

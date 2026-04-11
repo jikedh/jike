@@ -207,9 +207,6 @@ export const uploadPanoramaScreenshot = async (
 
   let fileToUpload = file;
   if (file.size > MAX_IMAGE_SIZE_MB) {
-    console.log(
-      `[上传图片] 文件大小 ${(file.size / 1024 / 1024).toFixed(2)}MB 超过 10MB，开始压缩...`,
-    );
     fileToUpload = await compressImage(file);
   }
 

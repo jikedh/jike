@@ -79,13 +79,11 @@ export const CollapsibleImageGallery = ({
     e.stopPropagation();
 
     if (!nodeId || !updateImageNodeData || !images[index]?.relativePath) {
-      console.log("[刷新图片] 缺少必要参数，无法刷新");
       return;
     }
 
     const item = images[index];
     if (!item.relativePath || !item.localFileName) {
-      console.log("[刷新图片] 缺少本地文件信息，无法刷新");
       return;
     }
 
@@ -112,9 +110,6 @@ export const CollapsibleImageGallery = ({
 
       // 检查文件大小，大于10MB时压缩
       if (file.size > MAX_IMAGE_SIZE_MB) {
-        console.log(
-          `[刷新图片] 文件大小 ${(file.size / 1024 / 1024).toFixed(2)}MB 超过 10MB，开始压缩...`,
-        );
         file = await compressImage(file);
       }
 
@@ -123,8 +118,6 @@ export const CollapsibleImageGallery = ({
       if (!ossResult.url) {
         throw new Error("上传到 OSS 失败");
       }
-
-      console.log("[刷新图片] 上传成功，新 OSS URL:", ossResult.url);
 
       // 更新节点数据
       const newImages = [...images];
