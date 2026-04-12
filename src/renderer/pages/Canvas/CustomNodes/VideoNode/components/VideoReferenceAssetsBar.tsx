@@ -15,7 +15,7 @@ const VideoThumbnailButton = ({ videoUrl }: { videoUrl: string }) => {
   useEffect(() => {
     getVideoThumbnail(videoUrl)
       .then(setThumbnail)
-      .catch(() => { });
+      .catch(() => {});
   }, [videoUrl]);
 
   if (thumbnail) {

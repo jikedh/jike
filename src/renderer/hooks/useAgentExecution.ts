@@ -111,9 +111,9 @@ export const useAgentExecution = (options: {
       const currentNode = nodes.find((node) => node.id === nodeId);
       const nextPosition = currentNode
         ? {
-          x: currentNode.position.x + 320,
-          y: currentNode.position.y,
-        }
+            x: currentNode.position.x + 320,
+            y: currentNode.position.y,
+          }
         : undefined;
 
       // 创建新便签节点

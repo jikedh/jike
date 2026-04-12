@@ -17,18 +17,18 @@ export default defineConfig({
   },
   build: {
     // sourcemap: true,
-      // outDir: "out",
-      // minify: "terser",
-      rollupOptions: {
-        output: {
-          manualChunks(id) {
-            if (id.includes("node_modules")) {
-              if (id.includes("react")) return "react";
-              return "vendor";
-            }
-          },
+    // outDir: "out",
+    // minify: "terser",
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("react")) return "react";
+            return "vendor";
+          }
         },
       },
+    },
   },
   // Web 部署使用绝对路径，确保二级路由刷新后资源加载正确
   base: "/",
@@ -73,4 +73,4 @@ export default defineConfig({
       },
     },
   },
-})
+});

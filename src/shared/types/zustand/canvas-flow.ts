@@ -1,8 +1,4 @@
-import type {
-  Connection,
-  EdgeChange,
-  NodeChange,
-} from "@xyflow/react";
+import type { Connection, EdgeChange, NodeChange } from "@xyflow/react";
 import type { AgentPresetId } from "shared/constants/agent-presets";
 import type {
   AllNodeType,
@@ -165,7 +161,10 @@ export type CanvasFlowStoreType = {
     nodeId: string,
     patch: Partial<AudioGenerationNode>,
   ) => void;
-  updateTextAgentNodeData: (nodeId: string, patch: Record<string, unknown>) => void;
+  updateTextAgentNodeData: (
+    nodeId: string,
+    patch: Record<string, unknown>,
+  ) => void;
   updateTableNodeData: (nodeId: string, patch: Record<string, unknown>) => void;
 
   // ── 图片生成 ─────────────────────────────────

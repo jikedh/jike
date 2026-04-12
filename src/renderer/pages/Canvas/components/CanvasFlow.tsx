@@ -314,7 +314,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
 
         const distance = Math.sqrt(
           Math.pow(draggedCenterX - targetCenterX, 2) +
-          Math.pow(draggedCenterY - targetCenterY, 2),
+            Math.pow(draggedCenterY - targetCenterY, 2),
         );
 
         if (distance < SNAP_DISTANCE && distance < nearestDistance) {

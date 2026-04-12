@@ -169,8 +169,9 @@ const LoginPage = () => {
 
             {/* 登录卡片 */}
             <div
-              className={`w-[330px] rounded-2xl flex flex-col items-center py-[35px] pb-[45px] relative z-10 ${isErrorState ? "py-[50px]" : ""
-                }`}
+              className={`w-[330px] rounded-2xl flex flex-col items-center py-[35px] pb-[45px] relative z-10 ${
+                isErrorState ? "py-[50px]" : ""
+              }`}
               style={cardStyle}
             >
               {/* 标题 */}

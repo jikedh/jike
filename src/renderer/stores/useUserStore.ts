@@ -7,7 +7,10 @@ import {
 import { create } from "zustand";
 import { getUserInfo } from "@/api/ai";
 
-const initialState: Pick<UserStoreType, 'loginStatus' | 'userInfo' | 'vipLevel' | 'isLoading' | 'dialogLoginStatus'> = {
+const initialState: Pick<
+  UserStoreType,
+  "loginStatus" | "userInfo" | "vipLevel" | "isLoading" | "dialogLoginStatus"
+> = {
   loginStatus: 0,
   userInfo: null,
   vipLevel: 0,
