@@ -118,8 +118,8 @@ export const TextAgentNode = memo(
 
         // 自动创建输入便签节点
         const inputNoteId = addNode("note", {
-          x: currentNode.position.x - 280,
-          y: currentNode.position.y,
+          x: currentNode.position.x - 450,
+          y: currentNode.position.y + 100,
         });
         setNoteNodeEditing(inputNoteId, true);
 
@@ -170,7 +170,6 @@ export const TextAgentNode = memo(
                 presetLabel={presetLabel}
                 selected={selected}
                 isGenerating={isGenerating}
-                onSwitchPreset={() => setShowPresetSelector(true)}
               />
 
               {/* 配置面板（选中时显示） */}

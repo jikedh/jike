@@ -28,7 +28,6 @@ interface NodeBodyProps {
   presetLabel: string;
   selected: boolean;
   isGenerating: boolean;
-  onSwitchPreset: () => void;
 }
 
 export const NodeBody = ({
@@ -36,7 +35,6 @@ export const NodeBody = ({
   presetLabel,
   selected,
   isGenerating,
-  onSwitchPreset,
 }: NodeBodyProps) => {
   // 手柄可见性控制
   const handleVisibilityClass = selected
@@ -70,14 +68,7 @@ export const NodeBody = ({
         className={`transition-opacity duration-150 ${handleVisibilityClass}`}
       />
 
-      {/* 切换预设按钮 */}
-      <button
-        onClick={onSwitchPreset}
-        className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-[#141416] px-3 py-1 text-xs text-white/40 transition-all hover:border-white/20 hover:text-white/60"
-      >
-        <IconRefresh size={12} />
-        <span>切换文本智能体</span>
-      </button>
+
 
       {/* 节点内容 */}
       <div className="flex items-center gap-2 text-sm text-white/50">
