@@ -1,13 +1,13 @@
 import { type NodeProps, Position } from "@xyflow/react";
 import { memo } from "react";
 import { getAgentPresetLabelById } from "shared/constants/agent-presets";
-import { cn } from "shared/lib/utils";
 import type { AgentNodeType } from "shared/types/flow";
 import { ButtonHandle } from "@/components/button-handle";
 import { Button } from "@/components/ui/button";
 import { useAgentExecution } from "@/hooks/useAgentExecution";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { cn } from "shared/utils/utils";
 
 const areAgentNodePropsEqual = (
   prev: NodeProps<AgentNodeType>,

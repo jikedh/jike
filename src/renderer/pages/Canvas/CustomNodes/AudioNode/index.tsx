@@ -19,13 +19,13 @@ import {
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
-import { cn } from "shared/lib/utils";
 import type { AudioNodeType } from "shared/types/flow";
 import { ButtonHandle } from "@/components/button-handle";
 import useMessage from "@/hooks/useMessage";
 import { useNodeScale } from "@/hooks/useNodeScale";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { cn } from "shared/utils/utils";
 
 const formatTime = (time: number) => {
   const minutes = Math.floor(time / 60);

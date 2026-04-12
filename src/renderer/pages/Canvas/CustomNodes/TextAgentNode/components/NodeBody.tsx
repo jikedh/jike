@@ -12,8 +12,8 @@ import {
   IconBrandStorybook,
 } from "@tabler/icons-react";
 import { ButtonHandle } from "@/components/button-handle";
-import { cn } from "shared/lib/utils";
 import type { TextAgentPresetId } from "shared/types/flow";
+import { cn } from "shared/utils/utils";
 
 const PRESET_ICONS: Record<TextAgentPresetId, React.ReactNode> = {
   "novel-to-script-agent": <IconBook size={18} />,

@@ -4,15 +4,13 @@
  */
 
 import { IconSettings, IconVideo } from "@tabler/icons-react";
-
+import { cn } from "shared/utils/utils";
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { cn } from "shared/lib/utils";
-
 import { AspectRatioIcon } from "../../ImageNode/components/AspectRatioIcon";
 
 type GrokVideoParamsPanelProps = {

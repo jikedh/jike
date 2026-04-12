@@ -13,9 +13,9 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "shared/lib/utils";
 
 import { AspectRatioIcon } from "../../ImageNode/components/AspectRatioIcon";
+import { cn } from "shared/utils/utils";
 
 type Seedance20ParamsPanelProps = {
   // 生成模式

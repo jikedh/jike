@@ -7,7 +7,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import { IMAGE_MODELS } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
-import { cn } from "shared/lib/utils";
 import type { ImageGenerationNode, NoteNodeData } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { Button } from "@/components/ui/button";
@@ -26,6 +25,7 @@ import { MidjourneyAdvancedPanel } from "./components/MidjourneyAdvancedPanel";
 import { MidjourneyParamsPanel } from "./components/MidjourneyParamsPanel";
 import { SeedreamParamsPanel } from "./components/SeedreamParamsPanel";
 import { COMMAND_MOCK, MENTION_MOCK } from "./mock";
+import { cn } from "shared/utils/utils";
 
 const ReferenceItemWrapper = ({
   children,

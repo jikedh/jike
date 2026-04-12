@@ -15,11 +15,11 @@ import {
   CANVAS_CHAT_PERSONAS,
   NO_CHAT_PERSONA_ID,
 } from "shared/constants/chat-personas";
-import { cn } from "shared/lib/utils";
 import type {
   ChatPersonaId,
   NoteGenerationMessage,
 } from "shared/types/NoteGeneration";
+import { cn } from "shared/utils/utils";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import {
   Select,

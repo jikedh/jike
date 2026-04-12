@@ -4,23 +4,21 @@
  */
 
 import {
-  IconChevronDown,
-  IconVolume3,
   IconBan,
+  IconChevronDown,
   IconImageInPicture,
+  IconVolume3,
 } from "@tabler/icons-react";
 import { useState } from "react";
-
+import { cn } from "shared/utils/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "shared/lib/utils";
-
 import { AspectRatioIcon } from "../../ImageNode/components/AspectRatioIcon";
 
 type Veo3ParamsPanelProps = {

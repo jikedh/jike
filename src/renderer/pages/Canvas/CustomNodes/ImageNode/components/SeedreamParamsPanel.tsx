@@ -4,14 +4,13 @@
  * 适用于 doubao-seedream-5-0 模型
  */
 
+import { cn } from "shared/utils/utils";
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { cn } from "shared/lib/utils";
-
 import { AspectRatioIcon } from "./AspectRatioIcon";
 
 // Seedream 5.0 宽高比选项（与类型定义保持一致）

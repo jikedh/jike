@@ -3,7 +3,6 @@ import { memo, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
-import { cn } from "shared/lib/utils";
 import type { ImageNodeType } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { toast } from "sonner";
@@ -15,6 +14,7 @@ import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { ImageContent } from "./ImageContent";
 import { ImagePromptPanel } from "./ImagePromptPanel";
 import { ImageToolbar } from "./ImageToolbar";
+import { cn } from "shared/utils/utils";
 
 /**
  * 图片节点组件

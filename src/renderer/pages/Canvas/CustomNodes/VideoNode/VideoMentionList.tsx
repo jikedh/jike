@@ -6,8 +6,8 @@ import {
   useRef,
 } from "react";
 import { IconMusic, IconVideo } from "@tabler/icons-react";
-import { cn, getVideoThumbnail } from "shared/lib/utils";
 import { Button } from "@/components/ui/button";
+import { cn, getVideoThumbnail } from "shared/utils/utils";
 
 export interface VideoMentionItem {
   id: string;

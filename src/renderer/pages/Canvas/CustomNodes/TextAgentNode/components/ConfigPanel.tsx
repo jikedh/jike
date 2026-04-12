@@ -2,11 +2,12 @@
  * 配置面板组件
  * 包含系统提示词编辑、模型选择和生成按钮
  */
+
+import { IconCheck, IconChevronDown, IconSend } from "@tabler/icons-react";
 import { useState } from "react";
-import { IconChevronDown, IconCheck, IconSend } from "@tabler/icons-react";
-import { Button } from "@/components/ui/button";
 import { TEXT_AGENT_MODELS } from "shared/constants/text-agent-presets";
-import { cn } from "shared/lib/utils";
+import { cn } from "shared/utils/utils";
+import { Button } from "@/components/ui/button";
 
 interface ConfigPanelProps {
   editableSystemPrompt: string;

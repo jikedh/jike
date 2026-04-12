@@ -6,15 +6,14 @@
 
 import { IconChevronDown } from "@tabler/icons-react";
 import { useState } from "react";
-
+import { cn } from "shared/utils/utils";
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "shared/lib/utils";
 
 type MinimaxHailuo23ParamsPanelProps = {
   // 视频时长（秒）：6 | 10

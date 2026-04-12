@@ -4,7 +4,7 @@ import { Veo3ParamsPanel } from "./Veo3ParamsPanel";
 import { KlingVideoO1ParamsPanel } from "./KlingVideoO1ParamsPanel";
 import { MinimaxHailuo23ParamsPanel } from "./MinimaxHailuo23ParamsPanel";
 import { Seedance20ParamsPanel } from "./Seedance20ParamsPanel";
-import { clampSeedance20Duration } from "shared/lib/utils";
+import { clampSeedance20Duration } from "shared/utils/utils";
 
 /**
  * 视频模型参数面板分发组件。

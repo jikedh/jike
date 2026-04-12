@@ -2,8 +2,6 @@ import { type NodeProps, NodeToolbar, Position, useStore } from "@xyflow/react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { GenerationStatus } from "shared/constants/enum";
-import { uploadPanoramaScreenshot } from "shared/lib/panorama";
-import { cn } from "shared/lib/utils";
 import type { PanoramaNodeType } from "shared/types/flow";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -12,6 +10,8 @@ import { useMessage } from "@/hooks/useMessage";
 import { useNodeScale } from "@/hooks/useNodeScale";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { uploadPanoramaScreenshot } from "shared/utils/panorama";
+import { cn } from "shared/utils/utils";
 
 export const PanoramaNode = memo(
   ({ id, data, selected, dragging }: NodeProps<PanoramaNodeType>) => {

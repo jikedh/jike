@@ -16,16 +16,15 @@ import {
   VIDEO_DURATION_CONFIG,
   VIDEO_RESOLUTIONS_15PRO,
 } from "shared/constants/ai-models";
+import { cn } from "shared/utils/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "shared/lib/utils";
-
 import { AspectRatioIcon } from "../../ImageNode/components/AspectRatioIcon";
 
 type Seedance15ProParamsPanelProps = {

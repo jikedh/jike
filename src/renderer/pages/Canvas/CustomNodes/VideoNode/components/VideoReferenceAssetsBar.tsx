@@ -1,9 +1,8 @@
 import { IconUpload, IconX } from "@tabler/icons-react";
+import type { ChangeEvent, ReactNode, RefObject } from "react";
 import { useEffect, useState } from "react";
-import type { ChangeEvent, RefObject, ReactNode } from "react";
-
+import { getVideoThumbnail } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
-import { cn, getVideoThumbnail } from "shared/lib/utils";
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
 
 /**
@@ -16,7 +15,7 @@ const VideoThumbnailButton = ({ videoUrl }: { videoUrl: string }) => {
   useEffect(() => {
     getVideoThumbnail(videoUrl)
       .then(setThumbnail)
-      .catch(() => {});
+      .catch(() => { });
   }, [videoUrl]);
 
   if (thumbnail) {

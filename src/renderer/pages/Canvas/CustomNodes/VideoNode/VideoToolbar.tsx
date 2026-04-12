@@ -12,7 +12,6 @@ import {
 import type { ChangeEvent } from "react";
 import { useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
-import { cn, downloadImageFromUrl } from "shared/lib/utils";
 import type { VideoGenerationNode } from "shared/types/flow";
 import { toast } from "sonner";
 import Lightbox from "yet-another-react-lightbox";
@@ -26,6 +25,7 @@ import Video from "yet-another-react-lightbox/plugins/video";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { getVideoUrlsFromNodeData } from "./utils/video-url";
+import { cn, downloadImageFromUrl } from "shared/utils/utils";
 
 type VideoToolbarProps = {
   nodeId: string;
