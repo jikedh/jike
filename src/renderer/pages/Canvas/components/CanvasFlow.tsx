@@ -1132,7 +1132,6 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
             fitView
             minZoom={0.2}
             maxZoom={2}
-            onlyRenderVisibleElements
             colorMode="dark"
             deleteKeyCode={["Backspace", "Delete"]}
             panOnDrag={[1]}
@@ -1145,7 +1144,6 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
             zoomOnScroll
             zoomOnPinch={true}
             preventScrolling={false}
-            connectionLineType={ConnectionLineType.Bezier}
             connectionLineStyle={connectionLineStyle}
             // 吸附开关与网格尺寸由设置中心驱动
             snapToGrid={snapToGrid}
