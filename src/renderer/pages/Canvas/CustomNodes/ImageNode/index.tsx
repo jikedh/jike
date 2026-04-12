@@ -254,11 +254,15 @@ export const ImageNode = memo(
             </div>
 
             {/* 节点内底部增强输入区：与节点同一几何空间，缩放时保持一致 */}
-            {shouldShowToolbar && (
-              <div className="nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2">
-                <ImagePromptPanel nodeId={id} />
-              </div>
-            )}
+            {/* 使用 CSS 控制显隐，避免条件渲染导致 DOM 销毁重建，TipTap editor 状态丢失 */}
+            <div
+              className={cn(
+                "nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2 transition-opacity duration-200",
+                shouldShowToolbar ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none",
+              )}
+            >
+              <ImagePromptPanel nodeId={id} />
+            </div>
           </div>
         </NodeContextMenu>
 

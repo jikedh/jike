@@ -96,11 +96,15 @@ export const VideoNode = memo(
           />
 
           {/* 顶部工具栏：放在节点几何空间内，缩放时自动保持一致 */}
-          {shouldShowToolbar && (
-            <div className="nodrag nopan nowheel absolute -top-12 left-1/2 z-50 -translate-x-1/2">
-              <VideoToolbar nodeId={id} data={data} onDelete={handleDelete} />
-            </div>
-          )}
+          {/* 使用 CSS 控制显隐，避免条件渲染导致 DOM 销毁重建 */}
+          <div
+            className={cn(
+              "nodrag nopan nowheel absolute -top-12 left-1/2 z-50 -translate-x-1/2 transition-opacity duration-200",
+              shouldShowToolbar ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none",
+            )}
+          >
+            <VideoToolbar nodeId={id} data={data} onDelete={handleDelete} />
+          </div>
 
           <div
             className={cn(
@@ -132,11 +136,15 @@ export const VideoNode = memo(
           </div>
 
           {/* 底部增强输入区：放在节点几何空间内，缩放时自动保持一致 */}
-          {shouldShowToolbar && (
-            <div className="nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2">
-              <VideoPromptPanel nodeId={id} />
-            </div>
-          )}
+          {/* 使用 CSS 控制显隐，避免条件渲染导致 DOM 销毁重建 */}
+          <div
+            className={cn(
+              "nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2 transition-opacity duration-200",
+              shouldShowToolbar ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none",
+            )}
+          >
+            <VideoPromptPanel nodeId={id} />
+          </div>
         </div>
       </NodeContextMenu>
     );
