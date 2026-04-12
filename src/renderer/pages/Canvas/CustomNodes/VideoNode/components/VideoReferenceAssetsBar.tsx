@@ -1,7 +1,7 @@
 import { IconUpload, IconX } from "@tabler/icons-react";
 import type { ChangeEvent, ReactNode, RefObject } from "react";
 import { useEffect, useState } from "react";
-import { getVideoThumbnail } from "shared/utils/utils";
+import { cn, getVideoThumbnail } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
 
