@@ -90,6 +90,8 @@ export type CanvasFlowStoreType = {
   history: CanvasPersistedState[];
   historyIndex: number;
   maxHistorySize: number;
+  // 选中的节点数量（用于避免 O(n²) 遍历计算）
+  selectedNodesCount: number;
 
   // ── 配对 setter ───────────────────────────────
   setNodes: (nodes: AllNodeType[]) => void;
@@ -115,6 +117,7 @@ export type CanvasFlowStoreType = {
   setClipboard: (clipboard: AllNodeType | null) => void;
   setHistory: (history: CanvasPersistedState[]) => void;
   setHistoryIndex: (index: number) => void;
+  setSelectedNodesCount: (count: number) => void;
 
   // ── 基础流程事件 ──────────────────────────────
   onNodesChange: (changes: NodeChange<AllNodeType>[]) => void;

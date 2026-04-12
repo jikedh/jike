@@ -981,6 +981,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     history: [],
     historyIndex: -1,
     maxHistorySize: 50,
+    // 选中节点数量初始化（用于避免 O(n²) 遍历）
+    selectedNodesCount: 0,
 
     // ── 配对 setter ───────────────────────────────
     setNodes: (nodes) => set({ nodes }),
@@ -995,6 +997,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     setClipboard: (clipboard) => set({ clipboard }),
     setHistory: (history) => set({ history }),
     setHistoryIndex: (historyIndex) => set({ historyIndex }),
+    setSelectedNodesCount: (count) => set({ selectedNodesCount: count }),
 
     // ==================== 持久化方法实现 ====================
 
@@ -2483,9 +2486,15 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      * 拖动过程中不会调用此方法，只有拖动结束或其他变更时才调用。
      */
     onNodesChange: (changes) => {
-      set((state) => ({
-        nodes: applyNodeChanges(changes, state.nodes),
-      }));
+      set((state) => {
+        const nextNodes = applyNodeChanges(changes, state.nodes);
+        // 计算选中节点数量，避免在 ImageNode 等组件中 O(n²) 遍历
+        const selectedCount = nextNodes.filter((n) => n.selected).length;
+        return {
+          nodes: nextNodes,
+          selectedNodesCount: selectedCount,
+        };
+      });
 
       // 在节点变化后保存历史记录（排除拖动中的变化）
       const hasPositionChange = changes.some(

@@ -1,8 +1,10 @@
-import { type NodeProps, NodeToolbar, Position, useStore } from "@xyflow/react";
+import { type NodeProps, NodeToolbar, Position } from "@xyflow/react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { GenerationStatus } from "shared/constants/enum";
 import type { PanoramaNodeType } from "shared/types/flow";
+import { uploadPanoramaScreenshot } from "shared/utils/panorama";
+import { cn } from "shared/utils/utils";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { ButtonHandle } from "@/components/button-handle";
@@ -10,8 +12,6 @@ import { useMessage } from "@/hooks/useMessage";
 import { useNodeScale } from "@/hooks/useNodeScale";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { uploadPanoramaScreenshot } from "shared/utils/panorama";
-import { cn } from "shared/utils/utils";
 
 export const PanoramaNode = memo(
   ({ id, data, selected, dragging }: NodeProps<PanoramaNodeType>) => {
@@ -39,13 +39,10 @@ export const PanoramaNode = memo(
 
     const [isFullscreen, setIsFullscreen] = useState(false);
 
-    const selectedNodesCount = useStore((state) => {
-      let count = 0;
-      for (const node of state.nodes) {
-        if (node.selected) count++;
-      }
-      return count;
-    });
+    // 从 store 直接读取选中节点数量，避免 O(n²) 遍历
+    const selectedNodesCount = useCanvasFlowStore(
+      (state) => state.selectedNodesCount,
+    );
 
     const handleVisibilityClass = useMemo(
       () =>

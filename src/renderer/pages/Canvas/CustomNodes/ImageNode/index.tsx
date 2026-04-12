@@ -1,20 +1,19 @@
-import { type NodeProps, Position, useStore } from "@xyflow/react";
+import { type NodeProps, Position } from "@xyflow/react";
 import { memo, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageNodeType } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
+import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
 import { ButtonHandle } from "@/components/button-handle";
 import { PanoramaViewer } from "@/components/panorama/PanoramaViewer";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-
 import { ImageContent } from "./ImageContent";
 import { ImagePromptPanel } from "./ImagePromptPanel";
 import { ImageToolbar } from "./ImageToolbar";
-import { cn } from "shared/utils/utils";
 
 /**
  * 图片节点组件
@@ -43,21 +42,16 @@ export const ImageNode = memo(
     const highlightedSourceNodeIds = useCanvasFlowStore(
       (state) => state.highlightedSourceNodeIds,
     );
+    // 从 store 直接读取选中节点数量，避免 O(n²) 遍历
+    const selectedNodesCount = useCanvasFlowStore(
+      (state) => state.selectedNodesCount,
+    );
 
     // 全景图查看器状态
     const panoramaViewer = useCanvasFlowStore((state) => state.panoramaViewer);
     const closePanoramaViewer = useCanvasFlowStore(
       (state) => state.closePanoramaViewer,
     );
-
-    // 使用 useStore 的 selector 精确订阅选中节点数量，避免订阅整个 nodes 数组
-    const selectedNodesCount = useStore((state) => {
-      let count = 0;
-      for (const node of state.nodes) {
-        if (node.selected) count++;
-      }
-      return count;
-    });
 
     // 使用 useMemo 缓存样式类名，避免每次渲染都重新拼接字符串
     const handleVisibilityClass = useMemo(
@@ -270,17 +264,17 @@ export const ImageNode = memo(
 
         {/* 全景图查看器 - 使用 Portal 渲染到 body，避免 React Flow 的 CSS 隔离影响 fixed 定位 */}
         {typeof document !== "undefined" &&
-        panoramaViewer.open &&
-        panoramaViewer.sourceNodeId === id
+          panoramaViewer.open &&
+          panoramaViewer.sourceNodeId === id
           ? createPortal(
-              <PanoramaViewer
-                open={panoramaViewer.open}
-                onClose={closePanoramaViewer}
-                initialImage={panoramaViewer.imageUrl ?? undefined}
-                sourceNodeId={panoramaViewer.sourceNodeId}
-              />,
-              document.body,
-            )
+            <PanoramaViewer
+              open={panoramaViewer.open}
+              onClose={closePanoramaViewer}
+              initialImage={panoramaViewer.imageUrl ?? undefined}
+              sourceNodeId={panoramaViewer.sourceNodeId}
+            />,
+            document.body,
+          )
           : null}
       </>
     );

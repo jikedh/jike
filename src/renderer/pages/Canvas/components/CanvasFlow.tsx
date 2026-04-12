@@ -295,18 +295,30 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
 
       const SNAP_DISTANCE = 120;
       const SNAP_OFFSET = 50;
+      // 预过滤距离：只检测 2 倍 SNAP_DISTANCE 范围内的节点，减少计算量
+      const PRE_FILTER_DISTANCE = SNAP_DISTANCE * 2;
       const draggedWidth = draggedNode.width || 175;
       const draggedHeight = draggedNode.height || 175;
       const draggedCenterX = draggedNodePosition.x + draggedWidth / 2;
       const draggedCenterY = draggedNodePosition.y + draggedHeight / 2;
 
+      // 预过滤：先找出在 PRE_FILTER_DISTANCE 范围内的节点，避免全量 O(n) 遍历
+      const nearbyNodes = allNodes.filter((targetNode) => {
+        if (targetNode.id === draggedNodeId) return false;
+        const targetWidth = targetNode.width || 175;
+        const targetHeight = targetNode.height || 175;
+        const targetCenterX = targetNode.position.x + targetWidth / 2;
+        const targetCenterY = targetNode.position.y + targetHeight / 2;
+        const dx = targetCenterX - draggedCenterX;
+        const dy = targetCenterY - draggedCenterY;
+        return Math.sqrt(dx * dx + dy * dy) <= PRE_FILTER_DISTANCE;
+      });
+
       let nearestNode: (typeof allNodes)[0] | null = null;
       let nearestDistance = Infinity;
       let snapPosition: { x: number; y: number } | null = null;
 
-      for (const targetNode of allNodes) {
-        if (targetNode.id === draggedNodeId) continue;
-
+      for (const targetNode of nearbyNodes) {
         const targetWidth = targetNode.width || 175;
         const targetHeight = targetNode.height || 175;
         const targetCenterX = targetNode.position.x + targetWidth / 2;
@@ -314,7 +326,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
 
         const distance = Math.sqrt(
           Math.pow(draggedCenterX - targetCenterX, 2) +
-            Math.pow(draggedCenterY - targetCenterY, 2),
+          Math.pow(draggedCenterY - targetCenterY, 2),
         );
 
         if (distance < SNAP_DISTANCE && distance < nearestDistance) {
@@ -1159,6 +1171,9 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                 zoomable
                 position="bottom-left"
                 style={{ left: "48px" }}
+                nodeStrokeWidth={0}
+                nodeColor="#B43FEB"
+                maskColor="rgba(0,0,0,0.5)"
               />
             ) : null}
           </ReactFlow>

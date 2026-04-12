@@ -1,14 +1,13 @@
-import { type NodeProps, Position, useStore } from "@xyflow/react";
+import { type NodeProps, Position } from "@xyflow/react";
 import { memo, useCallback, useMemo } from "react";
 import type { VideoNodeType } from "shared/types/flow";
+import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-
 import { VideoContent } from "./VideoContent";
 import { VideoPromptPanel } from "./VideoPromptPanel";
 import { VideoToolbar } from "./VideoToolbar";
-import { cn } from "shared/utils/utils";
 
 /**
  * 视频节点组件
@@ -29,15 +28,10 @@ export const VideoNode = memo(
     const highlightedSourceNodeIds = useCanvasFlowStore(
       (state) => state.highlightedSourceNodeIds,
     );
-
-    // 使用 useStore 的 selector 精确订阅选中节点数量
-    const selectedNodesCount = useStore((state) => {
-      let count = 0;
-      for (const node of state.nodes) {
-        if (node.selected) count++;
-      }
-      return count;
-    });
+    // 从 store 直接读取选中节点数量，避免 O(n²) 遍历
+    const selectedNodesCount = useCanvasFlowStore(
+      (state) => state.selectedNodesCount,
+    );
 
     // 使用 useMemo 缓存样式类名
     const handleVisibilityClass = useMemo(

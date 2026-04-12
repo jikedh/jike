@@ -1,4 +1,4 @@
-import { type NodeProps, NodeResizer, Position, useStore } from "@xyflow/react";
+import { type NodeProps, NodeResizer, Position } from "@xyflow/react";
 import { memo } from "react";
 import type { NoteNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
