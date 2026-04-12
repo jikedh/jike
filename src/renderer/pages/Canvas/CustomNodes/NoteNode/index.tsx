@@ -101,7 +101,7 @@ export const NoteNode = memo(
             </div>
 
             {/* 内容区域 - 可编辑 */}
-            <div className="flex h-full w-full overflow-hidden rounded-b-xl">
+            <div className="nowheel flex h-full w-full overflow-hidden rounded-b-xl">
               <NoteContent
                 content={data.content}
                 isEditing={Boolean(data.isEditing)}
