@@ -31,20 +31,15 @@ function setupAutoUpdater(): void {
 
   autoUpdater.autoDownload = true;
 
-  autoUpdater.on("checking-for-update", () => {
-  });
+  autoUpdater.on("checking-for-update", () => {});
 
-  autoUpdater.on("update-available", (info) => {
-  });
+  autoUpdater.on("update-available", (info) => {});
 
-  autoUpdater.on("update-not-available", () => {
-  });
+  autoUpdater.on("update-not-available", () => {});
 
-  autoUpdater.on("download-progress", (progress) => {
-  });
+  autoUpdater.on("download-progress", (progress) => {});
 
   autoUpdater.on("update-downloaded", async (info) => {
-
     if (!mainWindow) {
       autoUpdater.quitAndInstall();
       return;

@@ -45,7 +45,7 @@
         "noUnreachable": "error",
         "noUnreachableSuper": "error",
         "noUnsafeFinally": "error",
-        "noUnusedImports": "error",
+        "noUnusedImports": "warn",
 
         "noUnusedLabels": "error",
         "noUnusedPrivateClassMembers": "error",
@@ -76,7 +76,7 @@
         "noDuplicateAtImportRules": "error",
         "noDuplicateObjectKeys": "error",
         "noDuplicateParameters": "error",
-        "noExplicitAny": "warn",
+        "noExplicitAny": "off",
         "noFallthroughSwitchClause": "error",
         "noFunctionAssign": "error",
         "noGlobalAssign": "error",

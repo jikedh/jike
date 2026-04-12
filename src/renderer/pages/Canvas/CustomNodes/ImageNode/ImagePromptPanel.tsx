@@ -9,6 +9,7 @@ import { IMAGE_MODELS } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageGenerationNode, NoteNodeData } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
+import { cn } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -25,7 +26,6 @@ import { MidjourneyAdvancedPanel } from "./components/MidjourneyAdvancedPanel";
 import { MidjourneyParamsPanel } from "./components/MidjourneyParamsPanel";
 import { SeedreamParamsPanel } from "./components/SeedreamParamsPanel";
 import { COMMAND_MOCK, MENTION_MOCK } from "./mock";
-import { cn } from "shared/utils/utils";
 
 const ReferenceItemWrapper = ({
   children,
@@ -191,10 +191,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const disableBuiltInSuggestion = {
     items: () => [],
     render: () => ({
-      onStart: () => { },
-      onUpdate: () => { },
+      onStart: () => {},
+      onUpdate: () => {},
       onKeyDown: () => false,
-      onExit: () => { },
+      onExit: () => {},
     }),
   };
 

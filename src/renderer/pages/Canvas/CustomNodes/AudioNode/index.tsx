@@ -1009,7 +1009,7 @@ export const AudioNode = memo(
                 trimEnd={trimEnd}
                 onTrimStartChange={setTrimStart}
                 onTrimEndChange={setTrimEnd}
-                onPreviewTrim={() => { }}
+                onPreviewTrim={() => {}}
                 audioRef={audioRef}
               />
             </div>

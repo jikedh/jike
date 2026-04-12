@@ -1,16 +1,14 @@
-import { useNodes, ViewportPortal } from "@xyflow/react";
+import { type Node, useNodes, ViewportPortal } from "@xyflow/react";
 
 type NodeInfoProps = {
-  id: string;
-  type: string;
+  node: Node;
   x: number;
   y: number;
   width?: number;
   height?: number;
-  data: any;
 };
 
-function NodeInfo({ id, type, x, y, width, height, data }: NodeInfoProps) {
+function NodeInfo({ node, x, y, width, height }: NodeInfoProps) {
   if (!width || !height) {
     return null;
   }
@@ -21,18 +19,15 @@ function NodeInfo({ id, type, x, y, width, height, data }: NodeInfoProps) {
       style={{
         position: "absolute",
         transform: `translate(${x}px, ${y + height}px)`,
-        width: width * 2,
       }}
     >
-      <div>id: {id}</div>
-      <div>type: {type}</div>
-      <div>
-        position: {x.toFixed(1)}, {y.toFixed(1)}
+      <div className="node-info-header">
+        <span className="node-info-id">{node.id}</span>
+        <span className="node-info-type">{node.type || "default"}</span>
       </div>
-      <div>
-        dimensions: {width} × {height}
+      <div className="node-info-content">
+        <pre>{JSON.stringify(node, null, 2)}</pre>
       </div>
-      <div>data: {JSON.stringify(data, null, 2)}</div>
     </div>
   );
 }
@@ -52,13 +47,11 @@ export default function NodeInspector() {
           return (
             <NodeInfo
               key={node.id}
-              id={node.id}
-              type={node.type || "default"}
+              node={node}
               x={x}
               y={y}
               width={width}
               height={height}
-              data={node.data}
             />
           );
         })}

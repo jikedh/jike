@@ -94,9 +94,9 @@ export const useTextAgentGenerate = ({
       const currentNode = nodes.find((n) => n.id === id);
       const nextPosition = currentNode
         ? {
-          x: currentNode.position.x + 400,
-          y: currentNode.position.y,
-        }
+            x: currentNode.position.x + 400,
+            y: currentNode.position.y,
+          }
         : undefined;
 
       if (presetId === "novel-character-design") {

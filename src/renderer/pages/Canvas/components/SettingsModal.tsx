@@ -196,7 +196,7 @@ export const SettingsModal = ({
 
     return (
       sectionPlaceholderMap[
-      activeSection as keyof typeof sectionPlaceholderMap
+        activeSection as keyof typeof sectionPlaceholderMap
       ] ?? []
     );
   }, [activeSection]);

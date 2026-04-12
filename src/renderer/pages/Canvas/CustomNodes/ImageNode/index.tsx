@@ -270,17 +270,17 @@ export const ImageNode = memo(
 
         {/* 全景图查看器 - 使用 Portal 渲染到 body，避免 React Flow 的 CSS 隔离影响 fixed 定位 */}
         {typeof document !== "undefined" &&
-          panoramaViewer.open &&
-          panoramaViewer.sourceNodeId === id
+        panoramaViewer.open &&
+        panoramaViewer.sourceNodeId === id
           ? createPortal(
-            <PanoramaViewer
-              open={panoramaViewer.open}
-              onClose={closePanoramaViewer}
-              initialImage={panoramaViewer.imageUrl ?? undefined}
-              sourceNodeId={panoramaViewer.sourceNodeId}
-            />,
-            document.body,
-          )
+              <PanoramaViewer
+                open={panoramaViewer.open}
+                onClose={closePanoramaViewer}
+                initialImage={panoramaViewer.imageUrl ?? undefined}
+                sourceNodeId={panoramaViewer.sourceNodeId}
+              />,
+              document.body,
+            )
           : null}
       </>
     );
