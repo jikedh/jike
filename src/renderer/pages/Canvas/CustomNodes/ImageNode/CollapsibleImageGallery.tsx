@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState, useCallback, useRef } from "react";
 import { IconRefresh } from "@tabler/icons-react";
 import { ImageTile } from "./ImageTile";
 import { getMediaUrl } from "service/projectStorage";
@@ -26,7 +26,7 @@ type CollapsibleImageGalleryProps = {
  * - 优先使用本地路径，如果不存在则使用远程 URL
  * - 刷新按钮：重新上传图片到 OSS
  */
-export const CollapsibleImageGallery = ({
+export const CollapsibleImageGallery = memo(({
   images,
   onReorder,
   nodeId,
@@ -34,23 +34,27 @@ export const CollapsibleImageGallery = ({
 }: CollapsibleImageGalleryProps) => {
   // 默认折叠，仅展示封面
   const [isExpanded, setIsExpanded] = useState(false);
-  // 记录加载失败索引，统一渲染占位
-  const [brokenImageIndexes, setBrokenImageIndexes] = useState<number[]>([]);
+  // 记录加载失败索引，统一渲染占位（使用 ref 避免频繁 setState）
+  const brokenIndexesRef = useRef<Set<number>>(new Set());
+  const [, forceUpdate] = useState(0);
   // 记录正在刷新的图片索引
-  const [refreshingIndexes, setRefreshingIndexes] = useState<number[]>([]);
+  const refreshingIndexesRef = useRef<Set<number>>(new Set());
+  const [, forceRefreshUpdate] = useState(0);
 
   const totalCount = images.length;
 
-  // 优先使用本地路径，否则使用远程 URL
-  const getDisplayUrl = (item: ImageItem): string => {
-    if (item.relativePath) {
-      const localUrl = getMediaUrl(item.relativePath);
-      if (localUrl) return localUrl;
-    }
-    return item.url ?? "";
-  };
+  // 优先使用本地路径，否则使用远程 URL - 用 useMemo 缓存
+  const displayUrls = useMemo(() => {
+    return images.map((item) => {
+      if (item.relativePath) {
+        const localUrl = getMediaUrl(item.relativePath);
+        if (localUrl) return localUrl;
+      }
+      return item.url ?? "";
+    });
+  }, [images]);
 
-  const coverImage = getDisplayUrl(images[0] ?? {});
+  const coverImage = displayUrls[0] ?? "";
   const badgeText = `${totalCount}张`;
 
   // 当前设计要求：1/2/3/4/5+ 都使用 2 列（1 张时为单列）
@@ -63,93 +67,112 @@ export const CollapsibleImageGallery = ({
   const expandedGridGapClass = totalCount > 4 ? "gap-0.5" : "gap-1";
 
   // 切换折叠/展开
-  const handleToggleExpanded = (e: any) => {
+  const handleToggleExpanded = useCallback((e: any) => {
     e.stopPropagation();
     setIsExpanded((prev) => !prev);
-  };
+  }, []);
 
-  const handleImageError = (index: number) => {
-    setBrokenImageIndexes((prev) =>
-      prev.includes(index) ? prev : [...prev, index],
-    );
-  };
+  const handleImageError = useCallback((index: number) => {
+    // 使用 ref + forceUpdate 代替 setState，避免频繁重渲染
+    if (!brokenIndexesRef.current.has(index)) {
+      brokenIndexesRef.current.add(index);
+      forceUpdate((n) => n + 1);
+    }
+  }, []);
+
+  const isBroken = useCallback((index: number) => {
+    return brokenIndexesRef.current.has(index);
+  }, []);
+
+  const isRefreshing = useCallback((index: number) => {
+    return refreshingIndexesRef.current.has(index);
+  }, []);
 
   // 刷新图片：重新上传到 OSS
-  const handleRefreshImage = async (e: React.MouseEvent, index: number) => {
-    e.stopPropagation();
+  const handleRefreshImage = useCallback(
+    async (e: React.MouseEvent, index: number) => {
+      e.stopPropagation();
 
-    if (!nodeId || !updateImageNodeData || !images[index]?.relativePath) {
-      return;
-    }
-
-    const item = images[index];
-    if (!item.relativePath || !item.localFileName) {
-      return;
-    }
-
-    setRefreshingIndexes((prev) => [...prev, index]);
-
-    try {
-      // 读取本地文件
-      const absolutePath = getMediaUrl(item.relativePath);
-      if (!absolutePath || !window.storage) {
-        throw new Error("无法获取本地文件路径");
+      if (!nodeId || !updateImageNodeData || !images[index]?.relativePath) {
+        return;
       }
 
-      const readResult = await window.storage.readFile(absolutePath);
-      if (!readResult.success || !readResult.data) {
-        throw new Error("读取本地文件失败");
+      const item = images[index];
+      if (!item.relativePath || !item.localFileName) {
+        return;
       }
 
-      // 创建 File 对象
-      const ext = item.localFileName.split(".").pop() || "png";
-      const fileBytes = new Uint8Array(readResult.data);
-      let file = new File([fileBytes], item.localFileName, {
-        type: `image/${ext}`,
-      });
+      // 使用 ref 追踪刷新状态，避免频繁 setState
+      refreshingIndexesRef.current.add(index);
+      forceRefreshUpdate((n) => n + 1);
 
-      // 检查文件大小，大于10MB时压缩
-      if (file.size > MAX_IMAGE_SIZE_MB) {
-        file = await compressImage(file);
+      try {
+        // 读取本地文件
+        const absolutePath = getMediaUrl(item.relativePath);
+        if (!absolutePath || !window.storage) {
+          throw new Error("无法获取本地文件路径");
+        }
+
+        const readResult = await window.storage.readFile(absolutePath);
+        if (!readResult.success || !readResult.data) {
+          throw new Error("读取本地文件失败");
+        }
+
+        // 创建 File 对象
+        const ext = item.localFileName.split(".").pop() || "png";
+        const fileBytes = new Uint8Array(readResult.data);
+        let file = new File([fileBytes], item.localFileName, {
+          type: `image/${ext}`,
+        });
+
+        // 检查文件大小，大于10MB时压缩
+        if (file.size > MAX_IMAGE_SIZE_MB) {
+          file = await compressImage(file);
+        }
+
+        // 上传到 OSS
+        const ossResult = await uploadFileToOSS(file);
+        if (!ossResult.url) {
+          throw new Error("上传到 OSS 失败");
+        }
+
+        // 更新节点数据
+        const newImages = [...images];
+        newImages[index] = {
+          ...newImages[index],
+          url: ossResult.url,
+        };
+
+        updateImageNodeData(nodeId, {
+          result: {
+            type: "image",
+            data: newImages,
+          },
+        });
+
+        // 移除加载失败标记
+        brokenIndexesRef.current.delete(index);
+      } catch (error) {
+        console.error("[刷新图片] 刷新失败:", error);
+      } finally {
+        refreshingIndexesRef.current.delete(index);
+        forceRefreshUpdate((n) => n + 1);
       }
+    },
+    [images, nodeId, updateImageNodeData],
+  );
 
-      // 上传到 OSS
-      const ossResult = await uploadFileToOSS(file);
-      if (!ossResult.url) {
-        throw new Error("上传到 OSS 失败");
+  const handleImageClick = useCallback(
+    (e: any, index: number) => {
+      e.stopPropagation();
+      if (index === 0) return;
+      if (onReorder) {
+        onReorder(index);
       }
-
-      // 更新节点数据
-      const newImages = [...images];
-      newImages[index] = {
-        ...newImages[index],
-        url: ossResult.url,
-      };
-
-      updateImageNodeData(nodeId, {
-        result: {
-          type: "image",
-          data: newImages,
-        },
-      });
-
-      // 移除加载失败标记
-      setBrokenImageIndexes((prev) => prev.filter((i) => i !== index));
-    } catch (error) {
-      console.error("[刷新图片] 刷新失败:", error);
-    } finally {
-      setRefreshingIndexes((prev) => prev.filter((i) => i !== index));
-    }
-  };
-
-  const handleImageClick = (e: any, index: number) => {
-    e.stopPropagation();
-    if (index === 0) return;
-    if (onReorder) {
-      onReorder(index);
-    }
-    setIsExpanded(false);
-  };
+      setIsExpanded(false);
+    },
+    [onReorder],
+  );
 
   return (
     <div
@@ -176,29 +199,28 @@ export const CollapsibleImageGallery = ({
           <button
             type="button"
             onClick={(e) => handleRefreshImage(e, 0)}
-            disabled={refreshingIndexes.includes(0)}
+            disabled={isRefreshing(0)}
             className="absolute left-2 top-2 z-20 cursor-pointer rounded-lg bg-black/60 p-2 text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 disabled:opacity-50 disabled:cursor-not-allowed opacity-0 group-hover:opacity-100"
             aria-label="刷新图片"
           >
             <IconRefresh
               size={14}
-              className={refreshingIndexes.includes(0) ? "animate-spin" : ""}
+              className={isRefreshing(0) ? "animate-spin" : ""}
             />
           </button>
         )}
 
         {/* 折叠态：仅显示首图封面 */}
         <div
-          className={`absolute inset-0 transition-all duration-200 ease-out ${
-            isExpanded
+          className={`absolute inset-0 transition-all duration-200 ease-out ${isExpanded
               ? "pointer-events-none translate-y-1 scale-[0.98] opacity-0"
               : "translate-y-0 scale-100 opacity-100"
-          }`}
+            }`}
         >
           <ImageTile
             url={coverImage}
             index={0}
-            isBroken={brokenImageIndexes.includes(0)}
+            isBroken={isBroken(0)}
             onError={handleImageError}
             className="rounded-lg"
           />
@@ -207,11 +229,10 @@ export const CollapsibleImageGallery = ({
 
         {/* 展开态：2 列网格展示全部图片 */}
         <div
-          className={`absolute inset-0 transition-all duration-200 ease-out ${
-            isExpanded
+          className={`absolute inset-0 transition-all duration-200 ease-out ${isExpanded
               ? "translate-y-0 scale-100 opacity-100"
               : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0"
-          }`}
+            }`}
         >
           <div
             className={`h-full w-full ${totalCount > 4 ? "overflow-y-auto pr-0.5" : ""}`}
@@ -225,9 +246,9 @@ export const CollapsibleImageGallery = ({
                   className={`relative ${totalCount === 1 ? "min-h-0" : "min-h-13"} group/tile`}
                 >
                   <ImageTile
-                    url={getDisplayUrl(item)}
+                    url={displayUrls[index]}
                     index={index}
-                    isBroken={brokenImageIndexes.includes(index)}
+                    isBroken={isBroken(index)}
                     onError={handleImageError}
                     onClick={(e) => handleImageClick(e, index)}
                     className="rounded-md"
@@ -237,17 +258,13 @@ export const CollapsibleImageGallery = ({
                     <button
                       type="button"
                       onClick={(e) => handleRefreshImage(e, index)}
-                      disabled={refreshingIndexes.includes(index)}
+                      disabled={isRefreshing(index)}
                       className="absolute left-1 top-1 z-10 cursor-pointer rounded bg-black/60 p-1 text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 disabled:opacity-50 disabled:cursor-not-allowed opacity-0 group-hover/tile:opacity-100"
                       aria-label="刷新图片"
                     >
                       <IconRefresh
                         size={12}
-                        className={
-                          refreshingIndexes.includes(index)
-                            ? "animate-spin"
-                            : ""
-                        }
+                        className={isRefreshing(index) ? "animate-spin" : ""}
                       />
                     </button>
                   )}
@@ -259,4 +276,6 @@ export const CollapsibleImageGallery = ({
       </div>
     </div>
   );
-};
+});
+
+CollapsibleImageGallery.displayName = "CollapsibleImageGallery";

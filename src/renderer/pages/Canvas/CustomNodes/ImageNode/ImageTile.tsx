@@ -5,6 +5,8 @@ type ImageTileProps = {
   onError: (index: number) => void;
   onClick?: (e: React.MouseEvent) => void;
   className?: string;
+  /** 预设宽高比，用于在图片加载前预留空间，减少 CLS */
+  aspectRatio?: number;
 };
 
 export const ImageTile = ({
@@ -14,6 +16,7 @@ export const ImageTile = ({
   onError,
   onClick,
   className,
+  aspectRatio,
 }: ImageTileProps) => {
   if (isBroken) {
     return (
@@ -27,15 +30,22 @@ export const ImageTile = ({
     );
   }
 
+  // 使用 aspect-ratio CSS 属性预留空间，消除 Layout Shift
+  const containerStyle: React.CSSProperties = {
+    aspectRatio: aspectRatio ? String(aspectRatio) : undefined,
+  };
+
   return (
-    <img
-      src={url}
-      alt={`生成图片-${index + 1}`}
-      className={`h-full w-full object-cover ${className ?? ""}`}
-      loading="lazy"
-      onError={() => onError(index)}
-      onClick={onClick}
-      style={{ cursor: onClick ? "pointer" : undefined }}
-    />
+    <div className="h-full w-full overflow-hidden" style={containerStyle}>
+      <img
+        src={url}
+        alt={`生成图片-${index + 1}`}
+        className={`h-full w-full object-cover ${className ?? ""}`}
+        loading="lazy"
+        onError={() => onError(index)}
+        onClick={onClick}
+        style={{ cursor: onClick ? "pointer" : undefined }}
+      />
+    </div>
   );
 };

@@ -1,21 +1,32 @@
+import { lazy, Suspense } from "react";
 import {
   createHashRouter,
   RouterProvider,
   Outlet,
   Navigate,
 } from "react-router-dom";
-import CanvasPage from "@/pages/Canvas";
-import HomePage from "@/pages/Home";
-import TestPage from "@/pages/Test";
-import PanoramaDemo from "@/pages/Test/PanoramaDemo";
-import CanvasPlaceholderPage from "@/pages/CanvasPlaceholder";
-import ScriptPage from "@/pages/Script";
-import AssetsPage from "@/pages/Assets";
-import VoicePage from "@/pages/Voice";
-import VideoPage from "@/pages/Video";
-import SettingsPage from "@/pages/Settings";
-import LoginPage from "@/pages/Login";
 import { SidebarCeBianLan } from "@/pages/Sidebar/SidebarCeBianLan";
+
+// 懒加载页面组件 - 按需加载，减少首屏加载量
+const HomePage = lazy(() => import("@/pages/Home"));
+const TestPage = lazy(() => import("@/pages/Test"));
+const PanoramaDemo = lazy(() => import("@/pages/Test/PanoramaDemo"));
+const CanvasPlaceholderPage = lazy(() => import("@/pages/CanvasPlaceholder"));
+const ScriptPage = lazy(() => import("@/pages/Script"));
+const AssetsPage = lazy(() => import("@/pages/Assets"));
+const VoicePage = lazy(() => import("@/pages/Voice"));
+const VideoPage = lazy(() => import("@/pages/Video"));
+const SettingsPage = lazy(() => import("@/pages/Settings"));
+const LoginPage = lazy(() => import("@/pages/Login"));
+// Canvas 是重型页面，独立懒加载
+const CanvasPage = lazy(() => import("@/pages/Canvas"));
+
+// 页面加载中 fallback
+const PageLoader = () => (
+  <div className="flex items-center justify-center h-full">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+  </div>
+);
 
 // 带侧边栏的布局组件
 const SidebarLayout = () => {
@@ -23,8 +34,9 @@ const SidebarLayout = () => {
     <div className="flex h-screen">
       <SidebarCeBianLan />
       <div className="flex-1 overflow-auto">
-        {/* React Router 提供的动态插槽 */}
-        <Outlet />
+        <Suspense fallback={<PageLoader />}>
+          <Outlet />
+        </Suspense>
       </div>
     </div>
   );
@@ -82,7 +94,11 @@ const router = createHashRouter([
   },
   {
     path: "/canvas/:projectId",
-    element: <CanvasPage />,
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <CanvasPage />
+      </Suspense>
+    ),
   },
 ]);
 
