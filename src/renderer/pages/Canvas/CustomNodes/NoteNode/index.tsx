@@ -72,7 +72,7 @@ export const NoteNode = memo(
               height,
             }}
             className={cn(
-              "group/card relative flex h-full w-full flex-col rounded-xl border bg-gradient-to-br from-[#141418] to-[#0d0d10] transition-all duration-300 ease-out",
+              "group/card relative flex h-full w-full flex-col rounded-xl border bg-gradient-to-br ",
               selected
                 ? "shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-2 ring-[#B43FEB]/50"
                 : "border-white/[0.06] hover:border-white/[0.12] hover:bg-gradient-to-br hover:from-[#18181c] hover:to-[#101014]",

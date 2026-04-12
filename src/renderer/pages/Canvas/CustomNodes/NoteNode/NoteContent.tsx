@@ -24,7 +24,7 @@ export const NoteContent = ({
         defaultValue={content}
         maxLength={2500}
         onDoubleClick={(e) => e.stopPropagation()}
-        className="note-scrollbar nowheel noflow nopan h-full w-full resize-none rounded-b-xl border-0 bg-[#1f1f1f] p-3 text-sm text-white outline-none ring-0 placeholder:text-white/70 nodrag"
+        className="note-scrollbar noflow nopan h-full w-full resize-none rounded-b-xl border-0 bg-[#1f1f1f] p-3 text-sm text-white outline-none ring-0 placeholder:text-white/70 nodrag"
         onBlur={(event) => {
           onContentBlur(event.target.value);
           onStopEdit();
@@ -36,14 +36,22 @@ export const NoteContent = ({
 
   return (
     <div
-      className={`note-scrollbar nowheel noflow nopan h-full w-full rounded-b-xl bg-[#1f1f1f] p-3 text-sm text-white/90 cursor-text ${
+      className={`note-scrollbar noflow nopan h-full w-full rounded-b-xl bg-[#1f1f1f] p-3 text-sm text-white/90 cursor-text ${
         isSelected ? 'overflow-auto' : 'overflow-hidden'
       }`}
       onClick={(e) => {
+        // 当按下 Ctrl/Meta 键时，不触发编辑模式，让事件传播
+        if (e.ctrlKey || e.metaKey) {
+          return;
+        }
         e.stopPropagation();
         onStartEdit();
       }}
       onDoubleClick={(e) => {
+        // 当按下 Ctrl/Meta 键时，不触发编辑模式，让事件传播
+        if (e.ctrlKey || e.metaKey) {
+          return;
+        }
         e.stopPropagation();
         onStartEdit();
       }}

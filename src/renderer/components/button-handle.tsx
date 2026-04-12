@@ -46,22 +46,28 @@ export function ButtonHandle({
 
     const rect = area.getBoundingClientRect();
     const halfButton = buttonSize / 2;
-    const scaleX = rect.width > 0 ? rect.width / followAreaSize : 1;
-    const scaleY = rect.height > 0 ? rect.height / followAreaSize : 1;
+    
+    // 使用实际的区域尺寸而不是固定的 followAreaSize
+    const actualWidth = rect.width;
+    const actualHeight = rect.height;
 
     const centerX = clamp(
-      (pointer.x - rect.left) / scaleX,
+      pointer.x - rect.left,
       halfButton,
-      followAreaSize - halfButton,
+      actualWidth - halfButton,
     );
     const centerY = clamp(
-      (pointer.y - rect.top) / scaleY,
+      pointer.y - rect.top,
       halfButton,
-      followAreaSize - halfButton,
+      actualHeight - halfButton,
     );
 
-    area.style.setProperty("--btn-x", `${Math.round(centerX)}px`);
-    area.style.setProperty("--btn-y", `${Math.round(centerY)}px`);
+    // 使用百分比定位，这样可以随节点缩放而调整
+    const centerXPercent = (centerX / actualWidth) * 100;
+    const centerYPercent = (centerY / actualHeight) * 100;
+
+    area.style.setProperty("--btn-x", `${centerXPercent}%`);
+    area.style.setProperty("--btn-y", `${centerYPercent}%`);
   };
 
   const handlePointerMove = (event: any) => {
@@ -108,6 +114,7 @@ export function ButtonHandle({
             ref={followAreaRef}
             className="relative nodrag nopan pointer-events-auto rounded-md bg-transparent"
             style={{
+              // 根据位置设置不同的尺寸
               width: followAreaSize,
               height: followAreaSize,
             }}
