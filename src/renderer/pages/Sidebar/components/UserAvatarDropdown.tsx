@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { LogOut, User, Gift, Zap } from "lucide-react";
+import { LogOut, User, Gift, Zap, Coins } from "lucide-react";
 import { clearJikeingToken, getJikeingToken } from "shared/utils/utils";
 import {
   DropdownMenu,
