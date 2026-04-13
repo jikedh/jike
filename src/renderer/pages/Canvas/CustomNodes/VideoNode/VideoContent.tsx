@@ -1,14 +1,17 @@
 import { GenerationStatus } from "shared/constants/enum";
 import type { VideoGenerationNode } from "shared/types/flow";
-import { getPrimaryVideoUrlFromNodeData } from "./utils/video-url";
+import { CollapsibleVideoGallery } from "./CollapsibleVideoGallery";
 
 type VideoContentProps = {
   data: VideoGenerationNode;
   onRetry?: () => void;
+  nodeId?: string;
+  updateVideoNodeData?: (nodeId: string, patch: any) => void;
 };
 
-export const VideoContent = ({ data, onRetry }: VideoContentProps) => {
-  const videoUrl = getPrimaryVideoUrlFromNodeData(data);
+export const VideoContent = ({ data, onRetry, nodeId, updateVideoNodeData }: VideoContentProps) => {
+  // 结果视频列表（支持多个），保留原始对象结构用于排序
+  const videos = data.result?.data?.filter((item) => item?.url) ?? [];
   const status = data.status ?? GenerationStatus.COMPLETED;
   const progress = data.progress ?? 0;
   const error = data.error;
@@ -16,7 +19,7 @@ export const VideoContent = ({ data, onRetry }: VideoContentProps) => {
   // 判断是否应该显示失败状态：
   // 1. 状态明确为 failed（API 返回失败）
   // 2. 有错误信息且不是进行中/排队状态
-  // 注意：新创建的节点默认 status 是 COMPLETED，但没有 videoUrl 时应该显示"暂无视频"而非失败
+  // 注意：新创建的节点默认 status 是 COMPLETED，但没有 videos 时应该显示"暂无视频"而非失败
   const hasError = Boolean(
     error?.message || error?.detail || error?.serverMessage,
   );
@@ -70,20 +73,18 @@ export const VideoContent = ({ data, onRetry }: VideoContentProps) => {
     );
   }
 
-  if (videoUrl) {
+  // 已完成状态
+  if (videos.length > 0) {
     return (
-      <div className="nopan nowheel h-full w-full relative group/video">
-        <video
-          src={videoUrl}
-          controls
-          className="block h-full w-full object-cover object-center"
-        >
-          你的浏览器不支持视频播放
-        </video>
-      </div>
+      <CollapsibleVideoGallery
+        videos={videos}
+        nodeId={nodeId}
+        updateVideoNodeData={updateVideoNodeData}
+      />
     );
   }
 
+  // 空状态
   return (
     <div className="nopan h-full w-full flex items-center justify-center p-4 text-center text-muted-foreground text-sm bg-muted/10">
       暂无视频
