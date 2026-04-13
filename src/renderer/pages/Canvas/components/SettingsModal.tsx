@@ -141,7 +141,21 @@ export const SettingsModal = ({
     enabled: true,
   });
 
+  // 确认对话框状态
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [confirmDialogAction, setConfirmDialogAction] = useState<'add' | 'delete' | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
   const handleAddPreset = () => {
+    if (!formData.name.trim()) {
+      error('请输入预设名称');
+      return;
+    }
+    setConfirmDialogAction('add');
+    setConfirmDialogOpen(true);
+  };
+
+  const confirmAddPreset = () => {
     const newPreset = {
       ...formData,
       id: Math.random().toString(36).substr(2, 9),
@@ -149,17 +163,37 @@ export const SettingsModal = ({
     setPresets([newPreset, ...presets]);
     setIsAdding(false);
     resetPresetForm();
+    setConfirmDialogOpen(false);
+    setConfirmDialogAction(null);
+    success('预设创建成功');
   };
 
   const handleUpdatePreset = () => {
     if (!editingId) return;
+    if (!formData.name.trim()) {
+      error('请输入预设名称');
+      return;
+    }
     setPresets(presets.map(p => p.id === editingId ? { ...formData, id: editingId } : p));
     setEditingId(null);
     resetPresetForm();
+    success('预设更新成功');
   };
 
   const handleDeletePreset = (id: string) => {
-    setPresets(presets.filter(p => p.id !== id));
+    setPendingDeleteId(id);
+    setConfirmDialogAction('delete');
+    setConfirmDialogOpen(true);
+  };
+
+  const confirmDeletePreset = () => {
+    if (pendingDeleteId) {
+      setPresets(presets.filter(p => p.id !== pendingDeleteId));
+      success('预设删除成功');
+    }
+    setConfirmDialogOpen(false);
+    setConfirmDialogAction(null);
+    setPendingDeleteId(null);
   };
 
   const togglePresetEnabled = (id: string) => {
@@ -486,7 +520,7 @@ export const SettingsModal = ({
                                   value={formData.name}
                                   onChange={e => setFormData({ ...formData, name: e.target.value })}
                                   placeholder="例如：赛博朋克风格"
-                                  className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:border-[#B43FEB] focus:outline-none"
+                                  className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#B43FEB] focus:outline-none"
                                 />
                               </div>
                               <div>
@@ -515,7 +549,7 @@ export const SettingsModal = ({
                                   onChange={e => setFormData({ ...formData, content: e.target.value })}
                                   placeholder="输入您的提示词内容..."
                                   rows={3}
-                                  className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:border-[#B43FEB] focus:outline-none resize-none"
+                                  className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#B43FEB] focus:outline-none resize-none"
                                 />
                               </div>
                               <div className="flex justify-end gap-2">
@@ -852,6 +886,34 @@ export const SettingsModal = ({
             </Button>
             <Button size="sm" variant="blue" onClick={handleConfirmImport}>
               确认导入
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 预设提示词库确认对话框 */}
+      <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+        <DialogContent className="bg-[#0a0a0f] border-white/10 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">
+              {confirmDialogAction === 'add' ? '确认创建预设' : '确认删除预设'}
+            </DialogTitle>
+            <DialogDescription className="text-white/70">
+              {confirmDialogAction === 'add'
+                ? `确定要创建预设"${formData.name}"吗？`
+                : '确定要删除这个预设吗？此操作不可撤销。'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button size="sm" className="border-white/20 text-white/80 hover:bg-white/10 hover:text-white" onClick={() => setConfirmDialogOpen(false)}>
+              取消
+            </Button>
+            <Button
+              size="sm"
+              variant="blue"
+              onClick={confirmDialogAction === 'add' ? confirmAddPreset : confirmDeletePreset}
+            >
+              确认
             </Button>
           </DialogFooter>
         </DialogContent>
