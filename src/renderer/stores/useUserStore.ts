@@ -1,4 +1,5 @@
 import type { UserStoreType } from "shared/types/zustand/user";
+import type { UserScoreVO } from "shared/types/jikeing";
 import {
   clearJikeingToken,
   clearJikeingUserId,
@@ -6,16 +7,18 @@ import {
 } from "shared/utils/utils";
 import { create } from "zustand";
 import { getUserInfo } from "@/api/ai";
+import { getBalanceInfo } from "@/api/jikeing";
 
 const initialState: Pick<
   UserStoreType,
-  "loginStatus" | "userInfo" | "vipLevel" | "isLoading" | "dialogLoginStatus"
+  "loginStatus" | "userInfo" | "vipLevel" | "isLoading" | "dialogLoginStatus" | "balanceInfo"
 > = {
   loginStatus: 0,
   userInfo: null,
   vipLevel: 0,
   isLoading: false,
   dialogLoginStatus: false,
+  balanceInfo: null,
 };
 
 export const useUserStore = create<UserStoreType>((set, get) => ({
@@ -79,6 +82,24 @@ export const useUserStore = create<UserStoreType>((set, get) => ({
     }
   },
 
+  fetchBalanceInfo: async () => {
+    const token = getJikeingToken();
+    if (!token) return;
+
+    try {
+      const res = await getBalanceInfo();
+      if ((res.code === 10000 || res.code === 200) && res.data) {
+        console.log("[fetchBalanceInfo] 获取积分信息成功:", res.data);
+        set({ balanceInfo: res.data as UserScoreVO });
+      }
+    } catch (error) {
+      console.error("[fetchBalanceInfo] 获取积分信息异常:", error);
+      set({ balanceInfo: null });
+    }
+  },
+
+  setBalanceInfo: (info) => set({ balanceInfo: info }),
+
   logout: async () => {
     clearJikeingToken();
     clearJikeingUserId();
@@ -87,6 +108,7 @@ export const useUserStore = create<UserStoreType>((set, get) => ({
       userInfo: null,
       vipLevel: 0,
       dialogLoginStatus: false,
+      balanceInfo: null,
     });
   },
 

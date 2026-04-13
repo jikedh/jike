@@ -69,7 +69,6 @@
   margin: 0 2px;
   white-space: nowrap;
   user-select: none;
-  transition: all 0.15s ease;
 }
 
 .video-node-mention-pill:hover {

@@ -14,7 +14,7 @@ export function BaseHandle({
     <Handle
       {...props}
       className={cn(
-        "h-2.75 w-2.75 rounded-full border-0 bg-transparent shadow-none transition",
+        "h-2.75 w-2.75 rounded-full border-0 bg-transparent shadow-none",
         className,
       )}
       style={{

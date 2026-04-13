@@ -92,7 +92,6 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
   );
   const pasteNode = useCanvasFlowStore((state) => state.pasteNode);
   const canPaste = useCanvasFlowStore((state) => state.canPaste);
-  const setMousePosition = useCanvasFlowStore((state) => state.setMousePosition);
 
   // 处理键盘快捷键
   const handleKeyDown = useCallback(
@@ -287,101 +286,6 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     return unsubscribe;
   }, []);
 
-  // 检测节点靠近并自动连接
-  const checkAutoConnect = useCallback(
-    (draggedNodeId: string, draggedNodePosition: { x: number; y: number }) => {
-      const allNodes = useCanvasFlowStore.getState().nodes;
-      const draggedNode = allNodes.find((n) => n.id === draggedNodeId);
-      if (!draggedNode) return;
-
-      const SNAP_DISTANCE = 120;
-      const SNAP_OFFSET = 50;
-      // 预过滤距离：只检测 2 倍 SNAP_DISTANCE 范围内的节点，减少计算量
-      const PRE_FILTER_DISTANCE = SNAP_DISTANCE * 2;
-      const draggedWidth = draggedNode.width || 175;
-      const draggedHeight = draggedNode.height || 175;
-      const draggedCenterX = draggedNodePosition.x + draggedWidth / 2;
-      const draggedCenterY = draggedNodePosition.y + draggedHeight / 2;
-
-      // 预过滤：先找出在 PRE_FILTER_DISTANCE 范围内的节点，避免全量 O(n) 遍历
-      const nearbyNodes = allNodes.filter((targetNode) => {
-        if (targetNode.id === draggedNodeId) return false;
-        const targetWidth = targetNode.width || 175;
-        const targetHeight = targetNode.height || 175;
-        const targetCenterX = targetNode.position.x + targetWidth / 2;
-        const targetCenterY = targetNode.position.y + targetHeight / 2;
-        const dx = targetCenterX - draggedCenterX;
-        const dy = targetCenterY - draggedCenterY;
-        return Math.sqrt(dx * dx + dy * dy) <= PRE_FILTER_DISTANCE;
-      });
-
-      let nearestNode: (typeof allNodes)[0] | null = null;
-      let nearestDistance = Infinity;
-      let snapPosition: { x: number; y: number } | null = null;
-
-      for (const targetNode of nearbyNodes) {
-        const targetWidth = targetNode.width || 175;
-        const targetHeight = targetNode.height || 175;
-        const targetCenterX = targetNode.position.x + targetWidth / 2;
-        const targetCenterY = targetNode.position.y + targetHeight / 2;
-
-        const distance = Math.sqrt(
-          Math.pow(draggedCenterX - targetCenterX, 2) +
-          Math.pow(draggedCenterY - targetCenterY, 2),
-        );
-
-        if (distance < SNAP_DISTANCE && distance < nearestDistance) {
-          nearestDistance = distance;
-          nearestNode = targetNode;
-
-          const isLeft = draggedCenterX < targetCenterX;
-
-          if (isLeft) {
-            snapPosition = {
-              x: targetNode.position.x - draggedWidth - SNAP_OFFSET,
-              y: targetCenterY - draggedHeight / 2,
-            };
-          } else {
-            snapPosition = {
-              x: targetNode.position.x + targetWidth + SNAP_OFFSET,
-              y: targetCenterY - draggedHeight / 2,
-            };
-          }
-        }
-      }
-
-      if (nearestNode && snapPosition) {
-        const existingEdges = useCanvasFlowStore.getState().edges;
-        const hasConnection = existingEdges.some(
-          (edge) =>
-            (edge.source === draggedNodeId && edge.target === nearestNode.id) ||
-            (edge.source === nearestNode.id && edge.target === draggedNodeId),
-        );
-
-        if (!hasConnection) {
-          const isLeft = snapPosition.x < nearestNode.position.x;
-          onConnect({
-            source: isLeft ? draggedNodeId : nearestNode.id,
-            sourceHandle: "output",
-            target: isLeft ? nearestNode.id : draggedNodeId,
-            targetHandle: "input",
-          });
-        }
-
-        const changes: NodeChange<AllNodeType>[] = [
-          {
-            id: draggedNodeId,
-            type: "position",
-            position: snapPosition,
-            dragging: false,
-          },
-        ];
-        storeOnNodesChange(changes);
-      }
-    },
-    [onConnect, storeOnNodesChange],
-  );
-
   // 本地 onNodesChange：只负责更新 displayNodes，位置变更在拖动结束时处理
   const onNodesChange = useCallback(
     (changes: NodeChange<AllNodeType>[]) => {
@@ -437,8 +341,6 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
           type: "position",
           position: alignedPosition,
         });
-        // 使用对齐后坐标检测自动连接，避免吸附与连接计算不一致
-        checkAutoConnect(node.id, alignedPosition);
       }
     });
 
@@ -451,7 +353,6 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     snapToGrid,
     snapGridSize,
     storeOnNodesChange,
-    checkAutoConnect,
   ]);
 
   // 点击画布空白区域时取消所有节点的选中状态
@@ -1104,18 +1005,6 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
       document.removeEventListener("paste", handlePaste);
     };
   }, [handlePaste]);
-
-  // 监听鼠标移动事件，更新鼠标位置
-  useEffect(() => {
-    const handleMouseMove = (event: MouseEvent) => {
-      setMousePosition({ x: event.clientX, y: event.clientY });
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-    };
-  }, [setMousePosition]);
 
   return (
     <>

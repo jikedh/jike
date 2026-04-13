@@ -28,17 +28,18 @@ export const SidebarCeBianLan = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFirstLoginModalOpen, setIsFirstLoginModalOpen] = useState(false);
 
-  const { loginStatus, fetchUserInfo } = useUserStore();
+  const { loginStatus, fetchUserInfo, balanceInfo, fetchBalanceInfo } = useUserStore();
 
   useEffect(() => {
     if (token) {
       fetchUserInfo();
+      fetchBalanceInfo();
       const hasCompletedFirstLogin = localStorage.getItem(FIRST_LOGIN_KEY);
       if (!hasCompletedFirstLogin) {
         setIsFirstLoginModalOpen(true);
       }
     }
-  }, [token, fetchUserInfo]);
+  }, [token, fetchUserInfo, fetchBalanceInfo]);
 
   const handleNavClick = (path: string) => {
     navigate(path);
@@ -113,7 +114,7 @@ export const SidebarCeBianLan = () => {
         </SidebarNav>
 
         <SidebarFooter classNames={{ root: "mt-auto" }}>
-          <UserAvatarDropdown userId={userId} />
+          <UserAvatarDropdown userId={userId} balanceInfo={balanceInfo} />
           <SettingsButton onClick={handleSettingsClick} />
         </SidebarFooter>
       </SidebarRoot>

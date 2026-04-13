@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { LogOut, User, Gift, Zap } from "lucide-react";
+import { LogOut, User, Gift, Zap, Coins } from "lucide-react";
 import { clearJikeingToken, getJikeingToken } from "shared/utils/utils";
 import {
   DropdownMenu,
@@ -7,11 +7,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { UserScoreVO } from "shared/types/jikeing";
 // import { getJikeingToken, clearJikeingToken } from '@/utils/aiRequest'
 
 interface UserAvatarDropdownProps {
   userId?: string;
   nickname?: string;
+  balanceInfo?: UserScoreVO | null;
 }
 
 const AVATAR_STYLES = [
@@ -39,7 +41,10 @@ const getRandomStyle = (seed: string) => {
 export const UserAvatarDropdown = ({
   userId,
   nickname,
+  balanceInfo,
 }: UserAvatarDropdownProps) => {
+  const totalScore =
+    (balanceInfo?.forScore ?? 0) + (balanceInfo?.vipScore ?? 0);
   const navigate = useNavigate();
 
   // 读取登录态 token，决定是展示头像下拉还是跳转登录入口
@@ -92,10 +97,11 @@ export const UserAvatarDropdown = ({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex flex-col items-center justify-center rounded-xl px-2 py-2 text-white/50 transition-all hover:bg-white/5 hover:text-white/90"
+            className="relative flex items-center justify-center rounded-xl px-2 py-2 text-white/50 transition-all hover:bg-white/5 hover:text-white/90"
             title={nickname || "用户"}
           >
-            <div className="h-10 w-10 overflow-hidden rounded-full bg-linear-to-br from-purple-500 to-blue-500 p-0.5">
+            {/* 头像 */}
+          <div className="h-10 w-10 overflow-hidden rounded-full bg-linear-to-br from-purple-500 to-blue-500 p-0.5">
               <div className="h-full w-full overflow-hidden rounded-full bg-[#0a0a0a]">
                 <img
                   src={avatarUrl}
@@ -104,7 +110,15 @@ export const UserAvatarDropdown = ({
                 />
               </div>
             </div>
-          </button>
+
+          {/* 积分徽章 - 头像上方 */}
+          {balanceInfo && (
+            <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 flex items-center gap-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-lg ring-2 ring-black/50">
+              <Coins size={10} className="text-amber-100" />
+              <span className="leading-none">{totalScore}</span>
+            </div>
+          )}
+        </button>
         </DropdownMenuTrigger>
 
         {/* 固定在头像右侧展示，避免再使用手写 absolute + 外部点击逻辑 */}

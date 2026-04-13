@@ -981,8 +981,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     clipboard: null,
     // 复制计数器，用于计算水平偏移
     copyCount: {},
-    // 鼠标位置，用于粘贴
-    mousePosition: { x: 0, y: 0 },
     // 历史记录初始化
     history: [],
     historyIndex: -1,
@@ -1001,7 +999,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     setProjectId: (projectId) => set({ projectId }),
     setPanoramaViewer: (panoramaViewer) => set({ panoramaViewer }),
     setClipboard: (clipboard) => set({ clipboard }),
-    setMousePosition: (mousePosition) => set({ mousePosition }),
     setCopyCount: (copyCount) => set({ copyCount }),
     setHistory: (history) => set({ history }),
     setHistoryIndex: (historyIndex) => set({ historyIndex }),
@@ -1695,8 +1692,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         }));
 
         // 过滤掉可能存在的新节点与原节点之间的连接
-        const filteredEdges = state.edges.filter(edge => 
-          !(edge.source === nodeId && edge.target === newId) && 
+        const filteredEdges = state.edges.filter(edge =>
+          !(edge.source === nodeId && edge.target === newId) &&
           !(edge.source === newId && edge.target === nodeId)
         );
 
@@ -2792,17 +2789,18 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      * 粘贴节点
      */
     pasteNode: () => {
-      const { clipboard, nodes, getNextNodeId, mousePosition } = get();
+      const { clipboard, nodes, getNextNodeId } = get();
       if (!clipboard) return;
 
       const newId = getNextNodeId(clipboard.type as NodeType);
+      const offset = 50;
 
       const newNode = {
         id: newId,
         type: clipboard.type,
         position: {
-          x: mousePosition.x - 100, // 调整到鼠标中心位置
-          y: mousePosition.y - 50,
+          x: clipboard.position.x + offset,
+          y: clipboard.position.y + offset,
         },
         data: {
           ...clipboard.data,
