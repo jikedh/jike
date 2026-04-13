@@ -170,7 +170,10 @@ export const VideoPromptEditor = forwardRef<
         ];
       },
       suggestion: {
-        char: "@",
+        char:"@",
+        allowSpaces: true,
+        allowedPrefixes: null,  // 允许任意字符作为前缀
+        startOfLine: false,    // 不限制行首
         items: () => {
           return mentionItemsRef.current;
         },
