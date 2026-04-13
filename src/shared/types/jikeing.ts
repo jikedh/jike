@@ -51,3 +51,14 @@ export interface UserInfo {
   materialMemberExpireAt?: string;
   vipExpireAt?: string;
 }
+
+/**
+ * 用户积分余额视图对象
+ */
+export interface UserScoreVO {
+  forScore: number;
+  vipScore: number;
+  userId: number;
+  id: number;
+  todayResigned: boolean;
+}

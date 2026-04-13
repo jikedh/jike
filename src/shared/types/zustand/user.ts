@@ -1,4 +1,4 @@
-import type { UserInfo } from "shared/types/jikeing";
+import type { UserInfo, UserScoreVO } from "shared/types/jikeing";
 
 /**
  * User Store 类型定义（data + 方法配对结构）。
@@ -10,6 +10,7 @@ export type UserStoreType = {
   vipLevel: number;
   isLoading: boolean;
   dialogLoginStatus: boolean;
+  balanceInfo: UserScoreVO | null;
 
   // ── 配对 setter ──────────────────────────────
   setLoginStatus: (status: number) => void;
@@ -17,9 +18,11 @@ export type UserStoreType = {
   setVipLevel: (level: number) => void;
   setIsLoading: (loading: boolean) => void;
   setDialogLoginStatus: (show: boolean) => void;
+  setBalanceInfo: (info: UserScoreVO | null) => void;
 
   // ── 业务 action ───────────────────────────────
   fetchUserInfo: () => Promise<void>;
+  fetchBalanceInfo: () => Promise<void>;
   logout: () => Promise<void>;
 
   // ── 计算属性 ─────────────────────────────────
