@@ -46,7 +46,7 @@ export function ButtonHandle({
 
     const rect = area.getBoundingClientRect();
     const halfButton = buttonSize / 2;
-    
+
     // 使用实际的区域尺寸而不是固定的 followAreaSize
     const actualWidth = rect.width;
     const actualHeight = rect.height;
@@ -133,7 +133,7 @@ export function ButtonHandle({
             >
               <div className="nodrag nopan pointer-events-none">
                 {children ?? (
-                  <div className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#B43FEB]/50 bg-[#1a1a1f] text-sm font-medium text-[#B43FEB] shadow-lg hover:border-[#B43FEB] hover:bg-[#B43FEB]/10 transition-all">
+                  <div className="inline-flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#B43FEB]/50 bg-[#1a1a1f] text-sm font-medium text-[#B43FEB] shadow-lg hover:border-[#B43FEB] hover:bg-[#B43FEB]/10">
                     <svg
                       className="w-4 h-4"
                       fill="none"
