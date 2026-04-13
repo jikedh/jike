@@ -49,6 +49,12 @@ const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
     getBaseURL: () => "https://yunwu.ai",
     getToken: getYunwuToken,
   },
+  jikeingAdmin: {
+    getBaseURL: () => "https://api-admin.jikeing.com",
+    getToken: () => "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJsb2dpblR5cGUiOiJsb2dpbiIsImxvZ2luSWQiOjMsInJuU3RyIjoiVmJ0OVh5QU9nU2JaOVNNVks1TjNYVDA2SzI1UlZnZE4iLCJyb2xlSWQiOjR9.zY0yNhz_UZhNoFYphb_VjOnlGSh7h2RRkJtjF8Qyqqs",
+    authHeader: "x-token",
+    useBearer: false,
+  },
 };
 
 const createService = (
@@ -95,6 +101,10 @@ const zeakaiService = createService("zeakai", SERVICE_CONFIGS.zeakai);
 const kuaiziService = createService("kuaizi", SERVICE_CONFIGS.kuaizi);
 const jikeingService = createService("jikeing", SERVICE_CONFIGS.jikeing);
 const yunwuService = createService("yunwu", SERVICE_CONFIGS.yunwu);
+const jikeingAdminService = createService(
+  "jikeingAdmin",
+  SERVICE_CONFIGS.jikeingAdmin,
+);
 
 const aiRequest = async <T = any>(config: AxiosRequestConfig): Promise<T> => {
   return await aiService.request(config);
@@ -124,12 +134,25 @@ const yunwuRequest = async <T = any>(
   return await yunwuService.request(config);
 };
 
+const jikeingAdminRequest = async <T = any>(
+  config: AxiosRequestConfig,
+): Promise<T> => {
+  return await jikeingAdminService.request(config);
+};
+
 export {
   aiService,
   zeakaiService,
   kuaiziService,
   jikeingService,
   yunwuService,
+  jikeingAdminService,
 };
 export default aiRequest;
-export { zeakaiRequest, kuaiziRequest, jikeingRequest, yunwuRequest };
+export {
+  zeakaiRequest,
+  kuaiziRequest,
+  jikeingRequest,
+  yunwuRequest,
+  jikeingAdminRequest,
+};

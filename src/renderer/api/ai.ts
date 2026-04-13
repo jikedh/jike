@@ -234,15 +234,7 @@ export function getUserInfo(): any {
   });
 }
 
-// 获取用户积分余额
-export function getUserScoreBalance(): any {
-  return jikeingService({
-    url: "/userscore/v2/balance-info",
-    method: "get",
-  });
-}
-
-// 获取用户会员信息
+// 获取用户信息（包含会员等级）
 export function getMemberInfoByUUId(id: string): any {
   return jikeingService({
     url: `/get-member-info-by-uuid/${id}`,
