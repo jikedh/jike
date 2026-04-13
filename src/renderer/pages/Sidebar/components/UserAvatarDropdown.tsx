@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { LogOut, User, Coins } from "lucide-react";
+import { LogOut, User, Gift, Zap } from "lucide-react";
 import { clearJikeingToken, getJikeingToken } from "shared/utils/utils";
 import {
   DropdownMenu,
@@ -59,6 +59,11 @@ export const UserAvatarDropdown = ({
     navigate("/login");
   };
 
+  // 进入会员页面
+  const handlePointsClick = () => {
+    navigate("/points");
+  };
+
   if (!token) {
     return (
       <button
@@ -73,23 +78,38 @@ export const UserAvatarDropdown = ({
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="relative flex items-center justify-center rounded-xl px-2 py-2 text-white/50 transition-all hover:bg-white/5 hover:text-white/90"
-          title={nickname || "用户"}
-        >
-          {/* 头像 */}
+    <div className="flex flex-col items-center gap-2">
+      {/* 积分图标 */}
+      <button
+        type="button"
+        onClick={handlePointsClick}
+        className="flex flex-col items-center justify-center py-3 px-2 rounded-xl transition-all duration-200 group relative text-white/50 hover:bg-white/5 hover:text-white/90"
+        title="积分"
+      >
+        <Zap className="w-5 h-5 mb-1.5" strokeWidth={2} />
+        <div className="bg-[#B43FEB] text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-[0_0_12px_rgba(180,63,235,0.5)] scale-110">
+          120
+        </div>
+      </button>
+
+      {/* 头像下拉菜单 */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="relative flex items-center justify-center rounded-xl px-2 py-2 text-white/50 transition-all hover:bg-white/5 hover:text-white/90"
+            title={nickname || "用户"}
+          >
+            {/* 头像 */}
           <div className="h-10 w-10 overflow-hidden rounded-full bg-linear-to-br from-purple-500 to-blue-500 p-0.5">
-            <div className="h-full w-full overflow-hidden rounded-full bg-[#0a0a0a]">
-              <img
-                src={avatarUrl}
-                alt={nickname || "用户头像"}
-                className="h-full w-full object-cover"
-              />
+              <div className="h-full w-full overflow-hidden rounded-full bg-[#0a0a0a]">
+                <img
+                  src={avatarUrl}
+                  alt={nickname || "用户头像"}
+                  className="h-full w-full object-cover"
+                />
+              </div>
             </div>
-          </div>
 
           {/* 积分徽章 - 头像上方 */}
           {balanceInfo && (
@@ -99,31 +119,40 @@ export const UserAvatarDropdown = ({
             </div>
           )}
         </button>
-      </DropdownMenuTrigger>
+        </DropdownMenuTrigger>
 
-      {/* 固定在头像右侧展示，避免再使用手写 absolute + 外部点击逻辑 */}
-      <DropdownMenuContent
-        side="right"
-        align="end"
-        sideOffset={10}
-        className="z-50 w-60  overflow-hidden rounded-xl border border-white/10 bg-[#171717] p-0 text-white shadow-2xl ring-white/10"
-      >
-        <div className="border-b border-white/10 bg-linear-to-b from-white/3 to-transparent px-4 py-3">
-          <p className="truncate text-sm font-medium text-white/90">
-            {nickname || "用户"}
-          </p>
-          <p className="mt-1 text-xs text-white/40">ID: {userSeed}</p>
-        </div>
-
-        <DropdownMenuItem
-          onSelect={handleLogout}
-          className="flex w-full cursor-pointer items-center gap-3 rounded-none px-4 py-3 text-sm text-white/75 focus:bg-white/8 focus:text-white"
+        {/* 固定在头像右侧展示，避免再使用手写 absolute + 外部点击逻辑 */}
+        <DropdownMenuContent
+          side="right"
+          align="end"
+          sideOffset={10}
+          className="z-50 w-60  overflow-hidden rounded-xl border border-white/10 bg-[#171717] p-0 text-white shadow-2xl ring-white/10"
         >
-          <LogOut size={16} />
-          <span>退出登录</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <div className="border-b border-white/10 bg-linear-to-b from-white/3 to-transparent px-4 py-3">
+            <p className="truncate text-sm font-medium text-white/90">
+              {nickname || "用户"}
+            </p>
+            <p className="mt-1 text-xs text-white/40">ID: {userSeed}</p>
+          </div>
+
+          <DropdownMenuItem
+            onSelect={handlePointsClick}
+            className="flex w-full cursor-pointer items-center gap-3 rounded-none px-4 py-3 text-sm text-white/75 focus:bg-white/8 focus:text-white"
+          >
+            <Gift size={16} />
+            <span>我的积分</span>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            onSelect={handleLogout}
+            className="flex w-full cursor-pointer items-center gap-3 rounded-none px-4 py-3 text-sm text-white/75 focus:bg-white/8 focus:text-white"
+          >
+            <LogOut size={16} />
+            <span>退出登录</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 };
 
