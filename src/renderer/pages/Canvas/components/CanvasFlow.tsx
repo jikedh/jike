@@ -92,6 +92,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
   );
   const pasteNode = useCanvasFlowStore((state) => state.pasteNode);
   const canPaste = useCanvasFlowStore((state) => state.canPaste);
+  const setMousePosition = useCanvasFlowStore((state) => state.setMousePosition);
 
   // 处理键盘快捷键
   const handleKeyDown = useCallback(
@@ -1103,6 +1104,18 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
       document.removeEventListener("paste", handlePaste);
     };
   }, [handlePaste]);
+
+  // 监听鼠标移动事件，更新鼠标位置
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      setMousePosition({ x: event.clientX, y: event.clientY });
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+    };
+  }, [setMousePosition]);
 
   return (
     <>
