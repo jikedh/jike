@@ -979,6 +979,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     },
     // 剪贴板初始化
     clipboard: null,
+    // 复制计数器，用于计算水平偏移
+    copyCount: {},
+    // 鼠标位置，用于粘贴
+    mousePosition: { x: 0, y: 0 },
     // 历史记录初始化
     history: [],
     historyIndex: -1,
@@ -997,6 +1001,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     setProjectId: (projectId) => set({ projectId }),
     setPanoramaViewer: (panoramaViewer) => set({ panoramaViewer }),
     setClipboard: (clipboard) => set({ clipboard }),
+    setMousePosition: (mousePosition) => set({ mousePosition }),
+    setCopyCount: (copyCount) => set({ copyCount }),
     setHistory: (history) => set({ history }),
     setHistoryIndex: (historyIndex) => set({ historyIndex }),
     setSelectedNodesCount: (count) => set({ selectedNodesCount: count }),
@@ -1638,17 +1644,24 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      * @param nodeId 要复制的节点 ID
      */
     duplicateNode: (nodeId: string) => {
-      const node = get().nodes.find((n) => n.id === nodeId);
+      // 从最新的状态中获取节点，确保使用当前位置
+      const currentState = get();
+      const node = currentState.nodes.find((n) => n.id === nodeId);
       if (!node) return;
 
-      const newId = get().getNextNodeId(node.type as NodeType);
+      const newId = currentState.getNextNodeId(node.type as NodeType);
+
+      // 计算水平偏移：350px * 复制次数
+      const copyCount = (currentState.copyCount[node.type] || 0) + 1;
+      const offsetX = (copyCount - 1) * 350;
+      const offsetY = 300;
 
       const newNode = {
         id: newId,
         type: node.type,
         position: {
-          x: node.position.x + 40,
-          y: node.position.y + 40,
+          x: node.position.x + offsetX,
+          y: node.position.y + offsetY,
         },
         data: {
           ...node.data,
@@ -1661,9 +1674,50 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         ...(node.height !== undefined && { height: node.height }),
       } as AllNodeType;
 
-      set((state) => ({
-        nodes: [...state.nodes, newNode],
-      }));
+      set((state) => {
+        // 找到原节点的输入边（指向原节点的边）
+        const inputEdges = state.edges.filter(edge => edge.target === nodeId);
+        // 找到原节点的输出边（从原节点出发的边）
+        const outputEdges = state.edges.filter(edge => edge.source === nodeId);
+
+        // 为新节点创建输入边，连接到原节点的输入源
+        const newInputEdges = inputEdges.map(edge => ({
+          ...edge,
+          id: `edge-${edge.source}-${newId}`,
+          target: newId,
+        }));
+
+        // 为新节点创建输出边，连接到原节点的输出目标
+        const newOutputEdges = outputEdges.map(edge => ({
+          ...edge,
+          id: `edge-${newId}-${edge.target}`,
+          source: newId,
+        }));
+
+        // 过滤掉可能存在的新节点与原节点之间的连接
+        const filteredEdges = state.edges.filter(edge => 
+          !(edge.source === nodeId && edge.target === newId) && 
+          !(edge.source === newId && edge.target === nodeId)
+        );
+
+        // 取消所有节点的选中状态，只选中新节点
+        const updatedNodes = state.nodes.map(n => ({
+          ...n,
+          selected: false,
+        }));
+
+        // 更新复制计数器
+        const updatedCopyCount = {
+          ...state.copyCount,
+          [node.type]: copyCount,
+        };
+
+        return {
+          nodes: [...updatedNodes, newNode],
+          edges: [...filteredEdges, ...newInputEdges, ...newOutputEdges],
+          copyCount: updatedCopyCount,
+        };
+      });
 
       setTimeout(() => get().saveToHistory(), 0);
     },
@@ -2738,30 +2792,57 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      * 粘贴节点
      */
     pasteNode: () => {
-      const { clipboard, nodes, getNextNodeId } = get();
+      const { clipboard, nodes, getNextNodeId, mousePosition } = get();
       if (!clipboard) return;
 
-      const offset = 50;
       const newId = getNextNodeId(clipboard.type as NodeType);
 
       const newNode = {
         id: newId,
         type: clipboard.type,
         position: {
-          x: clipboard.position.x + offset,
-          y: clipboard.position.y + offset,
+          x: mousePosition.x - 100, // 调整到鼠标中心位置
+          y: mousePosition.y - 50,
         },
         data: {
           ...clipboard.data,
+          createdAt: Date.now(),
         },
-        selected: false,
+        selected: true,
+        dragging: false,
         // 保留原始节点的宽高
         ...(clipboard.width !== undefined && { width: clipboard.width }),
         ...(clipboard.height !== undefined && { height: clipboard.height }),
       } as AllNodeType;
 
+      // 找到原节点的输入边（指向原节点的边）
+      const inputEdges = get().edges.filter(edge => edge.target === clipboard.id);
+      // 找到原节点的输出边（从原节点出发的边）
+      const outputEdges = get().edges.filter(edge => edge.source === clipboard.id);
+
+      // 为新节点创建输入边，连接到原节点的输入源
+      const newInputEdges = inputEdges.map(edge => ({
+        ...edge,
+        id: `edge-${edge.source}-${newId}`,
+        target: newId,
+      }));
+
+      // 为新节点创建输出边，连接到原节点的输出目标
+      const newOutputEdges = outputEdges.map(edge => ({
+        ...edge,
+        id: `edge-${newId}-${edge.target}`,
+        source: newId,
+      }));
+
+      // 取消所有节点的选中状态，只选中新节点
+      const updatedNodes = nodes.map(node => ({
+        ...node,
+        selected: false,
+      }));
+
       set({
-        nodes: [...nodes, newNode],
+        nodes: [...updatedNodes, newNode],
+        edges: [...get().edges, ...newInputEdges, ...newOutputEdges],
       });
 
       get().saveToHistory();

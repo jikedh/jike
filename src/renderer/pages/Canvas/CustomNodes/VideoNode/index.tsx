@@ -28,6 +28,9 @@ export const VideoNode = memo(
     const highlightedSourceNodeIds = useCanvasFlowStore(
       (state) => state.highlightedSourceNodeIds,
     );
+    const updateVideoNodeData = useCanvasFlowStore(
+      (state) => state.updateVideoNodeData,
+    );
     // 从 store 直接读取选中节点数量，避免 O(n²) 遍历
     const selectedNodesCount = useCanvasFlowStore(
       (state) => state.selectedNodesCount,
@@ -131,7 +134,11 @@ export const VideoNode = memo(
 
             {/* 视频内容区 */}
             <div className="relative flex h-full w-full overflow-hidden rounded-lg bg-black/30">
-              <VideoContent data={data} />
+              <VideoContent
+                data={data}
+                nodeId={id}
+                updateVideoNodeData={updateVideoNodeData}
+              />
             </div>
           </div>
 
