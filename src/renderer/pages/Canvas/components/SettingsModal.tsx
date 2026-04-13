@@ -1,5 +1,6 @@
 import {
   IconBolt,
+  IconBook,
   IconDownload,
   IconFolder,
   IconRestore,
@@ -52,6 +53,7 @@ const settingSections = [
   { id: "canvas", label: "画布设置" },
   { id: "interaction", label: "节点交互" },
   { id: "ai", label: "AI 助手" },
+  { id: "presets", label: "预设提示词库" },
   { id: "collab", label: "协作通知" },
   { id: "data", label: "数据与版本" },
   { id: "shortcuts", label: "快捷键" },
@@ -67,6 +69,7 @@ const sectionPlaceholderMap = {
   ],
   interaction: [{ label: "拖拽辅助线", type: "toggle" }],
   ai: [],
+  presets: [],
   collab: [{ label: "@我提醒", type: "toggle" }],
   data: [{ label: "自动备份", type: "toggle" }],
   shortcuts: [
@@ -122,6 +125,61 @@ export const SettingsModal = ({
   const [importConfirmOpen, setImportConfirmOpen] = useState(false);
   const [pendingImportData, setPendingImportData] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 预设提示词库状态
+  const [presets, setPresets] = useState([
+    { id: '1', name: '电影感光效', content: 'Cinematic lighting, volumetric fog, 8k resolution, highly detailed, anamorphic lens flare', type: 'image', enabled: true },
+    { id: '2', name: '赛博朋克风格', content: 'Cyberpunk aesthetic, neon lights, rainy streets, futuristic city, high contrast', type: 'general', enabled: false },
+    { id: '3', name: '慢动作特写', content: 'Slow motion, extreme close up, shallow depth of field, 120fps style', type: 'video', enabled: true },
+  ]);
+  const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    content: '',
+    type: 'general',
+    enabled: true,
+  });
+
+  const handleAddPreset = () => {
+    const newPreset = {
+      ...formData,
+      id: Math.random().toString(36).substr(2, 9),
+    };
+    setPresets([newPreset, ...presets]);
+    setIsAdding(false);
+    resetPresetForm();
+  };
+
+  const handleUpdatePreset = () => {
+    if (!editingId) return;
+    setPresets(presets.map(p => p.id === editingId ? { ...formData, id: editingId } : p));
+    setEditingId(null);
+    resetPresetForm();
+  };
+
+  const handleDeletePreset = (id: string) => {
+    setPresets(presets.filter(p => p.id !== id));
+  };
+
+  const togglePresetEnabled = (id: string) => {
+    setPresets(presets.map(p => p.id === id ? { ...p, enabled: !p.enabled } : p));
+  };
+
+  const startEditPreset = (preset: any) => {
+    setEditingId(preset.id);
+    setFormData({
+      name: preset.name,
+      content: preset.content,
+      type: preset.type,
+      enabled: preset.enabled,
+    });
+    setIsAdding(false);
+  };
+
+  const resetPresetForm = () => {
+    setFormData({ name: '', content: '', type: 'general', enabled: true });
+  };
 
   // 检测开发环境
   useEffect(() => {
@@ -313,6 +371,8 @@ export const SettingsModal = ({
                             return <IconDownload size={14} />;
                           if (section.id === "about")
                             return <IconBolt size={14} />;
+                          if (section.id === "presets")
+                            return <IconBook size={14} />;
                           return <IconBolt size={14} />;
                         };
 
@@ -387,6 +447,164 @@ export const SettingsModal = ({
                             ))}
                           </SelectContent>
                         </Select>
+                      </section>
+                    </>
+                  )}
+
+                  {/* 预设提示词库 */}
+                  {activeSection === "presets" && (
+                    <>
+                      <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <div className="text-sm font-medium text-white/80">
+                              预设提示词库
+                            </div>
+                            <div className="text-xs text-white/40 mt-1">
+                              管理您的个性化提示词预设
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="blue"
+                            onClick={() => { setIsAdding(true); setEditingId(null); resetPresetForm(); }}
+                          >
+                            新增预设
+                          </Button>
+                        </div>
+
+                        {(isAdding || editingId) && (
+                          <div className="bg-black/30 border border-white/5 rounded-xl p-4 mb-4">
+                            <div className="text-sm font-medium text-white/80 mb-4">
+                              {editingId ? '编辑预设' : '创建新预设'}
+                            </div>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="text-xs text-white/40 mb-1 block">预设名称</label>
+                                <input
+                                  type="text"
+                                  value={formData.name}
+                                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                  placeholder="例如：赛博朋克风格"
+                                  className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:border-[#B43FEB] focus:outline-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs text-white/40 mb-1 block">适用范围</label>
+                                <div className="flex gap-2">
+                                  {['general', 'image', 'video'].map(t => (
+                                    <button
+                                      key={t}
+                                      onClick={() => setFormData({ ...formData, type: t })}
+                                      className={cn(
+                                        "flex-1 py-2 rounded-lg text-xs font-medium border transition-all",
+                                        formData.type === t
+                                          ? "bg-[#B43FEB]/20 border-[#B43FEB] text-[#B43FEB]"
+                                          : "bg-black/50 border-white/10 text-white/40 hover:border-white/20"
+                                      )}
+                                    >
+                                      {t === 'general' ? '通用' : t === 'image' ? '生图' : '视频'}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-xs text-white/40 mb-1 block">提示词正文</label>
+                                <textarea
+                                  value={formData.content}
+                                  onChange={e => setFormData({ ...formData, content: e.target.value })}
+                                  placeholder="输入您的提示词内容..."
+                                  rows={3}
+                                  className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:border-[#B43FEB] focus:outline-none resize-none"
+                                />
+                              </div>
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-white/20 text-white/80 hover:bg-white/10 hover:text-white"
+                                  onClick={() => { setIsAdding(false); setEditingId(null); }}
+                                >
+                                  取消
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="blue"
+                                  onClick={editingId ? handleUpdatePreset : handleAddPreset}
+                                >
+                                  {editingId ? '保存' : '创建'}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-2">
+                          {presets.map((preset) => (
+                            <div
+                              key={preset.id}
+                              className={cn(
+                                "bg-black/30 border rounded-lg p-3 flex items-start justify-between transition-all",
+                                preset.enabled ? "border-white/5" : "border-white/5 opacity-50"
+                              )}
+                            >
+                              <div className="flex gap-3 flex-1">
+                                <div className={cn(
+                                  "w-10 h-10 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold",
+                                  preset.type === 'image' ? "bg-blue-500/20 text-blue-400" :
+                                  preset.type === 'video' ? "bg-purple-500/20 text-purple-400" :
+                                  "bg-green-500/20 text-green-400"
+                                )}>
+                                  {preset.type === 'image' ? '图' : preset.type === 'video' ? '视' : '通'}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-sm font-medium text-white/90 truncate">{preset.name}</span>
+                                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-white/5 text-white/30">
+                                      {preset.type}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-white/40 line-clamp-1">
+                                    {preset.content}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1 ml-3">
+                                <button
+                                  onClick={() => togglePresetEnabled(preset.id)}
+                                  className={cn(
+                                    "p-1.5 rounded-lg transition-all",
+                                    preset.enabled
+                                      ? "bg-[#B43FEB]/10 text-[#B43FEB]"
+                                      : "bg-white/5 text-white/20"
+                                  )}
+                                  title={preset.enabled ? "点击禁用" : "点击启用"}
+                                >
+                                  <IconBolt size={14} />
+                                </button>
+                                <button
+                                  onClick={() => startEditPreset(preset)}
+                                  className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:bg-white/10 hover:text-white transition-all"
+                                >
+                                  <IconRestore size={14} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeletePreset(preset.id)}
+                                  className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:bg-red-500/10 hover:text-red-500 transition-all"
+                                >
+                                  <IconX size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+
+                          {presets.length === 0 && (
+                            <div className="text-center py-8 bg-black/30 border border-dashed border-white/10 rounded-lg">
+                              <p className="text-xs text-white/30">暂无预设提示词，点击上方按钮新增</p>
+                            </div>
+                          )}
+                        </div>
                       </section>
                     </>
                   )}
