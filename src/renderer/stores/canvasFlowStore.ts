@@ -41,6 +41,8 @@ import {
   updateImageNodeInList,
   updateTableNodeInList,
   updateTextAgentNodeInList,
+  updateImageAgentNodeInList,
+  updateVideoAgentNodeInList,
   updateVideoNodeInList,
   VIDEO_POLL_INTERVAL,
   VIDEO_RESULT_WAIT_TIMEOUT,
@@ -1500,6 +1502,34 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             createdAt: Date.now(),
           },
         };
+      } else if (nodeType === "imageAgent") {
+        newNode = {
+          id: nextId,
+          type: "imageAgentNode",
+          position: nextPosition,
+          data: {
+            model: "gemini-2.0-flash-exp",
+            presetId: undefined,
+            useDefaultSystemPrompt: true,
+            customSystemPrompt: "",
+            status: "idle",
+            createdAt: Date.now(),
+          },
+        };
+      } else if (nodeType === "videoAgent") {
+        newNode = {
+          id: nextId,
+          type: "videoAgentNode",
+          position: nextPosition,
+          data: {
+            model: "gemini-2.0-flash-exp",
+            presetId: undefined,
+            useDefaultSystemPrompt: true,
+            customSystemPrompt: "",
+            status: "idle",
+            createdAt: Date.now(),
+          },
+        };
       } else if (nodeType === "table") {
         newNode = {
           id: nextId,
@@ -2254,6 +2284,24 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     updateTextAgentNodeData: (nodeId, patch) => {
       set((state) => ({
         nodes: updateTextAgentNodeInList(state.nodes, nodeId, (data) => ({
+          ...data,
+          ...patch,
+        })),
+      }));
+    },
+
+    updateImageAgentNodeData: (nodeId, patch) => {
+      set((state) => ({
+        nodes: updateImageAgentNodeInList(state.nodes, nodeId, (data) => ({
+          ...data,
+          ...patch,
+        })),
+      }));
+    },
+
+    updateVideoAgentNodeData: (nodeId, patch) => {
+      set((state) => ({
+        nodes: updateVideoAgentNodeInList(state.nodes, nodeId, (data) => ({
           ...data,
           ...patch,
         })),

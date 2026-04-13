@@ -56,6 +56,16 @@ const DEFAULT_ITEMS: FloatingSidebarItem[] = [
     ],
   },
   {
+    id: "agent",
+    label: "智能体",
+    icon: <IconSparkles size={20} />,
+    children: [
+      { id: "create-textAgent", label: "文本智能体" },
+      { id: "create-imageAgent", label: "图片智能体" },
+      { id: "create-videoAgent", label: "视频智能体" },
+    ],
+  },
+  {
     id: "assistant",
     label: "智能助手",
     icon: <IconSparkles size={20} />,

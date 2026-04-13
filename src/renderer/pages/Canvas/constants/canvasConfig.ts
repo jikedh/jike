@@ -3,6 +3,8 @@ import { ImageNode } from "../CustomNodes/ImageNode";
 import { VideoNode } from "../CustomNodes/VideoNode";
 import { AgentNode } from "../CustomNodes/AgentNode";
 import { TextAgentNode } from "../CustomNodes/TextAgentNode";
+import { ImageAgentNode } from "../CustomNodes/ImageAgentNode";
+import { VideoAgentNode } from "../CustomNodes/VideoAgentNode";
 import { PanoramaNode } from "../CustomNodes/PanoramaNode";
 import { AudioNode } from "../CustomNodes/AudioNode";
 import { TableNode } from "../CustomNodes/TableNode";
@@ -15,6 +17,8 @@ export const nodeTypes = {
   videoNode: VideoNode,
   agentNode: AgentNode,
   textAgentNode: TextAgentNode,
+  imageAgentNode: ImageAgentNode,
+  videoAgentNode: VideoAgentNode,
   panoramaNode: PanoramaNode,
   audioNode: AudioNode,
   tableNode: TableNode,

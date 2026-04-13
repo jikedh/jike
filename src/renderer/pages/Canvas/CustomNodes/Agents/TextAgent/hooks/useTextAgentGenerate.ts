@@ -69,7 +69,7 @@ export const useTextAgentGenerate = ({
   const getParentNoteContent = useCallback(() => {
     const currentEdges = useCanvasFlowStore.getState().edges;
     const currentNodes = useCanvasFlowStore.getState().nodes;
-
+    
     const incomingEdges = currentEdges.filter((edge) => edge.target === id);
     if (!incomingEdges.length) {
       return { content: null, error: "需要连接一个便签节点作为输入" };
@@ -97,9 +97,9 @@ export const useTextAgentGenerate = ({
       const currentNode = nodes.find((n) => n.id === id);
       const nextPosition = currentNode
         ? {
-          x: currentNode.position.x + 400,
-          y: currentNode.position.y,
-        }
+            x: currentNode.position.x + 400,
+            y: currentNode.position.y,
+          }
         : undefined;
 
       if (presetId === "novel-character-design") {
@@ -199,12 +199,8 @@ export const useTextAgentGenerate = ({
           model: currentModel,
           messages: [
             {
-              role: "system",
-              content: systemPrompt,
-            },
-            {
               role: "user",
-              content: inputContent,
+              content: `${inputContent}\n\n${systemPrompt}`,
             },
           ],
         },

@@ -37,6 +37,15 @@ export const CanvasSidebar = () => {
         case "create-audio":
           addNode("audio", centerFlowPosition);
           break;
+        case "create-textAgent":
+          addNode("textAgent", centerFlowPosition);
+          break;
+        case "create-imageAgent":
+          addNode("imageAgent", centerFlowPosition);
+          break;
+        case "create-videoAgent":
+          addNode("videoAgent", centerFlowPosition);
+          break;
         case "save":
           saveGraph();
           toast.success("画布已保存");
