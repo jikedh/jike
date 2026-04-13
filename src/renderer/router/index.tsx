@@ -17,6 +17,7 @@ const AssetsPage = lazy(() => import("@/pages/Assets"));
 const VoicePage = lazy(() => import("@/pages/Voice"));
 const VideoPage = lazy(() => import("@/pages/Video"));
 const SettingsPage = lazy(() => import("@/pages/Settings"));
+const PointsPage = lazy(() => import("@/pages/Points"));
 const LoginPage = lazy(() => import("@/pages/Login"));
 // Canvas 是重型页面，独立懒加载
 const CanvasPage = lazy(() => import("@/pages/Canvas"));
@@ -89,6 +90,10 @@ const router = createHashRouter([
       {
         path: "/settings",
         element: <SettingsPage />,
+      },
+      {
+        path: "/points",
+        element: <PointsPage />,
       },
     ],
   },
