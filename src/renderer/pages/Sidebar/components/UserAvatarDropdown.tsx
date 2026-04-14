@@ -110,14 +110,6 @@ export const UserAvatarDropdown = ({
                 />
               </div>
             </div>
-
-          {/* 积分徽章 - 头像上方 */}
-          {balanceInfo && (
-            <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 flex items-center gap-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-lg ring-2 ring-black/50">
-              <Coins size={10} className="text-amber-100" />
-              <span className="leading-none">{totalScore}</span>
-            </div>
-          )}
         </button>
         </DropdownMenuTrigger>
 
