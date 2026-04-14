@@ -1,27 +1,35 @@
-name: Build and Release
+name: Release Build
 
+# 触发：推送 v 开头的 tag 时运行
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
-permissions:
-  contents: write
+env:
+  NODE_VERSION: '24'
 
 jobs:
-  build:
+  release:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
         with:
-          node-version: 24
-          cache: npm
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Cache Electron
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/electron-cache
+            ${{ runner.temp }}/electron-builder-cache
+          key: electron-${{ runner.os }}-${{ hashFiles('package.json') }}
 
       - name: Install dependencies
         run: npm ci
@@ -29,59 +37,23 @@ jobs:
       - name: Build Electron app
         run: npm run build:win
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          ELECTRON_CACHE: ${{ runner.temp }}/electron-cache
+          ELECTRON_BUILDER_CACHE: ${{ runner.temp }}/electron-builder-cache
 
-      - name: Upload artifacts (Windows)
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/jike-*-setup.exe
+            release/latest.yml
+          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+
+      - name: Upload build logs on failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: release-windows
+          name: build-logs
           path: |
-            release/*.exe
-            release/latest.yml
-            release/*.blockmap
-          if-no-files-found: error
-          retention-days: 1
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: release-windows
-          path: release
-
-      - name: List artifacts
-        run: ls -la release/
-
-      - name: Debug - Check target repo
-        run: |
-          echo "=== Debug Info ==="
-          echo "Target repo: 2026617199/jike-release"
-          echo "Tag: ${{ github.ref_name }}"
-          echo "GH_TOKEN exists: ${{ secrets.GH_TOKEN != '' }}"
-
-      - name: Create Release
-        id: create_release
-        uses: ncipollo/release-action@v1
-        with:
-          artifacts: "release/*.exe,release/latest.yml,release/*.blockmap"
-          repository: 2026617199/jike-release
-          tag: ${{ github.ref_name }}
-          name: 即刻 v${{ github.ref_name }}
-          generateReleaseNotes: true
-          draft: false
-          prerelease: false
-          token: ${{ secrets.GH_TOKEN }}
-
-      - name: Debug - Check release result
-        if: always()
-        run: |
-          echo "=== Release Result ==="
-          echo "Release URL: ${{ steps.create_release.outputs.url }}"
+            release/**/*.log
+            electron-vite*.log
+          retention-days: 7
