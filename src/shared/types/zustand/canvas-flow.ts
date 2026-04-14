@@ -88,7 +88,6 @@ export type CanvasFlowStoreType = {
     imageUrl: string | null;
     sourceNodeId: string | null;
   };
-  clipboard: AllNodeType | null;
   history: CanvasPersistedState[];
   historyIndex: number;
   maxHistorySize: number;
@@ -116,10 +115,6 @@ export type CanvasFlowStoreType = {
     imageUrl: string | null;
     sourceNodeId: string | null;
   }) => void;
-  setClipboard: (clipboard: AllNodeType | null) => void;
-  setHistory: (history: CanvasPersistedState[]) => void;
-  setHistoryIndex: (index: number) => void;
-  setSelectedNodesCount: (count: number) => void;
 
   // ── 基础流程事件 ──────────────────────────────
   onNodesChange: (changes: NodeChange<AllNodeType>[]) => void;
@@ -197,11 +192,6 @@ export type CanvasFlowStoreType = {
   // ── 全景图查看器 ─────────────────────────────
   openPanoramaViewer: (imageUrl: string, sourceNodeId?: string) => void;
   closePanoramaViewer: () => void;
-
-  // ── 剪贴板 ─────────────────────────────────
-  copySelectedNode: () => void;
-  pasteNode: () => void;
-  canPaste: () => boolean;
 
   // ── 参考高亮 ────────────────────────────────
   setReferenceHoverHighlight: (

@@ -87,11 +87,6 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
   const redo = useCanvasFlowStore((state) => state.redo);
   const canUndo = useCanvasFlowStore((state) => state.canUndo);
   const canRedo = useCanvasFlowStore((state) => state.canRedo);
-  const copySelectedNode = useCanvasFlowStore(
-    (state) => state.copySelectedNode,
-  );
-  const pasteNode = useCanvasFlowStore((state) => state.pasteNode);
-  const canPaste = useCanvasFlowStore((state) => state.canPaste);
 
   // 处理键盘快捷键
   const handleKeyDown = useCallback(
@@ -128,20 +123,8 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
           redo();
         }
       }
-
-      // Ctrl+C 或 Cmd+C：复制节点
-      if ((event.ctrlKey || event.metaKey) && event.key === "c") {
-        event.preventDefault();
-        copySelectedNode();
-      }
-
-      // Ctrl+V 或 Cmd+V：粘贴节点或图片
-      if ((event.ctrlKey || event.metaKey) && event.key === "v") {
-        // 不阻止默认行为，让 paste 事件处理图片粘贴
-        // paste 事件处理器会同时处理图片和节点粘贴
-      }
     },
-    [undo, redo, canUndo, canRedo, copySelectedNode, pasteNode, canPaste],
+    [undo, redo, canUndo, canRedo],
   );
 
   // 监听键盘事件
@@ -928,10 +911,6 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
 
       const items = event.clipboardData?.items;
       if (!items) {
-        // 没有剪贴板数据，尝试粘贴节点
-        if (canPaste()) {
-          pasteNode();
-        }
         return;
       }
 
@@ -983,19 +962,8 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
           y: window.innerHeight / 2,
         });
       }
-
-      if (
-        imageFiles.length === 0 &&
-        audioFiles.length === 0 &&
-        videoFiles.length === 0 &&
-        canPaste()
-      ) {
-        // 没有图片、音频和视频，尝试粘贴节点
-        event.preventDefault();
-        pasteNode();
-      }
     },
-    [handleImageDrop, handleAudioDrop, handleVideoDrop, canPaste, pasteNode],
+    [handleImageDrop, handleAudioDrop, handleVideoDrop],
   );
 
   // 监听粘贴事件

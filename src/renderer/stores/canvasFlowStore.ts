@@ -977,10 +977,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       imageUrl: null,
       sourceNodeId: null,
     },
-    // 剪贴板初始化
-    clipboard: null,
-    // 复制计数器，用于计算水平偏移
-    copyCount: {},
+
     // 历史记录初始化
     history: [],
     historyIndex: -1,
@@ -998,11 +995,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     setHydrated: (hydrated) => set({ hydrated }),
     setProjectId: (projectId) => set({ projectId }),
     setPanoramaViewer: (panoramaViewer) => set({ panoramaViewer }),
-    setClipboard: (clipboard) => set({ clipboard }),
-    setCopyCount: (copyCount) => set({ copyCount }),
-    setHistory: (history) => set({ history }),
-    setHistoryIndex: (historyIndex) => set({ historyIndex }),
-    setSelectedNodesCount: (count) => set({ selectedNodesCount: count }),
 
     // ==================== 持久化方法实现 ====================
 
@@ -1648,9 +1640,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       const newId = currentState.getNextNodeId(node.type as NodeType);
 
-      // 计算水平偏移：350px * 复制次数
-      const copyCount = (currentState.copyCount[node.type] || 0) + 1;
-      const offsetX = (copyCount - 1) * 350;
+      // 固定偏移量
+      const offsetX = 350;
       const offsetY = 300;
 
       const newNode = {
@@ -1703,16 +1694,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           selected: false,
         }));
 
-        // 更新复制计数器
-        const updatedCopyCount = {
-          ...state.copyCount,
-          [node.type]: copyCount,
-        };
-
         return {
           nodes: [...updatedNodes, newNode],
           edges: [...filteredEdges, ...newInputEdges, ...newOutputEdges],
-          copyCount: updatedCopyCount,
         };
       });
 
@@ -2767,90 +2751,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           imageUrl: null,
           sourceNodeId: null,
         },
+        // 历史记录初始化
+        history: [],
+        historyIndex: -1,
+        maxHistorySize: 50,
+        // 选中节点数量初始化（用于避免 O(n²) 遍历）
+        selectedNodesCount: 0,
       });
-    },
-
-    // ==================== 剪贴板操作 ====================
-
-    /**
-     * 复制选中的节点到剪贴板
-     */
-    copySelectedNode: () => {
-      const { nodes } = get();
-      const selectedNode = nodes.find((n) => n.selected);
-      if (!selectedNode) return;
-
-      // 深拷贝节点数据
-      const copiedNode = JSON.parse(JSON.stringify(selectedNode));
-      set({ clipboard: copiedNode });
-    },
-
-    /**
-     * 粘贴节点
-     */
-    pasteNode: () => {
-      const { clipboard, nodes, getNextNodeId } = get();
-      if (!clipboard) return;
-
-      const newId = getNextNodeId(clipboard.type as NodeType);
-      const offset = 50;
-
-      const newNode = {
-        id: newId,
-        type: clipboard.type,
-        position: {
-          x: clipboard.position.x + offset,
-          y: clipboard.position.y + offset,
-        },
-        data: {
-          ...clipboard.data,
-          createdAt: Date.now(),
-        },
-        selected: true,
-        dragging: false,
-        // 保留原始节点的宽高
-        ...(clipboard.width !== undefined && { width: clipboard.width }),
-        ...(clipboard.height !== undefined && { height: clipboard.height }),
-      } as AllNodeType;
-
-      // 找到原节点的输入边（指向原节点的边）
-      const inputEdges = get().edges.filter(edge => edge.target === clipboard.id);
-      // 找到原节点的输出边（从原节点出发的边）
-      const outputEdges = get().edges.filter(edge => edge.source === clipboard.id);
-
-      // 为新节点创建输入边，连接到原节点的输入源
-      const newInputEdges = inputEdges.map(edge => ({
-        ...edge,
-        id: `edge-${edge.source}-${newId}`,
-        target: newId,
-      }));
-
-      // 为新节点创建输出边，连接到原节点的输出目标
-      const newOutputEdges = outputEdges.map(edge => ({
-        ...edge,
-        id: `edge-${newId}-${edge.target}`,
-        source: newId,
-      }));
-
-      // 取消所有节点的选中状态，只选中新节点
-      const updatedNodes = nodes.map(node => ({
-        ...node,
-        selected: false,
-      }));
-
-      set({
-        nodes: [...updatedNodes, newNode],
-        edges: [...get().edges, ...newInputEdges, ...newOutputEdges],
-      });
-
-      get().saveToHistory();
-    },
-
-    /**
-     * 是否有可粘贴的节点
-     */
-    canPaste: () => {
-      return get().clipboard !== null;
     },
 
     // ==================== 撤销/重做 ====================

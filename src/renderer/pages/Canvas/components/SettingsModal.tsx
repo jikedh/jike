@@ -555,7 +555,7 @@ export const SettingsModal = ({
                               <div className="flex justify-end gap-2">
                                 <Button
                                   size="sm"
-                                  variant="outline"
+                                  variant="default"
                                   className="border-white/20 text-white/80 hover:bg-white/10 hover:text-white"
                                   onClick={() => { setIsAdding(false); setEditingId(null); }}
                                 >
