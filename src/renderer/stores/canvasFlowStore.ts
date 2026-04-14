@@ -9,7 +9,6 @@ import {
   saveGeneratedImageToLocal,
   saveGeneratedVideoToLocal,
 } from "service/projectStorage";
-import { getAgentPresetById } from "shared/constants/agent-presets";
 import { GenerationStatus } from "shared/constants/enum";
 import type { GeminiYwResponseBody } from "shared/types/detail/gemini-yw";
 import type {
@@ -26,6 +25,7 @@ import type {
   NodePosition,
   NodeType,
 } from "shared/types/zustand/canvas-flow";
+import { nodeFactoryMap } from "shared/utils/nodeFactory";
 import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
 import {
   buildReferenceHighlightState,
@@ -1359,196 +1359,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       position?: NodePosition,
       options?: AddNodeOptions,
     ) => {
+      const factory = nodeFactoryMap[nodeType];
+      if (!factory) {
+        console.warn(`[addNode] 未知节点类型: ${nodeType}`);
+        return "";
+      }
+
       const nextId = get().getNextNodeId(nodeType);
       const currentNodes = get().nodes;
       const nextPosition = position ?? getNextNodePosition(currentNodes);
-      const agentPreset = getAgentPresetById(options?.agentPresetId);
-      let newNode: AllNodeType;
 
-      if (nodeType === "note") {
-        newNode = {
-          id: nextId,
-          type: "noteNode",
-          position: nextPosition,
-          width: options?.initialWidth ?? 280,
-          height: options?.initialHeight ?? 180,
-          data: {
-            content: options?.initialContent ?? "",
-            isEditing: options?.initialContent ? false : true,
-            createdAt: Date.now(),
-          },
-        };
-      } else if (nodeType === "image") {
-        newNode = {
-          id: nextId,
-          type: "imageNode",
-          position: nextPosition,
-          width: 350,
-          height: 250,
-          data: {
-            model: "gemini-3-pro-image-preview",
-            prompt: "",
-            promptDraft: "",
-            promptDraftHtml: "<p></p>",
-            image_urls: [],
-            midjourneyAdvanced: {
-              referenceUrls: [],
-              styleUrls: [],
-              iw: 1,
-              sw: 100,
-            },
-            status: GenerationStatus.COMPLETED,
-            progress: 0,
-            result: {
-              type: "image",
-              data: [],
-            },
-            createdAt: Date.now(),
-          },
-        };
-      } else if (nodeType === "agent") {
-        newNode = {
-          id: nextId,
-          type: "agentNode",
-          position: nextPosition,
-          data: {
-            model: agentPreset.model,
-            messages: [
-              {
-                role: "system",
-                content: agentPreset.systemPrompt,
-              },
-            ],
-            agentPresetId: agentPreset.id,
-            createdAt: Date.now(),
-          },
-        };
-      } else if (nodeType === "panorama") {
-        newNode = {
-          id: nextId,
-          type: "panoramaNode",
-          position: nextPosition,
-          width: 400,
-          height: 300,
-          data: {
-            status: GenerationStatus.COMPLETED,
-            isFullscreen: false,
-            screenshots: [],
-            createdAt: Date.now(),
-          },
-        };
-      } else if (nodeType === "video") {
-        newNode = {
-          id: nextId,
-          type: "videoNode",
-          position: nextPosition,
-          width: 350,
-          height: 250,
-          data: {
-            // 新建视频节点默认模型：Doubao Seedance 1.5 Pro
-            model: "doubao-seedance-1-5-pro",
-            prompt: "",
-            promptDraft: "",
-            promptDraftHtml: "<p></p>",
-            aspect_ratio: "16:9",
-            status: GenerationStatus.COMPLETED,
-            progress: 0,
-            metadata: { size: "1280x720" },
-            result: {
-              type: "video",
-              data: [],
-            },
-            createdAt: Date.now(),
-          },
-        };
-      } else if (nodeType === "audio") {
-        newNode = {
-          id: nextId,
-          type: "audioNode",
-          position: nextPosition,
-          width: 350,
-          height: 250,
-          data: {
-            model: "audio-upload",
-            prompt: "",
-            promptDraft: "",
-            promptDraftHtml: "<p></p>",
-            status: GenerationStatus.COMPLETED,
-            progress: 0,
-            isUpload: false,
-            result: {
-              type: "audio",
-              data: [],
-            },
-            createdAt: Date.now(),
-          },
-        };
-      } else if (nodeType === "textAgent") {
-        newNode = {
-          id: nextId,
-          type: "textAgentNode",
-          position: nextPosition,
-          data: {
-            model: "gemini-3.1-pro",
-            presetId: undefined,
-            useDefaultSystemPrompt: true,
-            customSystemPrompt: "",
-            status: "idle",
-            createdAt: Date.now(),
-          },
-        };
-      } else if (nodeType === "imageAgent") {
-        newNode = {
-          id: nextId,
-          type: "imageAgentNode",
-          position: nextPosition,
-          data: {
-            model: "gemini-2.0-flash-exp",
-            presetId: undefined,
-            useDefaultSystemPrompt: true,
-            customSystemPrompt: "",
-            status: "idle",
-            createdAt: Date.now(),
-          },
-        };
-      } else if (nodeType === "videoAgent") {
-        newNode = {
-          id: nextId,
-          type: "videoAgentNode",
-          position: nextPosition,
-          data: {
-            model: "gemini-2.0-flash-exp",
-            presetId: undefined,
-            useDefaultSystemPrompt: true,
-            customSystemPrompt: "",
-            status: "idle",
-            createdAt: Date.now(),
-          },
-        };
-      } else if (nodeType === "table") {
-        newNode = {
-          id: nextId,
-          type: "tableNode",
-          position: nextPosition,
-          width: options?.initialWidth ?? 800,
-          height: options?.initialHeight ?? 400,
-          data: {
-            title: options?.tableTitle ?? "角色设计表",
-            columns: [
-              "姓名",
-              "基础设定",
-              "性格特征",
-              "核心动机",
-              "核心关系",
-              "习惯和兴趣",
-            ],
-            rows: options?.tableRows ?? [],
-            createdAt: Date.now(),
-          },
-        };
-      } else {
-        return "";
-      }
+      const newNode = factory(nextId, nextPosition, options);
 
       set((state) => ({
         nodes: [...state.nodes, newNode],
