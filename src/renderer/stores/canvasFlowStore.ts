@@ -1663,31 +1663,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       } as AllNodeType;
 
       set((state) => {
-        // 找到原节点的输入边（指向原节点的边）
-        const inputEdges = state.edges.filter(edge => edge.target === nodeId);
-        // 找到原节点的输出边（从原节点出发的边）
-        const outputEdges = state.edges.filter(edge => edge.source === nodeId);
-
-        // 为新节点创建输入边，连接到原节点的输入源
-        const newInputEdges = inputEdges.map(edge => ({
-          ...edge,
-          id: `edge-${edge.source}-${newId}`,
-          target: newId,
-        }));
-
-        // 为新节点创建输出边，连接到原节点的输出目标
-        const newOutputEdges = outputEdges.map(edge => ({
-          ...edge,
-          id: `edge-${newId}-${edge.target}`,
-          source: newId,
-        }));
-
-        // 过滤掉可能存在的新节点与原节点之间的连接
-        const filteredEdges = state.edges.filter(edge =>
-          !(edge.source === nodeId && edge.target === newId) &&
-          !(edge.source === newId && edge.target === nodeId)
-        );
-
         // 取消所有节点的选中状态，只选中新节点
         const updatedNodes = state.nodes.map(n => ({
           ...n,
@@ -1696,7 +1671,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         return {
           nodes: [...updatedNodes, newNode],
-          edges: [...filteredEdges, ...newInputEdges, ...newOutputEdges],
         };
       });
 
