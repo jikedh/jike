@@ -1644,6 +1644,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const offsetX = 350;
       const offsetY = 300;
 
+      // 深拷贝 data，避免引用类型共享（如 result.data, image_urls 等）
+      const deepCopiedData = JSON.parse(JSON.stringify(node.data));
       const newNode = {
         id: newId,
         type: node.type,
@@ -1652,7 +1654,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           y: node.position.y + offsetY,
         },
         data: {
-          ...node.data,
+          ...deepCopiedData,
           createdAt: Date.now(),
         },
         selected: true,
