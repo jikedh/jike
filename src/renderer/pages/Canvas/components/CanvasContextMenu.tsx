@@ -52,13 +52,6 @@ export const CanvasContextMenu = ({
         </ContextMenuItem>
         <ContextMenuItem
           className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
-          onSelect={() => onCreateNode("textAgent")}
-        >
-          <IconBrain size={16} />
-          新建文本智能体
-        </ContextMenuItem>
-        <ContextMenuItem
-          className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
           onSelect={() => onCreateNode("image")}
         >
           <IconPhoto size={16} />
@@ -84,6 +77,13 @@ export const CanvasContextMenu = ({
         >
           <IconEye size={16} />
           新建全景图节点
+        </ContextMenuItem>
+        <ContextMenuItem
+          className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
+          onSelect={() => onCreateNode("textAgent")}
+        >
+          <IconBrain size={16} />
+          新建文本智能体
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
