@@ -53,5 +53,6 @@ export const getVideoAgentPresetLabelById = (presetId?: string) => {
 };
 
 export const VIDEO_AGENT_MODELS = [
+  { value: "qwen3.5-flash", label: "Qwen 3.5 Flash (阿里云百炼)" },
   { value: "gemini-2.0-flash-exp", label: "Gemini 2.0 Flash" },
 ];

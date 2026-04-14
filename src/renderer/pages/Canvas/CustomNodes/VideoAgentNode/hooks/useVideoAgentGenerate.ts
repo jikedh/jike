@@ -4,7 +4,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { VideoAgentNodeType, VideoAgentPresetId } from "shared/types/flow";
-import { createChatCompletion } from "@/api/ai";
+import { createChatCompletion, createDashscopeChatCompletion } from "@/api/ai";
 import { useMessage } from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
@@ -158,54 +158,83 @@ export const useVideoAgentGenerate = ({
     abortControllerRef.current = abortController;
 
     try {
-      const response = await createChatCompletion(
-        {
-          model: currentModel,
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "video",
-                  video: {
-                    url: videoUrl,
+      // 根据模型选择不同的API服务
+      let response;
+      if (currentModel === "qwen3.5-flash") {
+        // 使用阿里云百炼API
+        response = await createDashscopeChatCompletion(
+          {
+            model: currentModel,
+            messages: [
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "video",
+                    video: {
+                      url: videoUrl,
+                    },
                   },
-                },
-                {
-                  type: "text",
-                  text: systemPrompt,
-                },
-              ],
+                  {
+                    type: "text",
+                    text: systemPrompt,
+                  },
+                ],
+              },
+            ],
+            stream: true,
+            extra_body: {
+              enable_thinking: true,
             },
-          ],
-        },
-        abortController.signal,
-      );
-
-      const resp = response as any;
-
-      const errorMsg = handleApiError(resp);
-      if (errorMsg) {
-        error("分析失败", errorMsg);
-        updateNodeData({ status: "error", error: errorMsg });
-        setIsGenerating(false);
-        return;
+          },
+          abortController.signal,
+        );
+      } else {
+        // 使用默认API
+        response = await createChatCompletion(
+          {
+            model: currentModel || "qwen3.5-flash",
+            messages: [
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "video",
+                    video: {
+                      url: videoUrl,
+                    },
+                  },
+                  {
+                    type: "text",
+                    text: systemPrompt,
+                  },
+                ],
+              },
+            ],
+            stream: true,
+            extra_body: {
+              enable_thinking: true,
+            },
+          },
+          abortController.signal,
+        );
       }
 
-      const choice = resp?.choices?.[0];
-      const generatedContent = choice?.message?.content;
-      const finishReason = choice?.finish_reason;
+      // 处理流式响应
+      let fullContent = "";
+      let thinkingContent = "";
 
-      if (finishReason === "content_filter") {
-        error("分析失败", "内容被安全过滤器拦截");
-        updateNodeData({ status: "error", error: "内容被安全过滤器拦截" });
-        setIsGenerating(false);
-        return;
+      for await (const chunk of response) {
+        if (chunk.reasoning_content) {
+          thinkingContent += chunk.reasoning_content;
+        }
+        if (chunk.content) {
+          fullContent += chunk.content;
+        }
       }
 
-      if (finishReason === "length") {
-        warning("分析内容达到最大长度限制，可能不完整");
-      }
+      // 组合思考内容和最终内容
+      const generatedContent = thinkingContent ? `${thinkingContent}\n\n${fullContent}` : fullContent;
 
       if (!generatedContent) {
         error("分析失败", "未获取到有效内容");
