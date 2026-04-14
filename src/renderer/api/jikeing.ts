@@ -2,6 +2,7 @@
 // 基于 score-api-analysis.md 文档生成
 
 import { jikeingAdminService, jikeingService } from 'service/aiRequest';
+import { GetScoreBalanceResponse } from 'shared/types/api/score';
 
 // ===================== 用户侧 API（jike-web-api）/userscore/v1 =====================
 
@@ -42,7 +43,7 @@ export function getScoreConfig(): any {
 /**
  * 查询当前用户积分余额和今日签到状态
  */
-export function getBalanceInfo(): any {
+export function getBalanceInfo(): Promise<GetScoreBalanceResponse> {
   return jikeingService({
     url: '/userscore/v1/balance-info',
     method: 'get',

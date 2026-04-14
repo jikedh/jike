@@ -11,30 +11,6 @@ import {
 } from '@/api/jikeing';
 import { addScore, getUserScore, adminGetScoreConfig } from '@/api/manager/score';
 
-// ===================== 类型定义 =====================
-
-/** 通用 API 响应壳 */
-interface ApiResponse<T = any> {
-  code: number;
-  msg: string;
-  data: T;
-}
-
-/** 用户积分余额视图对象 */
-interface UserScoreVO {
-  forScore: number;
-  vipScore: number;
-  userId: number;
-  id: number;
-  todayResigned: boolean;
-}
-
-/** 积分配置 */
-interface ScoreConfig {
-  dailySignReward: number;
-  aiGenPrice: number;
-  imageSplitPrice: number;
-}
 
 // ===================== 测试按钮组件 =====================
 

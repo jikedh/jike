@@ -88,7 +88,7 @@ export const UserAvatarDropdown = ({
       >
         <Zap className="w-5 h-5 mb-1.5" strokeWidth={2} />
         <div className="bg-[#B43FEB] text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-[0_0_12px_rgba(180,63,235,0.5)] scale-110">
-          120
+          {totalScore}
         </div>
       </button>
 
@@ -101,7 +101,7 @@ export const UserAvatarDropdown = ({
             title={nickname || "用户"}
           >
             {/* 头像 */}
-          <div className="h-10 w-10 overflow-hidden rounded-full bg-linear-to-br from-purple-500 to-blue-500 p-0.5">
+            <div className="h-10 w-10 overflow-hidden rounded-full bg-linear-to-br from-purple-500 to-blue-500 p-0.5">
               <div className="h-full w-full overflow-hidden rounded-full bg-[#0a0a0a]">
                 <img
                   src={avatarUrl}
@@ -110,7 +110,7 @@ export const UserAvatarDropdown = ({
                 />
               </div>
             </div>
-        </button>
+          </button>
         </DropdownMenuTrigger>
 
         {/* 固定在头像右侧展示，避免再使用手写 absolute + 外部点击逻辑 */}
