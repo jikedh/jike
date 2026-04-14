@@ -6,6 +6,7 @@ import {
   kuaiziRequest,
   jikeingService,
   yunwuRequest,
+  dashscopeRequest,
 } from "service/aiRequest";
 import { getAiToken, getBaseURL } from "shared/utils/utils";
 /**
@@ -87,11 +88,17 @@ export async function createChatCompletion(data: any, signal?: AbortSignal) {
         ? "/v1/chat/completions"
         : `${baseURL}/v1/chat/completions`;
 
+    // 处理 extra_body 参数
+    const requestBody = {
+      ...data,
+      ...(data.extra_body ? data.extra_body : {}),
+    };
+
     const response = await fetch(url, {
       method: "POST",
       signal,
       headers,
-      body: JSON.stringify(data),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -110,15 +117,27 @@ export async function createChatCompletion(data: any, signal?: AbortSignal) {
         const { done, value } = await reader.read();
         if (done || value?.data === "[DONE]") return;
         const content = JSON.parse(value.data)?.choices?.[0]?.delta?.content;
-        if (content) yield content;
+        const reasoningContent = JSON.parse(value.data)?.choices?.[0]?.delta?.reasoning_content;
+        if (content || reasoningContent) {
+          yield {
+            content,
+            reasoning_content: reasoningContent,
+          };
+        }
       }
     })();
   }
 
+  // 处理非流式请求的 extra_body 参数
+  const requestBody = {
+    ...data,
+    ...(data.extra_body ? data.extra_body : {}),
+  };
+
   return aiService({
     url: "/v1/chat/completions",
     method: "post",
-    data,
+    data: requestBody,
     signal,
   });
 }
@@ -284,5 +303,37 @@ export function generateGeminiContentStream(
     data: { ...data, stream: true },
     signal,
     responseType: "stream",
+  });
+}
+
+// ===================== 阿里云百炼相关 =====================
+
+/**
+ * 阿里云百炼 API 对话接口（支持深度思考）
+ * @param data 请求数据，包含 messages、model 等字段
+ * @param signal 可选的 AbortSignal 用于取消请求
+ */
+export async function createDashscopeChatCompletion(data: any, signal?: AbortSignal) {
+  // 处理 extra_body 参数
+  const requestBody = {
+    ...data,
+    ...(data.extra_body ? data.extra_body : {}),
+  };
+
+  if (data.stream) {
+    return dashscopeRequest({
+      url: "/chat/completions",
+      method: "post",
+      data: requestBody,
+      signal,
+      responseType: "stream",
+    });
+  }
+
+  return dashscopeRequest({
+    url: "/chat/completions",
+    method: "post",
+    data: requestBody,
+    signal,
   });
 }

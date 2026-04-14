@@ -227,6 +227,9 @@ const DEFAULT_KUAIZI_TOKEN = "kz-XyWCfLd8q784ybb6PVo6OuDb2rkRJ8ShiCZNcvnus0";
 const DEFAULT_YUNWU_TOKEN =
   "sk-BNkrD8Sfje36v0dbgVQDIVmfE8F4NV9A06zG9btQx9I1fwf5";
 
+// 阿里云百炼 API 密钥
+const DEFAULT_DASHSCOPE_TOKEN = "sk-d0f8647ea2c64c789ceef1c4a50ddf95";
+
 /**
  * 获取 AI 服务密钥
  */
@@ -246,6 +249,11 @@ export const getKuaiziToken = () => DEFAULT_KUAIZI_TOKEN;
  * 获取 Yunwu AI 服务密钥
  */
 export const getYunwuToken = () => DEFAULT_YUNWU_TOKEN;
+
+/**
+ * 获取阿里云百炼服务密钥
+ */
+export const getDashscopeToken = () => DEFAULT_DASHSCOPE_TOKEN;
 
 // ===================== Jikeing Token 管理 =====================
 const JIKEING_TOKEN_KEY = "jikeing_token";

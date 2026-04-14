@@ -7,6 +7,7 @@ import {
   getKuaiziToken,
   getYunwuToken,
   getZeakaiToken,
+  getDashscopeToken,
 } from "shared/utils/utils";
 
 const REQUEST_TIMEOUT = 300000;
@@ -48,6 +49,10 @@ const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
   yunwu: {
     getBaseURL: () => "https://yunwu.ai",
     getToken: getYunwuToken,
+  },
+  dashscope: {
+    getBaseURL: () => "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    getToken: getDashscopeToken,
   },
   jikeingAdmin: {
     getBaseURL: () => "https://api-admin.jikeing.com",
@@ -101,6 +106,7 @@ const zeakaiService = createService("zeakai", SERVICE_CONFIGS.zeakai);
 const kuaiziService = createService("kuaizi", SERVICE_CONFIGS.kuaizi);
 const jikeingService = createService("jikeing", SERVICE_CONFIGS.jikeing);
 const yunwuService = createService("yunwu", SERVICE_CONFIGS.yunwu);
+const dashscopeService = createService("dashscope", SERVICE_CONFIGS.dashscope);
 const jikeingAdminService = createService(
   "jikeingAdmin",
   SERVICE_CONFIGS.jikeingAdmin,
@@ -134,6 +140,12 @@ const yunwuRequest = async <T = any>(
   return await yunwuService.request(config);
 };
 
+const dashscopeRequest = async <T = any>(
+  config: AxiosRequestConfig,
+): Promise<T> => {
+  return await dashscopeService.request(config);
+};
+
 const jikeingAdminRequest = async <T = any>(
   config: AxiosRequestConfig,
 ): Promise<T> => {
@@ -146,6 +158,7 @@ export {
   kuaiziService,
   jikeingService,
   yunwuService,
+  dashscopeService,
   jikeingAdminService,
 };
 export default aiRequest;
@@ -154,5 +167,6 @@ export {
   kuaiziRequest,
   jikeingRequest,
   yunwuRequest,
+  dashscopeRequest,
   jikeingAdminRequest,
 };

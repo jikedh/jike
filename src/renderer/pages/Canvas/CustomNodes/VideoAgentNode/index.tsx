@@ -38,7 +38,7 @@ export const VideoAgentNode = memo(
       !data.presetId,
     );
     const [currentModel, setCurrentModel] = useState(
-      data.model || "gemini-2.0-flash-exp",
+      data.model || "qwen3.5-flash",
     );
     const [editableSystemPrompt, setEditableSystemPrompt] = useState("");
 
