@@ -28,7 +28,7 @@ export const useTextAgentGenerate = ({
   currentModel,
   dataStatus,
 }: UseTextAgentGenerateProps) => {
-  const [isGenerating, setIsGenerating] = useState(dataStatus === "generating");
+  const [isGenerating, setIsGenerating] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const { warning, error, success } = useMessage();
@@ -45,17 +45,12 @@ export const useTextAgentGenerate = ({
 
   // 同步 generating 状态
   useEffect(() => {
-    setIsGenerating(dataStatus === "generating");
-  }, [dataStatus]);
-
-  // 错误时自动中止
-  useEffect(() => {
-    if (dataStatus === "error" && isGenerating && abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
+    if (dataStatus === "generating") {
+      setIsGenerating(true);
+    } else if (dataStatus === "error" || dataStatus === "success") {
       setIsGenerating(false);
     }
-  }, [dataStatus, isGenerating]);
+  }, [dataStatus]);
 
   // 更新节点数据的便捷方法
   const updateNodeData = useCallback(
@@ -69,7 +64,7 @@ export const useTextAgentGenerate = ({
   const getParentNoteContent = useCallback(() => {
     const currentEdges = useCanvasFlowStore.getState().edges;
     const currentNodes = useCanvasFlowStore.getState().nodes;
-    
+
     const incomingEdges = currentEdges.filter((edge) => edge.target === id);
     if (!incomingEdges.length) {
       return { content: null, error: "需要连接一个便签节点作为输入" };
@@ -97,9 +92,9 @@ export const useTextAgentGenerate = ({
       const currentNode = nodes.find((n) => n.id === id);
       const nextPosition = currentNode
         ? {
-            x: currentNode.position.x + 400,
-            y: currentNode.position.y,
-          }
+          x: currentNode.position.x + 400,
+          y: currentNode.position.y,
+        }
         : undefined;
 
       if (presetId === "novel-character-design") {
@@ -165,8 +160,6 @@ export const useTextAgentGenerate = ({
 
   // 核心生成方法
   const handleGenerate = useCallback(async () => {
-    if (isGenerating) return;
-
     // 1. 输入验证
     const { content: inputContent, error: inputError } = getParentNoteContent();
     if (inputError || !inputContent) {
@@ -272,6 +265,7 @@ export const useTextAgentGenerate = ({
       abortControllerRef.current = null;
     }
   }, [
+    isGenerating,
     isGenerating,
     presetId,
     editableSystemPrompt,
