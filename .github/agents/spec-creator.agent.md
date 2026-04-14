@@ -94,6 +94,3 @@ Each document requires explicit user approval before moving to the next phase.
   - `design.md`
   - `tasks.md`
 
-## Output Format
-
-After tasks approved, inform user they can begin executing tasks by opening `tasks.md` and clicking "Start task" next to items.

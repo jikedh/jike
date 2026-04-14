@@ -985,6 +985,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     // 选中节点数量初始化（用于避免 O(n²) 遍历）
     selectedNodesCount: 0,
 
+    // 复制/粘贴剪贴板初始化
+    copiedNodes: [],
+    copiedEdges: [],
+
     // ── 配对 setter ───────────────────────────────
     setNodes: (nodes) => set({ nodes }),
     setEdges: (edges) => set({ edges }),
@@ -1499,6 +1503,163 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       setTimeout(() => get().saveToHistory(), 0);
     },
+
+    /**
+     * 复制选中的节点到剪贴板
+     * 存储节点的深拷贝数据（包含原始 ID），用于后续粘贴
+     */
+    copySelectedNodes: () => {
+      const currentState = get();
+      const selectedNodes = currentState.nodes.filter((n) => n.selected);
+
+      if (selectedNodes.length === 0) {
+        return;
+      }
+
+      // 收集被选中节点的 ID 集合
+      const selectedNodeIds = new Set(selectedNodes.map((n) => n.id));
+
+      // 复制节点（深拷贝，存储原始 ID 用于后续映射）
+      const copiedNodes = selectedNodes.map((node) => {
+        const deepCopiedData = JSON.parse(JSON.stringify(node.data));
+        return {
+          originalId: node.id,
+          type: node.type,
+          position: { ...node.position },
+          data: {
+            ...deepCopiedData,
+            createdAt: Date.now(),
+          },
+          // 保留宽高
+          ...(node.width !== undefined && { width: node.width }),
+          ...(node.height !== undefined && { height: node.height }),
+        };
+      });
+
+      // 复制边（只复制连接两个被选中节点的边）
+      // 存储原始 source/target ID 用于粘贴时重建连接
+      const copiedEdges = currentState.edges
+        .filter(
+          (edge) =>
+            selectedNodeIds.has(edge.source) &&
+            selectedNodeIds.has(edge.target),
+        )
+        .map((edge) => ({
+          originalSource: edge.source,
+          originalTarget: edge.target,
+        }));
+
+      set({ copiedNodes, copiedEdges });
+    },
+
+    /**
+     * 粘贴剪贴板中的节点
+     * 根据复制时存储的原始 ID 建立映射，重建节点和边
+     * @param mousePosition 鼠标在画布上的位置（flow coordinates），如果为 undefined 则使用默认偏移
+     */
+    pasteNodes: (mousePosition?: { x: number; y: number }) => {
+      const currentState = get();
+      const { copiedNodes, copiedEdges } = currentState;
+
+      if (copiedNodes.length === 0) {
+        return;
+      }
+
+      // 计算粘贴位置：如果提供了鼠标位置，使用鼠标位置作为参考点
+      // 否则使用默认偏移 (50, 50)
+      let pasteOffsetX = 50;
+      let pasteOffsetY = 50;
+
+      if (mousePosition) {
+        // 使用鼠标位置作为新节点的中心偏移
+        pasteOffsetX = mousePosition.x;
+        pasteOffsetY = mousePosition.y;
+      }
+
+      // 建立原始节点 ID → 新节点 ID 的映射
+      const originalToNewIdMap = new Map<string, string>();
+
+      // 计算节点组中心，用于保持相对位置
+      let groupCenterX = 0;
+      let groupCenterY = 0;
+
+      if (copiedNodes.length > 0) {
+        // 计算原始节点组的中心
+        const sumX = copiedNodes.reduce((sum, n) => sum + n.position.x, 0);
+        const sumY = copiedNodes.reduce((sum, n) => sum + n.position.y, 0);
+        groupCenterX = sumX / copiedNodes.length;
+        groupCenterY = sumY / copiedNodes.length;
+      }
+
+      // 生成新节点
+      const newNodes = copiedNodes.map((nodeTemplate) => {
+        const newId = currentState.getNextNodeId(nodeTemplate.type as NodeType);
+        // 建立映射：原始 ID → 新 ID
+        originalToNewIdMap.set(nodeTemplate.originalId, newId);
+
+        let newPositionX: number;
+        let newPositionY: number;
+
+        if (mousePosition) {
+          // 如果提供了鼠标位置，计算每个节点相对于组中心的偏移
+          // 然后将这个偏移应用到鼠标位置，保持节点间的相对位置
+          const offsetX = nodeTemplate.position.x - groupCenterX;
+          const offsetY = nodeTemplate.position.y - groupCenterY;
+          newPositionX = pasteOffsetX + offsetX;
+          newPositionY = pasteOffsetY + offsetY;
+        } else {
+          // 如果没有提供鼠标位置，使用默认偏移
+          newPositionX = nodeTemplate.position.x + pasteOffsetX;
+          newPositionY = nodeTemplate.position.y + pasteOffsetY;
+        }
+
+        return {
+          ...nodeTemplate,
+          id: newId,
+          position: {
+            x: newPositionX,
+            y: newPositionY,
+          },
+          selected: true,
+          dragging: false,
+        } as AllNodeType;
+      });
+
+      // 根据映射重建边连接
+      const newEdges = copiedEdges
+        .map((edgeTemplate) => {
+          const newSource = originalToNewIdMap.get(edgeTemplate.originalSource);
+          const newTarget = originalToNewIdMap.get(edgeTemplate.originalTarget);
+
+          // 如果源节点或目标节点不存在于复制的数据中，跳过此边
+          if (!newSource || !newTarget) {
+            return null;
+          }
+
+          return {
+            id: `edge-${newSource}-${newTarget}-${Date.now()}`,
+            source: newSource,
+            target: newTarget,
+          } as EdgeType;
+        })
+        .filter(Boolean) as EdgeType[];
+
+      set((state) => {
+        // 取消所有节点的选中状态
+        const updatedNodes = state.nodes.map((n) => ({
+          ...n,
+          selected: false,
+        }));
+
+        return {
+          nodes: [...updatedNodes, ...newNodes],
+          edges: [...state.edges, ...newEdges],
+        };
+      });
+
+      setTimeout(() => get().saveToHistory(), 0);
+    },
+
     /**
      * 删除边
      * @param edgeId 要删除的边 ID

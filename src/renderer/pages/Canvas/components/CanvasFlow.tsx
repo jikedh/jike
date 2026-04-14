@@ -74,6 +74,9 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [generatingCount, setGeneratingCount] = useState(0);
 
+  // 跟踪鼠标在画布上的位置，用于粘贴操作
+  const [mouseFlowPosition, setMouseFlowPosition] = useState<{ x: number; y: number } | null>(null);
+
   // 获取正在生成的任务数量和取消方法
   const getGeneratingTasksCount = useCanvasFlowStore(
     (state) => state.getGeneratingTasksCount,
@@ -87,6 +90,10 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
   const redo = useCanvasFlowStore((state) => state.redo);
   const canUndo = useCanvasFlowStore((state) => state.canUndo);
   const canRedo = useCanvasFlowStore((state) => state.canRedo);
+
+  // 获取复制/粘贴方法
+  const copySelectedNodes = useCanvasFlowStore((state) => state.copySelectedNodes);
+  const pasteNodes = useCanvasFlowStore((state) => state.pasteNodes);
 
   // 处理键盘快捷键
   const handleKeyDown = useCallback(
@@ -123,8 +130,29 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
           redo();
         }
       }
+
+      // Ctrl+C 或 Cmd+C：复制选中节点
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key === "c" &&
+        !event.shiftKey
+      ) {
+        event.preventDefault();
+        copySelectedNodes();
+      }
+
+      // Ctrl+V 或 Cmd+V：粘贴节点
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key === "v" &&
+        !event.shiftKey
+      ) {
+        event.preventDefault();
+        // 使用最近记录的鼠标在画布上的位置
+        pasteNodes(mouseFlowPosition ?? undefined);
+      }
     },
-    [undo, redo, canUndo, canRedo],
+    [undo, redo, canUndo, canRedo, copySelectedNodes, pasteNodes, mouseFlowPosition],
   );
 
   // 监听键盘事件
@@ -134,6 +162,22 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [handleKeyDown]);
+
+  // 监听鼠标移动以更新画布上的鼠标位置
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      setMouseFlowPosition(position);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+    };
+  }, [reactFlowInstance]);
 
   useEffect(() => {
     const handleWheel = (event: WheelEvent) => {
