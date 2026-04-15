@@ -26,10 +26,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useDragUpload } from "@/hooks/useDragUpload";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { edgeTypes, nodeTypes } from "../constants/canvasConfig";
 import { CanvasContextMenu, type CanvasNodeType } from "./CanvasContextMenu";
+import { DragOverlay } from "./DragOverlay";
 
 type CanvasFlowProps = {
   projectId: string | undefined;
@@ -54,6 +56,15 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
   const reactFlowInstance = useReactFlow<AllNodeType, EdgeType>();
   const { screenToFlowPosition } = reactFlowInstance;
   const navigate = useNavigate();
+
+  // 拖拽上传功能
+  const {
+    dragState,
+    handleDragEnter,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+  } = useDragUpload();
 
   // 确认对话框状态
   const [showExitDialog, setShowExitDialog] = useState(false);
@@ -575,6 +586,12 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
           ref={contextMenuTriggerRef}
           className="h-full w-full relative"
           onDoubleClick={handleNativeDblClick}
+          onDragEnter={handleDragEnter}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          role="region"
+          aria-label="Canvas drop zone"
         >
           <ReactFlow<AllNodeType, EdgeType>
             nodes={displayNodes}
@@ -668,6 +685,13 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
           </div>
         </div>
       </CanvasContextMenu>
+
+      {/* 拖拽上传遮罩 */}
+      <DragOverlay
+        isVisible={dragState.isDragging}
+        fileCount={dragState.fileCount}
+        acceptedTypes={dragState.acceptedTypes}
+      />
 
       {/* 确认退出对话框 */}
       <Dialog open={showExitDialog} onOpenChange={setShowExitDialog}>
