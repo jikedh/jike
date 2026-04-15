@@ -19,7 +19,7 @@ export const PresetSelector = ({ onSelect }: PresetSelectorProps) => {
         <div className="w-[280px] bg-[#1a1a1c] border border-white/[0.08] rounded-xl p-5 animate-in fade-in duration-300">
             {/* 标题 */}
             <div className="flex items-center gap-2 text-sm text-white/50 mb-8">
-                <IconSparkles size={16} className="text-[#3B82F6]" />
+                <IconSparkles size={16} className="text-[#B43FEB]" />
                 <span>图片智能体</span>
             </div>
 

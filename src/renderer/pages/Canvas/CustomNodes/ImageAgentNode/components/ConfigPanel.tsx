@@ -45,7 +45,7 @@ export const ConfigPanel = ({
                 <div className="relative flex-1">
                     <button
                         onClick={() => setShowModelDropdown(!showModelDropdown)}
-                        className="flex w-full items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs text-white/70 transition-colors hover:border-[#3B82F6]/30 hover:text-white/90 hover:bg-white/[0.04]"
+                        className="flex w-full items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs text-white/70 transition-colors hover:border-[#B43FEB]/30 hover:text-white/90 hover:bg-white/[0.04]"
                     >
                         <span>
                             {IMAGE_AGENT_MODELS.find((m) => m.value === currentModel)?.label ||
@@ -72,7 +72,7 @@ export const ConfigPanel = ({
                                     className={cn(
                                         "flex w-full items-center justify-between px-3 py-2 text-xs transition-colors",
                                         currentModel === m.value
-                                            ? "bg-[#3B82F6]/20 text-[#3B82F6]"
+                                            ? "bg-[#B43FEB]/20 text-[#B43FEB]"
                                             : "text-white/60 hover:bg-white/5",
                                     )}
                                 >
@@ -92,7 +92,7 @@ export const ConfigPanel = ({
                         "gap-1.5 h-8 px-4 text-xs font-medium rounded-lg transition-colors active:scale-[0.97]",
                         isGenerating
                             ? "bg-white/10 text-white/40 cursor-not-allowed"
-                            : "bg-[#3B82F6] text-white hover:bg-[#3B82F6]/80",
+                            : "bg-[#B43FEB] text-white hover:bg-[#B43FEB]/80",
                     )}
                 >
                     <IconScan size={14} />

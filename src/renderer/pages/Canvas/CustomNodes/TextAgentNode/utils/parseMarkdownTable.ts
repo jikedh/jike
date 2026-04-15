@@ -12,6 +12,8 @@ export interface CharacterData {
 }
 
 export const parseMarkdownTable = (markdown: string): CharacterData[] => {
+  console.log('测试会不会打印');
+  console.log(markdown);
   const characters: CharacterData[] = [];
 
   // 匹配 Markdown 表格行

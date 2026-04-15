@@ -1,12 +1,14 @@
 /**
  * 视频智能体生成逻辑 hook
- * 调用阿里云百炼 API（qwen3.5-flash）分析视频，将结果以便签子节点追加到画布
+ * 调用阿里云百炼 API（qwen3.5-flash）分析视频，将结果追加到画布
+ * video-pull-film 预设输出为表格节点，其他预设输出为便签节点
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { VideoAgentNodeType, VideoAgentPresetId } from "shared/types/flow";
 import { createDashscopeChatCompletion } from "@/api/ai";
 import { useMessage } from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { parseVideoAnalysisTable } from "../utils";
 
 interface UseVideoAgentGenerateProps {
   id: string;
@@ -76,7 +78,9 @@ export const useVideoAgentGenerate = ({
   }, [id]);
 
   /**
-   * 将 API 返回内容追加为便签子节点
+   * 将 API 返回内容追加为子节点
+   * video-pull-film 预设 → 表格节点
+   * 其他预设 → 便签节点
    * 多次点击时每次生成独立新节点（Y 轴随机偏移避免堆叠）
    */
   const createOutputNode = useCallback(
@@ -90,28 +94,51 @@ export const useVideoAgentGenerate = ({
         }
         : undefined;
 
-      const lines = content.split("\n").length;
-      const maxLineLength = Math.max(...content.split("\n").map((l) => l.length));
-      const width = Math.min(Math.max(maxLineLength * 8, 280), 600);
-      const height = Math.min(Math.max(lines * 20 + 60, 120), 400);
+      let outputNodeId: string;
 
-      const outputNoteId = addNode("note", nextPosition, {
-        initialWidth: width,
-        initialHeight: height,
-        initialContent: content,
-      });
-      setNoteNodeEditing(outputNoteId, false);
+      if (presetId === "video-pull-film") {
+        // 视频拉片预设 → 输出表格节点
+        const tableRows = parseVideoAnalysisTable(content);
+        outputNodeId = addNode("table", nextPosition, {
+          tableTitle: "视频拉片分析",
+          tableColumns: [
+            "时间点",
+            "场景描述",
+            "镜头类型",
+            "关键动作",
+            "画面构图",
+            "台词字幕",
+            "节奏分析",
+          ],
+          tableRows: tableRows,
+        });
+      } else {
+        // 其他预设 → 输出便签节点
+        const lines = content.split("\n").length;
+        const maxLineLength = Math.max(
+          ...content.split("\n").map((l) => l.length),
+        );
+        const width = Math.min(Math.max(maxLineLength * 8, 280), 600);
+        const height = Math.min(Math.max(lines * 20 + 60, 120), 400);
+
+        outputNodeId = addNode("note", nextPosition, {
+          initialWidth: width,
+          initialHeight: height,
+          initialContent: content,
+        });
+        setNoteNodeEditing(outputNodeId, false);
+      }
 
       setTimeout(() => {
         onConnect({
           source: id,
           sourceHandle: "output",
-          target: outputNoteId,
+          target: outputNodeId,
           targetHandle: "input",
         });
       }, 100);
     },
-    [id, nodes, addNode, setNoteNodeEditing, onConnect],
+    [id, nodes, presetId, addNode, setNoteNodeEditing, onConnect],
   );
 
   const handleGenerate = useCallback(async () => {

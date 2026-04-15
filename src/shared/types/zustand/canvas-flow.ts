@@ -59,6 +59,7 @@ export type AddNodeOptions = {
   initialHeight?: number;
   initialContent?: string;
   tableTitle?: string;
+  tableColumns?: string[];
   tableRows?: unknown[];
 };
 

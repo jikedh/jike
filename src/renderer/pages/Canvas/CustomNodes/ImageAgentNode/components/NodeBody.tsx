@@ -2,11 +2,12 @@
  * 图片智能体 - 节点主体组件
  * 显示圆形节点区域，包含连接手柄和预设信息
  */
-import { Position } from "@xyflow/react";
+
 import { IconPhoto } from "@tabler/icons-react";
-import { ButtonHandle } from "@/components/button-handle";
+import { Position } from "@xyflow/react";
 import type { ImageAgentPresetId } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
+import { ButtonHandle } from "@/components/button-handle";
 
 const PRESET_ICONS: Record<ImageAgentPresetId, React.ReactNode> = {
     "image-reverse-prompt": <IconPhoto size={18} />,
@@ -34,7 +35,7 @@ export const NodeBody = ({
             className={cn(
                 "group/nodeBox relative w-[200px] h-[200px] bg-[#1a1a1c] rounded-xl flex items-center justify-center",
                 selected
-                    ? "border-2 border-[#3B82F6] shadow-[0_0_20px_rgba(59,130,246,0.4),inset_0_0_10px_rgba(59,130,246,0.1)]"
+                    ? "border-2 border-[#B43FEB] shadow-[0_0_20px_rgba(180,63,235,0.4),inset_0_0_10px_rgba(180,63,235,0.1)]"
                     : "border border-white/[0.08] hover:border-white/[0.15]",
             )}
         >
@@ -61,8 +62,8 @@ export const NodeBody = ({
                 {isGenerating ? (
                     <>
                         <div className="relative w-5 h-5">
-                            <div className="absolute inset-0 border-2 border-[#3B82F6]/30 rounded-full" />
-                            <div className="absolute inset-0 border-2 border-transparent border-t-[#3B82F6] rounded-full animate-spin" />
+                            <div className="absolute inset-0 border-2 border-[#B43FEB]/30 rounded-full" />
+                            <div className="absolute inset-0 border-2 border-transparent border-t-[#B43FEB] rounded-full animate-spin" />
                         </div>
                         <span>反推中...</span>
                     </>

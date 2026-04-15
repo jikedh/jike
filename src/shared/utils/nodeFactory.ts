@@ -1,7 +1,10 @@
+import { getAgentPresetById } from "shared/constants/agent-presets";
 import { GenerationStatus } from "shared/constants/enum";
 import type { AllNodeType } from "shared/types/flow";
-import type { AddNodeOptions, NodePosition } from "shared/types/zustand/canvas-flow";
-import { getAgentPresetById } from "shared/constants/agent-presets";
+import type {
+  AddNodeOptions,
+  NodePosition,
+} from "shared/types/zustand/canvas-flow";
 
 // ==================== 节点工厂函数 ====================
 
@@ -72,7 +75,9 @@ export const createAgentNode = (
     position,
     data: {
       model: agentPreset.model,
-      messages: [{ role: "system" as const, content: agentPreset.systemPrompt }],
+      messages: [
+        { role: "system" as const, content: agentPreset.systemPrompt },
+      ],
       agentPresetId: agentPreset.id,
       createdAt: Date.now(),
     },
@@ -231,7 +236,14 @@ export const createTableNode = (
   height: options?.initialHeight ?? 400,
   data: {
     title: options?.tableTitle ?? "角色设计表",
-    columns: ["姓名", "基础设定", "性格特征", "核心动机", "核心关系", "习惯和兴趣"],
+    columns: options?.tableColumns ?? [
+      "姓名",
+      "基础设定",
+      "性格特征",
+      "核心动机",
+      "核心关系",
+      "习惯和兴趣",
+    ],
     rows: options?.tableRows ?? [],
     createdAt: Date.now(),
   },

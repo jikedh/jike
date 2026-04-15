@@ -318,13 +318,26 @@ export interface CharacterTableRow {
 }
 
 /**
+ * 视频分析表格行数据
+ */
+export interface VideoAnalysisTableRow {
+  时间点: string;
+  场景描述: string;
+  镜头类型: string;
+  关键动作: string;
+  画面构图: string;
+  台词字幕: string;
+  节奏分析: string;
+}
+
+/**
  * 表格节点数据结构
- * 用于展示角色设计等表格数据
+ * 用于展示角色设计、视频拉片等表格数据
  */
 export interface TableNodeData {
   title: string;
   columns: string[];
-  rows: CharacterTableRow[];
+  rows: any[];
   createdAt?: number;
   [key: string]: any;
 }
