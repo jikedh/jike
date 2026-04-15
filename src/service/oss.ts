@@ -156,6 +156,116 @@ export function generateThumbnailWithFormat(
   return generateImageUrl(ossUrl, actions);
 }
 
+// ===================== 视频截帧 =====================
+
+/**
+ * 视频截帧操作参数
+ * @see https://help.aliyun.com/document_detail/64572.html
+ */
+export interface VideoSnapshotOptions {
+  /** 时间点，单位毫秒（ms），如 5000 表示第 5 秒 */
+  time?: number;
+  /** 截帧模式：m_fast(快速模式，优先返回关键帧) | m_normal(普通模式) */
+  mode?: "m_fast" | "m_normal";
+  /** 输出宽度 */
+  width?: number;
+  /** 输出高度 */
+  height?: number;
+  /** 输出格式：jpg | png */
+  format?: "jpg" | "png";
+}
+
+/**
+ * 生成阿里云 OSS 视频截帧 URL
+ * 利用 OSS 原生视频处理能力，无需额外 API 调用
+ *
+ * @param ossUrl 原始 OSS 视频 URL（支持 mp4、mov 等格式）
+ * @param options 截帧参数
+ * @returns 带截帧参数的 OSS URL
+ *
+ * @example
+ * // 截取第 5 秒的帧
+ * generateVideoSnapshotUrl(videoUrl, { time: 5000 })
+ * // -> http://xxx.oss-cn-hangzhou.aliyuncs.com/video/xxx.mp4?x-oss-process=video/snapshot,t_5000,m_fast
+ *
+ * // 截取第 10 秒的帧，指定输出尺寸和格式
+ * generateVideoSnapshotUrl(videoUrl, { time: 10000, width: 1280, height: 720, format: 'jpg' })
+ * // -> http://xxx.oss-cn-hangzhou.aliyuncs.com/video/xxx.mp4?x-oss-process=video/snapshot,t_10000,m_fast,w_1280,h_720/format,jpg
+ */
+export function generateVideoSnapshotUrl(
+  ossUrl: string,
+  options: VideoSnapshotOptions = {},
+): string {
+  const { time, mode = "m_fast", width, height, format = "jpg" } = options;
+
+  // 清理 URL 中的现有查询参数
+  const [baseUrl] = ossUrl.split("?");
+
+  // 构建截帧操作链
+  const actionParts: string[] = [];
+
+  // 时间点（必填，使用 0 作为默认值表示尾帧）
+  actionParts.push(`t_${time ?? 0}`);
+
+  // 截帧模式
+  actionParts.push(mode);
+
+  // 宽高（可选）
+  if (width && height) {
+    actionParts.push(`w_${width}`);
+    actionParts.push(`h_${height}`);
+  } else if (width) {
+    actionParts.push(`w_${width}`);
+  } else if (height) {
+    actionParts.push(`h_${height}`);
+  }
+
+  // 格式
+  actionParts.push(`format,${format}`);
+
+  return `${baseUrl}?x-oss-process=video/${actionParts.join(",")}`;
+}
+
+/**
+ * 生成视频尾帧 URL
+ * 实际上是截取最后一帧，等价于 time=0 但 OSS 会自动取最后一帧
+ *
+ * @param ossUrl 原始 OSS 视频 URL
+ * @param options 截帧参数（time 会被忽略）
+ * @returns 带尾帧截取参数的 OSS URL
+ *
+ * @example
+ * generateVideoLastFrameUrl(videoUrl)
+ * // -> http://xxx.oss-cn-hangzhou.aliyuncs.com/video/xxx.mp4?x-oss-process=video/snapshot,t_0,m_fast/format,jpg
+ */
+export function generateVideoLastFrameUrl(
+  ossUrl: string,
+  options: Omit<VideoSnapshotOptions, "time"> = {},
+): string {
+  const { mode = "m_fast", width, height, format = "jpg" } = options;
+
+  // 清理 URL 中的现有查询参数
+  const [baseUrl] = ossUrl.split("?");
+
+  // 构建截帧操作链，t_0 在 OSS 中表示最后一帧
+  const actionParts: string[] = [`t_0`, mode];
+
+  // 宽高（可选）
+  if (width && height) {
+    actionParts.push(`w_${width}`);
+    actionParts.push(`h_${height}`);
+  } else if (width) {
+    actionParts.push(`w_${width}`);
+  } else if (height) {
+    actionParts.push(`h_${height}`);
+  }
+
+  // 格式
+  actionParts.push(`format,${format}`);
+
+  return `${baseUrl}?x-oss-process=video/${actionParts.join(",")}`;
+}
+
 // ===================== 文件上传 =====================
 
 export async function uploadFileToOSS(file: File) {

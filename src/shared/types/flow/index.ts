@@ -139,6 +139,7 @@ export interface VideoGenerationNode {
     }[];
   };
   isUpload?: boolean; // 是否为上传视频（用于区分加载中/生成中）
+  lastFrame?: string; // 视频尾帧图片 URL
   [key: string]: any; // React Flow 约束兼容
 }
 

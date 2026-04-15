@@ -1,16 +1,19 @@
 import {
   IconAspectRatio,
   IconBrush,
+  IconCamera,
   IconCrop,
   IconDownload,
   IconEraser,
+  IconPlayerStop,
   IconSparkles,
   IconTrash,
   IconUpload,
+  IconVideo,
   IconZoomIn,
 } from "@tabler/icons-react";
 import type { ChangeEvent } from "react";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import type { VideoGenerationNode } from "shared/types/flow";
 import { toast } from "sonner";
@@ -26,6 +29,8 @@ import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { getVideoUrlsFromNodeData } from "./utils/video-url";
 import { cn, downloadImageFromUrl } from "shared/utils/utils";
+import { useVideoFrameCapture } from "./hooks/useVideoFrameCapture";
+import { VideoSnapshotPanel } from "./components/VideoSnapshotPanel";
 
 type VideoToolbarProps = {
   nodeId: string;
@@ -41,12 +46,14 @@ type ActionKey =
   | "outpaint"
   | "crop"
   | "download"
-  | "preview";
+  | "preview"
+  | "lastFrame"
+  | "snapshot";
 
 /**
  * 视频节点工具栏组件
  * 职责：
- * - 提供重绘、擦除、增强、扩图、裁剪、下载、放大查看等操作按钮
+ * - 提供重绘、擦除、增强、扩图、裁剪、下载、放大查看、尾帧提取、截帧等操作按钮
  * - 处理工具栏按钮交互反馈
  * - 基于 yet-another-react-lightbox 提供放大查看能力
  */
@@ -54,8 +61,9 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isSnapshotPanelOpen, setIsSnapshotPanelOpen] = useState(false);
 
-  // 隐藏的文件输入框引用：用于点击“上传”按钮时拉起文件选择器
+  // 隐藏的文件输入框引用：用于点击"上传"按钮时拉起文件选择器
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // 更新视频节点数据：上传成功后将 URL 回填到当前节点
@@ -63,11 +71,18 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
     (state) => state.updateVideoNodeData,
   );
 
+  // 视频截帧 Hook
+  const { captureLastFrame, captureSnapshot, isCapturingLastFrame, isCapturingSnapshot } =
+    useVideoFrameCapture({ updateVideoNodeData, nodeId });
+
   // 统一走视频节点 URL 提取工具，避免不同组件口径不一致。
   const videoUrls = useMemo(() => {
     return getVideoUrlsFromNodeData(data);
   }, [data]);
   const currentVideoUrl = videoUrls[0];
+
+  // 获取视频时长（秒）
+  const videoDuration = data.duration;
 
   const toolbarActions = useMemo(() => {
     return [
@@ -79,6 +94,8 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       { key: "crop" as const, label: "裁剪", icon: IconCrop },
       { key: "download" as const, label: "下载", icon: IconDownload },
       { key: "preview" as const, label: "放大查看", icon: IconZoomIn },
+      { key: "lastFrame" as const, label: "尾帧", icon: IconPlayerStop },
+      { key: "snapshot" as const, label: "截帧", icon: IconCamera },
     ];
   }, []);
 
@@ -168,6 +185,24 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       return;
     }
 
+    if (actionKey === "lastFrame") {
+      if (!currentVideoUrl) {
+        toast.info("暂无可用视频");
+        return;
+      }
+      await captureLastFrame(currentVideoUrl);
+      return;
+    }
+
+    if (actionKey === "snapshot") {
+      if (!currentVideoUrl) {
+        toast.info("暂无可用视频");
+        return;
+      }
+      setIsSnapshotPanelOpen(true);
+      return;
+    }
+
     // 其余功能仅保留占位交互框架，业务逻辑后续接入
     toast.info("功能开发中...");
   };
@@ -230,6 +265,16 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           <span className="text-[10px]">删除</span>
         </button>
       </div>
+
+      {/* 截帧面板 */}
+      <VideoSnapshotPanel
+        open={isSnapshotPanelOpen}
+        onClose={() => setIsSnapshotPanelOpen(false)}
+        videoUrl={currentVideoUrl || ""}
+        duration={videoDuration}
+        onSnapshot={(timeMs) => captureSnapshot(currentVideoUrl, timeMs)}
+        isCapturing={isCapturingSnapshot}
+      />
 
       {isLightboxOpen ? (
         <Lightbox
