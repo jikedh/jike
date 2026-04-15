@@ -79,9 +79,9 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
   const toolbarActions = useMemo(() => {
     return [
-      { key: "lastFrame" as const, label: "尾帧", icon: IconPlayerStop },
       { key: "upload" as const, label: "上传", icon: IconUpload },
       { key: "snapshot" as const, label: "截帧", icon: IconScissors },
+      { key: "lastFrame" as const, label: "尾帧", icon: IconPlayerStop },
       { key: "download" as const, label: "下载", icon: IconDownload },
       { key: "preview" as const, label: "放大查看", icon: IconZoomIn },
     ];
