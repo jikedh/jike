@@ -1,17 +1,17 @@
 import {
-  useState,
-  useCallback,
-  useEffect,
-  useRef,
-  type ReactNode,
-} from "react";
-import {
   IconDeviceFloppy,
   IconPlus,
   IconRefresh,
   IconSparkles,
   IconTool,
 } from "@tabler/icons-react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "shared/utils/utils";
 import useMessage from "@/hooks/useMessage";
 import { SettingsModal } from "./SettingsModal";
@@ -53,16 +53,6 @@ const DEFAULT_ITEMS: FloatingSidebarItem[] = [
       { id: "create-image", label: "图片" },
       { id: "create-video", label: "视频" },
       { id: "create-audio", label: "音频" },
-    ],
-  },
-  {
-    id: "agent",
-    label: "智能体",
-    icon: <IconSparkles size={20} />,
-    children: [
-      { id: "create-textAgent", label: "文本智能体" },
-      { id: "create-imageAgent", label: "图片智能体" },
-      { id: "create-videoAgent", label: "视频智能体" },
     ],
   },
   {

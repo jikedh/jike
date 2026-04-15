@@ -1,10 +1,11 @@
 import {
+  IconBrain,
   IconEye,
+  IconMusic,
   IconNote,
   IconPhoto,
+  IconSparkles,
   IconVideo,
-  IconMusic,
-  IconBrain,
 } from "@tabler/icons-react";
 import type { PropsWithChildren } from "react";
 
@@ -14,6 +15,9 @@ import {
   ContextMenuItem,
   ContextMenuLabel,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 
@@ -23,7 +27,9 @@ export type CanvasNodeType =
   | "video"
   | "panorama"
   | "audio"
-  | "textAgent";
+  | "textAgent"
+  | "imageAgent"
+  | "videoAgent";
 
 type CanvasContextMenuProps = PropsWithChildren<{
   onCreateNode: (nodeType: CanvasNodeType) => void;
@@ -78,13 +84,35 @@ export const CanvasContextMenu = ({
           <IconEye size={16} />
           新建全景图节点
         </ContextMenuItem>
-        <ContextMenuItem
-          className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
-          onSelect={() => onCreateNode("textAgent")}
-        >
-          <IconBrain size={16} />
-          新建文本智能体
-        </ContextMenuItem>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors">
+            <IconSparkles size={16} />
+            智能体
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="w-44 bg-[#121214] border border-white/10 rounded-xl shadow-2xl overflow-hidden p-1">
+            <ContextMenuItem
+              className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
+              onSelect={() => onCreateNode("textAgent")}
+            >
+              <IconBrain size={15} />
+              文本智能体
+            </ContextMenuItem>
+            <ContextMenuItem
+              className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
+              onSelect={() => onCreateNode("imageAgent")}
+            >
+              <IconPhoto size={15} />
+              图片智能体
+            </ContextMenuItem>
+            <ContextMenuItem
+              className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
+              onSelect={() => onCreateNode("videoAgent")}
+            >
+              <IconVideo size={15} />
+              视频智能体
+            </ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
       </ContextMenuContent>
     </ContextMenu>
   );
