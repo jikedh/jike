@@ -19,15 +19,30 @@
  *     }
  *   ]
  * }
+ * @example
+ * {
+ *   "model": "qwen3.5-flash",
+ *   "messages": [
+ *     {
+ *       "role": "user",
+ *       "content": [
+ *         { "type": "video_url", "video_url": { "url": "https://example.com/video.mp4" }, "fps": 2 },
+ *         { "type": "text", "text": "这段视频的内容是什么?" }
+ *       ]
+ *     }
+ *   ]
+ * }
  */
 export interface DashscopeRequestBody {
   model: string;
   messages: {
     role: "system" | "user" | "assistant";
     content: string | ({
-      type: "text" | "image_url";
+      type: "text" | "image_url" | "video_url";
       text?: string;
       image_url?: { url: string };
+      video_url?: { url: string };
+      fps?: number;
     })[];
   }[];
   stream?: boolean;

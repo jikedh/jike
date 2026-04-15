@@ -207,7 +207,7 @@ export const createVideoAgentNode = (
   type: "videoAgentNode",
   position,
   data: {
-    model: "gemini-2.0-flash-exp",
+    model: "qwen3.5-flash",
     presetId: undefined,
     useDefaultSystemPrompt: true,
     customSystemPrompt: "",

@@ -14,7 +14,7 @@ export const VIDEO_AGENT_PRESETS: Record<
     id: "video-pull-film",
     label: "视频拉片",
     description: "分析视频内容，提取关键帧和剧情结构",
-    model: "gemini-2.0-flash-exp",
+    model: "qwen3.5-flash",
     systemPrompt: `请分析这个视频的内容，包括：
 1. 视频主题和主要内容
 2. 场景和镜头变化
@@ -52,7 +52,7 @@ export const getVideoAgentPresetLabelById = (presetId?: string) => {
   return VIDEO_AGENT_PRESETS["video-pull-film"].label;
 };
 
+/** 视频智能体可用模型（当前仅支持 qwen3.5-flash） */
 export const VIDEO_AGENT_MODELS = [
   { value: "qwen3.5-flash", label: "Qwen 3.5 Flash (阿里云百炼)" },
-  { value: "gemini-2.0-flash-exp", label: "Gemini 2.0 Flash" },
 ];
