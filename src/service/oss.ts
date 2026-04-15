@@ -165,8 +165,6 @@ export function generateThumbnailWithFormat(
 export interface VideoSnapshotOptions {
   /** 时间点，单位毫秒（ms），如 5000 表示第 5 秒 */
   time?: number;
-  /** 截帧模式：m_fast(快速模式，优先返回关键帧) | m_normal(普通模式) */
-  mode?: "m_fast" | "m_normal";
   /** 输出宽度 */
   width?: number;
   /** 输出高度 */
@@ -196,34 +194,29 @@ export function generateVideoSnapshotUrl(
   ossUrl: string,
   options: VideoSnapshotOptions = {},
 ): string {
-  const { time, mode = "m_fast", width, height, format = "jpg" } = options;
+  const { time, width, height, format = "jpg" } = options;
 
   // 清理 URL 中的现有查询参数
   const [baseUrl] = ossUrl.split("?");
 
-  // 构建截帧操作链
+  // 构建截帧操作链，格式参考：
+  // https://zhaojingnan.oss-cn-hangzhou.aliyuncs.com/videos/1775508606208-q0xjjh.mp4?x-oss-process=video/snapshot,t_5000,f_jpg,w_0,h_0,interlace_1
   const actionParts: string[] = [];
 
   // 时间点（必填，使用 0 作为默认值表示尾帧）
   actionParts.push(`t_${time ?? 0}`);
 
-  // 截帧模式
-  actionParts.push(mode);
+  // 格式：f_jpg
+  actionParts.push(`f_${format}`);
 
-  // 宽高（可选）
-  if (width && height) {
-    actionParts.push(`w_${width}`);
-    actionParts.push(`h_${height}`);
-  } else if (width) {
-    actionParts.push(`w_${width}`);
-  } else if (height) {
-    actionParts.push(`h_${height}`);
-  }
+  // 宽高：w_0,h_0 表示使用原视频宽高
+  actionParts.push(`w_${width ?? 0}`);
+  actionParts.push(`h_${height ?? 0}`);
 
-  // 格式
-  actionParts.push(`format,${format}`);
+  // 交错格式
+  actionParts.push("interlace_1");
 
-  return `${baseUrl}?x-oss-process=video/${actionParts.join(",")}`;
+  return `${baseUrl}?x-oss-process=video/snapshot,${actionParts.join(",")}`;
 }
 
 /**
@@ -242,28 +235,29 @@ export function generateVideoLastFrameUrl(
   ossUrl: string,
   options: Omit<VideoSnapshotOptions, "time"> = {},
 ): string {
-  const { mode = "m_fast", width, height, format = "jpg" } = options;
+  const { width, height, format = "jpg" } = options;
 
   // 清理 URL 中的现有查询参数
   const [baseUrl] = ossUrl.split("?");
 
-  // 构建截帧操作链，t_0 在 OSS 中表示最后一帧
-  const actionParts: string[] = [`t_0`, mode];
+  // 构建截帧操作链，格式参考：
+  // https://zhaojingnan.oss-cn-hangzhou.aliyuncs.com/videos/1775508606208-q0xjjh.mp4?x-oss-process=video/snapshot,t_5000,f_jpg,w_0,h_0,interlace_1
+  const actionParts: string[] = [];
 
-  // 宽高（可选）
-  if (width && height) {
-    actionParts.push(`w_${width}`);
-    actionParts.push(`h_${height}`);
-  } else if (width) {
-    actionParts.push(`w_${width}`);
-  } else if (height) {
-    actionParts.push(`h_${height}`);
-  }
+  // t_0 在 OSS 中表示最后一帧
+  actionParts.push("t_0");
 
-  // 格式
-  actionParts.push(`format,${format}`);
+  // 格式：f_jpg
+  actionParts.push(`f_${format}`);
 
-  return `${baseUrl}?x-oss-process=video/${actionParts.join(",")}`;
+  // 宽高：w_0,h_0 表示使用原视频宽高
+  actionParts.push(`w_${width ?? 0}`);
+  actionParts.push(`h_${height ?? 0}`);
+
+  // 交错格式
+  actionParts.push("interlace_1");
+
+  return `${baseUrl}?x-oss-process=video/snapshot,${actionParts.join(",")}`;
 }
 
 // ===================== 文件上传 =====================

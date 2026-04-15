@@ -1,4 +1,4 @@
-import { IconPlayerStop, IconVideo } from "@tabler/icons-react";
+import { IconPlayerSkipBack, IconVideo } from "@tabler/icons-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 /**
  * 视频截帧面板属性
@@ -21,6 +29,8 @@ export interface VideoSnapshotPanelProps {
   videoUrl: string;
   /** 截帧回调 (时间点，毫秒) */
   onSnapshot: (timeMs: number) => void;
+  /** 首帧回调 */
+  onFirstFrame: () => void;
   /** 是否正在截帧 */
   isCapturing?: boolean;
   /** 视频总时长（秒） */
@@ -29,13 +39,14 @@ export interface VideoSnapshotPanelProps {
 
 /**
  * 视频截帧面板组件
- * 提供时间点输入，支持毫秒和秒两种单位
+ * 提供首帧提取和时间点输入，支持毫秒和秒两种单位
  */
 export const VideoSnapshotPanel = ({
   open,
   onClose,
   videoUrl,
   onSnapshot,
+  onFirstFrame,
   isCapturing = false,
   duration,
 }: VideoSnapshotPanelProps) => {
@@ -63,40 +74,39 @@ export const VideoSnapshotPanel = ({
     onClose();
   };
 
-  const handleUseLastFrame = () => {
-    // 尾帧使用时间点 0，OSS 会自动取最后一帧
-    onSnapshot(0);
+  const handleUseFirstFrame = () => {
+    onFirstFrame();
     setTimeInput("");
     onClose();
   };
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-100">
+      <DialogContent className="sm:max-w-100 bg-neutral-900">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-white">
             <IconVideo size={18} />
             截取视频帧
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* 尾帧按钮 */}
+          {/* 首帧按钮 */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-muted-foreground">
-              尾帧
+              首帧
             </label>
             <Button
-              variant="outline"
+              variant="default"
               className="w-full justify-start gap-2"
-              onClick={handleUseLastFrame}
+              onClick={handleUseFirstFrame}
               disabled={isCapturing}
             >
-              <IconPlayerStop size={16} />
-              提取视频最后一帧
+              <IconPlayerSkipBack size={16} />
+              提取视频第一帧
             </Button>
             <p className="text-xs text-muted-foreground">
-              自动提取视频的最后一帧作为图片
+              自动提取视频的第一帧作为图片
             </p>
           </div>
 
@@ -118,23 +128,24 @@ export const VideoSnapshotPanel = ({
               指定时间点
             </label>
             <div className="flex gap-2">
-              <input
+              <Input
                 type="number"
-                min="0"
-                step="0.1"
+                min={0}
+                step={0.1}
                 value={timeInput}
                 onChange={(e) => setTimeInput(e.target.value)}
                 placeholder={unit === "s" ? "例如: 5" : "例如: 5000"}
-                className="flex-1 h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
+                disabled={isCapturing}
               />
-              <select
-                value={unit}
-                onChange={(e) => setUnit(e.target.value as "s" | "ms")}
-                className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                <option value="s">秒 (s)</option>
-                <option value="ms">毫秒 (ms)</option>
-              </select>
+              <Select value={unit} onValueChange={(v) => setUnit(v as "s" | "ms")}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="s">秒 (s)</SelectItem>
+                  <SelectItem value="ms">毫秒 (ms)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {duration && (
               <p className="text-xs text-muted-foreground">
