@@ -38,6 +38,7 @@ export type NodeType =
   | "panorama"
   | "audio"
   | "textAgent"
+  | "imageAgent"
   | "videoAgent"
   | "table";
 
@@ -161,6 +162,10 @@ export type CanvasFlowStoreType = {
     patch: Partial<AudioGenerationNode>,
   ) => void;
   updateTextAgentNodeData: (
+    nodeId: string,
+    patch: Record<string, unknown>,
+  ) => void;
+  updateImageAgentNodeData: (
     nodeId: string,
     patch: Record<string, unknown>,
   ) => void;

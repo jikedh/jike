@@ -40,6 +40,9 @@ export const CanvasSidebar = () => {
         case "create-textAgent":
           addNode("textAgent", centerFlowPosition);
           break;
+        case "create-imageAgent":
+          addNode("imageAgent", centerFlowPosition);
+          break;
         case "create-videoAgent":
           addNode("videoAgent", centerFlowPosition);
           break;

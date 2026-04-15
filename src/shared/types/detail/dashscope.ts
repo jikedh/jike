@@ -31,13 +31,6 @@ export interface DashscopeRequestBody {
     })[];
   }[];
   stream?: boolean;
-  max_tokens?: number;
-  temperature?: number;
-  extra_body?: {
-    enable_thinking?: boolean;
-    thinking_budget?: number;
-    [key: string]: any;
-  };
 }
 
 /**

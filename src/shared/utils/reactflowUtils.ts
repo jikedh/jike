@@ -185,6 +185,22 @@ export const updateTextAgentNodeInList = (
  * @param updater 数据更新函数
  * @returns 更新后的节点数组
  */
+export const updateImageAgentNodeInList = (
+  nodes: AllNodeType[],
+  nodeId: string,
+  updater: (data: any) => any,
+): AllNodeType[] => {
+  return nodes.map((node) => {
+    if (node.id !== nodeId || node.type !== "imageAgentNode") {
+      return node;
+    }
+    return {
+      ...node,
+      data: updater(node.data),
+    };
+  });
+};
+
 /**
  * 更新视频智能体节点数据的通用辅助函数
  * @param nodes 节点数组
