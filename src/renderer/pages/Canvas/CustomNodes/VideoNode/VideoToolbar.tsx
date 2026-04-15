@@ -1,7 +1,11 @@
 import {
+  IconAspectRatio,
+  IconBrush,
   IconCamera,
+  IconCrop,
   IconDownload,
-  IconScissors,
+  IconEraser,
+  IconSparkles,
   IconTrash,
   IconUpload,
   IconZoomIn,
@@ -36,24 +40,28 @@ type VideoToolbarProps = {
 };
 
 type ActionKey =
-  | "lastFrame"
-  | "snapshot"
   | "upload"
+  | "repaint"
+  | "erase"
+  | "enhance"
+  | "outpaint"
+  | "crop"
   | "download"
-  | "preview";
+  | "preview"
+  | "snapshot";
 
 /**
  * 视频节点工具栏组件
  * 职责：
- * - 提供尾帧、上传、下载、放大查看等操作按钮
+ * - 提供重绘、擦除、增强、扩图、裁剪、下载、放大查看、截帧等操作按钮
  * - 处理工具栏按钮交互反馈
  * - 基于 yet-another-react-lightbox 提供放大查看能力
  */
 export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
-  const [isSnapshotPanelOpen, setIsSnapshotPanelOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isSnapshotPanelOpen, setIsSnapshotPanelOpen] = useState(false);
 
   // 隐藏的文件输入框引用：用于点击"上传"按钮时拉起文件选择器
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -65,9 +73,9 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
   // 视频截帧 Hook
   const {
-    captureLastFrame,
-    captureSnapshotAtTime,
-    isCapturingLastFrame,
+    captureFirstFrame,
+    captureSnapshot,
+    isCapturingFirstFrame,
     isCapturingSnapshot,
   } = useVideoFrameCapture();
 
@@ -77,13 +85,20 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   }, [data]);
   const currentVideoUrl = videoUrls[0];
 
+  // 获取视频时长（秒）
+  const videoDuration = data.duration;
+
   const toolbarActions = useMemo(() => {
     return [
-      { key: "lastFrame" as const, label: "尾帧", icon: IconCamera },
-      { key: "snapshot" as const, label: "截帧", icon: IconScissors },
       { key: "upload" as const, label: "上传", icon: IconUpload },
+      { key: "repaint" as const, label: "重绘", icon: IconBrush },
+      { key: "erase" as const, label: "擦除", icon: IconEraser },
+      { key: "enhance" as const, label: "增强", icon: IconSparkles },
+      { key: "outpaint" as const, label: "扩图", icon: IconAspectRatio },
+      { key: "crop" as const, label: "裁剪", icon: IconCrop },
       { key: "download" as const, label: "下载", icon: IconDownload },
       { key: "preview" as const, label: "放大查看", icon: IconZoomIn },
+      { key: "snapshot" as const, label: "截帧", icon: IconCamera },
     ];
   }, []);
 
@@ -149,30 +164,6 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       return;
     }
 
-    if (actionKey === "lastFrame") {
-      if (!currentVideoUrl) {
-        toast.info("暂无可用视频");
-        return;
-      }
-
-      await captureLastFrame({
-        videoUrl: currentVideoUrl,
-        sourceNodeId: nodeId,
-        aspectRatio: data.aspect_ratio,
-      });
-      return;
-    }
-
-    if (actionKey === "snapshot") {
-      if (!currentVideoUrl) {
-        toast.info("暂无可用视频");
-        return;
-      }
-
-      setIsSnapshotPanelOpen(true);
-      return;
-    }
-
     if (actionKey === "preview") {
       if (!currentVideoUrl) {
         toast.info("暂无可预览视频");
@@ -207,6 +198,16 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       return;
     }
 
+    if (actionKey === "snapshot") {
+      if (!currentVideoUrl) {
+        toast.info("暂无可用视频");
+        return;
+      }
+      setIsSnapshotPanelOpen(true);
+      return;
+    }
+
+    // 其余功能仅保留占位交互框架，业务逻辑后续接入
     toast.info("功能开发中...");
   };
 
@@ -223,15 +224,13 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         onChange={handleFileChange}
       />
 
-      <div className="nodrag nopan nowheel inline-flex h-10 items-center gap-1 overflow-x-auto rounded-full bg-[#2a2a2d] border border-white/10 px-2 shadow-xl">
+      <div className="nodrag nopan nowheel inline-flex h-10 items-center gap-1 rounded-full bg-[#2a2a2d] border border-white/10 px-2 shadow-xl">
         {toolbarActions.map((item) => {
           const Icon = item.icon;
           const isActive = item.key === "preview" ? isPreviewActive : false;
           const isDisabled =
             (item.key === "download" && isDownloading) ||
-            (item.key === "upload" && isUploading) ||
-            (item.key === "lastFrame" && isCapturingLastFrame) ||
-            (item.key === "snapshot" && isCapturingSnapshot);
+            (item.key === "upload" && isUploading);
 
           return (
             <button
@@ -240,7 +239,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
               onClick={() => handleAction(item.key)}
               disabled={isDisabled}
               className={cn(
-                "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-xs transition-colors cursor-pointer min-w-11",
+                "flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer min-w-13",
                 isDisabled
                   ? "text-white/30 cursor-not-allowed"
                   : isActive
@@ -262,7 +261,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         <button
           type="button"
           onClick={onDelete}
-          className="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-xs text-white/60 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer min-w-11"
+          className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg text-xs text-white/60 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer min-w-13"
           title="删除"
           aria-label="删除节点"
         >
@@ -271,19 +270,15 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         </button>
       </div>
 
+      {/* 截帧面板 */}
       <VideoSnapshotPanel
         open={isSnapshotPanelOpen}
         onClose={() => setIsSnapshotPanelOpen(false)}
         videoUrl={currentVideoUrl || ""}
-        isCapturing={isCapturingSnapshot}
-        onSnapshot={(timeMs) =>
-          captureSnapshotAtTime({
-            videoUrl: currentVideoUrl || "",
-            sourceNodeId: nodeId,
-            aspectRatio: data.aspect_ratio,
-            timeMs,
-          })
-        }
+        duration={videoDuration}
+        onSnapshot={(timeMs) => captureSnapshot(currentVideoUrl, timeMs)}
+        onFirstFrame={() => captureFirstFrame(currentVideoUrl)}
+        isCapturing={isCapturingFirstFrame || isCapturingSnapshot}
       />
 
       {isLightboxOpen ? (

@@ -80,29 +80,20 @@ export const ImageNode = memo(
     // 根据 data.size（如 "1:1", "16:9"）动态计算节点尺寸，按图片原始比例展示
     const nodeSize = useMemo(() => {
       const sizeStr = data.size;
-      const baseHeight = data.thumbnailSize === "sm" ? 140 : 250;
       if (!sizeStr || !sizeStr.includes(":")) {
-        return {
-          width: Math.round((350 / 250) * baseHeight),
-          height: baseHeight,
-          aspectRatio: "7/5",
-        };
+        return { width: 350, height: 250, aspectRatio: "7/5" };
       }
       const [w, h] = sizeStr.split(":").map(Number);
       if (!w || !h) {
-        return {
-          width: Math.round((350 / 250) * baseHeight),
-          height: baseHeight,
-          aspectRatio: "7/5",
-        };
+        return { width: 350, height: 250, aspectRatio: "7/5" };
       }
-      const computed = getNodeSizeByAspectRatio(sizeStr, baseHeight);
+      const computed = getNodeSizeByAspectRatio(sizeStr, 250);
       return {
         width: computed.width,
         height: computed.height,
         aspectRatio: `${w}/${h}`,
       };
-    }, [data.size, data.thumbnailSize]);
+    }, [data.size]);
 
     // 节点尺寸变化时，通知 ReactFlow 重新计算 Handle 位置，确保连线贴合节点边缘
     const updateNodeInternals = useUpdateNodeInternals();

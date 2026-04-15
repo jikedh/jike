@@ -53,25 +53,6 @@ export type StorageApi = {
   getDefaultPath: () => Promise<string>;
 };
 
-export type MediaApi = {
-  extractVideoFrame: (payload: {
-    videoUrl: string;
-    timeMs?: number;
-    mode?: "time" | "last";
-    format?: "png" | "jpg";
-  }) => Promise<{
-    success: boolean;
-    data?: {
-      bytes: Uint8Array;
-      mimeType: string;
-      width?: number;
-      height?: number;
-      duration?: number;
-    };
-    error?: string;
-  }>;
-};
-
 declare global {
   interface Window {
     electron: ElectronAPI;
@@ -79,7 +60,6 @@ declare global {
     debug: {
       toggleDevTools: () => Promise<{ success: boolean; error?: string }>;
     };
-    media: MediaApi;
   }
 }
 
