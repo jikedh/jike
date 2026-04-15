@@ -74,6 +74,25 @@ export type DownloadApi = {
   ) => Promise<{ success: boolean; data?: { path: string }; error?: string }>;
 };
 
+export type MediaApi = {
+  extractVideoFrame: (payload: {
+    videoUrl: string;
+    timeMs?: number;
+    mode?: "time" | "last";
+    format?: "png" | "jpg";
+  }) => Promise<{
+    success: boolean;
+    data?: {
+      bytes: Uint8Array;
+      mimeType: string;
+      width?: number;
+      height?: number;
+      duration?: number;
+    };
+    error?: string;
+  }>;
+};
+
 const storageApi: StorageApi = {
   selectDirectory: () => ipcRenderer.invoke("storage:selectDirectory"),
   ensureProjectDir: (basePath, projectName) =>
@@ -115,12 +134,18 @@ const downloadApi: DownloadApi = {
     ipcRenderer.invoke("download:imageToFile", url, filePath),
 };
 
+const mediaApi: MediaApi = {
+  extractVideoFrame: (payload) =>
+    ipcRenderer.invoke("media:extractVideoFrame", payload),
+};
+
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld("electron", electronAPI);
     contextBridge.exposeInMainWorld("storage", storageApi);
     contextBridge.exposeInMainWorld("debug", debugApi);
     contextBridge.exposeInMainWorld("download", downloadApi);
+    contextBridge.exposeInMainWorld("media", mediaApi);
   } catch (error) {
     console.error(error);
   }
@@ -133,4 +158,6 @@ if (process.contextIsolated) {
   window.debug = debugApi;
   // @ts-ignore (define in dts)
   window.download = downloadApi;
+  // @ts-ignore (define in dts)
+  window.media = mediaApi;
 }

@@ -73,11 +73,31 @@ export type DownloadApi = {
   ) => Promise<{ success: boolean; data?: { path: string }; error?: string }>;
 };
 
+export type MediaApi = {
+  extractVideoFrame: (payload: {
+    videoUrl: string;
+    timeMs?: number;
+    mode?: "time" | "last";
+    format?: "png" | "jpg";
+  }) => Promise<{
+    success: boolean;
+    data?: {
+      bytes: Uint8Array;
+      mimeType: string;
+      width?: number;
+      height?: number;
+      duration?: number;
+    };
+    error?: string;
+  }>;
+};
+
 declare global {
   interface Window {
     electron: ElectronAPI;
     storage: StorageApi;
     debug: DebugApi;
     download: DownloadApi;
+    media: MediaApi;
   }
 }

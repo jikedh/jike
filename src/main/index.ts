@@ -19,6 +19,7 @@ import {
   registerStorageHandlers,
   registerDebugHandlers,
   registerDownloadHandlers,
+  registerMediaHandlers,
 } from "./ipc";
 
 let mainWindow: BrowserWindow | null = null;
@@ -103,6 +104,7 @@ function createWindow(): void {
   registerStorageHandlers();
   registerDebugHandlers();
   registerDownloadHandlers();
+  registerMediaHandlers();
 }
 
 app.whenReady().then(() => {
