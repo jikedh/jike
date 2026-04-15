@@ -14,6 +14,7 @@ import { memo, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import type { ImageGenerationNode } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
+import { getClosestAspectRatio, getImageDimensions } from "./utils/aspectRatioUtils";
 import { cn, downloadImageFromUrl } from "shared/utils/utils";
 import { toast } from "sonner";
 import Lightbox from "yet-another-react-lightbox";
@@ -112,12 +113,28 @@ export const ImageToolbar = memo(
         }
 
         const currentData = data.result?.data ?? [];
-        updateImageNodeData(nodeId, {
+
+        // 检测图片尺寸并更新节点比例（仅当节点还没有图片时设置 size）
+        const updatePatch: Record<string, any> = {
           result: {
             type: "image",
             data: [...currentData, { url: uploadedUrl }],
           },
-        });
+        };
+
+        if (currentData.length === 0) {
+          try {
+            const blobUrl = URL.createObjectURL(fileToUpload);
+            const dimensions = await getImageDimensions(blobUrl);
+            const aspectRatio = getClosestAspectRatio(dimensions.width, dimensions.height);
+            updatePatch.size = aspectRatio;
+            URL.revokeObjectURL(blobUrl);
+          } catch {
+            // 获取尺寸失败时不设置 size，使用默认比例
+          }
+        }
+
+        updateImageNodeData(nodeId, updatePatch);
         toast.success("上传成功");
       } catch (uploadError) {
         console.error("上传图片失败:", uploadError);

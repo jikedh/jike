@@ -1,10 +1,11 @@
-import { type NodeProps, Position } from "@xyflow/react";
-import { memo, useCallback, useMemo } from "react";
+import { type NodeProps, Position, useUpdateNodeInternals } from "@xyflow/react";
+import { memo, useCallback, useEffect, useMemo } from "react";
 import type { VideoNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { getNodeSizeByAspectRatio } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { VideoContent } from "./VideoContent";
 import { VideoPromptPanel } from "./VideoPromptPanel";
 import { VideoToolbar } from "./VideoToolbar";
@@ -55,6 +56,24 @@ export const VideoNode = memo(
       return highlightedSourceNodeIds.includes(id);
     }, [highlightedSourceNodeIds, id]);
 
+    // 根据 data.aspect_ratio（如 "1:1", "16:9"）动态计算节点尺寸，按视频原始比例展示
+    const nodeSize = useMemo(() => {
+      const sizeStr = data.aspect_ratio;
+      if (!sizeStr || !sizeStr.includes(":")) {
+        return { width: 350, height: 250, aspectRatio: "7/5" };
+      }
+      const [w, h] = sizeStr.split(":").map(Number);
+      if (!w || !h) {
+        return { width: 350, height: 250, aspectRatio: "7/5" };
+      }
+      const computed = getNodeSizeByAspectRatio(sizeStr, 250);
+      return {
+        width: computed.width,
+        height: computed.height,
+        aspectRatio: `${w}/${h}`,
+      };
+    }, [data.aspect_ratio]);
+
     // 缓存回调函数
     const handleDuplicate = useCallback(() => {
       duplicateNode(id);
@@ -79,7 +98,7 @@ export const VideoNode = memo(
         onSeparateToNodes={handleSeparateToNodes}
         hasMultipleResults={hasMultipleResults}
       >
-        <div className="group/node relative">
+        <div className="group/node relative" style={{ width: `${nodeSize.width}px`, height: `${nodeSize.height}px` }}>
           {/* 左侧输入 Handle */}
           <ButtonHandle
             type="target"
@@ -111,14 +130,13 @@ export const VideoNode = memo(
 
           <div
             className={cn(
-              "group/card relative flex w-87.5 h-62.5 flex-col rounded-xl border bg-linear-to-br from-[#141418] to-[#0d0d10]",
+              "group/card relative flex flex-col w-full h-full rounded-xl border bg-linear-to-br from-[#141418] to-[#0d0d10]",
               selected
                 ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
                 : isSourceHighlighted
                   ? "border-[#B43FEB]/65 shadow-[0_0_18px_rgba(180,63,235,0.28),0_0_36px_rgba(180,63,235,0.12)] ring-1 ring-[#B43FEB]/20"
                   : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
             )}
-
           >
             {/* 选中状态角落装饰 */}
             {selected && (

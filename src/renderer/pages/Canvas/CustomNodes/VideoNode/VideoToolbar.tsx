@@ -26,6 +26,10 @@ import Video from "yet-another-react-lightbox/plugins/video";
 // import Thumbnails from 'yet-another-react-lightbox/plugins/thumbnails'
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import {
+  getClosestAspectRatio,
+  getVideoDimensions,
+} from "../ImageNode/utils/aspectRatioUtils";
 import { VideoSnapshotPanel } from "./components/VideoSnapshotPanel";
 import { useVideoFrameCapture } from "./hooks/useVideoFrameCapture";
 import { getVideoUrlsFromNodeData } from "./utils/video-url";
@@ -129,12 +133,30 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       const fileExt = file.name.split(".").pop()?.toLowerCase() || "mp4";
       const currentData = data.result?.data ?? [];
 
-      updateVideoNodeData(nodeId, {
+      // 检测视频尺寸并更新节点比例（仅当节点还没有视频时设置 aspect_ratio）
+      const updatePatch: Record<string, any> = {
         result: {
           type: "video",
           data: [...currentData, { url: uploadedUrl, format: fileExt }],
         },
-      });
+      };
+
+      if (currentData.length === 0) {
+        try {
+          const blobUrl = URL.createObjectURL(file);
+          const dimensions = await getVideoDimensions(blobUrl);
+          const aspectRatio = getClosestAspectRatio(
+            dimensions.width,
+            dimensions.height,
+          );
+          updatePatch.aspect_ratio = aspectRatio;
+          URL.revokeObjectURL(blobUrl);
+        } catch {
+          // 获取尺寸失败时不设置 aspect_ratio，使用默认比例
+        }
+      }
+
+      updateVideoNodeData(nodeId, updatePatch);
       toast.success("上传成功");
     } catch (uploadError) {
       console.error("上传视频失败:", uploadError);

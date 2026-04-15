@@ -289,7 +289,7 @@ export const CollapsibleVideoGallery = memo(({
               <video
                 src={coverVideo}
                 controls
-                className="block h-full w-full object-cover object-center"
+                className="block h-full w-full object-contain object-center"
                 onError={() => handleVideoError(0)}
               >
                 你的浏览器不支持视频播放
@@ -327,7 +327,7 @@ export const CollapsibleVideoGallery = memo(({
                       <video
                         src={displayUrls[index]}
                         controls
-                        className={`block h-full w-full object-cover object-center`}
+                        className={`block h-full w-full object-contain object-center`}
                         loading="lazy"
                         onError={() => handleVideoError(index)}
                         onClick={(e) => handleVideoClick(e, index)}

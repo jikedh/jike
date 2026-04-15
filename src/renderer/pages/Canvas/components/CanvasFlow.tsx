@@ -41,6 +41,7 @@ import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import {
   getClosestAspectRatio,
+  getVideoDimensions,
   getImageDimensions,
 } from "../CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { edgeTypes, nodeTypes } from "../constants/canvasConfig";
@@ -863,24 +864,54 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
             // 创建 blob URL 用于播放
             const blobUrl = URL.createObjectURL(file);
 
-            updateVideoNodeData(newNodeId, {
-              status: GenerationStatus.COMPLETED,
-              progress: 100,
-              isUpload: true,
-              isLocalFile: true,
-              localFileName: fileName,
-              result: {
-                type: "video",
-                data: [
-                  {
-                    url: blobUrl,
-                    relativePath,
-                    localFileName: fileName,
-                    format: ext,
-                  },
-                ],
-              },
-            });
+            // 获取视频尺寸并计算最接近的比例
+            try {
+              const dimensions = await getVideoDimensions(blobUrl);
+              const aspectRatio = getClosestAspectRatio(
+                dimensions.width,
+                dimensions.height,
+              );
+
+              updateVideoNodeData(newNodeId, {
+                status: GenerationStatus.COMPLETED,
+                progress: 100,
+                aspect_ratio: aspectRatio,
+                isUpload: true,
+                isLocalFile: true,
+                localFileName: fileName,
+                result: {
+                  type: "video",
+                  data: [
+                    {
+                      url: blobUrl,
+                      relativePath,
+                      localFileName: fileName,
+                      format: ext,
+                    },
+                  ],
+                },
+              });
+            } catch (dimError) {
+              // 如果获取尺寸失败，使用默认比例
+              updateVideoNodeData(newNodeId, {
+                status: GenerationStatus.COMPLETED,
+                progress: 100,
+                isUpload: true,
+                isLocalFile: true,
+                localFileName: fileName,
+                result: {
+                  type: "video",
+                  data: [
+                    {
+                      url: blobUrl,
+                      relativePath,
+                      localFileName: fileName,
+                      format: ext,
+                    },
+                  ],
+                },
+              });
+            }
           } else {
             updateVideoNodeData(newNodeId, {
               status: GenerationStatus.FAILED,

@@ -1,5 +1,5 @@
-import { type NodeProps, Position } from "@xyflow/react";
-import { memo, useCallback, useMemo } from "react";
+import { type NodeProps, Position, useUpdateNodeInternals } from "@xyflow/react";
+import { memo, useCallback, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
@@ -14,6 +14,7 @@ import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { ImageContent } from "./ImageContent";
 import { ImagePromptPanel } from "./ImagePromptPanel";
 import { ImageToolbar } from "./ImageToolbar";
+import { getNodeSizeByAspectRatio } from "./utils/aspectRatioUtils";
 
 /**
  * 图片节点组件
@@ -71,6 +72,30 @@ export const ImageNode = memo(
     const isSourceHighlighted = useMemo(() => {
       return highlightedSourceNodeIds.includes(id);
     }, [highlightedSourceNodeIds, id]);
+
+    // 根据 data.size（如 "1:1", "16:9"）动态计算节点尺寸，按图片原始比例展示
+    const nodeSize = useMemo(() => {
+      const sizeStr = data.size;
+      if (!sizeStr || !sizeStr.includes(":")) {
+        return { width: 350, height: 250, aspectRatio: "7/5" };
+      }
+      const [w, h] = sizeStr.split(":").map(Number);
+      if (!w || !h) {
+        return { width: 350, height: 250, aspectRatio: "7/5" };
+      }
+      const computed = getNodeSizeByAspectRatio(sizeStr, 250);
+      return {
+        width: computed.width,
+        height: computed.height,
+        aspectRatio: `${w}/${h}`,
+      };
+    }, [data.size]);
+
+    // 节点尺寸变化时，通知 ReactFlow 重新计算 Handle 位置，确保连线贴合节点边缘
+    const updateNodeInternals = useUpdateNodeInternals();
+    useEffect(() => {
+      updateNodeInternals(id);
+    }, [nodeSize.width, nodeSize.height, id, updateNodeInternals]);
 
     const handleDelete = useCallback(() => {
       deleteNode(id);
@@ -188,7 +213,7 @@ export const ImageNode = memo(
           onSeparateToNodes={handleContextMenuSeparateToNodes}
           hasMultipleResults={hasMultipleResults}
         >
-          <div className="group/node relative">
+          <div className="group/node relative" style={{ width: `${nodeSize.width}px`, height: `${nodeSize.height}px` }}>
             {/* 节点内顶部工具栏：直接参与节点缩放，保证几何一致性 */}
             {shouldShowToolbar && (
               <div className="nodrag nopan nowheel absolute -top-12 left-1/2 z-50 -translate-x-1/2">
@@ -203,14 +228,13 @@ export const ImageNode = memo(
 
             <div
               className={cn(
-                "group/card relative flex w-87.5 h-62.5 flex-col rounded-xl border bg-linear-to-br from-[#141418] to-[#0d0d10]",
+                "group/card relative flex flex-col w-full h-full rounded-xl border bg-linear-to-br from-[#141418] to-[#0d0d10]",
                 selected
                   ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
                   : isSourceHighlighted
                     ? "border-[#B43FEB]/65 shadow-[0_0_18px_rgba(180,63,235,0.28),0_0_36px_rgba(180,63,235,0.12)] ring-1 ring-[#B43FEB]/20"
                     : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
               )}
-
             >
               {/* 左侧输入 Handle */}
               <ButtonHandle
@@ -243,8 +267,11 @@ export const ImageNode = memo(
               {/* 扫光效果 */}
               <div className="pointer-events-none absolute inset-0 rounded-xl bg-linear-to-tr from-transparent via-white/2 to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
 
-              {/* 图片内容区 */}
-              <div className="relative flex w-full min-h-62.5 aspect-7/5 overflow-hidden rounded-lg bg-black/30">
+              {/* 图片内容区 - 根据图片比例动态调整 */}
+              <div
+                className="relative flex w-full h-full overflow-hidden rounded-lg bg-black/30"
+                style={{ aspectRatio: nodeSize.aspectRatio }}
+              >
                 <ImageContent
                   data={data}
                   onReorder={handleReorder}

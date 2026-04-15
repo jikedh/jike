@@ -40,7 +40,7 @@ export const ImageTile = ({
       <img
         src={url}
         alt={`生成图片-${index + 1}`}
-        className={`h-full w-full object-cover ${className ?? ""}`}
+        className={`h-full w-full object-contain ${className ?? ""}`}
         loading="lazy"
         onError={() => onError(index)}
         onClick={onClick}

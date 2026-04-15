@@ -106,3 +106,28 @@ export function getImageDimensions(
     img.src = imageUrl;
   });
 }
+
+/**
+ * 获取视频的实际尺寸
+ * @param videoUrl 视频 URL（支持 blob URL）
+ * @returns Promise<{width: number, height: number}>
+ */
+export function getVideoDimensions(
+  videoUrl: string,
+): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      resolve({
+        width: video.videoWidth,
+        height: video.videoHeight,
+      });
+      // 释放资源
+      video.src = "";
+      video.load();
+    };
+    video.onerror = reject;
+    video.src = videoUrl;
+  });
+}
