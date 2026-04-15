@@ -47,6 +47,7 @@ export const VideoSnapshotPanel = ({
   isCapturing = false,
 }: VideoSnapshotPanelProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const playButtonRef = useRef<HTMLButtonElement | null>(null);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -131,6 +132,18 @@ export const VideoSnapshotPanel = ({
     setIsReady(false);
   }, [open, videoUrl]);
 
+  // 弹窗打开时聚焦到播放按钮
+  useEffect(() => {
+    if (open) {
+      // 等待 Dialog 动画完成后再聚焦
+      const timer = setTimeout(() => {
+        playButtonRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
+
+
   useEffect(() => {
     if (!open) {
       return;
@@ -146,15 +159,18 @@ export const VideoSnapshotPanel = ({
         return;
       }
 
+
       if (event.key === "ArrowUp") {
         event.preventDefault();
         stepFrame(-1);
       }
 
+
       if (event.key === "ArrowDown") {
         event.preventDefault();
         stepFrame(1);
       }
+
 
       if (event.key === " ") {
         event.preventDefault();
@@ -224,6 +240,7 @@ export const VideoSnapshotPanel = ({
                 <IconArrowBigUpLines size={18} />
               </button>
               <button
+                ref={playButtonRef}
                 type="button"
                 onClick={() => void togglePlayback()}
                 disabled={!isReady || isCapturing}
@@ -245,11 +262,6 @@ export const VideoSnapshotPanel = ({
               >
                 <IconArrowBigDownLines size={18} />
               </button>
-            </div>
-
-            <div className="flex items-center justify-between rounded-lg border border-white/6 bg-[#1f1f23] px-4 py-3 text-xs text-white/65">
-              <span>按 `↓` 向后逐帧移动，按 `↑` 向前逐帧移动，空格键可播放或暂停</span>
-              <span>按 30 FPS 估算单帧步进</span>
             </div>
           </div>
 
