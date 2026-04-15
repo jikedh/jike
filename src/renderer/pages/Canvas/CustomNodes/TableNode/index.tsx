@@ -1,4 +1,4 @@
-import { type NodeProps, NodeResizer, Position, useStore } from "@xyflow/react";
+import { type NodeProps, NodeResizer, Position } from "@xyflow/react";
 import { memo, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CharacterTableRow, TableNodeType } from "shared/types/flow";
@@ -241,9 +241,15 @@ export const TableNode = memo(
       (state) => state.updateTableNodeData,
     );
     const isDragging = Boolean(dragging);
-    const selectedNodesCount = useStore(
-      (state) => state.nodes.filter((n) => n.selected).length,
-    );
+    // 优化：避免每次 .filter() 遍历全部节点，改用稳定引用
+    const selectedNodesCount = useCanvasFlowStore((state) => {
+      let count = 0;
+      for (const n of state.nodes) {
+        if (n.selected) count++;
+        if (count > 1) break; // 只需判断是否 > 1
+      }
+      return count;
+    });
     const shouldShowToolbar =
       selected && !isDragging && selectedNodesCount <= 1;
 
@@ -274,14 +280,21 @@ export const TableNode = memo(
 
     const handleUpdateCell = useCallback(
       (rowIndex: number, column: string, value: string) => {
-        const newRows = [...(rows || [])];
-        newRows[rowIndex] = {
-          ...newRows[rowIndex],
-          [column]: value,
-        };
-        updateTableNodeData(id, { rows: newRows });
+        // 使用函数式更新避免依赖外部 rows，减少重渲染
+        updateTableNodeData(
+          id,
+          ((prevData: any) => {
+            const currentRows = prevData.rows || [];
+            const newRows = [...currentRows];
+            newRows[rowIndex] = {
+              ...newRows[rowIndex],
+              [column]: value,
+            };
+            return { rows: newRows };
+          }) as (prev: Record<string, unknown>) => Record<string, unknown>,
+        );
       },
-      [id, rows, updateTableNodeData],
+      [id, updateTableNodeData],
     );
 
     const fullscreenContent = (
@@ -309,8 +322,8 @@ export const TableNode = memo(
         </div>
 
         <div className="flex-1 overflow-auto p-4">
-          <div className="bg-[#1A1A1C] rounded-lg overflow-hidden border border-white/[0.06]">
-            <table className="w-max min-w-full border-collapse text-left">
+          <div className="bg-[#1A1A1C] rounded-lg border border-white/[0.06] overflow-auto min-w-full">
+            <table className="border-collapse text-left">
               <thead className="sticky top-0 z-10 bg-[#1A1A1C]">
                 <tr>
                   {columns.map((col) => (
@@ -407,8 +420,8 @@ export const TableNode = memo(
                 </div>
 
                 <div className="flex-1 overflow-auto p-2 nodrag nopan nowheel">
-                  <div className="bg-[#1A1A1C] rounded-lg overflow-hidden h-full border border-white/[0.06]">
-                    <table className="w-max min-w-full border-collapse text-left">
+                  <div className="bg-[#1A1A1C] rounded-lg border border-white/[0.06] overflow-auto min-w-full">
+                    <table className="border-collapse text-left">
                       <thead className="sticky top-0 z-10 bg-[#1A1A1C]">
                         <tr>
                           {columns.map((col) => (

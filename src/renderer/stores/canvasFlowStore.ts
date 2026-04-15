@@ -2241,12 +2241,15 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }));
     },
 
-    updateTableNodeData: (nodeId, patch) => {
+    updateTableNodeData: (nodeId, patchOrUpdater) => {
       set((state) => ({
-        nodes: updateTableNodeInList(state.nodes, nodeId, (data) => ({
-          ...data,
-          ...patch,
-        })),
+        nodes: updateTableNodeInList(
+          state.nodes,
+          nodeId,
+          typeof patchOrUpdater === "function"
+            ? patchOrUpdater
+            : (data) => ({ ...data, ...patchOrUpdater }),
+        ),
       }));
     },
 

@@ -75,6 +75,6 @@ export const getTextAgentPresetLabelById = (presetId?: string) => {
 };
 
 export const TEXT_AGENT_MODELS = [
-  { value: "gemini-3.1-pro", label: "Gemini 3.1 Pro" },
+  { value: "claude-sonnet-4.6", label: "Claude Sonnet 4.6" },
   { value: "deepseek-v3.2", label: "DeepSeek v3.2" },
 ];
