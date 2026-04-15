@@ -20,6 +20,7 @@ interface CopiedEdgeTemplate {
 export function useCopyPaste() {
   const copiedNodesRef = useRef<CopiedNodeTemplate[]>([]);
   const copiedEdgesRef = useRef<CopiedEdgeTemplate[]>([]);
+  const pasteCountRef = useRef(0);
 
   const copySelectedNodes = useCallback(() => {
     const state = useCanvasFlowStore.getState();
@@ -56,6 +57,7 @@ export function useCopyPaste() {
 
     copiedNodesRef.current = copiedNodes;
     copiedEdgesRef.current = copiedEdges;
+    pasteCountRef.current = 0;
   }, []);
 
   const pasteNodes = useCallback(
@@ -79,6 +81,13 @@ export function useCopyPaste() {
         groupCenterY = sumY / copiedNodes.length;
       }
 
+      pasteCountRef.current += 1;
+      const pasteCount = pasteCountRef.current;
+
+      const PASTE_OFFSET_X = 50;
+      const PASTE_OFFSET_Y = 50;
+      const REPEAT_OFFSET_X = 200;
+
       const newNodes: AllNodeType[] = copiedNodes.map((nodeTemplate) => {
         const newId = state.getNextNodeId(nodeTemplate.type as NodeType);
         originalToNewIdMap.set(nodeTemplate.originalId, newId);
@@ -92,8 +101,9 @@ export function useCopyPaste() {
           newPositionX = mousePosition.x + offsetX;
           newPositionY = mousePosition.y + offsetY;
         } else {
-          newPositionX = nodeTemplate.position.x + 50;
-          newPositionY = nodeTemplate.position.y + 50;
+          const repeatOffset = pasteCount > 1 ? (pasteCount - 1) * REPEAT_OFFSET_X : 0;
+          newPositionX = nodeTemplate.position.x + PASTE_OFFSET_X + repeatOffset;
+          newPositionY = nodeTemplate.position.y + PASTE_OFFSET_Y;
         }
 
         const dataCopy = JSON.parse(JSON.stringify(nodeTemplate.data));

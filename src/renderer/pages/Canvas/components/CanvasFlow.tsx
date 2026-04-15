@@ -138,7 +138,6 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         event.key === "c" &&
         !event.shiftKey
       ) {
-        event.preventDefault();
         copySelectedNodes();
       }
 
@@ -161,6 +160,34 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [handleKeyDown]);
+
+  useEffect(() => {
+    const handleCopy = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isEditableTarget =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable;
+
+      if (isEditableTarget) return;
+
+      const state = useCanvasFlowStore.getState();
+      const selectedNodes = state.nodes.filter((n) => n.selected);
+      if (selectedNodes.length === 0) return;
+
+      event.preventDefault();
+      event.clipboardData?.setData(
+        "application/json",
+        JSON.stringify({ type: "canvas-nodes", count: selectedNodes.length }),
+      );
+      event.clipboardData?.setData("text/plain", "");
+    };
+
+    document.addEventListener("copy", handleCopy);
+    return () => {
+      document.removeEventListener("copy", handleCopy);
+    };
+  }, []);
 
   // 监听 store 的 historyVersion 变化，触发历史记录保存
   const historyVersion = useCanvasFlowStore((state) => state.historyVersion);
@@ -283,6 +310,20 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
 
       if (isEditableTarget) {
         return;
+      }
+
+      const clipboardText = event.clipboardData?.getData("application/json");
+      if (clipboardText) {
+        try {
+          const data = JSON.parse(clipboardText);
+          if (data.type === "canvas-nodes") {
+            event.preventDefault();
+            pasteNodes(mouseFlowPosition ?? undefined);
+            return;
+          }
+        } catch {
+          // not our data, ignore
+        }
       }
 
       event.preventDefault();
