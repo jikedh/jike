@@ -90,17 +90,11 @@ export async function createChatCompletion(data: any, signal?: AbortSignal) {
         ? "/v1/chat/completions"
         : `${baseURL}/v1/chat/completions`;
 
-    // 处理 extra_body 参数
-    const requestBody = {
-      ...data,
-      ...(data.extra_body ? data.extra_body : {}),
-    };
-
     const response = await fetch(url, {
       method: "POST",
       signal,
       headers,
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify(data),
     });
 
     if (!response.ok) {
@@ -119,27 +113,15 @@ export async function createChatCompletion(data: any, signal?: AbortSignal) {
         const { done, value } = await reader.read();
         if (done || value?.data === "[DONE]") return;
         const content = JSON.parse(value.data)?.choices?.[0]?.delta?.content;
-        const reasoningContent = JSON.parse(value.data)?.choices?.[0]?.delta?.reasoning_content;
-        if (content || reasoningContent) {
-          yield {
-            content,
-            reasoning_content: reasoningContent,
-          };
-        }
+        if (content) yield content;
       }
     })();
   }
 
-  // 处理非流式请求的 extra_body 参数
-  const requestBody = {
-    ...data,
-    ...(data.extra_body ? data.extra_body : {}),
-  };
-
   return aiService({
     url: "/v1/chat/completions",
     method: "post",
-    data: requestBody,
+    data,
     signal,
   });
 }
