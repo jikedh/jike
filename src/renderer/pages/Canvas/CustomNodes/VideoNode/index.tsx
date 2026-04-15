@@ -74,6 +74,12 @@ export const VideoNode = memo(
       };
     }, [data.aspect_ratio]);
 
+    // 节点尺寸变化时，通知 ReactFlow 重新计算 Handle 位置，确保连线贴合节点边缘
+    const updateNodeInternals = useUpdateNodeInternals();
+    useEffect(() => {
+      updateNodeInternals(id);
+    }, [nodeSize.width, nodeSize.height, id, updateNodeInternals]);
+
     // 缓存回调函数
     const handleDuplicate = useCallback(() => {
       duplicateNode(id);
