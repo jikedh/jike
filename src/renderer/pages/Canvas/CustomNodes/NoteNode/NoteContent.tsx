@@ -36,8 +36,9 @@ export const NoteContent = ({
 
   return (
     <div
-      className={`note-scrollbar noflow nopan h-full w-full rounded-b-xl bg-[#1f1f1f] p-3 text-sm text-white/90 cursor-text ${isSelected ? 'overflow-auto' : 'overflow-hidden'
-        }`}
+      className={`note-scrollbar noflow nopan h-full w-full rounded-b-xl bg-[#1f1f1f] p-3 text-sm text-white/90 cursor-text ${
+        isSelected ? "overflow-auto" : "overflow-hidden"
+      }`}
       onClick={(e) => {
         // 当按下 Ctrl/Meta 键时，不触发编辑模式，让事件传播
         if (e.ctrlKey || e.metaKey) {

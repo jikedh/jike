@@ -1,1 +1,4 @@
-export { parseVideoAnalysisTable, type VideoAnalysisRow } from "./parseVideoAnalysisTable";
+export {
+  parseVideoAnalysisTable,
+  type VideoAnalysisRow,
+} from "./parseVideoAnalysisTable";

@@ -28,7 +28,8 @@ export const SidebarCeBianLan = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFirstLoginModalOpen, setIsFirstLoginModalOpen] = useState(false);
 
-  const { loginStatus, fetchUserInfo, balanceInfo, fetchBalanceInfo } = useUserStore();
+  const { loginStatus, fetchUserInfo, balanceInfo, fetchBalanceInfo } =
+    useUserStore();
 
   useEffect(() => {
     if (token) {

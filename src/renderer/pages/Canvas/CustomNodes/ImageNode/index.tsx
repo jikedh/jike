@@ -1,4 +1,8 @@
-import { type NodeProps, Position, useUpdateNodeInternals } from "@xyflow/react";
+import {
+  type NodeProps,
+  Position,
+  useUpdateNodeInternals,
+} from "@xyflow/react";
 import { memo, useCallback, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { uploadFileToOSS } from "service/oss";
@@ -213,7 +217,13 @@ export const ImageNode = memo(
           onSeparateToNodes={handleContextMenuSeparateToNodes}
           hasMultipleResults={hasMultipleResults}
         >
-          <div className="group/node relative" style={{ width: `${nodeSize.width}px`, height: `${nodeSize.height}px` }}>
+          <div
+            className="group/node relative"
+            style={{
+              width: `${nodeSize.width}px`,
+              height: `${nodeSize.height}px`,
+            }}
+          >
             {/* 节点内顶部工具栏：直接参与节点缩放，保证几何一致性 */}
             {shouldShowToolbar && (
               <div className="nodrag nopan nowheel absolute -top-12 left-1/2 z-50 -translate-x-1/2">
@@ -286,7 +296,9 @@ export const ImageNode = memo(
             <div
               className={cn(
                 "nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2 transition-opacity duration-200",
-                shouldShowToolbar ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none",
+                shouldShowToolbar
+                  ? "opacity-100 visible"
+                  : "opacity-0 invisible pointer-events-none",
               )}
             >
               <ImagePromptPanel nodeId={id} />
@@ -296,17 +308,17 @@ export const ImageNode = memo(
 
         {/* 全景图查看器 - 使用 Portal 渲染到 body，避免 React Flow 的 CSS 隔离影响 fixed 定位 */}
         {typeof document !== "undefined" &&
-          panoramaViewer.open &&
-          panoramaViewer.sourceNodeId === id
+        panoramaViewer.open &&
+        panoramaViewer.sourceNodeId === id
           ? createPortal(
-            <PanoramaViewer
-              open={panoramaViewer.open}
-              onClose={closePanoramaViewer}
-              initialImage={panoramaViewer.imageUrl ?? undefined}
-              sourceNodeId={panoramaViewer.sourceNodeId}
-            />,
-            document.body,
-          )
+              <PanoramaViewer
+                open={panoramaViewer.open}
+                onClose={closePanoramaViewer}
+                initialImage={panoramaViewer.imageUrl ?? undefined}
+                sourceNodeId={panoramaViewer.sourceNodeId}
+              />,
+              document.body,
+            )
           : null}
       </>
     );

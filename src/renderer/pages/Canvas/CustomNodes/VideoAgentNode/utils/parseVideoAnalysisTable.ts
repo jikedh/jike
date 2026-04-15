@@ -16,7 +16,9 @@ export interface VideoAnalysisRow {
  * 解析视频分析文本，尝试从 Markdown 表格中提取数据
  * 如果没有表格，则按时间点/序号分段解析
  */
-export const parseVideoAnalysisTable = (content: string): VideoAnalysisRow[] => {
+export const parseVideoAnalysisTable = (
+  content: string,
+): VideoAnalysisRow[] => {
   const rows: VideoAnalysisRow[] = [];
 
   // 尝试匹配 Markdown 表格格式
@@ -95,7 +97,12 @@ export const parseVideoAnalysisTable = (content: string): VideoAnalysisRow[] => 
       if (currentSegment) {
         segments.push(currentSegment);
       }
-      currentSegment = { timePoint: matchedTimePoint, content: trimmedLine.replace(timePointPatterns.find(p => trimmedLine.match(p))!, "").trim() };
+      currentSegment = {
+        timePoint: matchedTimePoint,
+        content: trimmedLine
+          .replace(timePointPatterns.find((p) => trimmedLine.match(p))!, "")
+          .trim(),
+      };
     } else if (currentSegment) {
       currentSegment.content += "\n" + trimmedLine;
     }
@@ -120,15 +127,17 @@ export const parseVideoAnalysisTable = (content: string): VideoAnalysisRow[] => 
 
   // 如果完全无法解析，返回单行原始内容
   if (content.trim()) {
-    return [{
-      时间点: "全文",
-      场景描述: content,
-      镜头类型: "",
-      关键动作: "",
-      画面构图: "",
-      台词字幕: "",
-      节奏分析: "",
-    }];
+    return [
+      {
+        时间点: "全文",
+        场景描述: content,
+        镜头类型: "",
+        关键动作: "",
+        画面构图: "",
+        台词字幕: "",
+        节奏分析: "",
+      },
+    ];
   }
 
   return [];

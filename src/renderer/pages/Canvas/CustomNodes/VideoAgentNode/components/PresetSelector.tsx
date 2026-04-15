@@ -2,10 +2,7 @@
  * 预设选择器组件
  * 用于首次选择或切换视频智能体类型
  */
-import {
-  IconSparkles,
-  IconVideo,
-} from "@tabler/icons-react";
+import { IconSparkles, IconVideo } from "@tabler/icons-react";
 import { VIDEO_AGENT_PRESET_LIST } from "shared/constants/video-agent-presets";
 import type { VideoAgentPresetId } from "shared/types/flow";
 

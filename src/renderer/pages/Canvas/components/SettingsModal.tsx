@@ -128,30 +128,53 @@ export const SettingsModal = ({
 
   // 预设提示词库状态
   const [presets, setPresets] = useState([
-    { id: '1', name: '电影感光效', content: 'Cinematic lighting, volumetric fog, 8k resolution, highly detailed, anamorphic lens flare', type: 'image', enabled: true },
-    { id: '2', name: '赛博朋克风格', content: 'Cyberpunk aesthetic, neon lights, rainy streets, futuristic city, high contrast', type: 'general', enabled: false },
-    { id: '3', name: '慢动作特写', content: 'Slow motion, extreme close up, shallow depth of field, 120fps style', type: 'video', enabled: true },
+    {
+      id: "1",
+      name: "电影感光效",
+      content:
+        "Cinematic lighting, volumetric fog, 8k resolution, highly detailed, anamorphic lens flare",
+      type: "image",
+      enabled: true,
+    },
+    {
+      id: "2",
+      name: "赛博朋克风格",
+      content:
+        "Cyberpunk aesthetic, neon lights, rainy streets, futuristic city, high contrast",
+      type: "general",
+      enabled: false,
+    },
+    {
+      id: "3",
+      name: "慢动作特写",
+      content:
+        "Slow motion, extreme close up, shallow depth of field, 120fps style",
+      type: "video",
+      enabled: true,
+    },
   ]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    name: '',
-    content: '',
-    type: 'general',
+    name: "",
+    content: "",
+    type: "general",
     enabled: true,
   });
 
   // 确认对话框状态
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [confirmDialogAction, setConfirmDialogAction] = useState<'add' | 'delete' | null>(null);
+  const [confirmDialogAction, setConfirmDialogAction] = useState<
+    "add" | "delete" | null
+  >(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const handleAddPreset = () => {
     if (!formData.name.trim()) {
-      error('请输入预设名称');
+      error("请输入预设名称");
       return;
     }
-    setConfirmDialogAction('add');
+    setConfirmDialogAction("add");
     setConfirmDialogOpen(true);
   };
 
@@ -165,31 +188,35 @@ export const SettingsModal = ({
     resetPresetForm();
     setConfirmDialogOpen(false);
     setConfirmDialogAction(null);
-    success('预设创建成功');
+    success("预设创建成功");
   };
 
   const handleUpdatePreset = () => {
     if (!editingId) return;
     if (!formData.name.trim()) {
-      error('请输入预设名称');
+      error("请输入预设名称");
       return;
     }
-    setPresets(presets.map(p => p.id === editingId ? { ...formData, id: editingId } : p));
+    setPresets(
+      presets.map((p) =>
+        p.id === editingId ? { ...formData, id: editingId } : p,
+      ),
+    );
     setEditingId(null);
     resetPresetForm();
-    success('预设更新成功');
+    success("预设更新成功");
   };
 
   const handleDeletePreset = (id: string) => {
     setPendingDeleteId(id);
-    setConfirmDialogAction('delete');
+    setConfirmDialogAction("delete");
     setConfirmDialogOpen(true);
   };
 
   const confirmDeletePreset = () => {
     if (pendingDeleteId) {
-      setPresets(presets.filter(p => p.id !== pendingDeleteId));
-      success('预设删除成功');
+      setPresets(presets.filter((p) => p.id !== pendingDeleteId));
+      success("预设删除成功");
     }
     setConfirmDialogOpen(false);
     setConfirmDialogAction(null);
@@ -197,7 +224,9 @@ export const SettingsModal = ({
   };
 
   const togglePresetEnabled = (id: string) => {
-    setPresets(presets.map(p => p.id === id ? { ...p, enabled: !p.enabled } : p));
+    setPresets(
+      presets.map((p) => (p.id === id ? { ...p, enabled: !p.enabled } : p)),
+    );
   };
 
   const startEditPreset = (preset: any) => {
@@ -212,7 +241,7 @@ export const SettingsModal = ({
   };
 
   const resetPresetForm = () => {
-    setFormData({ name: '', content: '', type: 'general', enabled: true });
+    setFormData({ name: "", content: "", type: "general", enabled: true });
   };
 
   // 检测开发环境
@@ -501,7 +530,11 @@ export const SettingsModal = ({
                           <Button
                             size="sm"
                             variant="blue"
-                            onClick={() => { setIsAdding(true); setEditingId(null); resetPresetForm(); }}
+                            onClick={() => {
+                              setIsAdding(true);
+                              setEditingId(null);
+                              resetPresetForm();
+                            }}
                           >
                             新增预设
                           </Button>
@@ -510,43 +543,65 @@ export const SettingsModal = ({
                         {(isAdding || editingId) && (
                           <div className="bg-black/30 border border-white/5 rounded-xl p-4 mb-4">
                             <div className="text-sm font-medium text-white/80 mb-4">
-                              {editingId ? '编辑预设' : '创建新预设'}
+                              {editingId ? "编辑预设" : "创建新预设"}
                             </div>
                             <div className="space-y-4">
                               <div>
-                                <label className="text-xs text-white/40 mb-1 block">预设名称</label>
+                                <label className="text-xs text-white/40 mb-1 block">
+                                  预设名称
+                                </label>
                                 <input
                                   type="text"
                                   value={formData.name}
-                                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                  onChange={(e) =>
+                                    setFormData({
+                                      ...formData,
+                                      name: e.target.value,
+                                    })
+                                  }
                                   placeholder="例如：赛博朋克风格"
                                   className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#B43FEB] focus:outline-none"
                                 />
                               </div>
                               <div>
-                                <label className="text-xs text-white/40 mb-1 block">适用范围</label>
+                                <label className="text-xs text-white/40 mb-1 block">
+                                  适用范围
+                                </label>
                                 <div className="flex gap-2">
-                                  {['general', 'image', 'video'].map(t => (
+                                  {["general", "image", "video"].map((t) => (
                                     <button
                                       key={t}
-                                      onClick={() => setFormData({ ...formData, type: t })}
+                                      onClick={() =>
+                                        setFormData({ ...formData, type: t })
+                                      }
                                       className={cn(
                                         "flex-1 py-2 rounded-lg text-xs font-medium border transition-all",
                                         formData.type === t
                                           ? "bg-[#B43FEB]/20 border-[#B43FEB] text-[#B43FEB]"
-                                          : "bg-black/50 border-white/10 text-white/40 hover:border-white/20"
+                                          : "bg-black/50 border-white/10 text-white/40 hover:border-white/20",
                                       )}
                                     >
-                                      {t === 'general' ? '通用' : t === 'image' ? '生图' : '视频'}
+                                      {t === "general"
+                                        ? "通用"
+                                        : t === "image"
+                                          ? "生图"
+                                          : "视频"}
                                     </button>
                                   ))}
                                 </div>
                               </div>
                               <div>
-                                <label className="text-xs text-white/40 mb-1 block">提示词正文</label>
+                                <label className="text-xs text-white/40 mb-1 block">
+                                  提示词正文
+                                </label>
                                 <textarea
                                   value={formData.content}
-                                  onChange={e => setFormData({ ...formData, content: e.target.value })}
+                                  onChange={(e) =>
+                                    setFormData({
+                                      ...formData,
+                                      content: e.target.value,
+                                    })
+                                  }
                                   placeholder="输入您的提示词内容..."
                                   rows={3}
                                   className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-[#B43FEB] focus:outline-none resize-none"
@@ -557,16 +612,23 @@ export const SettingsModal = ({
                                   size="sm"
                                   variant="default"
                                   className="border-white/20 text-white/80 hover:bg-white/10 hover:text-white"
-                                  onClick={() => { setIsAdding(false); setEditingId(null); }}
+                                  onClick={() => {
+                                    setIsAdding(false);
+                                    setEditingId(null);
+                                  }}
                                 >
                                   取消
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="blue"
-                                  onClick={editingId ? handleUpdatePreset : handleAddPreset}
+                                  onClick={
+                                    editingId
+                                      ? handleUpdatePreset
+                                      : handleAddPreset
+                                  }
                                 >
-                                  {editingId ? '保存' : '创建'}
+                                  {editingId ? "保存" : "创建"}
                                 </Button>
                               </div>
                             </div>
@@ -579,21 +641,33 @@ export const SettingsModal = ({
                               key={preset.id}
                               className={cn(
                                 "bg-black/30 border rounded-lg p-3 flex items-start justify-between transition-all",
-                                preset.enabled ? "border-white/5" : "border-white/5 opacity-50"
+                                preset.enabled
+                                  ? "border-white/5"
+                                  : "border-white/5 opacity-50",
                               )}
                             >
                               <div className="flex gap-3 flex-1">
-                                <div className={cn(
-                                  "w-10 h-10 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold",
-                                  preset.type === 'image' ? "bg-blue-500/20 text-blue-400" :
-                                  preset.type === 'video' ? "bg-purple-500/20 text-purple-400" :
-                                  "bg-green-500/20 text-green-400"
-                                )}>
-                                  {preset.type === 'image' ? '图' : preset.type === 'video' ? '视' : '通'}
+                                <div
+                                  className={cn(
+                                    "w-10 h-10 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold",
+                                    preset.type === "image"
+                                      ? "bg-blue-500/20 text-blue-400"
+                                      : preset.type === "video"
+                                        ? "bg-purple-500/20 text-purple-400"
+                                        : "bg-green-500/20 text-green-400",
+                                  )}
+                                >
+                                  {preset.type === "image"
+                                    ? "图"
+                                    : preset.type === "video"
+                                      ? "视"
+                                      : "通"}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-sm font-medium text-white/90 truncate">{preset.name}</span>
+                                    <span className="text-sm font-medium text-white/90 truncate">
+                                      {preset.name}
+                                    </span>
                                     <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-white/5 text-white/30">
                                       {preset.type}
                                     </span>
@@ -611,9 +685,11 @@ export const SettingsModal = ({
                                     "p-1.5 rounded-lg transition-all",
                                     preset.enabled
                                       ? "bg-[#B43FEB]/10 text-[#B43FEB]"
-                                      : "bg-white/5 text-white/20"
+                                      : "bg-white/5 text-white/20",
                                   )}
-                                  title={preset.enabled ? "点击禁用" : "点击启用"}
+                                  title={
+                                    preset.enabled ? "点击禁用" : "点击启用"
+                                  }
                                 >
                                   <IconBolt size={14} />
                                 </button>
@@ -635,7 +711,9 @@ export const SettingsModal = ({
 
                           {presets.length === 0 && (
                             <div className="text-center py-8 bg-black/30 border border-dashed border-white/10 rounded-lg">
-                              <p className="text-xs text-white/30">暂无预设提示词，点击上方按钮新增</p>
+                              <p className="text-xs text-white/30">
+                                暂无预设提示词，点击上方按钮新增
+                              </p>
                             </div>
                           )}
                         </div>
@@ -896,22 +974,30 @@ export const SettingsModal = ({
         <DialogContent className="bg-[#0a0a0f] border-white/10 text-white">
           <DialogHeader>
             <DialogTitle className="text-white">
-              {confirmDialogAction === 'add' ? '确认创建预设' : '确认删除预设'}
+              {confirmDialogAction === "add" ? "确认创建预设" : "确认删除预设"}
             </DialogTitle>
             <DialogDescription className="text-white/70">
-              {confirmDialogAction === 'add'
+              {confirmDialogAction === "add"
                 ? `确定要创建预设"${formData.name}"吗？`
-                : '确定要删除这个预设吗？此操作不可撤销。'}
+                : "确定要删除这个预设吗？此操作不可撤销。"}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button size="sm" className="border-white/20 text-white/80 hover:bg-white/10 hover:text-white" onClick={() => setConfirmDialogOpen(false)}>
+            <Button
+              size="sm"
+              className="border-white/20 text-white/80 hover:bg-white/10 hover:text-white"
+              onClick={() => setConfirmDialogOpen(false)}
+            >
               取消
             </Button>
             <Button
               size="sm"
               variant="blue"
-              onClick={confirmDialogAction === 'add' ? confirmAddPreset : confirmDeletePreset}
+              onClick={
+                confirmDialogAction === "add"
+                  ? confirmAddPreset
+                  : confirmDeletePreset
+              }
             >
               确认
             </Button>

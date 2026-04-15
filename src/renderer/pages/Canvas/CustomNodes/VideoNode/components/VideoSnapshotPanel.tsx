@@ -137,7 +137,10 @@ export const VideoSnapshotPanel = ({
                 placeholder={unit === "s" ? "例如: 5" : "例如: 5000"}
                 disabled={isCapturing}
               />
-              <Select value={unit} onValueChange={(v) => setUnit(v as "s" | "ms")}>
+              <Select
+                value={unit}
+                onValueChange={(v) => setUnit(v as "s" | "ms")}
+              >
                 <SelectTrigger className="w-32">
                   <SelectValue />
                 </SelectTrigger>

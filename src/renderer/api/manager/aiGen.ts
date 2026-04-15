@@ -5,17 +5,17 @@
 
 import { jikeingAdminService } from "service/aiRequest";
 import type {
-    AiAdminTaskListResponse,
-    AiAdminTaskListRequest,
+  AiAdminTaskListResponse,
+  AiAdminTaskListRequest,
 } from "shared/types/api/aiGen";
 
 /** AI 任务管理列表 */
 export function aiAdminTaskList(
-    params?: AiAdminTaskListRequest,
+  params?: AiAdminTaskListRequest,
 ): Promise<AiAdminTaskListResponse> {
-    return jikeingAdminService({
-        url: "/v1/nanotask/admin/page-list",
-        method: "get",
-        params,
-    });
+  return jikeingAdminService({
+    url: "/v1/nanotask/admin/page-list",
+    method: "get",
+    params,
+  });
 }

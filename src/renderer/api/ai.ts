@@ -71,7 +71,7 @@ export function getVideoTaskStatus(id: string) {
 
 export async function createChatCompletion(data: any, signal?: AbortSignal) {
   console.log(data);
-  console.log('测试会不会打印');
+  console.log("测试会不会打印");
   if (data.stream) {
     // 构建请求头 - 动态从 localStorage 获取 API 密钥
     const token = getAiToken();
@@ -297,9 +297,12 @@ export function generateGeminiContentStream(
  * @param data 请求数据，包含 messages、model 等字段
  * @param signal 可选的 AbortSignal 用于取消请求
  */
-export async function createDashscopeChatCompletion(data: any, signal?: AbortSignal) {
+export async function createDashscopeChatCompletion(
+  data: any,
+  signal?: AbortSignal,
+) {
   console.log(data);
-  console.log('测试会不会打印111');
+  console.log("测试会不会打印111");
   // 处理 extra_body 参数
   const requestBody = {
     ...data,

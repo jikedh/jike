@@ -1,17 +1,20 @@
 // 积分 API 测试 Demo 页面
 // 用于测试 jikeing.ts 和 manager/score.ts 中的各个接口
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
   dailyResign,
   initScore,
   getScoreConfig,
   getBalanceInfo,
   innerAddUserScore,
-} from '@/api/jikeing';
-import { addScore, getUserScore, adminGetScoreConfig } from '@/api/manager/score';
-import { createDashscopeChatCompletion } from '@/api/ai';
-
+} from "@/api/jikeing";
+import {
+  addScore,
+  getUserScore,
+  adminGetScoreConfig,
+} from "@/api/manager/score";
+import { createDashscopeChatCompletion } from "@/api/ai";
 
 // ===================== 测试按钮组件 =====================
 
@@ -19,15 +22,21 @@ interface TestButtonProps {
   label: string;
   onClick: () => void;
   loading?: boolean;
-  variant?: 'default' | 'outline' | 'ghost';
+  variant?: "default" | "outline" | "ghost";
 }
 
-const TestButton = ({ label, onClick, loading, variant = 'default' }: TestButtonProps) => {
-  const baseClasses = 'px-4 py-2 rounded-lg font-medium transition-all duration-200 disabled:opacity-50';
+const TestButton = ({
+  label,
+  onClick,
+  loading,
+  variant = "default",
+}: TestButtonProps) => {
+  const baseClasses =
+    "px-4 py-2 rounded-lg font-medium transition-all duration-200 disabled:opacity-50";
   const variantClasses = {
-    default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-    outline: 'border border-white/20 text-white/80 hover:bg-white/10',
-    ghost: 'text-white/60 hover:text-white hover:bg-white/5',
+    default: "bg-primary text-primary-foreground hover:bg-primary/90",
+    outline: "border border-white/20 text-white/80 hover:bg-white/10",
+    ghost: "text-white/60 hover:text-white hover:bg-white/5",
   };
 
   return (
@@ -36,7 +45,7 @@ const TestButton = ({ label, onClick, loading, variant = 'default' }: TestButton
       onClick={onClick}
       disabled={loading}
     >
-      {loading ? '加载中...' : label}
+      {loading ? "加载中..." : label}
     </button>
   );
 };
@@ -46,7 +55,7 @@ const TestButton = ({ label, onClick, loading, variant = 'default' }: TestButton
 interface LogEntry {
   time: string;
   api: string;
-  status: 'success' | 'error';
+  status: "success" | "error";
   data: any;
 }
 
@@ -63,15 +72,23 @@ const LogPanel = ({ logs }: { logs: LogEntry[] }) => {
           {logs.map((log, index) => (
             <div
               key={index}
-              className={`text-xs p-2 rounded ${log.status === 'success' ? 'bg-green-900/30 text-green-300' : 'bg-red-900/30 text-red-300'
-                }`}
+              className={`text-xs p-2 rounded ${
+                log.status === "success"
+                  ? "bg-green-900/30 text-green-300"
+                  : "bg-red-900/30 text-red-300"
+              }`}
             >
               <div className="flex items-center gap-2 mb-1">
                 <span className="opacity-60">{log.time}</span>
                 <span className="font-semibold">{log.api}</span>
-                <span className={`px-1.5 py-0.5 rounded text-[10px] ${log.status === 'success' ? 'bg-green-800/50' : 'bg-red-800/50'
-                  }`}>
-                  {log.status === 'success' ? 'SUCCESS' : 'ERROR'}
+                <span
+                  className={`px-1.5 py-0.5 rounded text-[10px] ${
+                    log.status === "success"
+                      ? "bg-green-800/50"
+                      : "bg-red-800/50"
+                  }`}
+                >
+                  {log.status === "success" ? "SUCCESS" : "ERROR"}
                 </span>
               </div>
               <pre className="whitespace-pre-wrap break-all font-mono">
@@ -92,9 +109,13 @@ export default function TestPage() {
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
 
   // 添加日志
-  const addLog = (api: string, status: 'success' | 'error', data: any) => {
+  const addLog = (api: string, status: "success" | "error", data: any) => {
     const now = new Date();
-    const time = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const time = now.toLocaleTimeString("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
     setLogs((prev) => [{ time, api, status, data }, ...prev]);
   };
 
@@ -105,10 +126,10 @@ export default function TestPage() {
       console.log(`[${apiName}] 请求开始`);
       const response = await apiFunc();
       console.log(`[${apiName}] 响应:`, response);
-      addLog(apiName, 'success', response);
+      addLog(apiName, "success", response);
     } catch (error: any) {
       console.error(`[${apiName}] 错误:`, error);
-      addLog(apiName, 'error', error?.response?.data || error.message || error);
+      addLog(apiName, "error", error?.response?.data || error.message || error);
     } finally {
       setLoadingMap((prev) => ({ ...prev, [apiName]: false }));
     }
@@ -116,63 +137,81 @@ export default function TestPage() {
 
   // ===================== 用户侧 API =====================
 
-  const handleDailyResign = () => callApi('dailyResign (每日签到)', dailyResign);
-  const handleInitScore = () => callApi('initScore (初始化积分)', initScore);
-  const handleGetScoreConfig = () => callApi('getScoreConfig (获取积分配置)', getScoreConfig);
-  const handleGetBalanceInfo = () => callApi('getBalanceInfo (获取积分余额)', getBalanceInfo);
+  const handleDailyResign = () =>
+    callApi("dailyResign (每日签到)", dailyResign);
+  const handleInitScore = () => callApi("initScore (初始化积分)", initScore);
+  const handleGetScoreConfig = () =>
+    callApi("getScoreConfig (获取积分配置)", getScoreConfig);
+  const handleGetBalanceInfo = () =>
+    callApi("getBalanceInfo (获取积分余额)", getBalanceInfo);
 
   // ===================== 管理侧 API =====================
 
-  const [uuidInput, setUuidInput] = useState('');
-  const [adminScoreData, setAdminScoreData] = useState({ toUserId: '', score: 0 });
+  const [uuidInput, setUuidInput] = useState("");
+  const [adminScoreData, setAdminScoreData] = useState({
+    toUserId: "",
+    score: 0,
+  });
 
   const handleAdminAddScore = () => {
     if (!adminScoreData.toUserId) {
-      alert('请输入用户 ID');
+      alert("请输入用户 ID");
       return;
     }
-    callApi('adminAddScore (管理员加积分)', () => addScore(adminScoreData));
+    callApi("adminAddScore (管理员加积分)", () => addScore(adminScoreData));
   };
 
   const handleGetUserScoreByUuid = () => {
     if (!uuidInput) {
-      alert('请输入 UUID');
+      alert("请输入 UUID");
       return;
     }
-    callApi('getUserScoreByUuid (查询用户积分)', () => getUserScore({ uuid: uuidInput }));
+    callApi("getUserScoreByUuid (查询用户积分)", () =>
+      getUserScore({ uuid: uuidInput }),
+    );
   };
 
-  const handleAdminGetScoreConfig = () => callApi('adminGetScoreConfig (管理员获取配置)', () => adminGetScoreConfig());
+  const handleAdminGetScoreConfig = () =>
+    callApi("adminGetScoreConfig (管理员获取配置)", () =>
+      adminGetScoreConfig(),
+    );
 
   // ===================== 内部接口 =====================
 
-  const [innerScoreData, setInnerScoreData] = useState({ userId: '', score: 0 });
+  const [innerScoreData, setInnerScoreData] = useState({
+    userId: "",
+    score: 0,
+  });
 
   const handleInnerAddUserScore = () => {
     if (!innerScoreData.userId) {
-      alert('请输入用户 ID');
+      alert("请输入用户 ID");
       return;
     }
-    callApi('innerAddUserScore (内部加积分)', () => innerAddUserScore(innerScoreData));
+    callApi("innerAddUserScore (内部加积分)", () =>
+      innerAddUserScore(innerScoreData),
+    );
   };
 
   // ===================== 阿里云百炼 API =====================
 
-
-  const [dashscopeModel, setDashscopeModel] = useState('qwen-turbo');
-  const [dashscopeMessage, setDashscopeMessage] = useState('你好，介绍一下你自己');
+  const [dashscopeModel, setDashscopeModel] = useState("qwen-turbo");
+  const [dashscopeMessage, setDashscopeMessage] = useState(
+    "你好，介绍一下你自己",
+  );
   const [dashscopeStream, setDashscopeStream] = useState(false);
-  const [dashscopeResult, setDashscopeResult] = useState('');
+  const [dashscopeResult, setDashscopeResult] = useState("");
   const [dashscopeLoading, setDashscopeLoading] = useState(false);
-  const [dashscopeAbortController, setDashscopeAbortController] = useState<AbortController | null>(null);
+  const [dashscopeAbortController, setDashscopeAbortController] =
+    useState<AbortController | null>(null);
 
   const handleDashscopeChat = async () => {
     if (!dashscopeMessage.trim()) {
-      alert('请输入消息内容');
+      alert("请输入消息内容");
       return;
     }
 
-    setDashscopeResult('');
+    setDashscopeResult("");
     setDashscopeLoading(true);
     const controller = new AbortController();
     setDashscopeAbortController(controller);
@@ -180,26 +219,32 @@ export default function TestPage() {
     try {
       const data = {
         model: dashscopeModel,
-        messages: [{ role: 'user', content: dashscopeMessage }],
+        messages: [{ role: "user", content: dashscopeMessage }],
         stream: dashscopeStream,
       };
 
       if (dashscopeStream) {
         // 流式响应
-        const streamGenerator = await createDashscopeChatCompletion(data, controller.signal);
+        const streamGenerator = await createDashscopeChatCompletion(
+          data,
+          controller.signal,
+        );
         for await (const chunk of streamGenerator) {
-          setDashscopeResult((prev) => prev + (chunk.content || ''));
+          setDashscopeResult((prev) => prev + (chunk.content || ""));
         }
       } else {
         // 非流式响应
-        const response = await createDashscopeChatCompletion(data, controller.signal);
+        const response = await createDashscopeChatCompletion(
+          data,
+          controller.signal,
+        );
         setDashscopeResult(JSON.stringify(response, null, 2));
-        addLog('createDashscopeChatCompletion (百炼对话)', 'success', response);
+        addLog("createDashscopeChatCompletion (百炼对话)", "success", response);
       }
     } catch (error: any) {
       const errorMsg = error?.response?.data || error.message || error;
       setDashscopeResult(`错误: ${JSON.stringify(errorMsg)}`);
-      addLog('createDashscopeChatCompletion (百炼对话)', 'error', errorMsg);
+      addLog("createDashscopeChatCompletion (百炼对话)", "error", errorMsg);
     } finally {
       setDashscopeLoading(false);
       setDashscopeAbortController(null);
@@ -210,7 +255,7 @@ export default function TestPage() {
     if (dashscopeAbortController) {
       dashscopeAbortController.abort();
       setDashscopeLoading(false);
-      setDashscopeResult((prev) => prev + '\n[已取消]');
+      setDashscopeResult((prev) => prev + "\n[已取消]");
     }
   };
 
@@ -242,10 +287,26 @@ export default function TestPage() {
                 用户侧 API（jike-web-api）
               </h2>
               <div className="flex flex-wrap gap-3">
-                <TestButton label="每日签到" onClick={handleDailyResign} loading={loadingMap['dailyResign (每日签到)']} />
-                <TestButton label="初始化积分" onClick={handleInitScore} loading={loadingMap['initScore (初始化积分)']} />
-                <TestButton label="获取积分配置" onClick={handleGetScoreConfig} loading={loadingMap['getScoreConfig (获取积分配置)']} />
-                <TestButton label="获取积分余额" onClick={handleGetBalanceInfo} loading={loadingMap['getBalanceInfo (获取积分余额)']} />
+                <TestButton
+                  label="每日签到"
+                  onClick={handleDailyResign}
+                  loading={loadingMap["dailyResign (每日签到)"]}
+                />
+                <TestButton
+                  label="初始化积分"
+                  onClick={handleInitScore}
+                  loading={loadingMap["initScore (初始化积分)"]}
+                />
+                <TestButton
+                  label="获取积分配置"
+                  onClick={handleGetScoreConfig}
+                  loading={loadingMap["getScoreConfig (获取积分配置)"]}
+                />
+                <TestButton
+                  label="获取积分余额"
+                  onClick={handleGetBalanceInfo}
+                  loading={loadingMap["getBalanceInfo (获取积分余额)"]}
+                />
               </div>
             </section>
 
@@ -266,7 +327,12 @@ export default function TestPage() {
                       className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-40 focus:border-cyan-500 outline-none"
                     />
                   </div>
-                  <TestButton label="查询用户积分" onClick={handleGetUserScoreByUuid} loading={loadingMap['getUserScoreByUuid (查询用户积分)']} variant="outline" />
+                  <TestButton
+                    label="查询用户积分"
+                    onClick={handleGetUserScoreByUuid}
+                    loading={loadingMap["getUserScoreByUuid (查询用户积分)"]}
+                    variant="outline"
+                  />
                 </div>
                 <div className="flex flex-wrap gap-3 items-end">
                   <div className="flex flex-col gap-1">
@@ -274,7 +340,12 @@ export default function TestPage() {
                     <input
                       type="text"
                       value={adminScoreData.toUserId}
-                      onChange={(e) => setAdminScoreData((prev) => ({ ...prev, toUserId: e.target.value }))}
+                      onChange={(e) =>
+                        setAdminScoreData((prev) => ({
+                          ...prev,
+                          toUserId: e.target.value,
+                        }))
+                      }
                       placeholder="toUserId"
                       className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-40 focus:border-cyan-500 outline-none"
                     />
@@ -284,14 +355,29 @@ export default function TestPage() {
                     <input
                       type="number"
                       value={adminScoreData.score}
-                      onChange={(e) => setAdminScoreData((prev) => ({ ...prev, score: Number(e.target.value) }))}
+                      onChange={(e) =>
+                        setAdminScoreData((prev) => ({
+                          ...prev,
+                          score: Number(e.target.value),
+                        }))
+                      }
                       placeholder="score"
                       className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-28 focus:border-cyan-500 outline-none"
                     />
                   </div>
-                  <TestButton label="管理员加积分" onClick={handleAdminAddScore} loading={loadingMap['adminAddScore (管理员加积分)']} variant="outline" />
+                  <TestButton
+                    label="管理员加积分"
+                    onClick={handleAdminAddScore}
+                    loading={loadingMap["adminAddScore (管理员加积分)"]}
+                    variant="outline"
+                  />
                 </div>
-                <TestButton label="获取管理员配置" onClick={handleAdminGetScoreConfig} loading={loadingMap['adminGetScoreConfig (管理员获取配置)']} variant="ghost" />
+                <TestButton
+                  label="获取管理员配置"
+                  onClick={handleAdminGetScoreConfig}
+                  loading={loadingMap["adminGetScoreConfig (管理员获取配置)"]}
+                  variant="ghost"
+                />
               </div>
             </section>
 
@@ -306,7 +392,12 @@ export default function TestPage() {
                   <input
                     type="text"
                     value={innerScoreData.userId}
-                    onChange={(e) => setInnerScoreData((prev) => ({ ...prev, userId: e.target.value }))}
+                    onChange={(e) =>
+                      setInnerScoreData((prev) => ({
+                        ...prev,
+                        userId: e.target.value,
+                      }))
+                    }
                     placeholder="userId"
                     className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-40 focus:border-cyan-500 outline-none"
                   />
@@ -316,12 +407,22 @@ export default function TestPage() {
                   <input
                     type="number"
                     value={innerScoreData.score}
-                    onChange={(e) => setInnerScoreData((prev) => ({ ...prev, score: Number(e.target.value) }))}
+                    onChange={(e) =>
+                      setInnerScoreData((prev) => ({
+                        ...prev,
+                        score: Number(e.target.value),
+                      }))
+                    }
                     placeholder="score"
                     className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-28 focus:border-cyan-500 outline-none"
                   />
                 </div>
-                <TestButton label="内部添加积分" onClick={handleInnerAddUserScore} loading={loadingMap['innerAddUserScore (内部加积分)']} variant="outline" />
+                <TestButton
+                  label="内部添加积分"
+                  onClick={handleInnerAddUserScore}
+                  loading={loadingMap["innerAddUserScore (内部加积分)"]}
+                  variant="outline"
+                />
               </div>
             </section>
 
@@ -337,13 +438,16 @@ export default function TestPage() {
                     <select
                       value={dashscopeModel}
                       onChange={(e) => setDashscopeModel(e.target.value)}
-                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-44 focus:border-yellow-500 outline-none">
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-44 focus:border-yellow-500 outline-none"
+                    >
                       <option value="qwen-turbo">qwen-turbo</option>
                       <option value="qwen-plus">qwen-plus</option>
                       <option value="qwen-max">qwen-max</option>
                       <option value="qwen-max-long">qwen-max-long</option>
                       <option value="qwen-coder-turbo">qwen-coder-turbo</option>
-                      <option value="qwen2.5-72b-instruct">qwen2.5-72b-instruct</option>
+                      <option value="qwen2.5-72b-instruct">
+                        qwen2.5-72b-instruct
+                      </option>
                     </select>
                   </div>
                   <div className="flex items-center gap-2">
@@ -354,7 +458,12 @@ export default function TestPage() {
                       onChange={(e) => setDashscopeStream(e.target.checked)}
                       className="w-4 h-4 accent-yellow-500"
                     />
-                    <label htmlFor="dashscope-stream" className="text-sm text-white/70">流式输出</label>
+                    <label
+                      htmlFor="dashscope-stream"
+                      className="text-sm text-white/70"
+                    >
+                      流式输出
+                    </label>
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
@@ -369,7 +478,7 @@ export default function TestPage() {
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <TestButton
-                    label={dashscopeStream ? '开始对话 (流式)' : '开始对话'}
+                    label={dashscopeStream ? "开始对话 (流式)" : "开始对话"}
                     onClick={handleDashscopeChat}
                     loading={dashscopeLoading}
                     variant="default"
@@ -384,7 +493,9 @@ export default function TestPage() {
                 </div>
                 {dashscopeResult && (
                   <div className="mt-4 p-3 bg-black/30 rounded border border-white/10">
-                    <div className="text-xs text-white/50 mb-2 uppercase tracking-wider">响应结果</div>
+                    <div className="text-xs text-white/50 mb-2 uppercase tracking-wider">
+                      响应结果
+                    </div>
                     <pre className="text-sm text-green-300 whitespace-pre-wrap break-all font-mono max-h-60 overflow-y-auto">
                       {dashscopeResult}
                     </pre>

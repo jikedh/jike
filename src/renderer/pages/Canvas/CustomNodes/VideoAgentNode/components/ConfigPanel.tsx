@@ -46,8 +46,8 @@ export const ConfigPanel = ({
             className="flex w-full items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-xs text-white/70 transition-colors hover:border-[#B43FEB]/30 hover:text-white/90 hover:bg-white/[0.04]"
           >
             <span>
-              {VIDEO_AGENT_MODELS.find((m) => m.value === currentModel)?.label ||
-                currentModel}
+              {VIDEO_AGENT_MODELS.find((m) => m.value === currentModel)
+                ?.label || currentModel}
             </span>
             <IconChevronDown
               size={14}

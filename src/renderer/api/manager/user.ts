@@ -26,9 +26,7 @@ export function getUserInfoByUUid(params: {
 }
 
 /** 设置会员权益 */
-export function updateMemberInfo(
-  data: AddVipRequest,
-): Promise<AddVipResponse> {
+export function updateMemberInfo(data: AddVipRequest): Promise<AddVipResponse> {
   return jikeingAdminService({
     baseURL: ADMIN_BASE_API,
     url: "/user/v1/add-vip",

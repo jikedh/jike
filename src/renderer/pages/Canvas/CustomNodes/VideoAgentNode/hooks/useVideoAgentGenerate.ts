@@ -51,7 +51,10 @@ export const useVideoAgentGenerate = ({
   );
 
   /** 从上游连接中获取视频 URL */
-  const getParentVideoUrl = useCallback((): { videoUrl: string | null; inputError: string | null } => {
+  const getParentVideoUrl = useCallback((): {
+    videoUrl: string | null;
+    inputError: string | null;
+  } => {
     const currentEdges = useCanvasFlowStore.getState().edges;
     const currentNodes = useCanvasFlowStore.getState().nodes;
 
@@ -68,8 +71,9 @@ export const useVideoAgentGenerate = ({
       return { videoUrl: null, inputError: "输入节点必须是视频节点" };
     }
 
-    const videoUrl = parentVideoNode.data?.video_url
-      ?? parentVideoNode.data?.result?.data?.[0]?.url;
+    const videoUrl =
+      parentVideoNode.data?.video_url ??
+      parentVideoNode.data?.result?.data?.[0]?.url;
     if (!videoUrl) {
       return { videoUrl: null, inputError: "视频节点尚未生成视频" };
     }
@@ -89,9 +93,9 @@ export const useVideoAgentGenerate = ({
       const randomYOffset = (Math.random() - 0.5) * 80;
       const nextPosition = currentNode
         ? {
-          x: currentNode.position.x + 400,
-          y: currentNode.position.y + randomYOffset,
-        }
+            x: currentNode.position.x + 400,
+            y: currentNode.position.y + randomYOffset,
+          }
         : undefined;
 
       let outputNodeId: string;
@@ -199,7 +203,8 @@ export const useVideoAgentGenerate = ({
       // 提取 DashscopeResponseBody.choices[0].message.content
       const content: string =
         response?.data?.choices?.[0]?.message?.content ??
-        response?.choices?.[0]?.message?.content ?? "";
+        response?.choices?.[0]?.message?.content ??
+        "";
 
       if (!content) {
         error("分析失败", "未获取到有效内容");

@@ -134,7 +134,7 @@ export async function downloadImageFromUrl(
         if (basename && basename.includes(".")) {
           finalFilename = basename;
         }
-      } catch { }
+      } catch {}
 
       if (!finalFilename) {
         const ext = blob.type.split("/")[1] || "jpg";

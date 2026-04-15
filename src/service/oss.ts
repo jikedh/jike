@@ -82,7 +82,10 @@ export type ImageAction = ResizeOptions | FormatOptions | IgnoreErrorOptions;
  * ])
  * // -> http://xxx.oss-cn-hangzhou.aliyuncs.com/image/xxx.jpg?x-oss-process=image/resize,m_fill,w_100,h_100/format,webp/ignore-error,1
  */
-export function generateImageUrl(ossUrl: string, actions: ImageAction[]): string {
+export function generateImageUrl(
+  ossUrl: string,
+  actions: ImageAction[],
+): string {
   if (!actions || actions.length === 0) {
     return ossUrl;
   }
@@ -91,27 +94,29 @@ export function generateImageUrl(ossUrl: string, actions: ImageAction[]): string
   const [baseUrl] = ossUrl.split("?");
 
   // 构建操作链
-  const actionParts = actions.map((action) => {
-    switch (action.type) {
-      case "resize": {
-        const { mode = "m_fit", width, height } = action;
-        if (width && height) {
-          return `resize,${mode},w_${width},h_${height}`;
-        } else if (width) {
-          return `resize,w_${width}`;
-        } else if (height) {
-          return `resize,h_${height}`;
+  const actionParts = actions
+    .map((action) => {
+      switch (action.type) {
+        case "resize": {
+          const { mode = "m_fit", width, height } = action;
+          if (width && height) {
+            return `resize,${mode},w_${width},h_${height}`;
+          } else if (width) {
+            return `resize,w_${width}`;
+          } else if (height) {
+            return `resize,h_${height}`;
+          }
+          return "resize";
         }
-        return "resize";
+        case "format":
+          return `format,${action.format}`;
+        case "ignore-error":
+          return `ignore-error,${action.value}`;
+        default:
+          return "";
       }
-      case "format":
-        return `format,${action.format}`;
-      case "ignore-error":
-        return `ignore-error,${action.value}`;
-      default:
-        return "";
-    }
-  }).filter(Boolean);
+    })
+    .filter(Boolean);
 
   if (actionParts.length === 0) {
     return baseUrl;
@@ -142,7 +147,12 @@ export function generateThumbnailWithFormat(
 
   // 添加 resize 操作
   if ("width" in size && "height" in size) {
-    actions.push({ type: "resize", mode, width: size.width, height: size.height });
+    actions.push({
+      type: "resize",
+      mode,
+      width: size.width,
+      height: size.height,
+    });
   } else if ("width" in size) {
     actions.push({ type: "resize", mode, width: size.width });
   }

@@ -99,10 +99,7 @@ export const VideoAgentNode = memo(
         updateNodeData({ presetId: newPresetId });
         setShowPresetSelector(false);
       },
-      [
-        id,
-        updateNodeData,
-      ],
+      [id, updateNodeData],
     );
 
     const handleModelChange = useCallback(

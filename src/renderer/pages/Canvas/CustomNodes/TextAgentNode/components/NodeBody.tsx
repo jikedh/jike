@@ -68,8 +68,6 @@ export const NodeBody = ({
         className={`transition-opacity duration-150 ${handleVisibilityClass}`}
       />
 
-
-
       {/* 节点内容 */}
       <div className="flex items-center gap-2 text-sm text-white/50">
         {isGenerating ? (

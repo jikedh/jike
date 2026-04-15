@@ -209,10 +209,11 @@ export const CollapsibleVideoGallery = memo(
 
           {/* 折叠态：仅显示首视频封面 */}
           <div
-            className={`absolute inset-0 transition-all duration-200 ease-out ${isExpanded
-              ? "pointer-events-none translate-y-1 scale-[0.98] opacity-0"
-              : "translate-y-0 scale-100 opacity-100"
-              }`}
+            className={`absolute inset-0 transition-all duration-200 ease-out ${
+              isExpanded
+                ? "pointer-events-none translate-y-1 scale-[0.98] opacity-0"
+                : "translate-y-0 scale-100 opacity-100"
+            }`}
           >
             <div className="h-full w-full overflow-hidden rounded-lg">
               {coverVideo ? (
@@ -235,10 +236,11 @@ export const CollapsibleVideoGallery = memo(
 
           {/* 展开态：2 列网格展示全部视频 */}
           <div
-            className={`absolute inset-0 transition-all duration-200 ease-out ${isExpanded
-              ? "translate-y-0 scale-100 opacity-100"
-              : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0"
-              }`}
+            className={`absolute inset-0 transition-all duration-200 ease-out ${
+              isExpanded
+                ? "translate-y-0 scale-100 opacity-100"
+                : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0"
+            }`}
           >
             <div
               className={`h-full w-full ${totalCount > 4 ? "overflow-y-auto pr-0.5" : ""}`}
@@ -284,7 +286,6 @@ export const CollapsibleVideoGallery = memo(
                         />
                       </button>
                     )}
-
                   </div>
                 ))}
               </div>

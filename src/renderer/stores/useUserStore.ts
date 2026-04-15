@@ -11,7 +11,12 @@ import { getBalanceInfo } from "@/api/jikeing";
 
 const initialState: Pick<
   UserStoreType,
-  "loginStatus" | "userInfo" | "vipLevel" | "isLoading" | "dialogLoginStatus" | "balanceInfo"
+  | "loginStatus"
+  | "userInfo"
+  | "vipLevel"
+  | "isLoading"
+  | "dialogLoginStatus"
+  | "balanceInfo"
 > = {
   loginStatus: 0,
   userInfo: null,

@@ -104,7 +104,13 @@ export const VIDEO_MODELS = [
     platform: "doubao",
     platformId: 2,
   },
-  { id: 22, name: 'Doubao Seedance 2.0', model: 'doubao-seedance-2.0', platform: 'doubao', platformId: 2 },
+  {
+    id: 22,
+    name: "Doubao Seedance 2.0",
+    model: "doubao-seedance-2.0",
+    platform: "doubao",
+    platformId: 2,
+  },
   // xAI Grok 系列
   {
     id: 17,

@@ -1,4 +1,8 @@
-import { type NodeProps, Position, useUpdateNodeInternals } from "@xyflow/react";
+import {
+  type NodeProps,
+  Position,
+  useUpdateNodeInternals,
+} from "@xyflow/react";
 import { memo, useCallback, useEffect, useMemo } from "react";
 import type { VideoNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
@@ -104,7 +108,13 @@ export const VideoNode = memo(
         onSeparateToNodes={handleSeparateToNodes}
         hasMultipleResults={hasMultipleResults}
       >
-        <div className="group/node relative" style={{ width: `${nodeSize.width}px`, height: `${nodeSize.height}px` }}>
+        <div
+          className="group/node relative"
+          style={{
+            width: `${nodeSize.width}px`,
+            height: `${nodeSize.height}px`,
+          }}
+        >
           {/* 左侧输入 Handle */}
           <ButtonHandle
             type="target"
@@ -128,7 +138,9 @@ export const VideoNode = memo(
           <div
             className={cn(
               "nodrag nopan nowheel absolute -top-12 left-1/2 z-50 -translate-x-1/2 transition-opacity duration-200",
-              shouldShowToolbar ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none",
+              shouldShowToolbar
+                ? "opacity-100 visible"
+                : "opacity-0 invisible pointer-events-none",
             )}
           >
             <VideoToolbar nodeId={id} data={data} onDelete={handleDelete} />
@@ -172,7 +184,9 @@ export const VideoNode = memo(
           <div
             className={cn(
               "nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2 transition-opacity duration-200",
-              shouldShowToolbar ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none",
+              shouldShowToolbar
+                ? "opacity-100 visible"
+                : "opacity-0 invisible pointer-events-none",
             )}
           >
             <VideoPromptPanel nodeId={id} />
