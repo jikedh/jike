@@ -10,6 +10,7 @@ import {
   innerAddUserScore,
 } from '@/api/jikeing';
 import { addScore, getUserScore, adminGetScoreConfig } from '@/api/manager/score';
+import { createDashscopeChatCompletion } from '@/api/ai';
 
 
 // ===================== 测试按钮组件 =====================
@@ -155,6 +156,64 @@ export default function TestPage() {
     callApi('innerAddUserScore (内部加积分)', () => innerAddUserScore(innerScoreData));
   };
 
+  // ===================== 阿里云百炼 API =====================
+
+
+  const [dashscopeModel, setDashscopeModel] = useState('qwen-turbo');
+  const [dashscopeMessage, setDashscopeMessage] = useState('你好，介绍一下你自己');
+  const [dashscopeStream, setDashscopeStream] = useState(false);
+  const [dashscopeResult, setDashscopeResult] = useState('');
+  const [dashscopeLoading, setDashscopeLoading] = useState(false);
+  const [dashscopeAbortController, setDashscopeAbortController] = useState<AbortController | null>(null);
+
+  const handleDashscopeChat = async () => {
+    if (!dashscopeMessage.trim()) {
+      alert('请输入消息内容');
+      return;
+    }
+
+    setDashscopeResult('');
+    setDashscopeLoading(true);
+    const controller = new AbortController();
+    setDashscopeAbortController(controller);
+
+    try {
+      const data = {
+        model: dashscopeModel,
+        messages: [{ role: 'user', content: dashscopeMessage }],
+        stream: dashscopeStream,
+      };
+
+      if (dashscopeStream) {
+        // 流式响应
+        const streamGenerator = await createDashscopeChatCompletion(data, controller.signal);
+        for await (const chunk of streamGenerator) {
+          setDashscopeResult((prev) => prev + (chunk.content || ''));
+        }
+      } else {
+        // 非流式响应
+        const response = await createDashscopeChatCompletion(data, controller.signal);
+        setDashscopeResult(JSON.stringify(response, null, 2));
+        addLog('createDashscopeChatCompletion (百炼对话)', 'success', response);
+      }
+    } catch (error: any) {
+      const errorMsg = error?.response?.data || error.message || error;
+      setDashscopeResult(`错误: ${JSON.stringify(errorMsg)}`);
+      addLog('createDashscopeChatCompletion (百炼对话)', 'error', errorMsg);
+    } finally {
+      setDashscopeLoading(false);
+      setDashscopeAbortController(null);
+    }
+  };
+
+  const handleDashscopeCancel = () => {
+    if (dashscopeAbortController) {
+      dashscopeAbortController.abort();
+      setDashscopeLoading(false);
+      setDashscopeResult((prev) => prev + '\n[已取消]');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#050508] text-white flex flex-col overflow-hidden relative">
       <div className="absolute inset-0 -z-10">
@@ -263,6 +322,74 @@ export default function TestPage() {
                   />
                 </div>
                 <TestButton label="内部添加积分" onClick={handleInnerAddUserScore} loading={loadingMap['innerAddUserScore (内部加积分)']} variant="outline" />
+              </div>
+            </section>
+
+            {/* 阿里云百炼 API */}
+            <section className="bg-white/5 rounded-xl p-5 border border-white/10">
+              <h2 className="text-lg font-semibold text-yellow-400 mb-4">
+                阿里云百炼 API（Dashscope）
+              </h2>
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">模型</label>
+                    <select
+                      value={dashscopeModel}
+                      onChange={(e) => setDashscopeModel(e.target.value)}
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-44 focus:border-yellow-500 outline-none">
+                      <option value="qwen-turbo">qwen-turbo</option>
+                      <option value="qwen-plus">qwen-plus</option>
+                      <option value="qwen-max">qwen-max</option>
+                      <option value="qwen-max-long">qwen-max-long</option>
+                      <option value="qwen-coder-turbo">qwen-coder-turbo</option>
+                      <option value="qwen2.5-72b-instruct">qwen2.5-72b-instruct</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="dashscope-stream"
+                      checked={dashscopeStream}
+                      onChange={(e) => setDashscopeStream(e.target.checked)}
+                      className="w-4 h-4 accent-yellow-500"
+                    />
+                    <label htmlFor="dashscope-stream" className="text-sm text-white/70">流式输出</label>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-white/50">消息内容</label>
+                  <textarea
+                    value={dashscopeMessage}
+                    onChange={(e) => setDashscopeMessage(e.target.value)}
+                    placeholder="输入消息..."
+                    rows={3}
+                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-full focus:border-yellow-500 outline-none resize-none"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <TestButton
+                    label={dashscopeStream ? '开始对话 (流式)' : '开始对话'}
+                    onClick={handleDashscopeChat}
+                    loading={dashscopeLoading}
+                    variant="default"
+                  />
+                  {dashscopeLoading && (
+                    <TestButton
+                      label="取消"
+                      onClick={handleDashscopeCancel}
+                      variant="outline"
+                    />
+                  )}
+                </div>
+                {dashscopeResult && (
+                  <div className="mt-4 p-3 bg-black/30 rounded border border-white/10">
+                    <div className="text-xs text-white/50 mb-2 uppercase tracking-wider">响应结果</div>
+                    <pre className="text-sm text-green-300 whitespace-pre-wrap break-all font-mono max-h-60 overflow-y-auto">
+                      {dashscopeResult}
+                    </pre>
+                  </div>
+                )}
               </div>
             </section>
           </div>

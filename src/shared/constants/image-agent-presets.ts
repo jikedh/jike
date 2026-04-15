@@ -53,5 +53,6 @@ export const getImageAgentPresetLabelById = (presetId?: string) => {
 };
 
 export const IMAGE_AGENT_MODELS = [
+  { value: "qwen3.5-flash", label: "通义千问 3.5 Flash" },
   { value: "gemini-2.0-flash-exp", label: "Gemini 2.0 Flash" },
 ];

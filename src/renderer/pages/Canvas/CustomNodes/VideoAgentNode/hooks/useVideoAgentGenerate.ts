@@ -256,7 +256,7 @@ export const useVideoAgentGenerate = ({
       success("分析完成");
     } catch (err: any) {
       if (err.name !== "AbortError") {
-        error("分析失败", err.message || "未知错误");
+        // error("分析失败", err.message || "未知错误");
         updateNodeData({ status: "error", error: err.message || "未知错误" });
       }
     } finally {

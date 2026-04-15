@@ -70,6 +70,8 @@ export function getVideoTaskStatus(id: string) {
 // - stream: true → 返回 async generator，逐块 yield 文本内容
 
 export async function createChatCompletion(data: any, signal?: AbortSignal) {
+  console.log(data);
+  console.log('测试会不会打印');
   if (data.stream) {
     // 构建请求头 - 动态从 localStorage 获取 API 密钥
     const token = getAiToken();
@@ -309,11 +311,13 @@ export function generateGeminiContentStream(
 // ===================== 阿里云百炼相关 =====================
 
 /**
- * 阿里云百炼 API 对话接口（支持深度思考）
+ * 阿里云百炼 API 对话接口（支持深度思考）这个接口是 openAI 兼容接口，入参和出参都和 OpenAI 一样
  * @param data 请求数据，包含 messages、model 等字段
  * @param signal 可选的 AbortSignal 用于取消请求
  */
 export async function createDashscopeChatCompletion(data: any, signal?: AbortSignal) {
+  console.log(data);
+  console.log('测试会不会打印111');
   // 处理 extra_body 参数
   const requestBody = {
     ...data,
