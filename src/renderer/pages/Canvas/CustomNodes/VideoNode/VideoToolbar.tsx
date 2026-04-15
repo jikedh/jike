@@ -27,8 +27,7 @@ import Video from "yet-another-react-lightbox/plugins/video";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import {
-  getClosestAspectRatio,
-  getVideoDimensions,
+  getAspectRatioFromMediaFile,
 } from "../ImageNode/utils/aspectRatioUtils";
 import { VideoSnapshotPanel } from "./components/VideoSnapshotPanel";
 import { useVideoFrameCapture } from "./hooks/useVideoFrameCapture";
@@ -142,17 +141,9 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       };
 
       if (currentData.length === 0) {
-        try {
-          const blobUrl = URL.createObjectURL(file);
-          const dimensions = await getVideoDimensions(blobUrl);
-          const aspectRatio = getClosestAspectRatio(
-            dimensions.width,
-            dimensions.height,
-          );
+        const aspectRatio = await getAspectRatioFromMediaFile(file, "video");
+        if (aspectRatio) {
           updatePatch.aspect_ratio = aspectRatio;
-          URL.revokeObjectURL(blobUrl);
-        } catch {
-          // 获取尺寸失败时不设置 aspect_ratio，使用默认比例
         }
       }
 

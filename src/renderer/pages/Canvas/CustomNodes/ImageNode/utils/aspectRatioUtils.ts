@@ -131,3 +131,27 @@ export function getVideoDimensions(
     video.src = videoUrl;
   });
 }
+
+/**
+ * 从本地媒体文件中推导最接近的标准比例。
+ * 统一用于上传、拖拽和外部粘贴导入场景。
+ */
+export async function getAspectRatioFromMediaFile(
+  file: File,
+  mediaType: "image" | "video",
+): Promise<string | null> {
+  const blobUrl = URL.createObjectURL(file);
+
+  try {
+    const dimensions =
+      mediaType === "image"
+        ? await getImageDimensions(blobUrl)
+        : await getVideoDimensions(blobUrl);
+
+    return getClosestAspectRatio(dimensions.width, dimensions.height);
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(blobUrl);
+  }
+}

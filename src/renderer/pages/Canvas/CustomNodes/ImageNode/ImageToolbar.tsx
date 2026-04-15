@@ -15,8 +15,7 @@ import { uploadFileToOSS } from "service/oss";
 import type { ImageGenerationNode } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import {
-  getClosestAspectRatio,
-  getImageDimensions,
+  getAspectRatioFromMediaFile,
 } from "./utils/aspectRatioUtils";
 import { cn, downloadImageFromUrl } from "shared/utils/utils";
 import { toast } from "sonner";
@@ -126,17 +125,12 @@ export const ImageToolbar = memo(
         };
 
         if (currentData.length === 0) {
-          try {
-            const blobUrl = URL.createObjectURL(fileToUpload);
-            const dimensions = await getImageDimensions(blobUrl);
-            const aspectRatio = getClosestAspectRatio(
-              dimensions.width,
-              dimensions.height,
-            );
+          const aspectRatio = await getAspectRatioFromMediaFile(
+            fileToUpload,
+            "image",
+          );
+          if (aspectRatio) {
             updatePatch.size = aspectRatio;
-            URL.revokeObjectURL(blobUrl);
-          } catch {
-            // 获取尺寸失败时不设置 size，使用默认比例
           }
         }
 

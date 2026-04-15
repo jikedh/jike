@@ -64,6 +64,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     handleDragOver,
     handleDragLeave,
     handleDrop,
+    handleFiles,
   } = useDragUpload();
 
   // 确认对话框状态
@@ -148,20 +149,10 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         event.key === "v" &&
         !event.shiftKey
       ) {
-        event.preventDefault();
-        // 使用最近记录的鼠标在画布上的位置
-        pasteNodes(mouseFlowPosition ?? undefined);
+        return;
       }
     },
-    [
-      undo,
-      redo,
-      canUndo,
-      canRedo,
-      copySelectedNodes,
-      pasteNodes,
-      mouseFlowPosition,
-    ],
+    [undo, redo, canUndo, canRedo, copySelectedNodes],
   );
 
   // 监听键盘事件
@@ -171,6 +162,49 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [handleKeyDown]);
+
+  useEffect(() => {
+    const handlePaste = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isEditableTarget =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable;
+
+      const files = Array.from(event.clipboardData?.items ?? [])
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => file !== null);
+
+      if (files.length > 0) {
+        if (isEditableTarget) {
+          return;
+        }
+
+        event.preventDefault();
+        void handleFiles(
+          files,
+          mouseFlowPosition ??
+            screenToFlowPosition({
+              x: window.innerWidth / 2,
+              y: window.innerHeight / 2,
+            }),
+        );
+        return;
+      }
+
+      if (isEditableTarget) {
+        return;
+      }
+
+      event.preventDefault();
+      pasteNodes(mouseFlowPosition ?? undefined);
+    };
+
+    document.addEventListener("paste", handlePaste);
+    return () => {
+      document.removeEventListener("paste", handlePaste);
+    };
+  }, [handleFiles, mouseFlowPosition, pasteNodes, screenToFlowPosition]);
 
   // 监听鼠标移动以更新画布上的鼠标位置
   useEffect(() => {

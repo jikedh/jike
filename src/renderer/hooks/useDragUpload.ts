@@ -5,6 +5,7 @@ import { GenerationStatus } from "shared/constants/enum";
 import { getMediaType, type MediaType } from "shared/constants/mediaTypes";
 import { toast } from "sonner";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { getAspectRatioFromMediaFile } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 
 /** 拖拽状态 */
 interface DragState {
@@ -172,6 +173,10 @@ export function useDragUpload() {
         try {
           // 上传文件
           const result = await uploadFile(file, updateProgress);
+          const aspectRatio =
+            mediaType === "image" || mediaType === "video"
+              ? await getAspectRatioFromMediaFile(file, mediaType)
+              : null;
 
           // 上传完成，更新为完成状态
           if (mediaType === "image") {
@@ -179,6 +184,7 @@ export function useDragUpload() {
               status: GenerationStatus.COMPLETED,
               progress: 100,
               isUpload: true,
+              ...(aspectRatio ? { size: aspectRatio } : {}),
               result: { type: "image", data: [{ url: result.url }] },
             });
           } else if (mediaType === "video") {
@@ -187,6 +193,7 @@ export function useDragUpload() {
               status: GenerationStatus.COMPLETED,
               progress: 100,
               isUpload: true,
+              ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
               result: {
                 type: "video",
                 data: [{ url: result.url, format: ext }],
@@ -356,5 +363,6 @@ export function useDragUpload() {
     handleDragOver,
     handleDragLeave,
     handleDrop,
+    handleFiles,
   };
 }
