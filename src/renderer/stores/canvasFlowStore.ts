@@ -25,8 +25,8 @@ import type {
   NodePosition,
   NodeType,
 } from "shared/types/zustand/canvas-flow";
-import { nodeFactoryMap } from "shared/utils/nodeFactory";
 import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
+import { nodeFactoryMap } from "shared/utils/nodeFactory";
 import {
   buildReferenceHighlightState,
   buildReferenceHoverKey,
@@ -38,10 +38,10 @@ import {
   stopImagePollingInternal,
   stopVideoPollingInternal,
   updateAudioNodeInList,
+  updateImageAgentNodeInList,
   updateImageNodeInList,
   updateTableNodeInList,
   updateTextAgentNodeInList,
-  updateImageAgentNodeInList,
   updateVideoAgentNodeInList,
   updateVideoNodeInList,
   VIDEO_POLL_INTERVAL,
@@ -1491,7 +1491,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       set((state) => {
         // 取消所有节点的选中状态，只选中新节点
-        const updatedNodes = state.nodes.map(n => ({
+        const updatedNodes = state.nodes.map((n) => ({
           ...n,
           selected: false,
         }));
@@ -1613,6 +1613,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           newPositionY = nodeTemplate.position.y + pasteOffsetY;
         }
 
+        // 对 data 进行深拷贝，确保每个新节点都有独立的数据引用
+        // 避免连续复制粘贴时出现 data 引用共享的问题
+        const dataCopy = JSON.parse(JSON.stringify(nodeTemplate.data));
+
         return {
           ...nodeTemplate,
           id: newId,
@@ -1620,6 +1624,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             x: newPositionX,
             y: newPositionY,
           },
+          data: dataCopy,
           selected: true,
           dragging: false,
         } as AllNodeType;
