@@ -24,11 +24,14 @@ export const NoteContent = ({
         defaultValue={content}
         maxLength={2500}
         onDoubleClick={(e) => e.stopPropagation()}
+        onWheelCapture={(e) => {
+          if (!e.ctrlKey && !e.metaKey) {
+            e.stopPropagation();
+          }
+        }}
         onWheel={(e) => {
           if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
-          } else {
-            e.stopPropagation();
           }
         }}
         className="note-scrollbar noflow nopan nodrag h-full w-full resize-none rounded-b-xl border-0 bg-[#1f1f1f] p-3 text-sm text-white outline-none ring-0 placeholder:text-white/70"

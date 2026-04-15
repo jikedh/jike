@@ -50,7 +50,9 @@ export interface ImageGenerationNode {
     type: string; // 结果类型
     data?: {
       url: string; // 远程 OSS URL（始终存储）
+      relativePath?: string; // 本地相对路径（兼容字段，仅用于 Electron 离线环境备用访问）
       localPath?: string; // 本地相对路径（仅用于 Electron 离线环境备用访问）
+      localFileName?: string; // 本地文件名（兼容字段，仅用于 Electron 离线环境备用访问）
       localName?: string; // 本地文件名（仅用于 Electron 离线环境备用访问）
     }[]; // 图片数据列表（支持多张图片累积）
   }; // 生成结果

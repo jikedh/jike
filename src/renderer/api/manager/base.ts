@@ -4,10 +4,10 @@
  */
 
 import { jikeingAdminService } from "service/aiRequest";
+import type { BaidupanAuthUrlResponse } from "shared/types/api/baidupan";
 import type {
   PutUrlRequest,
   PutUrlResponse,
-  BaidupanAuthUrlResponse,
   FileListRequest,
   FileListResponse,
   UploadFileResponse,

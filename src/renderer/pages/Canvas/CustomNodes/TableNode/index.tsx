@@ -138,8 +138,14 @@ const EditableCell = memo(
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           autoFocus
-          className="absolute inset-0 w-full h-full bg-[#1A1A1C] text-[#8D8D8E] text-xs resize-none outline-none border border-[#B43FEB]/50 leading-relaxed p-3 nodrag nopan noflow"
+          className="absolute inset-0 w-full h-full bg-[#1A1A1C] text-[#8D8D8E] text-xs resize-none outline-none border border-[#B43FEB]/50 leading-relaxed p-3 nodrag nopan noflow nowheel"
           onClick={(e) => e.stopPropagation()}
+          onWheel={(e) => {
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault();
+            }
+            e.stopPropagation();
+          }}
         />
       );
     }
