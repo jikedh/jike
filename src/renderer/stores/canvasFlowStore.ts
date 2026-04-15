@@ -187,8 +187,8 @@ const pollImageGeneration = async (
                   return {
                     ...item,
                     url: ossUrl || item.url, // 使用 OSS URL，如果上传失败则使用原始 URL
-                    localFileName: fileName,
-                    relativePath,
+                    localName: fileName,
+                    localPath: relativePath,
                   };
                 }
               } catch (saveError) {
@@ -443,8 +443,8 @@ const pollMjImageGeneration = async (
 
                   return {
                     url: ossUrl || url, // 使用 OSS URL，如果上传失败则使用原始 URL
-                    localFileName: fileName,
-                    relativePath,
+                    localName: fileName,
+                    localPath: relativePath,
                   };
                 }
               } catch (saveError) {
@@ -690,8 +690,8 @@ const pollVideoGeneration = async (
                   );
                   return {
                     ...item,
-                    localFileName: fileName,
-                    relativePath,
+                    localName: fileName,
+                    localPath: relativePath,
                   };
                 }
               } catch (saveError) {

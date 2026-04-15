@@ -51,9 +51,9 @@ export interface ImageGenerationNode {
   result?: {
     type: string; // 结果类型
     data?: {
-      url?: string; // 图片 URL
-      relativePath?: string; // 本地相对路径
-      localFileName?: string; // 本地文件名
+      url: string; // 远程 OSS URL（始终存储）
+      localPath?: string; // 本地相对路径（仅用于 Electron 离线环境备用访问）
+      localName?: string; // 本地文件名（仅用于 Electron 离线环境备用访问）
     }[]; // 图片数据列表（支持多张图片累积）
   }; // 生成结果
   // ---- 状态管理 ----
@@ -134,10 +134,10 @@ export interface VideoGenerationNode {
     type: string; // 结果类型，固定为 video
     data: {
       // 视频数据数组
-      url: string; // 生成的视频 URL
+      url: string; // 远程 OSS URL（始终存储）
       format: string; // 视频格式（如 mp4）
-      relativePath?: string; // 本地相对路径
-      localFileName?: string; // 本地文件名
+      localPath?: string; // 本地相对路径（仅用于 Electron 离线环境备用访问）
+      localName?: string; // 本地文件名（仅用于 Electron 离线环境备用访问）
     }[];
   };
   isUpload?: boolean; // 是否为上传视频（用于区分加载中/生成中）
@@ -239,11 +239,11 @@ export interface AudioGenerationNode {
   result?: {
     type: "audio"; // 结果类型
     data: {
-      url: string; // 生成的音频 URL
+      url: string; // 远程 OSS URL（始终存储）
       format?: string; // 音频格式（如 mp3, wav）
       duration?: number; // 音频时长
-      relativePath?: string; // 本地相对路径
-      localFileName?: string; // 本地文件名
+      localPath?: string; // 本地相对路径（仅用于 Electron 离线环境备用访问）
+      localName?: string; // 本地文件名（仅用于 Electron 离线环境备用访问）
     }[];
   };
 

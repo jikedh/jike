@@ -66,6 +66,7 @@ export type AddNodeOptions = {
  * CanvasFlow Store 类型定义（data + 方法配对结构）。
  */
 export type CanvasFlowStoreType = {
+  addVideoNode: any;
   // ── 数据字段 ──────────────────────────────────
   nodes: AllNodeType[];
   edges: EdgeType[];

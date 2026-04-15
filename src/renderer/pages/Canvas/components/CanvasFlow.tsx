@@ -41,8 +41,8 @@ import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import {
   getClosestAspectRatio,
-  getVideoDimensions,
   getImageDimensions,
+  getVideoDimensions,
 } from "../CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { edgeTypes, nodeTypes } from "../constants/canvasConfig";
 import { CanvasContextMenu, type CanvasNodeType } from "./CanvasContextMenu";
@@ -76,7 +76,10 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
   const [generatingCount, setGeneratingCount] = useState(0);
 
   // 跟踪鼠标在画布上的位置，用于粘贴操作
-  const [mouseFlowPosition, setMouseFlowPosition] = useState<{ x: number; y: number } | null>(null);
+  const [mouseFlowPosition, setMouseFlowPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   // 获取正在生成的任务数量和取消方法
   const getGeneratingTasksCount = useCanvasFlowStore(
@@ -93,7 +96,9 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
   const canRedo = useCanvasFlowStore((state) => state.canRedo);
 
   // 获取复制/粘贴方法
-  const copySelectedNodes = useCanvasFlowStore((state) => state.copySelectedNodes);
+  const copySelectedNodes = useCanvasFlowStore(
+    (state) => state.copySelectedNodes,
+  );
   const pasteNodes = useCanvasFlowStore((state) => state.pasteNodes);
 
   // 处理键盘快捷键
@@ -153,7 +158,15 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         pasteNodes(mouseFlowPosition ?? undefined);
       }
     },
-    [undo, redo, canUndo, canRedo, copySelectedNodes, pasteNodes, mouseFlowPosition],
+    [
+      undo,
+      redo,
+      canUndo,
+      canRedo,
+      copySelectedNodes,
+      pasteNodes,
+      mouseFlowPosition,
+    ],
   );
 
   // 监听键盘事件
@@ -376,12 +389,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     if (positionChanges.length > 0) {
       storeOnNodesChange(positionChanges);
     }
-  }, [
-    reactFlowInstance,
-    snapToGrid,
-    snapGridSize,
-    storeOnNodesChange,
-  ]);
+  }, [reactFlowInstance, snapToGrid, snapGridSize, storeOnNodesChange]);
 
   // 点击画布空白区域时取消所有节点的选中状态
   const handlePaneClick = useCallback(() => {
@@ -671,7 +679,11 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                 result: {
                   type: "image",
                   data: [
-                    { url: ossUrl, relativePath, localFileName: fileName },
+                    {
+                      url: ossUrl,
+                      localPath: relativePath,
+                      localName: fileName,
+                    },
                   ],
                 },
               });
@@ -685,7 +697,11 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                 result: {
                   type: "image",
                   data: [
-                    { url: ossUrl, relativePath, localFileName: fileName },
+                    {
+                      url: ossUrl,
+                      localPath: relativePath,
+                      localName: fileName,
+                    },
                   ],
                 },
               });
@@ -784,7 +800,9 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
               localFileName: fileName,
               result: {
                 type: "audio",
-                data: [{ url: ossUrl, relativePath, localFileName: fileName }],
+                data: [
+                  { url: ossUrl, localPath: relativePath, localName: fileName },
+                ],
               },
             });
           } else {
@@ -884,8 +902,8 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                   data: [
                     {
                       url: blobUrl,
-                      relativePath,
-                      localFileName: fileName,
+                      localPath: relativePath,
+                      localName: fileName,
                       format: ext,
                     },
                   ],
@@ -904,8 +922,8 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
                   data: [
                     {
                       url: blobUrl,
-                      relativePath,
-                      localFileName: fileName,
+                      localPath: relativePath,
+                      localName: fileName,
                       format: ext,
                     },
                   ],
