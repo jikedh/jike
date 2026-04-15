@@ -175,27 +175,6 @@ export const createTextAgentNode = (
 });
 
 /**
- * 创建图片智能体节点
- */
-export const createImageAgentNode = (
-  id: string,
-  position: NodePosition,
-  options?: AddNodeOptions,
-): AllNodeType => ({
-  id,
-  type: "imageAgentNode",
-  position,
-  data: {
-    model: "gemini-2.0-flash-exp",
-    presetId: undefined,
-    useDefaultSystemPrompt: true,
-    customSystemPrompt: "",
-    status: "idle" as const,
-    createdAt: Date.now(),
-  },
-});
-
-/**
  * 创建视频智能体节点
  */
 export const createVideoAgentNode = (
@@ -255,7 +234,6 @@ export const nodeFactoryMap: Record<NodeType, NodeFactory> = {
   video: createVideoNode,
   audio: createAudioNode,
   textAgent: createTextAgentNode,
-  imageAgent: createImageAgentNode,
   videoAgent: createVideoAgentNode,
   table: createTableNode,
 };

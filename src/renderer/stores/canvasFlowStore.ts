@@ -41,7 +41,6 @@ import {
   updateImageNodeInList,
   updateTableNodeInList,
   updateTextAgentNodeInList,
-  updateImageAgentNodeInList,
   updateVideoAgentNodeInList,
   updateVideoNodeInList,
   VIDEO_POLL_INTERVAL,
@@ -2277,15 +2276,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     updateTextAgentNodeData: (nodeId, patch) => {
       set((state) => ({
         nodes: updateTextAgentNodeInList(state.nodes, nodeId, (data) => ({
-          ...data,
-          ...patch,
-        })),
-      }));
-    },
-
-    updateImageAgentNodeData: (nodeId, patch) => {
-      set((state) => ({
-        nodes: updateImageAgentNodeInList(state.nodes, nodeId, (data) => ({
           ...data,
           ...patch,
         })),

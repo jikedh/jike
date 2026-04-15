@@ -182,26 +182,6 @@ export type TextAgentPresetId =
   | "script-to-storyboard";
 
 /**
- * 图片智能体预设 ID
- */
-export type ImageAgentPresetId =
-  | "image-reverse-prompt";
-
-/**
- * 图片智能体节点数据结构
- */
-export interface ImageAgentNodeData {
-  model: string;
-  presetId?: ImageAgentPresetId;
-  useDefaultSystemPrompt: boolean;
-  customSystemPrompt?: string;
-  inputImage?: string;
-  status?: "idle" | "generating" | "success" | "error";
-  error?: string;
-  [key: string]: any;
-}
-
-/**
  * 视频智能体预设 ID
  */
 export type VideoAgentPresetId =
@@ -390,8 +370,6 @@ export type NoteNodeType = Node<NoteNodeData, "noteNode">;
 export type AgentNodeType = Node<AgentNode, "agentNode">;
 // 文本智能体节点
 export type TextAgentNodeType = Node<TextAgentNodeData, "textAgentNode">;
-// 图片智能体节点
-export type ImageAgentNodeType = Node<ImageAgentNodeData, "imageAgentNode">;
 // 视频智能体节点
 export type VideoAgentNodeType = Node<VideoAgentNodeData, "videoAgentNode">;
 // 全景图节点
@@ -410,7 +388,6 @@ export type AllNodeType =
   | NoteNodeType
   | AgentNodeType
   | TextAgentNodeType
-  | ImageAgentNodeType
   | VideoAgentNodeType
   | PanoramaNodeType
   | AudioNodeType

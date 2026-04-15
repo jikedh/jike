@@ -38,7 +38,6 @@ export type NodeType =
   | "panorama"
   | "audio"
   | "textAgent"
-  | "imageAgent"
   | "videoAgent"
   | "table";
 
