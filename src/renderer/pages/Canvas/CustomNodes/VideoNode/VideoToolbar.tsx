@@ -1,11 +1,7 @@
 import {
-  IconAspectRatio,
-  IconBrush,
-  IconCamera,
-  IconCrop,
   IconDownload,
-  IconEraser,
-  IconSparkles,
+  IconPlayerStop,
+  IconScissors,
   IconTrash,
   IconUpload,
   IconZoomIn,
@@ -41,19 +37,15 @@ type VideoToolbarProps = {
 
 type ActionKey =
   | "upload"
-  | "repaint"
-  | "erase"
-  | "enhance"
-  | "outpaint"
-  | "crop"
   | "download"
   | "preview"
-  | "snapshot";
+  | "snapshot"
+  | "lastFrame";
 
 /**
  * 视频节点工具栏组件
  * 职责：
- * - 提供重绘、擦除、增强、扩图、裁剪、下载、放大查看、截帧等操作按钮
+ * - 提供首帧、尾帧、上传、下载、放大查看、截帧等操作按钮
  * - 处理工具栏按钮交互反馈
  * - 基于 yet-another-react-lightbox 提供放大查看能力
  */
@@ -73,9 +65,9 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
   // 视频截帧 Hook
   const {
-    captureFirstFrame,
+    captureLastFrame,
     captureSnapshot,
-    isCapturingFirstFrame,
+    isCapturingLastFrame,
     isCapturingSnapshot,
   } = useVideoFrameCapture();
 
@@ -85,20 +77,13 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   }, [data]);
   const currentVideoUrl = videoUrls[0];
 
-  // 获取视频时长（秒）
-  const videoDuration = data.duration;
-
   const toolbarActions = useMemo(() => {
     return [
+      { key: "lastFrame" as const, label: "尾帧", icon: IconPlayerStop },
       { key: "upload" as const, label: "上传", icon: IconUpload },
-      { key: "repaint" as const, label: "重绘", icon: IconBrush },
-      { key: "erase" as const, label: "擦除", icon: IconEraser },
-      { key: "enhance" as const, label: "增强", icon: IconSparkles },
-      { key: "outpaint" as const, label: "扩图", icon: IconAspectRatio },
-      { key: "crop" as const, label: "裁剪", icon: IconCrop },
+      { key: "snapshot" as const, label: "截帧", icon: IconScissors },
       { key: "download" as const, label: "下载", icon: IconDownload },
       { key: "preview" as const, label: "放大查看", icon: IconZoomIn },
-      { key: "snapshot" as const, label: "截帧", icon: IconCamera },
     ];
   }, []);
 
@@ -207,8 +192,15 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       return;
     }
 
-    // 其余功能仅保留占位交互框架，业务逻辑后续接入
-    toast.info("功能开发中...");
+    if (actionKey === "lastFrame") {
+      if (!currentVideoUrl) {
+        toast.info("暂无可用视频");
+        return;
+      }
+      await captureLastFrame(currentVideoUrl, nodeId);
+      return;
+    }
+
   };
 
   const isPreviewActive = isLightboxOpen;
@@ -224,13 +216,15 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         onChange={handleFileChange}
       />
 
-      <div className="nodrag nopan nowheel inline-flex h-10 items-center gap-1 rounded-full bg-[#2a2a2d] border border-white/10 px-2 shadow-xl">
+      <div className="nodrag nopan nowheel inline-flex h-10 items-center gap-1 overflow-hidden rounded-full border border-white/10 bg-[#2a2a2d] px-2 shadow-xl">
         {toolbarActions.map((item) => {
           const Icon = item.icon;
           const isActive = item.key === "preview" ? isPreviewActive : false;
           const isDisabled =
             (item.key === "download" && isDownloading) ||
-            (item.key === "upload" && isUploading);
+            (item.key === "upload" && isUploading) ||
+            (item.key === "lastFrame" && isCapturingLastFrame) ||
+            (item.key === "snapshot" && isCapturingSnapshot);
 
           return (
             <button
@@ -239,7 +233,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
               onClick={() => handleAction(item.key)}
               disabled={isDisabled}
               className={cn(
-                "flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer min-w-13",
+                "flex min-w-11 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-xs transition-colors cursor-pointer",
                 isDisabled
                   ? "text-white/30 cursor-not-allowed"
                   : isActive
@@ -261,7 +255,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         <button
           type="button"
           onClick={onDelete}
-          className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg text-xs text-white/60 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer min-w-13"
+          className="flex min-w-11 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-xs text-white/60 transition-colors cursor-pointer hover:bg-red-500/10 hover:text-red-400"
           title="删除"
           aria-label="删除节点"
         >
@@ -275,10 +269,8 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         open={isSnapshotPanelOpen}
         onClose={() => setIsSnapshotPanelOpen(false)}
         videoUrl={currentVideoUrl || ""}
-        duration={videoDuration}
-        onSnapshot={(timeMs) => captureSnapshot(currentVideoUrl, timeMs)}
-        onFirstFrame={() => captureFirstFrame(currentVideoUrl)}
-        isCapturing={isCapturingFirstFrame || isCapturingSnapshot}
+        onSnapshot={(timeMs) => captureSnapshot(currentVideoUrl || "", timeMs, nodeId)}
+        isCapturing={isCapturingSnapshot}
       />
 
       {isLightboxOpen ? (

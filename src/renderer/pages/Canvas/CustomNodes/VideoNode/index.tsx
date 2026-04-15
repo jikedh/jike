@@ -7,9 +7,9 @@ import { memo, useCallback, useEffect, useMemo } from "react";
 import type { VideoNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
+import { getNodeSizeByAspectRatio } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { getNodeSizeByAspectRatio } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { VideoContent } from "./VideoContent";
 import { VideoPromptPanel } from "./VideoPromptPanel";
 import { VideoToolbar } from "./VideoToolbar";
@@ -137,7 +137,7 @@ export const VideoNode = memo(
           {/* 使用 CSS 控制显隐，避免条件渲染导致 DOM 销毁重建 */}
           <div
             className={cn(
-              "nodrag nopan nowheel absolute -top-12 left-1/2 z-50 -translate-x-1/2 transition-opacity duration-200",
+              "nodrag nopan nowheel absolute -top-10 left-1/2 z-50 -translate-x-1/2 transition-opacity duration-200",
               shouldShowToolbar
                 ? "opacity-100 visible"
                 : "opacity-0 invisible pointer-events-none",
