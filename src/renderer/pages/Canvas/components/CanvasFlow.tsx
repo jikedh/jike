@@ -27,6 +27,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useDragUpload } from "@/hooks/useDragUpload";
+import { useCopyPaste } from "@/hooks/useCopyPaste";
+import { useUndoRedo } from "@/hooks/useUndoRedo";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { edgeTypes, nodeTypes } from "../constants/canvasConfig";
@@ -67,6 +69,9 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     handleFiles,
   } = useDragUpload();
 
+  // 空格键按下状态，用于控制画布平移和光标
+  const [spacePressed, setSpacePressed] = useState(false);
+
   // 确认对话框状态
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [generatingCount, setGeneratingCount] = useState(0);
@@ -85,17 +90,11 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
     (state) => state.cancelAllGeneratingTasks,
   );
 
-  // 获取撤销/重做方法
-  const undo = useCanvasFlowStore((state) => state.undo);
-  const redo = useCanvasFlowStore((state) => state.redo);
-  const canUndo = useCanvasFlowStore((state) => state.canUndo);
-  const canRedo = useCanvasFlowStore((state) => state.canRedo);
+  // 获取撤销/重做方法（通过 useUndoRedo hook）
+  const { undo, redo, canUndo, canRedo, saveToHistory, resetHistory, lastSavedVersionRef } = useUndoRedo();
 
-  // 获取复制/粘贴方法
-  const copySelectedNodes = useCanvasFlowStore(
-    (state) => state.copySelectedNodes,
-  );
-  const pasteNodes = useCanvasFlowStore((state) => state.pasteNodes);
+  // 获取复制/粘贴方法（通过 useCopyPaste hook）
+  const { copySelectedNodes, pasteNodes } = useCopyPaste();
 
   // 处理键盘快捷键
   const handleKeyDown = useCallback(
@@ -117,7 +116,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         !event.shiftKey
       ) {
         event.preventDefault();
-        if (canUndo()) {
+        if (canUndo) {
           undo();
         }
       }
@@ -128,7 +127,7 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         (event.key === "y" || (event.key === "z" && event.shiftKey))
       ) {
         event.preventDefault();
-        if (canRedo()) {
+        if (canRedo) {
           redo();
         }
       }
@@ -162,6 +161,96 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [handleKeyDown]);
+
+  // 监听 store 的 historyVersion 变化，触发历史记录保存
+  const historyVersion = useCanvasFlowStore((state) => state.historyVersion);
+  const historyResetTrigger = useCanvasFlowStore((state) => state.historyResetTrigger);
+  useEffect(() => {
+    resetHistory();
+    lastSavedVersionRef.current = 0;
+  }, [historyResetTrigger, resetHistory]);
+
+  useEffect(() => {
+    if (historyVersion > 0 && historyVersion !== lastSavedVersionRef.current) {
+      lastSavedVersionRef.current = historyVersion;
+      saveToHistory();
+    }
+  }, [historyVersion, saveToHistory, lastSavedVersionRef]);
+
+  // 画布光标交互：空格=抓手，Ctrl=放大镜，节点=小手，默认=箭头
+  useEffect(() => {
+    const reactFlowEl = document.querySelector(".react-flow");
+    if (!reactFlowEl) return;
+
+    let isSpacePressed = false;
+    let isCtrlPressed = false;
+
+    const updateCursorState = () => {
+      if (isSpacePressed) {
+        reactFlowEl.setAttribute("data-space-pressed", "true");
+        reactFlowEl.removeAttribute("data-ctrl-pressed");
+        setSpacePressed(true);
+      } else if (isCtrlPressed) {
+        reactFlowEl.setAttribute("data-ctrl-pressed", "true");
+        reactFlowEl.removeAttribute("data-space-pressed");
+        setSpacePressed(false);
+      } else {
+        reactFlowEl.removeAttribute("data-space-pressed");
+        reactFlowEl.removeAttribute("data-ctrl-pressed");
+        setSpacePressed(false);
+      }
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      if (e.code === "Space" && !isSpacePressed) {
+        e.preventDefault();
+        isSpacePressed = true;
+        updateCursorState();
+      }
+      if ((e.ctrlKey || e.metaKey) && !isCtrlPressed) {
+        isCtrlPressed = true;
+        updateCursorState();
+      }
+    };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        isSpacePressed = false;
+        updateCursorState();
+      }
+      if (!e.ctrlKey && !e.metaKey) {
+        isCtrlPressed = false;
+        updateCursorState();
+      }
+    };
+
+    const onBlur = () => {
+      isSpacePressed = false;
+      isCtrlPressed = false;
+      updateCursorState();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+      reactFlowEl.removeAttribute("data-space-pressed");
+      reactFlowEl.removeAttribute("data-ctrl-pressed");
+    };
+  }, []);
 
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
@@ -641,14 +730,14 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
             onPaneClick={handlePaneClick}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
-            nodesDraggable
+            nodesDraggable={!spacePressed}
             fitView
             minZoom={0.2}
             maxZoom={2}
             colorMode="dark"
             deleteKeyCode={["Backspace", "Delete"]}
-            panOnDrag={[1]}
-            selectionOnDrag
+            panOnDrag={spacePressed ? true : [1]}
+            selectionOnDrag={!spacePressed}
             selectionMode={SelectionMode.Partial}
             multiSelectionKeyCode={["Shift"]}
             panOnScroll

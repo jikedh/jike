@@ -373,38 +373,46 @@
   animation-delay: 4s;
 }
 
-/* 画布光标样式 */
-.canvas-cursor-default .react-flow__pane {
+/* 画布光标样式 - 优先级：空格(抓手) > Ctrl(放大镜) > 节点(小手) > 默认(箭头) */
+
+/* 默认：画布空白区域显示小箭头 */
+.react-flow__pane {
   cursor: default !important;
 }
 
-.canvas-cursor-pointer .react-flow__pane {
+/* 节点悬停光标样式：小手 */
+.react-flow__node {
   cursor: pointer !important;
 }
 
-.canvas-cursor-grabbing .react-flow__pane {
-  cursor: grabbing !important;
-}
-
-.canvas-cursor-zoom-in .react-flow__pane {
+/* Ctrl 按下时：放大镜 */
+.react-flow[data-ctrl-pressed="true"] {
   cursor: zoom-in !important;
 }
 
-/* 空格键按下时，整个画布显示抓手样式 */
+.react-flow[data-ctrl-pressed="true"] .react-flow__pane,
+.react-flow[data-ctrl-pressed="true"] .react-flow__node,
+.react-flow[data-ctrl-pressed="true"] .nodrag,
+.react-flow[data-ctrl-pressed="true"] * {
+  cursor: zoom-in !important;
+}
+
+/* 空格键按下时：抓手（最高优先级） */
 .react-flow[data-space-pressed="true"] {
-  cursor: grabbing !important;
+  cursor: grab !important;
 }
 
 .react-flow[data-space-pressed="true"] .react-flow__pane,
 .react-flow[data-space-pressed="true"] .react-flow__node,
 .react-flow[data-space-pressed="true"] .nodrag,
 .react-flow[data-space-pressed="true"] * {
-  cursor: grabbing !important;
+  cursor: grab !important;
 }
 
-/* 节点悬停光标样式 */
-.react-flow__node {
-  cursor: pointer !important;
+/* 空格+拖动时：grabbing */
+.react-flow[data-space-pressed="true"].react-flow__pane--dragging,
+.react-flow[data-space-pressed="true"].react-flow__pane--dragging * {
+  cursor: grabbing !important;
 }
 
 /* 框选范围样式 */
@@ -445,7 +453,8 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* 空格键按下时，禁用 nodrag 元素的鼠标事件，允许画布平移 */
+/* 空格键按下时，禁用节点和 nodrag 元素的鼠标事件，允许画布平移 */
+.react-flow[data-space-pressed="true"] .react-flow__node,
 .react-flow[data-space-pressed="true"] .nodrag {
   pointer-events: none !important;
 }
