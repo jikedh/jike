@@ -89,9 +89,8 @@ export type CanvasFlowStoreType = {
     imageUrl: string | null;
     sourceNodeId: string | null;
   };
-  history: CanvasPersistedState[];
-  historyIndex: number;
-  maxHistorySize: number;
+  historyVersion: number;
+  historyResetTrigger: number;
   // 选中的节点数量（用于避免 O(n²) 遍历计算）
   selectedNodesCount: number;
 
@@ -196,36 +195,8 @@ export type CanvasFlowStoreType = {
   getGeneratingTasksCount: () => number;
   cancelAllGeneratingTasks: () => void;
 
-  // ── 撤销/重做 ────────────────────────────────
-  saveToHistory: () => void;
-  undo: () => void;
-  redo: () => void;
-  canUndo: () => boolean;
-  canRedo: () => boolean;
-
-  // ── 复制/粘贴 ────────────────────────────────
-  /** 复制的节点数据（不含 ID，用于生成新节点） */
-  copiedNodes: Array<{
-    /** 原始节点 ID，用于边连接映射 */
-    originalId: string;
-    type: string;
-    position: { x: number; y: number };
-    data: any;
-    width?: number;
-    height?: number;
-  }>;
-  /** 复制的边数据（使用原始节点 ID，用于生成新边） */
-  copiedEdges: Array<{
-    originalSource: string;
-    originalTarget: string;
-  }>;
-  /** 复制选中的节点 */
-  copySelectedNodes: () => void;
-  /**
-   * 粘贴剪贴板中的节点
-   * @param mousePosition 鼠标在画布上的位置（flow coordinates），如果为 undefined 则使用默认偏移
-   */
-  pasteNodes: (mousePosition?: { x: number; y: number }) => void;
+  // ── 历史版本通知 ────────────────────────────
+  requestHistorySave: () => void;
 
   // ── 全景图查看器 ─────────────────────────────
   openPanoramaViewer: (imageUrl: string, sourceNodeId?: string) => void;
