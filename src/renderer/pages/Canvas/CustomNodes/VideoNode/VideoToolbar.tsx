@@ -197,7 +197,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         toast.info("暂无可用视频");
         return;
       }
-      await captureLastFrame(currentVideoUrl);
+      await captureLastFrame(currentVideoUrl, nodeId);
       return;
     }
 
@@ -269,7 +269,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         open={isSnapshotPanelOpen}
         onClose={() => setIsSnapshotPanelOpen(false)}
         videoUrl={currentVideoUrl || ""}
-        onSnapshot={(timeMs) => captureSnapshot(currentVideoUrl || "", timeMs)}
+        onSnapshot={(timeMs) => captureSnapshot(currentVideoUrl || "", timeMs, nodeId)}
         isCapturing={isCapturingSnapshot}
       />
 
