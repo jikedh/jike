@@ -1,8 +1,7 @@
-import { IconMenu, IconRefresh } from "@tabler/icons-react";
+import { IconRefresh } from "@tabler/icons-react";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import { getMediaUrl } from "service/projectStorage";
-import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
 type VideoItem = {
   url: string; // 远程 OSS URL
@@ -24,7 +23,6 @@ type CollapsibleVideoGalleryProps = {
  * - 点击展开态中的视频，可将其移动到首位作为新封面
  * - 优先使用本地路径，如果不存在则使用远程 URL
  * - 刷新按钮：重新上传视频到 OSS
- * - 右键菜单：支持将视频独立为新视频节点
  */
 export const CollapsibleVideoGallery = memo(
   ({ videos, nodeId, updateVideoNodeData }: CollapsibleVideoGalleryProps) => {
@@ -36,17 +34,8 @@ export const CollapsibleVideoGallery = memo(
     // 记录正在刷新的视频索引
     const refreshingIndexesRef = useRef<Set<number>>(new Set());
     const [, forceRefreshUpdate] = useState(0);
-    // 右键菜单状态
-    const [contextMenu, setContextMenu] = useState<{
-      x: number;
-      y: number;
-      videoIndex: number;
-    } | null>(null);
 
     const totalCount = videos.length;
-
-    // 画布操作
-    const addVideoNode = useCanvasFlowStore((state) => state.addVideoNode);
 
     // 优先使用本地路径，否则使用远程 URL - 用 useMemo 缓存
     const displayUrls = useMemo(() => {
@@ -83,10 +72,6 @@ export const CollapsibleVideoGallery = memo(
         brokenIndexesRef.current.add(index);
         forceUpdate((n) => n + 1);
       }
-    }, []);
-
-    const isBroken = useCallback((index: number) => {
-      return brokenIndexesRef.current.has(index);
     }, []);
 
     const isRefreshing = useCallback((index: number) => {
@@ -186,58 +171,6 @@ export const CollapsibleVideoGallery = memo(
       [videos, nodeId, updateVideoNodeData],
     );
 
-    // 处理右键菜单
-    const handleContextMenu = useCallback(
-      (e: React.MouseEvent, videoIndex: number) => {
-        e.preventDefault();
-        setContextMenu({
-          x: e.clientX,
-          y: e.clientY,
-          videoIndex,
-        });
-      },
-      [],
-    );
-
-    // 关闭右键菜单
-    const closeContextMenu = useCallback(() => {
-      setContextMenu(null);
-    }, []);
-
-    // 将视频独立为新视频节点
-    const handleExtractVideo = useCallback(
-      (videoIndex: number) => {
-        if (!nodeId) return;
-
-        const video = videos[videoIndex];
-        if (!video?.url) return;
-
-        // 创建新的视频节点
-        addVideoNode({
-          video_urls: [video.url],
-          aspect_ratio: "16:9", // 默认宽高比
-          metadata: {
-            resolution: "720p", // 默认分辨率
-          },
-        });
-
-        closeContextMenu();
-      },
-      [nodeId, videos, addVideoNode, closeContextMenu],
-    );
-
-    // 点击空白处关闭右键菜单
-    useMemo(() => {
-      const handleClickOutside = () => {
-        closeContextMenu();
-      };
-
-      document.addEventListener("click", handleClickOutside);
-      return () => {
-        document.removeEventListener("click", handleClickOutside);
-      };
-    }, [closeContextMenu]);
-
     return (
       <div
         className={`nopan h-full w-full overflow-hidden rounded-md bg-background p-1 ${isExpanded && totalCount > 4 ? "nowheel" : ""}`}
@@ -277,8 +210,8 @@ export const CollapsibleVideoGallery = memo(
           {/* 折叠态：仅显示首视频封面 */}
           <div
             className={`absolute inset-0 transition-all duration-200 ease-out ${isExpanded
-                ? "pointer-events-none translate-y-1 scale-[0.98] opacity-0"
-                : "translate-y-0 scale-100 opacity-100"
+              ? "pointer-events-none translate-y-1 scale-[0.98] opacity-0"
+              : "translate-y-0 scale-100 opacity-100"
               }`}
           >
             <div className="h-full w-full overflow-hidden rounded-lg">
@@ -303,8 +236,8 @@ export const CollapsibleVideoGallery = memo(
           {/* 展开态：2 列网格展示全部视频 */}
           <div
             className={`absolute inset-0 transition-all duration-200 ease-out ${isExpanded
-                ? "translate-y-0 scale-100 opacity-100"
-                : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0"
+              ? "translate-y-0 scale-100 opacity-100"
+              : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0"
               }`}
           >
             <div
@@ -316,8 +249,7 @@ export const CollapsibleVideoGallery = memo(
                 {videos.map((item, index) => (
                   <div
                     key={`${item.url}-${index}`}
-                    className={`relative ${totalCount === 1 ? "min-h-0" : "min-h-13"} group/tile`}
-                    onContextMenu={(e) => handleContextMenu(e, index)}
+                    className={`relative ${totalCount === 1 ? "min-h-0" : "min-h-13"}`}
                   >
                     <div className="h-full w-full overflow-hidden rounded-md">
                       {displayUrls[index] ? (
@@ -325,7 +257,6 @@ export const CollapsibleVideoGallery = memo(
                           src={displayUrls[index]}
                           controls
                           className={`block h-full w-full object-contain object-center`}
-                          loading="lazy"
                           onError={() => handleVideoError(index)}
                           onClick={(e) => handleVideoClick(e, index)}
                           style={{ cursor: "pointer" }}
@@ -353,40 +284,12 @@ export const CollapsibleVideoGallery = memo(
                         />
                       </button>
                     )}
-                    {/* 右键菜单图标 */}
-                    <button
-                      type="button"
-                      onClick={(e) => handleContextMenu(e, index)}
-                      className="absolute right-1 top-1 z-10 cursor-pointer rounded bg-black/60 p-1 text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 opacity-0 group-hover/tile:opacity-100"
-                      aria-label="视频操作"
-                    >
-                      <IconMenu size={12} />
-                    </button>
+
                   </div>
                 ))}
               </div>
             </div>
           </div>
-
-          {/* 右键菜单 */}
-          {contextMenu && (
-            <div
-              className="absolute z-50 right-2 top-10 rounded-lg border border-border bg-background shadow-lg py-2"
-              style={{
-                left: contextMenu.x,
-                top: contextMenu.y,
-                position: "fixed",
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => handleExtractVideo(contextMenu.videoIndex)}
-                className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/50 w-full text-left"
-              >
-                独立为视频节点
-              </button>
-            </div>
-          )}
         </div>
       </div>
     );

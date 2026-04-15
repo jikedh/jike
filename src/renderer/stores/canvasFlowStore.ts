@@ -890,70 +890,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     });
   };
 
-  /**
-   * 当图片节点的 result.data 变化时，同步到所有下游子节点的 image_urls
-   * @param nodes 当前节点数组
-   * @param sourceNodeId 发生变化的图片节点 ID
-   * @param edges 当前边数组
-   * @returns 更新后的节点数组
-   */
-  const syncImageUrlsToDescendants = (
-    nodes: any[],
-    sourceNodeId: string,
-    edges: any[],
-  ): any[] => {
-    // 找出所有以 sourceNodeId 为源的下游边
-    const downstreamEdges = edges.filter(
-      (edge) => edge.source === sourceNodeId,
-    );
-    if (downstreamEdges.length === 0) {
-      return nodes;
-    }
-
-    // 获取源节点的新图片 URL
-    const sourceNode = nodes.find((n) => n.id === sourceNodeId);
-    if (!sourceNode || sourceNode.type !== "imageNode") {
-      return nodes;
-    }
-
-    const sourceData = sourceNode.data as any;
-    const newUrls = (sourceData?.result?.data ?? [])
-      .map((item: any) => item.url)
-      .filter(Boolean);
-
-    if (newUrls.length === 0) {
-      return nodes;
-    }
-
-    // 更新所有下游节点
-    return nodes.map((node) => {
-      const isDownstream = downstreamEdges.some(
-        (edge) => edge.target === node.id,
-      );
-      if (!isDownstream) {
-        return node;
-      }
-
-      // 只同步到 imageNode 和 videoNode
-      if (node.type !== "imageNode" && node.type !== "videoNode") {
-        return node;
-      }
-
-      const nodeData = node.data as any;
-      const currentUrls = nodeData?.image_urls ?? [];
-      // 合并去重，保留当前 URL 加上新的 URL
-      const nextUrls = Array.from(new Set([...currentUrls, ...newUrls]));
-
-      return {
-        ...node,
-        data: {
-          ...nodeData,
-          image_urls: nextUrls,
-        },
-      };
-    });
-  };
-
   return {
     nodes: [],
     edges: [],
@@ -2122,7 +2058,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const sourceData = sourceNode.data as ImageGenerationNode;
       const sourceModel = sourceData.model || "doubao-seedream-5-0";
       const sourceImageUrl = sourceData.result?.data?.[0]?.url;
-      const sourcePrompt = sourceData.prompt || "";
 
       const totalCells = gridSize * gridSize;
       const nodeWidth = 350;
