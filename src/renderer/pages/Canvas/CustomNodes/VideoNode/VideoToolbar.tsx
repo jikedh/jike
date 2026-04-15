@@ -5,6 +5,7 @@ import {
   IconCrop,
   IconDownload,
   IconEraser,
+  IconPlayerStop,
   IconSparkles,
   IconTrash,
   IconUpload,
@@ -48,7 +49,9 @@ type ActionKey =
   | "crop"
   | "download"
   | "preview"
-  | "snapshot";
+  | "firstFrame"
+  | "snapshot"
+  | "lastFrame";
 
 /**
  * 视频节点工具栏组件
@@ -74,8 +77,10 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   // 视频截帧 Hook
   const {
     captureFirstFrame,
+    captureLastFrame,
     captureSnapshot,
     isCapturingFirstFrame,
+    isCapturingLastFrame,
     isCapturingSnapshot,
   } = useVideoFrameCapture();
 
@@ -98,8 +103,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       { key: "crop" as const, label: "裁剪", icon: IconCrop },
       { key: "download" as const, label: "下载", icon: IconDownload },
       { key: "preview" as const, label: "放大查看", icon: IconZoomIn },
-      { key: "snapshot" as const, label: "截帧", icon: IconCamera },
-    ];
+      { key: "snapshot" as const, label: "截帧", icon: IconCamera }, { key: "lastFrame" as const, label: "尾帧", icon: IconPlayerStop },];
   }, []);
 
   // 触发文件选择
@@ -207,6 +211,24 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       return;
     }
 
+    if (actionKey === "firstFrame") {
+      if (!currentVideoUrl) {
+        toast.info("暂无可用视频");
+        return;
+      }
+      await captureFirstFrame(currentVideoUrl);
+      return;
+    }
+
+    if (actionKey === "lastFrame") {
+      if (!currentVideoUrl) {
+        toast.info("暂无可用视频");
+        return;
+      }
+      await captureLastFrame(currentVideoUrl);
+      return;
+    }
+
     // 其余功能仅保留占位交互框架，业务逻辑后续接入
     toast.info("功能开发中...");
   };
@@ -278,7 +300,8 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         duration={videoDuration}
         onSnapshot={(timeMs) => captureSnapshot(currentVideoUrl, timeMs)}
         onFirstFrame={() => captureFirstFrame(currentVideoUrl)}
-        isCapturing={isCapturingFirstFrame || isCapturingSnapshot}
+        onLastFrame={() => captureLastFrame(currentVideoUrl)}
+        isCapturing={isCapturingFirstFrame || isCapturingLastFrame || isCapturingSnapshot}
       />
 
       {isLightboxOpen ? (

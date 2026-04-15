@@ -1,4 +1,4 @@
-import { IconPlayerSkipBack, IconVideo } from "@tabler/icons-react";
+import { IconPlayerSkipBack, IconPlayerStop, IconVideo } from "@tabler/icons-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,8 @@ export interface VideoSnapshotPanelProps {
   onSnapshot: (timeMs: number) => void;
   /** 首帧回调 */
   onFirstFrame: () => void;
+  /** 尾帧回调 */
+  onLastFrame: () => void;
   /** 是否正在截帧 */
   isCapturing?: boolean;
   /** 视频总时长（秒） */
@@ -47,6 +49,7 @@ export const VideoSnapshotPanel = ({
   videoUrl,
   onSnapshot,
   onFirstFrame,
+  onLastFrame,
   isCapturing = false,
   duration,
 }: VideoSnapshotPanelProps) => {
@@ -80,6 +83,12 @@ export const VideoSnapshotPanel = ({
     onClose();
   };
 
+  const handleUseLastFrame = () => {
+    onLastFrame();
+    setTimeInput("");
+    onClose();
+  };
+
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-100 bg-neutral-900">
@@ -107,6 +116,25 @@ export const VideoSnapshotPanel = ({
             </Button>
             <p className="text-xs text-muted-foreground">
               自动提取视频的第一帧作为图片
+            </p>
+          </div>
+
+          {/* 尾帧按钮 */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground">
+              尾帧
+            </label>
+            <Button
+              variant="default"
+              className="w-full justify-start gap-2"
+              onClick={handleUseLastFrame}
+              disabled={isCapturing}
+            >
+              <IconPlayerStop size={16} />
+              提取视频最后一帧
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              自动提取视频的最后一帧作为图片
             </p>
           </div>
 

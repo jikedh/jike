@@ -4,6 +4,7 @@ import { generateVideoSnapshotUrl, uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
 import { toast } from "sonner";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { getVideoDuration } from "shared/utils/getVideoDuration";
 
 /**
  * 视频截帧 Hook
@@ -11,6 +12,7 @@ import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
  */
 export const useVideoFrameCapture = () => {
   const [isCapturingFirstFrame, setIsCapturingFirstFrame] = useState(false);
+  const [isCapturingLastFrame, setIsCapturingLastFrame] = useState(false);
   const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
 
   const { screenToFlowPosition } = useReactFlow();
@@ -103,6 +105,69 @@ export const useVideoFrameCapture = () => {
   );
 
   /**
+   * 提取视频尾帧
+   * 1. 获取视频时长
+   * 2. 通过 OSS 生成尾帧 URL（使用实际最后一帧时间点）
+   * 3. 将尾帧图片上传到 OSS（生成永久 URL）
+   * 4. 创建新的图片节点
+   */
+  const captureLastFrame = useCallback(
+    async (videoUrl: string) => {
+      if (!videoUrl) {
+        toast.error("暂无可用视频");
+        return;
+      }
+
+      setIsCapturingLastFrame(true);
+
+      try {
+        // 1. 获取视频时长，用于精确定位最后一帧
+        const duration = await getVideoDuration(videoUrl);
+        if (!duration) {
+          throw new Error("无法获取视频时长");
+        }
+
+        // 2. 取视频末尾附近的一帧（倒数 100ms），确保取到真正的最后一帧
+        // OSS 的 t_0 在某些视频上可能不精准，使用实际时间点更可靠
+        const lastFrameTimeMs = Math.max(0, Math.round((duration - 0.1) * 1000));
+
+        const lastFrameOssUrl = generateVideoSnapshotUrl(videoUrl, {
+          time: lastFrameTimeMs,
+          format: "jpg",
+        });
+
+        // 3. 将尾帧图片上传到 OSS 生成永久 URL
+        const response = await fetch(lastFrameOssUrl);
+        if (!response.ok) {
+          throw new Error("获取尾帧图片失败");
+        }
+        const blob = await response.blob();
+
+        const file = new File([blob], `lastframe-${Date.now()}.jpg`, {
+          type: "image/jpeg",
+        });
+
+        const uploadResult = await uploadFileToOSS(file);
+        if (!uploadResult.url) {
+          throw new Error("上传尾帧图片失败");
+        }
+
+        // 4. 创建新的图片节点
+        await createImageNodeFromSnapshot(uploadResult.url);
+
+        toast.success("尾帧提取成功，已创建图片节点");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "提取尾帧失败";
+        toast.error(message);
+        console.error("[VideoFrameCapture] 提取尾帧失败:", error);
+      } finally {
+        setIsCapturingLastFrame(false);
+      }
+    },
+    [createImageNodeFromSnapshot],
+  );
+
+  /**
    * 截取视频指定时间点的帧
    * 1. 通过 OSS 生成截帧 URL
    * 2. 将截帧图片上传到 OSS
@@ -166,8 +231,10 @@ export const useVideoFrameCapture = () => {
 
   return {
     captureFirstFrame,
+    captureLastFrame,
     captureSnapshot,
     isCapturingFirstFrame,
+    isCapturingLastFrame,
     isCapturingSnapshot,
   };
 };
