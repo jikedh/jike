@@ -174,7 +174,12 @@ export type CanvasFlowStoreType = {
     nodeId: string,
     patch: Record<string, unknown>,
   ) => void;
-  updateTableNodeData: (nodeId: string, patch: Record<string, unknown>) => void;
+  updateTableNodeData: (
+    nodeId: string,
+    patch:
+      | Record<string, unknown>
+      | ((prev: Record<string, unknown>) => Record<string, unknown>),
+  ) => void;
 
   // ── 图片生成 ─────────────────────────────────
   startImageGeneration: (nodeId: string, payload: any) => Promise<void>;

@@ -267,7 +267,7 @@ storageHandler.register()
 // filepath: src/preload/index.ts
 contextBridge.exposeInMainWorld('api', {
   storage: {
-    saveProject: (projectId: string, data: object) => 
+    saveProject: (projectId: string, data: object) =>
       ipcRenderer.invoke('storage:saveProject', projectId, data)
   }
 })
@@ -325,3 +325,5 @@ Hooks 存放位置：`src/renderer/hooks/`
 console.log('[IPC]', channel, payload)
 ```
 
+
+Tailwind 类名优化建议）不影响功能，可以后续再处理。请忽略
