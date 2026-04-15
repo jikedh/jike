@@ -24,7 +24,14 @@ export const NoteContent = ({
         defaultValue={content}
         maxLength={2500}
         onDoubleClick={(e) => e.stopPropagation()}
-        className="note-scrollbar noflow nopan h-full w-full resize-none rounded-b-xl border-0 bg-[#1f1f1f] p-3 text-sm text-white outline-none ring-0 placeholder:text-white/70 nodrag"
+        onWheel={(e) => {
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+          } else {
+            e.stopPropagation();
+          }
+        }}
+        className="note-scrollbar noflow nopan nodrag h-full w-full resize-none rounded-b-xl border-0 bg-[#1f1f1f] p-3 text-sm text-white outline-none ring-0 placeholder:text-white/70"
         onBlur={(event) => {
           onContentBlur(event.target.value);
           onStopEdit();
@@ -36,9 +43,7 @@ export const NoteContent = ({
 
   return (
     <div
-      className={`note-scrollbar noflow nopan h-full w-full rounded-b-xl bg-[#1f1f1f] p-3 text-sm text-white/90 cursor-text ${
-        isSelected ? "overflow-auto" : "overflow-hidden"
-      }`}
+      className={`note-scrollbar noflow nopan h-full w-full rounded-b-xl bg-[#1f1f1f] p-3 text-sm text-white/90 cursor-text overflow-hidden`}
       onClick={(e) => {
         // 当按下 Ctrl/Meta 键时，不触发编辑模式，让事件传播
         if (e.ctrlKey || e.metaKey) {
