@@ -2,8 +2,6 @@ import {
   applyNodeChanges,
   Background,
   BackgroundVariant,
-  ControlButton,
-  Controls,
   type FinalConnectionState,
   type InternalNode,
   MiniMap,
@@ -13,7 +11,7 @@ import {
   SelectionMode,
   useReactFlow,
 } from "@xyflow/react";
-import { ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { AllNodeType, EdgeType } from "shared/types/flow";
@@ -26,8 +24,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useDragUpload } from "@/hooks/useDragUpload";
 import { useCopyPaste } from "@/hooks/useCopyPaste";
+import { useDragUpload } from "@/hooks/useDragUpload";
 import { useUndoRedo } from "@/hooks/useUndoRedo";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
@@ -37,10 +35,14 @@ import { DragOverlay } from "./DragOverlay";
 
 type CanvasFlowProps = {
   projectId: string | undefined;
+  isMiniMapVisible: boolean;
 };
 
 // 画布流组件：仅负责 ReactFlow 相关状态与渲染。
-export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
+export const CanvasFlow = ({
+  projectId,
+  isMiniMapVisible,
+}: CanvasFlowProps) => {
   // 通过 zustand 读取图状态，避免业务动作散落在多个组件。
   // 注：nodes 和 edges 不在此订阅（高频变化），使用本地 displayNodes/displayEdges 和 getState() 获取
   const currentProjectId = useCanvasFlowStore((state) => state.projectId);
@@ -91,7 +93,15 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
   );
 
   // 获取撤销/重做方法（通过 useUndoRedo hook）
-  const { undo, redo, canUndo, canRedo, saveToHistory, resetHistory, lastSavedVersionRef } = useUndoRedo();
+  const {
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    saveToHistory,
+    resetHistory,
+    lastSavedVersionRef,
+  } = useUndoRedo();
 
   // 获取复制/粘贴方法（通过 useCopyPaste hook）
   const { copySelectedNodes, pasteNodes } = useCopyPaste();
@@ -191,7 +201,9 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
 
   // 监听 store 的 historyVersion 变化，触发历史记录保存
   const historyVersion = useCanvasFlowStore((state) => state.historyVersion);
-  const historyResetTrigger = useCanvasFlowStore((state) => state.historyResetTrigger);
+  const historyResetTrigger = useCanvasFlowStore(
+    (state) => state.historyResetTrigger,
+  );
   useEffect(() => {
     resetHistory();
     lastSavedVersionRef.current = 0;
@@ -300,10 +312,10 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
         void handleFiles(
           files,
           mouseFlowPosition ??
-            screenToFlowPosition({
-              x: window.innerWidth / 2,
-              y: window.innerHeight / 2,
-            }),
+          screenToFlowPosition({
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2,
+          }),
         );
         return;
       }
@@ -574,7 +586,6 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
 
   const contextMenuTriggerRef = useRef<HTMLDivElement | null>(null);
   const [menuScreenPosition, setMenuScreenPosition] = useState({ x: 0, y: 0 });
-  const [isMiniMapVisible, setIsMiniMapVisible] = useState(true);
   const pendingConnectRef = useRef<{
     nodeId: string;
     handleId: string | null;
@@ -790,28 +801,17 @@ export const CanvasFlow = ({ projectId }: CanvasFlowProps) => {
             connectionLineStyle={connectionLineStyle}
             // 吸附开关与网格尺寸由设置中心驱动
             snapToGrid={snapToGrid}
-            snapGrid={snapGridSize}
+            snapGrid={[20, 20]}
             connectionRadius={50}
             defaultEdgeOptions={defaultEdgeOptions}
           >
             {gridVisible && <Background variant={BackgroundVariant.Dots} />}
-            <Controls>
-              <ControlButton
-                onClick={() => setIsMiniMapVisible((prev) => !prev)}
-              >
-                {isMiniMapVisible ? (
-                  <EyeOff className="size-4" />
-                ) : (
-                  <Eye className="size-4" />
-                )}
-              </ControlButton>
-            </Controls>
             {isMiniMapVisible ? (
               <MiniMap
                 pannable
                 zoomable
                 position="bottom-left"
-                style={{ left: "48px" }}
+                style={{ left: "16px", bottom: "92px" }}
                 nodeStrokeWidth={0}
                 nodeColor="#B43FEB"
                 maskColor="rgba(0,0,0,0.5)"

@@ -19,11 +19,11 @@ const INITIAL_STATE: Pick<
   defaultModel: DEFAULT_CANVAS_CHAT_MODEL,
   defaultPersonaId: "none" as ChatPersonaId,
   autoSaveEnabled: true,
-  gridVisible: true,
+  gridVisible: false,
   // 默认开启吸附网格，提升节点排版一致性
   snapToGrid: true,
-  // 固定 40x40 网格步进（当前版本采用最小改动策略）
-  snapGridSize: [40, 40] as [number, number],
+  // 固定 20x20 网格步进，统一画布交互
+  snapGridSize: [20, 20] as [number, number],
   nodeSearchVisible: false,
   devToolsVisible: false,
   storagePath: "",

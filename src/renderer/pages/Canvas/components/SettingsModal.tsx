@@ -98,16 +98,12 @@ export const SettingsModal = ({
     defaultModel,
     defaultPersonaId,
     autoSaveEnabled,
-    gridVisible,
-    snapToGrid,
     nodeSearchVisible,
     devToolsVisible,
     storagePath,
     setDefaultModel,
     setDefaultPersonaId,
     setAutoSaveEnabled,
-    setGridVisible,
-    setSnapToGrid,
     setNodeSearchVisible,
     setDevToolsVisible,
     setStoragePath,
@@ -256,7 +252,7 @@ export const SettingsModal = ({
           // Web 版本或非 Electron 环境，假设为生产环境
           setIsDev(false);
         }
-      } catch (e) {
+      } catch {
         // 出错时假设为生产环境
         setIsDev(false);
       }
@@ -317,7 +313,7 @@ export const SettingsModal = ({
 
     return (
       sectionPlaceholderMap[
-        activeSection as keyof typeof sectionPlaceholderMap
+      activeSection as keyof typeof sectionPlaceholderMap
       ] ?? []
     );
   }, [activeSection]);
@@ -744,39 +740,6 @@ export const SettingsModal = ({
                   {/* 画布设置 - 网格显示开关 */}
                   {activeSection === "canvas" && (
                     <>
-                      <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm font-medium text-white/80">
-                              网格显示
-                            </div>
-                            <div className="text-xs text-white/40 mt-1">
-                              控制画布背景网格线的显示
-                            </div>
-                          </div>
-                          <Switch
-                            checked={gridVisible}
-                            onCheckedChange={setGridVisible}
-                          />
-                        </div>
-                      </section>
-                      <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm font-medium text-white/80">
-                              吸附网格
-                            </div>
-                            <div className="text-xs text-white/40 mt-1">
-                              拖拽节点时自动吸附到网格点(有助于提高性能)
-                            </div>
-                          </div>
-                          {/* 画布节点吸附网格开关 */}
-                          <Switch
-                            checked={snapToGrid}
-                            onCheckedChange={setSnapToGrid}
-                          />
-                        </div>
-                      </section>
                       <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
                         <div className="flex items-center justify-between">
                           <div>
