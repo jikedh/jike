@@ -17,6 +17,9 @@ interface CopiedEdgeTemplate {
   originalTarget: string;
 }
 
+/** 运行时状态字段列表，复制时需要清除 */
+const RUNTIME_FIELDS = ['status', 'isLoading', 'progress', 'error'] as const;
+
 export function useCopyPaste() {
   const copiedNodesRef = useRef<CopiedNodeTemplate[]>([]);
   const copiedEdgesRef = useRef<CopiedEdgeTemplate[]>([]);
@@ -32,6 +35,8 @@ export function useCopyPaste() {
 
     const copiedNodes: CopiedNodeTemplate[] = selectedNodes.map((node) => {
       const deepCopiedData = JSON.parse(JSON.stringify(node.data));
+      // 清除运行时状态，避免 Loading 等状态被复制
+      RUNTIME_FIELDS.forEach((field) => delete deepCopiedData[field]);
       return {
         originalId: node.id,
         type: node.type,

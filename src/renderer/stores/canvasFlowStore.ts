@@ -1285,7 +1285,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         nodeIdCounters: {
           ...state.nodeIdCounters,
           [typeKey]: current + 1,
-            }        }));
+        }
+      }));
       return nextId;
     },
 
@@ -1404,7 +1405,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const nodeType = (node.type as NodeType) || 'default';
 
       console.log(`[duplicateNode] 正在复制节点: ${nodeId}, 类型: ${nodeType}`);
-     
+
       const newId = currentState.getNextNodeId(nodeType);
       console.log(`[duplicateNode] 生成新 ID: ${newId}`);
 
@@ -1414,6 +1415,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       // 深拷贝 data，避免引用类型共享（如 result.data, image_urls 等）
       const deepCopiedData = JSON.parse(JSON.stringify(node.data));
+      // 清除运行时状态，避免 Loading 等状态被复制
+      const { status: _status, isLoading: _isLoading, progress: _progress, error: _error, ...cleanData } = deepCopiedData;
       const newNode = {
         id: newId,
         type: node.type,
@@ -1423,7 +1426,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         },
         data: {
           // 这里拷贝了原节点的 data
-          ...deepCopiedData,
+          ...cleanData,
           createdAt: Date.now(),
         },
         selected: true,
