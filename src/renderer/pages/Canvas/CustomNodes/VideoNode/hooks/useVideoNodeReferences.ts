@@ -30,6 +30,22 @@ export interface VideoMentionCandidate {
   type: "image" | "video" | "audio";
 }
 
+export const getVideoLocalImageMentionId = (url: string) => {
+  return `local-image-${encodeURIComponent(url)}`;
+};
+
+export const getVideoParentImageMentionId = (nodeId: string) => {
+  return `parent-image-${nodeId}`;
+};
+
+export const getVideoParentVideoMentionId = (nodeId: string) => {
+  return `parent-video-${nodeId}`;
+};
+
+export const getVideoParentAudioMentionId = (nodeId: string) => {
+  return `parent-audio-${nodeId}`;
+};
+
 /**
  * 聚合视频节点的上游资源与提及候选项。
  * 将主组件中的 edges/nodes 扫描逻辑集中到一个 hook，减少容器复杂度。
@@ -132,12 +148,12 @@ export const useVideoNodeReferences = ({
     // 统一“本地上传图”和“节点继承图”的命名风格：全部使用“图片X”。
     // 同时按 URL 去重，避免同一张图在 @ 列表中出现两次。
     const mergedImageSources = [
-      ...(referenceImageUrls ?? []).map((url, index) => ({
-        id: `video-image-${index}`,
+      ...(referenceImageUrls ?? []).map((url) => ({
+        id: getVideoLocalImageMentionId(url),
         url,
       })),
       ...parentImageNodes.map((item) => ({
-        id: `parent-image-${item.id}`,
+        id: getVideoParentImageMentionId(item.id),
         url: item.url,
       })),
     ];
@@ -164,7 +180,7 @@ export const useVideoNodeReferences = ({
     if (model === "doubao-seedance-2.0") {
       parentVideoNodes.forEach((item, index) => {
         items.push({
-          id: `parent-video-${item.id}`,
+          id: getVideoParentVideoMentionId(item.id),
           label: `视频${toChineseNumber(index + 1)}`,
           value: `视频${toChineseNumber(index + 1)}`,
           thumbnail: item.url,
@@ -174,7 +190,7 @@ export const useVideoNodeReferences = ({
 
       parentAudioNodes.forEach((item, index) => {
         items.push({
-          id: `parent-audio-${item.id}`,
+          id: getVideoParentAudioMentionId(item.id),
           label: `音频${toChineseNumber(index + 1)}`,
           value: `音频${toChineseNumber(index + 1)}`,
           thumbnail: "/audio-icon.svg",

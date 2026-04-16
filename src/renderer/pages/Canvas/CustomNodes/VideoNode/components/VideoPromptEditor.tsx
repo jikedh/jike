@@ -22,6 +22,13 @@ import { VideoMentionList } from "../VideoMentionList";
  */
 export interface VideoPromptEditorHandle {
   getPlainText: () => string;
+  removeReferenceMentions: (
+    matchers: Array<{
+      ids?: string[];
+      thumbnail?: string;
+      type?: "image" | "video" | "audio";
+    }>,
+  ) => number;
 }
 
 /**
@@ -291,6 +298,75 @@ export const VideoPromptEditor = forwardRef<
     ref,
     () => ({
       getPlainText: () => editor?.getText().trim() ?? "",
+      removeReferenceMentions: (matchers) => {
+        if (!editor || !matchers.length) {
+          return 0;
+        }
+
+        const rangesToDelete: Array<{ from: number; to: number }> = [];
+
+        const normalizedMatchers = matchers.map((matcher) => ({
+          ids: new Set(matcher.ids ?? []),
+          thumbnail: matcher.thumbnail,
+          type: matcher.type,
+        }));
+
+        normalizedMatchers.forEach((matcher) => {
+          const idMatches: Array<{ from: number; to: number }> = [];
+          const fallbackMatches: Array<{ from: number; to: number }> = [];
+
+          editor.state.doc.descendants((node, pos) => {
+            if (node.type.name !== "mention") {
+              return true;
+            }
+
+            const mentionId = String(node.attrs.id ?? "");
+            const mentionThumbnail = String(node.attrs.thumbnail ?? "");
+            const mentionType = node.attrs.type as
+              | "image"
+              | "video"
+              | "audio"
+              | undefined;
+
+            const typeMatched = !matcher.type || matcher.type === mentionType;
+
+            if (matcher.ids.size > 0 && matcher.ids.has(mentionId)) {
+              idMatches.push({ from: pos, to: pos + node.nodeSize });
+              return true;
+            }
+
+            if (
+              matcher.thumbnail &&
+              typeMatched &&
+              matcher.thumbnail === mentionThumbnail
+            ) {
+              fallbackMatches.push({ from: pos, to: pos + node.nodeSize });
+            }
+
+            return true;
+          });
+
+          rangesToDelete.push(...(idMatches.length > 0 ? idMatches : fallbackMatches));
+        });
+
+        const uniqueRanges = Array.from(
+          new Map(
+            rangesToDelete.map((range) => [`${range.from}-${range.to}`, range]),
+          ).values(),
+        ).sort((a, b) => b.from - a.from);
+
+        if (uniqueRanges.length === 0) {
+          return 0;
+        }
+
+        let transaction = editor.state.tr;
+        uniqueRanges.forEach((range) => {
+          transaction = transaction.delete(range.from, range.to);
+        });
+        editor.view.dispatch(transaction);
+
+        return uniqueRanges.length;
+      },
     }),
     [editor],
   );
