@@ -1,12 +1,12 @@
 import {
-  IconArrowBigDownLines,
-  IconArrowBigUpLines,
+  IconArrowBigLeftLines,
+  IconArrowBigRightLines,
   IconPlayerPauseFilled,
   IconPlayerPlayFilled,
   IconScissors,
   IconVideo,
 } from "@tabler/icons-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,10 +14,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { VideoSlider } from "@/components/ui/video-slider";
+import { VideoTimeline } from "./VideoTimeline";
 
 const DEFAULT_FPS = 30;
 const FRAME_STEP_SECONDS = 1 / DEFAULT_FPS;
+const TIMELINE_STEP_MS = 100;
 
 /**
  * 视频截帧面板属性
@@ -37,7 +38,7 @@ export interface VideoSnapshotPanelProps {
 
 /**
  * 视频截帧面板组件
- * 使用播放器式预览与时间轴交互，支持逐帧定位当前截图时间点
+ * 使用播放器式预览，支持逐帧定位当前截图时间点
  */
 export const VideoSnapshotPanel = ({
   open,
@@ -159,22 +160,20 @@ export const VideoSnapshotPanel = ({
         return;
       }
 
-
-      if (event.key === "ArrowUp") {
-        event.preventDefault();
-        stepFrame(-1);
+      // 滑块聚焦时交给 Slider 内部处理键盘事件，避免重复步进。
+      if (target?.closest("[data-slot='slider']")) {
+        return;
       }
 
-
-      if (event.key === "ArrowDown") {
+      // 时间轴交互：左右键按 100ms 步长移动，保持毫秒级定位。
+      if (event.key === "ArrowLeft") {
         event.preventDefault();
-        stepFrame(1);
+        seekTo(currentTime - TIMELINE_STEP_MS / 1000);
       }
 
-
-      if (event.key === " ") {
+      if (event.key === "ArrowRight") {
         event.preventDefault();
-        void togglePlayback();
+        seekTo(currentTime + TIMELINE_STEP_MS / 1000);
       }
     };
 
@@ -182,7 +181,7 @@ export const VideoSnapshotPanel = ({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open, stepFrame, togglePlayback]);
+  }, [currentTime, open, seekTo]);
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
@@ -220,13 +219,14 @@ export const VideoSnapshotPanel = ({
                 />
               </div>
             </div>
-
-            <VideoSlider
-              value={currentTime}
-              max={duration}
-              step={FRAME_STEP_SECONDS}
-              disabled={!isReady}
-              onChange={seekTo}
+            <VideoTimeline
+              disabled={!isReady || isCapturing}
+              currentTimeMs={Math.round(currentTime * 1000)}
+              durationMs={Math.round(duration * 1000)}
+              stepMs={TIMELINE_STEP_MS}
+              onSeek={(nextTimeMs) => {
+                seekTo(nextTimeMs / 1000);
+              }}
             />
 
             <div className="flex items-center justify-center gap-4">
@@ -237,7 +237,7 @@ export const VideoSnapshotPanel = ({
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-[#27272a] text-white/75 hover:bg-[#3f3f46] hover:text-[#B43FEB] disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="向前移动一帧"
               >
-                <IconArrowBigUpLines size={18} />
+                <IconArrowBigLeftLines size={18} />
               </button>
               <button
                 ref={playButtonRef}
@@ -260,7 +260,7 @@ export const VideoSnapshotPanel = ({
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-[#27272a] text-white/75 hover:bg-[#3f3f46] hover:text-[#B43FEB] disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="向后移动一帧"
               >
-                <IconArrowBigDownLines size={18} />
+                <IconArrowBigRightLines size={18} />
               </button>
             </div>
           </div>
