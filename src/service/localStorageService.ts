@@ -489,3 +489,62 @@ export const getCoverImagePath = (
 ): string => {
   return joinPath(basePath, projectName, `cover.${extension}`);
 };
+
+// ========== 预设提示词库 ==========
+const CANVAS_PRESETS_KEY = "canvas-presets";
+
+export type PresetItem = {
+  id: string;
+  name: string;
+  content: string;
+  type: string;
+  enabled: boolean;
+};
+
+export const defaultPresets: PresetItem[] = [
+  {
+    id: "1",
+    name: "电影感光效",
+    content:
+      "Cinematic lighting, volumetric fog, 8k resolution, highly detailed, anamorphic lens flare",
+    type: "image",
+    enabled: true,
+  },
+  {
+    id: "2",
+    name: "赛博朋克风格",
+    content:
+      "Cyberpunk aesthetic, neon lights, rainy streets, futuristic city, high contrast",
+    type: "general",
+    enabled: false,
+  },
+  {
+    id: "3",
+    name: "慢动作特写",
+    content:
+      "Slow motion, extreme close up, shallow depth of field, 120fps style",
+    type: "video",
+    enabled: true,
+  },
+];
+
+export const presetsService = {
+  save(presets: PresetItem[]): void {
+    try {
+      localStorage.setItem(CANVAS_PRESETS_KEY, JSON.stringify(presets));
+    } catch (e) {
+      console.error("[presetsService] save failed:", e);
+    }
+  },
+
+  load(): PresetItem[] | null {
+    try {
+      const raw = localStorage.getItem(CANVAS_PRESETS_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw) as PresetItem[];
+    } catch (e) {
+      console.error("[presetsService] load failed:", e);
+      return null;
+    }
+  },
+};

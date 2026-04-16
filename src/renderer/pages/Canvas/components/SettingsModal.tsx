@@ -8,6 +8,11 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  defaultPresets,
+  type PresetItem,
+  presetsService,
+} from "service/localStorageService";
 import { clearProjectList } from "service/projectStorage";
 import { CANVAS_CHAT_MODELS } from "shared/constants/ai-models";
 import {
@@ -122,33 +127,8 @@ export const SettingsModal = ({
   const [pendingImportData, setPendingImportData] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 预设提示词库状态
-  const [presets, setPresets] = useState([
-    {
-      id: "1",
-      name: "电影感光效",
-      content:
-        "Cinematic lighting, volumetric fog, 8k resolution, highly detailed, anamorphic lens flare",
-      type: "image",
-      enabled: true,
-    },
-    {
-      id: "2",
-      name: "赛博朋克风格",
-      content:
-        "Cyberpunk aesthetic, neon lights, rainy streets, futuristic city, high contrast",
-      type: "general",
-      enabled: false,
-    },
-    {
-      id: "3",
-      name: "慢动作特写",
-      content:
-        "Slow motion, extreme close up, shallow depth of field, 120fps style",
-      type: "video",
-      enabled: true,
-    },
-  ]);
+  // 预设提示词库状态 — 初始化为空，加载逻辑见 useEffect([open])
+  const [presets, setPresets] = useState<PresetItem[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -157,6 +137,25 @@ export const SettingsModal = ({
     type: "general",
     enabled: true,
   });
+
+  // 组件挂载时从 localStorage 加载预设，首次无数据则写入默认预设
+  useEffect(() => {
+    if (!open) return;
+    const saved = presetsService.load();
+    if (saved && saved.length > 0) {
+      setPresets(saved);
+    } else {
+      setPresets(defaultPresets);
+      presetsService.save(defaultPresets);
+    }
+  }, [open]);
+
+  // presets 变化时自动持久化
+  useEffect(() => {
+    if (presets.length > 0) {
+      presetsService.save(presets);
+    }
+  }, [presets]);
 
   // 确认对话框状态
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
@@ -179,7 +178,11 @@ export const SettingsModal = ({
       ...formData,
       id: Math.random().toString(36).substr(2, 9),
     };
-    setPresets([newPreset, ...presets]);
+    setPresets((prev) => {
+      const updated = [newPreset, ...prev];
+      presetsService.save(updated);
+      return updated;
+    });
     setIsAdding(false);
     resetPresetForm();
     setConfirmDialogOpen(false);
@@ -193,11 +196,13 @@ export const SettingsModal = ({
       error("请输入预设名称");
       return;
     }
-    setPresets(
-      presets.map((p) =>
+    setPresets((prev) => {
+      const updated = prev.map((p) =>
         p.id === editingId ? { ...formData, id: editingId } : p,
-      ),
-    );
+      );
+      presetsService.save(updated);
+      return updated;
+    });
     setEditingId(null);
     resetPresetForm();
     success("预设更新成功");
@@ -211,7 +216,11 @@ export const SettingsModal = ({
 
   const confirmDeletePreset = () => {
     if (pendingDeleteId) {
-      setPresets(presets.filter((p) => p.id !== pendingDeleteId));
+      setPresets((prev) => {
+        const updated = prev.filter((p) => p.id !== pendingDeleteId);
+        presetsService.save(updated);
+        return updated;
+      });
       success("预设删除成功");
     }
     setConfirmDialogOpen(false);
@@ -220,9 +229,13 @@ export const SettingsModal = ({
   };
 
   const togglePresetEnabled = (id: string) => {
-    setPresets(
-      presets.map((p) => (p.id === id ? { ...p, enabled: !p.enabled } : p)),
-    );
+    setPresets((prev) => {
+      const updated = prev.map((p) =>
+        p.id === id ? { ...p, enabled: !p.enabled } : p,
+      );
+      presetsService.save(updated);
+      return updated;
+    });
   };
 
   const startEditPreset = (preset: any) => {
@@ -313,7 +326,7 @@ export const SettingsModal = ({
 
     return (
       sectionPlaceholderMap[
-      activeSection as keyof typeof sectionPlaceholderMap
+        activeSection as keyof typeof sectionPlaceholderMap
       ] ?? []
     );
   }, [activeSection]);
