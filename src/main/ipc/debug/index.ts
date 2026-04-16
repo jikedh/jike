@@ -1,5 +1,5 @@
-import { ipcMain, BrowserWindow } from "electron";
 import { is } from "@electron-toolkit/utils";
+import { app, BrowserWindow, ipcMain } from "electron";
 
 /**
  * Debug IPC Handlers
@@ -20,5 +20,9 @@ export function registerDebugHandlers(): void {
   // 检查是否为开发环境
   ipcMain.handle("debug:isDev", async () => {
     return is.dev;
+  });
+
+  ipcMain.handle("debug:isPackaged", async () => {
+    return app.isPackaged;
   });
 }

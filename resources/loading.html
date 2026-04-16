@@ -1,0 +1,56 @@
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>环形-旋转</title>
+    <style>
+      *{
+          margin: 0;
+          padding: 0;
+      }
+      body{
+          min-height: 100vh;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+      }
+      .loader{
+          /* css变量 环的宽度 */
+          --s: 15px;
+          width: calc(16 * var(--s));
+          height: calc(16 * var(--s));
+          border-radius: 50%;
+          display: grid;
+          -webkit-mask: radial-gradient(50% 50%,
+          #0000 calc(99% - 2 * var(--s)),
+          #000 calc(100% - 2 * var(--s)));
+          /* 执行动画：动画名 时长 线性 循环播放 */
+          animation: spin 1.5s linear infinite;
+      }
+      .loader::before{
+          content: "";
+          background: conic-gradient(
+            from 25deg,
+            #8e03ff 25%,
+            #8e03ff 0 50%,
+            #8e03ff 0 75%,
+            #8e03ff 0
+          );
+          -webkit-mask: repeating-conic-gradient(#0000 0 25deg,#000 23% 25%),
+          radial-gradient(var(--s) at var(--s) 50%,#000 97%,#0000) left/calc(100% - 2 * var(--s)) 100% repeat-x,
+          radial-gradient(var(--s) at 50% var(--s),#000 97%,#0000) top/100% calc(100% - 2 * var(--s)) repeat-y;
+      }
+
+      @keyframes spin {
+        to{
+            /* 旋转一周 */
+          transform: rotate(1turn);
+        }
+      }
+    </style>
+</head>
+<body>
+    <div class="loader"></div>
+</body>
+</html>
