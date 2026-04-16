@@ -40,10 +40,11 @@ export type NodeType =
   | "textAgent"
   | "imageAgent"
   | "videoAgent"
-  | "table";
+  | "table"
+  | "default";
 
 /**
- * 节点坐标。
+ * 节点坐标.
  */
 export type NodePosition = {
   x: number;
@@ -51,7 +52,7 @@ export type NodePosition = {
 };
 
 /**
- * 新建节点时的可选参数。
+ * 新建节点时的可选参数.
  */
 export type AddNodeOptions = {
   agentPresetId?: AgentPresetId;
@@ -64,7 +65,7 @@ export type AddNodeOptions = {
 };
 
 /**
- * CanvasFlow Store 类型定义（data + 方法配对结构）。
+ * CanvasFlow Store 类型定义（data + 方法配对结构）.
  */
 export type CanvasFlowStoreType = {
   // ── 数据字段 ──────────────────────────────────

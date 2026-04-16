@@ -1274,14 +1274,18 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      * @returns 新的节点 ID，如 'note-3', 'image-1' 等
      */
     getNextNodeId: (nodeType: NodeType) => {
-      const current = get().nodeIdCounters[nodeType];
-      const nextId = `${nodeType}-${current}`;
+      // 确保 nodeType 是有效的字符串
+      const typeKey = nodeType || 'default';
+      const current = get().nodeIdCounters[typeKey] ?? 0;
+
+      console.log(`[getNextNodeId] 类型: ${typeKey}, 当前计数: ${current}`);
+
+      const nextId = `${typeKey}-${current}`;
       set((state) => ({
         nodeIdCounters: {
           ...state.nodeIdCounters,
-          [nodeType]: current + 1,
-        },
-      }));
+          [typeKey]: current + 1,
+            }        }));
       return nextId;
     },
 
@@ -1391,9 +1395,18 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       // 从最新的状态中获取节点，确保使用当前位置
       const currentState = get();
       const node = currentState.nodes.find((n) => n.id === nodeId);
-      if (!node) return;
+      if (!node) {
+        console.warn(`[duplicateNode] 未找到节点: ${nodeId}`);
+        return;
+      }
 
-      const newId = currentState.getNextNodeId(node.type as NodeType);
+      // 确保 type 存在，如果缺失则尝试从 node.type 恢复或默认为 'default'
+      const nodeType = (node.type as NodeType) || 'default';
+
+      console.log(`[duplicateNode] 正在复制节点: ${nodeId}, 类型: ${nodeType}`);
+     
+      const newId = currentState.getNextNodeId(nodeType);
+      console.log(`[duplicateNode] 生成新 ID: ${newId}`);
 
       // 固定偏移量
       const offsetX = 350;
@@ -1409,6 +1422,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           y: node.position.y + offsetY,
         },
         data: {
+          // 这里拷贝了原节点的 data
           ...deepCopiedData,
           createdAt: Date.now(),
         },
