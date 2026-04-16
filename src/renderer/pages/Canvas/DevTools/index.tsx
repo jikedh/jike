@@ -1,20 +1,19 @@
-import {
-  useState,
-  type Dispatch,
-  type SetStateAction,
-  type ReactNode,
-  HTMLAttributes,
-} from "react";
 import { Panel, PanelPosition } from "@xyflow/react";
-
-import NodeInspector from "./NodeInspector";
+import {
+  type Dispatch,
+  HTMLAttributes,
+  type ReactNode,
+  type SetStateAction,
+  useState,
+} from "react";
 import ChangeLogger from "./ChangeLogger";
 import MessageDemo from "./MessageDemo";
+import NodeInspector from "./NodeInspector";
 
 import "./style.css";
 
 export default function ReactFlowDevTools({
-  position = "top-left",
+  position = "top-center",
 }: {
   position?: PanelPosition;
 }) {
