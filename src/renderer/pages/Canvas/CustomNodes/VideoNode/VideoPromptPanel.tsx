@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import {
   VIDEO_DURATION_CONFIG,
@@ -22,7 +22,13 @@ import { VideoModelParamsPanel } from "./components/VideoModelParamsPanel";
 import type { VideoPromptEditorHandle } from "./components/VideoPromptEditor";
 import { VideoPromptEditor } from "./components/VideoPromptEditor";
 import { VideoReferenceAssetsBar } from "./components/VideoReferenceAssetsBar";
-import { useVideoNodeReferences } from "./hooks/useVideoNodeReferences";
+import {
+  getVideoLocalImageMentionId,
+  getVideoParentAudioMentionId,
+  getVideoParentImageMentionId,
+  getVideoParentVideoMentionId,
+  useVideoNodeReferences,
+} from "./hooks/useVideoNodeReferences";
 import { useVideoReferenceActions } from "./hooks/useVideoReferenceActions";
 import { getVideoPayloadStrategy } from "./strategies/videoPayloadStrategies";
 
@@ -101,21 +107,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     referenceImageUrls,
   });
 
-  const {
-    isUploading,
-    fileInputRef,
-    handleDisconnectNode,
-    handleRemoveReferenceImage,
-    handleUploadClick,
-    handleFileChange,
-  } = useVideoReferenceActions({
-    nodeId,
-    edges,
-    currentImageUrls: referenceImageUrls,
-    updateVideoNodeData,
-    deleteEdge,
-  });
-
   const isGenerating = useMemo(() => {
     if (!currentNode || currentNode.type !== "videoNode") {
       return false;
@@ -155,6 +146,142 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     },
     [nodeId, updateVideoNodeData],
   );
+
+  const removeReferenceMentions = useCallback(
+    (
+      matchers: Array<{
+        ids?: string[];
+        thumbnail?: string;
+        type?: "image" | "video" | "audio";
+      }>,
+    ) => {
+      editorRef.current?.removeReferenceMentions(matchers);
+    },
+    [],
+  );
+
+  const availableReferenceMentions = useMemo(() => {
+    return [
+      ...(referenceImageUrls ?? []).map((url) => ({
+        id: getVideoLocalImageMentionId(url),
+        thumbnail: url,
+        type: "image" as const,
+      })),
+      ...parentImageNodes.map((item) => ({
+        id: getVideoParentImageMentionId(item.id),
+        thumbnail: item.url,
+        type: "image" as const,
+      })),
+      ...parentVideoNodes.map((item) => ({
+        id: getVideoParentVideoMentionId(item.id),
+        thumbnail: item.url,
+        type: "video" as const,
+      })),
+      ...parentAudioNodes.map((item) => ({
+        id: getVideoParentAudioMentionId(item.id),
+        thumbnail: item.url,
+        type: "audio" as const,
+      })),
+    ];
+  }, [parentAudioNodes, parentImageNodes, parentVideoNodes, referenceImageUrls]);
+
+  const previousAvailableReferenceMentionsRef = useRef<
+    Array<{
+      id: string;
+      thumbnail: string;
+      type: "image" | "video" | "audio";
+    }>
+  >([]);
+
+  useEffect(() => {
+    const previousItems = previousAvailableReferenceMentionsRef.current;
+    const currentIds = new Set(availableReferenceMentions.map((item) => item.id));
+    const removedItems = previousItems.filter((item) => !currentIds.has(item.id));
+
+    if (removedItems.length > 0) {
+      removeReferenceMentions(
+        removedItems.map((item) => ({
+          ids: [item.id],
+          thumbnail: item.thumbnail,
+          type: item.type,
+        })),
+      );
+    }
+
+    previousAvailableReferenceMentionsRef.current = availableReferenceMentions;
+  }, [availableReferenceMentions, removeReferenceMentions]);
+
+  const handleDisconnectedReferenceNode = useCallback(
+    (sourceNodeId: string) => {
+      const parentImage = parentImageNodes.find((item) => item.id === sourceNodeId);
+      if (parentImage) {
+        removeReferenceMentions([
+          {
+            ids: [getVideoParentImageMentionId(sourceNodeId)],
+            type: "image",
+          },
+        ]);
+        return;
+      }
+
+      const parentVideo = parentVideoNodes.find((item) => item.id === sourceNodeId);
+      if (parentVideo) {
+        removeReferenceMentions([
+          {
+            ids: [getVideoParentVideoMentionId(sourceNodeId)],
+            type: "video",
+          },
+        ]);
+        return;
+      }
+
+      const parentAudio = parentAudioNodes.find((item) => item.id === sourceNodeId);
+      if (parentAudio) {
+        removeReferenceMentions([
+          {
+            ids: [getVideoParentAudioMentionId(sourceNodeId)],
+            type: "audio",
+          },
+        ]);
+      }
+    },
+    [
+      parentAudioNodes,
+      parentImageNodes,
+      parentVideoNodes,
+      removeReferenceMentions,
+    ],
+  );
+
+  const handleRemovedUploadedReferenceImage = useCallback(
+    (url: string) => {
+      removeReferenceMentions([
+        {
+          ids: [getVideoLocalImageMentionId(url)],
+          thumbnail: url,
+          type: "image",
+        },
+      ]);
+    },
+    [removeReferenceMentions],
+  );
+
+  const {
+    isUploading,
+    fileInputRef,
+    handleDisconnectNode,
+    handleRemoveReferenceImage,
+    handleUploadClick,
+    handleFileChange,
+  } = useVideoReferenceActions({
+    nodeId,
+    edges,
+    currentImageUrls: referenceImageUrls,
+    updateVideoNodeData,
+    deleteEdge,
+    onDisconnectedNode: handleDisconnectedReferenceNode,
+    onRemovedReferenceImage: handleRemovedUploadedReferenceImage,
+  });
 
   /**
    * 停止正在进行的视频生成轮询。

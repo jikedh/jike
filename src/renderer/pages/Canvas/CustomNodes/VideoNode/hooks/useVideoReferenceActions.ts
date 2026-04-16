@@ -15,12 +15,16 @@ export const useVideoReferenceActions = ({
   currentImageUrls,
   updateVideoNodeData,
   deleteEdge,
+  onDisconnectedNode,
+  onRemovedReferenceImage,
 }: {
   nodeId: string;
   edges: any[];
   currentImageUrls: string[];
   updateVideoNodeData: (nodeId: string, patch: any) => void;
   deleteEdge: (edgeId: string) => void;
+  onDisconnectedNode?: (sourceNodeId: string) => void;
+  onRemovedReferenceImage?: (url: string) => void;
 }) => {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -34,9 +38,10 @@ export const useVideoReferenceActions = ({
       );
       if (edgeToDelete) {
         deleteEdge(edgeToDelete.id);
+        onDisconnectedNode?.(sourceNodeId);
       }
     },
-    [edges, nodeId, deleteEdge],
+    [edges, nodeId, deleteEdge, onDisconnectedNode],
   );
 
   /**
@@ -55,8 +60,9 @@ export const useVideoReferenceActions = ({
       updateVideoNodeData(nodeId, {
         image_urls: nextUrls,
       });
+      onRemovedReferenceImage?.(targetUrl);
     },
-    [currentImageUrls, nodeId, updateVideoNodeData],
+    [currentImageUrls, nodeId, onRemovedReferenceImage, updateVideoNodeData],
   );
 
   const handleUploadClick = useCallback(() => {
