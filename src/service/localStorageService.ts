@@ -497,39 +497,48 @@ export type PresetItem = {
   id: string;
   name: string;
   content: string;
-  type: string;
   enabled: boolean;
 };
 
-export const defaultPresets: PresetItem[] = [
-  {
-    id: "1",
-    name: "电影感光效",
-    content:
-      "Cinematic lighting, volumetric fog, 8k resolution, highly detailed, anamorphic lens flare",
-    type: "image",
-    enabled: true,
-  },
-  {
-    id: "2",
-    name: "赛博朋克风格",
-    content:
-      "Cyberpunk aesthetic, neon lights, rainy streets, futuristic city, high contrast",
-    type: "general",
-    enabled: false,
-  },
-  {
-    id: "3",
-    name: "慢动作特写",
-    content:
-      "Slow motion, extreme close up, shallow depth of field, 120fps style",
-    type: "video",
-    enabled: true,
-  },
-];
+// 按类型分组的预设结构
+export type PresetsMap = {
+  general: PresetItem[];
+  image: PresetItem[];
+  video: PresetItem[];
+};
+
+export const defaultPresets: PresetsMap = {
+  general: [
+    {
+      id: "2",
+      name: "赛博朋克风格",
+      content:
+        "Cyberpunk aesthetic, neon lights, rainy streets, futuristic city, high contrast",
+      enabled: false,
+    },
+  ],
+  image: [
+    {
+      id: "1",
+      name: "电影感光效",
+      content:
+        "Cinematic lighting, volumetric fog, 8k resolution, highly detailed, anamorphic lens flare",
+      enabled: true,
+    },
+  ],
+  video: [
+    {
+      id: "3",
+      name: "慢动作特写",
+      content:
+        "Slow motion, extreme close up, shallow depth of field, 120fps style",
+      enabled: true,
+    },
+  ],
+};
 
 export const presetsService = {
-  save(presets: PresetItem[]): void {
+  save(presets: PresetsMap): void {
     try {
       localStorage.setItem(CANVAS_PRESETS_KEY, JSON.stringify(presets));
     } catch (e) {
@@ -537,11 +546,11 @@ export const presetsService = {
     }
   },
 
-  load(): PresetItem[] | null {
+  load(): PresetsMap | null {
     try {
       const raw = localStorage.getItem(CANVAS_PRESETS_KEY);
       if (!raw) return null;
-      return JSON.parse(raw) as PresetItem[];
+      return JSON.parse(raw) as PresetsMap;
     } catch (e) {
       console.error("[presetsService] load failed:", e);
       return null;

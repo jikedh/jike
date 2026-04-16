@@ -10,7 +10,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   defaultPresets,
-  type PresetItem,
+  type PresetsMap,
   presetsService,
 } from "service/localStorageService";
 import { clearProjectList } from "service/projectStorage";
@@ -127,34 +127,30 @@ export const SettingsModal = ({
   const [pendingImportData, setPendingImportData] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 预设提示词库状态 — 初始化为空，加载逻辑见 useEffect([open])
-  const [presets, setPresets] = useState<PresetItem[]>([]);
+  // 预设提示词库状态 — 按类型分组
+  const [presets, setPresets] = useState<PresetsMap>({
+    general: [],
+    image: [],
+    video: [],
+  });
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     content: "",
-    type: "general",
-    enabled: true,
+    type: "general" as "general" | "image" | "video",
   });
 
-  // 组件挂载时从 localStorage 加载预设，首次无数据则写入默认预设
+  // 弹窗打开时从 localStorage 加载预设，首次无数据则写入默认预设
   useEffect(() => {
     if (!open) return;
     const saved = presetsService.load();
-    if (saved && saved.length > 0) {
-      setPresets(saved);
-    } else {
-      setPresets(defaultPresets);
-      presetsService.save(defaultPresets);
-    }
+    setPresets(saved ?? defaultPresets);
   }, [open]);
 
   // presets 变化时自动持久化
   useEffect(() => {
-    if (presets.length > 0) {
-      presetsService.save(presets);
-    }
+    presetsService.save(presets);
   }, [presets]);
 
   // 确认对话框状态
@@ -163,6 +159,9 @@ export const SettingsModal = ({
     "add" | "delete" | null
   >(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [pendingDeleteType, setPendingDeleteType] = useState<string | null>(
+    null,
+  );
 
   const handleAddPreset = () => {
     if (!formData.name.trim()) {
@@ -173,13 +172,22 @@ export const SettingsModal = ({
     setConfirmDialogOpen(true);
   };
 
+  const resetPresetForm = () => {
+    setFormData({ name: "", content: "", type: "general" });
+  };
+
   const confirmAddPreset = () => {
     const newPreset = {
-      ...formData,
+      name: formData.name.trim(),
+      content: formData.content,
+      enabled: true,
       id: Math.random().toString(36).substr(2, 9),
     };
     setPresets((prev) => {
-      const updated = [newPreset, ...prev];
+      const updated = {
+        ...prev,
+        [formData.type]: [newPreset, ...(prev[formData.type] ?? [])],
+      };
       presetsService.save(updated);
       return updated;
     });
@@ -197,9 +205,19 @@ export const SettingsModal = ({
       return;
     }
     setPresets((prev) => {
-      const updated = prev.map((p) =>
-        p.id === editingId ? { ...formData, id: editingId } : p,
-      );
+      const updated = {
+        ...prev,
+        [formData.type]: prev[formData.type].map((p) =>
+          p.id === editingId
+            ? {
+                name: formData.name.trim(),
+                content: formData.content,
+                enabled: p.enabled,
+                id: editingId,
+              }
+            : p,
+        ),
+      };
       presetsService.save(updated);
       return updated;
     });
@@ -208,16 +226,22 @@ export const SettingsModal = ({
     success("预设更新成功");
   };
 
-  const handleDeletePreset = (id: string) => {
+  const handleDeletePreset = (type: string, id: string) => {
     setPendingDeleteId(id);
+    setPendingDeleteType(type);
     setConfirmDialogAction("delete");
     setConfirmDialogOpen(true);
   };
 
   const confirmDeletePreset = () => {
-    if (pendingDeleteId) {
+    if (pendingDeleteId && pendingDeleteType) {
       setPresets((prev) => {
-        const updated = prev.filter((p) => p.id !== pendingDeleteId);
+        const updated = {
+          ...prev,
+          [pendingDeleteType]: prev[pendingDeleteType].filter(
+            (p) => p.id !== pendingDeleteId,
+          ),
+        };
         presetsService.save(updated);
         return updated;
       });
@@ -226,31 +250,29 @@ export const SettingsModal = ({
     setConfirmDialogOpen(false);
     setConfirmDialogAction(null);
     setPendingDeleteId(null);
+    setPendingDeleteType(null);
   };
 
-  const togglePresetEnabled = (id: string) => {
+  const togglePresetEnabled = (type: string, id: string) => {
     setPresets((prev) => {
-      const updated = prev.map((p) =>
-        p.id === id ? { ...p, enabled: !p.enabled } : p,
-      );
+      const updated = {
+        ...prev,
+        [type]: prev[type].map((p) =>
+          p.id === id ? { ...p, enabled: !p.enabled } : p,
+        ),
+      };
       presetsService.save(updated);
       return updated;
     });
   };
 
-  const startEditPreset = (preset: any) => {
+  const startEditPreset = (
+    preset: { id: string; name: string; content: string; enabled: boolean },
+    type: "general" | "image" | "video",
+  ) => {
     setEditingId(preset.id);
-    setFormData({
-      name: preset.name,
-      content: preset.content,
-      type: preset.type,
-      enabled: preset.enabled,
-    });
+    setFormData({ name: preset.name, content: preset.content, type });
     setIsAdding(false);
-  };
-
-  const resetPresetForm = () => {
-    setFormData({ name: "", content: "", type: "general", enabled: true });
   };
 
   // 检测开发环境
@@ -644,88 +666,118 @@ export const SettingsModal = ({
                           </div>
                         )}
 
-                        <div className="space-y-2">
-                          {presets.map((preset) => (
-                            <div
-                              key={preset.id}
-                              className={cn(
-                                "bg-black/30 border rounded-lg p-3 flex items-start justify-between transition-all",
-                                preset.enabled
-                                  ? "border-white/5"
-                                  : "border-white/5 opacity-50",
-                              )}
-                            >
-                              <div className="flex gap-3 flex-1">
-                                <div
-                                  className={cn(
-                                    "w-10 h-10 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold",
-                                    preset.type === "image"
-                                      ? "bg-blue-500/20 text-blue-400"
-                                      : preset.type === "video"
-                                        ? "bg-purple-500/20 text-purple-400"
-                                        : "bg-green-500/20 text-green-400",
-                                  )}
-                                >
-                                  {preset.type === "image"
-                                    ? "图"
-                                    : preset.type === "video"
-                                      ? "视"
-                                      : "通"}
+                        {(["general", "image", "video"] as const).map(
+                          (type) => {
+                            const items = presets[type] ?? [];
+                            return (
+                              <div key={type} className="mb-5 last:mb-0">
+                                <div className="text-xs font-medium uppercase text-white/30 mb-2 px-1">
+                                  {type === "general"
+                                    ? "通用"
+                                    : type === "image"
+                                      ? "生图"
+                                      : "视频"}
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-sm font-medium text-white/90 truncate">
-                                      {preset.name}
-                                    </span>
-                                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-white/5 text-white/30">
-                                      {preset.type}
-                                    </span>
+                                {items.length === 0 ? (
+                                  <div className="text-center py-5 bg-black/30 border border-dashed border-white/10 rounded-lg">
+                                    <p className="text-xs text-white/30">
+                                      暂无预设
+                                    </p>
                                   </div>
-                                  <p className="text-xs text-white/40 line-clamp-1">
-                                    {preset.content}
-                                  </p>
-                                </div>
-                              </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {items.map((preset) => (
+                                      <div
+                                        key={preset.id}
+                                        className={cn(
+                                          "bg-black/30 border rounded-lg p-3 flex items-start justify-between transition-all",
+                                          preset.enabled
+                                            ? "border-white/5"
+                                            : "border-white/5 opacity-50",
+                                        )}
+                                      >
+                                        <div className="flex gap-3 flex-1">
+                                          <div
+                                            className={cn(
+                                              "w-10 h-10 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold",
+                                              type === "image"
+                                                ? "bg-blue-500/20 text-blue-400"
+                                                : type === "video"
+                                                  ? "bg-purple-500/20 text-purple-400"
+                                                  : "bg-green-500/20 text-green-400",
+                                            )}
+                                          >
+                                            {type === "image"
+                                              ? "图"
+                                              : type === "video"
+                                                ? "视"
+                                                : "通"}
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                              <span className="text-sm font-medium text-white/90 truncate">
+                                                {preset.name}
+                                              </span>
+                                              <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-white/5 text-white/30">
+                                                {type}
+                                              </span>
+                                            </div>
+                                            <p className="text-xs text-white/40 line-clamp-1">
+                                              {preset.content}
+                                            </p>
+                                          </div>
+                                        </div>
 
-                              <div className="flex items-center gap-1 ml-3">
-                                <button
-                                  onClick={() => togglePresetEnabled(preset.id)}
-                                  className={cn(
-                                    "p-1.5 rounded-lg transition-all",
-                                    preset.enabled
-                                      ? "bg-[#B43FEB]/10 text-[#B43FEB]"
-                                      : "bg-white/5 text-white/20",
-                                  )}
-                                  title={
-                                    preset.enabled ? "点击禁用" : "点击启用"
-                                  }
-                                >
-                                  <IconBolt size={14} />
-                                </button>
-                                <button
-                                  onClick={() => startEditPreset(preset)}
-                                  className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:bg-white/10 hover:text-white transition-all"
-                                >
-                                  <IconRestore size={14} />
-                                </button>
-                                <button
-                                  onClick={() => handleDeletePreset(preset.id)}
-                                  className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:bg-red-500/10 hover:text-red-500 transition-all"
-                                >
-                                  <IconX size={14} />
-                                </button>
+                                        <div className="flex items-center gap-1 ml-3">
+                                          <button
+                                            onClick={() =>
+                                              togglePresetEnabled(
+                                                type,
+                                                preset.id,
+                                              )
+                                            }
+                                            className={cn(
+                                              "p-1.5 rounded-lg transition-all",
+                                              preset.enabled
+                                                ? "bg-[#B43FEB]/10 text-[#B43FEB]"
+                                                : "bg-white/5 text-white/20",
+                                            )}
+                                            title={
+                                              preset.enabled
+                                                ? "点击禁用"
+                                                : "点击启用"
+                                            }
+                                          >
+                                            <IconBolt size={14} />
+                                          </button>
+                                          <button
+                                            onClick={() =>
+                                              startEditPreset(preset, type)
+                                            }
+                                            className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:bg-white/10 hover:text-white transition-all"
+                                          >
+                                            <IconRestore size={14} />
+                                          </button>
+                                          <button
+                                            onClick={() =>
+                                              handleDeletePreset(
+                                                type,
+                                                preset.id,
+                                              )
+                                            }
+                                            className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:bg-red-500/10 hover:text-red-500 transition-all"
+                                          >
+                                            <IconX size={14} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
-                            </div>
-                          ))}
-
-                          {presets.length === 0 && (
-                            <div className="text-center py-8 bg-black/30 border border-dashed border-white/10 rounded-lg">
-                              <p className="text-xs text-white/30">
-                                暂无预设提示词，点击上方按钮新增
-                              </p>
-                            </div>
-                          )}
-                        </div>
+                            );
+                          },
+                        )}
                       </section>
                     </>
                   )}
