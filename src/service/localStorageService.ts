@@ -540,7 +540,9 @@ export const defaultPresets: PresetsMap = {
 export const presetsService = {
   save(presets: PresetsMap): void {
     try {
+      console.log("[presetsService] save called with:", JSON.stringify(presets));
       localStorage.setItem(CANVAS_PRESETS_KEY, JSON.stringify(presets));
+      console.log("[presetsService] saved, current localStorage:", localStorage.getItem(CANVAS_PRESETS_KEY));
     } catch (e) {
       console.error("[presetsService] save failed:", e);
     }
@@ -549,6 +551,7 @@ export const presetsService = {
   load(): PresetsMap | null {
     try {
       const raw = localStorage.getItem(CANVAS_PRESETS_KEY);
+      console.log("[presetsService] load called, raw value:", raw);
       if (!raw) return null;
       return JSON.parse(raw) as PresetsMap;
     } catch (e) {

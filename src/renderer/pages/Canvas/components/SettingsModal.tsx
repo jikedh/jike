@@ -128,11 +128,10 @@ export const SettingsModal = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 预设提示词库状态 — 按类型分组
-  const [presets, setPresets] = useState<PresetsMap>({
-    general: [],
-    image: [],
-    video: [],
-  });
+  // 懒初始化：优先读取已保存的预设，避免组件首次挂载时把空值写回 localStorage。
+  const [presets, setPresets] = useState<PresetsMap>(
+    () => presetsService.load() ?? defaultPresets,
+  );
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -149,9 +148,11 @@ export const SettingsModal = ({
   }, [open]);
 
   // presets 变化时自动持久化
+  // 仅在弹窗打开期间持久化，避免页面初始化/项目切换时出现无意义覆盖。
   useEffect(() => {
+    if (!open) return;
     presetsService.save(presets);
-  }, [presets]);
+  }, [open, presets]);
 
   // 确认对话框状态
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
