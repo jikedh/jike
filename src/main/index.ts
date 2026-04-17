@@ -1,8 +1,7 @@
-import { app, shell, BrowserWindow } from "electron";
-import { join } from "path";
-import { electronApp, optimizer, is } from "@electron-toolkit/utils";
-import { dialog } from "electron";
+import { electronApp, is, optimizer } from "@electron-toolkit/utils";
+import { app, BrowserWindow, dialog, shell } from "electron";
 import { autoUpdater } from "electron-updater";
+import { join } from "path";
 // @ts-ignore
 import icon from "../../resources/icon.png?asset";
 /**
@@ -11,15 +10,11 @@ import icon from "../../resources/icon.png?asset";
  * 2. 注册 IPC（委托给模块）
  * 3. 启动 updater
  *
- * 其余全部下沉到模块（ipc/storage、ipc/debug）
+ * 其余全部下沉到模块（ipc/*）
  */
 
 // 导入 IPC handlers
-import {
-  registerStorageHandlers,
-  registerDebugHandlers,
-  registerDownloadHandlers,
-} from "./ipc";
+import { registerAllIpcHandlers } from "./ipc";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -31,13 +26,13 @@ function setupAutoUpdater(): void {
 
   autoUpdater.autoDownload = true;
 
-  autoUpdater.on("checking-for-update", () => {});
+  autoUpdater.on("checking-for-update", () => { });
 
-  autoUpdater.on("update-available", (info) => {});
+  autoUpdater.on("update-available", (info) => { });
 
-  autoUpdater.on("update-not-available", () => {});
+  autoUpdater.on("update-not-available", () => { });
 
-  autoUpdater.on("download-progress", (progress) => {});
+  autoUpdater.on("download-progress", (progress) => { });
 
   autoUpdater.on("update-downloaded", async (info) => {
     if (!mainWindow) {
@@ -99,10 +94,8 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
 
-  // 注册 IPC handlers
-  registerStorageHandlers();
-  registerDebugHandlers();
-  registerDownloadHandlers();
+  // 统一注册全部 IPC handlers（模块化）
+  registerAllIpcHandlers();
 }
 
 app.whenReady().then(() => {

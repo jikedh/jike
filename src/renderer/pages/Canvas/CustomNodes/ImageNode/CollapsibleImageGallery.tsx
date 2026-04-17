@@ -121,11 +121,11 @@ export const CollapsibleImageGallery = memo(
         try {
           // 读取本地文件
           const absolutePath = getMediaUrl(item.localPath);
-          if (!absolutePath || !window.storage) {
+          if (!absolutePath || !window.electronApi?.storage) {
             throw new Error("无法获取本地文件路径");
           }
 
-          const readResult = await window.storage.readFile(absolutePath);
+          const readResult = await window.electronApi.storage.readFile(absolutePath);
           if (!readResult.success || !readResult.data) {
             throw new Error("读取本地文件失败");
           }
@@ -224,11 +224,10 @@ export const CollapsibleImageGallery = memo(
 
           {/* 折叠态：仅显示首图封面 */}
           <div
-            className={`absolute inset-0 transition-all duration-200 ease-out ${
-              isExpanded
+            className={`absolute inset-0 transition-all duration-200 ease-out ${isExpanded
                 ? "pointer-events-none translate-y-1 scale-[0.98] opacity-0"
                 : "translate-y-0 scale-100 opacity-100"
-            }`}
+              }`}
           >
             <ImageTile
               url={coverImage}
@@ -242,11 +241,10 @@ export const CollapsibleImageGallery = memo(
 
           {/* 展开态：2 列网格展示全部图片 */}
           <div
-            className={`absolute inset-0 transition-all duration-200 ease-out ${
-              isExpanded
+            className={`absolute inset-0 transition-all duration-200 ease-out ${isExpanded
                 ? "translate-y-0 scale-100 opacity-100"
                 : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0"
-            }`}
+              }`}
           >
             <div
               className={`h-full w-full ${totalCount > 4 ? "overflow-y-auto pr-0.5" : ""}`}

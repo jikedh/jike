@@ -1,4 +1,10 @@
-import { ElectronAPI } from "@electron-toolkit/preload";
+/**
+ * ============================================================================
+ * @file        index.d.ts
+ * @description Electron Preload 类型声明
+ *              统一通过 window.electronApi 访问所有 API
+ * ============================================================================
+ */
 
 export type FileInfo = {
   name: string;
@@ -8,7 +14,21 @@ export type FileInfo = {
   modifiedAt: number;
 };
 
-export type StorageApi = {
+// ============================================================================
+// IPC Service
+// ============================================================================
+type IpcService = {
+  send: (channel: string, ...args: any[]) => void;
+  invoke: (channel: string, ...args: any[]) => Promise<any>;
+  on: (channel: string, listener: (...args: any[]) => void) => void;
+  once: (channel: string, listener: (...args: any[]) => void) => void;
+  removeListener: (channel: string, listener: (...args: any[]) => void) => void;
+};
+
+// ============================================================================
+// Storage API
+// ============================================================================
+type StorageApi = {
   selectDirectory: () => Promise<string | null>;
   ensureProjectDir: (
     basePath: string,
@@ -53,12 +73,18 @@ export type StorageApi = {
   getDefaultPath: () => Promise<string>;
 };
 
-export type DebugApi = {
+// ============================================================================
+// Debug API
+// ============================================================================
+type DebugApi = {
   toggleDevTools: () => Promise<{ success: boolean; error?: string }>;
   isDev: () => Promise<boolean>;
 };
 
-export type DownloadApi = {
+// ============================================================================
+// Download API
+// ============================================================================
+type DownloadApi = {
   imageAsBuffer: (
     url: string,
   ) => Promise<{ success: boolean; data?: Uint8Array; error?: string }>;
@@ -73,11 +99,33 @@ export type DownloadApi = {
   ) => Promise<{ success: boolean; data?: { path: string }; error?: string }>;
 };
 
+// ============================================================================
+// Globals
+// ============================================================================
+type Globals = {
+  process: {
+    platform: string;
+    arch: string;
+    env: Record<string, string | undefined>;
+    versions: NodeJS.Versions;
+    execPath: string;
+  };
+};
+
+// ============================================================================
+// ElectronApi - 统一暴露的 API 对象
+// ============================================================================
+type ElectronApi = {
+  ipcService: IpcService;
+  storage: StorageApi;
+  debug: DebugApi;
+  download: DownloadApi;
+  globals: Globals;
+  platform: string;
+};
+
 declare global {
   interface Window {
-    electron: ElectronAPI;
-    storage: StorageApi;
-    debug: DebugApi;
-    download: DownloadApi;
+    electronApi: ElectronApi;
   }
 }

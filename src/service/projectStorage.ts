@@ -5,8 +5,8 @@
  */
 
 import {
-  localStorageService,
   generateSimpleFileName,
+  localStorageService,
 } from "service/localStorageService";
 
 const PROJECT_LIST_KEY = "canvas-projects";
@@ -57,16 +57,18 @@ export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
 
   if (localStorageService.isAvailable()) {
     const basePath = localStorageService.getStoragePath();
-    if (basePath && window.storage) {
+    if (basePath && window.electronApi?.storage) {
       try {
-        const listResult = await window.storage.listFiles(basePath);
+        const listResult = await window.electronApi.storage.listFiles(basePath);
         if (listResult.success && listResult.files) {
           for (const file of listResult.files) {
             if (file.isDirectory) {
               const canvasPath = `${basePath}/${file.name}/canvas.json`;
-              const exists = await window.storage.fileExists(canvasPath);
+              const exists =
+                await window.electronApi.storage.fileExists(canvasPath);
               if (exists) {
-                const readResult = await window.storage.readJson(canvasPath);
+                const readResult =
+                  await window.electronApi.storage.readJson(canvasPath);
                 if (readResult.success && readResult.data) {
                   const canvasData = readResult.data;
                   const existingProject = localStorageProjects.find(
@@ -320,9 +322,10 @@ export const deleteProject = async (id: string): Promise<boolean> => {
 
     // 删除本地文件夹
     const basePath = localStorageService.getStoragePath();
-    if (basePath && window.storage) {
+    if (basePath && window.electronApi?.storage) {
       const projectPath = `${basePath}/${projectName}`;
-      const deleteResult = await window.storage.deleteFolder(projectPath);
+      const deleteResult =
+        await window.electronApi.storage.deleteFolder(projectPath);
       if (!deleteResult.success) {
         console.error("Failed to delete project folder:", deleteResult.error);
       }

@@ -163,9 +163,9 @@ const pollImageGeneration = async (
                   try {
                     // 获取本地文件的绝对路径
                     const absolutePath = getMediaUrl(relativePath);
-                    if (absolutePath && window.storage) {
+                    if (absolutePath && window.electronApi?.storage) {
                       const readResult =
-                        await window.storage.readFile(absolutePath);
+                        await window.electronApi.storage.readFile(absolutePath);
                       if (readResult.success && readResult.data) {
                         const fileBytes = new Uint8Array(readResult.data);
                         const file = new File([fileBytes], fileName, {
@@ -420,9 +420,9 @@ const pollMjImageGeneration = async (
                   try {
                     // 获取本地文件的绝对路径
                     const absolutePath = getMediaUrl(relativePath);
-                    if (absolutePath && window.storage) {
+                    if (absolutePath && window.electronApi?.storage) {
                       const readResult =
-                        await window.storage.readFile(absolutePath);
+                        await window.electronApi.storage.readFile(absolutePath);
                       if (readResult.success && readResult.data) {
                         const fileBytes = new Uint8Array(readResult.data);
                         const file = new File([fileBytes], fileName, {
@@ -1018,12 +1018,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (node.type === "imageNode" && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
-                if (item.relativePath && window.storage) {
+                if (item.relativePath && window.electronApi?.storage) {
                   try {
                     const absolutePath = getMediaUrl(item.relativePath);
                     if (absolutePath) {
                       const readResult =
-                        await window.storage.readFile(absolutePath);
+                        await window.electronApi.storage.readFile(absolutePath);
                       if (readResult.success && readResult.data) {
                         const ext =
                           (item.localFileName || item.fileName)
@@ -1064,12 +1064,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (node.type === "videoNode" && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
-                if (item.relativePath && window.storage) {
+                if (item.relativePath && window.electronApi?.storage) {
                   try {
                     const absolutePath = getMediaUrl(item.relativePath);
                     if (absolutePath) {
                       const readResult =
-                        await window.storage.readFile(absolutePath);
+                        await window.electronApi.storage.readFile(absolutePath);
                       if (readResult.success && readResult.data) {
                         const ext =
                           item.format ||
@@ -1112,12 +1112,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (node.type === "audioNode" && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
-                if (item.relativePath && window.storage) {
+                if (item.relativePath && window.electronApi?.storage) {
                   try {
                     const absolutePath = getMediaUrl(item.relativePath);
                     if (absolutePath) {
                       const readResult =
-                        await window.storage.readFile(absolutePath);
+                        await window.electronApi.storage.readFile(absolutePath);
                       if (readResult.success && readResult.data) {
                         const ext =
                           (item.localFileName || item.fileName)

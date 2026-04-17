@@ -211,11 +211,11 @@ export const SettingsModal = ({
         [formData.type]: prev[formData.type].map((p) =>
           p.id === editingId
             ? {
-                name: formData.name.trim(),
-                content: formData.content,
-                enabled: p.enabled,
-                id: editingId,
-              }
+              name: formData.name.trim(),
+              content: formData.content,
+              enabled: p.enabled,
+              id: editingId,
+            }
             : p,
         ),
       };
@@ -280,19 +280,19 @@ export const SettingsModal = ({
   useEffect(() => {
     const checkDevEnvironment = async () => {
       try {
-        const debugApi = (window as any).debug;
+        const debugApi = window.electronApi?.debug;
         if (debugApi?.isDev) {
           const isDevEnv = await debugApi.isDev();
           console.log("[Settings] isDev value:", isDevEnv);
           setIsDev(isDevEnv);
         } else {
           // Web 版本或非 Electron 环境，假设为生产环境
-           console.log("[Settings] isDev value: false (no debug API)");
+          console.log("[Settings] isDev value: false (no debug API)");
           setIsDev(false);
         }
       } catch {
         // 出错时假设为生产环境
-         console.log("[Settings] isDev value: false (error)", err);
+        console.log("[Settings] isDev value: false (error)", err);
         setIsDev(false);
       }
     };
@@ -300,8 +300,8 @@ export const SettingsModal = ({
   }, []);
 
   useEffect(() => {
-    if (open && !storagePath && window.storage) {
-      window.storage.getDefaultPath().then((defaultPath) => {
+    if (open && !storagePath && window.electronApi?.storage) {
+      window.electronApi.storage.getDefaultPath().then((defaultPath) => {
         if (defaultPath) {
           setStoragePath(defaultPath);
         }
@@ -310,17 +310,17 @@ export const SettingsModal = ({
   }, [open, storagePath, setStoragePath]);
 
   const handleSelectStoragePath = async () => {
-    if (!window.storage) {
+    if (!window.electronApi?.storage) {
       error("存储功能不可用");
       return;
     }
 
     const oldPath = storagePath;
-    const selectedPath = await window.storage.selectDirectory();
+    const selectedPath = await window.electronApi.storage.selectDirectory();
 
     if (selectedPath && selectedPath !== oldPath) {
       if (oldPath) {
-        const migrateResult = await window.storage.migrateProjects(
+        const migrateResult = await window.electronApi.storage.migrateProjects(
           oldPath,
           selectedPath,
         );
@@ -352,7 +352,7 @@ export const SettingsModal = ({
 
     return (
       sectionPlaceholderMap[
-        activeSection as keyof typeof sectionPlaceholderMap
+      activeSection as keyof typeof sectionPlaceholderMap
       ] ?? []
     );
   }, [activeSection]);
