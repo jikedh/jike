@@ -6,7 +6,6 @@ import {
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import type { VideoGenerationNode } from "shared/types/flow";
-import { PresetDropdown } from "@/components/PresetDropdown";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -184,12 +183,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         type: "audio" as const,
       })),
     ];
-  }, [
-    parentAudioNodes,
-    parentImageNodes,
-    parentVideoNodes,
-    referenceImageUrls,
-  ]);
+  }, [parentAudioNodes, parentImageNodes, parentVideoNodes, referenceImageUrls]);
 
   const previousAvailableReferenceMentionsRef = useRef<
     Array<{
@@ -201,12 +195,8 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
   useEffect(() => {
     const previousItems = previousAvailableReferenceMentionsRef.current;
-    const currentIds = new Set(
-      availableReferenceMentions.map((item) => item.id),
-    );
-    const removedItems = previousItems.filter(
-      (item) => !currentIds.has(item.id),
-    );
+    const currentIds = new Set(availableReferenceMentions.map((item) => item.id));
+    const removedItems = previousItems.filter((item) => !currentIds.has(item.id));
 
     if (removedItems.length > 0) {
       removeReferenceMentions(
@@ -223,9 +213,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
   const handleDisconnectedReferenceNode = useCallback(
     (sourceNodeId: string) => {
-      const parentImage = parentImageNodes.find(
-        (item) => item.id === sourceNodeId,
-      );
+      const parentImage = parentImageNodes.find((item) => item.id === sourceNodeId);
       if (parentImage) {
         removeReferenceMentions([
           {
@@ -236,9 +224,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         return;
       }
 
-      const parentVideo = parentVideoNodes.find(
-        (item) => item.id === sourceNodeId,
-      );
+      const parentVideo = parentVideoNodes.find((item) => item.id === sourceNodeId);
       if (parentVideo) {
         removeReferenceMentions([
           {
@@ -249,9 +235,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         return;
       }
 
-      const parentAudio = parentAudioNodes.find(
-        (item) => item.id === sourceNodeId,
-      );
+      const parentAudio = parentAudioNodes.find((item) => item.id === sourceNodeId);
       if (parentAudio) {
         removeReferenceMentions([
           {
@@ -463,15 +447,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             camerafixed={camerafixed}
             seedance20Metadata={seedance20Metadata}
             onPatch={(patch) => updateVideoNodeData(nodeId, patch)}
-          />
-
-          {/* 预设提示词下拉 */}
-          <PresetDropdown
-            presetType="video"
-            disabled={isGenerating || isUploading}
-            onSelect={(content) => {
-              editorRef.current?.insertContent(content);
-            }}
           />
 
           <div className="ml-auto">

@@ -1,5 +1,16 @@
-import { dialog, ipcMain } from "electron";
-import { storageService } from "../../services/storageService";
+import { ipcMain, dialog } from "electron";
+import { join, dirname, normalize } from "path";
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  unlinkSync,
+  readdirSync,
+  statSync,
+  renameSync,
+} from "fs";
+import { app } from "electron";
 
 /**
  * Storage IPC Handlers
@@ -22,8 +33,16 @@ export function registerStorageHandlers(): void {
   ipcMain.handle(
     "storage:ensureProjectDir",
     async (_, basePath: string, projectName: string) => {
+      const projectDir = normalize(join(basePath, projectName));
+      const audioDir = join(projectDir, "audio");
+
       try {
-        const projectDir = storageService.ensureProjectDir(basePath, projectName);
+        if (!existsSync(projectDir)) {
+          mkdirSync(projectDir, { recursive: true });
+        }
+        if (!existsSync(audioDir)) {
+          mkdirSync(audioDir, { recursive: true });
+        }
         return { success: true, path: projectDir };
       } catch (error: any) {
         return { success: false, error: error.message };
@@ -36,7 +55,12 @@ export function registerStorageHandlers(): void {
     "storage:writeJson",
     async (_, filePath: string, data: any) => {
       try {
-        storageService.writeJson(filePath, data);
+        const normalizedPath = normalize(filePath);
+        const dir = dirname(normalizedPath);
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true });
+        }
+        writeFileSync(normalizedPath, JSON.stringify(data, null, 2), "utf-8");
         return { success: true };
       } catch (error: any) {
         return { success: false, error: error.message };
@@ -47,11 +71,12 @@ export function registerStorageHandlers(): void {
   // 读取 JSON 文件
   ipcMain.handle("storage:readJson", async (_, filePath: string) => {
     try {
-      const data = storageService.readJson(filePath);
-      if (data === null) {
+      const normalizedPath = normalize(filePath);
+      if (!existsSync(normalizedPath)) {
         return { success: false, error: "File not found", data: null };
       }
-      return { success: true, data };
+      const content = readFileSync(normalizedPath, "utf-8");
+      return { success: true, data: JSON.parse(content) };
     } catch (error: any) {
       return { success: false, error: error.message, data: null };
     }
@@ -62,7 +87,12 @@ export function registerStorageHandlers(): void {
     "storage:writeFile",
     async (_, filePath: string, buffer: ArrayBuffer) => {
       try {
-        storageService.writeFile(filePath, buffer);
+        const normalizedPath = normalize(filePath);
+        const dir = dirname(normalizedPath);
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true });
+        }
+        writeFileSync(normalizedPath, Buffer.from(buffer));
         return { success: true };
       } catch (error: any) {
         return { success: false, error: error.message };
@@ -73,11 +103,12 @@ export function registerStorageHandlers(): void {
   // 读取文件
   ipcMain.handle("storage:readFile", async (_, filePath: string) => {
     try {
-      const data = storageService.readFile(filePath);
-      if (data === null) {
+      const normalizedPath = normalize(filePath);
+      if (!existsSync(normalizedPath)) {
         return { success: false, error: "File not found", data: null };
       }
-      return { success: true, data };
+      const content = readFileSync(normalizedPath);
+      return { success: true, data: content };
     } catch (error: any) {
       return { success: false, error: error.message, data: null };
     }
@@ -86,7 +117,10 @@ export function registerStorageHandlers(): void {
   // 删除文件
   ipcMain.handle("storage:deleteFile", async (_, filePath: string) => {
     try {
-      storageService.deleteFile(filePath);
+      const normalizedPath = normalize(filePath);
+      if (existsSync(normalizedPath)) {
+        unlinkSync(normalizedPath);
+      }
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error.message };
@@ -96,7 +130,11 @@ export function registerStorageHandlers(): void {
   // 删除文件夹
   ipcMain.handle("storage:deleteFolder", async (_, folderPath: string) => {
     try {
-      storageService.deleteFolder(folderPath);
+      const normalizedPath = normalize(folderPath);
+      if (existsSync(normalizedPath)) {
+        const { rmSync } = require("fs");
+        rmSync(normalizedPath, { recursive: true, force: true });
+      }
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error.message };
@@ -105,13 +143,27 @@ export function registerStorageHandlers(): void {
 
   // 检查文件是否存在
   ipcMain.handle("storage:fileExists", async (_, filePath: string) => {
-    return storageService.fileExists(filePath);
+    return existsSync(normalize(filePath));
   });
 
   // 列出目录文件
   ipcMain.handle("storage:listFiles", async (_, dirPath: string) => {
     try {
-      const files = storageService.listFiles(dirPath);
+      const normalizedPath = normalize(dirPath);
+      if (!existsSync(normalizedPath)) {
+        return { success: true, files: [] };
+      }
+      const files = readdirSync(normalizedPath).map((name) => {
+        const fullPath = join(normalizedPath, name);
+        const stats = statSync(fullPath);
+        return {
+          name,
+          path: fullPath,
+          isDirectory: stats.isDirectory(),
+          size: stats.size,
+          modifiedAt: stats.mtimeMs,
+        };
+      });
       return { success: true, files };
     } catch (error: any) {
       return { success: false, error: error.message, files: [] };
@@ -123,8 +175,18 @@ export function registerStorageHandlers(): void {
     "storage:downloadFile",
     async (_, url: string, destPath: string) => {
       try {
-        const path = await storageService.downloadFile(url, destPath);
-        return { success: true, path };
+        const normalizedPath = normalize(destPath);
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        const dir = dirname(normalizedPath);
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true });
+        }
+        writeFileSync(normalizedPath, Buffer.from(arrayBuffer));
+        return { success: true, path: normalizedPath };
       } catch (error: any) {
         return { success: false, error: error.message };
       }
@@ -136,7 +198,24 @@ export function registerStorageHandlers(): void {
     "storage:renameDirectory",
     async (_, oldPath: string, newPath: string) => {
       try {
-        storageService.renameDirectory(oldPath, newPath);
+        const normalizedOldPath = normalize(oldPath);
+        const normalizedNewPath = normalize(newPath);
+
+        if (!existsSync(normalizedOldPath)) {
+          return { success: false, error: "Source directory does not exist" };
+        }
+
+        if (existsSync(normalizedNewPath)) {
+          return { success: false, error: "Target directory already exists" };
+        }
+
+        const parentDir = dirname(normalizedNewPath);
+        if (!existsSync(parentDir)) {
+          mkdirSync(parentDir, { recursive: true });
+        }
+
+        renameSync(normalizedOldPath, normalizedNewPath);
+
         return { success: true };
       } catch (error: any) {
         return { success: false, error: error.message };
@@ -149,16 +228,62 @@ export function registerStorageHandlers(): void {
     "storage:migrateProjects",
     async (_, oldPath: string, newPath: string) => {
       try {
-        const result = storageService.migrateProjects(oldPath, newPath);
-        if (result.skipped) {
+        const normalizedOldPath = normalize(oldPath);
+        const normalizedNewPath = normalize(newPath);
+
+        if (!existsSync(normalizedOldPath)) {
           return {
             success: true,
             message: "Old path does not exist, nothing to migrate",
-            migratedCount: 0,
           };
         }
 
-        return { success: true, migratedCount: result.migratedCount };
+        if (!existsSync(normalizedNewPath)) {
+          mkdirSync(normalizedNewPath, { recursive: true });
+        }
+
+        const entries = readdirSync(normalizedOldPath, { withFileTypes: true });
+        let migratedCount = 0;
+
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            const projectDir = join(normalizedOldPath, entry.name);
+            const canvasFile = join(projectDir, "canvas.json");
+
+            if (existsSync(canvasFile)) {
+              const destDir = join(normalizedNewPath, entry.name);
+
+              if (!existsSync(destDir)) {
+                mkdirSync(destDir, { recursive: true });
+
+                const subEntries = readdirSync(projectDir, {
+                  withFileTypes: true,
+                });
+                for (const subEntry of subEntries) {
+                  const srcPath = join(projectDir, subEntry.name);
+                  const destPath = join(destDir, subEntry.name);
+
+                  if (subEntry.isDirectory()) {
+                    mkdirSync(destPath, { recursive: true });
+                    const files = readdirSync(srcPath);
+                    for (const file of files) {
+                      const srcFile = join(srcPath, file);
+                      const destFile = join(destPath, file);
+                      const content = readFileSync(srcFile);
+                      writeFileSync(destFile, content);
+                    }
+                  } else {
+                    const content = readFileSync(srcPath);
+                    writeFileSync(destPath, content);
+                  }
+                }
+                migratedCount++;
+              }
+            }
+          }
+        }
+
+        return { success: true, migratedCount };
       } catch (error: any) {
         return { success: false, error: error.message };
       }
@@ -167,6 +292,6 @@ export function registerStorageHandlers(): void {
 
   // 获取默认路径
   ipcMain.handle("storage:getDefaultPath", async () => {
-    return storageService.getDefaultPath();
+    return join(app.getPath("documents"), "jike-projects");
   });
 }

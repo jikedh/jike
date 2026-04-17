@@ -22,7 +22,6 @@ import { VideoMentionList } from "../VideoMentionList";
  */
 export interface VideoPromptEditorHandle {
   getPlainText: () => string;
-  insertContent: (content: string) => void;
   removeReferenceMentions: (
     matchers: Array<{
       ids?: string[];
@@ -299,12 +298,6 @@ export const VideoPromptEditor = forwardRef<
     ref,
     () => ({
       getPlainText: () => editor?.getText().trim() ?? "",
-      insertContent: (content: string) => {
-        if (!editor) return;
-        // Insert at current cursor position
-        const { from } = editor.state.selection;
-        editor.commands.insertContentAt(from, content);
-      },
       removeReferenceMentions: (matchers) => {
         if (!editor || !matchers.length) {
           return 0;

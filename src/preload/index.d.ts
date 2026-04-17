@@ -75,10 +75,7 @@ export type DownloadApi = {
 
 declare global {
   interface Window {
-    electron: ElectronAPI & {
-      platform: NodeJS.Platform;
-      isPackaged: () => Promise<boolean>;
-    };
+    electron: ElectronAPI;
     storage: StorageApi;
     debug: DebugApi;
     download: DownloadApi;

@@ -4,41 +4,21 @@ directories:
   buildResources: build
   output: release
 files:
-  - out/**/*
-  - resources/**/*
-  - package.json
   - '!**/.vscode/*'
-  - '!src/**'
-  - '!docs/**'
-  - '!release/**'
-  - '!out/**/*.map'
-  - '!resources/**/*.psd'
-  - '!resources/**/*.ai'
+  - '!src/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.editorconfig,.eslintcache,eslint.config.mjs,.gitignore,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md,Dockerfile,nginx.conf}'
-  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml,package-lock.json}'
-  - '!{tsconfig.json,tsconfig.app.json,tsconfig.node.json,tsconfig.web.json}'
-  - '!biome.json'
-extraMetadata:
-  main: out/main/index.js
-asar: true
-compression: maximum
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
 win:
   executableName: 即刻
-  icon: resources/icon.png
-  target:
-    - target: nsis
-      arch:
-        - x64
-    - target: dir
-      arch:
-        - x64
+  icon: resources/icons/icon.png
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  artifactName: ${productName}-${version}-setup.${ext}
+  artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always

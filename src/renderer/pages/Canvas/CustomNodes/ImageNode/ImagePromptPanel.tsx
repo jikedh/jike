@@ -10,7 +10,6 @@ import { GenerationStatus } from "shared/constants/enum";
 import type { ImageGenerationNode, NoteNodeData } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { cn } from "shared/utils/utils";
-import { PresetDropdown } from "@/components/PresetDropdown";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -1113,15 +1112,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                 <span>{imageCount}</span>
               </button>
             )}
-
-            {/* 预设提示词下拉 */}
-            <PresetDropdown
-              presetType="image"
-              disabled={isGenerating}
-              onSelect={(content) => {
-                editor?.commands.insertContent(content);
-              }}
-            />
 
             {/* 生成/停止按钮 */}
             {isGenerating ? (

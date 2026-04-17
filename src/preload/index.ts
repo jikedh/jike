@@ -1,5 +1,5 @@
-import { electronAPI } from "@electron-toolkit/preload";
 import { contextBridge, ipcRenderer } from "electron";
+import { electronAPI } from "@electron-toolkit/preload";
 
 export type FileInfo = {
   name: string;
@@ -115,20 +115,9 @@ const downloadApi: DownloadApi = {
     ipcRenderer.invoke("download:imageToFile", url, filePath),
 };
 
-const appApi = {
-  platform: process.platform,
-  isPackaged: () => ipcRenderer.invoke("debug:isPackaged"),
-};
-
 if (process.contextIsolated) {
   try {
-    const electronBridge = {
-      ...electronAPI,
-      platform: appApi.platform,
-      isPackaged: appApi.isPackaged,
-    };
-
-    contextBridge.exposeInMainWorld("electron", electronBridge);
+    contextBridge.exposeInMainWorld("electron", electronAPI);
     contextBridge.exposeInMainWorld("storage", storageApi);
     contextBridge.exposeInMainWorld("debug", debugApi);
     contextBridge.exposeInMainWorld("download", downloadApi);
@@ -136,14 +125,8 @@ if (process.contextIsolated) {
     console.error(error);
   }
 } else {
-  const electronBridge = {
-    ...electronAPI,
-    platform: appApi.platform,
-    isPackaged: appApi.isPackaged,
-  };
-
   // @ts-ignore (define in dts)
-  window.electron = electronBridge;
+  window.electron = electronAPI;
   // @ts-ignore (define in dts)
   window.storage = storageApi;
   // @ts-ignore (define in dts)
