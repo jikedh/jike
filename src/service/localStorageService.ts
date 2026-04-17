@@ -489,3 +489,74 @@ export const getCoverImagePath = (
 ): string => {
   return joinPath(basePath, projectName, `cover.${extension}`);
 };
+
+// ========== 预设提示词库 ==========
+const CANVAS_PRESETS_KEY = "canvas-presets";
+
+export type PresetItem = {
+  id: string;
+  name: string;
+  content: string;
+  enabled: boolean;
+};
+
+// 按类型分组的预设结构
+export type PresetsMap = {
+  general: PresetItem[];
+  image: PresetItem[];
+  video: PresetItem[];
+};
+
+export const defaultPresets: PresetsMap = {
+  general: [
+    {
+      id: "2",
+      name: "赛博朋克风格",
+      content:
+        "Cyberpunk aesthetic, neon lights, rainy streets, futuristic city, high contrast",
+      enabled: false,
+    },
+  ],
+  image: [
+    {
+      id: "1",
+      name: "电影感光效",
+      content:
+        "Cinematic lighting, volumetric fog, 8k resolution, highly detailed, anamorphic lens flare",
+      enabled: true,
+    },
+  ],
+  video: [
+    {
+      id: "3",
+      name: "慢动作特写",
+      content:
+        "Slow motion, extreme close up, shallow depth of field, 120fps style",
+      enabled: true,
+    },
+  ],
+};
+
+export const presetsService = {
+  save(presets: PresetsMap): void {
+    try {
+      console.log("[presetsService] save called with:", JSON.stringify(presets));
+      localStorage.setItem(CANVAS_PRESETS_KEY, JSON.stringify(presets));
+      console.log("[presetsService] saved, current localStorage:", localStorage.getItem(CANVAS_PRESETS_KEY));
+    } catch (e) {
+      console.error("[presetsService] save failed:", e);
+    }
+  },
+
+  load(): PresetsMap | null {
+    try {
+      const raw = localStorage.getItem(CANVAS_PRESETS_KEY);
+      console.log("[presetsService] load called, raw value:", raw);
+      if (!raw) return null;
+      return JSON.parse(raw) as PresetsMap;
+    } catch (e) {
+      console.error("[presetsService] load failed:", e);
+      return null;
+    }
+  },
+};
