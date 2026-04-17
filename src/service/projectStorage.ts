@@ -11,7 +11,6 @@ import {
 
 const PROJECT_LIST_KEY = "canvas-projects";
 const CANVAS_DATA_PREFIX = "canvas-flow-data-";
-const CANVAS_FILE_NAME = "canvas.json";
 
 export type ProjectMeta = {
   id: string;
@@ -56,47 +55,37 @@ export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
   const localFileProjects: ProjectMeta[] = [];
 
   if (localStorageService.isAvailable()) {
-    const basePath = localStorageService.getStoragePath();
-    if (basePath && window.electronApi?.storage) {
-      try {
-        const listResult = await window.electronApi.storage.listFiles(basePath);
-        if (listResult.success && listResult.files) {
-          for (const file of listResult.files) {
-            if (file.isDirectory) {
-              const canvasPath = `${basePath}/${file.name}/canvas.json`;
-              const exists =
-                await window.electronApi.storage.fileExists(canvasPath);
-              if (exists) {
-                const readResult =
-                  await window.electronApi.storage.readJson(canvasPath);
-                if (readResult.success && readResult.data) {
-                  const canvasData = readResult.data;
-                  const existingProject = localStorageProjects.find(
-                    (p) => p.name === file.name,
-                  );
+    try {
+      const listResult = await localStorageService.listProjects();
+      if (listResult.success && listResult.projects) {
+        for (const item of listResult.projects) {
+          const readResult = await localStorageService.loadCanvasData(item.name);
+          if (!readResult.success || !readResult.data) {
+            continue;
+          }
 
-                  if (!existingProject) {
-                    const newProject: ProjectMeta = {
-                      id: canvasData.projectId || `local-${file.name}`,
-                      name: canvasData.projectName || file.name,
-                      createdAt:
-                        canvasData.savedAt || file.modifiedAt || Date.now(),
-                      updatedAt:
-                        canvasData.savedAt || file.modifiedAt || Date.now(),
-                      description: canvasData.description,
-                      coverLocalPath: canvasData.coverLocalPath,
-                      type: "video",
-                    };
-                    localFileProjects.push(newProject);
-                  }
-                }
-              }
-            }
+          const canvasData = readResult.data;
+          const existingProject = localStorageProjects.find(
+            (p) => p.name === item.name,
+          );
+
+          if (!existingProject) {
+            const newProject: ProjectMeta = {
+              id: canvasData.projectId || `local-${item.name}`,
+              name: canvasData.projectName || item.name,
+              createdAt: canvasData.savedAt || item.createdAt || Date.now(),
+              updatedAt: canvasData.savedAt || item.updatedAt || Date.now(),
+              description: canvasData.description,
+              coverLocalPath: canvasData.coverLocalPath,
+              type: canvasData.type || "video",
+            };
+
+            localFileProjects.push(newProject);
           }
         }
-      } catch (err) {
-        console.warn("Failed to scan local projects:", err);
       }
+    } catch (err) {
+      console.warn("Failed to load local projects from store:", err);
     }
   }
 
@@ -320,14 +309,11 @@ export const deleteProject = async (id: string): Promise<boolean> => {
     const project = data.projects[index];
     const projectName = project.name;
 
-    // 删除本地文件夹
-    const basePath = localStorageService.getStoragePath();
-    if (basePath && window.electronApi?.storage) {
-      const projectPath = `${basePath}/${projectName}`;
-      const deleteResult =
-        await window.electronApi.storage.deleteFolder(projectPath);
+    // 删除本地项目存储（electron-store）
+    if (localStorageService.isAvailable()) {
+      const deleteResult = await localStorageService.deleteProject(projectName);
       if (!deleteResult.success) {
-        console.error("Failed to delete project folder:", deleteResult.error);
+        console.error("Failed to delete project data:", deleteResult.error);
       }
     }
 
@@ -534,6 +520,18 @@ export const saveGeneratedVideoToLocal = async (
   return result.success ? fileName : null;
 };
 
+const arrayBufferToDataUrl = (buffer: ArrayBuffer, extension: string) => {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  const base64 = btoa(binary);
+  return `data:image/${extension};base64,${base64}`;
+};
+
 export const saveCoverImageToLocal = async (
   projectId: string,
   imageData: ArrayBuffer | string,
@@ -551,6 +549,10 @@ export const saveCoverImageToLocal = async (
     );
     if (result.success) {
       const ext = imageData.split(".").pop()?.toLowerCase() || "png";
+      updateProject(projectId, {
+        coverLocalPath: `${project.name}/cover.${ext}`,
+        coverUrl: imageData,
+      });
       return `cover.${ext}`;
     }
     return null;
@@ -560,8 +562,33 @@ export const saveCoverImageToLocal = async (
       imageData,
       extension,
     );
-    return result.success ? `cover.${extension}` : null;
+    if (!result.success) {
+      return null;
+    }
+
+    updateProject(projectId, {
+      coverLocalPath: `${project.name}/cover.${extension}`,
+      coverUrl: arrayBufferToDataUrl(imageData, extension),
+    });
+
+    return `cover.${extension}`;
   }
+};
+
+export const readMediaFromLocal = async (
+  relativePath: string,
+): Promise<ArrayBuffer | null> => {
+  if (!localStorageService.isAvailable()) return null;
+
+  const readResult = await localStorageService.readMedia(relativePath);
+  if (!readResult.success || !readResult.data) {
+    return null;
+  }
+
+  const rawBytes = new Uint8Array(readResult.data);
+  const copiedBytes = new Uint8Array(rawBytes.length);
+  copiedBytes.set(rawBytes);
+  return copiedBytes.buffer;
 };
 
 export const getLocalFilePath = (
@@ -608,29 +635,17 @@ export const getLocalFileAbsolutePath = (
 };
 
 export const getMediaPath = (relativePath: string): string | null => {
-  const basePath = localStorageService.getStoragePath();
-  if (!basePath) return null;
-
-  return `${basePath}/${relativePath}`;
+  return relativePath || null;
 };
 
 export const getMediaUrl = (relativePath: string): string | null => {
-  const basePath = localStorageService.getStoragePath();
-  if (!basePath) return null;
-
-  // 在 Electron 中使用 file:// 协议加载本地文件
-  const fullPath = `${basePath}/${relativePath}`;
-  return `file:///${fullPath.replace(/\\/g, "/")}`;
+  // electron-store 方案下不再提供 file:// 物理路径，仅保留相对路径语义。
+  return relativePath || null;
 };
 
 export const getCoverImageUrl = (projectId: string): string | null => {
   const project = getProjectById(projectId);
   if (!project) return null;
 
-  const basePath = localStorageService.getStoragePath();
-  if (!basePath) return null;
-
-  // 在 Electron 中使用 file:// 协议加载本地文件
-  const fullPath = `${basePath}/${project.name}/cover.png`;
-  return `file:///${fullPath.replace(/\\/g, "/")}`;
+  return project.coverUrl || null;
 };

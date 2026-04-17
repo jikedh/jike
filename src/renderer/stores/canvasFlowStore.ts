@@ -3,8 +3,8 @@ import { uploadFileToOSS } from "service/oss";
 import {
   getCanvasDataKey,
   getLocalFilePath,
-  getMediaUrl,
   loadCanvasData,
+  readMediaFromLocal,
   saveCanvasData,
   saveGeneratedImageToLocal,
   saveGeneratedVideoToLocal,
@@ -161,20 +161,16 @@ const pollImageGeneration = async (
                   // 上传到 OSS
                   let ossUrl: string | undefined;
                   try {
-                    // 获取本地文件的绝对路径
-                    const absolutePath = getMediaUrl(relativePath);
-                    if (absolutePath && window.electronApi?.storage) {
-                      const readResult =
-                        await window.electronApi.storage.readFile(absolutePath);
-                      if (readResult.success && readResult.data) {
-                        const fileBytes = new Uint8Array(readResult.data);
-                        const file = new File([fileBytes], fileName, {
-                          type: `image/${ext}`,
-                        });
-                        const ossResult = await uploadFileToOSS(file);
-                        if (ossResult.url) {
-                          ossUrl = ossResult.url;
-                        }
+                    const fileBytes = relativePath
+                      ? await readMediaFromLocal(relativePath)
+                      : null;
+                    if (fileBytes) {
+                      const file = new File([fileBytes], fileName, {
+                        type: `image/${ext}`,
+                      });
+                      const ossResult = await uploadFileToOSS(file);
+                      if (ossResult.url) {
+                        ossUrl = ossResult.url;
                       }
                     }
                   } catch (ossError) {
@@ -418,20 +414,16 @@ const pollMjImageGeneration = async (
                   // 上传到 OSS
                   let ossUrl: string | undefined;
                   try {
-                    // 获取本地文件的绝对路径
-                    const absolutePath = getMediaUrl(relativePath);
-                    if (absolutePath && window.electronApi?.storage) {
-                      const readResult =
-                        await window.electronApi.storage.readFile(absolutePath);
-                      if (readResult.success && readResult.data) {
-                        const fileBytes = new Uint8Array(readResult.data);
-                        const file = new File([fileBytes], fileName, {
-                          type: `image/${ext}`,
-                        });
-                        const ossResult = await uploadFileToOSS(file);
-                        if (ossResult.url) {
-                          ossUrl = ossResult.url;
-                        }
+                    const fileBytes = relativePath
+                      ? await readMediaFromLocal(relativePath)
+                      : null;
+                    if (fileBytes) {
+                      const file = new File([fileBytes], fileName, {
+                        type: `image/${ext}`,
+                      });
+                      const ossResult = await uploadFileToOSS(file);
+                      if (ossResult.url) {
+                        ossUrl = ossResult.url;
                       }
                     }
                   } catch (ossError) {
@@ -1018,28 +1010,19 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (node.type === "imageNode" && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
-                if (item.relativePath && window.electronApi?.storage) {
+                if (item.relativePath) {
                   try {
-                    const absolutePath = getMediaUrl(item.relativePath);
-                    if (absolutePath) {
-                      const readResult =
-                        await window.electronApi.storage.readFile(absolutePath);
-                      if (readResult.success && readResult.data) {
-                        const ext =
-                          (item.localFileName || item.fileName)
-                            ?.split(".")
-                            .pop() || "png";
-                        // 复制到浏览器侧 Uint8Array，避免 Node Buffer 与 BlobPart 类型不兼容
-                        const fileBytes = new Uint8Array(
-                          readResult.data.length,
-                        );
-                        fileBytes.set(readResult.data);
-                        const blob = new Blob([fileBytes], {
-                          type: `image/${ext}`,
-                        });
-                        const blobUrl = URL.createObjectURL(blob);
-                        return { ...item, url: blobUrl };
-                      }
+                    const fileBytes = await readMediaFromLocal(item.relativePath);
+                    if (fileBytes) {
+                      const ext =
+                        (item.localFileName || item.fileName)
+                          ?.split(".")
+                          .pop() || "png";
+                      const blob = new Blob([fileBytes], {
+                        type: `image/${ext}`,
+                      });
+                      const blobUrl = URL.createObjectURL(blob);
+                      return { ...item, url: blobUrl };
                     }
                   } catch (err) {
                     console.warn("Failed to load local image:", err);
@@ -1064,30 +1047,19 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (node.type === "videoNode" && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
-                if (item.relativePath && window.electronApi?.storage) {
+                if (item.relativePath) {
                   try {
-                    const absolutePath = getMediaUrl(item.relativePath);
-                    if (absolutePath) {
-                      const readResult =
-                        await window.electronApi.storage.readFile(absolutePath);
-                      if (readResult.success && readResult.data) {
-                        const ext =
-                          item.format ||
-                          (item.localFileName || item.fileName)
-                            ?.split(".")
-                            .pop() ||
-                          "mp4";
-                        // 复制到浏览器侧 Uint8Array，避免 Node Buffer 与 BlobPart 类型不兼容
-                        const fileBytes = new Uint8Array(
-                          readResult.data.length,
-                        );
-                        fileBytes.set(readResult.data);
-                        const blob = new Blob([fileBytes], {
-                          type: `video/${ext}`,
-                        });
-                        const blobUrl = URL.createObjectURL(blob);
-                        return { ...item, url: blobUrl };
-                      }
+                    const fileBytes = await readMediaFromLocal(item.relativePath);
+                    if (fileBytes) {
+                      const ext =
+                        item.format ||
+                        (item.localFileName || item.fileName)?.split(".").pop() ||
+                        "mp4";
+                      const blob = new Blob([fileBytes], {
+                        type: `video/${ext}`,
+                      });
+                      const blobUrl = URL.createObjectURL(blob);
+                      return { ...item, url: blobUrl };
                     }
                   } catch (err) {
                     console.warn("Failed to load local video:", err);
@@ -1112,28 +1084,19 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (node.type === "audioNode" && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
-                if (item.relativePath && window.electronApi?.storage) {
+                if (item.relativePath) {
                   try {
-                    const absolutePath = getMediaUrl(item.relativePath);
-                    if (absolutePath) {
-                      const readResult =
-                        await window.electronApi.storage.readFile(absolutePath);
-                      if (readResult.success && readResult.data) {
-                        const ext =
-                          (item.localFileName || item.fileName)
-                            ?.split(".")
-                            .pop() || "mp3";
-                        // 复制到浏览器侧 Uint8Array，避免 Node Buffer 与 BlobPart 类型不兼容
-                        const fileBytes = new Uint8Array(
-                          readResult.data.length,
-                        );
-                        fileBytes.set(readResult.data);
-                        const blob = new Blob([fileBytes], {
-                          type: `audio/${ext}`,
-                        });
-                        const blobUrl = URL.createObjectURL(blob);
-                        return { ...item, url: blobUrl };
-                      }
+                    const fileBytes = await readMediaFromLocal(item.relativePath);
+                    if (fileBytes) {
+                      const ext =
+                        (item.localFileName || item.fileName)
+                          ?.split(".")
+                          .pop() || "mp3";
+                      const blob = new Blob([fileBytes], {
+                        type: `audio/${ext}`,
+                      });
+                      const blobUrl = URL.createObjectURL(blob);
+                      return { ...item, url: blobUrl };
                     }
                   } catch (err) {
                     console.warn("Failed to load local audio:", err);
@@ -1278,8 +1241,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const typeKey = nodeType || 'default';
       const current = get().nodeIdCounters[typeKey] ?? 0;
 
-      console.log(`[getNextNodeId] 类型: ${typeKey}, 当前计数: ${current}`);
-
       const nextId = `${typeKey}-${current}`;
       set((state) => ({
         nodeIdCounters: {
@@ -1404,10 +1365,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       // 确保 type 存在，如果缺失则尝试从 node.type 恢复或默认为 'default'
       const nodeType = (node.type as NodeType) || 'default';
 
-      console.log(`[duplicateNode] 正在复制节点: ${nodeId}, 类型: ${nodeType}`);
-
       const newId = currentState.getNextNodeId(nodeType);
-      console.log(`[duplicateNode] 生成新 ID: ${newId}`);
 
       // 固定偏移量
       const offsetX = 350;

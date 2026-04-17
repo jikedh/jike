@@ -283,16 +283,13 @@ export const SettingsModal = ({
         const debugApi = window.electronApi?.debug;
         if (debugApi?.isDev) {
           const isDevEnv = await debugApi.isDev();
-          console.log("[Settings] isDev value:", isDevEnv);
           setIsDev(isDevEnv);
         } else {
           // Web 版本或非 Electron 环境，假设为生产环境
-          console.log("[Settings] isDev value: false (no debug API)");
           setIsDev(false);
         }
       } catch {
         // 出错时假设为生产环境
-        console.log("[Settings] isDev value: false (error)", err);
         setIsDev(false);
       }
     };
@@ -315,33 +312,12 @@ export const SettingsModal = ({
       return;
     }
 
-    const oldPath = storagePath;
     const selectedPath = await window.electronApi.storage.selectDirectory();
 
-    if (selectedPath && selectedPath !== oldPath) {
-      if (oldPath) {
-        const migrateResult = await window.electronApi.storage.migrateProjects(
-          oldPath,
-          selectedPath,
-        );
-        if (migrateResult.success) {
-          setStoragePath(selectedPath);
-          clearProjectList();
-          if (migrateResult.migratedCount && migrateResult.migratedCount > 0) {
-            success(
-              `存储路径已更新，已迁移 ${migrateResult.migratedCount} 个项目`,
-            );
-          } else {
-            success("存储路径已更新");
-          }
-        } else {
-          error(`迁移失败: ${migrateResult.error}`);
-        }
-      } else {
-        setStoragePath(selectedPath);
-        clearProjectList();
-        success("存储路径已更新");
-      }
+    if (selectedPath && selectedPath !== storagePath) {
+      setStoragePath(selectedPath);
+      clearProjectList();
+      success("存储路径已更新（旧路径数据不会自动迁移）");
     }
   };
 
@@ -607,7 +583,10 @@ export const SettingsModal = ({
                                     <button
                                       key={t}
                                       onClick={() =>
-                                        setFormData({ ...formData, type: t })
+                                        setFormData({
+                                          ...formData,
+                                          type: t as "general" | "image" | "video",
+                                        })
                                       }
                                       className={cn(
                                         "flex-1 py-2 rounded-lg text-xs font-medium border transition-all",

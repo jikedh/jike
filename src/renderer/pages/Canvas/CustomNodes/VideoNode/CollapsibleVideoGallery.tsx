@@ -1,7 +1,7 @@
 import { IconRefresh } from "@tabler/icons-react";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
-import { getMediaUrl } from "service/projectStorage";
+import { readMediaFromLocal } from "service/projectStorage";
 
 type VideoItem = {
   url: string; // 远程 OSS URL
@@ -40,10 +40,6 @@ export const CollapsibleVideoGallery = memo(
     // 优先使用本地路径，否则使用远程 URL - 用 useMemo 缓存
     const displayUrls = useMemo(() => {
       return videos.map((item) => {
-        if (item.localPath) {
-          const localUrl = getMediaUrl(item.localPath);
-          if (localUrl) return localUrl;
-        }
         return item.url ?? "";
       });
     }, [videos]);
@@ -98,19 +94,13 @@ export const CollapsibleVideoGallery = memo(
 
         try {
           // 读取本地文件
-          const absolutePath = getMediaUrl(item.localPath);
-          if (!absolutePath || !window.electronApi?.storage) {
+          const fileBytes = await readMediaFromLocal(item.localPath);
+          if (!fileBytes) {
             throw new Error("无法获取本地文件路径");
-          }
-
-          const readResult = await window.electronApi.storage.readFile(absolutePath);
-          if (!readResult.success || !readResult.data) {
-            throw new Error("读取本地文件失败");
           }
 
           // 创建 File 对象
           const ext = item.localName.split(".").pop() || "mp4";
-          const fileBytes = new Uint8Array(readResult.data);
           let file = new File([fileBytes], item.localName, {
             type: `video/${ext}`,
           });
@@ -210,8 +200,8 @@ export const CollapsibleVideoGallery = memo(
           {/* 折叠态：仅显示首视频封面 */}
           <div
             className={`absolute inset-0 transition-all duration-200 ease-out ${isExpanded
-                ? "pointer-events-none translate-y-1 scale-[0.98] opacity-0"
-                : "translate-y-0 scale-100 opacity-100"
+              ? "pointer-events-none translate-y-1 scale-[0.98] opacity-0"
+              : "translate-y-0 scale-100 opacity-100"
               }`}
           >
             <div className="h-full w-full overflow-hidden rounded-lg">
@@ -236,8 +226,8 @@ export const CollapsibleVideoGallery = memo(
           {/* 展开态：2 列网格展示全部视频 */}
           <div
             className={`absolute inset-0 transition-all duration-200 ease-out ${isExpanded
-                ? "translate-y-0 scale-100 opacity-100"
-                : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0"
+              ? "translate-y-0 scale-100 opacity-100"
+              : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0"
               }`}
           >
             <div

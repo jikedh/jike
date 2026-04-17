@@ -270,4 +270,5 @@ export const nodeFactoryMap: Record<NodeType, NodeFactory> = {
   imageAgent: createImageAgentNode,
   videoAgent: createVideoAgentNode,
   table: createTableNode,
+  default: createNoteNode,
 };

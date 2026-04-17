@@ -1,7 +1,7 @@
 import { IconRefresh } from "@tabler/icons-react";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { generateThumbnailWithFormat, uploadFileToOSS } from "service/oss";
-import { getMediaUrl } from "service/projectStorage";
+import { readMediaFromLocal } from "service/projectStorage";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { ImageTile } from "./ImageTile";
 
@@ -48,13 +48,7 @@ export const CollapsibleImageGallery = memo(
     // OSS 图片使用缩略图展示，减少带宽占用，提升加载速度
     const displayUrls = useMemo(() => {
       return images.map((item) => {
-        let originalUrl = item.url ?? "";
-
-        // 本地图片优先使用本地路径
-        if (item.localPath) {
-          const localUrl = getMediaUrl(item.localPath);
-          if (localUrl) originalUrl = localUrl;
-        }
+        const originalUrl = item.url ?? "";
 
         // OSS 图片生成缩略图（使用 WIDTH_200 + webp，体积最小）
         // 本地图片不需要缩略图优化（已经是本地文件路径）
@@ -120,19 +114,13 @@ export const CollapsibleImageGallery = memo(
 
         try {
           // 读取本地文件
-          const absolutePath = getMediaUrl(item.localPath);
-          if (!absolutePath || !window.electronApi?.storage) {
+          const fileBytes = await readMediaFromLocal(item.localPath);
+          if (!fileBytes) {
             throw new Error("无法获取本地文件路径");
-          }
-
-          const readResult = await window.electronApi.storage.readFile(absolutePath);
-          if (!readResult.success || !readResult.data) {
-            throw new Error("读取本地文件失败");
           }
 
           // 创建 File 对象
           const ext = item.localName.split(".").pop() || "png";
-          const fileBytes = new Uint8Array(readResult.data);
           let file = new File([fileBytes], item.localName, {
             type: `image/${ext}`,
           });
@@ -225,8 +213,8 @@ export const CollapsibleImageGallery = memo(
           {/* 折叠态：仅显示首图封面 */}
           <div
             className={`absolute inset-0 transition-all duration-200 ease-out ${isExpanded
-                ? "pointer-events-none translate-y-1 scale-[0.98] opacity-0"
-                : "translate-y-0 scale-100 opacity-100"
+              ? "pointer-events-none translate-y-1 scale-[0.98] opacity-0"
+              : "translate-y-0 scale-100 opacity-100"
               }`}
           >
             <ImageTile
@@ -242,8 +230,8 @@ export const CollapsibleImageGallery = memo(
           {/* 展开态：2 列网格展示全部图片 */}
           <div
             className={`absolute inset-0 transition-all duration-200 ease-out ${isExpanded
-                ? "translate-y-0 scale-100 opacity-100"
-                : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0"
+              ? "translate-y-0 scale-100 opacity-100"
+              : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0"
               }`}
           >
             <div

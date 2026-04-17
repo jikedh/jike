@@ -42,25 +42,37 @@ const ipcService = {
 // ============================================================================
 const storageApi = {
   selectDirectory: () => ipcRenderer.invoke("storage:selectDirectory"),
-  ensureProjectDir: (basePath: string, projectName: string) =>
-    ipcRenderer.invoke("storage:ensureProjectDir", basePath, projectName),
-  writeJson: (filePath: string, data: any) =>
-    ipcRenderer.invoke("storage:writeJson", filePath, data),
-  readJson: (filePath: string) => ipcRenderer.invoke("storage:readJson", filePath),
-  writeFile: (filePath: string, buffer: ArrayBuffer) =>
-    ipcRenderer.invoke("storage:writeFile", filePath, buffer),
-  readFile: (filePath: string) => ipcRenderer.invoke("storage:readFile", filePath),
-  deleteFile: (filePath: string) => ipcRenderer.invoke("storage:deleteFile", filePath),
-  deleteFolder: (folderPath: string) =>
-    ipcRenderer.invoke("storage:deleteFolder", folderPath),
-  fileExists: (filePath: string) => ipcRenderer.invoke("storage:fileExists", filePath),
-  listFiles: (dirPath: string) => ipcRenderer.invoke("storage:listFiles", dirPath),
-  downloadFile: (url: string, destPath: string) =>
-    ipcRenderer.invoke("storage:downloadFile", url, destPath),
-  renameDirectory: (oldPath: string, newPath: string) =>
-    ipcRenderer.invoke("storage:renameDirectory", oldPath, newPath),
-  migrateProjects: (oldPath: string, newPath: string) =>
-    ipcRenderer.invoke("storage:migrateProjects", oldPath, newPath),
+  ensureProject: (basePath: string, projectName: string) =>
+    ipcRenderer.invoke("storage:ensureProject", basePath, projectName),
+  listProjects: (basePath: string) =>
+    ipcRenderer.invoke("storage:listProjects", basePath),
+  saveCanvas: (basePath: string, projectName: string, data: any) =>
+    ipcRenderer.invoke("storage:saveCanvas", basePath, projectName, data),
+  loadCanvas: (basePath: string, projectName: string) =>
+    ipcRenderer.invoke("storage:loadCanvas", basePath, projectName),
+  saveMedia: (basePath: string, relativePath: string, buffer: ArrayBuffer) =>
+    ipcRenderer.invoke("storage:saveMedia", basePath, relativePath, buffer),
+  readMedia: (basePath: string, relativePath: string) =>
+    ipcRenderer.invoke("storage:readMedia", basePath, relativePath),
+  listMedia: (basePath: string, projectName: string, mediaType: string) =>
+    ipcRenderer.invoke("storage:listMedia", basePath, projectName, mediaType),
+  deleteMedia: (basePath: string, relativePath: string) =>
+    ipcRenderer.invoke("storage:deleteMedia", basePath, relativePath),
+  downloadMedia: (basePath: string, url: string, relativePath: string) =>
+    ipcRenderer.invoke("storage:downloadMedia", basePath, url, relativePath),
+  renameProject: (
+    basePath: string,
+    oldProjectName: string,
+    newProjectName: string,
+  ) =>
+    ipcRenderer.invoke(
+      "storage:renameProject",
+      basePath,
+      oldProjectName,
+      newProjectName,
+    ),
+  deleteProject: (basePath: string, projectName: string) =>
+    ipcRenderer.invoke("storage:deleteProject", basePath, projectName),
   getDefaultPath: () => ipcRenderer.invoke("storage:getDefaultPath"),
 };
 
