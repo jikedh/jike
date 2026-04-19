@@ -51,6 +51,7 @@ import {
   wait,
 } from "shared/utils/reactflowUtils";
 import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
+import { toChineseNumber } from "shared/utils/utils";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
 import { create } from "zustand";
 import {
@@ -769,6 +770,36 @@ const pollVideoGeneration = async (
 
 export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
   /**
+   * 根据节点 ID 推导音频节点昵称（音频一、音频二...）。
+   * 例如：audio-1 => 音频一。
+   */
+  const getAudioNicknameByNodeId = (nodeId: string) => {
+    const suffix = Number(nodeId.split("-").pop() || "0");
+    const sequence = Number.isFinite(suffix) && suffix > 0 ? suffix : 1;
+    return `音频${toChineseNumber(sequence)}`;
+  };
+
+  /**
+   * 将 ReactFlow 节点 type 映射为 store 的 NodeType 计数键。
+   */
+  const resolveNodeTypeForCounter = (node: AllNodeType): NodeType => {
+    const nodeTypeMap: Record<string, NodeType> = {
+      noteNode: "note",
+      imageNode: "image",
+      videoNode: "video",
+      agentNode: "agent",
+      panoramaNode: "panorama",
+      audioNode: "audio",
+      textAgentNode: "textAgent",
+      imageAgentNode: "imageAgent",
+      videoAgentNode: "videoAgent",
+      tableNode: "table",
+    };
+
+    return nodeTypeMap[node.type] ?? "default";
+  };
+
+  /**
    * 同步图片节点的 image_urls 依赖
    * 支持 Image→Image 和 Image→Video 的边操作
    * @param nodes 当前节点数组
@@ -1270,9 +1301,19 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const nextPosition = position ?? getNextNodePosition(currentNodes);
 
       const newNode = factory(nextId, nextPosition, options);
+      const finalNode =
+        newNode.type === "audioNode"
+          ? {
+            ...newNode,
+            data: {
+              ...newNode.data,
+              nickname: getAudioNicknameByNodeId(nextId),
+            },
+          }
+          : newNode;
 
       set((state) => ({
-        nodes: [...state.nodes, newNode],
+        nodes: [...state.nodes, finalNode],
       }));
 
       // 保存历史记录
@@ -1362,8 +1403,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         return;
       }
 
-      // 确保 type 存在，如果缺失则尝试从 node.type 恢复或默认为 'default'
-      const nodeType = (node.type as NodeType) || 'default';
+      // 统一用映射后的 NodeType 参与 ID 计数，避免出现 audioNode-0 这类异常前缀。
+      const nodeType = resolveNodeTypeForCounter(node);
 
       const newId = currentState.getNextNodeId(nodeType);
 
@@ -1394,6 +1435,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         ...(node.height !== undefined && { height: node.height }),
       } as AllNodeType;
 
+      const finalDuplicatedNode =
+        newNode.type === "audioNode"
+          ? {
+            ...newNode,
+            data: {
+              ...newNode.data,
+              nickname: getAudioNicknameByNodeId(newId),
+            },
+          }
+          : newNode;
+
       set((state) => {
         // 取消所有节点的选中状态，只选中新节点
         const updatedNodes = state.nodes.map((n) => ({
@@ -1402,7 +1454,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         }));
 
         return {
-          nodes: [...updatedNodes, newNode],
+          nodes: [...updatedNodes, finalDuplicatedNode],
         };
       });
 
@@ -2047,6 +2099,26 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           ...data,
           ...patch,
         })),
+      }));
+    },
+
+    /**
+     * 更新节点的 nickname（通用方法）
+     */
+    updateNodeNickname: (nodeId, nickname) => {
+      set((state) => ({
+        nodes: state.nodes.map((node) => {
+          if (node.id === nodeId) {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                nickname,
+              },
+            };
+          }
+          return node;
+        }),
       }));
     },
 

@@ -8,6 +8,7 @@ import type { VideoNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
 import { getNodeSizeByAspectRatio } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
+import { NicknameEditor } from "@/pages/Canvas/CustomNodes/NicknameEditor";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { VideoContent } from "./VideoContent";
@@ -99,6 +100,13 @@ export const VideoNode = memo(
 
     const hasMultipleResults = (data.result?.data?.length ?? 0) > 1;
 
+    const handleNicknameSave = useCallback(
+      (newNickname: string) => {
+        updateVideoNodeData(id, { nickname: newNickname });
+      },
+      [id, updateVideoNodeData],
+    );
+
     // console.log('视频节点重新渲染', id)
 
     return (
@@ -166,6 +174,15 @@ export const VideoNode = memo(
                 <div className="absolute -bottom-px -right-px w-4 h-4 border-r-2 border-b-2 border-[#B43FEB] rounded-br-xl" />
               </>
             )}
+
+            {/* 节点昵称编辑器 - 显示在左上角 */}
+            <div className="absolute top-3 left-3 z-10">
+              <NicknameEditor
+                nickname={data.nickname || "视频"}
+                isSelected={selected}
+                onSave={handleNicknameSave}
+              />
+            </div>
 
             {/* 扫光效果 */}
             <div className="pointer-events-none absolute inset-0 rounded-xl bg-linear-to-tr from-transparent via-white/2 to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
