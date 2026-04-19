@@ -465,16 +465,16 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             onPatch={(patch) => updateVideoNodeData(nodeId, patch)}
           />
 
-          {/* 预设提示词下拉 */}
-          <PresetDropdown
-            presetType="video"
-            disabled={isGenerating || isUploading}
-            onSelect={(content) => {
-              editorRef.current?.insertContent(content);
-            }}
-          />
+          <div className="ml-auto flex items-center gap-2">
+            {/* 预设提示词下拉 */}
+            <PresetDropdown
+              presetType="video"
+              disabled={isGenerating || isUploading}
+              onSelect={(content) => {
+                editorRef.current?.insertContent(content);
+              }}
+            />
 
-          <div className="ml-auto">
             {isGenerating ? (
               <Button
                 type="button"

@@ -192,10 +192,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const disableBuiltInSuggestion = {
     items: () => [],
     render: () => ({
-      onStart: () => {},
-      onUpdate: () => {},
+      onStart: () => { },
+      onUpdate: () => { },
       onKeyDown: () => false,
-      onExit: () => {},
+      onExit: () => { },
     }),
   };
 
@@ -1092,6 +1092,15 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
           {/* 数量选择和生成按钮 */}
           <div className="ml-auto flex items-center gap-2">
+            {/* 预设提示词下拉 */}
+            <PresetDropdown
+              presetType="image"
+              disabled={isGenerating}
+              onSelect={(content) => {
+                editor?.commands.insertContent(content);
+              }}
+            />
+
             {/* 数量选择按钮 - Midjourney 模型隐藏 */}
             {!isMidjourneyModel && (
               <button
@@ -1113,15 +1122,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                 <span>{imageCount}</span>
               </button>
             )}
-
-            {/* 预设提示词下拉 */}
-            <PresetDropdown
-              presetType="image"
-              disabled={isGenerating}
-              onSelect={(content) => {
-                editor?.commands.insertContent(content);
-              }}
-            />
 
             {/* 生成/停止按钮 */}
             {isGenerating ? (
