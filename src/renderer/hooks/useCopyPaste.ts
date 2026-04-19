@@ -15,6 +15,8 @@ interface CopiedNodeTemplate {
 interface CopiedEdgeTemplate {
   originalSource: string;
   originalTarget: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
 }
 
 /** 运行时状态字段列表，复制时需要清除 */
@@ -51,13 +53,20 @@ export function useCopyPaste() {
     });
 
     const copiedEdges: CopiedEdgeTemplate[] = state.edges
-      .filter(
-        (edge) =>
-          selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target),
-      )
+      .filter((edge) => {
+        const sourceSelected = selectedNodeIds.has(edge.source);
+        const targetSelected = selectedNodeIds.has(edge.target);
+
+        // 复制范围：
+        // 1) 内部边（选中节点之间）
+        // 2) 上游入边（未选中 source -> 选中 target）
+        return (sourceSelected && targetSelected) || (!sourceSelected && targetSelected);
+      })
       .map((edge) => ({
         originalSource: edge.source,
         originalTarget: edge.target,
+        sourceHandle: edge.sourceHandle,
+        targetHandle: edge.targetHandle,
       }));
 
     copiedNodesRef.current = copiedNodes;
@@ -126,17 +135,44 @@ export function useCopyPaste() {
         } as AllNodeType;
       });
 
+      const existingEdgeKeys = new Set(
+        state.edges.map(
+          (edge) =>
+            `${edge.source}:${edge.sourceHandle ?? "output"}->${edge.target}:${edge.targetHandle ?? "input"}`,
+        ),
+      );
+
       const newEdges: EdgeType[] = copiedEdges
         .map((edgeTemplate) => {
-          const newSource = originalToNewIdMap.get(edgeTemplate.originalSource);
+          const mappedSource = originalToNewIdMap.get(edgeTemplate.originalSource);
           const newTarget = originalToNewIdMap.get(edgeTemplate.originalTarget);
+
+          // 上游入边场景：source 节点可能未被复制，允许回退到原 source
+          const newSource = mappedSource ?? edgeTemplate.originalSource;
 
           if (!newSource || !newTarget) return null;
 
+          const sourceHandle = edgeTemplate.sourceHandle ?? "output";
+          const targetHandle = edgeTemplate.targetHandle ?? "input";
+          const edgeKey = `${newSource}:${sourceHandle}->${newTarget}:${targetHandle}`;
+
+          if (existingEdgeKeys.has(edgeKey)) {
+            return null;
+          }
+
+          existingEdgeKeys.add(edgeKey);
+
+          const uniqueSuffix =
+            typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+              ? crypto.randomUUID()
+              : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
           return {
-            id: `edge-${newSource}-${newTarget}-${Date.now()}`,
+            id: `edge-${newSource}-${newTarget}-${uniqueSuffix}`,
             source: newSource,
             target: newTarget,
+            sourceHandle,
+            targetHandle,
           } as EdgeType;
         })
         .filter(Boolean) as EdgeType[];
