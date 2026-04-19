@@ -20,7 +20,7 @@ export const MultiSelectQuickCreate = memo(
             <div
                 className="absolute z-20"
                 style={{
-                    left: `${x}px`,
+                    left: `${x + 10}px`,
                     top: `${y}px`,
                     transform: "translate(-50%, -50%)",
                 }}
@@ -29,9 +29,9 @@ export const MultiSelectQuickCreate = memo(
                     variant="default"
                     size="default"
                     onPointerDown={onPointerDown}
-                    className="size-10 rounded-full bg-[#B43FEB] hover:bg-[#B43FEB]/90 text-white shadow-[0_0_20px_rgba(180,63,235,0.3)] border border-[#B43FEB]/60"
+                    className="size-8 min-h-0 p-0 rounded-full bg-[#B43FEB] hover:bg-[#B43FEB]/90 text-white shadow-[0_0_20px_rgba(180,63,235,0.3)] border border-[#B43FEB]/60"
                 >
-                    <Plus className="size-5" />
+                    <Plus className="size-4" />
                 </Button>
             </div>
         );

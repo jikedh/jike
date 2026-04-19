@@ -54,6 +54,79 @@ import { CanvasContextMenu, type CanvasNodeType } from "./CanvasContextMenu";
 import { DragOverlay } from "./DragOverlay";
 import { MultiSelectQuickCreate } from "./MultiSelectQuickCreate";
 
+const FALLBACK_NODE_WIDTH = 175;
+const FALLBACK_NODE_HEIGHT = 175;
+
+/**
+ * 根据起点和终点绘制一条柔和的贝塞尔曲线。
+ * 这里直接使用屏幕坐标，方便叠加到 fixed 覆盖层上。
+ */
+const buildConnectionPath = (
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+) => {
+  const deltaX = Math.max(Math.abs(endX - startX) * 0.5, 80);
+  const controlPointX = startX < endX ? startX + deltaX : startX - deltaX;
+
+  return `M ${startX} ${startY} C ${controlPointX} ${startY}, ${controlPointX} ${endY}, ${endX} ${endY}`;
+};
+
+/**
+ * 把线段的末端稍微往回缩一点，避免预览线直接顶到菜单或按钮中心。
+ */
+const shortenLineEnd = (
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  inset = 14,
+) => {
+  const deltaX = endX - startX;
+  const deltaY = endY - startY;
+  const length = Math.hypot(deltaX, deltaY);
+
+  if (!length || length <= inset) {
+    return { x: endX, y: endY };
+  }
+
+  const ratio = (length - inset) / length;
+  return {
+    x: startX + deltaX * ratio,
+    y: startY + deltaY * ratio,
+  };
+};
+
+/**
+ * 优先从 DOM 直接读取 handle 的真实屏幕坐标。
+ * 这样可以避免仅根据节点宽高推算时，ghost 线落到节点内部。
+ */
+const getHandleScreenPosition = (
+  nodeId: string,
+  handleId: string | null,
+  handleType: "source" | "target",
+) => {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const normalizedHandleId =
+    handleId ?? (handleType === "source" ? "output" : "input");
+  const selector = `[data-nodeid="${nodeId}"][data-handleid="${normalizedHandleId}"]`;
+  const handleElement = document.querySelector(selector) as HTMLElement | null;
+
+  if (!handleElement) {
+    return null;
+  }
+
+  const rect = handleElement.getBoundingClientRect();
+  return {
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
+  };
+};
+
 type CanvasFlowProps = {
   projectId: string | undefined;
   isMiniMapVisible: boolean;
@@ -632,7 +705,7 @@ export const CanvasFlow = ({
 
     return {
       // “+”出现在选区右侧，留一段固定偏移，避免贴边重叠。
-      x: maxRight + 24,
+      x: maxRight + 32,
       y: minTop + (maxBottom - minTop) / 2,
     };
   }, [multiSelectedNodes]);
@@ -672,6 +745,11 @@ export const CanvasFlow = ({
     handleId: string | null;
     handleType: "source" | "target";
   } | null>(null);
+  const [connectionGhost, setConnectionGhost] = useState<{
+    nodeId: string;
+    handleId: string | null;
+    handleType: "source" | "target";
+  } | null>(null);
   const quickAddSelectionSnapshotRef = useRef<string[]>([]);
   const [quickAddDragPreview, setQuickAddDragPreview] = useState<{
     active: boolean;
@@ -707,10 +785,21 @@ export const CanvasFlow = ({
   const handlePaneContextMenu = useCallback(
     (event: React.MouseEvent | MouseEvent) => {
       pendingConnectRef.current = null;
+      setConnectionGhost(null);
       setMenuScreenPosition({ x: event.clientX, y: event.clientY });
     },
     [],
   );
+
+  // 菜单关闭时，统一清理拖线状态，避免预览线残留。
+  const handleCanvasContextMenuOpenChange = useCallback((open: boolean) => {
+    if (open) {
+      return;
+    }
+
+    pendingConnectRef.current = null;
+    setConnectionGhost(null);
+  }, []);
 
   // 通过原生 dblclick 事件实现双击唤出菜单
   const handleNativeDblClick = useCallback(
@@ -750,6 +839,7 @@ export const CanvasFlow = ({
     ) => {
       if (connectionState.isValid) {
         pendingConnectRef.current = null;
+        setConnectionGhost(null);
         return;
       }
 
@@ -757,11 +847,13 @@ export const CanvasFlow = ({
         "changedTouches" in event ? event.changedTouches[0] : event;
       if (!pointer) {
         pendingConnectRef.current = null;
+        setConnectionGhost(null);
         return;
       }
 
       const pendingConnect = pendingConnectRef.current;
       if (pendingConnect) {
+        setConnectionGhost(pendingConnect);
         const allNodes = useCanvasFlowStore.getState().nodes;
         const pointerPos = screenToFlowPosition({
           x: pointer.clientX,
@@ -813,11 +905,13 @@ export const CanvasFlow = ({
             }
 
             pendingConnectRef.current = null;
+            setConnectionGhost(null);
             return;
           }
         }
       }
 
+      // 未命中节点时，保留虚拟连线并打开菜单。
       openContextMenuAt(pointer.clientX, pointer.clientY);
     },
     [screenToFlowPosition, onConnect, openContextMenuAt],
@@ -830,6 +924,7 @@ export const CanvasFlow = ({
 
       const pendingConnect = pendingConnectRef.current;
       if (!pendingConnect) {
+        setConnectionGhost(null);
         return;
       }
 
@@ -850,9 +945,156 @@ export const CanvasFlow = ({
       }
 
       pendingConnectRef.current = null;
+      setConnectionGhost(null);
     },
     [addNode, menuScreenPosition, onConnect, screenToFlowPosition],
   );
+
+  // 菜单态预览线：根据拖线开始的节点和菜单位置，计算出一个稳定的显示路径。
+  const connectionGhostPath = useMemo(() => {
+    if (!connectionGhost) {
+      return null;
+    }
+
+    const handleScreenPosition = getHandleScreenPosition(
+      connectionGhost.nodeId,
+      connectionGhost.handleId,
+      connectionGhost.handleType,
+    );
+
+    if (!handleScreenPosition) {
+      const sourceNode = displayNodes.find(
+        (node) => node.id === connectionGhost.nodeId,
+      );
+
+      if (!sourceNode) {
+        return null;
+      }
+
+      const nodeWidth = sourceNode.width ?? FALLBACK_NODE_WIDTH;
+      const nodeHeight = sourceNode.height ?? FALLBACK_NODE_HEIGHT;
+      const startFlowX =
+        connectionGhost.handleType === "source"
+          ? sourceNode.position.x + nodeWidth
+          : sourceNode.position.x;
+      const startFlowY = sourceNode.position.y + nodeHeight / 2;
+
+      const startX = startFlowX * viewportState.zoom + viewportState.x;
+      const startY = startFlowY * viewportState.zoom + viewportState.y;
+      const endPoint = shortenLineEnd(
+        startX,
+        startY,
+        menuScreenPosition.x,
+        menuScreenPosition.y,
+        16,
+      );
+
+      return buildConnectionPath(startX, startY, endPoint.x, endPoint.y);
+    }
+
+    const endPoint = shortenLineEnd(
+      handleScreenPosition.x,
+      handleScreenPosition.y,
+      menuScreenPosition.x,
+      menuScreenPosition.y,
+      16,
+    );
+
+    return buildConnectionPath(
+      handleScreenPosition.x,
+      handleScreenPosition.y,
+      endPoint.x,
+      endPoint.y,
+    );
+  }, [
+    connectionGhost,
+    displayNodes,
+    menuScreenPosition.x,
+    menuScreenPosition.y,
+    viewportState,
+  ]);
+
+  // Quick Add 预览线：每个选中节点都绘制一条线，统一指向拖拽点或菜单落点。
+  const quickAddConnectionPaths = useMemo(() => {
+    const hasDragTarget = quickAddDragPreview.active;
+    const hasMenuTarget = quickAddMenuOpen && quickAddMenuScreenPosition;
+
+    if (!hasDragTarget && !hasMenuTarget) {
+      return [];
+    }
+
+    const sourceNodeIds = quickAddSelectionSnapshotRef.current.filter((id) =>
+      displayNodes.some((node) => node.id === id),
+    );
+
+    if (sourceNodeIds.length === 0) {
+      return [];
+    }
+
+    const targetX = hasDragTarget
+      ? quickAddDragPreview.endX
+      : (quickAddMenuScreenPosition?.x ?? 0);
+    const targetY = hasDragTarget
+      ? quickAddDragPreview.endY
+      : (quickAddMenuScreenPosition?.y ?? 0);
+    const inset = hasDragTarget ? 12 : 16;
+
+    return sourceNodeIds
+      .map((nodeId) => {
+        const handleScreenPosition = getHandleScreenPosition(
+          nodeId,
+          "output",
+          "source",
+        );
+
+        if (handleScreenPosition) {
+          const endPoint = shortenLineEnd(
+            handleScreenPosition.x,
+            handleScreenPosition.y,
+            targetX,
+            targetY,
+            inset,
+          );
+
+          return {
+            nodeId,
+            path: buildConnectionPath(
+              handleScreenPosition.x,
+              handleScreenPosition.y,
+              endPoint.x,
+              endPoint.y,
+            ),
+          };
+        }
+
+        const sourceNode = displayNodes.find((node) => node.id === nodeId);
+        if (!sourceNode) {
+          return null;
+        }
+
+        const nodeWidth = sourceNode.width ?? FALLBACK_NODE_WIDTH;
+        const nodeHeight = sourceNode.height ?? FALLBACK_NODE_HEIGHT;
+        const startFlowX = sourceNode.position.x + nodeWidth;
+        const startFlowY = sourceNode.position.y + nodeHeight / 2;
+        const startX = startFlowX * viewportState.zoom + viewportState.x;
+        const startY = startFlowY * viewportState.zoom + viewportState.y;
+        const endPoint = shortenLineEnd(startX, startY, targetX, targetY, inset);
+
+        return {
+          nodeId,
+          path: buildConnectionPath(startX, startY, endPoint.x, endPoint.y),
+        };
+      })
+      .filter(Boolean) as Array<{ nodeId: string; path: string }>;
+  }, [
+    displayNodes,
+    quickAddDragPreview.active,
+    quickAddDragPreview.endX,
+    quickAddDragPreview.endY,
+    quickAddMenuOpen,
+    quickAddMenuScreenPosition,
+    viewportState,
+  ]);
 
   // 按住“+”开始拖拽：显示预览连线；松手后在释放点打开类型菜单。
   const handleQuickAddPointerDown = useCallback(
@@ -929,6 +1171,7 @@ export const CanvasFlow = ({
     setQuickAddMenuOpen(open);
     if (!open) {
       setQuickAddMenuScreenPosition(null);
+      quickAddSelectionSnapshotRef.current = [];
     }
   }, []);
 
@@ -984,7 +1227,10 @@ export const CanvasFlow = ({
 
   return (
     <>
-      <CanvasContextMenu onCreateNode={handleCreateNodeFromMenu}>
+      <CanvasContextMenu
+        onCreateNode={handleCreateNodeFromMenu}
+        onOpenChange={handleCanvasContextMenuOpenChange}
+      >
         <div
           ref={contextMenuTriggerRef}
           className="h-full w-full relative"
@@ -996,6 +1242,38 @@ export const CanvasFlow = ({
           role="region"
           aria-label="Canvas drop zone"
         >
+          {/* 菜单态虚拟连线：在拖线释放后保留连接感。 */}
+          <svg
+            className="pointer-events-none fixed inset-0 z-20 overflow-visible"
+            aria-hidden="true"
+          >
+            {connectionGhostPath ? (
+              <path
+                d={connectionGhostPath}
+                fill="none"
+                stroke="#B43FEB"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity={0.9}
+              />
+            ) : null}
+
+            {quickAddConnectionPaths.map((item) => (
+              <path
+                key={`quick-add-ghost-${item.nodeId}`}
+                d={item.path}
+                fill="none"
+                stroke="#B43FEB"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity={0.72}
+                strokeDasharray="8 6"
+              />
+            ))}
+          </svg>
+
           <ReactFlow<AllNodeType, EdgeType>
             nodes={displayNodes}
             edges={displayEdges}
@@ -1092,8 +1370,8 @@ export const CanvasFlow = ({
             <div
               className="fixed z-20 pointer-events-none"
               style={{
-                width: "40px",
-                height: "40px",
+                width: "34px",
+                height: "34px",
                 left: `${quickAddDragPreview.endX}px`,
                 top: `${quickAddDragPreview.endY}px`,
                 transform: "translate(-50%, -50%)",
@@ -1101,8 +1379,8 @@ export const CanvasFlow = ({
             >
               <div className="w-full h-full rounded-full bg-[#B43FEB] shadow-[0_0_20px_rgba(180,63,235,0.3)] border border-[#B43FEB]/60 flex items-center justify-center">
                 <svg
-                  width="20"
-                  height="20"
+                  width="16"
+                  height="16"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="white"
