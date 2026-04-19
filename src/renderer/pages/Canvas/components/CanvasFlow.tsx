@@ -1,4 +1,13 @@
 import {
+  IconBrain,
+  IconEye,
+  IconMusic,
+  IconNote,
+  IconPhoto,
+  IconSparkles,
+  IconVideo,
+} from "@tabler/icons-react";
+import {
   applyNodeChanges,
   Background,
   BackgroundVariant,
@@ -24,6 +33,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useCopyPaste } from "@/hooks/useCopyPaste";
 import { useDragUpload } from "@/hooks/useDragUpload";
 import { useUndoRedo } from "@/hooks/useUndoRedo";
@@ -32,6 +52,7 @@ import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { edgeTypes, nodeTypes } from "../constants/canvasConfig";
 import { CanvasContextMenu, type CanvasNodeType } from "./CanvasContextMenu";
 import { DragOverlay } from "./DragOverlay";
+import { MultiSelectQuickCreate } from "./MultiSelectQuickCreate";
 
 type CanvasFlowProps = {
   projectId: string | undefined;
@@ -458,6 +479,9 @@ export const CanvasFlow = ({
   const [displayEdges, setDisplayEdges] = useState<EdgeType[]>(
     () => useCanvasFlowStore.getState().edges,
   );
+  const [viewportState, setViewportState] = useState(() =>
+    reactFlowInstance.getViewport(),
+  );
   const latestStoreNodesRef = useRef(useCanvasFlowStore.getState().nodes);
   const latestStoreEdgesRef = useRef(useCanvasFlowStore.getState().edges);
   // 用 ref 而非 state 追踪拖动状态，避免引发额外渲染
@@ -577,6 +601,63 @@ export const CanvasFlow = ({
     }
   }, [storeOnNodesChange]);
 
+  // 计算当前多选节点（仅在节点数组变化时更新）。
+  const multiSelectedNodes = useMemo(
+    () => displayNodes.filter((node) => node.selected),
+    [displayNodes],
+  );
+
+  // 计算选区右侧中心点（流坐标）。
+  const selectionRightCenterFlowPosition = useMemo(() => {
+    if (multiSelectedNodes.length < 2) {
+      return null;
+    }
+
+    let maxRight = Number.NEGATIVE_INFINITY;
+    let minTop = Number.POSITIVE_INFINITY;
+    let maxBottom = Number.NEGATIVE_INFINITY;
+
+    multiSelectedNodes.forEach((node) => {
+      const nodeWidth = node.width || 175;
+      const nodeHeight = node.height || 175;
+      const left = node.position.x;
+      const top = node.position.y;
+      const right = left + nodeWidth;
+      const bottom = top + nodeHeight;
+
+      if (right > maxRight) maxRight = right;
+      if (top < minTop) minTop = top;
+      if (bottom > maxBottom) maxBottom = bottom;
+    });
+
+    return {
+      // “+”出现在选区右侧，留一段固定偏移，避免贴边重叠。
+      x: maxRight + 24,
+      y: minTop + (maxBottom - minTop) / 2,
+    };
+  }, [multiSelectedNodes]);
+
+  // 将流坐标转换为屏幕坐标，用于绝对定位浮动按钮。
+  const selectionRightCenterScreenPosition = useMemo(() => {
+    if (!selectionRightCenterFlowPosition) {
+      return null;
+    }
+
+    return {
+      x:
+        selectionRightCenterFlowPosition.x * viewportState.zoom +
+        viewportState.x,
+      y:
+        selectionRightCenterFlowPosition.y * viewportState.zoom +
+        viewportState.y,
+    };
+  }, [selectionRightCenterFlowPosition, viewportState]);
+
+  const handleViewportMove = useCallback((_: unknown, viewport: unknown) => {
+    // 使用 unknown 避免在高频事件中引入额外类型噪音。
+    setViewportState(viewport as { x: number; y: number; zoom: number });
+  }, []);
+
   // 当 projectId 变化时切换项目
   useEffect(() => {
     if (projectId && projectId !== currentProjectId) {
@@ -590,6 +671,25 @@ export const CanvasFlow = ({
     nodeId: string;
     handleId: string | null;
     handleType: "source" | "target";
+  } | null>(null);
+  const quickAddSelectionSnapshotRef = useRef<string[]>([]);
+  const [quickAddDragPreview, setQuickAddDragPreview] = useState<{
+    active: boolean;
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+  }>({
+    active: false,
+    startX: 0,
+    startY: 0,
+    endX: 0,
+    endY: 0,
+  });
+  const [quickAddMenuOpen, setQuickAddMenuOpen] = useState(false);
+  const [quickAddMenuScreenPosition, setQuickAddMenuScreenPosition] = useState<{
+    x: number;
+    y: number;
   } | null>(null);
 
   const openContextMenuAt = useCallback((x: number, y: number) => {
@@ -754,6 +854,134 @@ export const CanvasFlow = ({
     [addNode, menuScreenPosition, onConnect, screenToFlowPosition],
   );
 
+  // 按住“+”开始拖拽：显示预览连线；松手后在释放点打开类型菜单。
+  const handleQuickAddPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      if (
+        !selectionRightCenterScreenPosition ||
+        multiSelectedNodes.length < 2
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      quickAddSelectionSnapshotRef.current = multiSelectedNodes.map(
+        (node) => node.id,
+      );
+
+      const startX = selectionRightCenterScreenPosition.x;
+      const startY = selectionRightCenterScreenPosition.y;
+
+      setQuickAddDragPreview({
+        active: true,
+        startX,
+        startY,
+        endX: event.clientX,
+        endY: event.clientY,
+      });
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        setQuickAddDragPreview((prev) => ({
+          ...prev,
+          endX: moveEvent.clientX,
+          endY: moveEvent.clientY,
+        }));
+      };
+
+      const finishDrag = (endX: number, endY: number) => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
+        window.removeEventListener("pointercancel", handlePointerCancel);
+
+        setQuickAddDragPreview((prev) => ({
+          ...prev,
+          active: false,
+          endX,
+          endY,
+        }));
+
+        setQuickAddMenuScreenPosition({ x: endX, y: endY });
+        setQuickAddMenuOpen(true);
+      };
+
+      const handlePointerUp = (upEvent: PointerEvent) => {
+        finishDrag(upEvent.clientX, upEvent.clientY);
+      };
+
+      const handlePointerCancel = () => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
+        window.removeEventListener("pointercancel", handlePointerCancel);
+
+        setQuickAddDragPreview((prev) => ({ ...prev, active: false }));
+      };
+
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
+      window.addEventListener("pointercancel", handlePointerCancel);
+    },
+    [multiSelectedNodes, selectionRightCenterScreenPosition],
+  );
+
+  const handleQuickAddMenuOpenChange = useCallback((open: boolean) => {
+    setQuickAddMenuOpen(open);
+    if (!open) {
+      setQuickAddMenuScreenPosition(null);
+    }
+  }, []);
+
+  const handleCreateNodeFromQuickAddMenu = useCallback(
+    (nodeType: CanvasNodeType) => {
+      if (!quickAddMenuScreenPosition) {
+        return;
+      }
+
+      const flowPosition = screenToFlowPosition(quickAddMenuScreenPosition);
+      const newNodeId = addNode(nodeType, flowPosition);
+      if (!newNodeId) {
+        return;
+      }
+
+      const allNodes = useCanvasFlowStore.getState().nodes;
+      const sourceNodeIds = quickAddSelectionSnapshotRef.current.filter((id) =>
+        allNodes.some((node) => node.id === id),
+      );
+
+      const existingEdges = useCanvasFlowStore.getState().edges;
+      const edgeKeySet = new Set(
+        existingEdges.map(
+          (edge) =>
+            `${edge.source}:${edge.sourceHandle ?? "output"}->${edge.target}:${edge.targetHandle ?? "input"}`,
+        ),
+      );
+
+      sourceNodeIds.forEach((sourceId) => {
+        if (sourceId === newNodeId) {
+          return;
+        }
+
+        const edgeKey = `${sourceId}:output->${newNodeId}:input`;
+        if (edgeKeySet.has(edgeKey)) {
+          return;
+        }
+
+        edgeKeySet.add(edgeKey);
+        onConnect({
+          source: sourceId,
+          sourceHandle: "output",
+          target: newNodeId,
+          targetHandle: "input",
+        });
+      });
+
+      setQuickAddMenuOpen(false);
+      setQuickAddMenuScreenPosition(null);
+    },
+    [addNode, onConnect, quickAddMenuScreenPosition, screenToFlowPosition],
+  );
+
   return (
     <>
       <CanvasContextMenu onCreateNode={handleCreateNodeFromMenu}>
@@ -780,6 +1008,7 @@ export const CanvasFlow = ({
             onNodeDragStart={handleNodeDragStart}
             onNodeDragStop={handleNodeDragStop}
             onPaneClick={handlePaneClick}
+            onMove={handleViewportMove}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             nodesDraggable={!spacePressed}
@@ -847,6 +1076,145 @@ export const CanvasFlow = ({
               返回
             </Button>
           </div>
+
+          {/* 多选右侧快捷创建按钮（拖拽时隐藏，改用跟踪图标） */}
+          {selectionRightCenterScreenPosition && !quickAddDragPreview.active ? (
+            <MultiSelectQuickCreate
+              visible={multiSelectedNodes.length >= 2}
+              x={selectionRightCenterScreenPosition.x}
+              y={selectionRightCenterScreenPosition.y}
+              onPointerDown={handleQuickAddPointerDown}
+            />
+          ) : null}
+
+          {/* 拖拽时跟踪光标的 + 符号 */}
+          {quickAddDragPreview.active ? (
+            <div
+              className="fixed z-20 pointer-events-none"
+              style={{
+                width: "40px",
+                height: "40px",
+                left: `${quickAddDragPreview.endX}px`,
+                top: `${quickAddDragPreview.endY}px`,
+                transform: "translate(-50%, -50%)",
+              }}
+            >
+              <div className="w-full h-full rounded-full bg-[#B43FEB] shadow-[0_0_20px_rgba(180,63,235,0.3)] border border-[#B43FEB]/60 flex items-center justify-center">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2"
+                >
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </div>
+            </div>
+          ) : null}
+
+          {/* 释放点节点类型菜单（用于批量连线创建） */}
+          {quickAddMenuScreenPosition ? (
+            <DropdownMenu
+              open={quickAddMenuOpen}
+              onOpenChange={handleQuickAddMenuOpenChange}
+            >
+              <DropdownMenuTrigger asChild>
+                <div
+                  className="absolute size-2"
+                  style={{
+                    left: `${quickAddMenuScreenPosition.x}px`,
+                    top: `${quickAddMenuScreenPosition.y}px`,
+                    transform: "translate(-50%, -50%)",
+                  }}
+                />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                sideOffset={6}
+                className="w-52 bg-[#121214] border border-white/10 rounded-xl shadow-2xl overflow-hidden p-1"
+              >
+                <DropdownMenuLabel className="text-white/70 text-xs font-medium px-3 py-2">
+                  创建并连接到新节点
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-white/5 h-px" />
+
+                <DropdownMenuItem
+                  className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
+                  onSelect={() => handleCreateNodeFromQuickAddMenu("note")}
+                >
+                  <IconNote size={16} />
+                  新建便签节点
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
+                  onSelect={() => handleCreateNodeFromQuickAddMenu("image")}
+                >
+                  <IconPhoto size={16} />
+                  新建图片节点
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
+                  onSelect={() => handleCreateNodeFromQuickAddMenu("video")}
+                >
+                  <IconVideo size={16} />
+                  新建视频节点
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
+                  onSelect={() => handleCreateNodeFromQuickAddMenu("audio")}
+                >
+                  <IconMusic size={16} />
+                  新建音频节点
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
+                  onSelect={() => handleCreateNodeFromQuickAddMenu("panorama")}
+                >
+                  <IconEye size={16} />
+                  新建全景图节点
+                </DropdownMenuItem>
+
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer">
+                    <IconSparkles size={16} />
+                    智能体
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-44 bg-[#121214] border border-white/10 rounded-xl shadow-2xl overflow-hidden p-1">
+                    <DropdownMenuItem
+                      className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
+                      onSelect={() =>
+                        handleCreateNodeFromQuickAddMenu("textAgent")
+                      }
+                    >
+                      <IconBrain size={15} />
+                      文本智能体
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
+                      onSelect={() =>
+                        handleCreateNodeFromQuickAddMenu("imageAgent")
+                      }
+                    >
+                      <IconPhoto size={15} />
+                      图片智能体
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
+                      onSelect={() =>
+                        handleCreateNodeFromQuickAddMenu("videoAgent")
+                      }
+                    >
+                      <IconVideo size={15} />
+                      视频智能体
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
       </CanvasContextMenu>
 
