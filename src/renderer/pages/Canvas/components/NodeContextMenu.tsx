@@ -1,8 +1,8 @@
 import {
   IconCopy,
+  IconLayout,
   IconLayoutGrid,
   IconTrash,
-  IconLayout,
 } from "@tabler/icons-react";
 import type { PropsWithChildren } from "react";
 
@@ -23,6 +23,7 @@ type NodeContextMenuProps = PropsWithChildren<{
   onSplitImage?: (gridSize: 2 | 3 | 4) => void;
   onSeparateToNodes?: () => void;
   hasMultipleResults?: boolean;
+  separateToNodesLabel?: string;
 }>;
 
 export const NodeContextMenu = ({
@@ -32,6 +33,7 @@ export const NodeContextMenu = ({
   onSplitImage,
   onSeparateToNodes,
   hasMultipleResults,
+  separateToNodesLabel = "独立为图片",
 }: NodeContextMenuProps) => {
   return (
     <ContextMenu>
@@ -80,7 +82,7 @@ export const NodeContextMenu = ({
             onSelect={onSeparateToNodes}
           >
             <IconLayout size={15} />
-            独立为图片
+            {separateToNodesLabel}
           </ContextMenuItem>
         )}
 

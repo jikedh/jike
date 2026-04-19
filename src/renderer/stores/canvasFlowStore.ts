@@ -1967,6 +1967,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       if (!resultData || resultData.length <= 1) return;
 
+      const targetNodeType = nodeType === "videoNode" ? "video" : "image";
+
       const nodeWidth = nodeType === "imageNode" ? 350 : 350;
       const nodeHeight = nodeType === "imageNode" ? 280 : 250;
       const gap = 20;
@@ -1980,24 +1982,44 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           y: sourceNode.position.y + nodeHeight + gap,
         };
 
-        const newNodeId = get().addNode("image", position);
+        const newNodeId = get().addNode(targetNodeType, position);
 
-        get().updateImageNodeData(newNodeId, {
-          status: GenerationStatus.COMPLETED,
-          progress: 100,
+        if (targetNodeType === "video") {
+          get().updateVideoNodeData(newNodeId, {
+            status: GenerationStatus.COMPLETED,
+            progress: 100,
+            result: {
+              type: "video",
+              data: [{ url: item.url }],
+            },
+          });
+        } else {
+          get().updateImageNodeData(newNodeId, {
+            status: GenerationStatus.COMPLETED,
+            progress: 100,
+            result: {
+              type: "image",
+              data: [{ url: item.url }],
+            },
+          });
+        }
+      }
+
+      if (targetNodeType === "video") {
+        get().updateVideoNodeData(nodeId, {
           result: {
-            type: "image",
-            data: [{ url: item.url }],
+            type: sourceData.result?.type ?? "video",
+            data: [resultData[0]],
+          },
+        });
+      } else {
+        get().updateImageNodeData(nodeId, {
+          result: {
+            type: sourceData.result?.type ?? "image",
+            data: [resultData[0]],
           },
         });
       }
-
-      get().updateImageNodeData(nodeId, {
-        result: {
-          type: sourceData.result?.type ?? "image",
-          data: [resultData[0]],
-        },
-      });
 
       if (useChatSettingsStore.getState().autoSaveEnabled) {
         get().saveGraph();

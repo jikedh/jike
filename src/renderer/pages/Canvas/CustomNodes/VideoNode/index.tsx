@@ -107,6 +107,7 @@ export const VideoNode = memo(
         onDelete={handleDelete}
         onSeparateToNodes={handleSeparateToNodes}
         hasMultipleResults={hasMultipleResults}
+        separateToNodesLabel="独立为视频"
       >
         <div
           className="group/node relative"
