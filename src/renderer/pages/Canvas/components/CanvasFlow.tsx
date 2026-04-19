@@ -172,8 +172,8 @@ export const CanvasFlow = ({
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [generatingCount, setGeneratingCount] = useState(0);
 
-  // 跟踪鼠标在画布上的位置，用于粘贴操作
-  const [mouseFlowPosition, setMouseFlowPosition] = useState<{
+  // 跟踪鼠标在画布上的位置（仅供事件处理读取），用 ref 避免 mousemove 导致整树重渲染。
+  const mouseFlowPositionRef = useRef<{
     x: number;
     y: number;
   } | null>(null);
@@ -405,7 +405,7 @@ export const CanvasFlow = ({
         event.preventDefault();
         void handleFiles(
           files,
-          mouseFlowPosition ??
+          mouseFlowPositionRef.current ??
           screenToFlowPosition({
             x: window.innerWidth / 2,
             y: window.innerHeight / 2,
@@ -424,7 +424,7 @@ export const CanvasFlow = ({
           const data = JSON.parse(clipboardText);
           if (data.type === "canvas-nodes") {
             event.preventDefault();
-            pasteNodes(mouseFlowPosition ?? undefined);
+            pasteNodes(mouseFlowPositionRef.current ?? undefined);
             return;
           }
         } catch {
@@ -433,14 +433,14 @@ export const CanvasFlow = ({
       }
 
       event.preventDefault();
-      pasteNodes(mouseFlowPosition ?? undefined);
+      pasteNodes(mouseFlowPositionRef.current ?? undefined);
     };
 
     document.addEventListener("paste", handlePaste);
     return () => {
       document.removeEventListener("paste", handlePaste);
     };
-  }, [handleFiles, mouseFlowPosition, pasteNodes, screenToFlowPosition]);
+  }, [handleFiles, pasteNodes, screenToFlowPosition]);
 
   // 监听鼠标移动以更新画布上的鼠标位置
   useEffect(() => {
@@ -449,7 +449,7 @@ export const CanvasFlow = ({
         x: event.clientX,
         y: event.clientY,
       });
-      setMouseFlowPosition(position);
+      mouseFlowPositionRef.current = position;
     };
 
     document.addEventListener("mousemove", handleMouseMove);
@@ -555,6 +555,9 @@ export const CanvasFlow = ({
   const [viewportState, setViewportState] = useState(() =>
     reactFlowInstance.getViewport(),
   );
+  const viewportStateRef = useRef(reactFlowInstance.getViewport());
+  const pendingViewportRef = useRef(reactFlowInstance.getViewport());
+  const viewportRafRef = useRef<number | null>(null);
   const latestStoreNodesRef = useRef(useCanvasFlowStore.getState().nodes);
   const latestStoreEdgesRef = useRef(useCanvasFlowStore.getState().edges);
   // 用 ref 而非 state 追踪拖动状态，避免引发额外渲染
@@ -620,6 +623,9 @@ export const CanvasFlow = ({
     // 从 ReactFlow 实例读取最新的节点状态
     const currentNodes = reactFlowInstance.getNodes() as AllNodeType[];
     const zustandStateNodes = useCanvasFlowStore.getState().nodes;
+    const zustandNodeById = new Map(
+      zustandStateNodes.map((node) => [node.id, node]),
+    );
 
     // 收集位置发生变化的节点
     const positionChanges: NodeChange<AllNodeType>[] = [];
@@ -639,7 +645,7 @@ export const CanvasFlow = ({
 
     currentNodes.forEach((node) => {
       const alignedPosition = alignPositionToGrid(node.position);
-      const zustandNode = zustandStateNodes.find((n) => n.id === node.id);
+      const zustandNode = zustandNodeById.get(node.id);
       if (
         zustandNode &&
         (zustandNode.position.x !== alignedPosition.x ||
@@ -674,23 +680,33 @@ export const CanvasFlow = ({
     }
   }, [storeOnNodesChange]);
 
-  // 计算当前多选节点（仅在节点数组变化时更新）。
-  const multiSelectedNodes = useMemo(
-    () => displayNodes.filter((node) => node.selected),
-    [displayNodes],
-  );
+  // 为高频读取场景建立节点索引，避免重复线性扫描。
+  const displayNodeById = useMemo(() => {
+    const nodeMap = new Map<string, AllNodeType>();
+    displayNodes.forEach((node) => {
+      nodeMap.set(node.id, node);
+    });
+    return nodeMap;
+  }, [displayNodes]);
 
-  // 计算选区右侧中心点（流坐标）。
-  const selectionRightCenterFlowPosition = useMemo(() => {
-    if (multiSelectedNodes.length < 2) {
-      return null;
-    }
+  const displayNodeIdSet = useMemo(() => {
+    return new Set(displayNodes.map((node) => node.id));
+  }, [displayNodes]);
 
+  // 单次遍历完成多选统计：同时得到选中节点 id 列表与选区右侧中心点。
+  const multiSelectedSummary = useMemo(() => {
+    const selectedNodeIds: string[] = [];
     let maxRight = Number.NEGATIVE_INFINITY;
     let minTop = Number.POSITIVE_INFINITY;
     let maxBottom = Number.NEGATIVE_INFINITY;
 
-    multiSelectedNodes.forEach((node) => {
+    displayNodes.forEach((node) => {
+      if (!node.selected) {
+        return;
+      }
+
+      selectedNodeIds.push(node.id);
+
       const nodeWidth = node.width || 175;
       const nodeHeight = node.height || 175;
       const left = node.position.x;
@@ -703,12 +719,31 @@ export const CanvasFlow = ({
       if (bottom > maxBottom) maxBottom = bottom;
     });
 
+    const count = selectedNodeIds.length;
+
+    if (count < 2) {
+      return {
+        selectedNodeIds,
+        count,
+        selectionRightCenterFlowPosition: null,
+      };
+    }
+
     return {
-      // “+”出现在选区右侧，留一段固定偏移，避免贴边重叠。
-      x: maxRight + 32,
-      y: minTop + (maxBottom - minTop) / 2,
+      selectedNodeIds,
+      count,
+      selectionRightCenterFlowPosition: {
+        // “+”出现在选区右侧，留一段固定偏移，避免贴边重叠。
+        x: maxRight + 32,
+        y: minTop + (maxBottom - minTop) / 2,
+      },
     };
-  }, [multiSelectedNodes]);
+  }, [displayNodes]);
+
+  const multiSelectedNodeIds = multiSelectedSummary.selectedNodeIds;
+  const multiSelectedCount = multiSelectedSummary.count;
+  const selectionRightCenterFlowPosition =
+    multiSelectedSummary.selectionRightCenterFlowPosition;
 
   // 将流坐标转换为屏幕坐标，用于绝对定位浮动按钮。
   const selectionRightCenterScreenPosition = useMemo(() => {
@@ -725,11 +760,6 @@ export const CanvasFlow = ({
         viewportState.y,
     };
   }, [selectionRightCenterFlowPosition, viewportState]);
-
-  const handleViewportMove = useCallback((_: unknown, viewport: unknown) => {
-    // 使用 unknown 避免在高频事件中引入额外类型噪音。
-    setViewportState(viewport as { x: number; y: number; zoom: number });
-  }, []);
 
   // 当 projectId 变化时切换项目
   useEffect(() => {
@@ -769,6 +799,77 @@ export const CanvasFlow = ({
     x: number;
     y: number;
   } | null>(null);
+
+  // 仅在叠加层需要跟随缩放/平移时，才追踪 viewport，避免 onMove 高频触发整树重渲染。
+  const shouldTrackViewport =
+    Boolean(selectionRightCenterFlowPosition) ||
+    Boolean(connectionGhost) ||
+    quickAddDragPreview.active ||
+    Boolean(quickAddMenuOpen && quickAddMenuScreenPosition);
+
+  // 使用 rAF 合帧更新 viewport 状态，避免每次 onMove 都 setState。
+  const flushViewportState = useCallback(() => {
+    viewportRafRef.current = null;
+    const nextViewport = pendingViewportRef.current;
+    const prevViewport = viewportStateRef.current;
+
+    if (
+      prevViewport.x === nextViewport.x &&
+      prevViewport.y === nextViewport.y &&
+      prevViewport.zoom === nextViewport.zoom
+    ) {
+      return;
+    }
+
+    viewportStateRef.current = nextViewport;
+    setViewportState(nextViewport);
+  }, []);
+
+  const scheduleViewportState = useCallback(
+    (nextViewport: { x: number; y: number; zoom: number }) => {
+      pendingViewportRef.current = nextViewport;
+
+      if (viewportRafRef.current !== null) {
+        return;
+      }
+
+      viewportRafRef.current = window.requestAnimationFrame(flushViewportState);
+    },
+    [flushViewportState],
+  );
+
+  const handleViewportMove = useCallback(
+    (_: unknown, viewport: unknown) => {
+      // 使用 unknown 避免在高频事件中引入额外类型噪音。
+      if (!shouldTrackViewport) {
+        return;
+      }
+
+      scheduleViewportState(viewport as { x: number; y: number; zoom: number });
+    },
+    [scheduleViewportState, shouldTrackViewport],
+  );
+
+  // 当开始需要追踪 viewport 时，先同步一次最新值，避免出现位置跳变。
+  useEffect(() => {
+    if (!shouldTrackViewport) {
+      return;
+    }
+
+    const latestViewport = reactFlowInstance.getViewport();
+    viewportStateRef.current = latestViewport;
+    pendingViewportRef.current = latestViewport;
+    setViewportState(latestViewport);
+  }, [reactFlowInstance, shouldTrackViewport]);
+
+  // 组件卸载时清理 rAF，避免潜在内存泄漏。
+  useEffect(() => {
+    return () => {
+      if (viewportRafRef.current !== null) {
+        window.cancelAnimationFrame(viewportRafRef.current);
+      }
+    };
+  }, []);
 
   const openContextMenuAt = useCallback((x: number, y: number) => {
     setMenuScreenPosition({ x, y });
@@ -963,9 +1064,7 @@ export const CanvasFlow = ({
     );
 
     if (!handleScreenPosition) {
-      const sourceNode = displayNodes.find(
-        (node) => node.id === connectionGhost.nodeId,
-      );
+      const sourceNode = displayNodeById.get(connectionGhost.nodeId);
 
       if (!sourceNode) {
         return null;
@@ -1008,7 +1107,7 @@ export const CanvasFlow = ({
     );
   }, [
     connectionGhost,
-    displayNodes,
+    displayNodeById,
     menuScreenPosition.x,
     menuScreenPosition.y,
     viewportState,
@@ -1024,7 +1123,7 @@ export const CanvasFlow = ({
     }
 
     const sourceNodeIds = quickAddSelectionSnapshotRef.current.filter((id) =>
-      displayNodes.some((node) => node.id === id),
+      displayNodeIdSet.has(id),
     );
 
     if (sourceNodeIds.length === 0) {
@@ -1067,7 +1166,7 @@ export const CanvasFlow = ({
           };
         }
 
-        const sourceNode = displayNodes.find((node) => node.id === nodeId);
+        const sourceNode = displayNodeById.get(nodeId);
         if (!sourceNode) {
           return null;
         }
@@ -1087,7 +1186,8 @@ export const CanvasFlow = ({
       })
       .filter(Boolean) as Array<{ nodeId: string; path: string }>;
   }, [
-    displayNodes,
+    displayNodeById,
+    displayNodeIdSet,
     quickAddDragPreview.active,
     quickAddDragPreview.endX,
     quickAddDragPreview.endY,
@@ -1101,7 +1201,7 @@ export const CanvasFlow = ({
     (event: React.PointerEvent<HTMLButtonElement>) => {
       if (
         !selectionRightCenterScreenPosition ||
-        multiSelectedNodes.length < 2
+        multiSelectedCount < 2
       ) {
         return;
       }
@@ -1109,9 +1209,7 @@ export const CanvasFlow = ({
       event.preventDefault();
       event.stopPropagation();
 
-      quickAddSelectionSnapshotRef.current = multiSelectedNodes.map(
-        (node) => node.id,
-      );
+      quickAddSelectionSnapshotRef.current = [...multiSelectedNodeIds];
 
       const startX = selectionRightCenterScreenPosition.x;
       const startY = selectionRightCenterScreenPosition.y;
@@ -1124,18 +1222,41 @@ export const CanvasFlow = ({
         endY: event.clientY,
       });
 
-      const handlePointerMove = (moveEvent: PointerEvent) => {
+      // 拖拽预览采用 rAF 合帧，降低 pointermove 风暴下的 setState 频率。
+      let pointerRafId: number | null = null;
+      let latestPointerPoint = { x: event.clientX, y: event.clientY };
+
+      const flushPointerMove = () => {
+        pointerRafId = null;
         setQuickAddDragPreview((prev) => ({
           ...prev,
-          endX: moveEvent.clientX,
-          endY: moveEvent.clientY,
+          endX: latestPointerPoint.x,
+          endY: latestPointerPoint.y,
         }));
+      };
+
+      const schedulePointerMove = () => {
+        if (pointerRafId !== null) {
+          return;
+        }
+
+        pointerRafId = window.requestAnimationFrame(flushPointerMove);
+      };
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        latestPointerPoint = { x: moveEvent.clientX, y: moveEvent.clientY };
+        schedulePointerMove();
       };
 
       const finishDrag = (endX: number, endY: number) => {
         window.removeEventListener("pointermove", handlePointerMove);
         window.removeEventListener("pointerup", handlePointerUp);
         window.removeEventListener("pointercancel", handlePointerCancel);
+
+        if (pointerRafId !== null) {
+          window.cancelAnimationFrame(pointerRafId);
+          pointerRafId = null;
+        }
 
         setQuickAddDragPreview((prev) => ({
           ...prev,
@@ -1157,6 +1278,11 @@ export const CanvasFlow = ({
         window.removeEventListener("pointerup", handlePointerUp);
         window.removeEventListener("pointercancel", handlePointerCancel);
 
+        if (pointerRafId !== null) {
+          window.cancelAnimationFrame(pointerRafId);
+          pointerRafId = null;
+        }
+
         setQuickAddDragPreview((prev) => ({ ...prev, active: false }));
       };
 
@@ -1164,7 +1290,7 @@ export const CanvasFlow = ({
       window.addEventListener("pointerup", handlePointerUp);
       window.addEventListener("pointercancel", handlePointerCancel);
     },
-    [multiSelectedNodes, selectionRightCenterScreenPosition],
+    [multiSelectedCount, multiSelectedNodeIds, selectionRightCenterScreenPosition],
   );
 
   const handleQuickAddMenuOpenChange = useCallback((open: boolean) => {
@@ -1188,8 +1314,9 @@ export const CanvasFlow = ({
       }
 
       const allNodes = useCanvasFlowStore.getState().nodes;
+      const allNodeIdSet = new Set(allNodes.map((node) => node.id));
       const sourceNodeIds = quickAddSelectionSnapshotRef.current.filter((id) =>
-        allNodes.some((node) => node.id === id),
+        allNodeIdSet.has(id),
       );
 
       const existingEdges = useCanvasFlowStore.getState().edges;
@@ -1286,7 +1413,7 @@ export const CanvasFlow = ({
             onNodeDragStart={handleNodeDragStart}
             onNodeDragStop={handleNodeDragStop}
             onPaneClick={handlePaneClick}
-            onMove={handleViewportMove}
+            onMove={shouldTrackViewport ? handleViewportMove : undefined}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             nodesDraggable={!spacePressed}
@@ -1358,7 +1485,7 @@ export const CanvasFlow = ({
           {/* 多选右侧快捷创建按钮（拖拽时隐藏，改用跟踪图标） */}
           {selectionRightCenterScreenPosition && !quickAddDragPreview.active ? (
             <MultiSelectQuickCreate
-              visible={multiSelectedNodes.length >= 2}
+              visible={multiSelectedCount >= 2}
               x={selectionRightCenterScreenPosition.x}
               y={selectionRightCenterScreenPosition.y}
               onPointerDown={handleQuickAddPointerDown}
