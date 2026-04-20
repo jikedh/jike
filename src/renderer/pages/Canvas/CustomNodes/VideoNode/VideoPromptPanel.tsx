@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
-import {
-  VIDEO_DURATION_CONFIG,
-  VIDEO_MODELS,
-} from "shared/constants/ai-models";
+import { VIDEO_MODELS } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import type { VideoGenerationNode } from "shared/types/flow";
 import { PresetDropdown } from "@/components/PresetDropdown";
@@ -74,18 +71,19 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     return currentVideoData?.image_urls ?? [];
   }, [currentVideoData?.image_urls]);
 
-  const model =
-    currentVideoData?.model ??
-    VIDEO_MODELS[0]?.model ??
-    "doubao-seedance-1-5-pro";
+  const model = useMemo(() => {
+    const fallbackModel = VIDEO_MODELS[0]?.model ?? "doubao-seedance-2.0";
+    const currentModel = currentVideoData?.model;
+    if (!currentModel) {
+      return fallbackModel;
+    }
+
+    const isSupportedModel = VIDEO_MODELS.some(
+      (item) => item.model === currentModel,
+    );
+    return isSupportedModel ? currentModel : fallbackModel;
+  }, [currentVideoData?.model]);
   const aspectRatio = currentVideoData?.aspect_ratio ?? "16:9";
-  const videoSize = currentVideoData?.metadata?.size ?? "1280x720";
-  const duration =
-    currentVideoData?.duration ?? VIDEO_DURATION_CONFIG.defaultValue;
-  const resolution = currentVideoData?.metadata?.resolution ?? "720p";
-  const seed = currentVideoData?.metadata?.seed ?? -1;
-  const audio = currentVideoData?.audio ?? false;
-  const camerafixed = currentVideoData?.camerafixed ?? false;
   const promptDraftHtml = currentVideoData?.promptDraftHtml ?? "<p></p>";
   const seedance20Metadata = currentVideoData?.metadata ?? {};
 
@@ -104,7 +102,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     nodeId,
     nodes,
     edges,
-    model,
     referenceImageUrls,
   });
 
@@ -346,11 +343,9 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
     // Seedance 2.0 在存在参考音频时仅允许使用 Pro 模式。
     // 命中该条件时先提示用户，再自动修正为 Pro 并继续本次生成。
-    const isSeedance20Model = model === "doubao-seedance-2.0";
     const hasReferenceAudio = allAudioUrls.length > 0;
     const currentSeedanceMode = currentVideoData.metadata?.mode ?? "fast";
-    const shouldForceProMode =
-      isSeedance20Model && hasReferenceAudio && currentSeedanceMode !== "pro";
+    const shouldForceProMode = hasReferenceAudio && currentSeedanceMode !== "pro";
 
     let nextVideoData = currentVideoData;
     if (shouldForceProMode) {
@@ -394,7 +389,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     startVideoGeneration,
     nodeId,
     success,
-    parentImageNodes,
   ]);
 
   return (
@@ -420,7 +414,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
           parentImageNodeIdByUrl={parentImageNodeIdByUrl}
           parentAudioNodes={parentAudioNodes}
           parentVideoNodes={parentVideoNodes}
-          model={model}
           onDisconnectNode={handleDisconnectNode}
           onRemoveReferenceImage={handleRemoveReferenceImage}
           onReferenceHoverChange={handleReferenceHoverChange}
@@ -452,15 +445,8 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
           </Select>
 
           <VideoModelParamsPanel
-            model={model}
             currentVideoData={currentVideoData}
             aspectRatio={aspectRatio}
-            videoSize={videoSize}
-            duration={duration}
-            resolution={resolution}
-            seed={seed}
-            audio={audio}
-            camerafixed={camerafixed}
             seedance20Metadata={seedance20Metadata}
             onPatch={(patch) => updateVideoNodeData(nodeId, patch)}
           />

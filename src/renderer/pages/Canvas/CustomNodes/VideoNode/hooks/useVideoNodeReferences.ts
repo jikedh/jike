@@ -55,13 +55,11 @@ export const useVideoNodeReferences = ({
   nodeId,
   nodes,
   edges,
-  model,
   referenceImageUrls,
 }: {
   nodeId: string;
   nodes: any[];
   edges: any[];
-  model: string;
   referenceImageUrls: string[];
 }) => {
   const parentNodeIds = useMemo(() => {
@@ -179,28 +177,26 @@ export const useVideoNodeReferences = ({
       });
     });
 
-    if (model === "doubao-seedance-2.0") {
-      parentVideoNodes.forEach((item, index) => {
-        items.push({
-          id: getVideoParentVideoMentionId(item.id),
-          label: `视频${toChineseNumber(index + 1)}`,
-          value: `视频${toChineseNumber(index + 1)}`,
-          thumbnail: item.url,
-          type: "video",
-        });
+    parentVideoNodes.forEach((item, index) => {
+      items.push({
+        id: getVideoParentVideoMentionId(item.id),
+        label: `视频${toChineseNumber(index + 1)}`,
+        value: `视频${toChineseNumber(index + 1)}`,
+        thumbnail: item.url,
+        type: "video",
       });
+    });
 
-      parentAudioNodes.forEach((item) => {
-        const audioNickname = item.nickname?.trim() || "-";
-        items.push({
-          id: getVideoParentAudioMentionId(item.id),
-          label: audioNickname,
-          value: audioNickname,
-          thumbnail: "/audio-icon.svg",
-          type: "audio",
-        });
+    parentAudioNodes.forEach((item) => {
+      const audioNickname = item.nickname?.trim() || "-";
+      items.push({
+        id: getVideoParentAudioMentionId(item.id),
+        label: audioNickname,
+        value: audioNickname,
+        thumbnail: "/audio-icon.svg",
+        type: "audio",
       });
-    }
+    });
 
     return items;
   }, [
@@ -208,7 +204,6 @@ export const useVideoNodeReferences = ({
     parentImageNodes,
     parentVideoNodes,
     parentAudioNodes,
-    model,
   ]);
 
   const allImageUrls = useMemo(() => {

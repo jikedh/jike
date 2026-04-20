@@ -76,34 +76,7 @@ export const TEXT_MODELS = [
 
 /** 视频模型配置 */
 export const VIDEO_MODELS = [
-  // OpenAI Sora 系列
-  // { id: 1, name: 'Sora 2(模型不存在,文档里面的curl都跑不通)', model: 'sora-2', platform: 'openai', platformId: 1 },
-  // { id: 2, name: 'Sora 2 Pro(能用，)', model: 'sora-2-pro', platform: 'openai', platformId: 1 },
-  // { id: 3, name: 'Sora 2 VIP(能进入回调，最后所有渠道都失败)', model: 'sora-2-vip', platform: 'openai', platformId: 1 },
-  // { id: 4, name: 'Sora 2 Official(能用，进度完成不给我URL)', model: 'sora-2-official', platform: 'openai', platformId: 1 },
-  // Google Veo 系列
-  {
-    id: 18,
-    name: "Veo 3.1 Quality",
-    model: "Veo3.1-quality-official",
-    platform: "google",
-    platformId: 16,
-  },
-  {
-    id: 19,
-    name: "Veo 3.1 Fast",
-    model: "Veo3.1-fast-official",
-    platform: "google",
-    platformId: 16,
-  },
-  // 字节豆包 Seedance 系列
-  {
-    id: 11,
-    name: "Doubao Seedance 1.5 Pro",
-    model: "doubao-seedance-1-5-pro",
-    platform: "doubao",
-    platformId: 2,
-  },
+  // 字节豆包 Seedance 2.0
   {
     id: 22,
     name: "Doubao Seedance 2.0",
@@ -111,39 +84,6 @@ export const VIDEO_MODELS = [
     platform: "doubao",
     platformId: 2,
   },
-  // xAI Grok 系列
-  {
-    id: 17,
-    name: "Grok Video 3",
-    model: "grok-video-3",
-    platform: "xai",
-    platformId: 18,
-  },
-  // Kling 系列
-  {
-    id: 20,
-    name: "Kling Video O1",
-    model: "kling-video-o1",
-    platform: "kling",
-    platformId: 14,
-  },
-  // MiniMax 系列
-  {
-    id: 21,
-    name: "MiniMax Hailuo 2.3",
-    model: "MiniMax-Hailuo-2.3",
-    platform: "minimax",
-    platformId: 12,
-  },
-  // MiniMax
-  // { id: 12, name: 'MiniMax-Hailuo-02', model: 'MiniMax-Hailuo-02', platform: 'minimax', platformId: 12 },
-  // Wan 系列
-  // { id: 13, name: 'Wan2.6(size不能用16:9,要用1920:1080)', model: 'wan2.6', platform: 'wan', platformId: 13 },
-  // { id: 14, name: 'Wan2.6-Flash', model: 'wan2.6-flash', platform: 'wan', platformId: 13 },
-  // Kling
-  // { id: 15, name: 'Kling-2-6', model: 'kling-2-6', platform: 'kling', platformId: 14 },
-  // Vidu
-  // { id: 16, name: 'VidUQ3-Pr(模型不纯在)', model: 'viduq3-pro', platform: 'vidu', platformId: 15 },
 ];
 
 /** 宽高比配置 */
@@ -164,21 +104,6 @@ export const VIDEO_ASPECT_RATIOS = [
   { label: "3:4", value: "3:4" },
   { label: "21:9", value: "21:9" },
 ];
-
-/** 豆包 Seedance 1.5 Pro 视频分辨率配置 */
-export const VIDEO_RESOLUTIONS_15PRO = [
-  { label: "1080p (超清)", value: "1080p" },
-  { label: "720p (高清)", value: "720p" },
-  { label: "480p (标清)", value: "480p" },
-] as const;
-
-/** 视频节点时长配置（豆包 Seedance 1.5 Pro：4-12秒） */
-export const VIDEO_DURATION_CONFIG = {
-  min: 4,
-  max: 12,
-  step: 1,
-  defaultValue: 5,
-} as const;
 
 /** 图片生成模型配置 */
 export const IMAGE_MODELS = [

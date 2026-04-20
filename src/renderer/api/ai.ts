@@ -2,11 +2,11 @@
 import { EventSourceParserStream } from "eventsource-parser/stream";
 import {
   aiService,
-  zeakaiRequest,
-  kuaiziRequest,
-  jikeingService,
-  yunwuRequest,
   dashscopeRequest,
+  jikeingService,
+  kuaiziRequest,
+  yunwuRequest,
+  zeakaiRequest,
 } from "service/aiRequest";
 import { getAiToken, getBaseURL } from "shared/utils/utils";
 /**
@@ -33,33 +33,6 @@ export function createImageGeneration(data) {
     url: "/v1/images/generations",
     method: "post",
     data,
-  });
-}
-
-// 获取图片生成任务状态
-export function getImageTaskStatus(id: string) {
-  return aiService({
-    url: `/v1/images/generations/${id}`,
-    method: "get",
-  });
-}
-
-// ===================== 视频生成相关 =====================
-
-// 创建视频生成任务
-export function createVideoGeneration(data: any) {
-  return aiService({
-    url: "/v1/videos/generations",
-    method: "post",
-    data,
-  });
-}
-
-// 获取视频生成任务状态
-export function getVideoTaskStatus(id: string) {
-  return aiService({
-    url: `/v1/videos/generations/${id}`,
-    method: "get",
   });
 }
 

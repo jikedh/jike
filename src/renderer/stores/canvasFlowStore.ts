@@ -57,12 +57,9 @@ import { create } from "zustand";
 import {
   createImageGeneration,
   createLzVideoTask,
-  createVideoGeneration,
   fetchMjTask,
   generateGeminiContent,
-  getImageTaskStatus,
   getLzVideoTaskStatus,
-  getVideoTaskStatus,
   submitMjImagine,
 } from "@/api/ai";
 import { buildMidjourneyPrompt } from "@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt";
@@ -71,248 +68,6 @@ import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 // ==================== 持久化配置 ====================
 
 const CANVAS_STORAGE_VERSION = 1;
-
-/**
- * 图片生成轮询逻辑
- */
-const pollImageGeneration = async (
-  taskId: string,
-  nodeId: string,
-  signal: AbortSignal,
-  setState: (
-    updater: (state: CanvasFlowStoreType) => Partial<CanvasFlowStoreType>,
-  ) => void,
-  getState: () => CanvasFlowStoreType,
-  totalTaskCount: number, // 用于判断是否所有任务都已完成
-) => {
-  const startTime = Date.now();
-  try {
-    while (true) {
-      await wait(IMAGE_POLL_INTERVAL, signal);
-      if (signal.aborted) {
-        return;
-      }
-
-      // 检查是否超时
-      if (Date.now() - startTime > IMAGE_TIMEOUT) {
-        console.error("[pollImageGeneration] 图片生成超时");
-        stopImagePollingInternal(taskId);
-        const currentData = getState().nodes.find((n) => n.id === nodeId)
-          ?.data as ImageGenerationNode;
-        if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
-          pendingTaskCounts.delete(nodeId);
-        }
-        setState((state) => ({
-          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-            const completedCount = (data.completedCount ?? 0) + 1;
-            const allCompleted = completedCount >= totalTaskCount;
-            return {
-              ...data,
-              status: allCompleted
-                ? GenerationStatus.FAILED
-                : GenerationStatus.IN_PROGRESS,
-              error: {
-                code: "TIMEOUT",
-                message: "图片生成超时，请稍后再试",
-              },
-              completedCount,
-            };
-          }),
-        }));
-        return;
-      }
-
-      const response: any = await getImageTaskStatus(taskId);
-
-      const currentNode = getState().nodes.find((node) => node.id === nodeId);
-      if (!currentNode || currentNode.type !== "imageNode") {
-        stopImagePollingInternal(taskId);
-        return;
-      }
-
-      // 如果生成完成，下载并保存图片到本地
-      if (response.status === "completed") {
-        const projectId = getState().projectId;
-        const newResultData = response.result?.data ?? [];
-
-        // 处理每张生成的图片
-        const processedResultData = await Promise.all(
-          newResultData.map(async (item: any) => {
-            if (item.url && projectId) {
-              try {
-                // 从 URL 中提取扩展名
-                const urlPath = new URL(item.url).pathname;
-                const ext = urlPath.split(".").pop()?.toLowerCase() || "png";
-
-                // 下载并保存到本地
-                const fileName = await saveGeneratedImageToLocal(
-                  projectId,
-                  item.url,
-                  ext,
-                );
-
-                if (fileName) {
-                  // 获取相对路径
-                  const relativePath = getLocalFilePath(
-                    projectId,
-                    "generate_image",
-                    fileName,
-                  );
-
-                  // 上传到 OSS
-                  let ossUrl: string | undefined;
-                  try {
-                    const fileBytes = relativePath
-                      ? await readMediaFromLocal(relativePath)
-                      : null;
-                    if (fileBytes) {
-                      const file = new File([fileBytes], fileName, {
-                        type: `image/${ext}`,
-                      });
-                      const ossResult = await uploadFileToOSS(file);
-                      if (ossResult.url) {
-                        ossUrl = ossResult.url;
-                      }
-                    }
-                  } catch (ossError) {
-                    console.error(
-                      "[pollImageGeneration] 上传图片到 OSS 失败:",
-                      ossError,
-                    );
-                  }
-
-                  return {
-                    ...item,
-                    url: ossUrl || item.url, // 使用 OSS URL，如果上传失败则使用原始 URL
-                    localName: fileName,
-                    localPath: relativePath,
-                  };
-                }
-              } catch (saveError) {
-                console.error(
-                  "[pollImageGeneration] 保存图片到本地失败:",
-                  saveError,
-                );
-              }
-            }
-            return item;
-          }),
-        );
-
-        setState((state) => ({
-          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-            // 追加新结果到 result.data，而不是覆盖
-            const existingData = data.result?.data ?? [];
-            const mergedData = [...existingData, ...processedResultData];
-
-            // 更新已完成数量
-            const completedCount = (data.completedCount ?? 0) + 1;
-            // 判断是否所有任务都已完成
-            const allCompleted = completedCount >= totalTaskCount;
-
-            // 更新 ossUrlMap 缓存
-            const newOssUrlMap: Record<string, string> = { ...data.ossUrlMap };
-            processedResultData.forEach((item: any) => {
-              if (item.url && item.url.includes("aliyuncs.com")) {
-                // 如果原始 URL 存在，缓存映射关系
-                const originalUrl = response.result?.data?.find(
-                  (orig: any) =>
-                    orig.localFileName === item.localFileName ||
-                    orig.relativePath === item.relativePath,
-                )?.url;
-                if (originalUrl) {
-                  newOssUrlMap[originalUrl] = item.url;
-                }
-              }
-            });
-
-            return {
-              ...data,
-              status: allCompleted
-                ? GenerationStatus.COMPLETED
-                : GenerationStatus.IN_PROGRESS,
-              progress: allCompleted ? 100 : (response.progress ?? 0),
-              result: {
-                type: response.result?.type ?? "image",
-                data: mergedData,
-              },
-              completedCount,
-              ossUrlMap: newOssUrlMap,
-              error: allCompleted ? undefined : data.error,
-            };
-          }),
-        }));
-
-        stopImagePollingInternal(taskId);
-        // 如果所有任务都完成了，清理计数
-        const currentData = getState().nodes.find((n) => n.id === nodeId)
-          ?.data as ImageGenerationNode;
-        if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
-          pendingTaskCounts.delete(nodeId);
-        }
-        return;
-      }
-
-      if (response.status === "failed") {
-        setState((state) => ({
-          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-            const completedCount = (data.completedCount ?? 0) + 1;
-            const allCompleted = completedCount >= totalTaskCount;
-
-            return {
-              ...data,
-              status: allCompleted
-                ? GenerationStatus.FAILED
-                : GenerationStatus.IN_PROGRESS,
-              progress: response.progress ?? 0,
-              error: response.error ?? {
-                code: "UNKNOWN_ERROR",
-                message: "生成失败，请稍后再试",
-              },
-              completedCount,
-            };
-          }),
-        }));
-
-        stopImagePollingInternal(taskId);
-        const currentData = getState().nodes.find((n) => n.id === nodeId)
-          ?.data as ImageGenerationNode;
-        if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
-          pendingTaskCounts.delete(nodeId);
-        }
-        return;
-      }
-
-      // 更新进度
-      setState((state) => ({
-        nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-          ...data,
-          status: GenerationStatus.IN_PROGRESS,
-          progress: response.progress ?? 0,
-        })),
-      }));
-    }
-  } catch (pollError) {
-    console.error("图片生成轮询失败:", pollError);
-    stopImagePollingInternal(taskId);
-    // 任务失败时也要检查是否所有任务都结束
-    const currentData = getState().nodes.find((n) => n.id === nodeId)
-      ?.data as ImageGenerationNode;
-    if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
-      pendingTaskCounts.delete(nodeId);
-    }
-    setState((state) => ({
-      nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-        ...data,
-        status: GenerationStatus.FAILED,
-        error: {
-          code: "POLL_ERROR",
-          message: "轮询失败，请稍后再试",
-        },
-      })),
-    }));
-  }
-};
 
 /**
  * Midjourney 图片生成轮询逻辑
@@ -573,7 +328,6 @@ const pollMjImageGeneration = async (
 const pollVideoGeneration = async (
   taskId: string,
   nodeId: string,
-  model: string,
   signal: AbortSignal,
   setState: (
     updater: (state: CanvasFlowStoreType) => Partial<CanvasFlowStoreType>,
@@ -606,10 +360,7 @@ const pollVideoGeneration = async (
         return;
       }
 
-      const isSeedance20 = model === "doubao-seedance-2.0";
-      const response: any = isSeedance20
-        ? await getLzVideoTaskStatus(taskId)
-        : await getVideoTaskStatus(taskId);
+      const response: any = await getLzVideoTaskStatus(taskId);
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
       if (!currentNode || currentNode.type !== "videoNode") {
@@ -617,7 +368,7 @@ const pollVideoGeneration = async (
         return;
       }
 
-      const normalized = normalizeVideoTaskResponse(model, response);
+      const normalized = normalizeVideoTaskResponse(response);
       const normalizedTaskId = normalized.taskId ?? taskId;
 
       if (normalized.status === GenerationStatus.COMPLETED) {
@@ -641,9 +392,6 @@ const pollVideoGeneration = async (
             continue;
           }
 
-          const missingUrlErrorCode = isSeedance20
-            ? "LZ_VIDEO_MISSING_URL"
-            : "VIDEO_MISSING_URL";
           setState((state) => ({
             nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
               ...data,
@@ -651,7 +399,7 @@ const pollVideoGeneration = async (
               progress: normalized.progress,
               task_id: normalizedTaskId,
               error: {
-                code: missingUrlErrorCode,
+                code: "LZ_VIDEO_MISSING_URL",
                 message: "任务已完成但未返回视频地址，请稍后重试",
               },
             })),
@@ -717,9 +465,6 @@ const pollVideoGeneration = async (
       }
 
       if (normalized.status === GenerationStatus.FAILED) {
-        const failedErrorCode = isSeedance20
-          ? "LZ_VIDEO_FAILED"
-          : "VIDEO_FAILED";
         setState((state) => ({
           nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
             ...data,
@@ -727,7 +472,7 @@ const pollVideoGeneration = async (
             progress: normalized.progress,
             task_id: normalizedTaskId,
             error: {
-              code: failedErrorCode,
+              code: "LZ_VIDEO_FAILED",
               message: normalized.errorMessage || "生成失败，请稍后再试",
             },
           })),
@@ -1627,9 +1372,103 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
           taskId = response.result;
         } else {
-          // 其他模型使用原有 API
+          // 非 Midjourney 模型：创建后直接按返回结果落库，不再依赖任务状态轮询
           const response: any = await createImageGeneration(payload);
-          taskId = response?.id;
+          const resultItems = response?.result?.data ?? [];
+
+          if (!Array.isArray(resultItems) || resultItems.length === 0) {
+            throw new Error("未返回可用图片结果，请稍后再试");
+          }
+
+          const projectId = get().projectId;
+          const processedResultData = await Promise.all(
+            resultItems.map(async (item: any) => {
+              if (item.url && projectId) {
+                try {
+                  const urlPath = new URL(item.url).pathname;
+                  const ext = urlPath.split(".").pop()?.toLowerCase() || "png";
+
+                  const fileName = await saveGeneratedImageToLocal(
+                    projectId,
+                    item.url,
+                    ext,
+                  );
+
+                  if (fileName) {
+                    const relativePath = getLocalFilePath(
+                      projectId,
+                      "generate_image",
+                      fileName,
+                    );
+
+                    let ossUrl: string | undefined;
+                    try {
+                      const fileBytes = relativePath
+                        ? await readMediaFromLocal(relativePath)
+                        : null;
+                      if (fileBytes) {
+                        const file = new File([fileBytes], fileName, {
+                          type: `image/${ext}`,
+                        });
+                        const ossResult = await uploadFileToOSS(file);
+                        if (ossResult.url) {
+                          ossUrl = ossResult.url;
+                        }
+                      }
+                    } catch (ossError) {
+                      console.error(
+                        "[startImageGeneration] 上传图片到 OSS 失败:",
+                        ossError,
+                      );
+                    }
+
+                    return {
+                      ...item,
+                      url: ossUrl || item.url,
+                      localName: fileName,
+                      localPath: relativePath,
+                    };
+                  }
+                } catch (saveError) {
+                  console.error(
+                    "[startImageGeneration] 保存图片到本地失败:",
+                    saveError,
+                  );
+                }
+              }
+              return item;
+            }),
+          );
+
+          set((state) => ({
+            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+              const existingData = data.result?.data ?? [];
+              const mergedData = [...existingData, ...processedResultData];
+              const completedCount = (data.completedCount ?? 0) + 1;
+              const allCompleted = completedCount >= totalTaskCount;
+
+              return {
+                ...data,
+                status: allCompleted
+                  ? GenerationStatus.COMPLETED
+                  : GenerationStatus.IN_PROGRESS,
+                progress: allCompleted ? 100 : (response.progress ?? 100),
+                result: {
+                  type: response.result?.type ?? "image",
+                  data: mergedData,
+                },
+                completedCount,
+                error: allCompleted ? undefined : data.error,
+              };
+            }),
+          }));
+
+          const currentData = get().nodes.find((n) => n.id === nodeId)
+            ?.data as ImageGenerationNode;
+          if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
+            pendingTaskCounts.delete(nodeId);
+          }
+          return;
         }
 
         if (!taskId) {
@@ -1652,15 +1491,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         // 根据模型类型选择不同的轮询函数，传入 totalTaskCount 用于判断所有任务是否完成
         if (isMidjourney) {
           pollMjImageGeneration(
-            taskId,
-            nodeId,
-            controller.signal,
-            set,
-            get,
-            totalTaskCount,
-          );
-        } else {
-          pollImageGeneration(
             taskId,
             nodeId,
             controller.signal,
@@ -2042,7 +1872,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             progress: 100,
             result: {
               type: "video",
-              data: [{ url: item.url }],
+              data: [{ url: item.url, format: "mp4" }],
             },
           });
         } else {
@@ -2061,7 +1891,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         get().updateVideoNodeData(nodeId, {
           result: {
             type: sourceData.result?.type ?? "video",
-            data: [resultData[0]],
+            data: [
+              {
+                ...(resultData[0] as any),
+                format: (resultData[0] as any)?.format ?? "mp4",
+              },
+            ],
           },
         });
       } else {
@@ -2184,13 +2019,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }));
 
       try {
-        const isSeedance20 = payload?.model === "doubao-seedance-2.0";
+        const response: any = await createLzVideoTask(payload);
 
-        const response: any = isSeedance20
-          ? await createLzVideoTask(payload)
-          : await createVideoGeneration(payload);
-
-        const taskId = isSeedance20 ? response?.data?.task_id : response?.id;
+        const taskId = response?.data?.task_id;
 
         if (!taskId) {
           throw new Error("任务 ID 为空");
@@ -2211,7 +2042,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         pollVideoGeneration(
           taskId,
           nodeId,
-          payload?.model,
           controller.signal,
           set,
           get,

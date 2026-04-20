@@ -18,47 +18,6 @@ export interface VideoPayloadStrategy {
 }
 
 /**
- * Grok Video 3 策略
- * 字段映射：图片字段使用 images
- */
-const grokVideoStrategy: VideoPayloadStrategy = {
-  model: "grok-video-3",
-  buildPayload: (nodeData, { prompt, imageUrls }) => ({
-    model: "grok-video-3",
-    prompt,
-    images: imageUrls,
-    aspect_ratio: nodeData.aspect_ratio,
-    duration: nodeData.duration,
-    metadata: {
-      resolution: nodeData.metadata?.resolution,
-    },
-  }),
-};
-
-/**
- * Doubao Seedance 1.5 Pro 策略
- * 字段映射：图片字段使用 image_urls，支持 audio、camerafixed
- */
-const doubaoSeedanceStrategy: VideoPayloadStrategy = {
-  model: "doubao-seedance-1-5-pro",
-  buildPayload: (nodeData, { prompt, imageUrls }) => ({
-    model: "doubao-seedance-1-5-pro",
-    prompt,
-    image_urls: imageUrls,
-    aspect_ratio: nodeData.aspect_ratio,
-    duration: nodeData.duration,
-    metadata: {
-      resolution: nodeData.metadata?.resolution,
-      seed: nodeData.metadata?.seed,
-      audio: nodeData.audio,
-      camerafixed: nodeData.camerafixed,
-    },
-    audio: nodeData.audio,
-    camerafixed: nodeData.camerafixed,
-  }),
-};
-
-/**
  * Seedance 2.0 图像角色映射
  * 约定：按产品要求，所有参考图 role 统一使用 reference_image
  */
@@ -151,87 +110,10 @@ const doubaoSeedance20Strategy: VideoPayloadStrategy = {
 };
 
 /**
- * Veo 3 策略
- * 字段映射：model、prompt、duration、size、resolution、image_urls（首帧参考图）
- * metadata 包含 generateAudio、negativePrompt、personGeneration、referenceImages、
- * compressionQuality、resizeMode 等扩展参数
- */
-const veo3Strategy: VideoPayloadStrategy = {
-  model: "Veo3.1-quality-official",
-  buildPayload: (nodeData, { prompt, imageUrls }) => ({
-    model: nodeData.model ?? "Veo3.1-quality-official",
-    prompt,
-    duration: nodeData.duration,
-    size: nodeData.aspect_ratio,
-    resolution: nodeData.metadata?.resolution ?? "720p",
-    image_urls: imageUrls.length > 0 ? [imageUrls[0]] : undefined,
-    metadata: {
-      generateAudio: nodeData.metadata?.generateAudio,
-      negativePrompt: nodeData.metadata?.negativePrompt,
-      personGeneration: nodeData.metadata?.personGeneration,
-      referenceImages: nodeData.metadata?.referenceImages,
-      compressionQuality: nodeData.metadata?.compressionQuality,
-      resizeMode: nodeData.metadata?.resizeMode,
-    },
-  }),
-};
-
-/**
- * Kling Video O1 策略
- * 字段映射：model、prompt、mode、duration、aspect_ratio、image_urls、video_list、metadata
- */
-const klingVideoO1Strategy: VideoPayloadStrategy = {
-  model: "kling-video-o1",
-  buildPayload: (nodeData, { prompt, imageUrls }) => ({
-    model: "kling-video-o1",
-    prompt,
-    mode: nodeData.metadata?.mode ?? "std",
-    duration: nodeData.duration ?? 5,
-    aspect_ratio: nodeData.aspect_ratio ?? "16:9",
-    image_urls: imageUrls.length > 0 ? imageUrls : undefined,
-    video_list: nodeData.metadata?.video_list,
-    metadata: {
-      watermark: nodeData.metadata?.watermark,
-    },
-  }),
-};
-
-/**
- * MiniMax Hailuo 2.3 策略
- * 字段映射：model、prompt、duration、metadata
- * 严格遵循 API 字段命名：first_frame_image、prompt_optimizer、fast_pretreatment
- * 注意：参考图第一张会作为 first_frame_image 传递
- */
-const minimaxHailuo23Strategy: VideoPayloadStrategy = {
-  model: "MiniMax-Hailuo-2.3",
-  buildPayload: (nodeData, { prompt, imageUrls }) => ({
-    model: "MiniMax-Hailuo-2.3",
-    prompt,
-    duration: nodeData.duration ?? 6,
-    metadata: {
-      resolution: nodeData.metadata?.resolution ?? "768p",
-      // 优先使用用户手动设置的 first_frame_image，否则使用参考图第一张
-      first_frame_image:
-        nodeData.metadata?.first_frame_image ??
-        (imageUrls.length > 0 ? imageUrls[0] : undefined),
-      prompt_optimizer: nodeData.metadata?.prompt_optimizer ?? true,
-      fast_pretreatment: nodeData.metadata?.fast_pretreatment ?? false,
-      watermark: nodeData.metadata?.watermark ?? false,
-    },
-  }),
-};
-
-/**
  * 策略注册表
  */
 export const videoPayloadStrategies: Record<string, VideoPayloadStrategy> = {
-  "grok-video-3": grokVideoStrategy,
-  "doubao-seedance-1-5-pro": doubaoSeedanceStrategy,
   "doubao-seedance-2.0": doubaoSeedance20Strategy,
-  "Veo3.1-quality-official": veo3Strategy,
-  "Veo3.1-fast-official": veo3Strategy,
-  "kling-video-o1": klingVideoO1Strategy,
-  "MiniMax-Hailuo-2.3": minimaxHailuo23Strategy,
 };
 
 /**
