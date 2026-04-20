@@ -17,6 +17,7 @@ export const VIDEO_MODEL_POINTS: Record<string, number> = {
   "grok-video-3": 100,
   "kling-video-o1": 88,
   "MiniMax-Hailuo-2.3": 76,
+  "wan2.7-i2v": 60,
 };
 
 export const DEFAULT_IMAGE_GENERATION_POINTS = 12;

@@ -190,6 +190,7 @@ export type CanvasFlowStoreType = {
 
   // ── 视频生成 ─────────────────────────────────
   startVideoGeneration: (nodeId: string, payload: any) => Promise<void>;
+  startWanI2vVideoGeneration: (nodeId: string, payload: any) => Promise<void>;
   stopVideoPolling: (nodeId: string) => void;
 
   // ── 任务管理 ─────────────────────────────────

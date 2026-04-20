@@ -110,10 +110,40 @@ const doubaoSeedance20Strategy: VideoPayloadStrategy = {
 };
 
 /**
+ * Wan 2.7 I2V 策略
+ * 图生视频模型，输入一张参考图和提示词生成视频
+ * 参考图映射为 input.media 数组，类型固定为 "image"
+ */
+const wan27I2vStrategy: VideoPayloadStrategy = {
+  model: "wan2.7-i2v",
+  buildPayload: (nodeData, { prompt, imageUrls }) => {
+    const media = imageUrls
+      .filter((url) => Boolean(url))
+      .map((url) => ({
+        type: "first_frame",
+        url,
+      }));
+
+    return {
+      model: "wan2.7-i2v",
+      input: {
+        prompt,
+        ...(media.length > 0 ? { media } : {}),
+      },
+      parameters: {
+        resolution: nodeData.metadata?.resolution ?? "720P",
+        duration: nodeData.duration ?? 4,
+      },
+    };
+  },
+};
+
+/**
  * 策略注册表
  */
 export const videoPayloadStrategies: Record<string, VideoPayloadStrategy> = {
   "doubao-seedance-2.0": doubaoSeedance20Strategy,
+  "wan2.7-i2v": wan27I2vStrategy,
 };
 
 /**

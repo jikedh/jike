@@ -292,7 +292,7 @@ export async function createDashscopeChatCompletion(
 
   if (data.stream) {
     return dashscopeRequest({
-      url: "/chat/completions",
+      url: "/compatible-mode/v1/chat/completions",
       method: "post",
       data: requestBody,
       signal,
@@ -301,9 +301,70 @@ export async function createDashscopeChatCompletion(
   }
 
   return dashscopeRequest({
-    url: "/chat/completions",
+    url: "/compatible-mode/v1/chat/completions",
     method: "post",
     data: requestBody,
     signal,
   });
 }
+
+// ===================== 阿里云百炼视频生成相关 =====================
+
+/**
+ * 阿里云百炼视频生成接口
+ * 用于提交视频生成任务
+ * API 端点: /api/v1/services/aigc/video-generation/video-synthesis
+ * @param data 请求数据
+ */
+export function createDashscopeVideoSynthesis(data: any) {
+  return dashscopeRequest({
+    url: "/api/v1/services/aigc/video-generation/video-synthesis",
+    method: "post",
+    data,
+    headers: {
+      "X-DashScope-Async": "enable",
+    },
+  });
+}
+// 响应体的格式如下
+// {
+//     "request_id": "d40eb92c-179f-9e15-ae48-deddc63e1a5a",
+//     "output": {
+//         "task_id": "b2b03f03-432e-4d0f-84c7-3dd0dfbb8489",
+//         "task_status": "PENDING"
+//     }
+// }
+
+
+/**
+ * 阿里云百炼视频生成任务状态查询接口
+ * 用于轮询视频生成任务状态
+ * API 端点: /api/v1/tasks/{task_id}
+ * @param taskId 任务 ID
+ */
+export function getDashscopeVideoTaskStatus(taskId: string) {
+  return dashscopeRequest({
+    url: `/api/v1/tasks/${taskId}`,
+    method: "get",
+  });
+}
+
+// {
+//     "request_id": "7e75c1d7-f4a7-9064-bfcf-e7bc69fa15d8",
+//     "output": {
+//         "task_id": "b2b03f03-432e-4d0f-84c7-3dd0dfbb8489",
+//         "task_status": "SUCCEEDED",
+//         "submit_time": "2026-04-21 00:09:06.534",
+//         "scheduled_time": "2026-04-21 00:09:15.225",
+//         "end_time": "2026-04-21 00:10:50.287",
+//         "orig_prompt": "一幅都市奇幻艺术的场景。一个充满动感的涂鸦艺术角色。一个由喷漆所画成的少年，正从一面混凝土墙上活过来。他一边用极快的语速演唱一首英文rap，一边摆着一个经典的、充满活力的说唱歌手姿势。场景设定在夜晚一个充满都市感的铁路桥下。灯光来自一盏孤零零的街灯，营造出电影般的氛围，充满高能量和惊人的细节。视频的音频部分完全由rap构成，没有其他对话或杂音。",
+//         "video_url": "https://dashscope-a717.oss-accelerate.aliyuncs.com/1d/02/20260421/2b319361/8947677-metadata_user_c270fb9129168390_watermark.mp4?Expires=1776787839&OSSAccessKeyId=LTAI5tPxpiCM2hjmWrFXrym1&Signature=V%2FR40Jz%2FD21KQiPEzs0kAtyRoyY%3D"
+//     },
+//     "usage": {
+//         "duration": 10,
+//         "input_video_duration": 0,
+//         "output_video_duration": 10,
+//         "video_count": 1,
+//         "SR": 720
+//     }
+// }

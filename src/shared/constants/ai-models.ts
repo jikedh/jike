@@ -84,6 +84,14 @@ export const VIDEO_MODELS = [
     platform: "doubao",
     platformId: 2,
   },
+  // Wan 2.7 I2V
+  {
+    id: 23,
+    name: "Wan 2.7 I2V",
+    model: "wan2.7-i2v",
+    platform: "dashscope",
+    platformId: 0,
+  },
 ];
 
 /** 宽高比配置 */

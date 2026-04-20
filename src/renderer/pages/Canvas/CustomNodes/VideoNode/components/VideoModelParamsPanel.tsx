@@ -1,9 +1,10 @@
 import { clampSeedance20Duration } from "shared/utils/utils";
 import { Seedance20ParamsPanel } from "./Seedance20ParamsPanel";
+import { Wan27I2vParamsPanel } from "./Wan27I2vParamsPanel";
 
 /**
  * 视频模型参数面板分发组件。
- * 使用映射表组合模型和参数面板，减少容器层条件分支长度。
+ * 根据模型类型渲染对应的参数面板。
  */
 export const VideoModelParamsPanel = ({
   currentVideoData,
@@ -16,6 +17,33 @@ export const VideoModelParamsPanel = ({
   seedance20Metadata: any;
   onPatch: (patch: any) => void;
 }) => {
+  const model = currentVideoData?.model ?? "doubao-seedance-2.0";
+
+  // Wan 2.7 I2V 参数面板
+  if (model === "wan2.7-i2v") {
+    return (
+      <Wan27I2vParamsPanel
+        duration={currentVideoData?.duration}
+        resolution={
+          (currentVideoData?.metadata?.resolution as "720P" | "1080P" | undefined) ??
+          "720P"
+        }
+        onDurationChange={(value) => {
+          onPatch({ duration: value });
+        }}
+        onResolutionChange={(value) => {
+          onPatch({
+            metadata: {
+              ...(currentVideoData?.metadata ?? {}),
+              resolution: value,
+            },
+          });
+        }}
+      />
+    );
+  }
+
+  // Doubao Seedance 2.0 参数面板（默认）
   return (
     <Seedance20ParamsPanel
       mode={(seedance20Metadata.mode as "fast" | "pro" | undefined) ?? "fast"}
