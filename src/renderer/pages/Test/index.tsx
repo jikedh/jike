@@ -2,19 +2,22 @@
 // 用于测试 jikeing.ts 和 manager/score.ts 中的各个接口
 
 import { useState } from "react";
+import { getJikeingUserId } from "shared/utils/utils";
+import { createDashscopeChatCompletion } from "@/api/ai";
 import {
   dailyResign,
-  initScore,
-  getScoreConfig,
   getBalanceInfo,
+  getScoreConfig,
+  initScore,
   innerAddUserScore,
+  updateVipScore,
 } from "@/api/jikeing";
 import {
   addScore,
-  getUserScore,
   adminGetScoreConfig,
+  getUserScore,
 } from "@/api/manager/score";
-import { createDashscopeChatCompletion } from "@/api/ai";
+import { useUserStore } from "@/stores/useUserStore";
 
 // ===================== 测试按钮组件 =====================
 
@@ -72,21 +75,19 @@ const LogPanel = ({ logs }: { logs: LogEntry[] }) => {
           {logs.map((log, index) => (
             <div
               key={index}
-              className={`text-xs p-2 rounded ${
-                log.status === "success"
+              className={`text-xs p-2 rounded ${log.status === "success"
                   ? "bg-green-900/30 text-green-300"
                   : "bg-red-900/30 text-red-300"
-              }`}
+                }`}
             >
               <div className="flex items-center gap-2 mb-1">
                 <span className="opacity-60">{log.time}</span>
                 <span className="font-semibold">{log.api}</span>
                 <span
-                  className={`px-1.5 py-0.5 rounded text-[10px] ${
-                    log.status === "success"
+                  className={`px-1.5 py-0.5 rounded text-[10px] ${log.status === "success"
                       ? "bg-green-800/50"
                       : "bg-red-800/50"
-                  }`}
+                    }`}
                 >
                   {log.status === "success" ? "SUCCESS" : "ERROR"}
                 </span>
@@ -123,9 +124,7 @@ export default function TestPage() {
   const callApi = async (apiName: string, apiFunc: () => Promise<any>) => {
     setLoadingMap((prev) => ({ ...prev, [apiName]: true }));
     try {
-      console.log(`[${apiName}] 请求开始`);
       const response = await apiFunc();
-      console.log(`[${apiName}] 响应:`, response);
       addLog(apiName, "success", response);
     } catch (error: any) {
       console.error(`[${apiName}] 错误:`, error);
@@ -144,6 +143,34 @@ export default function TestPage() {
     callApi("getScoreConfig (获取积分配置)", getScoreConfig);
   const handleGetBalanceInfo = () =>
     callApi("getBalanceInfo (获取积分余额)", getBalanceInfo);
+
+  const [vipScoreData, setVipScoreData] = useState({
+    userId: "",
+    vipScoreDelta: 0,
+  });
+
+  const handleUpdateVipScore = async () => {
+    const loginUserId = getJikeingUserId();
+    const reqUserId = vipScoreData.userId || loginUserId;
+
+    if (!reqUserId) {
+      alert("请先登录并确保存在用户 ID");
+      return;
+    }
+
+    await callApi("updateVipScore (更新会员积分)", async () => {
+      const res = await updateVipScore({
+        userId: reqUserId,
+        vipScoreDelta: Number(vipScoreData.vipScoreDelta),
+      });
+
+      if (res?.code === 10000 || res?.code === 200) {
+        await useUserStore.getState().fetchBalanceInfo();
+      }
+
+      return res;
+    });
+  };
 
   // ===================== 管理侧 API =====================
 
@@ -286,27 +313,72 @@ export default function TestPage() {
               <h2 className="text-lg font-semibold text-cyan-400 mb-4">
                 用户侧 API（jike-web-api）
               </h2>
-              <div className="flex flex-wrap gap-3">
-                <TestButton
-                  label="每日签到"
-                  onClick={handleDailyResign}
-                  loading={loadingMap["dailyResign (每日签到)"]}
-                />
-                <TestButton
-                  label="初始化积分"
-                  onClick={handleInitScore}
-                  loading={loadingMap["initScore (初始化积分)"]}
-                />
-                <TestButton
-                  label="获取积分配置"
-                  onClick={handleGetScoreConfig}
-                  loading={loadingMap["getScoreConfig (获取积分配置)"]}
-                />
-                <TestButton
-                  label="获取积分余额"
-                  onClick={handleGetBalanceInfo}
-                  loading={loadingMap["getBalanceInfo (获取积分余额)"]}
-                />
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-3">
+                  <TestButton
+                    label="每日签到"
+                    onClick={handleDailyResign}
+                    loading={loadingMap["dailyResign (每日签到)"]}
+                  />
+                  <TestButton
+                    label="初始化积分"
+                    onClick={handleInitScore}
+                    loading={loadingMap["initScore (初始化积分)"]}
+                  />
+                  <TestButton
+                    label="获取积分配置"
+                    onClick={handleGetScoreConfig}
+                    loading={loadingMap["getScoreConfig (获取积分配置)"]}
+                  />
+                  <TestButton
+                    label="获取积分余额"
+                    onClick={handleGetBalanceInfo}
+                    loading={loadingMap["getBalanceInfo (获取积分余额)"]}
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">
+                      用户 ID（默认当前登录）
+                    </label>
+                    <input
+                      type="text"
+                      value={vipScoreData.userId}
+                      onChange={(e) =>
+                        setVipScoreData((prev) => ({
+                          ...prev,
+                          userId: e.target.value,
+                        }))
+                      }
+                      placeholder="留空则使用当前登录用户"
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-56 focus:border-cyan-500 outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">
+                      VIP 积分变动
+                    </label>
+                    <input
+                      type="number"
+                      value={vipScoreData.vipScoreDelta}
+                      onChange={(e) =>
+                        setVipScoreData((prev) => ({
+                          ...prev,
+                          vipScoreDelta: Number(e.target.value),
+                        }))
+                      }
+                      placeholder="可正可负"
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-32 focus:border-cyan-500 outline-none"
+                    />
+                  </div>
+                  <TestButton
+                    label="更新会员积分"
+                    onClick={handleUpdateVipScore}
+                    loading={loadingMap["updateVipScore (更新会员积分)"]}
+                    variant="outline"
+                  />
+                </div>
               </div>
             </section>
 
@@ -512,3 +584,4 @@ export default function TestPage() {
     </div>
   );
 }
+

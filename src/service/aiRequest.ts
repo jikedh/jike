@@ -3,11 +3,11 @@ import { handleRequestError } from "shared/utils/requestErrorHandler";
 import {
   getAiToken,
   getBaseURL,
+  getDashscopeToken,
   getJikeingToken,
   getKuaiziToken,
   getYunwuToken,
   getZeakaiToken,
-  getDashscopeToken,
 } from "shared/utils/utils";
 
 const REQUEST_TIMEOUT = 300000;
@@ -16,6 +16,10 @@ const DEFAULT_HEADERS = {
   Accept: "application/json",
   "Content-Type": "application/json",
 };
+
+// Jikeing 服务默认地址：优先使用环境变量，方便本地开发切换到本地后端
+const JIKEING_BASE_URL =
+  import.meta.env.VITE_JIKEING_BASE_URL || "http://localhost:9001";
 
 type ServiceConfig = {
   getBaseURL: () => string;
@@ -40,8 +44,8 @@ const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
     useBearer: false,
   },
   jikeing: {
-    // getBaseURL: () => 'https://api.jikeing.com',
-    getBaseURL: () => "https://api-v2.jikeing.com",
+    // 本地开发默认走本地服务，生产环境可通过 .env 覆盖为线上地址
+    getBaseURL: () => JIKEING_BASE_URL,
     getToken: getJikeingToken,
     authHeader: "x-token",
     useBearer: false,

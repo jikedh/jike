@@ -20,6 +20,19 @@ export interface GetScoreBalanceResponse {
   data: UserScoreBalance;
 }
 
+/** 更新会员积分请求 */
+export interface UpdateVipScoreRequest {
+  userId: string | number;
+  vipScoreDelta: number;
+}
+
+/** 更新会员积分响应 */
+export interface UpdateVipScoreResponse {
+  code: number;
+  msg?: string;
+  data?: any;
+}
+
 /** 签到响应 */
 export interface DailyResignResponse {
   code: number;

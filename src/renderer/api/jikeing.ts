@@ -2,7 +2,12 @@
 // 基于 score-api-analysis.md 文档生成
 
 import { jikeingAdminService, jikeingService } from "service/aiRequest";
-import { GetScoreBalanceResponse } from "shared/types/api/score";
+import {
+  GetScoreBalanceResponse,
+  UpdateVipScoreRequest,
+  UpdateVipScoreResponse,
+} from "shared/types/api/score";
+import { getJikeingUserId } from "shared/utils/utils";
 
 // ===================== 用户侧 API（jike-web-api）/userscore/v1 =====================
 
@@ -47,6 +52,34 @@ export function getBalanceInfo(): Promise<GetScoreBalanceResponse> {
   return jikeingService({
     url: "/userscore/v1/balance-info",
     method: "get",
+  });
+}
+
+/**
+ * 更新会员积分
+ * Header: x-token(由 jikeingService 拦截器自动注入) + X-User-Id
+ * Body: { userId, vipScoreDelta }
+ */
+export function updateVipScore(
+  data: UpdateVipScoreRequest,
+): Promise<UpdateVipScoreResponse> {
+  const loginUserId = getJikeingUserId();
+
+  // 前置校验：body.userId 必须与登录用户一致
+  if (!loginUserId || String(data.userId) !== String(loginUserId)) {
+    return Promise.reject(new Error("请求用户与登录用户不一致"));
+  }
+
+  return jikeingService({
+    url: "/userscore/v1/update-vip-score",
+    method: "post",
+    data: {
+      userId: data.userId,
+      vipScoreDelta: data.vipScoreDelta,
+    },
+    headers: {
+      "X-User-Id": String(loginUserId),
+    },
   });
 }
 
