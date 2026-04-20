@@ -136,6 +136,37 @@ export const IMAGE_MODELS = [
   },
 ];
 
+/**
+ * 生成任务默认积分消耗。
+ * 说明：当前阶段所有生图/生视频模型统一消耗 30 分，后续可按模型单独调整。
+ */
+export const DEFAULT_GENERATION_SCORE_COST = 30;
+
+/**
+ * 模型积分消耗映射。
+ * 说明：未命中的模型会回退到 DEFAULT_GENERATION_SCORE_COST。
+ */
+export const GENERATION_SCORE_COST_MAP: Record<string, number> = {
+  // 图片模型
+  "gemini-3-pro-image-preview": 30,
+  "doubao-seedream-5-0": 30,
+  midjourney: 30,
+  "midjourney-niji7": 30,
+  // 视频模型
+  "doubao-seedance-2.0": 30,
+};
+
+/**
+ * 按模型获取生成任务积分消耗。
+ */
+export const getGenerationScoreCost = (model?: string) => {
+  if (!model) {
+    return DEFAULT_GENERATION_SCORE_COST;
+  }
+
+  return GENERATION_SCORE_COST_MAP[model] ?? DEFAULT_GENERATION_SCORE_COST;
+};
+
 /** 图片尺寸配置 */
 export const IMAGE_SIZES = [
   { label: "256×256", value: "256x256" },

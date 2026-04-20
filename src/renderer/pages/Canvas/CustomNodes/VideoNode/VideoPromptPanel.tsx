@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-
-import { VIDEO_MODELS } from "shared/constants/ai-models";
+import {
+  getGenerationScoreCost,
+  VIDEO_MODELS,
+} from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import type { VideoGenerationNode } from "shared/types/flow";
+import { getBalanceInfo } from "@/api/jikeing";
 import { PresetDropdown } from "@/components/PresetDropdown";
 import { Button } from "@/components/ui/button";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
@@ -370,7 +373,8 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     // 命中该条件时先提示用户，再自动修正为 Pro 并继续本次生成。
     const hasReferenceAudio = allAudioUrls.length > 0;
     const currentSeedanceMode = currentVideoData.metadata?.mode ?? "fast";
-    const shouldForceProMode = hasReferenceAudio && currentSeedanceMode !== "pro";
+    const shouldForceProMode =
+      hasReferenceAudio && currentSeedanceMode !== "pro";
 
     let nextVideoData = currentVideoData;
     if (shouldForceProMode) {
@@ -398,6 +402,19 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       videoUrls: allVideoUrls,
       audioUrls: allAudioUrls,
     });
+
+    const scoreCost = getGenerationScoreCost(model);
+    try {
+      const balanceResponse = await getBalanceInfo();
+      const currentVipScore = Number(balanceResponse?.data?.vipScore ?? 0);
+      if (currentVipScore < scoreCost) {
+        warning(`积分不足，当前生成需 ${scoreCost} 积分`);
+        return;
+      }
+    } catch (_balanceError: any) {
+      warning("积分校验失败，请稍后重试");
+      return;
+    }
 
     await startVideoGeneration(nodeId, payload);
     success("已开始生成视频");

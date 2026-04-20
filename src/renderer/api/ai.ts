@@ -36,6 +36,14 @@ export function createImageGeneration(data) {
   });
 }
 
+// 获取图片生成任务状态
+export function getImageTaskStatus(id: string) {
+  return aiService({
+    url: `/v1/images/generations/${id}`,
+    method: "get",
+  });
+}
+
 // ===================== 聊天相关 =====================
 
 // 兼容 OpenAI 格式的文字对话接口，支持全部文字模型

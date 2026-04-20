@@ -5,11 +5,15 @@ import StarterKit from "@tiptap/starter-kit";
 import type { ChangeEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
-import { IMAGE_MODELS } from "shared/constants/ai-models";
+import {
+  getGenerationScoreCost,
+  IMAGE_MODELS,
+} from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageGenerationNode, NoteNodeData } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { cn } from "shared/utils/utils";
+import { getBalanceInfo } from "@/api/jikeing";
 import { PresetDropdown } from "@/components/PresetDropdown";
 import { Button } from "@/components/ui/button";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
@@ -786,6 +790,22 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     // image_urls 直接使用界面当前显示的参考图列表（上传 + 父节点结果）
     // 所有图片在上传时已经上传到 OSS，或是在线 URL，直接使用即可
     const imageUrls = referenceImageUrls;
+
+    const perTaskScoreCost = getGenerationScoreCost(model);
+    const totalScoreCost = perTaskScoreCost * imageCount;
+
+    // 前置余额校验：避免积分不足时仍创建任务
+    try {
+      const balanceResponse = await getBalanceInfo();
+      const currentVipScore = Number(balanceResponse?.data?.vipScore ?? 0);
+      if (currentVipScore < totalScoreCost) {
+        warning(`积分不足，当前生成需 ${totalScoreCost} 积分`);
+        return;
+      }
+    } catch (_balanceError: any) {
+      warning("积分校验失败，请稍后重试");
+      return;
+    }
 
     // 构建请求 payload
     const buildPayload = (): any => {
