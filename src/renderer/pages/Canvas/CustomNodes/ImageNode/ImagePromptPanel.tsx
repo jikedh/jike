@@ -12,6 +12,7 @@ import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { cn } from "shared/utils/utils";
 import { PresetDropdown } from "@/components/PresetDropdown";
 import { Button } from "@/components/ui/button";
+import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import {
   Select,
   SelectContent,
@@ -19,8 +20,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { getImageGenerationPoints } from "shared/constants/modelPoints";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import { GeminiParamsPanel } from "./components/GeminiParamsPanel";
 import { MidjourneyAdvancedPanel } from "./components/MidjourneyAdvancedPanel";
@@ -89,6 +92,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
   // 消息提示（成功/失败/警告）
   const { success, error, warning } = useMessage();
+  const {
+    totalPoints,
+    fallbackAIGenPrice,
+    refreshBalanceInfo,
+    ensureEnoughPoints,
+  } = useGenerationPoints();
 
   // 画布数据：用于沿边查找父节点
   const nodes = useCanvasFlowStore((state) => state.nodes);
@@ -164,6 +173,21 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       currentImageData?.platform === undefined);
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
+
+  const requiredPoints = useMemo(() => {
+    return getImageGenerationPoints({
+      model,
+      platform,
+      count: isMidjourneyModel ? 1 : imageCount,
+      fallback: fallbackAIGenPrice,
+    });
+  }, [
+    fallbackAIGenPrice,
+    imageCount,
+    isMidjourneyModel,
+    model,
+    platform,
+  ]);
 
   // Midjourney 高级参数
   const midjourneyAdvanced = currentImageData?.midjourneyAdvanced ?? {
@@ -730,6 +754,16 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       return;
     }
 
+    if (
+      !ensureEnoughPoints({
+        requiredPoints,
+        actionLabel: "生成图片",
+        warning,
+      })
+    ) {
+      return;
+    }
+
     // 判断是否为 Midjourney Niji7 模型，如果是则在 prompt 最后拼接 --niji7 参数
     const isNiji7Model = model === "midjourney-niji7";
     // 构建 Midjourney 模型的最终 prompt：添加 --ar 参数
@@ -839,8 +873,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     // 根据结果显示提示
     if (failCount === 0) {
       success(`已开始生成 ${successCount} 张图片`);
+      void refreshBalanceInfo();
     } else if (successCount > 0) {
       warning(`已创建 ${successCount} 张图片，${failCount} 张创建失败`);
+      void refreshBalanceInfo();
     } else {
       error("创建任务失败，请稍后再试");
     }
@@ -1099,6 +1135,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               onSelect={(content) => {
                 editor?.commands.insertContent(content);
               }}
+            />
+
+            <ModelPointsBadge
+              totalPoints={totalPoints}
+              requiredPoints={requiredPoints}
+              title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
             />
 
             {/* 数量选择按钮 - Midjourney 模型隐藏 */}

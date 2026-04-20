@@ -1,15 +1,6 @@
-/**
- * ============================================================================
- * @file        index.ts
- * @description Electron Preload Script - 安全桥接层
- *              采用 Context Isolation + Preload Script 模式
- *              所有 API 通过 window.electronApi 统一暴露
- * ============================================================================
- */
-
 import { contextBridge, ipcRenderer } from "electron";
+import { electronAPI } from "@electron-toolkit/preload";
 
-// 文件信息类型（保留供其他模块使用）
 export type FileInfo = {
   name: string;
   path: string;
@@ -18,115 +9,128 @@ export type FileInfo = {
   modifiedAt: number;
 };
 
-// ============================================================================
-// IPC Service - 通用 IPC 通信服务
-// ============================================================================
-const ipcService = {
-  // 发送消息（用于 main process 的 on 监听）
-  send: (channel: string, ...args: any[]) => ipcRenderer.send(channel, ...args),
-  // 异步调用并返回结果
-  invoke: (channel: string, ...args: any[]) => ipcRenderer.invoke(channel, ...args),
-  // 监听事件
-  on: (channel: string, listener: (...args: any[]) => void) =>
-    ipcRenderer.on(channel, (_event, ...args) => listener(...args)),
-  // 单次监听
-  once: (channel: string, listener: (...args: any[]) => void) =>
-    ipcRenderer.once(channel, (_event, ...args) => listener(...args)),
-  // 移除监听
-  removeListener: (channel: string, listener: (...args: any[]) => void) =>
-    ipcRenderer.removeListener(channel, listener),
+export type StorageApi = {
+  selectDirectory: () => Promise<string | null>;
+  ensureProjectDir: (
+    basePath: string,
+    projectName: string,
+  ) => Promise<{ success: boolean; path?: string; error?: string }>;
+  writeJson: (
+    filePath: string,
+    data: any,
+  ) => Promise<{ success: boolean; error?: string }>;
+  readJson: (
+    filePath: string,
+  ) => Promise<{ success: boolean; data: any; error?: string }>;
+  writeFile: (
+    filePath: string,
+    buffer: ArrayBuffer,
+  ) => Promise<{ success: boolean; error?: string }>;
+  readFile: (
+    filePath: string,
+  ) => Promise<{ success: boolean; data: Buffer | null; error?: string }>;
+  deleteFile: (
+    filePath: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  deleteFolder: (
+    folderPath: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  fileExists: (filePath: string) => Promise<boolean>;
+  listFiles: (
+    dirPath: string,
+  ) => Promise<{ success: boolean; files: FileInfo[]; error?: string }>;
+  downloadFile: (
+    url: string,
+    destPath: string,
+  ) => Promise<{ success: boolean; path?: string; error?: string }>;
+  renameDirectory: (
+    oldPath: string,
+    newPath: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  migrateProjects: (
+    oldPath: string,
+    newPath: string,
+  ) => Promise<{ success: boolean; migratedCount?: number; error?: string }>;
+  getDefaultPath: () => Promise<string>;
 };
 
-// ============================================================================
-// Storage API - 文件系统操作
-// ============================================================================
-const storageApi = {
+export type DebugApi = {
+  toggleDevTools: () => Promise<{ success: boolean; error?: string }>;
+  isDev: () => Promise<boolean>;
+};
+
+export type DownloadApi = {
+  imageAsBuffer: (
+    url: string,
+  ) => Promise<{ success: boolean; data?: Uint8Array; error?: string }>;
+  imageAsBase64: (url: string) => Promise<{
+    success: boolean;
+    data?: { base64: string; mimeType: string };
+    error?: string;
+  }>;
+  imageToFile: (
+    url: string,
+    filePath: string,
+  ) => Promise<{ success: boolean; data?: { path: string }; error?: string }>;
+};
+
+const storageApi: StorageApi = {
   selectDirectory: () => ipcRenderer.invoke("storage:selectDirectory"),
-  ensureProject: (basePath: string, projectName: string) =>
-    ipcRenderer.invoke("storage:ensureProject", basePath, projectName),
-  listProjects: (basePath: string) =>
-    ipcRenderer.invoke("storage:listProjects", basePath),
-  saveCanvas: (basePath: string, projectName: string, data: any) =>
-    ipcRenderer.invoke("storage:saveCanvas", basePath, projectName, data),
-  loadCanvas: (basePath: string, projectName: string) =>
-    ipcRenderer.invoke("storage:loadCanvas", basePath, projectName),
-  saveMedia: (basePath: string, relativePath: string, buffer: ArrayBuffer) =>
-    ipcRenderer.invoke("storage:saveMedia", basePath, relativePath, buffer),
-  readMedia: (basePath: string, relativePath: string) =>
-    ipcRenderer.invoke("storage:readMedia", basePath, relativePath),
-  listMedia: (basePath: string, projectName: string, mediaType: string) =>
-    ipcRenderer.invoke("storage:listMedia", basePath, projectName, mediaType),
-  deleteMedia: (basePath: string, relativePath: string) =>
-    ipcRenderer.invoke("storage:deleteMedia", basePath, relativePath),
-  downloadMedia: (basePath: string, url: string, relativePath: string) =>
-    ipcRenderer.invoke("storage:downloadMedia", basePath, url, relativePath),
-  renameProject: (
-    basePath: string,
-    oldProjectName: string,
-    newProjectName: string,
-  ) =>
-    ipcRenderer.invoke(
-      "storage:renameProject",
-      basePath,
-      oldProjectName,
-      newProjectName,
-    ),
-  deleteProject: (basePath: string, projectName: string) =>
-    ipcRenderer.invoke("storage:deleteProject", basePath, projectName),
+  ensureProjectDir: (basePath, projectName) =>
+    ipcRenderer.invoke("storage:ensureProjectDir", basePath, projectName),
+  writeJson: (filePath, data) =>
+    ipcRenderer.invoke("storage:writeJson", filePath, data),
+  readJson: (filePath) => ipcRenderer.invoke("storage:readJson", filePath),
+  writeFile: (filePath, buffer) =>
+    ipcRenderer.invoke("storage:writeFile", filePath, buffer),
+  readFile: (filePath) => ipcRenderer.invoke("storage:readFile", filePath),
+  deleteFile: (filePath) => ipcRenderer.invoke("storage:deleteFile", filePath),
+  deleteFolder: (folderPath) =>
+    ipcRenderer.invoke("storage:deleteFolder", folderPath),
+  fileExists: (filePath) => ipcRenderer.invoke("storage:fileExists", filePath),
+  listFiles: (dirPath) => ipcRenderer.invoke("storage:listFiles", dirPath),
+  downloadFile: (url, destPath) =>
+    ipcRenderer.invoke("storage:downloadFile", url, destPath),
+  renameDirectory: (oldPath, newPath) =>
+    ipcRenderer.invoke("storage:renameDirectory", oldPath, newPath),
+  migrateProjects: (oldPath, newPath) =>
+    ipcRenderer.invoke("storage:migrateProjects", oldPath, newPath),
   getDefaultPath: () => ipcRenderer.invoke("storage:getDefaultPath"),
 };
 
-// ============================================================================
-// Debug API - 调试功能
-// ============================================================================
-const debugApi = {
+const debugApi: DebugApi = {
+  // 触发主进程切换 DevTools
   toggleDevTools: () => ipcRenderer.invoke("debug:toggleDevTools"),
+  // 检查是否为开发环境
   isDev: () => ipcRenderer.invoke("debug:isDev"),
 };
 
-// ============================================================================
-// Download API - 图片下载
-// ============================================================================
-const downloadApi = {
-  imageAsBuffer: (url: string) => ipcRenderer.invoke("download:imageAsBuffer", url),
-  imageAsBase64: (url: string) =>
-    ipcRenderer.invoke("download:imageAsBase64", url),
-  imageToFile: (url: string, filePath: string) =>
+const downloadApi: DownloadApi = {
+  // 下载图片作为 Buffer
+  imageAsBuffer: (url) => ipcRenderer.invoke("download:imageAsBuffer", url),
+  // 下载图片作为 Base64
+  imageAsBase64: (url) => ipcRenderer.invoke("download:imageAsBase64", url),
+  // 下载图片保存到文件
+  imageToFile: (url, filePath) =>
     ipcRenderer.invoke("download:imageToFile", url, filePath),
-};
-
-// ============================================================================
-// Globals - 安全的进程信息暴露
-// ============================================================================
-const globals = {
-  process: {
-    platform: process.platform,
-    arch: process.arch,
-    env: { ...process.env },
-    versions: process.versions,
-    execPath: process.execPath,
-  },
-};
-
-// ============================================================================
-// Context Bridge - 统一暴露 API
-// ============================================================================
-const electronApi = {
-  ipcService,
-  storage: storageApi,
-  debug: debugApi,
-  download: downloadApi,
-  globals,
-  platform: process.platform,
 };
 
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld("electronApi", electronApi);
+    contextBridge.exposeInMainWorld("electron", electronAPI);
+    contextBridge.exposeInMainWorld("storage", storageApi);
+    contextBridge.exposeInMainWorld("debug", debugApi);
+    contextBridge.exposeInMainWorld("download", downloadApi);
   } catch (error) {
-    console.error("contextBridge error:", error);
+    console.error(error);
   }
 } else {
-  // @ts-ignore (fallback for non-isolated context)
-  window.electronApi = electronApi;
+  // @ts-ignore (define in dts)
+  window.electron = electronAPI;
+  // @ts-ignore (define in dts)
+  window.storage = storageApi;
+  // @ts-ignore (define in dts)
+  window.debug = debugApi;
+  // @ts-ignore (define in dts)
+  window.download = downloadApi;
 }

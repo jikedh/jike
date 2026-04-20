@@ -17,7 +17,6 @@ export interface VideoReferenceItem {
   url: string;
   relativePath?: string;
   fileName?: string;
-  nickname?: string;
 }
 
 /**
@@ -86,7 +85,6 @@ export const useVideoNodeReferences = ({
       .map((node) => ({
         id: node.id,
         url: (node.data as AudioGenerationNode).result?.data?.[0]?.url,
-        nickname: (node.data as AudioGenerationNode).nickname,
       }))
       .filter((item) => item.url) as VideoReferenceItem[];
   }, [parentNodeIds, nodes]);
@@ -187,12 +185,11 @@ export const useVideoNodeReferences = ({
       });
     });
 
-    parentAudioNodes.forEach((item) => {
-      const audioNickname = item.nickname?.trim() || "-";
+    parentAudioNodes.forEach((item, index) => {
       items.push({
         id: getVideoParentAudioMentionId(item.id),
-        label: audioNickname,
-        value: audioNickname,
+        label: `音频${toChineseNumber(index + 1)}`,
+        value: `音频${toChineseNumber(index + 1)}`,
         thumbnail: "/audio-icon.svg",
         type: "audio",
       });

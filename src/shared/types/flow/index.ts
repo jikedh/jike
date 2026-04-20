@@ -68,7 +68,6 @@ export interface ImageGenerationNode {
     serverMessage?: string; // 原始后端错误消息
     status?: number; // HTTP 状态码
   }; // 错误对象
-  nickname?: string; // 节点昵称，显示在左上角
   [key: string]: any; // React Flow 约束兼容
 }
 
@@ -143,7 +142,6 @@ export interface VideoGenerationNode {
   };
   isUpload?: boolean; // 是否为上传视频（用于区分加载中/生成中）
   lastFrame?: string; // 视频尾帧图片 URL
-  nickname?: string; // 节点昵称，显示在左上角
   [key: string]: any; // React Flow 约束兼容
 }
 
@@ -157,7 +155,6 @@ export interface NoteNodeData {
   content: string; // 文本内容（支持 Markdown 语法）
   isEditing?: boolean; // 是否处于编辑状态
   createdAt?: number; // 创建时间戳
-  nickname?: string; // 节点昵称，显示在左上角
   [key: string]: any; // React Flow 约束兼容
 }
 
@@ -304,7 +301,6 @@ export interface AudioGenerationNode {
     serverMessage?: string;
     status?: number;
   };
-  nickname?: string; // 节点昵称，显示在左上角
 
   [key: string]: any; // React Flow 约束兼容
 }
@@ -345,7 +341,6 @@ export interface TableNodeData {
   columns: string[];
   rows: any[];
   createdAt?: number;
-  nickname?: string; // 节点昵称，显示在左上角
   [key: string]: any;
 }
 

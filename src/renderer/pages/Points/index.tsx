@@ -13,6 +13,14 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { getJikeingToken, getJikeingUserId } from "shared/utils/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { cn } from "shared/utils/utils";
+import { toast } from "sonner";
 
 const AVATAR_STYLES = [
   "adventurer",
@@ -40,6 +48,14 @@ export function PointsView() {
   const [activeTab, setActiveTab] = useState<"usage" | "transaction">("usage");
   const [avatarUrl, setAvatarUrl] = useState<string>("");
   const [userId, setUserId] = useState<string>("");
+  const [selectedPackageId, setSelectedPackageId] = useState<number | null>(
+    null,
+  );
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [nativePayOrder, setNativePayOrder] = useState<{
+    orderId: string;
+    codeUrl: string;
+  } | null>(null);
 
   useEffect(() => {
     const token = getJikeingToken();
@@ -55,24 +71,120 @@ export function PointsView() {
   }, []);
 
   const packages = [
-    { id: 1, points: 500, price: 9.9, originalPrice: 15, tag: "入门首选" },
+    {
+      id: 1,
+      packageId: "pkg_500",
+      points: 500,
+      price: 9.9,
+      originalPrice: 15,
+      tag: "入门首选",
+    },
     {
       id: 2,
+      packageId: "pkg_2000",
       points: 2000,
       price: 29.9,
       originalPrice: 60,
       tag: "超值特惠",
       popular: true,
     },
-    { id: 3, points: 5000, price: 69.9, originalPrice: 150, tag: "创作达人" },
+    {
+      id: 3,
+      packageId: "pkg_5000",
+      points: 5000,
+      price: 69.9,
+      originalPrice: 150,
+      tag: "创作达人",
+    },
     {
       id: 4,
+      packageId: "pkg_12000",
       points: 12000,
       price: 159.9,
       originalPrice: 360,
       tag: "专业工作室",
     },
   ];
+
+  const selectedPackage =
+    selectedPackageId === null
+      ? null
+      : packages.find((pkg) => pkg.id === selectedPackageId) ?? null;
+
+  const payServerBaseUrl =
+    ((import.meta as any).env?.VITE_PAY_SERVER_BASE_URL as string | undefined) ||
+    "http://127.0.0.1:8787";
+
+  const buildQrcodeImageByCodeUrl = (codeUrl: string) => {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(codeUrl)}`;
+  };
+
+  const createNativeRechargeOrder = async (pkg: {
+    packageId: string;
+    points: number;
+  }) => {
+    if (!userId) {
+      toast.error("请先登录后再充值");
+      return;
+    }
+
+    setIsCreatingOrder(true);
+    try {
+      const response = await fetch(`${payServerBaseUrl}/api/recharge/native/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          packageId: pkg.packageId,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result?.success || !result?.data?.codeUrl) {
+        throw new Error(result?.error || "创建充值订单失败");
+      }
+
+      setNativePayOrder({
+        orderId: result.data.orderId,
+        codeUrl: result.data.codeUrl,
+      });
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : "创建充值订单失败");
+    } finally {
+      setIsCreatingOrder(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedPackage || !nativePayOrder?.orderId) {
+      return;
+    }
+
+    const timer = window.setInterval(async () => {
+      try {
+        const response = await fetch(
+          `${payServerBaseUrl}/api/recharge/native/status?orderId=${encodeURIComponent(nativePayOrder.orderId)}`,
+        );
+        const result = await response.json();
+        if (!response.ok || !result?.success) {
+          return;
+        }
+
+        if (result?.data?.status === "PAID") {
+          toast.success("充值成功，积分已到账");
+          setSelectedPackageId(null);
+          setNativePayOrder(null);
+          window.clearInterval(timer);
+        }
+      } catch {
+        // 轮询失败忽略，下一轮继续
+      }
+    }, 1500);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [nativePayOrder?.orderId, payServerBaseUrl, selectedPackage]);
 
   const usageHistory = [
     {
@@ -264,6 +376,11 @@ export function PointsView() {
                           ? "bg-[#B43FEB] text-white shadow-xl shadow-[#B43FEB]/20 hover:scale-[1.02]"
                           : "bg-white/5 text-white/80 group-hover:bg-white group-hover:text-black"
                       }`}
+                      onClick={() => {
+                        setSelectedPackageId(pkg.id);
+                        setNativePayOrder(null);
+                        void createNativeRechargeOrder(pkg);
+                      }}
                     >
                       立即充值
                     </button>
@@ -400,6 +517,75 @@ export function PointsView() {
           </div>
         </div>
       </div>
+
+      <Dialog
+        open={selectedPackage !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedPackageId(null);
+            setNativePayOrder(null);
+          }
+        }}
+      >
+        <DialogContent className="w-[min(520px,92vw)] border border-white/10 bg-[#121214] p-0 text-white">
+          <DialogHeader className="border-b border-white/5 bg-[#18181b] px-5 py-4">
+            <DialogTitle className="flex items-center gap-2 text-white">
+              <Wallet className="h-4.5 w-4.5 text-[#B43FEB]" />
+              积分充值
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedPackage && (
+            <div className="space-y-5 px-5 py-5">
+              <div className="flex items-center justify-between rounded-2xl border border-white/5 bg-white/[0.03] px-4 py-3">
+                <div className="flex flex-col">
+                  <div className="text-xs text-white/40">充值套餐</div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-[#B43FEB] fill-[#B43FEB]" />
+                    <span className="text-lg font-black tracking-tight">
+                      {selectedPackage.points}
+                    </span>
+                    <span className="text-xs text-white/35">积分</span>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <div className="text-xs text-white/40">应付金额</div>
+                  <div className="mt-1 text-lg font-black tracking-tight">
+                    ¥{selectedPackage.price}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[#B43FEB]/30 bg-[#B43FEB]/10 px-3 py-2 text-center text-sm font-bold text-white">
+                微信扫码支付
+              </div>
+
+              <div className="flex flex-col items-center justify-center rounded-3xl border border-white/10 bg-[#0f0f12] px-6 py-6">
+                {isCreatingOrder ? (
+                  <div className="py-16 text-sm text-white/60">正在生成支付二维码...</div>
+                ) : nativePayOrder?.codeUrl ? (
+                  <>
+                    <div className="mb-3 text-xs font-bold text-white/70">
+                      请使用微信扫码支付
+                    </div>
+                    <img
+                      src={buildQrcodeImageByCodeUrl(nativePayOrder.codeUrl)}
+                      alt="微信支付二维码"
+                      className="h-60 w-60 rounded-2xl bg-white p-2"
+                    />
+                    <div className="mt-3 text-[10px] text-white/35">
+                      支付完成后积分将自动到账
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-16 text-sm text-red-300">未获取到支付二维码，请重试</div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -13,7 +13,6 @@ import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
 import { ButtonHandle } from "@/components/button-handle";
 import { PanoramaViewer } from "@/components/panorama/PanoramaViewer";
-import { NicknameEditor } from "@/pages/Canvas/CustomNodes/NicknameEditor";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { ImageContent } from "./ImageContent";
@@ -209,13 +208,6 @@ export const ImageNode = memo(
       [data.result, id, updateImageNodeData],
     );
 
-    const handleNicknameSave = useCallback(
-      (newNickname: string) => {
-        updateImageNodeData(id, { nickname: newNickname });
-      },
-      [id, updateImageNodeData],
-    );
-
     return (
       <>
         <NodeContextMenu
@@ -282,15 +274,6 @@ export const ImageNode = memo(
                 </>
               )}
 
-              {/* 节点昵称编辑器 - 显示在左上角 */}
-              <div className="absolute top-3 left-3 z-10">
-                <NicknameEditor
-                  nickname={data.nickname || "图片"}
-                  isSelected={selected}
-                  onSave={handleNicknameSave}
-                />
-              </div>
-
               {/* 扫光效果 */}
               <div className="pointer-events-none absolute inset-0 rounded-xl bg-linear-to-tr from-transparent via-white/2 to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
 
@@ -325,17 +308,17 @@ export const ImageNode = memo(
 
         {/* 全景图查看器 - 使用 Portal 渲染到 body，避免 React Flow 的 CSS 隔离影响 fixed 定位 */}
         {typeof document !== "undefined" &&
-          panoramaViewer.open &&
-          panoramaViewer.sourceNodeId === id
+        panoramaViewer.open &&
+        panoramaViewer.sourceNodeId === id
           ? createPortal(
-            <PanoramaViewer
-              open={panoramaViewer.open}
-              onClose={closePanoramaViewer}
-              initialImage={panoramaViewer.imageUrl ?? undefined}
-              sourceNodeId={panoramaViewer.sourceNodeId}
-            />,
-            document.body,
-          )
+              <PanoramaViewer
+                open={panoramaViewer.open}
+                onClose={closePanoramaViewer}
+                initialImage={panoramaViewer.imageUrl ?? undefined}
+                sourceNodeId={panoramaViewer.sourceNodeId}
+              />,
+              document.body,
+            )
           : null}
       </>
     );

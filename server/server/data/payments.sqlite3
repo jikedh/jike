@@ -1,0 +1,29 @@
+{
+  "orders": {
+    "rcg20260420210312a0b3a938": {
+      "id": "rcg20260420210312a0b3a938",
+      "userId": "1922447677741334528",
+      "packageId": "pkg_500",
+      "points": 500,
+      "amountFen": 1,
+      "codeUrl": "weixin://wxpay/bizpayurl?pr=1bX7m32z1",
+      "status": "PAID",
+      "createdAt": 1776690192616,
+      "updatedAt": 1776690204833,
+      "paidAt": 1776690204833
+    },
+    "rcg202604202103315a2aef93": {
+      "id": "rcg202604202103315a2aef93",
+      "userId": "1922447677741334528",
+      "packageId": "pkg_2000",
+      "points": 2000,
+      "amountFen": 1,
+      "codeUrl": "weixin://wxpay/bizpayurl?pr=ODu5YKTz3",
+      "status": "PAID",
+      "createdAt": 1776690211606,
+      "updatedAt": 1776690222326,
+      "paidAt": 1776690222326
+    }
+  },
+  "ledgerByOrderId": {}
+}

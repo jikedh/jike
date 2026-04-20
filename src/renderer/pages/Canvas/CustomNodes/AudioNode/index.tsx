@@ -20,13 +20,12 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
 import type { AudioNodeType } from "shared/types/flow";
-import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
 import useMessage from "@/hooks/useMessage";
 import { useNodeScale } from "@/hooks/useNodeScale";
-import { NicknameEditor } from "@/pages/Canvas/CustomNodes/NicknameEditor";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { cn } from "shared/utils/utils";
 
 const formatTime = (time: number) => {
   const minutes = Math.floor(time / 60);
@@ -933,13 +932,6 @@ export const AudioNode = memo(
       return trimDuration > 0 && trimDuration <= 15;
     }, [trimStart, trimEnd]);
 
-    const handleNicknameSave = useCallback(
-      (newNickname: string) => {
-        updateAudioNodeData(id, { nickname: newNickname });
-      },
-      [id, updateAudioNodeData],
-    );
-
     return (
       <NodeContextMenu onDuplicate={handleDuplicate} onDelete={handleDelete}>
         <div
@@ -1007,15 +999,6 @@ export const AudioNode = memo(
               </>
             )}
 
-            {/* 节点昵称编辑器 - 显示在左上角 */}
-            <div className="absolute top-3 left-3 z-10">
-              <NicknameEditor
-                nickname={data.nickname || "音频"}
-                isSelected={selected}
-                onSave={handleNicknameSave}
-              />
-            </div>
-
             <div className="pointer-events-none absolute inset-0 rounded-xl bg-linear-to-tr from-transparent via-white/2 to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
 
             <div className="relative flex h-full w-full overflow-hidden rounded-lg bg-black/30">
@@ -1026,7 +1009,7 @@ export const AudioNode = memo(
                 trimEnd={trimEnd}
                 onTrimStartChange={setTrimStart}
                 onTrimEndChange={setTrimEnd}
-                onPreviewTrim={() => { }}
+                onPreviewTrim={() => {}}
                 audioRef={audioRef}
               />
             </div>

@@ -5,6 +5,7 @@ import { GenerationStatus } from "shared/constants/enum";
 import type { VideoGenerationNode } from "shared/types/flow";
 import { PresetDropdown } from "@/components/PresetDropdown";
 import { Button } from "@/components/ui/button";
+import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import {
   Select,
   SelectContent,
@@ -12,8 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { getVideoGenerationPoints } from "shared/constants/modelPoints";
 
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import { VideoModelParamsPanel } from "./components/VideoModelParamsPanel";
@@ -38,6 +41,12 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   const editorRef = useRef<VideoPromptEditorHandle | null>(null);
 
   const { success, warning } = useMessage();
+  const {
+    totalPoints,
+    fallbackAIGenPrice,
+    refreshBalanceInfo,
+    ensureEnoughPoints,
+  } = useGenerationPoints();
 
   const nodes = useCanvasFlowStore((state) => state.nodes);
   const edges = useCanvasFlowStore((state) => state.edges);
@@ -86,6 +95,12 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   const aspectRatio = currentVideoData?.aspect_ratio ?? "16:9";
   const promptDraftHtml = currentVideoData?.promptDraftHtml ?? "<p></p>";
   const seedance20Metadata = currentVideoData?.metadata ?? {};
+  const requiredPoints = useMemo(() => {
+    return getVideoGenerationPoints({
+      model,
+      fallback: Math.max(fallbackAIGenPrice, 1),
+    });
+  }, [fallbackAIGenPrice, model]);
 
   const {
     parentVideoNodes,
@@ -338,6 +353,16 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       return;
     }
 
+    if (
+      !ensureEnoughPoints({
+        requiredPoints,
+        actionLabel: "生成视频",
+        warning,
+      })
+    ) {
+      return;
+    }
+
     // 所有图片在上传时已经上传到 OSS，或是在线 URL，直接使用即可
     const imageUrls = allImageUrls;
 
@@ -376,6 +401,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
     await startVideoGeneration(nodeId, payload);
     success("已开始生成视频");
+    void refreshBalanceInfo();
   }, [
     currentVideoData,
     warning,
@@ -389,6 +415,9 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     startVideoGeneration,
     nodeId,
     success,
+    requiredPoints,
+    refreshBalanceInfo,
+    ensureEnoughPoints,
   ]);
 
   return (
@@ -451,16 +480,22 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             onPatch={(patch) => updateVideoNodeData(nodeId, patch)}
           />
 
-          <div className="ml-auto flex items-center gap-2">
-            {/* 预设提示词下拉 */}
-            <PresetDropdown
-              presetType="video"
-              disabled={isGenerating || isUploading}
-              onSelect={(content) => {
-                editorRef.current?.insertContent(content);
-              }}
-            />
+          {/* 预设提示词下拉 */}
+          <PresetDropdown
+            presetType="video"
+            disabled={isGenerating || isUploading}
+            onSelect={(content) => {
+              editorRef.current?.insertContent(content);
+            }}
+          />
 
+          <ModelPointsBadge
+            totalPoints={totalPoints}
+            requiredPoints={requiredPoints}
+            title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
+          />
+
+          <div className="ml-auto">
             {isGenerating ? (
               <Button
                 type="button"
