@@ -14,7 +14,7 @@ import type {
 // 环境变量配置的基础路径
 const ADMIN_BASE_API = import.meta.env.VITE_JAVA_ADMIN_BASE_API || "";
 
-/** 管理员加积分 */
+/** 管理员加减积分，通过传入 score 的正负  */
 export function addScore(
   params: AdminAddScoreRequest,
 ): Promise<AdminAddScoreResponse> {

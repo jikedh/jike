@@ -99,7 +99,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId("com.electron");
+  electronApp.setAppUserModelId("com.jike.app");
 
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);
