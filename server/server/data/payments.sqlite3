@@ -71,6 +71,30 @@
       "createdAt": 1776691920037,
       "updatedAt": 1776691920037,
       "paidAt": null
+    },
+    "rcg20260420222849a7291686": {
+      "id": "rcg20260420222849a7291686",
+      "userId": "2041140021934137344",
+      "packageId": "pkg_500",
+      "points": 500,
+      "amountFen": 1,
+      "codeUrl": "weixin://wxpay/bizpayurl?pr=f6IC7Tgz1",
+      "status": "CREATED",
+      "createdAt": 1776695330133,
+      "updatedAt": 1776695330133,
+      "paidAt": null
+    },
+    "rcg20260420223446c1c9a2ef": {
+      "id": "rcg20260420223446c1c9a2ef",
+      "userId": "2041140021934137344",
+      "packageId": "pkg_500",
+      "points": 500,
+      "amountFen": 1,
+      "codeUrl": "weixin://wxpay/bizpayurl?pr=3uil9cGz3",
+      "status": "CREATED",
+      "createdAt": 1776695687039,
+      "updatedAt": 1776695687039,
+      "paidAt": null
     }
   },
   "ledgerByOrderId": {}

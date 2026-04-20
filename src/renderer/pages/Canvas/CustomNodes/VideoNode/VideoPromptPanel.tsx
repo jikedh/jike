@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import {
-  getGenerationScoreCost,
-  VIDEO_MODELS,
-} from "shared/constants/ai-models";
+import { VIDEO_MODELS } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import type { VideoGenerationNode } from "shared/types/flow";
 import { getBalanceInfo } from "@/api/jikeing";
@@ -403,7 +400,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       audioUrls: allAudioUrls,
     });
 
-    const scoreCost = getGenerationScoreCost(model);
+    const scoreCost = requiredPoints;
     try {
       const balanceResponse = await getBalanceInfo();
       const currentVipScore = Number(balanceResponse?.data?.vipScore ?? 0);
@@ -416,7 +413,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       return;
     }
 
-    await startVideoGeneration(nodeId, payload);
+    await startVideoGeneration(nodeId, {
+      ...payload,
+      requiredPoints,
+    });
     success("已开始生成视频");
     void refreshBalanceInfo();
   }, [

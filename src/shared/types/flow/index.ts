@@ -35,6 +35,7 @@ export interface ImageGenerationNode {
   n?: number; // 生成图片数量 (1-4)
   size?: string; // 图片尺寸比例，如 "16:9", "1024x1024"
   resolution?: string; // 分辨率，如 "1K", "2K", "4K"
+  requiredPoints?: number; // 本次生成预计消耗积分（用于扣费与 UI 对齐）
   quality?: string; // 图片质量，如 "standard", "hd"
   style?: string; // 图片风格
   image_urls?: string[]; // 参考图片 URL 列表（统一关键字段，包含上传和来自依赖节点的图片）
@@ -87,6 +88,7 @@ export interface VideoGenerationNode {
   audio_urls?: string[]; // 参考音频 URL 列表（仅 Seedance 2.0 支持）
   status?: GenerationStatus; // 当前生成状态
   progress?: number; // 进度百分比（0-100）
+  requiredPoints?: number; // 本次生成预计消耗积分（用于扣费与 UI 对齐）
   metadata: {
     size?: string; // 视频尺寸，例如 "1920x1080", "720x720"
     resolution?: string; // 视频分辨率，如 "720p", "480p"

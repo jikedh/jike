@@ -5,10 +5,7 @@ import StarterKit from "@tiptap/starter-kit";
 import type { ChangeEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
-import {
-  getGenerationScoreCost,
-  IMAGE_MODELS,
-} from "shared/constants/ai-models";
+import { IMAGE_MODELS } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageGenerationNode, NoteNodeData } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
@@ -790,9 +787,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     // image_urls 直接使用界面当前显示的参考图列表（上传 + 父节点结果）
     // 所有图片在上传时已经上传到 OSS，或是在线 URL，直接使用即可
     const imageUrls = referenceImageUrls;
+    const generationTaskCount = isMidjourneyModel ? 1 : imageCount;
+    const perTaskRequiredPoints = requiredPoints / generationTaskCount;
 
-    const perTaskScoreCost = getGenerationScoreCost(model);
-    const totalScoreCost = perTaskScoreCost * imageCount;
+    const totalScoreCost = requiredPoints;
 
     // 前置余额校验：避免积分不足时仍创建任务
     try {
@@ -819,6 +817,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         resolution,
         n: 1,
         image_urls: imageUrls,
+        requiredPoints: perTaskRequiredPoints,
         promptDraft: editor?.getText() ?? "",
         promptDraftHtml: editor?.getHTML() ?? "<p></p>",
         metadata: {},

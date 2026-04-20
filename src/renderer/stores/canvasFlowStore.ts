@@ -266,6 +266,7 @@ const pollImageGeneration = async (
           nodeId,
           taskId,
           model: currentData?.model,
+          requiredPoints: currentData?.requiredPoints,
         });
         return;
       }
@@ -536,6 +537,7 @@ const pollMjImageGeneration = async (
           nodeId,
           taskId,
           model: currentData?.model,
+          requiredPoints: currentData?.requiredPoints,
         });
         return;
       }
@@ -751,6 +753,7 @@ const pollVideoGeneration = async (
           nodeId,
           taskId: normalizedTaskId,
           model: (currentNode.data as VideoGenerationNode)?.model,
+          requiredPoints: (currentNode.data as VideoGenerationNode)?.requiredPoints,
         });
         return;
       }
@@ -813,11 +816,13 @@ const deductVipScoreAfterGeneration = async ({
   scene,
   nodeId,
   taskId,
+  requiredPoints,
 }: {
   model?: string;
   scene: "image" | "video";
   nodeId: string;
   taskId?: string;
+  requiredPoints?: number;
 }) => {
   const loginUserId = getJikeingUserId();
   if (!loginUserId) {
@@ -830,11 +835,15 @@ const deductVipScoreAfterGeneration = async ({
     return;
   }
 
-  const scoreCost = getGenerationScoreCost(model);
+  const scoreCost = Number(requiredPoints);
+  const finalScoreCost =
+    Number.isFinite(scoreCost) && scoreCost > 0
+      ? scoreCost
+      : getGenerationScoreCost(model);
   try {
     await updateVipScore({
       userId: loginUserId,
-      vipScoreDelta: -scoreCost,
+      vipScoreDelta: -finalScoreCost,
     });
   } catch (deductError: any) {
     console.error("[score] 扣费失败", {
@@ -842,7 +851,7 @@ const deductVipScoreAfterGeneration = async ({
       nodeId,
       taskId,
       model,
-      scoreCost,
+      scoreCost: finalScoreCost,
       message:
         deductError?.message ||
         getRequestErrorMessage(deductError) ||
@@ -1844,6 +1853,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         resolution,
         promptDraft,
         promptDraftHtml,
+        requiredPoints,
       } = payload;
 
       // 更新节点状态为排队中
@@ -1855,6 +1865,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           prompt,
           promptDraft: promptDraft ?? "",
           promptDraftHtml: promptDraftHtml ?? "<p></p>",
+          requiredPoints,
           size,
           resolution,
           status: GenerationStatus.QUEUED,
@@ -2005,6 +2016,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           scene: "image",
           nodeId,
           model: payload.originalModel ?? payload.model,
+          requiredPoints: payload.requiredPoints,
         });
       } catch (startError) {
         console.error(
