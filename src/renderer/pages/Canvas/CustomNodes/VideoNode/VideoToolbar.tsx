@@ -60,6 +60,7 @@ const DEFAULT_FPS = 30;
 const FRAME_STEP_SECONDS = 1 / DEFAULT_FPS;
 const TIMELINE_STEP_MS = 100;
 const SUBTITLE_REMOVAL_POINTS_PER_SECOND = 0.5;
+const WUHEI_MAX_RECT_AREA = 480_000;
 
 const clamp = (value: number, minValue: number, maxValue: number) => {
   return Math.min(maxValue, Math.max(minValue, value));
@@ -519,8 +520,25 @@ const VideoSubtitleRemovalPanel = ({
       y2: Math.round((cropRect.y - videoBounds.y + cropRect.height) * scaleY),
     };
 
+    const rectWidth = Math.max(0, rect.x2 - rect.x1);
+    const rectHeight = Math.max(0, rect.y2 - rect.y1);
+    const area = rectWidth * rectHeight;
+    if (area > WUHEI_MAX_RECT_AREA) {
+      toast.warning(`选区过大（${area}），无痕AI 限制面积 <= ${WUHEI_MAX_RECT_AREA} 像素`);
+      return;
+    }
+
+    onClose();
     await onSubmit(rect);
-  }, [cropRect, ensureEnoughPoints, onSubmit, requiredPoints, videoBounds, videoSize]);
+  }, [
+    cropRect,
+    ensureEnoughPoints,
+    onClose,
+    onSubmit,
+    requiredPoints,
+    videoBounds,
+    videoSize,
+  ]);
 
   const handleConfig = useMemo(() => {
     return [
@@ -1025,7 +1043,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
         updateVideoNodeData(newNodeId, {
           nickname: "去字幕",
-          status: GenerationStatus.QUEUED,
+          status: GenerationStatus.IN_PROGRESS,
           progress: 0,
           result: { type: "video", data: [] },
           error: undefined,
@@ -1091,7 +1109,6 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           startSubtitlePolling(response.data.taskId, newNodeId);
         }
 
-        setIsSubtitlePanelOpen(false);
       } catch (error: any) {
         toast.error(error?.message || "去字幕失败");
       } finally {

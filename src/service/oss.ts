@@ -313,20 +313,16 @@ export async function createSignedUploadTargetToOSS(options?: {
 }) {
   const directory = options?.directory ?? "video";
   const extension = (options?.extension ?? "mp4").replace(/^\./, "").toLowerCase();
-  const contentType = options?.contentType ?? "video/mp4";
   const timestamp = Date.now();
   const random = Math.random().toString(36).slice(2, 8);
   const objectKey = `${directory}/${timestamp}-${random}.${extension}`;
-  const uploadHeaders = {
-    "Content-Type": contentType,
-  };
+  const uploadHeaders: Record<string, string> = {};
 
   const uploadUrl = client.signatureUrl(
     objectKey,
     {
       method: "PUT",
       expires: 24 * 60 * 60,
-      headers: uploadHeaders,
     } as any,
   );
 

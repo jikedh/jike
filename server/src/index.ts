@@ -61,6 +61,7 @@ const createRechargeOrderSchema = z.object({
 });
 
 const app = express();
+app.set("trust proxy", true);
 app.use(
   cors({
     origin: env.CORS_ORIGIN ? env.CORS_ORIGIN.split(",") : true,
@@ -175,11 +176,14 @@ app.post("/api/wuhen/video-removal/create", async (req, res) => {
       apiKey: env.WUHEI_API_KEY,
     });
 
-    if (env.WUHEI_NOTIFY_CALLBACK_URL) {
+    const callbackUrl =
+      env.WUHEI_NOTIFY_CALLBACK_URL?.trim() ||
+      buildRequestCallbackUrl(req, "/api/wuhen/notify");
+    if (callbackUrl) {
       await setWuhenNotifyCallback({
         apiBaseUrl: env.WUHEI_API_BASE_URL,
         accessToken,
-        callbackUrl: env.WUHEI_NOTIFY_CALLBACK_URL,
+        callbackUrl,
       });
     }
 
@@ -224,6 +228,18 @@ app.post("/api/wuhen/video-removal/create", async (req, res) => {
   }
 });
 
+function buildRequestCallbackUrl(req: express.Request, pathname: string) {
+  const forwardedProto = req.get("x-forwarded-proto");
+  const proto = forwardedProto ? forwardedProto.split(",")[0].trim() : req.protocol;
+  const forwardedHost = req.get("x-forwarded-host");
+  const host = forwardedHost ? forwardedHost.split(",")[0].trim() : req.get("host");
+  if (!host) {
+    return null;
+  }
+  const normalizedPathname = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return `${proto}://${host}${normalizedPathname}`;
+}
+
 app.get("/api/wuhen/video-removal/status", async (req, res) => {
   const taskId = String(req.query.taskId || "");
   if (!taskId) {
@@ -237,8 +253,37 @@ app.get("/api/wuhen/video-removal/status", async (req, res) => {
     return;
   }
 
+  if (record.status !== "success" && record.status !== "failed") {
+    const accessible = await checkPublicUrlAccessible(record.resultVideoUrl);
+    if (accessible) {
+      const now = Date.now();
+      const next: WuhenVideoRemovalTaskRecord = {
+        ...record,
+        status: "success",
+        progress: 100,
+        updatedAt: now,
+        completedAt: now,
+      };
+      wuhenTasks.set(taskId, next);
+      res.json({ success: true, data: next });
+      return;
+    }
+  }
+
   res.json({ success: true, data: record });
 });
+
+async function checkPublicUrlAccessible(url: string) {
+  try {
+    const response = await axios.head(url, {
+      timeout: 10_000,
+      validateStatus: () => true,
+    });
+    return response.status >= 200 && response.status < 300;
+  } catch {
+    return false;
+  }
+}
 
 const wuhenNotifySchema = z.object({
   type: z.number().optional(),
