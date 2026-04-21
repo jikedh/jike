@@ -1,10 +1,8 @@
 import {
   Icon3dRotate,
-  IconAspectRatio,
   IconCrop,
   IconDownload,
   IconEraser,
-  IconSparkles,
   IconTrash,
   IconUpload,
   IconZoomIn,
@@ -79,8 +77,6 @@ export const ImageToolbar = memo(
       return [
         { key: "upload" as const, label: "上传", icon: IconUpload },
         { key: "erase" as const, label: "擦除", icon: IconEraser },
-        { key: "enhance" as const, label: "增强", icon: IconSparkles },
-        { key: "outpaint" as const, label: "扩图", icon: IconAspectRatio },
         { key: "crop" as const, label: "裁剪", icon: IconCrop },
         { key: "download" as const, label: "下载", icon: IconDownload },
         { key: "preview" as const, label: "放大", icon: IconZoomIn },

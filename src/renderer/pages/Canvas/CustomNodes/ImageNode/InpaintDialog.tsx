@@ -414,8 +414,8 @@ export const InpaintDialog = memo(
 
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[min(1100px,96vw)] max-h-[92vh] overflow-hidden bg-slate-50 p-0">
-          <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+        <DialogContent className="w-[min(1100px,96vw)] max-h-[92vh] overflow-hidden border border-white/5 bg-[#1e1e20] p-0">
+          <div className="flex items-start justify-between border-b border-white/8 px-5 py-4">
             <DialogHeader className="space-y-1">
               <DialogTitle>重绘</DialogTitle>
               <DialogDescription>
@@ -424,13 +424,13 @@ export const InpaintDialog = memo(
               </DialogDescription>
             </DialogHeader>
 
-            <DialogClose className="static rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800">
+            <DialogClose className="static rounded-md p-2 text-white/60 hover:bg-white/5 hover:text-white">
               <IconX size={18} />
             </DialogClose>
           </div>
 
           <div className="grid gap-4 px-5 py-4 md:grid-cols-[minmax(0,1fr)_280px]">
-            <div className="rounded-xl border border-slate-200 bg-slate-900 p-3">
+            <div className="rounded-xl border border-white/8 bg-black/60 p-3">
               <div className="relative mx-auto w-full max-h-[65vh] overflow-auto">
                 <div
                   className="relative mx-auto"
@@ -441,7 +441,7 @@ export const InpaintDialog = memo(
                 >
                   <canvas
                     ref={baseCanvasRef}
-                    className="absolute inset-0 h-full w-full"
+                    className="absolute inset-0 h-full w-full select-none"
                   />
                   <canvas
                     ref={maskCanvasRef}
@@ -455,30 +455,30 @@ export const InpaintDialog = memo(
               </div>
             </div>
 
-            <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
+            <div className="space-y-4 rounded-xl border border-white/8 bg-[#121214] p-4">
               <div className="space-y-2">
-                <div className="text-sm font-medium text-slate-700">工具</div>
+                <div className="text-sm font-medium text-white/85">工具</div>
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     unstyled
-                    className={`h-8 rounded-lg border px-2 text-xs ${tool === "brush" ? "border-red-500 bg-red-50 text-red-600" : "border-slate-200 bg-white text-slate-600"}`}
+                    className={`h-8 rounded-lg border px-2 text-xs transition-colors ${tool === "brush" ? "border-[#B43FEB]/60 bg-[#B43FEB]/15 text-[#d97bff]" : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"}`}
                     onClick={() => setTool("brush")}
                   >
                     画笔
                   </Button>
                   <Button
                     unstyled
-                    className={`h-8 rounded-lg border px-2 text-xs ${tool === "eraser" ? "border-blue-500 bg-blue-50 text-blue-600" : "border-slate-200 bg-white text-slate-600"}`}
+                    className={`h-8 rounded-lg border px-2 text-xs transition-colors ${tool === "eraser" ? "border-[#B43FEB]/60 bg-[#B43FEB]/15 text-[#d97bff]" : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"}`}
                     onClick={() => setTool("eraser")}
                   >
                     橡皮擦
                   </Button>
                 </div>
-                <div className="text-xs text-slate-500">当前：{actionText}</div>
+                <div className="text-xs text-white/50">当前：{actionText}</div>
               </div>
 
               <div className="space-y-2">
-                <div className="text-sm font-medium text-slate-700">
+                <div className="text-sm font-medium text-white/85">
                   笔刷大小
                 </div>
                 <Input
@@ -487,18 +487,19 @@ export const InpaintDialog = memo(
                   max={72}
                   step={1}
                   value={brushSize}
+                  className="h-8 border-white/10 bg-white/5"
                   onChange={(event) => {
                     const next = Number(event.target.value);
                     setBrushSize(Number.isFinite(next) ? next : 24);
                   }}
                 />
-                <div className="text-xs text-slate-500">{brushSize}px</div>
+                <div className="text-xs text-white/50">{brushSize}px</div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   unstyled
-                  className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700"
+                  className="h-8 rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white/80 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-45"
                   onClick={handleUndo}
                   disabled={!canUndo}
                 >
@@ -506,7 +507,7 @@ export const InpaintDialog = memo(
                 </Button>
                 <Button
                   unstyled
-                  className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700"
+                  className="h-8 rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white/80 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-45"
                   onClick={handleRedo}
                   disabled={!canRedo}
                 >
@@ -516,26 +517,26 @@ export const InpaintDialog = memo(
 
               <Button
                 unstyled
-                className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700"
+                className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white/80 transition-colors hover:bg-white/10 hover:text-white"
                 onClick={handleClear}
               >
                 清空
               </Button>
 
               <div className="space-y-2">
-                <div className="text-sm font-medium text-slate-700">提示词</div>
+                <div className="text-sm font-medium text-white/85">提示词</div>
                 <Textarea
                   rows={5}
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
                   placeholder="请输入你想修复的内容描述"
-                  className="border-slate-200 bg-white text-slate-700 placeholder:text-slate-400"
+                  className="border-white/10 bg-white/[0.03] text-white/90 placeholder:text-white/30 focus-visible:ring-[#B43FEB]/30"
                 />
               </div>
             </div>
           </div>
 
-          <DialogFooter className="border-t border-slate-200 bg-white px-5 py-4">
+          <DialogFooter className="border-t border-white/8 bg-[#1e1e20] px-5 py-4">
             <Button
               variant="blue"
               size="sm"

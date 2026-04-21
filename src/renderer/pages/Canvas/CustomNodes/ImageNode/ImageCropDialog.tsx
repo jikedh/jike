@@ -402,8 +402,8 @@ export const ImageCropDialog = memo(
 
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[min(980px,96vw)] max-h-[92vh] overflow-hidden bg-slate-50 p-0">
-          <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+        <DialogContent className="w-[min(980px,96vw)] max-h-[92vh] overflow-hidden border border-white/5 bg-[#1e1e20] p-0">
+          <div className="flex items-start justify-between border-b border-white/8 px-5 py-4">
             <DialogHeader className="space-y-1">
               <DialogTitle>裁剪图片</DialogTitle>
               <DialogDescription>
@@ -411,7 +411,7 @@ export const ImageCropDialog = memo(
               </DialogDescription>
             </DialogHeader>
 
-            <DialogClose className="static rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800">
+            <DialogClose className="static rounded-md p-2 text-white/60 hover:bg-white/5 hover:text-white">
               <IconX size={18} />
             </DialogClose>
           </div>
@@ -420,7 +420,7 @@ export const ImageCropDialog = memo(
             <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
               <div
                 ref={viewportRef}
-                className="relative min-h-130 overflow-hidden rounded-xl bg-slate-900"
+                className="relative min-h-130 overflow-hidden rounded-xl border border-white/8 bg-black/60"
               >
                 {imageUrl ? (
                   <>
@@ -435,7 +435,7 @@ export const ImageCropDialog = memo(
 
                     {imageBounds && cropRect ? (
                       <div
-                        className="absolute border border-white/90 bg-white/10 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]"
+                        className="absolute border border-[#B43FEB]/70 bg-[#B43FEB]/10 shadow-[0_0_0_9999px_rgba(0,0,0,0.55)]"
                         style={{
                           left: imageBounds.x + cropRect.x,
                           top: imageBounds.y + cropRect.y,
@@ -447,7 +447,7 @@ export const ImageCropDialog = memo(
                         {handleConfig.map((item) => (
                           <div
                             key={item.mode}
-                            className={`absolute h-4 w-4 rounded-full border border-white bg-blue-500/95 ${item.className}`}
+                            className={`absolute h-4 w-4 rounded-full border border-white/70 bg-[#B43FEB] ${item.className}`}
                             onPointerDown={(event) =>
                               startDrag(item.mode as DragMode, event)
                             }
@@ -457,15 +457,15 @@ export const ImageCropDialog = memo(
                     ) : null}
                   </>
                 ) : (
-                  <div className="flex h-full min-h-130 items-center justify-center text-sm text-slate-300">
+                  <div className="flex h-full min-h-130 items-center justify-center text-sm text-white/60">
                     暂无可裁剪图片
                   </div>
                 )}
               </div>
 
-              <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
+              <div className="space-y-4 rounded-xl border border-white/8 bg-[#121214] p-4">
                 <div className="space-y-2">
-                  <div className="text-sm font-medium text-slate-700">
+                  <div className="text-sm font-medium text-white/85">
                     裁剪比例
                   </div>
                   <Select
@@ -474,12 +474,16 @@ export const ImageCropDialog = memo(
                       setCropRatio(value as CropRatioKey)
                     }
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full border border-white/10 bg-white/5 text-white/80">
                       <SelectValue placeholder="选择比例" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="border border-white/10 bg-[#1a1a1d] text-white/80">
                       {ratioOptions.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
+                        <SelectItem
+                          key={item.value}
+                          value={item.value}
+                          className="cursor-pointer focus:bg-white/10 focus:text-white"
+                        >
                           {item.label}
                         </SelectItem>
                       ))}
@@ -489,7 +493,7 @@ export const ImageCropDialog = memo(
 
                 {cropRatio === "free" ? (
                   <div className="space-y-2">
-                    <div className="text-sm font-medium text-slate-700">
+                    <div className="text-sm font-medium text-white/85">
                       自由比例（宽 : 高）
                     </div>
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
@@ -498,6 +502,7 @@ export const ImageCropDialog = memo(
                         min={1}
                         step={1}
                         value={freeRatioWidth}
+                        className="h-9 border-white/10 bg-white/[0.03] text-white/90"
                         onChange={(event) => {
                           const nextValue = Number(event.target.value);
                           setFreeRatioWidth(
@@ -507,12 +512,13 @@ export const ImageCropDialog = memo(
                           );
                         }}
                       />
-                      <span className="text-sm text-slate-400">:</span>
+                      <span className="text-sm text-white/40">:</span>
                       <Input
                         type="number"
                         min={1}
                         step={1}
                         value={freeRatioHeight}
+                        className="h-9 border-white/10 bg-white/[0.03] text-white/90"
                         onChange={(event) => {
                           const nextValue = Number(event.target.value);
                           setFreeRatioHeight(
@@ -526,7 +532,7 @@ export const ImageCropDialog = memo(
                   </div>
                 ) : null}
 
-                <div className="rounded-lg bg-slate-100 px-3 py-2 text-xs leading-5 text-slate-600">
+                <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-5 text-white/60">
                   当前模式：{selectedRatio.label}
                   <br />
                   当前比例：{aspect.toFixed(2)}
@@ -537,7 +543,7 @@ export const ImageCropDialog = memo(
             </div>
           </div>
 
-          <DialogFooter className="border-t border-slate-200 bg-white px-5 py-4">
+          <DialogFooter className="border-t border-white/8 bg-[#1e1e20] px-5 py-4">
             <Button
               variant="default"
               size="sm"
