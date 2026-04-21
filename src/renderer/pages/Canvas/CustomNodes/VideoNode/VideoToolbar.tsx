@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import { createSignedUploadTargetToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
+import { normalizeRequiredPoints } from "shared/constants/points";
 import type { VideoGenerationNode } from "shared/types/flow";
 import { formatDuration } from "shared/utils/getVideoDuration";
 import { cn, downloadImageFromUrl } from "shared/utils/utils";
@@ -121,7 +122,7 @@ const VideoSubtitleRemovalPanel = ({
     startRect: ViewportRect;
   } | null>(null);
 
-  const { totalPoints, ensureEnoughPoints, refreshBalanceInfo } =
+  const { pointsEnabled, totalPoints, ensureEnoughPoints, refreshBalanceInfo } =
     useGenerationPoints();
 
   const [isReady, setIsReady] = useState(false);
@@ -137,7 +138,10 @@ const VideoSubtitleRemovalPanel = ({
     if (!Number.isFinite(duration) || duration <= 0) {
       return 0;
     }
-    return Math.max(1, Math.ceil(duration * SUBTITLE_REMOVAL_POINTS_PER_SECOND));
+
+    return normalizeRequiredPoints(
+      Math.max(1, Math.ceil(duration * SUBTITLE_REMOVAL_POINTS_PER_SECOND)),
+    );
   }, [duration]);
 
   const seekTo = useCallback(
@@ -718,18 +722,21 @@ const VideoSubtitleRemovalPanel = ({
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="text-xs text-white/50">
                 {isReady ? `视频时长 ${formatDuration(duration)}（${Math.ceil(duration)} 秒）` : "读取视频时长中..."}
-                {" · "}
-                单价 {SUBTITLE_REMOVAL_POINTS_PER_SECOND} 积分/秒
+                {pointsEnabled
+                  ? ` · 单价 ${SUBTITLE_REMOVAL_POINTS_PER_SECOND} 积分/秒`
+                  : ""}
               </div>
-              <ModelPointsBadge
-                totalPoints={totalPoints}
-                requiredPoints={requiredPoints}
-                title={
-                  isReady
-                    ? `预计消耗 ${requiredPoints} 积分（${SUBTITLE_REMOVAL_POINTS_PER_SECOND} 积分/秒，时长 ${formatDuration(duration)}），当前余额 ${totalPoints}`
-                    : `预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`
-                }
-              />
+              {pointsEnabled ? (
+                <ModelPointsBadge
+                  totalPoints={totalPoints}
+                  requiredPoints={requiredPoints}
+                  title={
+                    isReady
+                      ? `预计消耗 ${requiredPoints} 积分（${SUBTITLE_REMOVAL_POINTS_PER_SECOND} 积分/秒，时长 ${formatDuration(duration)}），当前余额 ${totalPoints}`
+                      : `预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`
+                  }
+                />
+              ) : null}
             </div>
           </div>
 

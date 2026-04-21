@@ -11,6 +11,7 @@ import {
 } from "service/projectStorage";
 import { getGenerationScoreCost } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
+import { POINTS_FEATURE_ENABLED, normalizeRequiredPoints } from "shared/constants/points";
 import type { GeminiYwResponseBody } from "shared/types/detail/gemini-yw";
 import type {
   AllNodeType,
@@ -824,6 +825,10 @@ const deductVipScoreAfterGeneration = async ({
   taskId?: string;
   requiredPoints?: number;
 }) => {
+  if (!POINTS_FEATURE_ENABLED) {
+    return;
+  }
+
   const loginUserId = getJikeingUserId();
   if (!loginUserId) {
     console.warn("[score] 扣费跳过：未获取到登录用户", {
@@ -835,7 +840,7 @@ const deductVipScoreAfterGeneration = async ({
     return;
   }
 
-  const scoreCost = Number(requiredPoints);
+  const scoreCost = normalizeRequiredPoints(requiredPoints);
   const finalScoreCost =
     Number.isFinite(scoreCost) && scoreCost > 0
       ? scoreCost

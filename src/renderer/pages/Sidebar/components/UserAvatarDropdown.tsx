@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { LogOut, User, Gift, Zap, Coins } from "lucide-react";
+import { POINTS_FEATURE_ENABLED } from "shared/constants/points";
 import { clearJikeingToken, getJikeingToken } from "shared/utils/utils";
 import {
   DropdownMenu,
@@ -79,18 +80,19 @@ export const UserAvatarDropdown = ({
 
   return (
     <div className="flex flex-col items-center gap-2">
-      {/* 积分图标 */}
-      <button
-        type="button"
-        onClick={handlePointsClick}
-        className="flex flex-col items-center justify-center py-3 px-2 rounded-xl transition-all duration-200 group relative text-white/50 hover:bg-white/5 hover:text-white/90"
-        title="积分"
-      >
-        <Zap className="w-5 h-5 mb-1.5" strokeWidth={2} />
-        <div className="bg-[#B43FEB] text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-[0_0_12px_rgba(180,63,235,0.5)] scale-110">
-          {totalScore}
-        </div>
-      </button>
+      {POINTS_FEATURE_ENABLED ? (
+        <button
+          type="button"
+          onClick={handlePointsClick}
+          className="flex flex-col items-center justify-center py-3 px-2 rounded-xl transition-all duration-200 group relative text-white/50 hover:bg-white/5 hover:text-white/90"
+          title="积分"
+        >
+          <Zap className="w-5 h-5 mb-1.5" strokeWidth={2} />
+          <div className="bg-[#B43FEB] text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-[0_0_12px_rgba(180,63,235,0.5)] scale-110">
+            {totalScore}
+          </div>
+        </button>
+      ) : null}
 
       {/* 头像下拉菜单 */}
       <DropdownMenu>

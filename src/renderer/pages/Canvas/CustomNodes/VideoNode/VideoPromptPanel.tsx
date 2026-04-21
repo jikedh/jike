@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { GenerationStatus } from "shared/constants/enum";
 import { getVideoGenerationPoints } from "shared/constants/modelPoints";
 import type { VideoGenerationNode } from "shared/types/flow";
-import { getBalanceInfo } from "@/api/jikeing";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { PresetDropdown } from "@/components/PresetDropdown";
 import { Button } from "@/components/ui/button";
@@ -46,10 +45,13 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
   const { success, warning } = useMessage();
   const {
+    pointsEnabled,
     totalPoints,
     fallbackAIGenPrice,
+    normalizeRequiredPoints,
     refreshBalanceInfo,
     ensureEnoughPoints,
+    validateBalanceBeforeGenerate,
   } = useGenerationPoints();
 
   const nodes = useCanvasFlowStore((state) => state.nodes);
@@ -89,11 +91,13 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
   const promptDraftHtml = currentVideoData?.promptDraftHtml ?? "<p></p>";
   const requiredPoints = useMemo(() => {
-    return getVideoGenerationPoints({
-      model,
-      fallback: Math.max(fallbackAIGenPrice, 1),
-    });
-  }, [fallbackAIGenPrice, model]);
+    return normalizeRequiredPoints(
+      getVideoGenerationPoints({
+        model,
+        fallback: Math.max(fallbackAIGenPrice, 1),
+      }),
+    );
+  }, [fallbackAIGenPrice, model, normalizeRequiredPoints]);
 
   const currentModelCapability = useMemo(() => {
     return getVideoModelCapability(model);
@@ -402,16 +406,12 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       audioUrls: allAudioUrls,
     });
 
-    const scoreCost = requiredPoints;
-    try {
-      const balanceResponse = await getBalanceInfo();
-      const currentVipScore = Number(balanceResponse?.data?.vipScore ?? 0);
-      if (currentVipScore < scoreCost) {
-        warning(`积分不足，当前生成需 ${scoreCost} 积分`);
-        return;
-      }
-    } catch (_balanceError: any) {
-      warning("积分校验失败，请稍后重试");
+    if (
+      !(await validateBalanceBeforeGenerate({
+        requiredPoints,
+        warning,
+      }))
+    ) {
       return;
     }
 
@@ -507,11 +507,13 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
               }}
             />
 
-            <ModelPointsBadge
-              totalPoints={totalPoints}
-              requiredPoints={requiredPoints}
-              title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
-            />
+            {pointsEnabled ? (
+              <ModelPointsBadge
+                totalPoints={totalPoints}
+                requiredPoints={requiredPoints}
+                title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
+              />
+            ) : null}
 
             {isGenerating ? (
               <Button
