@@ -173,7 +173,7 @@ export const createTextAgentNode = (
   type: "textAgentNode",
   position,
   data: {
-    model: "gemini-3.1-pro",
+    model: "deepseek-v3.2",
     presetId: undefined,
     useDefaultSystemPrompt: true,
     customSystemPrompt: "",
