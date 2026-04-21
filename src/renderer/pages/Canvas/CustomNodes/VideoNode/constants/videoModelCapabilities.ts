@@ -251,3 +251,94 @@ export const VIDEO_MODE_BUTTONS = [
         label: "多图参考",
     },
 ] as const;
+
+/**
+ * 模型族枚举（用于 Select UI）
+ */
+export type VideoModelFamily =
+    | "doubao-seedance-2.0"
+    | "keling"
+    | "pixverse"
+    | "wanxiang"
+    | "vidu";
+
+/**
+ * 模型族选项（5 个族）
+ */
+export const VIDEO_MODEL_FAMILY_OPTIONS = [
+    { value: "doubao-seedance-2.0" as const, label: "Doubao Seedance 2.0" },
+    { value: "keling" as const, label: "Keling" },
+    { value: "pixverse" as const, label: "PixVerse" },
+    { value: "wanxiang" as const, label: "Wanxiang" },
+    { value: "vidu" as const, label: "Vidu" },
+];
+
+/**
+ * 模式 → 最佳子模型映射表
+ * 每个族在每个模式下的默认使用的子模型
+ */
+const MODE_TO_BEST_SUBMODEL: Record<
+    VideoInputMode,
+    Partial<Record<VideoModelFamily, string>>
+> = {
+    [VideoInputMode.TextToVideo]: {
+        "doubao-seedance-2.0": "doubao-seedance-2.0",
+        keling: "kling/kling-v3-video-generation",
+        pixverse: "pixverse/pixverse-v6-t2v",
+        wanxiang: "wan2.7-t2v",
+        vidu: "vidu/viduq3-turbo_text2video",
+    },
+    [VideoInputMode.ImageToVideo]: {
+        "doubao-seedance-2.0": "doubao-seedance-2.0",
+        keling: "kling/kling-v3-video-generation",
+        pixverse: "pixverse/pixverse-v6-it2v",
+        wanxiang: "wan2.7-i2v",
+        vidu: "vidu/viduq3-turbo_text2video",
+    },
+    [VideoInputMode.LastFrame]: {
+        "doubao-seedance-2.0": "doubao-seedance-2.0",
+        keling: "kling/kling-v3-video-generation",
+        pixverse: "pixverse/pixverse-v6-kf2v",
+        wanxiang: "wan2.7-i2v",
+        vidu: "vidu/viduq3-turbo_text2video",
+    },
+    [VideoInputMode.MultiImageReference]: {
+        "doubao-seedance-2.0": "doubao-seedance-2.0",
+        keling: "kling/kling-v3-video-generation",
+        pixverse: "pixverse/pixverse-v5.6-r2v",
+        wanxiang: "wan2.7-r2v",
+        vidu: "vidu/viduq3-turbo_text2video",
+    },
+};
+
+/**
+ * 获取指定族在指定模式下的最佳子模型
+ */
+export const getBestSubmodelForMode = (
+    family: VideoModelFamily,
+    mode: VideoInputMode,
+): string | undefined => {
+    return MODE_TO_BEST_SUBMODEL[mode]?.[family];
+};
+
+/**
+ * 将模型字符串解析为族标识（用于 Select 高亮）
+ */
+export const resolveModelToFamily = (model: string): VideoModelFamily => {
+    if (model === "doubao-seedance-2.0") {
+        return "doubao-seedance-2.0";
+    }
+    if (model.startsWith("wan2.7-")) {
+        return "wanxiang";
+    }
+    if (model.startsWith("pixverse/")) {
+        return "pixverse";
+    }
+    if (model.startsWith("kling/")) {
+        return "keling";
+    }
+    if (model.startsWith("vidu/")) {
+        return "vidu";
+    }
+    return "doubao-seedance-2.0";
+};

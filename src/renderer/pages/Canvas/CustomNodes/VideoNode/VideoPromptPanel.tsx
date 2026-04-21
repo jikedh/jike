@@ -18,16 +18,21 @@ import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
+import { getModelDefaultParams } from "./components/modelParamsConfig";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import { VideoModelParamsPanel } from "./components/VideoModelParamsPanel";
 import type { VideoPromptEditorHandle } from "./components/VideoPromptEditor";
 import { VideoPromptEditor } from "./components/VideoPromptEditor";
 import { VideoReferenceAssetsBar } from "./components/VideoReferenceAssetsBar";
 import {
+  getBestSubmodelForMode,
   getVideoModelCapability,
   pickFirstAvailableVideoMode,
+  resolveModelToFamily,
   VIDEO_MODE_BUTTONS,
   VideoInputMode,
+  VideoModelFamily,
+  VIDEO_MODEL_FAMILY_OPTIONS,
 } from "./constants/videoModelCapabilities";
 import {
   getVideoLocalImageMentionId,
@@ -98,9 +103,12 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     );
     return isSupportedModel ? currentModel : fallbackModel;
   }, [currentVideoData?.model]);
-  const aspectRatio = currentVideoData?.aspect_ratio ?? "16:9";
+
+  // 当前族标识（用于 Select UI）
+  const currentFamily = useMemo((): VideoModelFamily => {
+    return resolveModelToFamily(model);
+  }, [model]);
   const promptDraftHtml = currentVideoData?.promptDraftHtml ?? "<p></p>";
-  const seedance20Metadata = currentVideoData?.metadata ?? {};
   const requiredPoints = useMemo(() => {
     return getVideoGenerationPoints({
       model,
@@ -179,6 +187,64 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     };
   }, [allImageUrls.length, currentModelCapability.supportedModes]);
 
+  /**
+   * 切换模式 → 自动匹配合适子模型写入节点数据
+   */
+  const handleModeButtonClick = useCallback(
+    (mode: VideoInputMode) => {
+      if (!currentVideoData) return;
+      const bestModel = getBestSubmodelForMode(currentFamily, mode);
+      if (!bestModel) return;
+      const bestCapability = getVideoModelCapability(bestModel);
+      const normalizedMode = pickFirstAvailableVideoMode(bestCapability, mode);
+      updateVideoNodeData(nodeId, {
+        model: bestModel,
+        metadata: {
+          ...(currentVideoData.metadata ?? {}),
+          generation_mode: normalizedMode,
+        },
+      });
+    },
+    [currentVideoData, currentFamily, nodeId, updateVideoNodeData],
+  );
+
+  /**
+   * 切换族 → 自动选择该族在当前模式下的最佳子模型，并重置参数到默认值
+   */
+  const handleFamilyChange = useCallback(
+    (family: VideoModelFamily) => {
+      if (!currentVideoData) return;
+      const bestModel = getBestSubmodelForMode(family, selectedMode);
+      if (!bestModel) return;
+      const bestCapability = getVideoModelCapability(bestModel);
+      const normalizedMode = pickFirstAvailableVideoMode(
+        bestCapability,
+        selectedMode,
+      );
+
+      // 获取新模型的默认参数
+      const defaultParams = getModelDefaultParams(bestModel) ?? {};
+      const defaultDuration = defaultParams.duration as number | undefined;
+      const defaultAspectRatio = defaultParams.aspect_ratio as string | undefined;
+      const currentDuration = currentVideoData?.duration as number;
+      const currentAspectRatio = currentVideoData?.aspect_ratio as string;
+
+      // 构建重置后的 metadata（包含新模型的默认参数 + generation_mode）
+      const resetMetadata = {
+        ...defaultParams,
+        generation_mode: normalizedMode,
+      };
+
+      updateVideoNodeData(nodeId, {
+        model: bestModel,
+        duration: defaultDuration ?? currentDuration,
+        aspect_ratio: defaultAspectRatio ?? currentAspectRatio,
+        metadata: resetMetadata,
+      });
+    },
+    [currentVideoData, selectedMode, nodeId, updateVideoNodeData],
+  );
+
   useEffect(() => {
     if (!currentVideoData) {
       return;
@@ -196,13 +262,8 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       return;
     }
 
-    updateVideoNodeData(nodeId, {
-      metadata: {
-        ...(currentVideoData.metadata ?? {}),
-        generation_mode: normalizedMode,
-      },
-    });
-  }, [currentModelCapability, currentVideoData, nodeId, updateVideoNodeData]);
+    handleModeButtonClick(normalizedMode);
+  }, [currentModelCapability, currentVideoData, nodeId, updateVideoNodeData, handleModeButtonClick]);
 
   /**
    * 参考资源悬浮时，触发来源节点与连接边高亮。
@@ -574,32 +635,22 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       <div className={PROMPT_PANEL_STYLES.controlArea}>
         <div className="flex items-center gap-3 flex-wrap w-full">
           <Select
-            value={model}
+            value={currentFamily}
             onValueChange={(value) => {
-              const nextCapability = getVideoModelCapability(value);
-              const nextMode = pickFirstAvailableVideoMode(nextCapability);
-              updateVideoNodeData(nodeId, {
-                model: value,
-                metadata: {
-                  ...(currentVideoData?.metadata ?? {}),
-                  generation_mode: nextMode,
-                },
-              });
+              handleFamilyChange(value as VideoModelFamily);
             }}
           >
             <SelectTrigger className={PROMPT_PANEL_STYLES.modelSelect}>
               <SelectValue placeholder="选择模型" />
             </SelectTrigger>
             <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
-              {VIDEO_MODELS.map((item) => (
+              {VIDEO_MODEL_FAMILY_OPTIONS.map((item) => (
                 <SelectItem
-                  key={item.id}
-                  value={item.model}
-                  disabled={item.callable === false}
+                  key={item.value}
+                  value={item.value}
                   className={PROMPT_PANEL_STYLES.modelSelectItem}
                 >
-                  {item.name}
-                  {item.callable === false ? "（暂不可用）" : ""}
+                  {item.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -622,16 +673,11 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                     if (isDisabled) {
                       return;
                     }
-                    updateVideoNodeData(nodeId, {
-                      metadata: {
-                        ...(currentVideoData?.metadata ?? {}),
-                        generation_mode: item.key,
-                      },
-                    });
+                    handleModeButtonClick(item.key);
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${isSelected
-                      ? "bg-[#B43FEB]/20 text-[#d97bff] border-[#B43FEB]/60"
-                      : "bg-white/5 text-white/70 border-white/10"
+                    ? "bg-[#B43FEB]/20 text-[#d97bff] border-[#B43FEB]/60"
+                    : "bg-white/5 text-white/70 border-white/10"
                     } ${isDisabled
                       ? "opacity-45 cursor-not-allowed"
                       : "hover:bg-white/10 hover:text-white"
@@ -645,8 +691,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
           <VideoModelParamsPanel
             currentVideoData={currentVideoData}
-            aspectRatio={aspectRatio}
-            seedance20Metadata={seedance20Metadata}
             onPatch={(patch) => updateVideoNodeData(nodeId, patch)}
           />
 

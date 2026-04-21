@@ -389,14 +389,12 @@ interface VideoRemovalRequest {
  * 用于消除视频中的路人或不需要的元素
  * API 端点: https://api.wuhenai.com/v2/video_removal
  * @param data 请求体，包含 video_url, model, method 等字段
- * @param nonce 一次性随机串（每次请求都不同）
- * @param t 时间戳（当前时间）
  */
-export function videoRemoval(
-  data: VideoRemovalRequest,
-  nonce: string,
-  t: number,
-): any {
+export function videoRemoval(data: VideoRemovalRequest): any {
+  // 生成一次性随机串和当前时间戳
+  const nonce = crypto.randomUUID();
+  const t = Date.now();
+
   return wuhenRequest({
     url: "/v2/video_removal",
     method: "post",
