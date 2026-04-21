@@ -15,6 +15,7 @@ import { ButtonHandle } from "@/components/button-handle";
 import { PanoramaViewer } from "@/components/panorama/PanoramaViewer";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { ImageAnnotationWorkspace } from "./ImageAnnotationWorkspace";
 import { ImageContent } from "./ImageContent";
 import { ImagePromptPanel } from "./ImagePromptPanel";
 import { ImageToolbar } from "./ImageToolbar";
@@ -57,6 +58,15 @@ export const ImageNode = memo(
     const closePanoramaViewer = useCanvasFlowStore(
       (state) => state.closePanoramaViewer,
     );
+    const annotationWorkspace = useCanvasFlowStore(
+      (state) => state.annotationWorkspace,
+    );
+    const openImageAnnotation = useCanvasFlowStore(
+      (state) => state.openImageAnnotation,
+    );
+
+    const isAnnotationMode = annotationWorkspace.open;
+    const isAnnotationTarget = annotationWorkspace.sourceNodeId === id;
 
     // 使用 useMemo 缓存样式类名，避免每次渲染都重新拼接字符串
     const handleVisibilityClass = useMemo(
@@ -69,8 +79,12 @@ export const ImageNode = memo(
 
     // 使用 useMemo 缓存工具栏显示条件，避免每次渲染都重新计算
     const shouldShowToolbar = useMemo(
-      () => selected && !isDragging && selectedNodesCount <= 1,
-      [selected, isDragging, selectedNodesCount],
+      () =>
+        selected &&
+        !isDragging &&
+        selectedNodesCount <= 1 &&
+        !isAnnotationMode,
+      [selected, isDragging, isAnnotationMode, selectedNodesCount],
     );
 
     const isSourceHighlighted = useMemo(() => {
@@ -185,6 +199,15 @@ export const ImageNode = memo(
       [addNode, id, onConnect, updateImageNodeData],
     );
 
+    const handleAnnotate = useCallback(() => {
+      const currentUrl = data.result?.data?.[0]?.url;
+      if (!currentUrl) {
+        toast.info("暂无可标注图片");
+        return;
+      }
+      openImageAnnotation(currentUrl, id);
+    }, [data.result?.data, id, openImageAnnotation]);
+
     // 点击图片重新排序：将指定索引的图片移到首位
     const handleReorder = useCallback(
       (fromIndex: number) => {
@@ -232,6 +255,7 @@ export const ImageNode = memo(
                   data={data}
                   onDelete={handleDelete}
                   onCrop={handleCrop}
+                  onAnnotate={handleAnnotate}
                 />
               </div>
             )}
@@ -239,7 +263,9 @@ export const ImageNode = memo(
             <div
               className={cn(
                 "group/card relative flex flex-col w-full h-full rounded-xl border bg-linear-to-br from-[#141418] to-[#0d0d10]",
-                selected
+                isAnnotationMode
+                  ? "border-transparent shadow-none ring-0"
+                  : selected
                   ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
                   : isSourceHighlighted
                     ? "border-[#B43FEB]/65 shadow-[0_0_18px_rgba(180,63,235,0.28),0_0_36px_rgba(180,63,235,0.12)] ring-1 ring-[#B43FEB]/20"
@@ -252,7 +278,7 @@ export const ImageNode = memo(
                 position={Position.Left}
                 id="input"
                 visible
-                className={`transition-opacity duration-150 ${handleVisibilityClass}`}
+                className={`transition-opacity duration-150 ${isAnnotationMode ? "invisible opacity-0" : handleVisibilityClass}`}
               />
 
               {/* 右侧输出 Handle */}
@@ -261,11 +287,11 @@ export const ImageNode = memo(
                 position={Position.Right}
                 id="output"
                 visible
-                className={`transition-opacity duration-150 ${handleVisibilityClass}`}
+                className={`transition-opacity duration-150 ${isAnnotationMode ? "invisible opacity-0" : handleVisibilityClass}`}
               />
 
               {/* 选中状态角落装饰 */}
-              {selected && (
+              {selected && !isAnnotationMode && (
                 <>
                   <div className="absolute -top-px -left-px w-4 h-4 border-l-2 border-t-2 border-[#B43FEB] rounded-tl-xl" />
                   <div className="absolute -top-px -right-px w-4 h-4 border-r-2 border-t-2 border-[#B43FEB] rounded-tr-xl" />
@@ -275,7 +301,9 @@ export const ImageNode = memo(
               )}
 
               {/* 扫光效果 */}
-              <div className="pointer-events-none absolute inset-0 rounded-xl bg-linear-to-tr from-transparent via-white/2 to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
+              {!isAnnotationMode ? (
+                <div className="pointer-events-none absolute inset-0 rounded-xl bg-linear-to-tr from-transparent via-white/2 to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
+              ) : null}
 
               {/* 图片内容区 - 根据图片比例动态调整 */}
               <div
@@ -316,6 +344,20 @@ export const ImageNode = memo(
                 onClose={closePanoramaViewer}
                 initialImage={panoramaViewer.imageUrl ?? undefined}
                 sourceNodeId={panoramaViewer.sourceNodeId}
+              />,
+              document.body,
+            )
+          : null}
+
+        {typeof document !== "undefined" &&
+        isAnnotationTarget &&
+        annotationWorkspace.open
+          ? createPortal(
+              <ImageAnnotationWorkspace
+                open={annotationWorkspace.open}
+                imageUrl={annotationWorkspace.imageUrl}
+                sourceNodeId={annotationWorkspace.sourceNodeId}
+                onClose={() => useCanvasFlowStore.getState().closeImageAnnotation()}
               />,
               document.body,
             )
