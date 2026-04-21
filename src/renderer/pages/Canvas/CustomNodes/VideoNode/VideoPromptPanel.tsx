@@ -500,7 +500,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       const modeValidationMessageMap = {
         [VideoInputMode.TextToVideo]: "当前模式可直接生成",
         [VideoInputMode.ImageToVideo]: "图生视频模式需要至少 1 张参考图",
-        [VideoInputMode.LastFrame]: "收尾帧模式需要至少 2 张参考图",
+        [VideoInputMode.LastFrame]: "首尾帧模式需要至少 2 张参考图",
         [VideoInputMode.MultiImageReference]: "多图参考模式需要至少 2 张参考图",
       };
       warning(modeValidationMessageMap[selectedMode]);
@@ -605,13 +605,40 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   return (
     <div className={PROMPT_PANEL_STYLES.container}>
       <div className={PROMPT_PANEL_STYLES.inputArea}>
-        <div className={PROMPT_PANEL_STYLES.textAreaWrap}>
-          <VideoPromptEditor
-            ref={editorRef}
-            promptDraftHtml={promptDraftHtml}
-            mentionItems={videoMentionItems}
-            onDraftChange={handleDraftChange}
-          />
+        <div className="flex items-center gap-2 flex-wrap">
+          {VIDEO_MODE_BUTTONS.map((item) => {
+            const modeState = modeButtonStateMap[item.key];
+            const isSelected = selectedMode === item.key;
+            const isDisabled =
+              !modeState?.supported || !modeState.available || isGenerating;
+
+            return (
+              <Button
+                key={item.key}
+                type="button"
+                unstyled
+                disabled={isDisabled}
+                onClick={() => {
+                  if (isDisabled) {
+                    return;
+                  }
+                  updateVideoNodeData(nodeId, {
+                    metadata: {
+                      ...(currentVideoData?.metadata ?? {}),
+                      generation_mode: item.key,
+                    },
+                  });
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                  isSelected
+                    ? "bg-[#B43FEB]/20 text-[#d97bff] border-[#B43FEB]/60"
+                    : "bg-white/5 text-white/70 border-white/10"
+                } ${isDisabled ? "opacity-45 cursor-not-allowed" : "hover:bg-white/10 hover:text-white"}`}
+              >
+                {item.label}
+              </Button>
+            );
+          })}
         </div>
 
         <VideoReferenceAssetsBar
@@ -628,6 +655,15 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
           onRemoveReferenceImage={handleRemoveReferenceImage}
           onReferenceHoverChange={handleReferenceHoverChange}
         />
+
+        <div className={PROMPT_PANEL_STYLES.textAreaWrap}>
+          <VideoPromptEditor
+            ref={editorRef}
+            promptDraftHtml={promptDraftHtml}
+            mentionItems={videoMentionItems}
+            onDraftChange={handleDraftChange}
+          />
+        </div>
       </div>
 
       <div className={PROMPT_PANEL_STYLES.divider} />
@@ -655,39 +691,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
               ))}
             </SelectContent>
           </Select>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            {VIDEO_MODE_BUTTONS.map((item) => {
-              const modeState = modeButtonStateMap[item.key];
-              const isSelected = selectedMode === item.key;
-              const isDisabled =
-                !modeState?.supported || !modeState.available || isGenerating;
-
-              return (
-                <Button
-                  key={item.key}
-                  type="button"
-                  unstyled
-                  disabled={isDisabled}
-                  onClick={() => {
-                    if (isDisabled) {
-                      return;
-                    }
-                    handleModeButtonClick(item.key);
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${isSelected
-                    ? "bg-[#B43FEB]/20 text-[#d97bff] border-[#B43FEB]/60"
-                    : "bg-white/5 text-white/70 border-white/10"
-                    } ${isDisabled
-                      ? "opacity-45 cursor-not-allowed"
-                      : "hover:bg-white/10 hover:text-white"
-                    }`}
-                >
-                  {item.label}
-                </Button>
-              );
-            })}
-          </div>
 
           <VideoModelParamsPanel
             currentVideoData={currentVideoData}
