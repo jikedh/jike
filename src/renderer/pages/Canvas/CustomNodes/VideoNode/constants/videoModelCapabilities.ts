@@ -18,61 +18,7 @@ export type VideoModelCapability = {
 };
 
 /**
- * 模型族默认能力（第一层映射）
- */
-const MODEL_FAMILY_CAPABILITIES: Record<string, VideoModelCapability> = {
-  seedance: {
-    callable: true,
-    supportedModes: [
-      VideoInputMode.TextToVideo,
-      VideoInputMode.ImageToVideo,
-      VideoInputMode.MultiImageReference,
-    ],
-    defaultMode: VideoInputMode.TextToVideo,
-  },
-  wanxiang: {
-    callable: true,
-    supportedModes: [
-      VideoInputMode.TextToVideo,
-      VideoInputMode.ImageToVideo,
-      VideoInputMode.LastFrame,
-      VideoInputMode.MultiImageReference,
-    ],
-    defaultMode: VideoInputMode.TextToVideo,
-  },
-  pixverse: {
-    callable: true,
-    supportedModes: [
-      VideoInputMode.TextToVideo,
-      VideoInputMode.ImageToVideo,
-      VideoInputMode.LastFrame,
-      VideoInputMode.MultiImageReference,
-    ],
-    defaultMode: VideoInputMode.TextToVideo,
-  },
-  keling: {
-    callable: true,
-    supportedModes: [
-      VideoInputMode.TextToVideo,
-      VideoInputMode.ImageToVideo,
-      VideoInputMode.LastFrame,
-    ],
-    defaultMode: VideoInputMode.TextToVideo,
-  },
-  vidu: {
-    callable: true,
-    supportedModes: [VideoInputMode.TextToVideo],
-    defaultMode: VideoInputMode.TextToVideo,
-  },
-  unknown: {
-    callable: false,
-    supportedModes: [VideoInputMode.TextToVideo],
-    defaultMode: VideoInputMode.TextToVideo,
-  },
-};
-
-/**
- * 模型级覆盖能力（第二层映射）
+ * 模型能力（仅豆包 Seedance 2.0）
  */
 const MODEL_CAPABILITY_OVERRIDES: Record<string, Partial<VideoModelCapability>> = {
   "doubao-seedance-2.0": {
@@ -82,133 +28,23 @@ const MODEL_CAPABILITY_OVERRIDES: Record<string, Partial<VideoModelCapability>> 
       VideoInputMode.MultiImageReference,
     ],
     defaultMode: VideoInputMode.TextToVideo,
-  },
-
-  "wan2.7-t2v": {
-    supportedModes: [VideoInputMode.TextToVideo],
-    defaultMode: VideoInputMode.TextToVideo,
-  },
-  "wan2.7-i2v": {
-    supportedModes: [VideoInputMode.ImageToVideo, VideoInputMode.LastFrame],
-    defaultMode: VideoInputMode.ImageToVideo,
-  },
-  "wan2.7-r2v": {
-    supportedModes: [VideoInputMode.ImageToVideo, VideoInputMode.MultiImageReference],
-    defaultMode: VideoInputMode.MultiImageReference,
-  },
-
-  "pixverse/pixverse-c1-t2v": {
-    supportedModes: [VideoInputMode.TextToVideo],
-    defaultMode: VideoInputMode.TextToVideo,
-  },
-  "pixverse/pixverse-v6-t2v": {
-    supportedModes: [VideoInputMode.TextToVideo],
-    defaultMode: VideoInputMode.TextToVideo,
-  },
-  "pixverse/pixverse-v5.6-t2v": {
-    supportedModes: [VideoInputMode.TextToVideo],
-    defaultMode: VideoInputMode.TextToVideo,
-  },
-  "pixverse/pixverse-c1-it2v": {
-    supportedModes: [VideoInputMode.ImageToVideo],
-    defaultMode: VideoInputMode.ImageToVideo,
-  },
-  "pixverse/pixverse-v6-it2v": {
-    supportedModes: [VideoInputMode.ImageToVideo],
-    defaultMode: VideoInputMode.ImageToVideo,
-  },
-  "pixverse/pixverse-v5.6-it2v": {
-    supportedModes: [VideoInputMode.ImageToVideo],
-    defaultMode: VideoInputMode.ImageToVideo,
-  },
-  "pixverse/pixverse-c1-kf2v": {
-    supportedModes: [VideoInputMode.LastFrame],
-    defaultMode: VideoInputMode.LastFrame,
-  },
-  "pixverse/pixverse-v6-kf2v": {
-    supportedModes: [VideoInputMode.LastFrame],
-    defaultMode: VideoInputMode.LastFrame,
-  },
-  "pixverse/pixverse-v5.6-kf2v": {
-    supportedModes: [VideoInputMode.LastFrame],
-    defaultMode: VideoInputMode.LastFrame,
-  },
-  "pixverse/pixverse-c1-r2v": {
-    supportedModes: [VideoInputMode.ImageToVideo, VideoInputMode.MultiImageReference],
-    defaultMode: VideoInputMode.MultiImageReference,
-  },
-  "pixverse/pixverse-v5.6-r2v": {
-    supportedModes: [VideoInputMode.ImageToVideo, VideoInputMode.MultiImageReference],
-    defaultMode: VideoInputMode.MultiImageReference,
-  },
-
-  "kling/kling-v3-video-generation": {
-    supportedModes: [
-      VideoInputMode.TextToVideo,
-      VideoInputMode.ImageToVideo,
-      VideoInputMode.LastFrame,
-    ],
-    defaultMode: VideoInputMode.TextToVideo,
-  },
-  "kling/kling-v3-omni-video-generation": {
-    supportedModes: [
-      VideoInputMode.TextToVideo,
-      VideoInputMode.ImageToVideo,
-      VideoInputMode.LastFrame,
-    ],
-    defaultMode: VideoInputMode.TextToVideo,
-  },
-
-  "vidu/viduq3-turbo_text2video": {
-    supportedModes: [VideoInputMode.TextToVideo],
-    defaultMode: VideoInputMode.TextToVideo,
+    callable: true,
   },
 };
 
 /**
- * 识别模型族
- */
-const resolveModelFamily = (model: string) => {
-  if (!model) {
-    return "unknown";
-  }
-
-  if (model === "doubao-seedance-2.0") {
-    return "seedance";
-  }
-
-  if (model.startsWith("wan2.7-")) {
-    return "wanxiang";
-  }
-
-  if (model.startsWith("pixverse/")) {
-    return "pixverse";
-  }
-
-  if (model.startsWith("kling/")) {
-    return "keling";
-  }
-
-  if (model.startsWith("vidu/")) {
-    return "vidu";
-  }
-
-  return "unknown";
-};
-
-/**
- * 获取模型能力（族默认 + 模型覆盖）
+ * 获取模型能力（仅豆包 Seedance 2.0）
  */
 export const getVideoModelCapability = (model: string): VideoModelCapability => {
-  const family = resolveModelFamily(model);
-  const familyCapability =
-    MODEL_FAMILY_CAPABILITIES[family] ?? MODEL_FAMILY_CAPABILITIES.unknown;
-  const override = MODEL_CAPABILITY_OVERRIDES[model] ?? {};
-
+  const override = MODEL_CAPABILITY_OVERRIDES[model] ?? MODEL_CAPABILITY_OVERRIDES["doubao-seedance-2.0"];
   return {
-    callable: override.callable ?? familyCapability.callable,
-    supportedModes: override.supportedModes ?? familyCapability.supportedModes,
-    defaultMode: override.defaultMode ?? familyCapability.defaultMode,
+    callable: override.callable ?? true,
+    supportedModes: override.supportedModes ?? [
+      VideoInputMode.TextToVideo,
+      VideoInputMode.ImageToVideo,
+      VideoInputMode.MultiImageReference,
+    ],
+    defaultMode: override.defaultMode ?? VideoInputMode.TextToVideo,
   };
 };
 
@@ -253,92 +89,31 @@ export const VIDEO_MODE_BUTTONS = [
 ] as const;
 
 /**
- * 模型族枚举（用于 Select UI）
+ * 模型族标识（仅豆包 Seedance 2.0）
  */
-export type VideoModelFamily =
-  | "doubao-seedance-2.0"
-  | "keling"
-  | "pixverse"
-  | "wanxiang"
-  | "vidu";
+export type VideoModelFamily = "doubao-seedance-2.0";
 
 /**
- * 模型族选项（5 个族）
+ * 模型族选项（仅一个）
  */
 export const VIDEO_MODEL_FAMILY_OPTIONS = [
   { value: "doubao-seedance-2.0" as const, label: "豆包 Seedance 2.0" },
-  { value: "keling" as const, label: "可灵" },
-  { value: "pixverse" as const, label: "PixVerse" },
-  { value: "wanxiang" as const, label: "万象" },
-  { value: "vidu" as const, label: "Vidu" },
 ];
 
 /**
- * 模式 → 最佳子模型映射表
- * 每个族在每个模式下的默认使用的子模型
- */
-const MODE_TO_BEST_SUBMODEL: Record<
-  VideoInputMode,
-  Partial<Record<VideoModelFamily, string>>
-> = {
-  [VideoInputMode.TextToVideo]: {
-    "doubao-seedance-2.0": "doubao-seedance-2.0",
-    keling: "kling/kling-v3-video-generation",
-    pixverse: "pixverse/pixverse-v6-t2v",
-    wanxiang: "wan2.7-t2v",
-    vidu: "vidu/viduq3-turbo_text2video",
-  },
-  [VideoInputMode.ImageToVideo]: {
-    "doubao-seedance-2.0": "doubao-seedance-2.0",
-    keling: "kling/kling-v3-video-generation",
-    pixverse: "pixverse/pixverse-v6-it2v",
-    wanxiang: "wan2.7-i2v",
-    vidu: "vidu/viduq3-turbo_text2video",
-  },
-  [VideoInputMode.LastFrame]: {
-    "doubao-seedance-2.0": "doubao-seedance-2.0",
-    keling: "kling/kling-v3-video-generation",
-    pixverse: "pixverse/pixverse-v6-kf2v",
-    wanxiang: "wan2.7-i2v",
-    vidu: "vidu/viduq3-turbo_text2video",
-  },
-  [VideoInputMode.MultiImageReference]: {
-    "doubao-seedance-2.0": "doubao-seedance-2.0",
-    keling: "kling/kling-v3-video-generation",
-    pixverse: "pixverse/pixverse-v5.6-r2v",
-    wanxiang: "wan2.7-r2v",
-    vidu: "vidu/viduq3-turbo_text2video",
-  },
-};
-
-/**
- * 获取指定族在指定模式下的最佳子模型
+ * 获取指定族在指定模式下的最佳子模型（写死为 Seedance 2.0）
  */
 export const getBestSubmodelForMode = (
   family: VideoModelFamily,
   mode: VideoInputMode,
-): string | undefined => {
-  return MODE_TO_BEST_SUBMODEL[mode]?.[family];
+): string => {
+  // 所有模式均返回豆包 Seedance 2.0
+  return "doubao-seedance-2.0";
 };
 
 /**
- * 将模型字符串解析为族标识（用于 Select 高亮）
+ * 将模型字符串解析为族标识（写死为 Seedance 2.0）
  */
 export const resolveModelToFamily = (model: string): VideoModelFamily => {
-  if (model === "doubao-seedance-2.0") {
-    return "doubao-seedance-2.0";
-  }
-  if (model.startsWith("wan2.7-")) {
-    return "wanxiang";
-  }
-  if (model.startsWith("pixverse/")) {
-    return "pixverse";
-  }
-  if (model.startsWith("kling/")) {
-    return "keling";
-  }
-  if (model.startsWith("vidu/")) {
-    return "vidu";
-  }
   return "doubao-seedance-2.0";
 };
