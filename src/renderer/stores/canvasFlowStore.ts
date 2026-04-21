@@ -1028,6 +1028,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       imageUrl: null,
       sourceNodeId: null,
     },
+    annotationWorkspace: {
+      open: false,
+      imageUrl: null,
+      sourceNodeId: null,
+    },
 
     // 历史版本计数器（用于通知 useUndoRedo hook 保存快照）
     historyVersion: 0,
@@ -1046,6 +1051,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     setHydrated: (hydrated) => set({ hydrated }),
     setProjectId: (projectId) => set({ projectId }),
     setPanoramaViewer: (panoramaViewer) => set({ panoramaViewer }),
+    setAnnotationWorkspace: (annotationWorkspace) => set({ annotationWorkspace }),
 
     // ==================== 持久化方法实现 ====================
 
@@ -2688,6 +2694,26 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         historyResetTrigger: get().historyResetTrigger + 1,
         // 选中节点数量初始化（用于避免 O(n²) 遍历）
         selectedNodesCount: 0,
+      });
+    },
+
+    openImageAnnotation: (imageUrl: string, sourceNodeId: string) => {
+      set({
+        annotationWorkspace: {
+          open: true,
+          imageUrl,
+          sourceNodeId,
+        },
+      });
+    },
+
+    closeImageAnnotation: () => {
+      set({
+        annotationWorkspace: {
+          open: false,
+          imageUrl: null,
+          sourceNodeId: null,
+        },
       });
     },
 

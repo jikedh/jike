@@ -90,6 +90,11 @@ export type CanvasFlowStoreType = {
     imageUrl: string | null;
     sourceNodeId: string | null;
   };
+  annotationWorkspace: {
+    open: boolean;
+    imageUrl: string | null;
+    sourceNodeId: string | null;
+  };
   historyVersion: number;
   historyResetTrigger: number;
   // 选中的节点数量（用于避免 O(n²) 遍历计算）
@@ -112,6 +117,11 @@ export type CanvasFlowStoreType = {
   setHydrated: (hydrated: boolean) => void;
   setProjectId: (projectId: string | null) => void;
   setPanoramaViewer: (viewer: {
+    open: boolean;
+    imageUrl: string | null;
+    sourceNodeId: string | null;
+  }) => void;
+  setAnnotationWorkspace: (workspace: {
     open: boolean;
     imageUrl: string | null;
     sourceNodeId: string | null;
@@ -202,6 +212,8 @@ export type CanvasFlowStoreType = {
   // ── 全景图查看器 ─────────────────────────────
   openPanoramaViewer: (imageUrl: string, sourceNodeId?: string) => void;
   closePanoramaViewer: () => void;
+  openImageAnnotation: (imageUrl: string, sourceNodeId: string) => void;
+  closeImageAnnotation: () => void;
 
   // ── 参考高亮 ────────────────────────────────
   setReferenceHoverHighlight: (

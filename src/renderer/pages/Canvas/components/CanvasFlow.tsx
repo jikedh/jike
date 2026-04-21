@@ -98,6 +98,10 @@ const shortenLineEnd = (
   };
 };
 
+const clamp = (value: number, min: number, max: number) => {
+  return Math.min(Math.max(value, min), max);
+};
+
 /**
  * 优先从 DOM 直接读取 handle 的真实屏幕坐标。
  * 这样可以避免仅根据节点宽高推算时，ghost 线落到节点内部。
@@ -140,6 +144,9 @@ export const CanvasFlow = ({
   // 通过 zustand 读取图状态，避免业务动作散落在多个组件。
   // 注：nodes 和 edges 不在此订阅（高频变化），使用本地 displayNodes/displayEdges 和 getState() 获取
   const currentProjectId = useCanvasFlowStore((state) => state.projectId);
+  const annotationWorkspace = useCanvasFlowStore(
+    (state) => state.annotationWorkspace,
+  );
   const storeOnNodesChange = useCanvasFlowStore((state) => state.onNodesChange);
   const onEdgesChange = useCanvasFlowStore((state) => state.onEdgesChange);
   const onConnect = useCanvasFlowStore((state) => state.onConnect);
@@ -167,6 +174,13 @@ export const CanvasFlow = ({
 
   // 空格键按下状态，用于控制画布平移和光标
   const [spacePressed, setSpacePressed] = useState(false);
+  const previousAnnotationViewportRef = useRef<{
+    x: number;
+    y: number;
+    zoom: number;
+  } | null>(null);
+  const annotationWasOpenRef = useRef(false);
+  const isAnnotationLocked = annotationWorkspace.open;
 
   // 确认对话框状态
   const [showExitDialog, setShowExitDialog] = useState(false);
@@ -213,6 +227,10 @@ export const CanvasFlow = ({
         return;
       }
 
+      if (annotationWorkspace.open) {
+        return;
+      }
+
       // Ctrl+Z 或 Cmd+Z：撤销
       if (
         (event.ctrlKey || event.metaKey) &&
@@ -254,7 +272,14 @@ export const CanvasFlow = ({
         return;
       }
     },
-    [undo, redo, canUndo, canRedo, copySelectedNodes],
+    [
+      undo,
+      redo,
+      canUndo,
+      canRedo,
+      copySelectedNodes,
+      annotationWorkspace.open,
+    ],
   );
 
   // 监听键盘事件
@@ -267,6 +292,10 @@ export const CanvasFlow = ({
 
   useEffect(() => {
     const handleCopy = (event: ClipboardEvent) => {
+      if (annotationWorkspace.open) {
+        return;
+      }
+
       const target = event.target as HTMLElement | null;
       const isEditableTarget =
         target?.tagName === "INPUT" ||
@@ -291,7 +320,7 @@ export const CanvasFlow = ({
     return () => {
       document.removeEventListener("copy", handleCopy);
     };
-  }, []);
+  }, [annotationWorkspace.open]);
 
   // 监听 store 的 historyVersion 变化，触发历史记录保存
   const historyVersion = useCanvasFlowStore((state) => state.historyVersion);
@@ -319,6 +348,13 @@ export const CanvasFlow = ({
     let isCtrlPressed = false;
 
     const updateCursorState = () => {
+      if (annotationWorkspace.open) {
+        reactFlowEl.removeAttribute("data-space-pressed");
+        reactFlowEl.removeAttribute("data-ctrl-pressed");
+        setSpacePressed(false);
+        return;
+      }
+
       if (isSpacePressed) {
         reactFlowEl.setAttribute("data-space-pressed", "true");
         reactFlowEl.removeAttribute("data-ctrl-pressed");
@@ -341,6 +377,10 @@ export const CanvasFlow = ({
         target.tagName === "TEXTAREA" ||
         target.isContentEditable
       ) {
+        return;
+      }
+
+      if (annotationWorkspace.open) {
         return;
       }
 
@@ -383,10 +423,14 @@ export const CanvasFlow = ({
       reactFlowEl.removeAttribute("data-space-pressed");
       reactFlowEl.removeAttribute("data-ctrl-pressed");
     };
-  }, []);
+  }, [annotationWorkspace.open]);
 
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
+      if (annotationWorkspace.open) {
+        return;
+      }
+
       const target = event.target as HTMLElement | null;
       const isEditableTarget =
         target?.tagName === "INPUT" ||
@@ -440,7 +484,7 @@ export const CanvasFlow = ({
     return () => {
       document.removeEventListener("paste", handlePaste);
     };
-  }, [handleFiles, pasteNodes, screenToFlowPosition]);
+  }, [annotationWorkspace.open, handleFiles, pasteNodes, screenToFlowPosition]);
 
   // 监听鼠标移动以更新画布上的鼠标位置
   useEffect(() => {
@@ -460,6 +504,10 @@ export const CanvasFlow = ({
 
   useEffect(() => {
     const handleWheel = (event: WheelEvent) => {
+      if (annotationWorkspace.open) {
+        return;
+      }
+
       if (event.ctrlKey || event.metaKey) {
         event.preventDefault();
 
@@ -509,7 +557,7 @@ export const CanvasFlow = ({
         );
       }
     };
-  }, [reactFlowInstance]);
+  }, [annotationWorkspace.open, reactFlowInstance]);
 
   // 处理返回按钮点击
   const handleBackClick = useCallback(() => {
@@ -614,10 +662,17 @@ export const CanvasFlow = ({
   );
 
   const handleNodeDragStart = useCallback(() => {
+    if (annotationWorkspace.open) {
+      return;
+    }
     isDraggingRef.current = true;
-  }, []);
+  }, [annotationWorkspace.open]);
 
   const handleNodeDragStop = useCallback(() => {
+    if (annotationWorkspace.open) {
+      return;
+    }
+
     isDraggingRef.current = false;
 
     // 从 ReactFlow 实例读取最新的节点状态
@@ -663,10 +718,20 @@ export const CanvasFlow = ({
     if (positionChanges.length > 0) {
       storeOnNodesChange(positionChanges);
     }
-  }, [reactFlowInstance, snapToGrid, snapGridSize, storeOnNodesChange]);
+  }, [
+    annotationWorkspace.open,
+    reactFlowInstance,
+    snapToGrid,
+    snapGridSize,
+    storeOnNodesChange,
+  ]);
 
   // 点击画布空白区域时取消所有节点的选中状态
   const handlePaneClick = useCallback(() => {
+    if (annotationWorkspace.open) {
+      return;
+    }
+
     const allNodes = useCanvasFlowStore.getState().nodes;
     const selectedNodes = allNodes.filter((node) => node.selected);
 
@@ -678,7 +743,7 @@ export const CanvasFlow = ({
       }));
       storeOnNodesChange(changes);
     }
-  }, [storeOnNodesChange]);
+  }, [annotationWorkspace.open, storeOnNodesChange]);
 
   // 为高频读取场景建立节点索引，避免重复线性扫描。
   const displayNodeById = useMemo(() => {
@@ -692,6 +757,19 @@ export const CanvasFlow = ({
   const displayNodeIdSet = useMemo(() => {
     return new Set(displayNodes.map((node) => node.id));
   }, [displayNodes]);
+
+  const annotationTargetNode = useMemo(() => {
+    const sourceNodeId = annotationWorkspace.sourceNodeId;
+    if (!annotationWorkspace.open || !sourceNodeId) {
+      return null;
+    }
+
+    return displayNodeById.get(sourceNodeId) ?? null;
+  }, [
+    annotationWorkspace.open,
+    annotationWorkspace.sourceNodeId,
+    displayNodeById,
+  ]);
 
   // 单次遍历完成多选统计：同时得到选中节点 id 列表与选区右侧中心点。
   const multiSelectedSummary = useMemo(() => {
@@ -871,20 +949,116 @@ export const CanvasFlow = ({
     };
   }, []);
 
-  const openContextMenuAt = useCallback((x: number, y: number) => {
-    setMenuScreenPosition({ x, y });
-    const contextMenuEvent = new MouseEvent("contextmenu", {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-      clientX: x,
-      clientY: y,
-    });
-    contextMenuTriggerRef.current?.dispatchEvent(contextMenuEvent);
-  }, []);
+  useEffect(() => {
+    if (!annotationWorkspace.open) {
+      if (!annotationWasOpenRef.current) {
+        return;
+      }
+
+      annotationWasOpenRef.current = false;
+      pendingConnectRef.current = null;
+      setConnectionGhost(null);
+      setQuickAddDragPreview({
+        active: false,
+        startX: 0,
+        startY: 0,
+        endX: 0,
+        endY: 0,
+      });
+      setQuickAddMenuOpen(false);
+      setQuickAddMenuScreenPosition(null);
+      quickAddSelectionSnapshotRef.current = [];
+
+      const previousViewport = previousAnnotationViewportRef.current;
+      previousAnnotationViewportRef.current = null;
+      if (previousViewport) {
+        reactFlowInstance.setViewport(previousViewport, { duration: 260 });
+      }
+      return;
+    }
+
+    if (!annotationTargetNode) {
+      return;
+    }
+
+    const allNodes = useCanvasFlowStore.getState().nodes;
+    const selectedNodes = allNodes.filter((node) => node.selected);
+    if (selectedNodes.length > 0) {
+      storeOnNodesChange(
+        selectedNodes.map((node) => ({
+          id: node.id,
+          type: "select" as const,
+          selected: false,
+        })),
+      );
+    }
+
+    if (!annotationWasOpenRef.current) {
+      previousAnnotationViewportRef.current = reactFlowInstance.getViewport();
+      annotationWasOpenRef.current = true;
+    }
+
+    const viewportElement = document.querySelector(
+      ".react-flow__viewport",
+    ) as HTMLElement | null;
+    const flowElement = document.querySelector(".react-flow") as HTMLElement | null;
+    const bounds = flowElement?.getBoundingClientRect();
+    const viewportWidth = bounds?.width ?? window.innerWidth;
+    const viewportHeight = bounds?.height ?? window.innerHeight;
+
+    const nodeWidth = annotationTargetNode.width ?? FALLBACK_NODE_WIDTH;
+    const nodeHeight = annotationTargetNode.height ?? FALLBACK_NODE_HEIGHT;
+    const targetZoom = clamp(
+      Math.min((viewportWidth * 0.7) / nodeWidth, (viewportHeight * 0.64) / nodeHeight),
+      0.45,
+      1.85,
+    );
+    const centerX = annotationTargetNode.position.x + nodeWidth / 2;
+    const centerY = annotationTargetNode.position.y + nodeHeight / 2;
+    const offsetY = viewportHeight * 0.035;
+    const nextViewport = {
+      x: viewportWidth / 2 - centerX * targetZoom,
+      y: viewportHeight / 2 - centerY * targetZoom + offsetY,
+      zoom: targetZoom,
+    };
+
+    reactFlowInstance.setViewport(nextViewport, { duration: 280 });
+    viewportStateRef.current = nextViewport;
+    pendingViewportRef.current = nextViewport;
+    setViewportState(nextViewport);
+    viewportElement?.classList.add("transition-transform", "duration-300", "ease-out");
+  }, [
+    annotationTargetNode,
+    annotationWorkspace.open,
+    reactFlowInstance,
+    storeOnNodesChange,
+  ]);
+
+  const openContextMenuAt = useCallback(
+    (x: number, y: number) => {
+      if (annotationWorkspace.open) {
+        return;
+      }
+
+      setMenuScreenPosition({ x, y });
+      const contextMenuEvent = new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: x,
+        clientY: y,
+      });
+      contextMenuTriggerRef.current?.dispatchEvent(contextMenuEvent);
+    },
+    [annotationWorkspace.open],
+  );
 
   useEffect(() => {
     const handler = (event: Event) => {
+      if (annotationWorkspace.open) {
+        return;
+      }
+
       const detail = (event as CustomEvent<{ x: number; y: number }>).detail;
       if (!detail) {
         return;
@@ -895,15 +1069,20 @@ export const CanvasFlow = ({
     return () => {
       window.removeEventListener("jike:open-canvas-context-menu", handler);
     };
-  }, [openContextMenuAt]);
+  }, [annotationWorkspace.open, openContextMenuAt]);
 
   const handlePaneContextMenu = useCallback(
     (event: React.MouseEvent | MouseEvent) => {
+      if (annotationWorkspace.open) {
+        event.preventDefault();
+        return;
+      }
+
       pendingConnectRef.current = null;
       setConnectionGhost(null);
       setMenuScreenPosition({ x: event.clientX, y: event.clientY });
     },
-    [],
+    [annotationWorkspace.open],
   );
 
   // 菜单关闭时，统一清理拖线状态，避免预览线残留。
@@ -919,6 +1098,12 @@ export const CanvasFlow = ({
   // 通过原生 dblclick 事件实现双击唤出菜单
   const handleNativeDblClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
+      if (annotationWorkspace.open) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       // 只响应点在画布空白区域（.react-flow__pane）上的双击
       const target = event.target as Element;
       if (target.closest(".react-flow__pane")) {
@@ -928,11 +1113,16 @@ export const CanvasFlow = ({
         openContextMenuAt(event.clientX, event.clientY);
       }
     },
-    [openContextMenuAt],
+    [annotationWorkspace.open, openContextMenuAt],
   );
 
   const handleConnectStart = useCallback(
     (_: unknown, params: OnConnectStartParams) => {
+      if (annotationWorkspace.open) {
+        pendingConnectRef.current = null;
+        return;
+      }
+
       if (!params?.nodeId || !params?.handleType) {
         pendingConnectRef.current = null;
         return;
@@ -944,7 +1134,7 @@ export const CanvasFlow = ({
         handleType: params.handleType,
       };
     },
-    [],
+    [annotationWorkspace.open],
   );
 
   const handleConnectEnd = useCallback(
@@ -952,6 +1142,12 @@ export const CanvasFlow = ({
       event: MouseEvent | TouchEvent,
       connectionState: FinalConnectionState<InternalNode>,
     ) => {
+      if (annotationWorkspace.open) {
+        pendingConnectRef.current = null;
+        setConnectionGhost(null);
+        return;
+      }
+
       if (connectionState.isValid) {
         pendingConnectRef.current = null;
         setConnectionGhost(null);
@@ -1029,11 +1225,16 @@ export const CanvasFlow = ({
       // 未命中节点时，保留虚拟连线并打开菜单。
       openContextMenuAt(pointer.clientX, pointer.clientY);
     },
-    [screenToFlowPosition, onConnect, openContextMenuAt],
+    [annotationWorkspace.open, screenToFlowPosition, onConnect, openContextMenuAt],
   );
 
   const handleCreateNodeFromMenu = useCallback(
     (nodeType: CanvasNodeType) => {
+      if (annotationWorkspace.open) {
+        setConnectionGhost(null);
+        return;
+      }
+
       const flowPosition = screenToFlowPosition(menuScreenPosition);
       const newNodeId = addNode(nodeType, flowPosition);
 
@@ -1062,7 +1263,7 @@ export const CanvasFlow = ({
       pendingConnectRef.current = null;
       setConnectionGhost(null);
     },
-    [addNode, menuScreenPosition, onConnect, screenToFlowPosition],
+    [annotationWorkspace.open, addNode, menuScreenPosition, onConnect, screenToFlowPosition],
   );
 
   // 菜单态预览线：根据拖线开始的节点和菜单位置，计算出一个稳定的显示路径。
@@ -1213,6 +1414,10 @@ export const CanvasFlow = ({
   // 按住“+”开始拖拽：显示预览连线；松手后在释放点打开类型菜单。
   const handleQuickAddPointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
+      if (annotationWorkspace.open) {
+        return;
+      }
+
       if (
         !selectionRightCenterScreenPosition ||
         multiSelectedCount < 2
@@ -1304,7 +1509,12 @@ export const CanvasFlow = ({
       window.addEventListener("pointerup", handlePointerUp);
       window.addEventListener("pointercancel", handlePointerCancel);
     },
-    [multiSelectedCount, multiSelectedNodeIds, selectionRightCenterScreenPosition],
+    [
+      annotationWorkspace.open,
+      multiSelectedCount,
+      multiSelectedNodeIds,
+      selectionRightCenterScreenPosition,
+    ],
   );
 
   const handleQuickAddMenuOpenChange = useCallback((open: boolean) => {
@@ -1317,6 +1527,10 @@ export const CanvasFlow = ({
 
   const handleCreateNodeFromQuickAddMenu = useCallback(
     (nodeType: CanvasNodeType) => {
+      if (annotationWorkspace.open) {
+        return;
+      }
+
       if (!quickAddMenuScreenPosition) {
         return;
       }
@@ -1363,7 +1577,13 @@ export const CanvasFlow = ({
       setQuickAddMenuOpen(false);
       setQuickAddMenuScreenPosition(null);
     },
-    [addNode, onConnect, quickAddMenuScreenPosition, screenToFlowPosition],
+    [
+      annotationWorkspace.open,
+      addNode,
+      onConnect,
+      quickAddMenuScreenPosition,
+      screenToFlowPosition,
+    ],
   );
 
   return (
@@ -1383,6 +1603,14 @@ export const CanvasFlow = ({
           role="region"
           aria-label="Canvas drop zone"
         >
+          {annotationWorkspace.open ? (
+            <>
+              <div className="pointer-events-none absolute inset-0 z-[9] bg-[radial-gradient(circle_at_50%_38%,rgba(255,255,255,0.03)_0%,rgba(126,58,242,0.05)_14%,rgba(10,10,14,0.18)_32%,rgba(6,6,8,0.58)_100%)] backdrop-blur-[2px]" />
+              <div className="pointer-events-none absolute inset-x-0 top-0 z-[9] h-32 bg-[linear-gradient(180deg,rgba(0,0,0,0.34)_0%,rgba(0,0,0,0)_100%)]" />
+              <div className="pointer-events-none absolute bottom-0 left-1/2 z-[9] h-56 w-[46vw] -translate-x-1/2 rounded-full bg-[#B43FEB]/[0.05] blur-[120px]" />
+            </>
+          ) : null}
+
           {/* 菜单态虚拟连线：在拖线释放后保留连接感。 */}
           <svg
             className="pointer-events-none fixed inset-0 z-20 overflow-visible"
@@ -1430,21 +1658,25 @@ export const CanvasFlow = ({
             onMove={shouldTrackViewport ? handleViewportMove : undefined}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
-            nodesDraggable={!spacePressed}
+            nodesDraggable={isAnnotationLocked ? false : !spacePressed}
+            nodesConnectable={!isAnnotationLocked}
+            nodesFocusable={!isAnnotationLocked}
+            edgesFocusable={!isAnnotationLocked}
+            elementsSelectable={!isAnnotationLocked}
             fitView
             minZoom={0.2}
             maxZoom={2}
             colorMode="dark"
-            deleteKeyCode={["Backspace", "Delete"]}
-            panOnDrag={spacePressed ? true : [1]}
-            selectionOnDrag={!spacePressed}
+            deleteKeyCode={isAnnotationLocked ? null : ["Backspace", "Delete"]}
+            panOnDrag={isAnnotationLocked ? false : spacePressed ? true : [1]}
+            selectionOnDrag={isAnnotationLocked ? false : !spacePressed}
             selectionMode={SelectionMode.Partial}
             multiSelectionKeyCode={["Shift"]}
-            panOnScroll
+            panOnScroll={!isAnnotationLocked}
             panOnScrollSpeed={0.5}
             zoomOnDoubleClick={false}
-            zoomOnScroll
-            zoomOnPinch={true}
+            zoomOnScroll={!isAnnotationLocked}
+            zoomOnPinch={!isAnnotationLocked}
             preventScrolling={false}
             connectionLineStyle={connectionLineStyle}
             // 吸附开关与网格尺寸由设置中心驱动
