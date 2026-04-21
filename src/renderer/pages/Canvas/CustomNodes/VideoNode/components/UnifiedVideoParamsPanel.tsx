@@ -3,7 +3,6 @@
  * 根据模型动态渲染参数控件
  */
 
-import { IconSettings } from "@tabler/icons-react";
 import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -14,8 +13,10 @@ import {
 } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "shared/utils/utils";
+import { Volume2, VolumeX } from "lucide-react";
 
 import { getModelParamConfig, type ParamItem } from "./modelParamsConfig";
+import { AspectRatioIcon } from "../../ImageNode/components/AspectRatioIcon";
 
 type UnifiedVideoParamsPanelProps = {
     /** 当前视频数据 */
@@ -179,6 +180,49 @@ export const UnifiedVideoParamsPanel = ({
         return getModelParamConfig(model);
     }, [model]);
 
+    const summary = useMemo(() => {
+        if (!paramConfig) {
+            return [];
+        }
+
+        const keySet = new Set(paramConfig.params.map((item) => item.key));
+        const parts: Array<
+            | { kind: "ratio"; value: string }
+            | { kind: "resolution"; value: string }
+            | { kind: "duration"; value: string }
+            | { kind: "audio"; enabled: boolean }
+        > = [];
+
+        if (keySet.has("aspect_ratio")) {
+            const raw = String(getParamValue({ key: "aspect_ratio", label: "", controlType: "buttons", defaultValue: "16:9" } as any, currentVideoData));
+            const ratio = raw === "adaptive" ? "Auto" : raw;
+            parts.push({ kind: "ratio", value: ratio });
+        }
+
+        if (keySet.has("resolution")) {
+            const raw = String(getParamValue({ key: "resolution", label: "", controlType: "buttons", defaultValue: "" } as any, currentVideoData));
+            const normalized = raw ? raw.toUpperCase() : "";
+            if (normalized) {
+                parts.push({ kind: "resolution", value: normalized });
+            }
+        }
+
+        if (keySet.has("duration")) {
+            const raw = getParamValue({ key: "duration", label: "", controlType: "buttons", defaultValue: 0 } as any, currentVideoData);
+            const numberValue = Number(raw);
+            if (Number.isFinite(numberValue) && numberValue > 0) {
+                parts.push({ kind: "duration", value: `${Math.round(numberValue)}s` });
+            }
+        }
+
+        if (keySet.has("generate_audio")) {
+            const raw = getParamValue({ key: "generate_audio", label: "", controlType: "switch", defaultValue: true } as any, currentVideoData);
+            parts.push({ kind: "audio", enabled: Boolean(raw) });
+        }
+
+        return parts;
+    }, [currentVideoData, paramConfig]);
+
     // 如果没有配置，隐藏面板或显示默认
     if (!paramConfig) {
         return null;
@@ -196,8 +240,73 @@ export const UnifiedVideoParamsPanel = ({
                     unstyled
                     className="flex h-8 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 text-xs text-neutral-300 transition-colors hover:border-neutral-500 hover:text-neutral-100"
                 >
-                    <IconSettings size={14} />
-                    <span>整合参数</span>
+                    {summary.length === 0 ? (
+                        <span>整合参数</span>
+                    ) : (
+                        <span className="flex items-center gap-1.5">
+                        {summary.map((item, index) => {
+                            const separator =
+                                index === 0 ? null : (
+                                    <span
+                                        key={`sep_${index}`}
+                                        className="text-neutral-500"
+                                    >
+                                        |
+                                    </span>
+                                );
+
+                            if (item.kind === "ratio") {
+                                const isAuto = item.value === "Auto";
+                                return (
+                                    <span
+                                        key={`part_${index}`}
+                                        className="flex items-center gap-1.5"
+                                    >
+                                        {separator}
+                                        {isAuto ? null : (
+                                            <AspectRatioIcon
+                                                ratio={item.value}
+                                                size={14}
+                                                active={false}
+                                            />
+                                        )}
+                                        <span className="text-neutral-300">
+                                            {item.value}
+                                        </span>
+                                    </span>
+                                );
+                            }
+
+                            if (item.kind === "audio") {
+                                return (
+                                    <span
+                                        key={`part_${index}`}
+                                        className="flex items-center gap-1.5"
+                                    >
+                                        {separator}
+                                        {item.enabled ? (
+                                            <Volume2 className="h-3.5 w-3.5 text-neutral-300" />
+                                        ) : (
+                                            <VolumeX className="h-3.5 w-3.5 text-neutral-400" />
+                                        )}
+                                    </span>
+                                );
+                            }
+
+                            return (
+                                <span
+                                    key={`part_${index}`}
+                                    className="flex items-center gap-1.5"
+                                >
+                                    {separator}
+                                    <span className="text-neutral-300">
+                                        {item.value}
+                                    </span>
+                                </span>
+                            );
+                        })}
+                        </span>
+                    )}
                 </Button>
             </PopoverTrigger>
             <PopoverContent

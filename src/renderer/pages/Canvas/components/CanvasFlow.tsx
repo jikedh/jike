@@ -883,6 +883,20 @@ export const CanvasFlow = ({
     contextMenuTriggerRef.current?.dispatchEvent(contextMenuEvent);
   }, []);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ x: number; y: number }>).detail;
+      if (!detail) {
+        return;
+      }
+      openContextMenuAt(detail.x, detail.y);
+    };
+    window.addEventListener("jike:open-canvas-context-menu", handler);
+    return () => {
+      window.removeEventListener("jike:open-canvas-context-menu", handler);
+    };
+  }, [openContextMenuAt]);
+
   const handlePaneContextMenu = useCallback(
     (event: React.MouseEvent | MouseEvent) => {
       pendingConnectRef.current = null;

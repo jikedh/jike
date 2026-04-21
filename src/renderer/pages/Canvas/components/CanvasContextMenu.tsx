@@ -77,13 +77,6 @@ export const CanvasContextMenu = ({
           <IconMusic size={16} />
           新建音频节点
         </ContextMenuItem>
-        <ContextMenuItem
-          className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
-          onSelect={() => onCreateNode("panorama")}
-        >
-          <IconEye size={16} />
-          新建全景图节点
-        </ContextMenuItem>
         <ContextMenuSub>
           <ContextMenuSubTrigger className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors">
             <IconSparkles size={16} />
@@ -113,6 +106,13 @@ export const CanvasContextMenu = ({
             </ContextMenuItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
+        <ContextMenuItem
+          className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
+          onSelect={() => onCreateNode("panorama")}
+        >
+          <IconEye size={16} />
+          新建全景图节点
+        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );
