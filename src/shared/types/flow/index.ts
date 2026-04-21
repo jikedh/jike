@@ -118,6 +118,11 @@ export interface VideoGenerationNode {
     input_type?: "reference" | "first_last_frame"; // 输入类型
     generate_audio?: boolean; // 是否生成同步音频
     web_search?: boolean; // 是否启用联网搜索增强（仅 pro）
+    generation_mode?:
+    | "text-to-video"
+    | "image-to-video"
+    | "first-last-frame"
+    | "multi-image-reference"; // UI 四按钮模式
   };
   audio?: boolean; // 是否生成音频（豆包 1.5 Pro 独有功能）
   camerafixed?: boolean; // 是否固定摄像头

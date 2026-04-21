@@ -65,6 +65,10 @@ const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
     authHeader: "x-token",
     useBearer: false,
   },
+  wuhen: {
+    getBaseURL: () => "https://api.wuhenai.com",
+    getToken: () => "",
+  },
 };
 
 const createService = (
@@ -116,6 +120,7 @@ const jikeingAdminService = createService(
   "jikeingAdmin",
   SERVICE_CONFIGS.jikeingAdmin,
 );
+const wuhenService = createService("wuhen", SERVICE_CONFIGS.wuhen);
 
 const aiRequest = async <T = any>(config: AxiosRequestConfig): Promise<T> => {
   return await aiService.request(config);
@@ -157,6 +162,12 @@ const jikeingAdminRequest = async <T = any>(
   return await jikeingAdminService.request(config);
 };
 
+const wuhenRequest = async <T = any>(
+  config: AxiosRequestConfig,
+): Promise<T> => {
+  return await wuhenService.request(config);
+};
+
 export {
   aiService,
   zeakaiService,
@@ -165,6 +176,7 @@ export {
   yunwuService,
   dashscopeService,
   jikeingAdminService,
+  wuhenService,
 };
 export default aiRequest;
 export {
@@ -174,4 +186,5 @@ export {
   yunwuRequest,
   dashscopeRequest,
   jikeingAdminRequest,
+  wuhenRequest,
 };

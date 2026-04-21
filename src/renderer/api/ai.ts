@@ -5,6 +5,7 @@ import {
   dashscopeRequest,
   jikeingService,
   kuaiziRequest,
+  wuhenRequest,
   yunwuRequest,
   zeakaiRequest,
 } from "service/aiRequest";
@@ -369,3 +370,37 @@ export function getDashscopeVideoTaskStatus(taskId: string) {
 //         "SR": 720
 //     }
 // }
+
+// ===================== 无痕 AI 视频消除相关 =====================
+
+// 视频消除接口请求体
+interface VideoRemovalRequest {
+  video_url: string;
+  model: "video_removal_std";
+  method: "all_area";
+  upload_url?: string;
+  upload_headers?: {
+    "Content-Type": string;
+  };
+}
+
+/**
+ * 视频消除接口
+ * 用于消除视频中的路人或不需要的元素
+ * API 端点: https://api.wuhenai.com/v2/video_removal
+ * @param data 请求体，包含 video_url, model, method 等字段
+ * @param nonce 一次性随机串（每次请求都不同）
+ * @param t 时间戳（当前时间）
+ */
+export function videoRemoval(
+  data: VideoRemovalRequest,
+  nonce: string,
+  t: number,
+): any {
+  return wuhenRequest({
+    url: "/v2/video_removal",
+    method: "post",
+    params: { nonce, t },
+    data,
+  });
+}

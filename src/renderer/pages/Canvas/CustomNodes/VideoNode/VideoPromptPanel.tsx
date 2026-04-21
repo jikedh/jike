@@ -24,6 +24,12 @@ import type { VideoPromptEditorHandle } from "./components/VideoPromptEditor";
 import { VideoPromptEditor } from "./components/VideoPromptEditor";
 import { VideoReferenceAssetsBar } from "./components/VideoReferenceAssetsBar";
 import {
+  getVideoModelCapability,
+  pickFirstAvailableVideoMode,
+  VIDEO_MODE_BUTTONS,
+  VideoInputMode,
+} from "./constants/videoModelCapabilities";
+import {
   getVideoLocalImageMentionId,
   getVideoParentAudioMentionId,
   getVideoParentImageMentionId,
@@ -52,9 +58,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   const edges = useCanvasFlowStore((state) => state.edges);
   const startVideoGeneration = useCanvasFlowStore(
     (state) => state.startVideoGeneration,
-  );
-  const startWanI2vVideoGeneration = useCanvasFlowStore(
-    (state) => state.startWanI2vVideoGeneration,
   );
   const stopVideoPolling = useCanvasFlowStore(
     (state) => state.stopVideoPolling,
@@ -105,6 +108,17 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     });
   }, [fallbackAIGenPrice, model]);
 
+  const currentModelCapability = useMemo(() => {
+    return getVideoModelCapability(model);
+  }, [model]);
+
+  const selectedMode = useMemo(() => {
+    const persistedMode = currentVideoData?.metadata?.generation_mode as
+      | VideoInputMode
+      | undefined;
+    return pickFirstAvailableVideoMode(currentModelCapability, persistedMode);
+  }, [currentModelCapability, currentVideoData?.metadata?.generation_mode]);
+
   const {
     parentVideoNodes,
     parentAudioNodes,
@@ -134,6 +148,61 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       status === GenerationStatus.QUEUED
     );
   }, [currentNode]);
+
+  const modeButtonStateMap = useMemo(() => {
+    const imageCount = allImageUrls.length;
+    return {
+      [VideoInputMode.TextToVideo]: {
+        supported: currentModelCapability.supportedModes.includes(
+          VideoInputMode.TextToVideo,
+        ),
+        available: true,
+      },
+      [VideoInputMode.ImageToVideo]: {
+        supported: currentModelCapability.supportedModes.includes(
+          VideoInputMode.ImageToVideo,
+        ),
+        available: imageCount >= 1,
+      },
+      [VideoInputMode.LastFrame]: {
+        supported: currentModelCapability.supportedModes.includes(
+          VideoInputMode.LastFrame,
+        ),
+        available: imageCount >= 2,
+      },
+      [VideoInputMode.MultiImageReference]: {
+        supported: currentModelCapability.supportedModes.includes(
+          VideoInputMode.MultiImageReference,
+        ),
+        available: imageCount >= 2,
+      },
+    };
+  }, [allImageUrls.length, currentModelCapability.supportedModes]);
+
+  useEffect(() => {
+    if (!currentVideoData) {
+      return;
+    }
+
+    const currentMode = currentVideoData.metadata?.generation_mode as
+      | VideoInputMode
+      | undefined;
+    const normalizedMode = pickFirstAvailableVideoMode(
+      currentModelCapability,
+      currentMode,
+    );
+
+    if (currentMode === normalizedMode) {
+      return;
+    }
+
+    updateVideoNodeData(nodeId, {
+      metadata: {
+        ...(currentVideoData.metadata ?? {}),
+        generation_mode: normalizedMode,
+      },
+    });
+  }, [currentModelCapability, currentVideoData, nodeId, updateVideoNodeData]);
 
   /**
    * 参考资源悬浮时，触发来源节点与连接边高亮。
@@ -356,6 +425,27 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       return;
     }
 
+    if (!currentModelCapability.callable) {
+      warning("当前模型暂不可用，请切换其他模型");
+      return;
+    }
+
+    const selectedModeState = modeButtonStateMap[selectedMode];
+    if (!selectedModeState?.supported) {
+      warning("当前模型不支持该生成模式");
+      return;
+    }
+    if (!selectedModeState.available) {
+      const modeValidationMessageMap = {
+        [VideoInputMode.TextToVideo]: "当前模式可直接生成",
+        [VideoInputMode.ImageToVideo]: "图生视频模式需要至少 1 张参考图",
+        [VideoInputMode.LastFrame]: "收尾帧模式需要至少 2 张参考图",
+        [VideoInputMode.MultiImageReference]: "多图参考模式需要至少 2 张参考图",
+      };
+      warning(modeValidationMessageMap[selectedMode]);
+      return;
+    }
+
     if (
       !ensureEnoughPoints({
         requiredPoints,
@@ -395,6 +485,14 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       };
     }
 
+    nextVideoData = {
+      ...nextVideoData,
+      metadata: {
+        ...(nextVideoData.metadata ?? {}),
+        generation_mode: selectedMode,
+      },
+    };
+
     const strategy = getVideoPayloadStrategy(model);
     const payload = strategy.buildPayload(nextVideoData, {
       prompt: mergedPrompt,
@@ -416,24 +514,19 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       return;
     }
 
-    // Wan 2.7 I2V 使用独立的生成方法
-    if (model === "wan2.7-i2v") {
-      await startWanI2vVideoGeneration(nodeId, {
-        ...payload,
-        requiredPoints,
-      });
-    } else {
-      await startVideoGeneration(nodeId, {
-        ...payload,
-        requiredPoints,
-      });
-    }
+    await startVideoGeneration(nodeId, {
+      ...payload,
+      requiredPoints,
+    });
     success("已开始生成视频");
     void refreshBalanceInfo();
   }, [
     currentVideoData,
+    currentModelCapability.callable,
     warning,
     isGenerating,
+    modeButtonStateMap,
+    selectedMode,
     parentNoteContents,
     model,
     allImageUrls,
@@ -441,7 +534,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     allAudioUrls,
     updateVideoNodeData,
     startVideoGeneration,
-    startWanI2vVideoGeneration,
     nodeId,
     success,
     requiredPoints,
@@ -484,7 +576,15 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
           <Select
             value={model}
             onValueChange={(value) => {
-              updateVideoNodeData(nodeId, { model: value });
+              const nextCapability = getVideoModelCapability(value);
+              const nextMode = pickFirstAvailableVideoMode(nextCapability);
+              updateVideoNodeData(nodeId, {
+                model: value,
+                metadata: {
+                  ...(currentVideoData?.metadata ?? {}),
+                  generation_mode: nextMode,
+                },
+              });
             }}
           >
             <SelectTrigger className={PROMPT_PANEL_STYLES.modelSelect}>
@@ -495,13 +595,53 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                 <SelectItem
                   key={item.id}
                   value={item.model}
+                  disabled={item.callable === false}
                   className={PROMPT_PANEL_STYLES.modelSelectItem}
                 >
                   {item.name}
+                  {item.callable === false ? "（暂不可用）" : ""}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {VIDEO_MODE_BUTTONS.map((item) => {
+              const modeState = modeButtonStateMap[item.key];
+              const isSelected = selectedMode === item.key;
+              const isDisabled =
+                !modeState?.supported || !modeState.available || isGenerating;
+
+              return (
+                <Button
+                  key={item.key}
+                  type="button"
+                  unstyled
+                  disabled={isDisabled}
+                  onClick={() => {
+                    if (isDisabled) {
+                      return;
+                    }
+                    updateVideoNodeData(nodeId, {
+                      metadata: {
+                        ...(currentVideoData?.metadata ?? {}),
+                        generation_mode: item.key,
+                      },
+                    });
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${isSelected
+                      ? "bg-[#B43FEB]/20 text-[#d97bff] border-[#B43FEB]/60"
+                      : "bg-white/5 text-white/70 border-white/10"
+                    } ${isDisabled
+                      ? "opacity-45 cursor-not-allowed"
+                      : "hover:bg-white/10 hover:text-white"
+                    }`}
+                >
+                  {item.label}
+                </Button>
+              );
+            })}
+          </div>
 
           <VideoModelParamsPanel
             currentVideoData={currentVideoData}

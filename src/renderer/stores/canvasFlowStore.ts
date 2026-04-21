@@ -58,12 +58,10 @@ import { create } from "zustand";
 import {
   createDashscopeVideoSynthesis,
   createImageGeneration,
-  createLzVideoTask,
   fetchMjTask,
   generateGeminiContent,
   getDashscopeVideoTaskStatus,
   getImageTaskStatus,
-  getLzVideoTaskStatus,
   submitMjImagine,
 } from "@/api/ai";
 import { updateVipScore } from "@/api/jikeing";
@@ -648,7 +646,7 @@ const pollVideoGeneration = async (
         return;
       }
 
-      const response: any = await getLzVideoTaskStatus(taskId);
+      const response: any = await getDashscopeVideoTaskStatus(taskId);
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
       if (!currentNode || currentNode.type !== "videoNode") {
@@ -687,7 +685,7 @@ const pollVideoGeneration = async (
               progress: normalized.progress,
               task_id: normalizedTaskId,
               error: {
-                code: "LZ_VIDEO_MISSING_URL",
+                code: "VIDEO_MISSING_URL",
                 message: "任务已完成但未返回视频地址，请稍后重试",
               },
             })),
@@ -768,7 +766,7 @@ const pollVideoGeneration = async (
             progress: normalized.progress,
             task_id: normalizedTaskId,
             error: {
-              code: "LZ_VIDEO_FAILED",
+              code: "VIDEO_FAILED",
               message: normalized.errorMessage || "生成失败，请稍后再试",
             },
           })),
@@ -793,174 +791,6 @@ const pollVideoGeneration = async (
     console.error("视频生成轮询失败:", pollError);
     stopVideoPollingInternal(nodeId);
     // 从 error 对象中提取后端返回的详细信息
-    const serverMessage = getRequestErrorMessage(pollError);
-    setState((state) => ({
-      nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-        ...data,
-        status: GenerationStatus.FAILED,
-        error: {
-          code: "POLL_ERROR",
-          message: "轮询失败，请稍后再试",
-          detail: serverMessage,
-          serverMessage,
-        },
-      })),
-    }));
-  }
-};
-
-/**
- * Wan 2.7 I2V 视频生成轮询逻辑
- */
-const pollWanI2vVideoGeneration = async (
-  taskId: string,
-  nodeId: string,
-  signal: AbortSignal,
-  setState: (
-    updater: (state: CanvasFlowStoreType) => Partial<CanvasFlowStoreType>,
-  ) => void,
-  getState: () => CanvasFlowStoreType,
-) => {
-  const startTime = Date.now();
-  try {
-    while (true) {
-      await wait(VIDEO_POLL_INTERVAL, signal);
-      if (signal.aborted) {
-        return;
-      }
-
-      // 检查是否超时
-      if (Date.now() - startTime > VIDEO_TIMEOUT) {
-        console.error("[Wan I2V] 视频生成超时");
-        stopVideoPollingInternal(nodeId);
-        setState((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            status: GenerationStatus.FAILED,
-            error: {
-              code: "TIMEOUT",
-              message: "视频生成超时，请稍后再试",
-            },
-          })),
-        }));
-        return;
-      }
-
-      const response: any = await getDashscopeVideoTaskStatus(taskId);
-
-      const currentNode = getState().nodes.find((node) => node.id === nodeId);
-      if (!currentNode || currentNode.type !== "videoNode") {
-        stopVideoPollingInternal(nodeId);
-        return;
-      }
-
-      const normalized = normalizeVideoTaskResponse(response);
-      const normalizedTaskId = normalized.taskId ?? taskId;
-
-      if (normalized.status === GenerationStatus.COMPLETED) {
-        if (normalized.missingResultUrl) {
-          setState((state) => ({
-            nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-              ...data,
-              status: GenerationStatus.FAILED,
-              progress: normalized.progress,
-              task_id: normalizedTaskId,
-              error: {
-                code: "WAN_I2V_MISSING_URL",
-                message: "任务已完成但未返回视频地址，请稍后重试",
-              },
-            })),
-          }));
-          stopVideoPollingInternal(nodeId);
-          return;
-        }
-
-        const projectId = getState().projectId;
-        const processedResultData = await Promise.all(
-          normalized.videoItems.map(async (item: any) => {
-            if (item.url && projectId) {
-              try {
-                const ext = item.format || "mp4";
-                const fileName = await saveGeneratedVideoToLocal(
-                  projectId,
-                  item.url,
-                  ext,
-                );
-                if (fileName) {
-                  const relativePath = getLocalFilePath(
-                    projectId,
-                    "generate_video",
-                    fileName,
-                  );
-                  return {
-                    ...item,
-                    localName: fileName,
-                    localPath: relativePath,
-                  };
-                }
-              } catch (saveError) {
-                console.error("[Wan I2V] 保存视频到本地失败:", saveError);
-              }
-            }
-            return item;
-          }),
-        );
-
-        setState((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            status: GenerationStatus.COMPLETED,
-            progress: 100,
-            task_id: normalizedTaskId,
-            result: {
-              type: "video",
-              data: processedResultData,
-            },
-            error: undefined,
-          })),
-        }));
-
-        stopVideoPollingInternal(nodeId);
-
-        await deductVipScoreAfterGeneration({
-          scene: "video",
-          nodeId,
-          taskId: normalizedTaskId,
-          model: (currentNode.data as VideoGenerationNode)?.model,
-          requiredPoints: (currentNode.data as VideoGenerationNode)?.requiredPoints,
-        });
-        return;
-      }
-
-      if (normalized.status === GenerationStatus.FAILED) {
-        setState((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            status: GenerationStatus.FAILED,
-            progress: normalized.progress,
-            task_id: normalizedTaskId,
-            error: {
-              code: "WAN_I2V_FAILED",
-              message: normalized.errorMessage || "生成失败，请稍后再试",
-            },
-          })),
-        }));
-        stopVideoPollingInternal(nodeId);
-        return;
-      }
-
-      setState((state) => ({
-        nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-          ...data,
-          status: normalized.status,
-          progress: normalized.progress,
-          task_id: normalizedTaskId,
-        })),
-      }));
-    }
-  } catch (pollError) {
-    console.error("[Wan I2V] 视频生成轮询失败:", pollError);
-    stopVideoPollingInternal(nodeId);
     const serverMessage = getRequestErrorMessage(pollError);
     setState((state) => ({
       nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
@@ -2490,9 +2320,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }));
 
       try {
-        const response: any = await createLzVideoTask(payload);
+        const response: any = await createDashscopeVideoSynthesis(payload);
 
-        const taskId = response?.data?.task_id;
+        const taskId = response?.output?.task_id;
 
         if (!taskId) {
           throw new Error("任务 ID 为空");
@@ -2512,71 +2342,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         videoPollingControllers.set(nodeId, controller);
         pollVideoGeneration(taskId, nodeId, controller.signal, set, get);
       } catch (startError) {
-        console.error("创建视频生成任务失败:", startError);
+        console.error("[Dashscope] 创建视频生成任务失败:", startError);
         // 从 error 对象中提取后端返回的详细信息
-        const serverMessage = getRequestErrorMessage(startError);
-        set((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            status: GenerationStatus.FAILED,
-            error: {
-              code: "CREATE_TASK_FAILED",
-              message: "创建任务失败，请稍后再试",
-              detail: serverMessage,
-              serverMessage,
-            },
-          })),
-        }));
-        throw startError;
-      }
-    },
-
-    /**
-     * Wan 2.7 I2V 视频生成任务并启动轮询
-     */
-    startWanI2vVideoGeneration: async (nodeId, payload) => {
-      // 先中止旧轮询
-      stopVideoPollingInternal(nodeId);
-
-      // 更新节点状态
-      set((state) => ({
-        nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-          ...data,
-          ...payload,
-          status: GenerationStatus.QUEUED,
-          progress: 0,
-          error: undefined,
-          result: {
-            type: "video",
-            data: [],
-          },
-        })),
-      }));
-
-      try {
-        const response: any = await createDashscopeVideoSynthesis(payload);
-
-        const taskId = response?.output?.task_id;
-
-        if (!taskId) {
-          throw new Error("任务 ID 为空");
-        }
-
-        // 标记为生成中
-        set((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            task_id: taskId,
-            status: GenerationStatus.IN_PROGRESS,
-            progress: 0,
-          })),
-        }));
-
-        const controller = new AbortController();
-        videoPollingControllers.set(nodeId, controller);
-        pollWanI2vVideoGeneration(taskId, nodeId, controller.signal, set, get);
-      } catch (startError) {
-        console.error("[Wan I2V] 创建视频生成任务失败:", startError);
         const serverMessage = getRequestErrorMessage(startError);
         set((state) => ({
           nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({

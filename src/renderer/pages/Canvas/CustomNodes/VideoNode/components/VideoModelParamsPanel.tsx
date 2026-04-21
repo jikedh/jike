@@ -19,8 +19,8 @@ export const VideoModelParamsPanel = ({
 }) => {
   const model = currentVideoData?.model ?? "doubao-seedance-2.0";
 
-  // Wan 2.7 I2V 参数面板
-  if (model === "wan2.7-i2v") {
+  // 非 Seedance 模型使用通用参数面板（分辨率 + 时长）
+  if (model !== "doubao-seedance-2.0") {
     return (
       <Wan27I2vParamsPanel
         duration={currentVideoData?.duration}
