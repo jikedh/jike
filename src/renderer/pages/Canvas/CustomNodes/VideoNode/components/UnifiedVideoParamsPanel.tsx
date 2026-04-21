@@ -17,6 +17,8 @@ import { Volume2, VolumeX } from "lucide-react";
 
 import { getModelParamConfig, type ParamItem } from "./modelParamsConfig";
 import { AspectRatioIcon } from "../../ImageNode/components/AspectRatioIcon";
+import { WanxVideoParamsPanel } from "./WanxVideoParamsPanel";
+import { PixVerseParamsPanel } from "./PixVerseParamsPanel";
 
 type UnifiedVideoParamsPanelProps = {
     /** 当前视频数据 */
@@ -228,6 +230,16 @@ export const UnifiedVideoParamsPanel = ({
         return null;
     }
 
+    // 万象模型使用独立的参数面板
+    if (model === "wan2.7-r2v") {
+        return <WanxVideoParamsPanel currentVideoData={currentVideoData} onPatch={onPatch} />;
+    }
+
+    // PixVerse 模型使用独立的参数面板
+    if (model === "pixverse-i2v") {
+        return <PixVerseParamsPanel currentVideoData={currentVideoData} onPatch={onPatch} />;
+    }
+
     const handleParamChange = (param: ParamItem, value: string | number | boolean) => {
         const patch = buildPatch(param, value, currentVideoData);
         onPatch(patch);
@@ -244,67 +256,67 @@ export const UnifiedVideoParamsPanel = ({
                         <span>整合参数</span>
                     ) : (
                         <span className="flex items-center gap-1.5">
-                        {summary.map((item, index) => {
-                            const separator =
-                                index === 0 ? null : (
-                                    <span
-                                        key={`sep_${index}`}
-                                        className="text-neutral-500"
-                                    >
-                                        |
-                                    </span>
-                                );
+                            {summary.map((item, index) => {
+                                const separator =
+                                    index === 0 ? null : (
+                                        <span
+                                            key={`sep_${index}`}
+                                            className="text-neutral-500"
+                                        >
+                                            |
+                                        </span>
+                                    );
 
-                            if (item.kind === "ratio") {
-                                const isAuto = item.value === "Auto";
+                                if (item.kind === "ratio") {
+                                    const isAuto = item.value === "Auto";
+                                    return (
+                                        <span
+                                            key={`part_${index}`}
+                                            className="flex items-center gap-1.5"
+                                        >
+                                            {separator}
+                                            {isAuto ? null : (
+                                                <AspectRatioIcon
+                                                    ratio={item.value}
+                                                    size={14}
+                                                    active={false}
+                                                />
+                                            )}
+                                            <span className="text-neutral-300">
+                                                {item.value}
+                                            </span>
+                                        </span>
+                                    );
+                                }
+
+                                if (item.kind === "audio") {
+                                    return (
+                                        <span
+                                            key={`part_${index}`}
+                                            className="flex items-center gap-1.5"
+                                        >
+                                            {separator}
+                                            {item.enabled ? (
+                                                <Volume2 className="h-3.5 w-3.5 text-neutral-300" />
+                                            ) : (
+                                                <VolumeX className="h-3.5 w-3.5 text-neutral-400" />
+                                            )}
+                                        </span>
+                                    );
+                                }
+
                                 return (
                                     <span
                                         key={`part_${index}`}
                                         className="flex items-center gap-1.5"
                                     >
                                         {separator}
-                                        {isAuto ? null : (
-                                            <AspectRatioIcon
-                                                ratio={item.value}
-                                                size={14}
-                                                active={false}
-                                            />
-                                        )}
                                         <span className="text-neutral-300">
                                             {item.value}
                                         </span>
                                     </span>
                                 );
-                            }
-
-                            if (item.kind === "audio") {
-                                return (
-                                    <span
-                                        key={`part_${index}`}
-                                        className="flex items-center gap-1.5"
-                                    >
-                                        {separator}
-                                        {item.enabled ? (
-                                            <Volume2 className="h-3.5 w-3.5 text-neutral-300" />
-                                        ) : (
-                                            <VolumeX className="h-3.5 w-3.5 text-neutral-400" />
-                                        )}
-                                    </span>
-                                );
-                            }
-
-                            return (
-                                <span
-                                    key={`part_${index}`}
-                                    className="flex items-center gap-1.5"
-                                >
-                                    {separator}
-                                    <span className="text-neutral-300">
-                                        {item.value}
-                                    </span>
-                                </span>
-                            );
-                        })}
+                            })}
                         </span>
                     )}
                 </Button>
