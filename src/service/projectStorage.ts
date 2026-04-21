@@ -1,9 +1,3 @@
-/**
- * 项目管理工具函数
- * 负责项目的创建、读取、更新、删除
- * 支持 localStorage 和本地文件存储
- */
-
 import {
   generateSimpleFileName,
   localStorageService,
@@ -30,6 +24,12 @@ type ProjectList = {
 };
 
 const STORAGE_VERSION = 2;
+
+export type MediaRef = {
+  url: string;
+  localName?: string;
+  localPath?: string;
+};
 
 export const getProjectList = (): ProjectMeta[] => {
   try {
@@ -309,7 +309,6 @@ export const deleteProject = async (id: string): Promise<boolean> => {
     const project = data.projects[index];
     const projectName = project.name;
 
-    // 删除本地项目存储（electron-store）
     if (localStorageService.isAvailable()) {
       const deleteResult = await localStorageService.deleteProject(projectName);
       if (!deleteResult.success) {
@@ -388,6 +387,157 @@ export const loadCanvasData = async (
     } catch {
       return null;
     }
+  }
+
+  return null;
+};
+
+const extractExtFromUrl = (url: string, fallback: string = "png"): string => {
+  try {
+    const urlPath = new URL(url).pathname;
+    const ext = urlPath.split(".").pop()?.toLowerCase();
+    if (ext && ["png", "jpg", "jpeg", "webp", "gif", "bmp", "mp4", "webm", "mp3", "wav", "ogg"].includes(ext)) {
+      return ext;
+    }
+  } catch {}
+  return fallback;
+};
+
+export const saveMediaFromUrl = async (
+  projectId: string,
+  url: string,
+  mediaType: "image" | "video" | "audio" | "generate_image" | "generate_video",
+  extension?: string,
+): Promise<MediaRef> => {
+  const project = getProjectById(projectId);
+  if (!project || !localStorageService.isAvailable()) {
+    return { url };
+  }
+
+  const ext = extension || extractExtFromUrl(url, mediaType === "video" ? "mp4" : mediaType === "audio" ? "mp3" : "png");
+  const fileName = generateSimpleFileName(ext);
+
+  try {
+    const downloadFnMap: Record<string, (projectName: string, fileName: string, url: string) => Promise<any>> = {
+      image: localStorageService.downloadImage,
+      generate_image: localStorageService.downloadGeneratedImage,
+      video: localStorageService.downloadVideo,
+      generate_video: localStorageService.downloadGeneratedVideo,
+      audio: localStorageService.downloadAudio,
+    };
+
+    const downloadFn = downloadFnMap[mediaType];
+    if (!downloadFn) {
+      return { url };
+    }
+
+    const result = await downloadFn(project.name, fileName, url);
+
+    if (result.success) {
+      const relativePath = getLocalFilePath(projectId, mediaType, fileName);
+      return {
+        url,
+        localName: fileName,
+        localPath: relativePath || undefined,
+      };
+    }
+  } catch (err) {
+    console.warn(`[saveMediaFromUrl] 保存 ${mediaType} 到本地失败:`, err);
+  }
+
+  return { url };
+};
+
+export const saveMediaBuffer = async (
+  projectId: string,
+  buffer: ArrayBuffer,
+  mediaType: "image" | "video" | "audio" | "generate_image" | "generate_video",
+  extension: string = "png",
+): Promise<MediaRef> => {
+  const project = getProjectById(projectId);
+  if (!project || !localStorageService.isAvailable()) {
+    return { url: "" };
+  }
+
+  const fileName = generateSimpleFileName(extension);
+
+  try {
+    const saveFnMap: Record<string, (projectName: string, fileName: string, buffer: ArrayBuffer) => Promise<any>> = {
+      image: localStorageService.saveImage,
+      generate_image: localStorageService.saveGeneratedImage,
+      video: localStorageService.saveVideo,
+      generate_video: localStorageService.saveGeneratedVideo,
+      audio: localStorageService.saveAudio,
+    };
+
+    const saveFn = saveFnMap[mediaType];
+    if (!saveFn) {
+      return { url: "" };
+    }
+
+    const result = await saveFn(project.name, fileName, buffer);
+
+    if (result.success) {
+      const relativePath = getLocalFilePath(projectId, mediaType, fileName);
+      return {
+        url: "",
+        localName: fileName,
+        localPath: relativePath || undefined,
+      };
+    }
+  } catch (err) {
+    console.warn(`[saveMediaBuffer] 保存 ${mediaType} 到本地失败:`, err);
+  }
+
+  return { url: "" };
+};
+
+export const readLocalMediaAsBlobUrl = async (
+  relativePath: string,
+  mimeType: string = "image/png",
+): Promise<string | null> => {
+  const fileBytes = await readMediaFromLocal(relativePath);
+  if (!fileBytes) return null;
+
+  const blob = new Blob([fileBytes], { type: mimeType });
+  return URL.createObjectURL(blob);
+};
+
+export const retryMediaUrl = async (
+  url: string,
+  retries: number = 2,
+  timeoutMs: number = 5000,
+): Promise<boolean> => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const response = await fetch(url, {
+        method: "HEAD",
+        mode: "no-cors",
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      return true;
+    } catch {
+      if (i < retries - 1) {
+        await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+      }
+    }
+  }
+  return false;
+};
+
+export const getDisplayUrl = async (
+  item: { url?: string; localPath?: string; localName?: string },
+  mimeType: string = "image/png",
+): Promise<string | null> => {
+  if (item.url) {
+    return item.url;
+  }
+
+  if (item.localPath) {
+    return readLocalMediaAsBlobUrl(item.localPath, mimeType);
   }
 
   return null;
@@ -639,7 +789,6 @@ export const getMediaPath = (relativePath: string): string | null => {
 };
 
 export const getMediaUrl = (relativePath: string): string | null => {
-  // electron-store 方案下不再提供 file:// 物理路径，仅保留相对路径语义。
   return relativePath || null;
 };
 

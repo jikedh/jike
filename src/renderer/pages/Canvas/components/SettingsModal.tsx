@@ -10,6 +10,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   defaultPresets,
+  type PresetItem,
   type PresetsMap,
   presetsService,
 } from "service/localStorageService";
@@ -182,7 +183,7 @@ export const SettingsModal = ({
       name: formData.name.trim(),
       content: formData.content,
       enabled: true,
-      id: Math.random().toString(36).substr(2, 9),
+      id: Math.random().toString(36).substring(2, 11),
     };
     setPresets((prev) => {
       const updated = {
@@ -240,7 +241,7 @@ export const SettingsModal = ({
         const updated = {
           ...prev,
           [pendingDeleteType]: prev[pendingDeleteType].filter(
-            (p) => p.id !== pendingDeleteId,
+            (p: PresetItem) => p.id !== pendingDeleteId,
           ),
         };
         presetsService.save(updated);
@@ -258,7 +259,7 @@ export const SettingsModal = ({
     setPresets((prev) => {
       const updated = {
         ...prev,
-        [type]: prev[type].map((p) =>
+        [type]: prev[type].map((p: PresetItem) =>
           p.id === id ? { ...p, enabled: !p.enabled } : p,
         ),
       };
@@ -276,20 +277,17 @@ export const SettingsModal = ({
     setIsAdding(false);
   };
 
-  // 检测开发环境
   useEffect(() => {
     const checkDevEnvironment = async () => {
       try {
-        const debugApi = window.electronApi?.debug;
+        const debugApi = window.debug;
         if (debugApi?.isDev) {
           const isDevEnv = await debugApi.isDev();
           setIsDev(isDevEnv);
         } else {
-          // Web 版本或非 Electron 环境，假设为生产环境
           setIsDev(false);
         }
       } catch {
-        // 出错时假设为生产环境
         setIsDev(false);
       }
     };
@@ -297,8 +295,8 @@ export const SettingsModal = ({
   }, []);
 
   useEffect(() => {
-    if (open && !storagePath && window.electronApi?.storage) {
-      window.electronApi.storage.getDefaultPath().then((defaultPath) => {
+    if (open && !storagePath && window.storage) {
+      window.storage.getDefaultPath().then((defaultPath) => {
         if (defaultPath) {
           setStoragePath(defaultPath);
         }
@@ -307,12 +305,12 @@ export const SettingsModal = ({
   }, [open, storagePath, setStoragePath]);
 
   const handleSelectStoragePath = async () => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       error("存储功能不可用");
       return;
     }
 
-    const selectedPath = await window.electronApi.storage.selectDirectory();
+    const selectedPath = await window.storage.selectDirectory();
 
     if (selectedPath && selectedPath !== storagePath) {
       setStoragePath(selectedPath);
@@ -421,6 +419,7 @@ export const SettingsModal = ({
               {!isFirstLogin && (
                 <button
                   type="button"
+                  title="关闭"
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-white/50 transition-colors hover:bg-white/5 hover:text-white"
                   onClick={onClose}
                 >
@@ -581,6 +580,7 @@ export const SettingsModal = ({
                                 <div className="flex gap-2">
                                   {["general", "image", "video"].map((t) => (
                                     <button
+                                      type="button"
                                       key={t}
                                       onClick={() =>
                                         setFormData({
@@ -713,6 +713,7 @@ export const SettingsModal = ({
 
                                         <div className="flex items-center gap-1 ml-3">
                                           <button
+                                            type="button"
                                             onClick={() =>
                                               togglePresetEnabled(
                                                 type,
@@ -734,20 +735,24 @@ export const SettingsModal = ({
                                             <IconBolt size={14} />
                                           </button>
                                           <button
+                                            type="button"
                                             onClick={() =>
                                               startEditPreset(preset, type)
                                             }
+                                            title="编辑预设"
                                             className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:bg-white/10 hover:text-white transition-all"
                                           >
                                             <IconRestore size={14} />
                                           </button>
                                           <button
+                                            type="button"
                                             onClick={() =>
                                               handleDeletePreset(
                                                 type,
                                                 preset.id,
                                               )
                                             }
+                                            title="删除预设"
                                             className="p-1.5 rounded-lg bg-white/5 text-white/40 hover:bg-red-500/10 hover:text-red-500 transition-all"
                                           >
                                             <IconX size={14} />
@@ -872,6 +877,7 @@ export const SettingsModal = ({
                             ref={fileInputRef}
                             type="file"
                             accept=".json"
+                            title="导入预设文件"
                             className="hidden"
                             onChange={handleFileChange}
                           />

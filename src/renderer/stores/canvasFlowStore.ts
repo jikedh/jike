@@ -1,5 +1,4 @@
 import { addEdge, applyEdgeChanges, applyNodeChanges } from "@xyflow/react";
-import { uploadFileToOSS } from "service/oss";
 import {
   getCanvasDataKey,
   getLocalFilePath,
@@ -171,11 +170,9 @@ const pollImageGeneration = async (
           images.map(async (url: string) => {
             if (url && projectId) {
               try {
-                // 从 URL 中提取扩展名
                 const urlPath = new URL(url).pathname;
                 const ext = urlPath.split(".").pop()?.toLowerCase() || "png";
 
-                // 下载并保存到本地
                 const fileName = await saveGeneratedImageToLocal(
                   projectId,
                   url,
@@ -183,37 +180,14 @@ const pollImageGeneration = async (
                 );
 
                 if (fileName) {
-                  // 获取相对路径
                   const relativePath = getLocalFilePath(
                     projectId,
                     "generate_image",
                     fileName,
                   );
 
-                  // 上传到 OSS
-                  let ossUrl: string | undefined;
-                  try {
-                    const fileBytes = relativePath
-                      ? await readMediaFromLocal(relativePath)
-                      : null;
-                    if (fileBytes) {
-                      const file = new File([fileBytes], fileName, {
-                        type: `image/${ext}`,
-                      });
-                      const ossResult = await uploadFileToOSS(file);
-                      if (ossResult.url) {
-                        ossUrl = ossResult.url;
-                      }
-                    }
-                  } catch (ossError) {
-                    console.error(
-                      "[pollImageGeneration] 上传图片到 OSS 失败:",
-                      ossError,
-                    );
-                  }
-
                   return {
-                    url: ossUrl || url,
+                    url,
                     localName: fileName,
                     localPath: relativePath,
                   };
@@ -429,11 +403,9 @@ const pollMjImageGeneration = async (
           newImageUrls.map(async (url: string) => {
             if (url && projectId) {
               try {
-                // 从 URL 中提取扩展名
                 const urlPath = new URL(url).pathname;
                 const ext = urlPath.split(".").pop()?.toLowerCase() || "png";
 
-                // 下载并保存到本地
                 const fileName = await saveGeneratedImageToLocal(
                   projectId,
                   url,
@@ -441,37 +413,14 @@ const pollMjImageGeneration = async (
                 );
 
                 if (fileName) {
-                  // 获取相对路径
                   const relativePath = getLocalFilePath(
                     projectId,
                     "generate_image",
                     fileName,
                   );
 
-                  // 上传到 OSS
-                  let ossUrl: string | undefined;
-                  try {
-                    const fileBytes = relativePath
-                      ? await readMediaFromLocal(relativePath)
-                      : null;
-                    if (fileBytes) {
-                      const file = new File([fileBytes], fileName, {
-                        type: `image/${ext}`,
-                      });
-                      const ossResult = await uploadFileToOSS(file);
-                      if (ossResult.url) {
-                        ossUrl = ossResult.url;
-                      }
-                    }
-                  } catch (ossError) {
-                    console.error(
-                      "[pollMjImageGeneration] 上传图片到 OSS 失败:",
-                      ossError,
-                    );
-                  }
-
                   return {
-                    url: ossUrl || url, // 使用 OSS URL，如果上传失败则使用原始 URL
+                    url,
                     localName: fileName,
                     localPath: relativePath,
                   };
@@ -495,20 +444,7 @@ const pollMjImageGeneration = async (
 
             // 更新已完成数量
             const completedCount = (data.completedCount ?? 0) + 1;
-            // 判断是否所有任务都已完成
             const allCompleted = completedCount >= totalTaskCount;
-
-            // 更新 ossUrlMap 缓存
-            const newOssUrlMap: Record<string, string> = { ...data.ossUrlMap };
-            processedResultData.forEach((item: any, index: number) => {
-              if (item.url && item.url.includes("aliyuncs.com")) {
-                // 使用原始 URL 作为 key
-                const originalUrl = newImageUrls[index];
-                if (originalUrl) {
-                  newOssUrlMap[originalUrl] = item.url;
-                }
-              }
-            });
 
             return {
               ...data,
@@ -521,7 +457,6 @@ const pollMjImageGeneration = async (
                 data: mergedData,
               },
               completedCount,
-              ossUrlMap: newOssUrlMap,
               error: allCompleted ? undefined : data.error,
             };
           }),
@@ -1147,18 +1082,16 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             };
           }
 
-          // 处理图片节点的本地文件
           if (node.type === "imageNode" && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
-                if (item.relativePath) {
+                if (!item.url && (item.relativePath || item.localPath)) {
                   try {
-                    const fileBytes = await readMediaFromLocal(
-                      item.relativePath,
-                    );
+                    const path = item.localPath || item.relativePath;
+                    const fileBytes = await readMediaFromLocal(path);
                     if (fileBytes) {
                       const ext =
-                        (item.localFileName || item.fileName)
+                        (item.localFileName || item.localName || item.fileName)
                           ?.split(".")
                           .pop() || "png";
                       const blob = new Blob([fileBytes], {
@@ -1186,19 +1119,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             };
           }
 
-          // 处理视频节点的本地文件
           if (node.type === "videoNode" && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
-                if (item.relativePath) {
+                if (!item.url && (item.relativePath || item.localPath)) {
                   try {
-                    const fileBytes = await readMediaFromLocal(
-                      item.relativePath,
-                    );
+                    const path = item.localPath || item.relativePath;
+                    const fileBytes = await readMediaFromLocal(path);
                     if (fileBytes) {
                       const ext =
                         item.format ||
-                        (item.localFileName || item.fileName)
+                        (item.localFileName || item.localName || item.fileName)
                           ?.split(".")
                           .pop() ||
                         "mp4";
@@ -1227,18 +1158,16 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             };
           }
 
-          // 处理音频节点的本地文件
           if (node.type === "audioNode" && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
-                if (item.relativePath) {
+                if (!item.url && (item.relativePath || item.localPath)) {
                   try {
-                    const fileBytes = await readMediaFromLocal(
-                      item.relativePath,
-                    );
+                    const path = item.localPath || item.relativePath;
+                    const fileBytes = await readMediaFromLocal(path);
                     if (fileBytes) {
                       const ext =
-                        (item.localFileName || item.fileName)
+                        (item.localFileName || item.localName || item.fileName)
                           ?.split(".")
                           .pop() || "mp3";
                       const blob = new Blob([fileBytes], {
