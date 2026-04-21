@@ -4,6 +4,7 @@ import {
   IconSparkles,
 } from "@tabler/icons-react";
 import {
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
   useCallback,
   useEffect,
@@ -46,12 +47,6 @@ const DEFAULT_ITEMS: FloatingSidebarItem[] = [
     label: "新增节点",
     icon: <IconPlus stroke={2.5} size={22} />,
     role: "primary",
-    children: [
-      { id: "create-note", label: "便签" },
-      { id: "create-image", label: "图片" },
-      { id: "create-video", label: "视频" },
-      { id: "create-audio", label: "音频" },
-    ],
   },
   {
     id: "efficiency-tools",
@@ -142,12 +137,27 @@ export const FloatingSidebar = ({
 
   // 处理按钮点击
   const handleClick = useCallback(
-    (item: FloatingSidebarItem) => {
+    (item: FloatingSidebarItem, event: ReactMouseEvent<HTMLButtonElement>) => {
       if (item.disabled) return;
 
       if (item.id === "settings") {
         setExpandedItemId(null);
         setIsSettingsOpen(true);
+        return;
+      }
+
+      if (item.id === "create") {
+        setExpandedItemId(null);
+        const rect = event.currentTarget.getBoundingClientRect();
+        const x =
+          event.clientX || Math.round(rect.left + Math.max(0, rect.width) / 2);
+        const y =
+          event.clientY || Math.round(rect.top + Math.max(0, rect.height) / 2);
+        window.dispatchEvent(
+          new CustomEvent("jike:open-canvas-context-menu", {
+            detail: { x, y },
+          }),
+        );
         return;
       }
 
@@ -229,7 +239,10 @@ export const FloatingSidebar = ({
 interface ItemGroupProps {
   items: FloatingSidebarItem[];
   expandedItemId: string | null;
-  onItemClick: (item: FloatingSidebarItem) => void;
+  onItemClick: (
+    item: FloatingSidebarItem,
+    event: ReactMouseEvent<HTMLButtonElement>,
+  ) => void;
   onSubItemClick: (subId: string) => void;
 }
 
@@ -245,7 +258,7 @@ const ItemGroup = ({
         key={item.id}
         item={item}
         isExpanded={expandedItemId === item.id}
-        onClick={() => onItemClick(item)}
+        onClick={(event) => onItemClick(item, event)}
         onSubItemClick={onSubItemClick}
       />
     ))}
@@ -255,7 +268,7 @@ const ItemGroup = ({
 interface SidebarButtonProps {
   item: FloatingSidebarItem;
   isExpanded: boolean;
-  onClick: () => void;
+  onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   onSubItemClick: (subId: string) => void;
 }
 
