@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { VIDEO_MODELS } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import { getVideoGenerationPoints } from "shared/constants/modelPoints";
 import type { VideoGenerationNode } from "shared/types/flow";
@@ -25,13 +24,7 @@ import type { VideoPromptEditorHandle } from "./components/VideoPromptEditor";
 import { VideoPromptEditor } from "./components/VideoPromptEditor";
 import { VideoReferenceAssetsBar } from "./components/VideoReferenceAssetsBar";
 import {
-  getBestSubmodelForMode,
   getVideoModelCapability,
-  pickFirstAvailableVideoMode,
-  resolveModelToFamily,
-  VIDEO_MODE_BUTTONS,
-  VideoInputMode,
-  VideoModelFamily,
   VIDEO_MODEL_FAMILY_OPTIONS,
 } from "./constants/videoModelCapabilities";
 import {
@@ -91,23 +84,9 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     return currentVideoData?.image_urls ?? [];
   }, [currentVideoData?.image_urls]);
 
-  const model = useMemo(() => {
-    const fallbackModel = VIDEO_MODELS[0]?.model ?? "doubao-seedance-2.0";
-    const currentModel = currentVideoData?.model;
-    if (!currentModel) {
-      return fallbackModel;
-    }
+  /** 固定为豆包 Seedance 2.0 */
+  const model = "doubao-seedance-2.0";
 
-    const isSupportedModel = VIDEO_MODELS.some(
-      (item) => item.model === currentModel,
-    );
-    return isSupportedModel ? currentModel : fallbackModel;
-  }, [currentVideoData?.model]);
-
-  // 当前族标识（用于 Select UI）
-  const currentFamily = useMemo((): VideoModelFamily => {
-    return resolveModelToFamily(model);
-  }, [model]);
   const promptDraftHtml = currentVideoData?.promptDraftHtml ?? "<p></p>";
   const requiredPoints = useMemo(() => {
     return getVideoGenerationPoints({
@@ -119,13 +98,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   const currentModelCapability = useMemo(() => {
     return getVideoModelCapability(model);
   }, [model]);
-
-  const selectedMode = useMemo(() => {
-    const persistedMode = currentVideoData?.metadata?.generation_mode as
-      | VideoInputMode
-      | undefined;
-    return pickFirstAvailableVideoMode(currentModelCapability, persistedMode);
-  }, [currentModelCapability, currentVideoData?.metadata?.generation_mode]);
 
   const {
     parentVideoNodes,
@@ -156,114 +128,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       status === GenerationStatus.QUEUED
     );
   }, [currentNode]);
-
-  const modeButtonStateMap = useMemo(() => {
-    const imageCount = allImageUrls.length;
-    return {
-      [VideoInputMode.TextToVideo]: {
-        supported: currentModelCapability.supportedModes.includes(
-          VideoInputMode.TextToVideo,
-        ),
-        available: true,
-      },
-      [VideoInputMode.ImageToVideo]: {
-        supported: currentModelCapability.supportedModes.includes(
-          VideoInputMode.ImageToVideo,
-        ),
-        available: imageCount >= 1,
-      },
-      [VideoInputMode.LastFrame]: {
-        supported: currentModelCapability.supportedModes.includes(
-          VideoInputMode.LastFrame,
-        ),
-        available: imageCount >= 2,
-      },
-      [VideoInputMode.MultiImageReference]: {
-        supported: currentModelCapability.supportedModes.includes(
-          VideoInputMode.MultiImageReference,
-        ),
-        available: imageCount >= 2,
-      },
-    };
-  }, [allImageUrls.length, currentModelCapability.supportedModes]);
-
-  /**
-   * 切换模式 → 自动匹配合适子模型写入节点数据
-   */
-  const handleModeButtonClick = useCallback(
-    (mode: VideoInputMode) => {
-      if (!currentVideoData) return;
-      const bestModel = getBestSubmodelForMode(currentFamily, mode);
-      if (!bestModel) return;
-      const bestCapability = getVideoModelCapability(bestModel);
-      const normalizedMode = pickFirstAvailableVideoMode(bestCapability, mode);
-      updateVideoNodeData(nodeId, {
-        model: bestModel,
-        metadata: {
-          ...(currentVideoData.metadata ?? {}),
-          generation_mode: normalizedMode,
-        },
-      });
-    },
-    [currentVideoData, currentFamily, nodeId, updateVideoNodeData],
-  );
-
-  /**
-   * 切换族 → 自动选择该族在当前模式下的最佳子模型，并重置参数到默认值
-   */
-  const handleFamilyChange = useCallback(
-    (family: VideoModelFamily) => {
-      if (!currentVideoData) return;
-      const bestModel = getBestSubmodelForMode(family, selectedMode);
-      if (!bestModel) return;
-      const bestCapability = getVideoModelCapability(bestModel);
-      const normalizedMode = pickFirstAvailableVideoMode(
-        bestCapability,
-        selectedMode,
-      );
-
-      // 获取新模型的默认参数
-      const defaultParams = getModelDefaultParams(bestModel) ?? {};
-      const defaultDuration = defaultParams.duration as number | undefined;
-      const defaultAspectRatio = defaultParams.aspect_ratio as string | undefined;
-      const currentDuration = currentVideoData?.duration as number;
-      const currentAspectRatio = currentVideoData?.aspect_ratio as string;
-
-      // 构建重置后的 metadata（包含新模型的默认参数 + generation_mode）
-      const resetMetadata = {
-        ...defaultParams,
-        generation_mode: normalizedMode,
-      };
-
-      updateVideoNodeData(nodeId, {
-        model: bestModel,
-        duration: defaultDuration ?? currentDuration,
-        aspect_ratio: defaultAspectRatio ?? currentAspectRatio,
-        metadata: resetMetadata,
-      });
-    },
-    [currentVideoData, selectedMode, nodeId, updateVideoNodeData],
-  );
-
-  useEffect(() => {
-    if (!currentVideoData) {
-      return;
-    }
-
-    const currentMode = currentVideoData.metadata?.generation_mode as
-      | VideoInputMode
-      | undefined;
-    const normalizedMode = pickFirstAvailableVideoMode(
-      currentModelCapability,
-      currentMode,
-    );
-
-    if (currentMode === normalizedMode) {
-      return;
-    }
-
-    handleModeButtonClick(normalizedMode);
-  }, [currentModelCapability, currentVideoData, nodeId, updateVideoNodeData, handleModeButtonClick]);
 
   /**
    * 参考资源悬浮时，触发来源节点与连接边高亮。
@@ -491,22 +355,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       return;
     }
 
-    const selectedModeState = modeButtonStateMap[selectedMode];
-    if (!selectedModeState?.supported) {
-      warning("当前模型不支持该生成模式");
-      return;
-    }
-    if (!selectedModeState.available) {
-      const modeValidationMessageMap = {
-        [VideoInputMode.TextToVideo]: "当前模式可直接生成",
-        [VideoInputMode.ImageToVideo]: "图生视频模式需要至少 1 张参考图",
-        [VideoInputMode.LastFrame]: "首尾帧模式需要至少 2 张参考图",
-        [VideoInputMode.MultiImageReference]: "多图参考模式需要至少 2 张参考图",
-      };
-      warning(modeValidationMessageMap[selectedMode]);
-      return;
-    }
-
     if (
       !ensureEnoughPoints({
         requiredPoints,
@@ -546,14 +394,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       };
     }
 
-    nextVideoData = {
-      ...nextVideoData,
-      metadata: {
-        ...(nextVideoData.metadata ?? {}),
-        generation_mode: selectedMode,
-      },
-    };
-
     const strategy = getVideoPayloadStrategy(model);
     const payload = strategy.buildPayload(nextVideoData, {
       prompt: mergedPrompt,
@@ -586,8 +426,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     currentModelCapability.callable,
     warning,
     isGenerating,
-    modeButtonStateMap,
-    selectedMode,
     parentNoteContents,
     model,
     allImageUrls,
@@ -605,42 +443,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   return (
     <div className={PROMPT_PANEL_STYLES.container}>
       <div className={PROMPT_PANEL_STYLES.inputArea}>
-        <div className="flex items-center gap-2 flex-wrap">
-          {VIDEO_MODE_BUTTONS.map((item) => {
-            const modeState = modeButtonStateMap[item.key];
-            const isSelected = selectedMode === item.key;
-            const isDisabled =
-              !modeState?.supported || !modeState.available || isGenerating;
-
-            return (
-              <Button
-                key={item.key}
-                type="button"
-                unstyled
-                disabled={isDisabled}
-                onClick={() => {
-                  if (isDisabled) {
-                    return;
-                  }
-                  updateVideoNodeData(nodeId, {
-                    metadata: {
-                      ...(currentVideoData?.metadata ?? {}),
-                      generation_mode: item.key,
-                    },
-                  });
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                  isSelected
-                    ? "bg-[#B43FEB]/20 text-[#d97bff] border-[#B43FEB]/60"
-                    : "bg-white/5 text-white/70 border-white/10"
-                } ${isDisabled ? "opacity-45 cursor-not-allowed" : "hover:bg-white/10 hover:text-white"}`}
-              >
-                {item.label}
-              </Button>
-            );
-          })}
-        </div>
-
         <VideoReferenceAssetsBar
           isUploading={isUploading}
           fileInputRef={fileInputRef}
@@ -671,10 +473,8 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       <div className={PROMPT_PANEL_STYLES.controlArea}>
         <div className="flex items-center gap-3 flex-wrap w-full">
           <Select
-            value={currentFamily}
-            onValueChange={(value) => {
-              handleFamilyChange(value as VideoModelFamily);
-            }}
+            value={VIDEO_MODEL_FAMILY_OPTIONS[0].value}
+            disabled
           >
             <SelectTrigger className={PROMPT_PANEL_STYLES.modelSelect}>
               <SelectValue placeholder="选择模型" />

@@ -14,7 +14,8 @@ export const VideoModelParamsPanel = ({
   currentVideoData: any;
   onPatch: (patch: any) => void;
 }) => {
-  const model = currentVideoData?.model ?? "doubao-seedance-2.0";
+  /** 固定为豆包 Seedance 2.0 */
+  const model = "doubao-seedance-2.0";
 
   // 使用统一参数面板，根据模型动态渲染
   return (
