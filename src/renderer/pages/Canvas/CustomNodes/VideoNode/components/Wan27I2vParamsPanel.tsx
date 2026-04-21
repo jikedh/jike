@@ -1,12 +1,11 @@
 import { IconSettings } from "@tabler/icons-react";
-
+import { cn } from "shared/utils/utils";
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { cn } from "shared/utils/utils";
 
 type Wan27I2vParamsPanelProps = {
   // 视频时长（秒）

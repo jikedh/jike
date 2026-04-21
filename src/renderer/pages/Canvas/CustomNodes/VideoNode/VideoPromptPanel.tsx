@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { VIDEO_MODELS } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
+import { getVideoGenerationPoints } from "shared/constants/modelPoints";
 import type { VideoGenerationNode } from "shared/types/flow";
 import { getBalanceInfo } from "@/api/jikeing";
+import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { PresetDropdown } from "@/components/PresetDropdown";
 import { Button } from "@/components/ui/button";
-import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import {
   Select,
   SelectContent,
@@ -16,7 +17,6 @@ import {
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { getVideoGenerationPoints } from "shared/constants/modelPoints";
 
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import { VideoModelParamsPanel } from "./components/VideoModelParamsPanel";

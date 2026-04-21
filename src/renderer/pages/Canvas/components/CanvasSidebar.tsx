@@ -3,16 +3,12 @@ import { useCallback } from "react";
 import type { AllNodeType, EdgeType } from "shared/types/flow";
 import { toast } from "sonner";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { assistantActionToPresetId } from "../constants/canvasConfig";
 import type { FloatingSidebarProps } from "./FloatingSidebar";
 import { FloatingSidebar } from "./FloatingSidebar";
 
 export const CanvasSidebar = () => {
   const addNode = useCanvasFlowStore((state) => state.addNode);
   const saveGraph = useCanvasFlowStore((state) => state.saveGraph);
-  const resetToSavedGraph = useCanvasFlowStore(
-    (state) => state.resetToSavedGraph,
-  );
   const { screenToFlowPosition } = useReactFlow<AllNodeType, EdgeType>();
 
   const handleSidebarAction = useCallback<
@@ -50,20 +46,11 @@ export const CanvasSidebar = () => {
           saveGraph();
           toast.success("画布已保存");
           break;
-        case "reset":
-          resetToSavedGraph();
-          toast.info("画布已重置");
-          break;
         default:
-          if (assistantActionToPresetId[actionId]) {
-            addNode("agent", centerFlowPosition, {
-              agentPresetId: assistantActionToPresetId[actionId],
-            });
-          }
           break;
       }
     },
-    [addNode, saveGraph, resetToSavedGraph, screenToFlowPosition],
+    [addNode, saveGraph, screenToFlowPosition],
   );
 
   return <FloatingSidebar onAction={handleSidebarAction} />;

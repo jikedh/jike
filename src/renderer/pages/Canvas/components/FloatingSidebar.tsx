@@ -1,8 +1,6 @@
 import {
   IconDeviceFloppy,
   IconPlus,
-  IconRefresh,
-  IconSparkles,
   IconTool,
 } from "@tabler/icons-react";
 import {
@@ -56,15 +54,6 @@ const DEFAULT_ITEMS: FloatingSidebarItem[] = [
     ],
   },
   {
-    id: "assistant",
-    label: "智能助手",
-    icon: <IconSparkles size={20} />,
-    children: [
-      { id: "novel-to-script-agent", label: "小说转剧本智能助手" },
-      { id: "short-video-script-agent", label: "爆款短视频脚本智能助手" },
-    ],
-  },
-  {
     id: "efficiency-tools",
     label: "效率工具",
     icon: <IconTool size={20} />,
@@ -82,12 +71,6 @@ const DEFAULT_ITEMS: FloatingSidebarItem[] = [
     id: "save",
     label: "保存画布",
     icon: <IconDeviceFloppy size={20} />,
-    role: "bottom",
-  },
-  {
-    id: "reset",
-    label: "重置画布",
-    icon: <IconRefresh size={20} />,
     role: "bottom",
   },
   // 设置按钮已移至首页侧边栏，暂时隐藏

@@ -343,6 +343,7 @@ export function createDashscopeVideoSynthesis(data: any) {
  * @param taskId 任务 ID
  */
 export function getDashscopeVideoTaskStatus(taskId: string) {
+  console.log('测试会不会打印');
   return dashscopeRequest({
     url: `/api/v1/tasks/${taskId}`,
     method: "get",

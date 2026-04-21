@@ -1,15 +1,14 @@
-import { NoteNode } from "../CustomNodes/NoteNode";
-import { ImageNode } from "../CustomNodes/ImageNode";
-import { VideoNode } from "../CustomNodes/VideoNode";
-import { AgentNode } from "../CustomNodes/AgentNode";
-import { TextAgentNode } from "../CustomNodes/TextAgentNode";
-import { ImageAgentNode } from "../CustomNodes/ImageAgentNode";
-import { VideoAgentNode } from "../CustomNodes/VideoAgentNode";
-import { PanoramaNode } from "../CustomNodes/PanoramaNode";
-import { AudioNode } from "../CustomNodes/AudioNode";
-import { TableNode } from "../CustomNodes/TableNode";
-import type { AgentPresetId } from "shared/constants/agent-presets";
 import { CustomEdge } from "../CustomEdge/CustomEdge";
+import { AgentNode } from "../CustomNodes/AgentNode";
+import { AudioNode } from "../CustomNodes/AudioNode";
+import { ImageAgentNode } from "../CustomNodes/ImageAgentNode";
+import { ImageNode } from "../CustomNodes/ImageNode";
+import { NoteNode } from "../CustomNodes/NoteNode";
+import { PanoramaNode } from "../CustomNodes/PanoramaNode";
+import { TableNode } from "../CustomNodes/TableNode";
+import { TextAgentNode } from "../CustomNodes/TextAgentNode";
+import { VideoAgentNode } from "../CustomNodes/VideoAgentNode";
+import { VideoNode } from "../CustomNodes/VideoNode";
 
 export const nodeTypes = {
   noteNode: NoteNode,
@@ -30,12 +29,4 @@ export const nodeTypes = {
  */
 export const edgeTypes = {
   default: CustomEdge,
-};
-
-/**
- * 侧边栏动作到智能体预设 ID 的映射
- */
-export const assistantActionToPresetId: Record<string, AgentPresetId> = {
-  "novel-to-script-agent": "novel-to-script-agent",
-  "short-video-script-agent": "short-video-script-agent",
 };
