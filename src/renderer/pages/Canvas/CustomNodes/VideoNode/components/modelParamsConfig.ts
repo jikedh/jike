@@ -128,3 +128,64 @@ export const getModelDefaultParams = (
   const config = MODEL_PARAM_CONFIGS[model];
   return config?.defaults;
 };
+
+// ===================== Wan 2.7 r2v (万象) =====================
+/** 万象模型参数配置 */
+const WAN27R2V_PARAMS: ParamItem[] = [
+  {
+    key: "resolution",
+    label: "分辨率",
+    controlType: "buttons",
+    options: [
+      { label: "720P", value: "720P" },
+      { label: "1080P", value: "1080P" },
+    ],
+    defaultValue: "1080P",
+  },
+  {
+    key: "ratio",
+    label: "画面比例",
+    controlType: "buttons",
+    options: [
+      { label: "16:9", value: "16:9" },
+      { label: "9:16", value: "9:16" },
+      { label: "1:1", value: "1:1" },
+    ],
+    defaultValue: "16:9",
+  },
+  {
+    key: "duration",
+    label: "视频时长",
+    controlType: "buttons",
+    options: [
+      { label: "2秒", value: 2 },
+      { label: "3秒", value: 3 },
+      { label: "4秒", value: 4 },
+      { label: "5秒", value: 5 },
+      { label: "6秒", value: 6 },
+      { label: "7秒", value: 7 },
+      { label: "8秒", value: 8 },
+      { label: "9秒", value: 9 },
+      { label: "10秒", value: 10 },
+    ],
+    defaultValue: 5,
+  },
+  {
+    key: "prompt_extend",
+    label: "智能改写 prompt",
+    controlType: "switch",
+    defaultValue: false,
+  },
+];
+
+// 注册到 MODEL_PARAM_CONFIGS
+MODEL_PARAM_CONFIGS["wan2.7-r2v"] = {
+  model: "wan2.7-r2v",
+  params: WAN27R2V_PARAMS,
+  defaults: {
+    resolution: "1080P",
+    ratio: "16:9",
+    duration: 5,
+    prompt_extend: false,
+  },
+};

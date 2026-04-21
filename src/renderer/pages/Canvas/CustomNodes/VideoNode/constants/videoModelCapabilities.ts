@@ -18,7 +18,7 @@ export type VideoModelCapability = {
 };
 
 /**
- * 模型能力（仅豆包 Seedance 2.0）
+ * 模型能力（豆包 Seedance 2.0 和万象）
  */
 const MODEL_CAPABILITY_OVERRIDES: Record<string, Partial<VideoModelCapability>> = {
   "doubao-seedance-2.0": {
@@ -30,10 +30,18 @@ const MODEL_CAPABILITY_OVERRIDES: Record<string, Partial<VideoModelCapability>> 
     defaultMode: VideoInputMode.TextToVideo,
     callable: true,
   },
+  "wan2.7-r2v": {
+    supportedModes: [
+      VideoInputMode.ImageToVideo,
+      VideoInputMode.MultiImageReference,
+    ],
+    defaultMode: VideoInputMode.ImageToVideo,
+    callable: true,
+  },
 };
 
 /**
- * 获取模型能力（仅豆包 Seedance 2.0）
+ * 获取模型能力
  */
 export const getVideoModelCapability = (model: string): VideoModelCapability => {
   const override = MODEL_CAPABILITY_OVERRIDES[model] ?? MODEL_CAPABILITY_OVERRIDES["doubao-seedance-2.0"];
@@ -89,31 +97,38 @@ export const VIDEO_MODE_BUTTONS = [
 ] as const;
 
 /**
- * 模型族标识（仅豆包 Seedance 2.0）
+ * 模型族标识（豆包 Seedance 2.0 和万象）
  */
-export type VideoModelFamily = "doubao-seedance-2.0";
+export type VideoModelFamily = "doubao-seedance-2.0" | "wan2.7-r2v";
 
 /**
- * 模型族选项（仅一个）
+ * 模型族选项
  */
 export const VIDEO_MODEL_FAMILY_OPTIONS = [
   { value: "doubao-seedance-2.0" as const, label: "豆包 Seedance 2.0" },
+  { value: "wan2.7-r2v" as const, label: "万象" },
 ];
 
 /**
- * 获取指定族在指定模式下的最佳子模型（写死为 Seedance 2.0）
+ * 获取指定族在指定模式下的最佳子模型
  */
 export const getBestSubmodelForMode = (
   family: VideoModelFamily,
   mode: VideoInputMode,
 ): string => {
-  // 所有模式均返回豆包 Seedance 2.0
+  if (family === "wan2.7-r2v") {
+    return "wan2.7-r2v";
+  }
+  // 默认返回豆包 Seedance 2.0
   return "doubao-seedance-2.0";
 };
 
 /**
- * 将模型字符串解析为族标识（写死为 Seedance 2.0）
+ * 将模型字符串解析为族标识
  */
 export const resolveModelToFamily = (model: string): VideoModelFamily => {
+  if (model === "wan2.7-r2v") {
+    return "wan2.7-r2v";
+  }
   return "doubao-seedance-2.0";
 };

@@ -84,8 +84,8 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     return currentVideoData?.image_urls ?? [];
   }, [currentVideoData?.image_urls]);
 
-  /** 固定为豆包 Seedance 2.0 */
-  const model = "doubao-seedance-2.0";
+  /** 当前视频模型，默认为豆包 Seedance 2.0 */
+  const model = currentVideoData?.model ?? "doubao-seedance-2.0";
 
   const promptDraftHtml = currentVideoData?.promptDraftHtml ?? "<p></p>";
   const requiredPoints = useMemo(() => {
@@ -473,8 +473,15 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       <div className={PROMPT_PANEL_STYLES.controlArea}>
         <div className="flex items-center gap-3 flex-wrap w-full">
           <Select
-            value={VIDEO_MODEL_FAMILY_OPTIONS[0].value}
-            disabled
+            value={model}
+            onValueChange={(value) => {
+              // 切换模型时，使用该模型的默认参数
+              const defaultParams = getModelDefaultParams(value);
+              updateVideoNodeData(nodeId, {
+                model: value,
+                ...defaultParams,
+              });
+            }}
           >
             <SelectTrigger className={PROMPT_PANEL_STYLES.modelSelect}>
               <SelectValue placeholder="选择模型" />
