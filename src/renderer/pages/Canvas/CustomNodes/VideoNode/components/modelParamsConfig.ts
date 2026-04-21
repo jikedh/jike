@@ -189,3 +189,59 @@ MODEL_PARAM_CONFIGS["wan2.7-r2v"] = {
     prompt_extend: false,
   },
 };
+
+// ===================== PixVerse (万象秒创) =====================
+/** PixVerse 模型参数配置 */
+const PIXVERSE_PARAMS: ParamItem[] = [
+  {
+    key: "subModel",
+    label: "子模型",
+    controlType: "buttons",
+    options: [
+      { label: "V6", value: "pixverse/pixverse-v6-it2v" },
+      { label: "C1", value: "pixverse/pixverse-c1-it2v" },
+    ],
+    defaultValue: "pixverse/pixverse-v6-it2v",
+  },
+  {
+    key: "resolution",
+    label: "分辨率",
+    controlType: "buttons",
+    options: [
+      { label: "360P", value: "360P" },
+      { label: "540P", value: "540P" },
+      { label: "720P", value: "720P" },
+      { label: "1080P", value: "1080P" },
+    ],
+    defaultValue: "720P",
+  },
+  {
+    key: "duration",
+    label: "视频时长",
+    controlType: "buttons",
+    options: [
+      { label: "4秒", value: 4 },
+      { label: "5秒", value: 5 },
+      { label: "8秒", value: 8 },
+    ],
+    defaultValue: 5,
+  },
+  {
+    key: "audio",
+    label: "生成音频",
+    controlType: "switch",
+    defaultValue: false,
+  },
+];
+
+// 注册到 MODEL_PARAM_CONFIGS
+MODEL_PARAM_CONFIGS["pixverse-i2v"] = {
+  model: "pixverse-i2v",
+  params: PIXVERSE_PARAMS,
+  defaults: {
+    subModel: "pixverse/pixverse-v6-it2v",
+    resolution: "720P",
+    duration: 5,
+    audio: false,
+  },
+};

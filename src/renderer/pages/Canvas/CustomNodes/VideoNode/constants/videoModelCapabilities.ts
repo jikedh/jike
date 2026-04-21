@@ -18,7 +18,7 @@ export type VideoModelCapability = {
 };
 
 /**
- * 模型能力（豆包 Seedance 2.0 和万象）
+ * 模型能力（豆包 Seedance 2.0、万象、PixVerse）
  */
 const MODEL_CAPABILITY_OVERRIDES: Record<string, Partial<VideoModelCapability>> = {
   "doubao-seedance-2.0": {
@@ -34,6 +34,13 @@ const MODEL_CAPABILITY_OVERRIDES: Record<string, Partial<VideoModelCapability>> 
     supportedModes: [
       VideoInputMode.ImageToVideo,
       VideoInputMode.MultiImageReference,
+    ],
+    defaultMode: VideoInputMode.ImageToVideo,
+    callable: true,
+  },
+  "pixverse-i2v": {
+    supportedModes: [
+      VideoInputMode.ImageToVideo,
     ],
     defaultMode: VideoInputMode.ImageToVideo,
     callable: true,
@@ -97,9 +104,9 @@ export const VIDEO_MODE_BUTTONS = [
 ] as const;
 
 /**
- * 模型族标识（豆包 Seedance 2.0 和万象）
+ * 模型族标识（豆包 Seedance 2.0、万象、PixVerse）
  */
-export type VideoModelFamily = "doubao-seedance-2.0" | "wan2.7-r2v";
+export type VideoModelFamily = "doubao-seedance-2.0" | "wan2.7-r2v" | "pixverse-i2v";
 
 /**
  * 模型族选项
@@ -107,6 +114,7 @@ export type VideoModelFamily = "doubao-seedance-2.0" | "wan2.7-r2v";
 export const VIDEO_MODEL_FAMILY_OPTIONS = [
   { value: "doubao-seedance-2.0" as const, label: "豆包 Seedance 2.0" },
   { value: "wan2.7-r2v" as const, label: "万象" },
+  { value: "pixverse-i2v" as const, label: "PixVerse" },
 ];
 
 /**
@@ -119,6 +127,9 @@ export const getBestSubmodelForMode = (
   if (family === "wan2.7-r2v") {
     return "wan2.7-r2v";
   }
+  if (family === "pixverse-i2v") {
+    return "pixverse-i2v";
+  }
   // 默认返回豆包 Seedance 2.0
   return "doubao-seedance-2.0";
 };
@@ -129,6 +140,9 @@ export const getBestSubmodelForMode = (
 export const resolveModelToFamily = (model: string): VideoModelFamily => {
   if (model === "wan2.7-r2v") {
     return "wan2.7-r2v";
+  }
+  if (model === "pixverse-i2v") {
+    return "pixverse-i2v";
   }
   return "doubao-seedance-2.0";
 };

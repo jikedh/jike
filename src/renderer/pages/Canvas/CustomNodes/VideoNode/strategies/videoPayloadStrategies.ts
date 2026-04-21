@@ -233,11 +233,53 @@ const wan27R2vStrategy: VideoPayloadStrategy = {
 };
 
 /**
- * 策略注册表（豆包 Seedance 2.0 和万象）
+ * PixVerse (万象秒创) 策略
+ * 参考 pixverse-i2v API 文档构建请求体
+ * 使用 input.prompt 和 input.media 构建输入，parameters 构建处理参数
+ */
+const pixverseStrategy: VideoPayloadStrategy = {
+  model: "pixverse-i2v",
+  buildPayload: (
+    nodeData,
+    { prompt, imageUrls },
+  ) => {
+    // 构建 media 数组
+    const media: Array<{ type: "image_url"; url: string }> = [];
+
+    // 添加参考图片
+    imageUrls
+      .filter((url) => Boolean(url))
+      .slice(0, 1) // PixVerse 通常只支持单张参考图
+      .forEach((url) => {
+        media.push({ type: "image_url", url });
+      });
+
+    // 获取子模型
+    const subModel = (nodeData.metadata as any)?.subModel ?? "pixverse/pixverse-v6-it2v";
+
+    return {
+      model: subModel,
+      input: {
+        prompt: prompt || undefined,
+        media,
+      },
+      parameters: {
+        resolution: nodeData.metadata?.resolution ?? "720P",
+        duration: nodeData.duration ?? 5,
+        audio: (nodeData.metadata as any)?.audio ?? false,
+        watermark: false,
+      },
+    };
+  },
+};
+
+/**
+ * 策略注册表（豆包 Seedance 2.0、万象、PixVerse）
  */
 export const videoPayloadStrategies: Record<string, VideoPayloadStrategy> = {
   "doubao-seedance-2.0": doubaoSeedance20Strategy,
   "wan2.7-r2v": wan27R2vStrategy,
+  "pixverse-i2v": pixverseStrategy,
 };
 
 /**

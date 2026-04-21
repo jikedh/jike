@@ -18,6 +18,7 @@ import { Volume2, VolumeX } from "lucide-react";
 import { getModelParamConfig, type ParamItem } from "./modelParamsConfig";
 import { AspectRatioIcon } from "../../ImageNode/components/AspectRatioIcon";
 import { WanxVideoParamsPanel } from "./WanxVideoParamsPanel";
+import { PixVerseParamsPanel } from "./PixVerseParamsPanel";
 
 type UnifiedVideoParamsPanelProps = {
     /** 当前视频数据 */
@@ -232,6 +233,11 @@ export const UnifiedVideoParamsPanel = ({
     // 万象模型使用独立的参数面板
     if (model === "wan2.7-r2v") {
         return <WanxVideoParamsPanel currentVideoData={currentVideoData} onPatch={onPatch} />;
+    }
+
+    // PixVerse 模型使用独立的参数面板
+    if (model === "pixverse-i2v") {
+        return <PixVerseParamsPanel currentVideoData={currentVideoData} onPatch={onPatch} />;
     }
 
     const handleParamChange = (param: ParamItem, value: string | number | boolean) => {
