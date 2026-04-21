@@ -1,4 +1,3 @@
-import { IconSettings } from "@tabler/icons-react";
 import { cn } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,16 +45,19 @@ export const Wan27I2vParamsPanel = ({
       <PopoverTrigger asChild>
         <Button
           unstyled
-          className="flex h-8 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 text-xs text-neutral-300 transition-colors hover:border-neutral-500 hover:text-neutral-100"
+          className="flex h-8 items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800 px-3 text-xs text-neutral-300 transition-colors hover:border-neutral-500 hover:text-neutral-100"
         >
-          <IconSettings size={14} />
-          <span>整合参数</span>
+          <span className="flex items-center gap-1.5">
+            <span className="text-neutral-300">{currentResolution}</span>
+            <span className="text-neutral-500">|</span>
+            <span className="text-neutral-300">{currentDuration}s</span>
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent
         align="start"
         side="top"
-        className="w-72 border border-neutral-700 bg-neutral-900 p-4 shadow-xl"
+        className="w-[320px] border border-neutral-700 bg-neutral-900 p-4 shadow-xl"
       >
         <div className="space-y-5">
           {/* 时长 */}
@@ -97,7 +99,7 @@ export const Wan27I2vParamsPanel = ({
             <label className="text-xs font-medium text-neutral-300">
               视频分辨率
             </label>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {RESOLUTION_OPTIONS.map((item) => {
                 const isActive = currentResolution === item.value;
                 return (
@@ -106,7 +108,7 @@ export const Wan27I2vParamsPanel = ({
                     type="button"
                     onClick={() => onResolutionChange(item.value)}
                     className={cn(
-                      "flex flex-col items-start gap-0.5 rounded-lg border px-4 py-2 transition-all flex-1",
+                      "flex flex-col items-start gap-0.5 rounded-lg border px-4 py-2 transition-all",
                       isActive
                         ? "border-[#B43FEB] bg-[#B43FEB]/10"
                         : "border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750",

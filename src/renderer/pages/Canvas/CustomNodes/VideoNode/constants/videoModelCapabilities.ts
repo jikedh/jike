@@ -244,7 +244,7 @@ export const VIDEO_MODE_BUTTONS = [
     },
     {
         key: VideoInputMode.LastFrame,
-        label: "收尾帧",
+        label: "首尾帧",
     },
     {
         key: VideoInputMode.MultiImageReference,

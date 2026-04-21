@@ -1,7 +1,7 @@
 import {
   IconDeviceFloppy,
   IconPlus,
-  IconTool,
+  IconSparkles,
 } from "@tabler/icons-react";
 import {
   type ReactNode,
@@ -56,7 +56,7 @@ const DEFAULT_ITEMS: FloatingSidebarItem[] = [
   {
     id: "efficiency-tools",
     label: "效率工具",
-    icon: <IconTool size={20} />,
+    icon: <IconSparkles size={20} />,
     children: [
       { id: "script-outline", label: "剧本大纲" },
       { id: "script-hierarchy", label: "剧本分级" },
