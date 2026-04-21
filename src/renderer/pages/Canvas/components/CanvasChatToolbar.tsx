@@ -2,7 +2,7 @@ import {
   IconHelpCircle,
   IconMap2,
 } from "@tabler/icons-react";
-import { type ReactFlowInstance, useReactFlow } from "@xyflow/react";
+import { type ReactFlowInstance, useReactFlow, useStore } from "@xyflow/react";
 import { Grid3X3, Maximize2 } from "lucide-react";
 import { type ChangeEvent, useEffect, useState } from "react";
 import { cn } from "shared/utils/utils";
@@ -47,12 +47,15 @@ export const CanvasChatToolbar = ({
   const reactFlowInstance = useReactFlow();
   const snapToGrid = useChatSettingsStore((state) => state.snapToGrid);
   const setSnapToGrid = useChatSettingsStore((state) => state.setSnapToGrid);
+  // 使用 useStore 订阅视口缩放变化，实时更新进度条
+  const rawZoom = useStore((s) => s.transform[2]);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [helpOpen, setHelpOpen] = useState(false);
 
+  // 当 rawZoom 变化时更新 zoomLevel
   useEffect(() => {
-    setZoomLevel(clampZoom(reactFlowInstance.getZoom()));
-  }, [reactFlowInstance]);
+    setZoomLevel(clampZoom(rawZoom));
+  }, [rawZoom]);
 
   const handleFitView = () => {
     reactFlowInstance.fitView({ padding: 0.1, duration: 300 });
