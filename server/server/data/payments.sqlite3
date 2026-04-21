@@ -95,6 +95,18 @@
       "createdAt": 1776695687039,
       "updatedAt": 1776695687039,
       "paidAt": null
+    },
+    "rcg2026042116181391fbfc96": {
+      "id": "rcg2026042116181391fbfc96",
+      "userId": "2041140021934137344",
+      "packageId": "pkg_500",
+      "points": 500,
+      "amountFen": 1,
+      "codeUrl": "weixin://wxpay/bizpayurl?pr=2Ai8KNNz3",
+      "status": "CREATED",
+      "createdAt": 1776759494010,
+      "updatedAt": 1776759494010,
+      "paidAt": null
     }
   },
   "ledgerByOrderId": {}

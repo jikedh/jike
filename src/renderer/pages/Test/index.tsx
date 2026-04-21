@@ -4,9 +4,12 @@
 import { useState } from "react";
 import { getJikeingUserId } from "shared/utils/utils";
 import { createDashscopeChatCompletion } from "@/api/ai";
+import QRCode from "qrcode";
 import {
+  createRechargeOrder,
   dailyResign,
   getBalanceInfo,
+  getRechargeOrderStatus,
   getScoreConfig,
   initScore,
   innerAddUserScore,
@@ -76,8 +79,8 @@ const LogPanel = ({ logs }: { logs: LogEntry[] }) => {
             <div
               key={index}
               className={`text-xs p-2 rounded ${log.status === "success"
-                  ? "bg-green-900/30 text-green-300"
-                  : "bg-red-900/30 text-red-300"
+                ? "bg-green-900/30 text-green-300"
+                : "bg-red-900/30 text-red-300"
                 }`}
             >
               <div className="flex items-center gap-2 mb-1">
@@ -85,8 +88,8 @@ const LogPanel = ({ logs }: { logs: LogEntry[] }) => {
                 <span className="font-semibold">{log.api}</span>
                 <span
                   className={`px-1.5 py-0.5 rounded text-[10px] ${log.status === "success"
-                      ? "bg-green-800/50"
-                      : "bg-red-800/50"
+                    ? "bg-green-800/50"
+                    : "bg-red-800/50"
                     }`}
                 >
                   {log.status === "success" ? "SUCCESS" : "ERROR"}
@@ -126,9 +129,11 @@ export default function TestPage() {
     try {
       const response = await apiFunc();
       addLog(apiName, "success", response);
+      return response;
     } catch (error: any) {
       console.error(`[${apiName}] 错误:`, error);
       addLog(apiName, "error", error?.response?.data || error.message || error);
+      throw error;
     } finally {
       setLoadingMap((prev) => ({ ...prev, [apiName]: false }));
     }
@@ -218,6 +223,138 @@ export default function TestPage() {
     callApi("innerAddUserScore (内部加积分)", () =>
       innerAddUserScore(innerScoreData),
     );
+  };
+
+  // ===================== 充值订单 API =====================
+
+  const [rechargeData, setRechargeData] = useState({
+    userId: "",
+    packageId: "",
+  });
+  const [lastOrderId, setLastOrderId] = useState("");
+  const [orderStatus, setOrderStatus] = useState<any>(null);
+  const [codeUrl, setCodeUrl] = useState(""); // 微信支付二维码
+  const [showQRModal, setShowQRModal] = useState(false); // 弹窗显示
+  const [pollingTimer, setPollingTimer] = useState<NodeJS.Timeout | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState(""); // 生成的二维码图片 Data URL
+  const [isGeneratingQR, setIsGeneratingQR] = useState(false);
+
+  // 使用 qrcode 库生成二维码图片
+  const generateQRCode = async (url: string) => {
+    setIsGeneratingQR(true);
+    try {
+      const dataUrl = await QRCode.toDataURL(url, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: "#000000",
+          light: "#ffffff",
+        },
+      });
+      setQrCodeDataUrl(dataUrl);
+    } catch (error) {
+      console.error("生成二维码失败:", error);
+      addLog("generateQRCode (生成二维码)", "error", error);
+    } finally {
+      setIsGeneratingQR(false);
+    }
+  };
+
+  // 清理轮询定时器
+  const clearPolling = () => {
+    if (pollingTimer) {
+      clearInterval(pollingTimer);
+      setPollingTimer(null);
+    }
+    setIsPolling(false);
+  };
+
+  // 停止轮询并关闭弹窗
+  const stopPollingAndClose = () => {
+    clearPolling();
+    setShowQRModal(false);
+  };
+
+  // 轮询查询订单状态
+  const startPollingOrderStatus = (orderId: string) => {
+    clearPolling();
+    setIsPolling(true);
+
+    const timer = setInterval(async () => {
+      try {
+        const res = await getRechargeOrderStatus(orderId);
+        setOrderStatus(res);
+        addLog("getRechargeOrderStatus (轮询查询)", "success", res);
+
+        // 检查支付状态 - 根据实际接口返回调整判断条件
+        if (res?.data?.status === "PAID" || res?.code === 200) {
+          clearPolling();
+          setShowQRModal(false);
+          alert("🎉 充值成功！积分已到账");
+        }
+      } catch (error: any) {
+        addLog("getRechargeOrderStatus (轮询查询)", "error", error?.message || error);
+      }
+    }, 3000); // 每 3 秒轮询
+
+    setPollingTimer(timer);
+  };
+
+  const handleCreateRechargeOrder = () => {
+    const loginUserId = getJikeingUserId();
+    const reqUserId = rechargeData.userId || loginUserId;
+
+    if (!reqUserId) {
+      alert("请先登录并确保存在用户 ID");
+      return;
+    }
+    if (!rechargeData.packageId) {
+      alert("请输入套餐 ID (packageId)");
+      return;
+    }
+
+    // 清空之前的状态
+    setCodeUrl("");
+    setOrderStatus(null);
+    clearPolling();
+
+    callApi("createRechargeOrder (创建充值订单)", () =>
+      createRechargeOrder({
+        userId: reqUserId,
+        packageId: rechargeData.packageId,
+      }),
+    ).then((res: any) => {
+      // 优先从 response 结构中取 codeUrl
+      const url = res?.data?.codeUrl || res?.codeUrl;
+      console.log("订单创建成功，codeUrl:", url, "完整响应:", res);
+      if (url) {
+        setCodeUrl(url);
+        setShowQRModal(true);
+        // 使用 qrcode 库生成二维码图片
+        generateQRCode(url);
+      }
+
+      if (res?.data?.orderId) {
+        setLastOrderId(res.data.orderId);
+        // 开始轮询订单状态
+        startPollingOrderStatus(res.data.orderId);
+      }
+    });
+  };
+
+  const handleGetRechargeOrderStatus = () => {
+    const orderId = lastOrderId;
+    if (!orderId) {
+      alert("请先创建订单");
+      return;
+    }
+
+    callApi("getRechargeOrderStatus (查询订单状态)", () =>
+      getRechargeOrderStatus(orderId),
+    ).then((res: any) => {
+      setOrderStatus(res);
+    });
   };
 
   // ===================== 阿里云百炼 API =====================
@@ -498,6 +635,98 @@ export default function TestPage() {
               </div>
             </section>
 
+            {/* 充值订单 API */}
+            <section className="bg-white/5 rounded-xl p-5 border border-white/10">
+              <h2 className="text-lg font-semibold text-emerald-400 mb-4">
+                充值订单 API（jike-web-api /recharge/v1）
+              </h2>
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">
+                      用户 ID（默认当前登录）
+                    </label>
+                    <input
+                      type="text"
+                      value={rechargeData.userId}
+                      onChange={(e) =>
+                        setRechargeData((prev) => ({
+                          ...prev,
+                          userId: e.target.value,
+                        }))
+                      }
+                      placeholder="留空则使用当前登录用户"
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-56 focus:border-emerald-500 outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">套餐 ID</label>
+                    <input
+                      type="text"
+                      value={rechargeData.packageId}
+                      onChange={(e) =>
+                        setRechargeData((prev) => ({
+                          ...prev,
+                          packageId: e.target.value,
+                        }))
+                      }
+                      placeholder="packageId"
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-36 focus:border-emerald-500 outline-none"
+                    />
+                  </div>
+                  <TestButton
+                    label="创建充值订单"
+                    onClick={handleCreateRechargeOrder}
+                    loading={loadingMap["createRechargeOrder (创建充值订单)"]}
+                    variant="outline"
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">
+                      订单号（可手动输入或自动填充）
+                    </label>
+                    <input
+                      type="text"
+                      value={lastOrderId}
+                      onChange={(e) => setLastOrderId(e.target.value)}
+                      placeholder="orderId"
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-48 focus:border-emerald-500 outline-none"
+                    />
+                  </div>
+                  <TestButton
+                    label="查询订单状态"
+                    onClick={handleGetRechargeOrderStatus}
+                    loading={loadingMap["getRechargeOrderStatus (查询订单状态)"]}
+                    variant="outline"
+                  />
+                </div>
+
+                {orderStatus && (
+                  <div className="p-3 bg-black/30 rounded border border-white/10">
+                    <div className="text-xs text-white/50 mb-2 uppercase tracking-wider">
+                      订单状态详情
+                    </div>
+                    <pre className="text-xs text-emerald-300 whitespace-pre-wrap break-all font-mono max-h-40 overflow-y-auto">
+                      {JSON.stringify(orderStatus, null, 2)}
+                    </pre>
+                  </div>
+                )}
+
+                {codeUrl && (
+                  <div className="mt-4 p-3 bg-black/30 rounded border border-white/10">
+                    <div className="text-xs text-white/50 mb-2 uppercase tracking-wider">
+                      二维码链接（已自动弹出扫码窗口）
+                    </div>
+                    <div className="text-xs text-emerald-300 break-all font-mono bg-black/20 p-2 rounded">
+                      {codeUrl}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
             {/* 阿里云百炼 API */}
             <section className="bg-white/5 rounded-xl p-5 border border-white/10">
               <h2 className="text-lg font-semibold text-yellow-400 mb-4">
@@ -581,6 +810,65 @@ export default function TestPage() {
           <LogPanel logs={logs} />
         </div>
       </main>
+
+      {/* 微信支付二维码弹窗 */}
+      {showQRModal && codeUrl && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-[#1a1a2e] rounded-2xl p-6 border border-white/20 max-w-sm w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-white">微信支付扫码</h3>
+              <div className="flex items-center gap-2">
+                {isPolling && (
+                  <span className="text-xs text-emerald-400 animate-pulse">
+                    轮询中... 🔄
+                  </span>
+                )}
+                <button
+                  onClick={stopPollingAndClose}
+                  className="text-white/50 hover:text-white text-xl leading-none"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-lg mb-4">
+              {isGeneratingQR ? (
+                <div className="w-[200px] h-[200px] flex items-center justify-center text-gray-500">
+                  生成二维码中...
+                </div>
+              ) : qrCodeDataUrl ? (
+                <img
+                  src={qrCodeDataUrl}
+                  alt="微信支付二维码"
+                  className="w-full max-w-[200px] mx-auto"
+                />
+              ) : (
+                <div className="w-[200px] h-[200px] flex items-center justify-center text-gray-500">
+                  二维码加载失败
+                </div>
+              )}
+            </div>
+
+            <p className="text-sm text-white/60 text-center mb-4">
+              请使用微信扫码支付，支付成功后积分将自动到账
+            </p>
+
+            {orderStatus && (
+              <div className="text-xs text-white/40 text-center">
+                订单状态: {JSON.stringify(orderStatus)}
+              </div>
+            )}
+
+            <button
+              onClick={stopPollingAndClose}
+              className="w-full mt-4 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white/70 hover:text-white transition-colors"
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

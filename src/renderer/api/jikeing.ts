@@ -87,6 +87,35 @@ export function updateVipScore(
 // 管理侧积分接口已迁移至 manager/score.ts
 // import { addScore, getUserScore, adminGetScoreConfig } from './manager/score'
 
+// ===================== 充值订单 API（jike-web-api）/recharge/v1 =====================
+
+/**
+ * 创建充值订单（微信 Native 扫码支付）
+ * @param data - { userId: string, packageId: string }
+ */
+export function createRechargeOrder(data: {
+  userId: string;
+  packageId: string;
+}): any {
+  return jikeingService({
+    url: "/recharge/v1/native/create",
+    method: "post",
+    data,
+  });
+}
+
+/**
+ * 查询充值订单状态
+ * @param orderId - 订单号
+ */
+export function getRechargeOrderStatus(orderId: string): any {
+  return jikeingService({
+    url: "/recharge/v1/native/status",
+    method: "get",
+    params: { orderId },
+  });
+}
+
 // ===================== 内部接口（jike-web-api）/inner =====================
 
 /**

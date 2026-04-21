@@ -92,3 +92,41 @@ export interface GetScoreConfigResponse {
   msg?: string;
   data: ScoreConfig;
 }
+
+// ===================== 充值订单 =====================
+
+/** 创建充值订单请求 */
+export interface CreateRechargeOrderRequest {
+  userId: string;
+  packageId: string; // pkg_500, pkg_2000, pkg_5000, pkg_12000
+}
+
+/** 创建充值订单响应 */
+export interface CreateRechargeOrderResponse {
+  code: number;
+  msg?: string;
+  data?: {
+    orderId: string;
+    codeUrl: string; // 微信支付二维码链接
+    points: number;
+    amountFen: number;
+  };
+}
+
+/** 充值套餐 */
+export interface RechargePackage {
+  packageId: string;
+  points: number;
+  amountFen: number;
+}
+
+/** 查询订单状态响应 */
+export interface GetRechargeOrderStatusResponse {
+  code: number;
+  msg?: string;
+  data?: {
+    orderId: string;
+    status: "CREATED" | "PAID" | "CLOSED";
+    tradeState?: string;
+  };
+}
