@@ -450,17 +450,16 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   ]);
 
   return (
-    <div
-      className={PROMPT_PANEL_STYLES.container}
-      style={{ pointerEvents: "auto" }}
-    >
+    <div className={PROMPT_PANEL_STYLES.container}>
       <div className={PROMPT_PANEL_STYLES.inputArea}>
-        <VideoPromptEditor
-          ref={editorRef}
-          promptDraftHtml={promptDraftHtml}
-          mentionItems={videoMentionItems}
-          onDraftChange={handleDraftChange}
-        />
+        <div className={PROMPT_PANEL_STYLES.textAreaWrap}>
+          <VideoPromptEditor
+            ref={editorRef}
+            promptDraftHtml={promptDraftHtml}
+            mentionItems={videoMentionItems}
+            onDraftChange={handleDraftChange}
+          />
+        </div>
 
         <VideoReferenceAssetsBar
           isUploading={isUploading}
@@ -478,8 +477,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         />
       </div>
 
+      <div className={PROMPT_PANEL_STYLES.divider} />
+
       <div className={PROMPT_PANEL_STYLES.controlArea}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 flex-wrap w-full">
           <Select
             value={model}
             onValueChange={(value) => {
@@ -509,22 +510,22 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             onPatch={(patch) => updateVideoNodeData(nodeId, patch)}
           />
 
-          {/* 预设提示词下拉 */}
-          <PresetDropdown
-            presetType="video"
-            disabled={isGenerating || isUploading}
-            onSelect={(content) => {
-              editorRef.current?.insertContent(content);
-            }}
-          />
+          <div className="ml-auto flex items-center gap-3">
+            {/* 预设提示词下拉 */}
+            <PresetDropdown
+              presetType="video"
+              disabled={isGenerating || isUploading}
+              onSelect={(content) => {
+                editorRef.current?.insertContent(content);
+              }}
+            />
 
-          <ModelPointsBadge
-            totalPoints={totalPoints}
-            requiredPoints={requiredPoints}
-            title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
-          />
+            <ModelPointsBadge
+              totalPoints={totalPoints}
+              requiredPoints={requiredPoints}
+              title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
+            />
 
-          <div className="ml-auto">
             {isGenerating ? (
               <Button
                 type="button"

@@ -594,7 +594,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     editorProps: {
       attributes: {
         class: cn(
-          "nodrag nopan nowheel min-h-[88px] max-h-[220px] overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900/85 px-3 py-2 text-sm leading-6 text-neutral-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] cursor-text",
+          PROMPT_PANEL_STYLES.editorContent,
+          "leading-6",
           "focus:outline-none",
         ),
       },
@@ -918,14 +919,13 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   }, [isGenerating, stopImagePolling, nodeId, success, updateImageNodeData]);
 
   return (
-    <div
-      className={PROMPT_PANEL_STYLES.container}
-      style={{ pointerEvents: "auto" }}
-    >
-      {/* 顶部区域：tiptap 增强输入区 */}
+    <div className={PROMPT_PANEL_STYLES.container}>
       <div className={PROMPT_PANEL_STYLES.inputArea}>
-        <EditorContent editor={editor} />
-        <div className="nodrag nopan nowheel flex gap-2 overflow-x-auto pb-1 mt-2.5">
+        <div className={PROMPT_PANEL_STYLES.textAreaWrap}>
+          <EditorContent editor={editor} />
+        </div>
+
+        <div className="nodrag nopan nowheel flex gap-2 overflow-x-auto pb-1">
           {/* 上传按钮（固定为第一个） */}
           <Button
             unstyled
@@ -935,7 +935,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             disabled={isUploading}
           >
             <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px]">
-              <IconUpload size={16} />
+              <IconUpload
+                size={16}
+                className="w-4 h-4 mb-1.5 group-hover:-translate-y-0.5 transition-transform"
+              />
               {isUploading ? "上传中" : "上传"}
             </div>
           </Button>
@@ -1043,9 +1046,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         )}
       </div>
 
-      {/* 下方区域：参数控制区 */}
-      <div className="rounded-xl border border-white/6 bg-white/2 p-2.5">
-        <div className="flex items-center gap-2">
+      <div className={PROMPT_PANEL_STYLES.divider} />
+
+      <div className={PROMPT_PANEL_STYLES.controlArea}>
+        <div className="flex items-center gap-3 flex-wrap w-full">
           {/* 生成模型 - 始终在最左侧 */}
           <Select
             value={String(currentModelId)}
@@ -1146,7 +1150,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           )}
 
           {/* 数量选择和生成按钮 */}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-3">
             {/* 预设提示词下拉 */}
             <PresetDropdown
               presetType="image"
@@ -1154,12 +1158,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               onSelect={(content) => {
                 editor?.commands.insertContent(content);
               }}
-            />
-
-            <ModelPointsBadge
-              totalPoints={totalPoints}
-              requiredPoints={requiredPoints}
-              title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
             />
 
             {/* 数量选择按钮 - Midjourney 模型隐藏 */}
@@ -1183,6 +1181,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                 <span>{imageCount}</span>
               </button>
             )}
+
+            <ModelPointsBadge
+              totalPoints={totalPoints}
+              requiredPoints={requiredPoints}
+              title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
+            />
 
             {/* 生成/停止按钮 */}
             {isGenerating ? (

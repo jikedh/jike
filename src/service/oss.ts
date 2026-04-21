@@ -294,3 +294,46 @@ export async function uploadFileToOSS(file: File) {
 
   return { url: result.url, name: file.name };
 }
+
+export type OssSignedUploadTarget = {
+  objectKey: string;
+  uploadUrl: string;
+  publicUrl: string;
+  uploadHeaders: Record<string, string>;
+};
+
+/**
+ * 创建一个可供第三方服务 PUT 上传的 OSS 预签名目标。
+ * 典型场景：异步视频处理平台在完成处理后，直接把结果上传回该地址。
+ */
+export async function createSignedUploadTargetToOSS(options?: {
+  directory?: "video" | "image" | "audio";
+  extension?: string;
+  contentType?: string;
+}) {
+  const directory = options?.directory ?? "video";
+  const extension = (options?.extension ?? "mp4").replace(/^\./, "").toLowerCase();
+  const contentType = options?.contentType ?? "video/mp4";
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).slice(2, 8);
+  const objectKey = `${directory}/${timestamp}-${random}.${extension}`;
+  const uploadHeaders = {
+    "Content-Type": contentType,
+  };
+
+  const uploadUrl = client.signatureUrl(
+    objectKey,
+    {
+      method: "PUT",
+      expires: 24 * 60 * 60,
+      headers: uploadHeaders,
+    } as any,
+  );
+
+  return {
+    objectKey,
+    uploadUrl,
+    publicUrl: uploadUrl.split("?")[0],
+    uploadHeaders,
+  } satisfies OssSignedUploadTarget;
+}

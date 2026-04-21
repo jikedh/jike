@@ -126,7 +126,7 @@ export const VideoReferenceAssetsBar = ({
   onReferenceHoverChange: (sourceNodeId: string, isHovering: boolean) => void;
 }) => {
   return (
-    <div className="nodrag nopan nowheel mt-2.5 flex gap-2 overflow-x-auto pb-1">
+    <div className="nodrag nopan nowheel flex gap-2 overflow-x-auto pb-1">
       <Button
         unstyled
         className={PROMPT_PANEL_STYLES.uploadButton}

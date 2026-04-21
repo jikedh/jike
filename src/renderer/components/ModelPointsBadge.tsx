@@ -22,24 +22,21 @@ export function ModelPointsBadge({
       disabled
       title={title ?? `当前模型生成需要 ${requiredPoints} 积分`}
       className={cn(
-        "flex flex-col items-center justify-center rounded-xl px-2 py-2.5 text-white/60 transition-all duration-200",
+        "inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold tracking-wide transition-colors",
         insufficient
-          ? "bg-red-500/10 text-red-300 ring-1 ring-red-500/20"
-          : "hover:bg-white/5 hover:text-white/90",
+          ? "border-red-500/20 bg-red-500/10 text-red-300"
+          : "border-[#B43FEB]/20 bg-[#B43FEB]/10 text-[#B43FEB]",
         className,
       )}
     >
-      <Zap className="mb-1 h-4.5 w-4.5" strokeWidth={2} />
-      <div
+      <Zap
         className={cn(
-          "rounded-full px-2 py-0.5 text-[10px] font-black shadow-[0_0_12px_rgba(180,63,235,0.5)]",
-          insufficient
-            ? "bg-red-500 text-white shadow-[0_0_12px_rgba(239,68,68,0.35)]"
-            : "bg-[#B43FEB] text-white",
+          "h-3.5 w-3.5",
+          insufficient ? "text-red-300" : "text-[#B43FEB]",
         )}
-      >
-        {requiredPoints}
-      </div>
+        strokeWidth={2}
+      />
+      <span>{requiredPoints}</span>
     </button>
   );
 }

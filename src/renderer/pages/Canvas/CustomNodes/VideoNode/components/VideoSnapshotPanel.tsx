@@ -53,6 +53,7 @@ export const VideoSnapshotPanel = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
 
   const seekTo = useCallback(
     (time: number) => {
@@ -131,6 +132,7 @@ export const VideoSnapshotPanel = ({
     setCurrentTime(0);
     setDuration(0);
     setIsReady(false);
+    setVideoSize(null);
   }, [open, videoUrl]);
 
   // 弹窗打开时聚焦到播放按钮
@@ -160,6 +162,16 @@ export const VideoSnapshotPanel = ({
         return;
       }
 
+      if (event.code === "Space" || event.key === " ") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!isReady || isCapturing) {
+          return;
+        }
+        void togglePlayback();
+        return;
+      }
+
       // 滑块聚焦时交给 Slider 内部处理键盘事件，避免重复步进。
       if (target?.closest("[data-slot='slider']")) {
         return;
@@ -181,7 +193,7 @@ export const VideoSnapshotPanel = ({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [currentTime, open, seekTo]);
+  }, [currentTime, isCapturing, isReady, open, seekTo, togglePlayback]);
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
@@ -196,7 +208,12 @@ export const VideoSnapshotPanel = ({
         <div className="flex min-h-0 flex-1 flex-col bg-[#18181b]">
           <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5">
             <div className="relative overflow-hidden rounded-xl border border-white/8 bg-black">
-              <div className="aspect-video w-full">
+              <div
+                className="w-full"
+                style={{
+                  aspectRatio: videoSize ? `${videoSize.width} / ${videoSize.height}` : "16 / 9",
+                }}
+              >
                 <video
                   ref={videoRef}
                   src={videoUrl}
@@ -208,6 +225,10 @@ export const VideoSnapshotPanel = ({
                     const nextDuration = event.currentTarget.duration || 0;
                     setDuration(nextDuration);
                     setCurrentTime(event.currentTarget.currentTime || 0);
+                    setVideoSize({
+                      width: event.currentTarget.videoWidth || 0,
+                      height: event.currentTarget.videoHeight || 0,
+                    });
                     setIsReady(true);
                   }}
                   onTimeUpdate={(event) => {
@@ -291,4 +312,3 @@ export const VideoSnapshotPanel = ({
 const clamp = (value: number, min: number, max: number) => {
   return Math.min(Math.max(value, min), max);
 };
-

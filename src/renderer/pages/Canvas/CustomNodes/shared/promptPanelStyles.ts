@@ -5,21 +5,29 @@
 
 export const PROMPT_PANEL_STYLES = {
   container:
-    "nodrag nopan nowheel w-[700px] rounded-2xl border border-white/[0.05] bg-[#1e1e20] p-3 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]",
+    "nodrag nopan nowheel w-[720px] bg-[#1e1e20] border border-white/5 rounded-3xl p-5 shadow-2xl pointer-events-auto flex flex-col gap-4",
 
   inputArea:
-    "relative mb-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2",
+    "relative flex flex-col gap-3",
 
-  controlArea: "rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5",
+  textAreaWrap:
+    "w-full bg-[#121214] border border-transparent rounded-xl overflow-hidden focus-within:border-[#B43FEB]/50 focus-within:shadow-[0_0_15px_rgba(180,63,235,0.15)] transition-all shadow-inner",
+
+  editorContent:
+    "nodrag nopan nowheel w-full bg-transparent p-4 pb-8 text-sm text-white/90 outline-none cursor-text min-h-[100px] max-h-[220px] overflow-y-auto",
+
+  divider: "w-full h-px bg-white/5 my-1",
+
+  controlArea: "flex items-center justify-between gap-3 flex-wrap",
 
   uploadButton:
-    "nodrag nopan nowheel h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-dashed border-white/[0.1] bg-white/[0.02] text-white/60 transition-colors hover:border-[#B43FEB]/50 hover:text-white/90 hover:bg-white/[0.04]",
+    "nodrag nopan nowheel flex flex-col items-center justify-center w-[60px] h-[60px] bg-[#121214] hover:bg-[#18181b] border border-transparent hover:border-[#B43FEB]/40 rounded-xl text-white/50 hover:text-[#B43FEB] transition-all cursor-pointer shadow-sm group",
 
   referenceImageButton:
-    "group relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.02]",
+    "group relative w-[60px] h-[60px] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#121214] shadow-sm hover:border-[#B43FEB]/40",
 
   modelSelect:
-    "h-8 min-w-[160px] rounded-full border-white/[0.08] bg-white/[0.03] text-xs text-white/80 hover:border-[#B43FEB]/40 hover:bg-white/[0.05] focus:border-[#B43FEB] focus:ring-2 focus:ring-[#B43FEB]/20 transition-all",
+    "bg-white/5 hover:bg-white/10 border border-transparent hover:border-[#B43FEB]/30 px-4 py-2.5 rounded-xl text-xs text-white/80 font-medium flex items-center gap-2 transition-all cursor-pointer group shadow-sm h-auto min-w-[160px]",
 
   modelSelectContent:
     "bg-[#1a1a1d] border border-white/[0.08] rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.4)] overflow-hidden",
@@ -39,13 +47,13 @@ export const PROMPT_PANEL_STYLES = {
     "flex flex-col items-center gap-1 rounded-lg border p-2 transition-all border-[#B43FEB] bg-[#B43FEB]/10",
 
   countButton:
-    "nodrag nopan nowheel inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 text-xs font-medium text-white/70 transition-colors hover:border-white/[0.12] hover:text-white/90 hover:bg-white/[0.04]",
+    "bg-white/5 hover:bg-white/10 px-4 py-2.5 rounded-xl text-xs text-white/70 hover:text-white/90 font-bold transition-colors cursor-pointer shadow-sm",
 
   generateButton:
-    "bg-[#B43FEB] text-white hover:bg-[#B43FEB]/80 h-8 px-4 text-xs font-medium rounded-lg transition-colors active:scale-[0.97]",
+    "bg-[#c246ff] text-white px-7 py-2.5 rounded-xl text-sm font-bold hover:bg-[#b030e8] hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-[0_0_20px_rgba(194,70,255,0.3)]",
 
   stopButton:
-    "bg-red-500/80 text-white hover:bg-red-500 h-8 px-4 text-xs font-medium rounded-lg transition-colors active:scale-[0.97]",
+    "bg-red-500/80 text-white px-7 py-2.5 rounded-xl text-sm font-bold hover:bg-red-500 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-sm",
 
   label: "text-xs font-medium text-white/70",
 

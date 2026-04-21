@@ -1,5 +1,10 @@
 import {
+  IconArrowBigLeftLines,
+  IconArrowBigRightLines,
   IconDownload,
+  IconEraser,
+  IconPlayerPauseFilled,
+  IconPlayerPlayFilled,
   IconPlayerStop,
   IconScissors,
   IconTrash,
@@ -7,9 +12,12 @@ import {
   IconZoomIn,
 } from "@tabler/icons-react";
 import type { ChangeEvent } from "react";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
+import { createSignedUploadTargetToOSS } from "service/oss";
+import { GenerationStatus } from "shared/constants/enum";
 import type { VideoGenerationNode } from "shared/types/flow";
+import { formatDuration } from "shared/utils/getVideoDuration";
 import { cn, downloadImageFromUrl } from "shared/utils/utils";
 import { toast } from "sonner";
 import Lightbox from "yet-another-react-lightbox";
@@ -21,13 +29,713 @@ import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
 import Video from "yet-another-react-lightbox/plugins/video";
 // import Thumbnails from 'yet-another-react-lightbox/plugins/thumbnails'
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import { ModelPointsBadge } from "@/components/ModelPointsBadge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import {
   getAspectRatioFromMediaFile,
 } from "../ImageNode/utils/aspectRatioUtils";
 import { VideoSnapshotPanel } from "./components/VideoSnapshotPanel";
+import { VideoTimeline } from "./components/VideoTimeline";
 import { useVideoFrameCapture } from "./hooks/useVideoFrameCapture";
 import { getVideoUrlsFromNodeData } from "./utils/video-url";
+import {
+  createWuhenVideoRemovalTask,
+  getWuhenVideoRemovalTaskStatus,
+  type WuhenRect,
+} from "@/api/wuhen";
+
+type ViewportRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type DragMode = "move" | "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
+const DEFAULT_FPS = 30;
+const FRAME_STEP_SECONDS = 1 / DEFAULT_FPS;
+const TIMELINE_STEP_MS = 100;
+const SUBTITLE_REMOVAL_POINTS_PER_SECOND = 0.5;
+
+const clamp = (value: number, minValue: number, maxValue: number) => {
+  return Math.min(maxValue, Math.max(minValue, value));
+};
+
+const computeContainedRect = (container: ViewportRect, mediaWidth: number, mediaHeight: number) => {
+  if (!mediaWidth || !mediaHeight || container.width <= 0 || container.height <= 0) {
+    return { x: 0, y: 0, width: container.width, height: container.height };
+  }
+
+  const containerRatio = container.width / container.height;
+  const mediaRatio = mediaWidth / mediaHeight;
+
+  let width = container.width;
+  let height = container.height;
+
+  if (containerRatio > mediaRatio) {
+    height = container.height;
+    width = height * mediaRatio;
+  } else {
+    width = container.width;
+    height = width / mediaRatio;
+  }
+
+  const x = (container.width - width) / 2;
+  const y = (container.height - height) / 2;
+  return { x, y, width, height };
+};
+
+const buildDefaultSubtitleRect = (bounds: ViewportRect) => {
+  const width = Math.max(80, bounds.width * 0.8);
+  const height = Math.max(60, bounds.height * 0.22);
+  const x = clamp((bounds.width - width) / 2, 0, Math.max(0, bounds.width - width));
+  const y = clamp(bounds.height * 0.72, 0, Math.max(0, bounds.height - height));
+  return { x, y, width, height };
+};
+
+const VideoSubtitleRemovalPanel = ({
+  open,
+  onClose,
+  videoUrl,
+  onSubmit,
+  isSubmitting,
+}: {
+  open: boolean;
+  onClose: () => void;
+  videoUrl: string;
+  isSubmitting: boolean;
+  onSubmit: (rect: WuhenRect) => Promise<void> | void;
+}) => {
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const playButtonRef = useRef<HTMLButtonElement | null>(null);
+  const dragRef = useRef<{
+    mode: DragMode;
+    startX: number;
+    startY: number;
+    startRect: ViewportRect;
+  } | null>(null);
+
+  const { totalPoints, ensureEnoughPoints, refreshBalanceInfo } =
+    useGenerationPoints();
+
+  const [isReady, setIsReady] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
+  const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(null);
+  const [videoBounds, setVideoBounds] = useState<ViewportRect | null>(null);
+  const [cropRect, setCropRect] = useState<ViewportRect | null>(null);
+
+  const requiredPoints = useMemo(() => {
+    if (!Number.isFinite(duration) || duration <= 0) {
+      return 0;
+    }
+    return Math.max(1, Math.ceil(duration * SUBTITLE_REMOVAL_POINTS_PER_SECOND));
+  }, [duration]);
+
+  const seekTo = useCallback(
+    (time: number) => {
+      const video = videoRef.current;
+      if (!video) {
+        return;
+      }
+
+      const maxTime = Number.isFinite(video.duration) ? video.duration : duration;
+      const nextTime = clamp(time, 0, maxTime || 0);
+      video.currentTime = nextTime;
+      setCurrentTime(nextTime);
+    },
+    [duration],
+  );
+
+  const stepFrame = useCallback(
+    (direction: 1 | -1) => {
+      const video = videoRef.current;
+      if (!video) {
+        return;
+      }
+
+      if (!video.paused) {
+        video.pause();
+        setIsPlaying(false);
+      }
+
+      const targetTime = video.currentTime + direction * FRAME_STEP_SECONDS;
+      seekTo(targetTime);
+
+      if ("requestVideoFrameCallback" in HTMLVideoElement.prototype) {
+        video.requestVideoFrameCallback(() => {
+          setCurrentTime(video.currentTime);
+        });
+      }
+    },
+    [seekTo],
+  );
+
+  const togglePlayback = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    if (video.paused) {
+      try {
+        await video.play();
+        setIsPlaying(true);
+      } catch {
+        setIsPlaying(false);
+      }
+      return;
+    }
+
+    video.pause();
+    setIsPlaying(false);
+  }, []);
+
+  const syncVideoBounds = useCallback(() => {
+    if (!viewportRef.current || !videoRef.current) {
+      return;
+    }
+    const viewport = viewportRef.current.getBoundingClientRect();
+    const container = { x: 0, y: 0, width: viewport.width, height: viewport.height };
+    setContainerSize({ width: viewport.width, height: viewport.height });
+
+    const mediaWidth = videoRef.current.videoWidth || 0;
+    const mediaHeight = videoRef.current.videoHeight || 0;
+    const contained = computeContainedRect(container, mediaWidth, mediaHeight);
+    setVideoBounds(contained);
+
+    setCropRect((prev) => {
+      if (!prev) {
+        const initial = buildDefaultSubtitleRect(contained);
+        return {
+          x: contained.x + initial.x,
+          y: contained.y + initial.y,
+          width: initial.width,
+          height: initial.height,
+        };
+      }
+
+      if (!videoBounds || videoBounds.width <= 0 || videoBounds.height <= 0) {
+        const fallback = buildDefaultSubtitleRect(contained);
+        return {
+          x: contained.x + fallback.x,
+          y: contained.y + fallback.y,
+          width: fallback.width,
+          height: fallback.height,
+        };
+      }
+
+      const nx = (prev.x - videoBounds.x) / videoBounds.width;
+      const ny = (prev.y - videoBounds.y) / videoBounds.height;
+      const nw = prev.width / videoBounds.width;
+      const nh = prev.height / videoBounds.height;
+
+      const nextWidth = clamp(nw * contained.width, 24, contained.width);
+      const nextHeight = clamp(nh * contained.height, 24, contained.height);
+      const nextX = clamp(
+        contained.x + nx * contained.width,
+        contained.x,
+        contained.x + contained.width - nextWidth,
+      );
+      const nextY = clamp(
+        contained.y + ny * contained.height,
+        contained.y,
+        contained.y + contained.height - nextHeight,
+      );
+
+      return {
+        x: nextX,
+        y: nextY,
+        width: nextWidth,
+        height: nextHeight,
+      };
+    });
+  }, [videoBounds?.height, videoBounds?.width]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!open) {
+      if (video && !video.paused) {
+        video.pause();
+      }
+      setIsPlaying(false);
+      return;
+    }
+    setIsReady(false);
+    setVideoSize(null);
+    setVideoBounds(null);
+    setCropRect(null);
+    setDuration(0);
+    setCurrentTime(0);
+    setIsPlaying(false);
+  }, [open, videoUrl]);
+
+  useEffect(() => {
+    if (open) {
+      void refreshBalanceInfo();
+      const timer = setTimeout(() => {
+        playButtonRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [open, refreshBalanceInfo]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const handleResize = () => syncVideoBounds();
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [open, syncVideoBounds]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const target = viewportRef.current;
+    if (!target) {
+      return;
+    }
+
+    let rafId = 0;
+    const schedule = () => {
+      if (rafId) {
+        return;
+      }
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0;
+        syncVideoBounds();
+      });
+    };
+
+    schedule();
+
+    const observer = new ResizeObserver(() => {
+      schedule();
+    });
+    observer.observe(target);
+
+    return () => {
+      observer.disconnect();
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+      }
+    };
+  }, [open, syncVideoBounds]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      if (event.code === "Space" || event.key === " ") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!isReady || isSubmitting) {
+          return;
+        }
+        void togglePlayback();
+        return;
+      }
+
+      if (target?.closest("[data-slot='slider']")) {
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        seekTo(currentTime - TIMELINE_STEP_MS / 1000);
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        seekTo(currentTime + TIMELINE_STEP_MS / 1000);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [currentTime, isReady, isSubmitting, open, seekTo, togglePlayback]);
+
+  const handlePointerUp = useCallback(() => {
+    dragRef.current = null;
+    window.removeEventListener("pointermove", handlePointerMove);
+    window.removeEventListener("pointerup", handlePointerUp);
+  }, []);
+
+  const handlePointerMove = useCallback(
+    (event: PointerEvent) => {
+      const drag = dragRef.current;
+      if (!drag || !videoBounds) {
+        return;
+      }
+
+      const minSize = 24;
+      const dx = event.clientX - drag.startX;
+      const dy = event.clientY - drag.startY;
+      const start = drag.startRect;
+      const mode = drag.mode;
+
+      let next: ViewportRect = { ...start };
+
+      if (mode === "move") {
+        next.x = clamp(
+          start.x + dx,
+          videoBounds.x,
+          videoBounds.x + videoBounds.width - start.width,
+        );
+        next.y = clamp(
+          start.y + dy,
+          videoBounds.y,
+          videoBounds.y + videoBounds.height - start.height,
+        );
+        setCropRect(next);
+        return;
+      }
+
+      if (mode.includes("e")) {
+        next.width = clamp(
+          start.width + dx,
+          minSize,
+          videoBounds.x + videoBounds.width - start.x,
+        );
+      }
+
+      if (mode.includes("s")) {
+        next.height = clamp(
+          start.height + dy,
+          minSize,
+          videoBounds.y + videoBounds.height - start.y,
+        );
+      }
+
+      if (mode.includes("w")) {
+        const nextX = clamp(
+          start.x + dx,
+          videoBounds.x,
+          start.x + start.width - minSize,
+        );
+        next.width = start.width - (nextX - start.x);
+        next.x = nextX;
+      }
+
+      if (mode.includes("n")) {
+        const nextY = clamp(
+          start.y + dy,
+          videoBounds.y,
+          start.y + start.height - minSize,
+        );
+        next.height = start.height - (nextY - start.y);
+        next.y = nextY;
+      }
+
+      next.width = clamp(
+        next.width,
+        minSize,
+        videoBounds.x + videoBounds.width - next.x,
+      );
+      next.height = clamp(
+        next.height,
+        minSize,
+        videoBounds.y + videoBounds.height - next.y,
+      );
+      setCropRect(next);
+    },
+    [videoBounds],
+  );
+
+  const startDrag = useCallback(
+    (mode: DragMode, event: React.PointerEvent<HTMLDivElement>) => {
+      if (!cropRect) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+
+      dragRef.current = {
+        mode,
+        startX: event.clientX,
+        startY: event.clientY,
+        startRect: cropRect,
+      };
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
+    },
+    [cropRect, handlePointerMove, handlePointerUp],
+  );
+
+  useEffect(() => {
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [handlePointerMove, handlePointerUp]);
+
+  const handleSend = useCallback(async () => {
+    if (!videoBounds || !cropRect || !videoSize) {
+      return;
+    }
+
+    if (
+      !ensureEnoughPoints({
+        requiredPoints,
+        actionLabel: "去字幕",
+        warning: toast.warning,
+      })
+    ) {
+      return;
+    }
+
+    const scaleX = videoSize.width / videoBounds.width;
+    const scaleY = videoSize.height / videoBounds.height;
+
+    const rect: WuhenRect = {
+      x1: Math.round((cropRect.x - videoBounds.x) * scaleX),
+      y1: Math.round((cropRect.y - videoBounds.y) * scaleY),
+      x2: Math.round((cropRect.x - videoBounds.x + cropRect.width) * scaleX),
+      y2: Math.round((cropRect.y - videoBounds.y + cropRect.height) * scaleY),
+    };
+
+    await onSubmit(rect);
+  }, [cropRect, ensureEnoughPoints, onSubmit, requiredPoints, videoBounds, videoSize]);
+
+  const handleConfig = useMemo(() => {
+    return [
+      { mode: "nw", className: "-left-2 -top-2 cursor-nwse-resize" },
+      { mode: "n", className: "left-1/2 -top-2 -translate-x-1/2 cursor-ns-resize" },
+      { mode: "ne", className: "-right-2 -top-2 cursor-nesw-resize" },
+      { mode: "e", className: "-right-2 top-1/2 -translate-y-1/2 cursor-ew-resize" },
+      { mode: "se", className: "-right-2 -bottom-2 cursor-nwse-resize" },
+      { mode: "s", className: "left-1/2 -bottom-2 -translate-x-1/2 cursor-ns-resize" },
+      { mode: "sw", className: "-left-2 -bottom-2 cursor-nesw-resize" },
+      { mode: "w", className: "-left-2 top-1/2 -translate-y-1/2 cursor-ew-resize" },
+    ] as const;
+  }, []);
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="flex max-h-[92vh] w-[min(1100px,96vw)] max-w-275 flex-col overflow-hidden border border-white/10 bg-[#121214] p-0 text-white">
+        <DialogHeader className="shrink-0 border-b border-white/5 bg-[#18181b] px-5 py-4">
+          <DialogTitle className="flex items-center gap-2 text-white">
+            <IconEraser size={18} />
+            去字幕
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex min-h-0 flex-1 flex-col bg-[#18181b]">
+          <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5">
+            <div
+              ref={viewportRef}
+              className="relative overflow-hidden rounded-xl border border-white/8 bg-black"
+            >
+              <div
+                className="w-full"
+                style={{
+                  aspectRatio: videoSize ? `${videoSize.width} / ${videoSize.height}` : "16 / 9",
+                }}
+              >
+                <video
+                  ref={videoRef}
+                  src={videoUrl}
+                  className="h-full w-full object-contain"
+                  controls={false}
+                  playsInline
+                  preload="auto"
+                  onLoadedMetadata={(event) => {
+                    const w = event.currentTarget.videoWidth || 0;
+                    const h = event.currentTarget.videoHeight || 0;
+                    setVideoSize({ width: w, height: h });
+                    setDuration(event.currentTarget.duration || 0);
+                    setCurrentTime(event.currentTarget.currentTime || 0);
+                    setIsReady(true);
+                    window.requestAnimationFrame(() => {
+                      window.requestAnimationFrame(() => {
+                        syncVideoBounds();
+                      });
+                    });
+                  }}
+                  onTimeUpdate={(event) => {
+                    setCurrentTime(event.currentTarget.currentTime || 0);
+                  }}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onEnded={() => setIsPlaying(false)}
+                />
+              </div>
+
+              {videoBounds && cropRect ? (
+                <div
+                  className="absolute border border-white/90 bg-white/10 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]"
+                  style={{
+                    left: cropRect.x,
+                    top: cropRect.y,
+                    width: cropRect.width,
+                    height: cropRect.height,
+                  }}
+                  onPointerDown={(event) => startDrag("move", event)}
+                >
+                  {handleConfig.map((item) => (
+                    <div
+                      key={item.mode}
+                      className={`absolute h-4 w-4 rounded-full border border-white bg-[#B43FEB] ${item.className}`}
+                      onPointerDown={(event) => startDrag(item.mode as DragMode, event)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+
+              {containerSize && videoBounds ? (
+                <>
+                  <div
+                    className="pointer-events-none absolute left-0 top-0 bg-black/55"
+                    style={{
+                      width: containerSize.width,
+                      height: Math.max(0, videoBounds.y),
+                    }}
+                  />
+                  <div
+                    className="pointer-events-none absolute left-0 bg-black/55"
+                    style={{
+                      top: videoBounds.y + videoBounds.height,
+                      width: containerSize.width,
+                      height: Math.max(
+                        0,
+                        containerSize.height - (videoBounds.y + videoBounds.height),
+                      ),
+                    }}
+                  />
+                  <div
+                    className="pointer-events-none absolute top-0 bg-black/55"
+                    style={{
+                      left: 0,
+                      top: videoBounds.y,
+                      width: Math.max(0, videoBounds.x),
+                      height: videoBounds.height,
+                    }}
+                  />
+                  <div
+                    className="pointer-events-none absolute top-0 bg-black/55"
+                    style={{
+                      left: videoBounds.x + videoBounds.width,
+                      top: videoBounds.y,
+                      width: Math.max(
+                        0,
+                        containerSize.width - (videoBounds.x + videoBounds.width),
+                      ),
+                      height: videoBounds.height,
+                    }}
+                  />
+                </>
+              ) : null}
+            </div>
+
+            <VideoTimeline
+              disabled={!isReady || isSubmitting}
+              currentTimeMs={Math.round(currentTime * 1000)}
+              durationMs={Math.round(duration * 1000)}
+              stepMs={TIMELINE_STEP_MS}
+              onSeek={(nextTimeMs) => {
+                seekTo(nextTimeMs / 1000);
+              }}
+            />
+
+            <div className="flex items-center justify-center gap-4">
+              <button
+                type="button"
+                onClick={() => stepFrame(-1)}
+                disabled={!isReady || isSubmitting}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#27272a] text-white/75 hover:bg-[#3f3f46] hover:text-[#B43FEB] disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="快退"
+              >
+                <IconArrowBigLeftLines size={18} />
+              </button>
+              <button
+                ref={playButtonRef}
+                type="button"
+                onClick={() => void togglePlayback()}
+                disabled={!isReady || isSubmitting}
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-[#B43FEB] text-white shadow-lg shadow-[#B43FEB]/20 hover:bg-[#B43FEB]/90 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={isPlaying ? "暂停" : "播放"}
+              >
+                {isPlaying ? (
+                  <IconPlayerPauseFilled size={20} />
+                ) : (
+                  <IconPlayerPlayFilled size={20} className="ml-0.5" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => stepFrame(1)}
+                disabled={!isReady || isSubmitting}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#27272a] text-white/75 hover:bg-[#3f3f46] hover:text-[#B43FEB] disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="快进"
+              >
+                <IconArrowBigRightLines size={18} />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-xs text-white/50">
+                {isReady ? `视频时长 ${formatDuration(duration)}（${Math.ceil(duration)} 秒）` : "读取视频时长中..."}
+                {" · "}
+                单价 {SUBTITLE_REMOVAL_POINTS_PER_SECOND} 积分/秒
+              </div>
+              <ModelPointsBadge
+                totalPoints={totalPoints}
+                requiredPoints={requiredPoints}
+                title={
+                  isReady
+                    ? `预计消耗 ${requiredPoints} 积分（${SUBTITLE_REMOVAL_POINTS_PER_SECOND} 积分/秒，时长 ${formatDuration(duration)}），当前余额 ${totalPoints}`
+                    : `预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`
+                }
+              />
+            </div>
+          </div>
+
+          <div className="flex shrink-0 justify-end gap-3 border-t border-white/5 bg-[#18181b] px-5 py-4">
+            <Button
+              variant="default"
+              onClick={onClose}
+              className="border border-white/10 bg-transparent text-white/70 hover:bg-white/5 hover:text-white"
+            >
+              取消
+            </Button>
+            <Button
+              onClick={() => void handleSend()}
+              disabled={!isReady || isSubmitting || requiredPoints <= 0}
+              className="min-w-44 border border-[#f3d5ff]/50 bg-[#B43FEB] font-semibold text-white shadow-[0_12px_34px_rgba(180,63,235,0.44)] ring-1 ring-[#f0c7ff]/25 hover:bg-[#C45BF0] hover:shadow-[0_16px_40px_rgba(180,63,235,0.52)]"
+            >
+              {isSubmitting ? "发送中..." : "发送并生成新视频"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 type VideoToolbarProps = {
   nodeId: string;
@@ -40,6 +748,7 @@ type ActionKey =
   | "download"
   | "preview"
   | "snapshot"
+  | "removeCaptions"
   | "lastFrame";
 
 /**
@@ -54,9 +763,16 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSnapshotPanelOpen, setIsSnapshotPanelOpen] = useState(false);
+  const [isSubtitlePanelOpen, setIsSubtitlePanelOpen] = useState(false);
+  const [isSubmittingSubtitle, setIsSubmittingSubtitle] = useState(false);
+  const subtitlePollersRef = useRef<Record<string, number>>({});
 
   // 隐藏的文件输入框引用：用于点击"上传"按钮时拉起文件选择器
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const nodes = useCanvasFlowStore((state) => state.nodes);
+  const addNode = useCanvasFlowStore((state) => state.addNode);
+  const onConnect = useCanvasFlowStore((state) => state.onConnect);
 
   // 更新视频节点数据：上传成功后将 URL 回填到当前节点
   const updateVideoNodeData = useCanvasFlowStore(
@@ -82,6 +798,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       { key: "upload" as const, label: "上传", icon: IconUpload },
       { key: "snapshot" as const, label: "截帧", icon: IconScissors },
       { key: "lastFrame" as const, label: "尾帧", icon: IconPlayerStop },
+      { key: "removeCaptions" as const, label: "去字幕", icon: IconEraser },
       { key: "download" as const, label: "下载", icon: IconDownload },
       { key: "preview" as const, label: "放大查看", icon: IconZoomIn },
     ];
@@ -201,9 +918,197 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       return;
     }
 
+    if (actionKey === "removeCaptions") {
+      if (!currentVideoUrl) {
+        toast.info("暂无可用视频");
+        return;
+      }
+      setIsSubtitlePanelOpen(true);
+      return;
+    }
+
   };
 
   const isPreviewActive = isLightboxOpen;
+
+  useEffect(() => {
+    return () => {
+      Object.values(subtitlePollersRef.current).forEach((timer) => {
+        window.clearInterval(timer);
+      });
+      subtitlePollersRef.current = {};
+    };
+  }, []);
+
+  const startSubtitlePolling = useCallback(
+    (taskId: string, targetNodeId: string) => {
+      const existing = subtitlePollersRef.current[targetNodeId];
+      if (existing) {
+        window.clearInterval(existing);
+      }
+
+      const timer = window.setInterval(async () => {
+        try {
+          const response = await getWuhenVideoRemovalTaskStatus(taskId);
+          if (!response?.success) {
+            return;
+          }
+          const record = response.data;
+
+          if (record.status === "success") {
+            updateVideoNodeData(targetNodeId, {
+              status: GenerationStatus.COMPLETED,
+              progress: 100,
+              result: {
+                type: "video",
+                data: [{ url: record.resultVideoUrl, format: "mp4" }],
+              },
+              error: undefined,
+            });
+            window.clearInterval(timer);
+            delete subtitlePollersRef.current[targetNodeId];
+            return;
+          }
+
+          if (record.status === "failed") {
+            updateVideoNodeData(targetNodeId, {
+              status: GenerationStatus.FAILED,
+              progress: record.progress ?? 0,
+              error: {
+                code: "WUHEI_FAILED",
+                message: record.description || record.message || "去字幕失败",
+              },
+            });
+            window.clearInterval(timer);
+            delete subtitlePollersRef.current[targetNodeId];
+            return;
+          }
+
+          updateVideoNodeData(targetNodeId, {
+            status: GenerationStatus.IN_PROGRESS,
+            progress: record.progress ?? 0,
+          });
+        } catch {
+        }
+      }, 2000);
+
+      subtitlePollersRef.current[targetNodeId] = timer;
+    },
+    [updateVideoNodeData],
+  );
+
+  const handleSubmitRemoveCaptions = useCallback(
+    async (rect: WuhenRect) => {
+      if (!currentVideoUrl) {
+        return;
+      }
+      if (isSubmittingSubtitle) {
+        return;
+      }
+
+      setIsSubmittingSubtitle(true);
+      try {
+        const sourceNode = nodes.find((n) => n.id === nodeId);
+        const basePosition = sourceNode?.position ?? { x: 0, y: 0 };
+        const baseWidth = Number(sourceNode?.width ?? 350) || 350;
+
+        const target = await createSignedUploadTargetToOSS({
+          directory: "video",
+          extension: "mp4",
+          contentType: "video/mp4",
+        });
+
+        const newNodeId = addNode("video", {
+          x: basePosition.x + baseWidth + 120,
+          y: basePosition.y,
+        });
+
+        updateVideoNodeData(newNodeId, {
+          nickname: "去字幕",
+          status: GenerationStatus.QUEUED,
+          progress: 0,
+          result: { type: "video", data: [] },
+          error: undefined,
+          wuhen: {
+            taskId: "",
+            rect,
+            resultVideoUrl: target.publicUrl,
+          },
+        } as any);
+
+        window.setTimeout(() => {
+          onConnect({
+            source: nodeId,
+            sourceHandle: "output",
+            target: newNodeId,
+            targetHandle: "input",
+          });
+        }, 50);
+
+        const response = await createWuhenVideoRemovalTask({
+          sourceVideoUrl: currentVideoUrl,
+          uploadUrl: target.uploadUrl,
+          uploadHeaders: target.uploadHeaders,
+          resultVideoUrl: target.publicUrl,
+          rect,
+          model: "video_removal_std",
+        });
+
+        if (!response?.success) {
+          updateVideoNodeData(newNodeId, {
+            status: GenerationStatus.FAILED,
+            error: {
+              code: "WUHEI_CREATE_FAILED",
+              message: "创建去字幕任务失败",
+            },
+          });
+          return;
+        }
+
+        updateVideoNodeData(newNodeId, {
+          wuhen: {
+            taskId: response.data.taskId,
+            rect,
+            resultVideoUrl: response.data.resultVideoUrl,
+          },
+        } as any);
+
+        if (response.data.status === "success") {
+          updateVideoNodeData(newNodeId, {
+            status: GenerationStatus.COMPLETED,
+            progress: 100,
+            result: {
+              type: "video",
+              data: [{ url: response.data.resultVideoUrl, format: "mp4" }],
+            },
+            error: undefined,
+          });
+        } else {
+          updateVideoNodeData(newNodeId, {
+            status: GenerationStatus.IN_PROGRESS,
+            progress: 0,
+          });
+          startSubtitlePolling(response.data.taskId, newNodeId);
+        }
+
+        setIsSubtitlePanelOpen(false);
+      } catch (error: any) {
+        toast.error(error?.message || "去字幕失败");
+      } finally {
+        setIsSubmittingSubtitle(false);
+      }
+    },
+    [
+      addNode,
+      currentVideoUrl,
+      isSubmittingSubtitle,
+      nodeId,
+      nodes,
+      onConnect,
+      startSubtitlePolling,
+      updateVideoNodeData,
+    ],
+  );
 
   return (
     <>
@@ -224,7 +1129,8 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             (item.key === "download" && isDownloading) ||
             (item.key === "upload" && isUploading) ||
             (item.key === "lastFrame" && isCapturingLastFrame) ||
-            (item.key === "snapshot" && isCapturingSnapshot);
+            (item.key === "snapshot" && isCapturingSnapshot) ||
+            (item.key === "removeCaptions" && isSubmittingSubtitle);
 
           return (
             <button
@@ -271,6 +1177,14 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         videoUrl={currentVideoUrl || ""}
         onSnapshot={(timeMs) => captureSnapshot(currentVideoUrl || "", timeMs, nodeId)}
         isCapturing={isCapturingSnapshot}
+      />
+
+      <VideoSubtitleRemovalPanel
+        open={isSubtitlePanelOpen}
+        onClose={() => setIsSubtitlePanelOpen(false)}
+        videoUrl={currentVideoUrl || ""}
+        onSubmit={handleSubmitRemoveCaptions}
+        isSubmitting={isSubmittingSubtitle}
       />
 
       {isLightboxOpen ? (
