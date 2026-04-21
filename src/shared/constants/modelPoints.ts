@@ -10,8 +10,10 @@ export const IMAGE_PLATFORM_POINTS: Record<string, number> = {
 };
 
 export const VIDEO_MODEL_POINTS: Record<string, number> = {
-  // 仅豆包 Seedance 2.0
+  // 豆包 Seedance 2.0 Fast/Pro（共享同一模型，积分相同）
   "doubao-seedance-2.0": 90,
+  "doubao-seedance-2.0-fast": 90,
+  "doubao-seedance-2.0-pro": 90,
 };
 
 export const DEFAULT_IMAGE_GENERATION_POINTS = 12;

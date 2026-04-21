@@ -129,7 +129,120 @@ export const getModelDefaultParams = (
   return config?.defaults;
 };
 
-// ===================== Wan 2.7 r2v (万象) =====================
+// ===================== Doubao Seedance 2.0 Fast =====================
+/** 豆包 Seedance 2.0 Fast 参数配置（mode 固定为 fast，不暴露给用户） */
+MODEL_PARAM_CONFIGS["doubao-seedance-2.0-fast"] = {
+  model: "doubao-seedance-2.0-fast",
+  params: [
+    {
+      key: "duration",
+      label: "视频时长",
+      controlType: "buttons",
+      options: [
+        { label: "4秒", value: 4 },
+        { label: "5秒", value: 5 },
+        { label: "8秒", value: 8 },
+        { label: "10秒", value: 10 },
+      ],
+      defaultValue: 8,
+    },
+    {
+      key: "aspect_ratio",
+      label: "画面比例",
+      controlType: "buttons",
+      options: [
+        { label: "16:9", value: "16:9" },
+        { label: "4:3", value: "4:3" },
+        { label: "1:1", value: "1:1" },
+        { label: "3:4", value: "3:4" },
+        { label: "9:16", value: "9:16" },
+        { label: "21:9", value: "21:9" },
+        { label: "自适应", value: "adaptive" },
+      ],
+      defaultValue: "16:9",
+    },
+    {
+      key: "resolution",
+      label: "分辨率",
+      controlType: "buttons",
+      options: [
+        { label: "720p", value: "720p" },
+        { label: "480p", value: "480p" },
+      ],
+      defaultValue: "720p",
+    },
+    {
+      key: "generate_audio",
+      label: "生成音频",
+      controlType: "switch",
+      defaultValue: false,
+    },
+  ],
+  defaults: {
+    duration: 8,
+    aspect_ratio: "16:9",
+    resolution: "720p",
+    generate_audio: false,
+  },
+};
+
+
+// ===================== Doubao Seedance 2.0 Pro =====================
+/** 豆包 Seedance 2.0 Pro 参数配置（mode 固定为 pro，不暴露给用户） */
+MODEL_PARAM_CONFIGS["doubao-seedance-2.0-pro"] = {
+  model: "doubao-seedance-2.0-pro",
+  params: [
+    {
+      key: "duration",
+      label: "视频时长",
+      controlType: "buttons",
+      options: [
+        { label: "4秒", value: 4 },
+        { label: "5秒", value: 5 },
+        { label: "8秒", value: 8 },
+        { label: "10秒", value: 10 },
+      ],
+      defaultValue: 10,
+    },
+    {
+      key: "aspect_ratio",
+      label: "画面比例",
+      controlType: "buttons",
+      options: [
+        { label: "16:9", value: "16:9" },
+        { label: "4:3", value: "4:3" },
+        { label: "1:1", value: "1:1" },
+        { label: "3:4", value: "3:4" },
+        { label: "9:16", value: "9:16" },
+        { label: "21:9", value: "21:9" },
+        { label: "自适应", value: "adaptive" },
+      ],
+      defaultValue: "16:9",
+    },
+    {
+      key: "resolution",
+      label: "分辨率",
+      controlType: "buttons",
+      options: [
+        { label: "720p", value: "720p" },
+        { label: "480p", value: "480p" },
+      ],
+      defaultValue: "720p",
+    },
+    {
+      key: "generate_audio",
+      label: "生成音频",
+      controlType: "switch",
+      defaultValue: false,
+    },
+  ],
+  defaults: {
+    duration: 10,
+    aspect_ratio: "16:9",
+    resolution: "720p",
+    generate_audio: false,
+  },
+};
 /** 万象模型参数配置 */
 const WAN27R2V_PARAMS: ParamItem[] = [
   {

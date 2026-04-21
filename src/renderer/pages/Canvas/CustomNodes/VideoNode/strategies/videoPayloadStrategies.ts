@@ -122,7 +122,16 @@ const doubaoSeedance20Strategy: VideoPayloadStrategy = {
     { prompt, imageUrls, videoUrls = [], audioUrls = [] },
   ) => {
     const generationMode = resolveGenerationMode(nodeData, "doubao-seedance-2.0");
-    const mode = nodeData.metadata?.mode ?? "fast";
+    // 根据模型名称推断 mode：fast/pro 后缀决定 mode 值，兜底走 metadata
+    const modelName = nodeData.model ?? "";
+    let mode: string;
+    if (modelName.endsWith("-fast")) {
+      mode = "fast";
+    } else if (modelName.endsWith("-pro")) {
+      mode = "pro";
+    } else {
+      mode = (nodeData.metadata as any)?.mode ?? "fast";
+    }
     const minDuration = 4;
     const maxDuration = mode === "pro" ? 15 : 12;
     const rawDuration = nodeData.duration ?? 8;
@@ -157,7 +166,7 @@ const doubaoSeedance20Strategy: VideoPayloadStrategy = {
         : "reference";
 
     return {
-      model: "doubao-seedance-2.0",
+      model: modelName, // 使用实际的模型名称（包含 -fast/-pro 后缀）
       prompt,
       generation_type: "video",
       mode,

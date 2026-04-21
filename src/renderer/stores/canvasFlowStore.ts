@@ -59,10 +59,12 @@ import { create } from "zustand";
 import {
   createDashscopeVideoSynthesis,
   createImageGeneration,
+  createLzVideoTask,
   fetchMjTask,
   generateGeminiContent,
   getDashscopeVideoTaskStatus,
   getImageTaskStatus,
+  getLzVideoTaskStatus,
   submitMjImagine,
 } from "@/api/ai";
 import { updateVipScore } from "@/api/jikeing";
@@ -611,6 +613,7 @@ const pollMjImageGeneration = async (
 
 /**
  * 视频生成轮询逻辑
+ * @param isSeedance20 是否为豆包 Seedance 2.0（使用快手 API 轮询）
  */
 const pollVideoGeneration = async (
   taskId: string,
@@ -620,6 +623,7 @@ const pollVideoGeneration = async (
     updater: (state: CanvasFlowStoreType) => Partial<CanvasFlowStoreType>,
   ) => void,
   getState: () => CanvasFlowStoreType,
+  isSeedance20 = false,
 ) => {
   const startTime = Date.now();
   let missingResultUrlStartTime: number | null = null;
@@ -647,7 +651,10 @@ const pollVideoGeneration = async (
         return;
       }
 
-      const response: any = await getDashscopeVideoTaskStatus(taskId);
+      // 根据模型类型选择不同的轮询接口
+      const response: any = isSeedance20
+        ? await getLzVideoTaskStatus(taskId)
+        : await getDashscopeVideoTaskStatus(taskId);
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
       if (!currentNode || currentNode.type !== "videoNode") {
@@ -2331,9 +2338,20 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }));
 
       try {
-        const response: any = await createDashscopeVideoSynthesis(payload);
+        const model = (payload as any).model ?? "";
+        // 判断是否为豆包 Seedance 2.0 Fast/Pro（使用快手 API）
+        const isSeedance20 = model === "doubao-seedance-2.0-fast" || model === "doubao-seedance-2.0-pro";
 
-        const taskId = response?.output?.task_id;
+        let response: any;
+        if (isSeedance20) {
+          // 豆包 Seedance 2.0 使用快手 AI 视频接口
+          response = await createLzVideoTask(payload);
+        } else {
+          // 万象、PixVerse 等使用阿里云百炼视频接口
+          response = await createDashscopeVideoSynthesis(payload);
+        }
+
+        const taskId = response?.data?.task_id ?? response?.output?.task_id;
 
         if (!taskId) {
           throw new Error("任务 ID 为空");
@@ -2351,7 +2369,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         const controller = new AbortController();
         videoPollingControllers.set(nodeId, controller);
-        pollVideoGeneration(taskId, nodeId, controller.signal, set, get);
+        pollVideoGeneration(taskId, nodeId, controller.signal, set, get, isSeedance20);
       } catch (startError) {
         console.error("[Dashscope] 创建视频生成任务失败:", startError);
         // 从 error 对象中提取后端返回的详细信息

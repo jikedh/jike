@@ -76,11 +76,20 @@ export const TEXT_MODELS = [
 
 /** 视频模型配置 */
 export const VIDEO_MODELS = [
-  // 字节豆包 Seedance 2.0
+  // 字节豆包 Seedance 2.0 Fast
   {
     id: 22,
-    name: "Doubao Seedance 2.0",
-    model: "doubao-seedance-2.0",
+    name: "豆包 Seedance 2.0 Fast",
+    model: "doubao-seedance-2.0-fast",
+    platform: "doubao",
+    platformId: 2,
+    callable: true,
+  },
+  // 字节豆包 Seedance 2.0 Pro
+  {
+    id: 23,
+    name: "豆包 Seedance 2.0 Pro",
+    model: "doubao-seedance-2.0-pro",
     platform: "doubao",
     platformId: 2,
     callable: true,
