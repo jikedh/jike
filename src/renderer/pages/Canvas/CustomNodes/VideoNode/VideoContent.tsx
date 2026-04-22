@@ -7,6 +7,11 @@ type VideoContentProps = {
   onRetry?: () => void;
   nodeId?: string;
   updateVideoNodeData?: (nodeId: string, patch: any) => void;
+  onGalleryExpandedChange?: (expanded: boolean) => void;
+  frameSize?: {
+    width: number;
+    height: number;
+  };
 };
 
 export const VideoContent = ({
@@ -14,6 +19,8 @@ export const VideoContent = ({
   onRetry,
   nodeId,
   updateVideoNodeData,
+  onGalleryExpandedChange,
+  frameSize,
 }: VideoContentProps) => {
   // 结果视频列表（支持多个），保留原始对象结构用于排序
   const videos = data.result?.data?.filter((item) => item?.url) ?? [];
@@ -85,6 +92,8 @@ export const VideoContent = ({
         videos={videos}
         nodeId={nodeId}
         updateVideoNodeData={updateVideoNodeData}
+        onExpandedChange={onGalleryExpandedChange}
+        frameSize={frameSize}
       />
     );
   }

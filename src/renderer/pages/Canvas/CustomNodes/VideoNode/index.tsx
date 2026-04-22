@@ -3,7 +3,7 @@ import {
   Position,
   useUpdateNodeInternals,
 } from "@xyflow/react";
-import { memo, useCallback, useEffect, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import type { VideoNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
@@ -25,6 +25,7 @@ import { VideoToolbar } from "./VideoToolbar";
 export const VideoNode = memo(
   ({ id, data, selected, dragging }: NodeProps<VideoNodeType>) => {
     const isDragging = Boolean(dragging);
+    const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
     const separateToNodes = useCanvasFlowStore(
@@ -44,10 +45,12 @@ export const VideoNode = memo(
     // 使用 useMemo 缓存样式类名
     const handleVisibilityClass = useMemo(
       () =>
-        selected
+        isGalleryExpanded
+          ? "invisible opacity-0"
+          : selected
           ? "visible opacity-100"
           : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100",
-      [selected],
+      [isGalleryExpanded, selected],
     );
 
     // 使用 useMemo 缓存工具栏显示条件
@@ -107,6 +110,7 @@ export const VideoNode = memo(
         onDelete={handleDelete}
         onSeparateToNodes={handleSeparateToNodes}
         hasMultipleResults={hasMultipleResults}
+        separateToNodesLabel="独立为视频"
       >
         <div
           className="group/node relative"
@@ -148,7 +152,8 @@ export const VideoNode = memo(
 
           <div
             className={cn(
-              "group/card relative flex flex-col w-full h-full rounded-xl border bg-linear-to-br from-[#141418] to-[#0d0d10]",
+              "group/card relative flex h-full w-full flex-col rounded-xl border",
+              hasMultipleResults && "bg-linear-to-br from-[#141418] to-[#0d0d10]",
               selected
                 ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
                 : isSourceHighlighted
@@ -167,14 +172,31 @@ export const VideoNode = memo(
             )}
 
             {/* 扫光效果 */}
-            <div className="pointer-events-none absolute inset-0 rounded-xl bg-linear-to-tr from-transparent via-white/2 to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
+            <div
+              className={cn(
+                "pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-500 group-hover/card:opacity-100",
+                hasMultipleResults &&
+                  "bg-linear-to-tr from-transparent via-white/2 to-transparent",
+              )}
+            />
 
             {/* 视频内容区 */}
-            <div className="relative flex h-full w-full overflow-hidden rounded-lg bg-black/30">
+            <div
+              className={cn(
+                "relative flex h-full w-full",
+                hasMultipleResults ? "rounded-lg bg-black/30" : "rounded-xl",
+                isGalleryExpanded ? "overflow-visible" : "overflow-hidden",
+              )}
+            >
               <VideoContent
                 data={data}
                 nodeId={id}
                 updateVideoNodeData={updateVideoNodeData}
+                onGalleryExpandedChange={setIsGalleryExpanded}
+                frameSize={{
+                  width: nodeSize.width,
+                  height: nodeSize.height,
+                }}
               />
             </div>
           </div>

@@ -3,7 +3,7 @@ import {
   Position,
   useUpdateNodeInternals,
 } from "@xyflow/react";
-import { memo, useCallback, useEffect, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { ButtonHandle } from "@/components/button-handle";
 import { PanoramaViewer } from "@/components/panorama/PanoramaViewer";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { ImageAnnotationWorkspace } from "./ImageAnnotationWorkspace";
 import { ImageContent } from "./ImageContent";
@@ -34,6 +35,7 @@ import { getNodeSizeByAspectRatio } from "./utils/aspectRatioUtils";
 export const ImageNode = memo(
   ({ id, data, selected, dragging }: NodeProps<ImageNodeType>) => {
     const isDragging = Boolean(dragging);
+    const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
     const addNode = useCanvasFlowStore((state) => state.addNode);
@@ -71,10 +73,12 @@ export const ImageNode = memo(
     // 使用 useMemo 缓存样式类名，避免每次渲染都重新拼接字符串
     const handleVisibilityClass = useMemo(
       () =>
-        selected
+        isGalleryExpanded || isAnnotationMode
+          ? "invisible opacity-0"
+          : selected
           ? "visible opacity-100"
           : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100",
-      [selected],
+      [isAnnotationMode, isGalleryExpanded, selected],
     );
 
     // 使用 useMemo 缓存工具栏显示条件，避免每次渲染都重新计算
@@ -208,17 +212,15 @@ export const ImageNode = memo(
       openImageAnnotation(currentUrl, id);
     }, [data.result?.data, id, openImageAnnotation]);
 
-    // 点击图片重新排序：将指定索引的图片移到首位
+    // 点击“设为主图”时交换主图与目标图，保持其余顺序不变
     const handleReorder = useCallback(
       (fromIndex: number) => {
         const resultData = data.result?.data;
         if (!resultData || fromIndex <= 0 || fromIndex >= resultData.length)
           return;
 
-        // 将被点击的图片元素移到数组首位
         const newData = [...resultData];
-        const [movedItem] = newData.splice(fromIndex, 1);
-        newData.unshift(movedItem);
+        [newData[0], newData[fromIndex]] = [newData[fromIndex], newData[0]];
 
         // 通过 store 更新节点数据
         updateImageNodeData(id, {
@@ -227,6 +229,12 @@ export const ImageNode = memo(
             data: newData,
           },
         });
+
+        const flowStore = useCanvasFlowStore.getState();
+        flowStore.requestHistorySave();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          flowStore.saveGraph();
+        }
       },
       [data.result, id, updateImageNodeData],
     );
@@ -241,7 +249,10 @@ export const ImageNode = memo(
           hasMultipleResults={hasMultipleResults}
         >
           <div
-            className="group/node relative"
+            className={cn(
+              "group/node relative",
+              isGalleryExpanded && "z-40",
+            )}
             style={{
               width: `${nodeSize.width}px`,
               height: `${nodeSize.height}px`,
@@ -262,7 +273,8 @@ export const ImageNode = memo(
 
             <div
               className={cn(
-                "group/card relative flex flex-col w-full h-full rounded-xl border bg-linear-to-br from-[#141418] to-[#0d0d10]",
+                "group/card relative flex h-full w-full flex-col rounded-xl border",
+                hasMultipleResults && "bg-linear-to-br from-[#141418] to-[#0d0d10]",
                 isAnnotationMode
                   ? "border-transparent shadow-none ring-0"
                   : selected
@@ -302,12 +314,22 @@ export const ImageNode = memo(
 
               {/* 扫光效果 */}
               {!isAnnotationMode ? (
-                <div className="pointer-events-none absolute inset-0 rounded-xl bg-linear-to-tr from-transparent via-white/2 to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
+                <div
+                  className={cn(
+                    "pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-500 group-hover/card:opacity-100",
+                    hasMultipleResults &&
+                      "bg-linear-to-tr from-transparent via-white/2 to-transparent",
+                  )}
+                />
               ) : null}
 
               {/* 图片内容区 - 根据图片比例动态调整 */}
               <div
-                className="relative flex w-full h-full overflow-hidden rounded-lg bg-black/30"
+                className={cn(
+                  "relative flex h-full w-full",
+                  hasMultipleResults ? "rounded-lg bg-black/30" : "rounded-xl",
+                  isGalleryExpanded ? "overflow-visible" : "overflow-hidden",
+                )}
                 style={{ aspectRatio: nodeSize.aspectRatio }}
               >
                 <ImageContent
@@ -315,6 +337,11 @@ export const ImageNode = memo(
                   onReorder={handleReorder}
                   nodeId={id}
                   updateImageNodeData={updateImageNodeData}
+                  onGalleryExpandedChange={setIsGalleryExpanded}
+                  frameSize={{
+                    width: nodeSize.width,
+                    height: nodeSize.height,
+                  }}
                 />
               </div>
             </div>

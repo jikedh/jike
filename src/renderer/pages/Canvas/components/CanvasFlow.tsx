@@ -172,8 +172,9 @@ export const CanvasFlow = ({
     handleFiles,
   } = useDragUpload();
 
-  // 空格键按下状态仅供事件处理读取，避免切换抓手模式时触发整树重渲染。
+  // 空格键按下状态同时驱动 React Flow 的平移/框选切换。
   const spacePressedRef = useRef(false);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
   const previousAnnotationViewportRef = useRef<{
     x: number;
     y: number;
@@ -352,6 +353,7 @@ export const CanvasFlow = ({
         reactFlowEl.removeAttribute("data-space-pressed");
         reactFlowEl.removeAttribute("data-ctrl-pressed");
         spacePressedRef.current = false;
+        setIsSpacePressed(false);
         return;
       }
 
@@ -359,14 +361,17 @@ export const CanvasFlow = ({
         reactFlowEl.setAttribute("data-space-pressed", "true");
         reactFlowEl.removeAttribute("data-ctrl-pressed");
         spacePressedRef.current = true;
+        setIsSpacePressed(true);
       } else if (isCtrlPressed) {
         reactFlowEl.setAttribute("data-ctrl-pressed", "true");
         reactFlowEl.removeAttribute("data-space-pressed");
         spacePressedRef.current = false;
+        setIsSpacePressed(false);
       } else {
         reactFlowEl.removeAttribute("data-space-pressed");
         reactFlowEl.removeAttribute("data-ctrl-pressed");
         spacePressedRef.current = false;
+        setIsSpacePressed(false);
       }
     };
 
@@ -423,6 +428,7 @@ export const CanvasFlow = ({
       reactFlowEl.removeAttribute("data-space-pressed");
       reactFlowEl.removeAttribute("data-ctrl-pressed");
       spacePressedRef.current = false;
+      setIsSpacePressed(false);
     };
   }, [annotationWorkspace.open]);
 
@@ -1659,7 +1665,7 @@ export const CanvasFlow = ({
             onMove={shouldTrackViewport ? handleViewportMove : undefined}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
-            nodesDraggable={!isAnnotationLocked}
+            nodesDraggable={!isAnnotationLocked && !isSpacePressed}
             nodesConnectable={!isAnnotationLocked}
             nodesFocusable={!isAnnotationLocked}
             edgesFocusable={!isAnnotationLocked}
@@ -1668,10 +1674,11 @@ export const CanvasFlow = ({
             minZoom={0.2}
             maxZoom={2}
             colorMode="dark"
+            style={{ background: "#090909" }}
             deleteKeyCode={isAnnotationLocked ? null : ["Backspace", "Delete"]}
-            panOnDrag={isAnnotationLocked ? false : [1]}
+            panOnDrag={isAnnotationLocked ? false : isSpacePressed ? [0, 2] : [2]}
             panActivationKeyCode={isAnnotationLocked ? null : "Space"}
-            selectionOnDrag={!isAnnotationLocked}
+            selectionOnDrag={!isAnnotationLocked && !isSpacePressed}
             selectionMode={SelectionMode.Partial}
             multiSelectionKeyCode={["Shift"]}
             panOnScroll={!isAnnotationLocked}
@@ -1687,7 +1694,14 @@ export const CanvasFlow = ({
             connectionRadius={50}
             defaultEdgeOptions={defaultEdgeOptions}
           >
-            {gridVisible && <Background variant={BackgroundVariant.Dots} />}
+            {gridVisible && (
+              <Background
+                id="canvas-grid-dots"
+                variant={BackgroundVariant.Dots}
+                gap={20}
+                size={1}
+              />
+            )}
             {isMiniMapVisible ? (
               <MiniMap
                 pannable
