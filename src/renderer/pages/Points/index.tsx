@@ -21,6 +21,12 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
+import {
+  createRechargeOrder,
+  getRechargeOrderStatus,
+  updateVipScore,
+} from "@/api/jikeing";
+import { useUserStore } from "@/stores/useUserStore";
 
 const AVATAR_STYLES = [
   "adventurer",
@@ -57,6 +63,11 @@ export function PointsView() {
     codeUrl: string;
   } | null>(null);
 
+  // 从全局 store 获取积分信息
+  const balanceInfo = useUserStore((state) => state.balanceInfo);
+  const fetchBalanceInfo = useUserStore((state) => state.fetchBalanceInfo);
+  const setBalanceInfo = useUserStore((state) => state.setBalanceInfo);
+
   useEffect(() => {
     const token = getJikeingToken();
     if (token) {
@@ -67,6 +78,9 @@ export function PointsView() {
       const avatarStyle = getRandomStyle(userSeed);
       const url = generateAvatarUrl(userSeed, avatarStyle);
       setAvatarUrl(url);
+
+      // 使用全局 store 的 fetchBalanceInfo 获取积分
+      void fetchBalanceInfo();
     }
   }, []);
 
@@ -111,10 +125,6 @@ export function PointsView() {
       ? null
       : packages.find((pkg) => pkg.id === selectedPackageId) ?? null;
 
-  const payServerBaseUrl =
-    ((import.meta as any).env?.VITE_PAY_SERVER_BASE_URL as string | undefined) ||
-    "http://127.0.0.1:8787";
-
   const buildQrcodeImageByCodeUrl = (codeUrl: string) => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(codeUrl)}`;
   };
@@ -128,19 +138,16 @@ export function PointsView() {
       return;
     }
 
+
     setIsCreatingOrder(true);
     try {
-      const response = await fetch(`${payServerBaseUrl}/api/recharge/native/create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          packageId: pkg.packageId,
-        }),
+      const result = await createRechargeOrder({
+        userId,
+        packageId: pkg.packageId,
       });
-      const result = await response.json();
-      if (!response.ok || !result?.success || !result?.data?.codeUrl) {
-        throw new Error(result?.error || "创建充值订单失败");
+
+      if (!result?.data?.codeUrl) {
+        throw new Error(result?.msg || "创建充值订单失败");
       }
 
       setNativePayOrder({
@@ -162,19 +169,35 @@ export function PointsView() {
 
     const timer = window.setInterval(async () => {
       try {
-        const response = await fetch(
-          `${payServerBaseUrl}/api/recharge/native/status?orderId=${encodeURIComponent(nativePayOrder.orderId)}`,
-        );
-        const result = await response.json();
-        if (!response.ok || !result?.success) {
+        const result = await getRechargeOrderStatus(nativePayOrder.orderId);
+        if (result?.code !== 0) {
           return;
         }
 
         if (result?.data?.status === "PAID") {
-          toast.success("充值成功，积分已到账");
+          window.clearInterval(timer);
+
+          // 充值成功后调用 updateVipScore 增加积分
+          try {
+            await updateVipScore({
+              userId,
+              vipScoreDelta: selectedPackage.points,
+            });
+            // 更新全局 store 中的积分
+            if (balanceInfo) {
+              setBalanceInfo({
+                ...balanceInfo,
+                forScore: balanceInfo.forScore + selectedPackage.points,
+              });
+            }
+            toast.success("充值成功，积分已到账");
+          } catch (error) {
+            console.error(error);
+            toast.error("充值成功但积分更新失败，请刷新页面");
+          }
+
           setSelectedPackageId(null);
           setNativePayOrder(null);
-          window.clearInterval(timer);
         }
       } catch {
         // 轮询失败忽略，下一轮继续
@@ -184,7 +207,7 @@ export function PointsView() {
     return () => {
       window.clearInterval(timer);
     };
-  }, [nativePayOrder?.orderId, payServerBaseUrl, selectedPackage]);
+  }, [nativePayOrder?.orderId, selectedPackage]);
 
   const usageHistory = [
     {
@@ -284,7 +307,10 @@ export function PointsView() {
                   <div className="flex items-center gap-2">
                     <Zap className="w-4 h-4 text-[#B43FEB] fill-[#B43FEB]" />
                     <span className="text-2xl font-bold tracking-tighter">
-                      2,480
+                      {(
+                        (balanceInfo?.forScore ?? 0) +
+                        (balanceInfo?.vipScore ?? 0)
+                      ).toLocaleString()}
                     </span>
                   </div>
                 </div>
@@ -332,11 +358,10 @@ export function PointsView() {
                 {packages.map((pkg) => (
                   <div
                     key={pkg.id}
-                    className={`relative p-7 rounded-[24px] border transition-all duration-500 group cursor-pointer overflow-hidden ${
-                      pkg.popular
-                        ? "bg-gradient-to-br from-[#B43FEB]/10 to-transparent border-[#B43FEB]/50 shadow-[0_20px_40px_rgba(180,63,235,0.1)]"
-                        : "bg-[#121214] border-white/5 hover:border-white/20 hover:bg-[#161618]"
-                    }`}
+                    className={`relative p-7 rounded-[24px] border transition-all duration-500 group cursor-pointer overflow-hidden ${pkg.popular
+                      ? "bg-gradient-to-br from-[#B43FEB]/10 to-transparent border-[#B43FEB]/50 shadow-[0_20px_40px_rgba(180,63,235,0.1)]"
+                      : "bg-[#121214] border-white/5 hover:border-white/20 hover:bg-[#161618]"
+                      }`}
                   >
                     {pkg.popular && (
                       <div className="absolute top-0 right-0 bg-gradient-to-l from-[#B43FEB] to-[#2b5aed] text-white text-[10px] font-black px-4 py-1.5 rounded-bl-2xl tracking-widest">
@@ -346,11 +371,10 @@ export function PointsView() {
                     <div className="flex justify-between items-start mb-6">
                       <div>
                         <div
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md mb-3 inline-block ${
-                            pkg.popular
-                              ? "bg-[#B43FEB] text-white"
-                              : "bg-white/10 text-white/60"
-                          }`}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md mb-3 inline-block ${pkg.popular
+                            ? "bg-[#B43FEB] text-white"
+                            : "bg-white/10 text-white/60"
+                            }`}
                         >
                           {pkg.tag}
                         </div>
@@ -371,11 +395,10 @@ export function PointsView() {
                       </div>
                     </div>
                     <button
-                      className={`w-full py-3.5 rounded-2xl text-sm font-bold transition-all duration-300 ${
-                        pkg.popular
-                          ? "bg-[#B43FEB] text-white shadow-xl shadow-[#B43FEB]/20 hover:scale-[1.02]"
-                          : "bg-white/5 text-white/80 group-hover:bg-white group-hover:text-black"
-                      }`}
+                      className={`w-full py-3.5 rounded-2xl text-sm font-bold transition-all duration-300 ${pkg.popular
+                        ? "bg-[#B43FEB] text-white shadow-xl shadow-[#B43FEB]/20 hover:scale-[1.02]"
+                        : "bg-white/5 text-white/80 group-hover:bg-white group-hover:text-black"
+                        }`}
                       onClick={() => {
                         setSelectedPackageId(pkg.id);
                         setNativePayOrder(null);
@@ -396,11 +419,10 @@ export function PointsView() {
                   <div className="flex gap-8">
                     <button
                       onClick={() => setActiveTab("usage")}
-                      className={`pb-4 text-sm font-bold transition-all relative ${
-                        activeTab === "usage"
-                          ? "text-white"
-                          : "text-white/30 hover:text-white/60"
-                      }`}
+                      className={`pb-4 text-sm font-bold transition-all relative ${activeTab === "usage"
+                        ? "text-white"
+                        : "text-white/30 hover:text-white/60"
+                        }`}
                     >
                       <div className="flex items-center gap-2">
                         <ReceiptText className="w-4 h-4" /> 积分消耗明细
@@ -411,11 +433,10 @@ export function PointsView() {
                     </button>
                     <button
                       onClick={() => setActiveTab("transaction")}
-                      className={`pb-4 text-sm font-bold transition-all relative ${
-                        activeTab === "transaction"
-                          ? "text-white"
-                          : "text-white/30 hover:text-white/60"
-                      }`}
+                      className={`pb-4 text-sm font-bold transition-all relative ${activeTab === "transaction"
+                        ? "text-white"
+                        : "text-white/30 hover:text-white/60"
+                        }`}
                     >
                       <div className="flex items-center gap-2">
                         <CreditCard className="w-4 h-4" /> 充值消费明细
@@ -471,11 +492,10 @@ export function PointsView() {
                         >
                           <div className="flex items-center gap-4">
                             <div
-                              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                                item.amount.startsWith("+")
-                                  ? "bg-green-500/10 text-green-500"
-                                  : "bg-blue-500/10 text-blue-500"
-                              }`}
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.amount.startsWith("+")
+                                ? "bg-green-500/10 text-green-500"
+                                : "bg-blue-500/10 text-blue-500"
+                                }`}
                             >
                               {item.amount.startsWith("+") ? (
                                 <Gift className="w-5 h-5" />
