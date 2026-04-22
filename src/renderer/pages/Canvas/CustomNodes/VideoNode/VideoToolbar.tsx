@@ -14,10 +14,10 @@ import {
 import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
-import { createSignedUploadTargetToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
 import { normalizeRequiredPoints } from "shared/constants/points";
 import type { VideoGenerationNode } from "shared/types/flow";
+import { createPresignedOssUploadTarget } from "shared/utils/presignedOssUploader";
 import { formatDuration } from "shared/utils/getVideoDuration";
 import { cn, downloadImageFromUrl } from "shared/utils/utils";
 import { toast } from "sonner";
@@ -42,11 +42,14 @@ import { VideoSnapshotPanel } from "./components/VideoSnapshotPanel";
 import { VideoTimeline } from "./components/VideoTimeline";
 import { useVideoFrameCapture } from "./hooks/useVideoFrameCapture";
 import { getVideoUrlsFromNodeData } from "./utils/video-url";
-import {
-  createWuhenVideoRemovalTask,
-  getWuhenVideoRemovalTaskStatus,
-  type WuhenRect,
-} from "@/api/wuhen";
+import { getVideoRemovalStatus, videoRemoval } from "@/api/ai";
+
+type WuhenRect = {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+};
 
 type ViewportRect = {
   x: number;
@@ -62,6 +65,47 @@ const FRAME_STEP_SECONDS = 1 / DEFAULT_FPS;
 const TIMELINE_STEP_MS = 100;
 const SUBTITLE_REMOVAL_POINTS_PER_SECOND = 0.5;
 const WUHEI_MAX_RECT_AREA = 480_000;
+
+const normalizeTaskStatus = (value?: string) => {
+  return String(value || "").trim().toUpperCase();
+};
+
+const extractTaskStatusInfo = (response: any) => {
+  const payload = response?.data ?? response;
+  const nested = payload?.data ?? {};
+  const output = payload?.output ?? {};
+
+  const taskStatus = normalizeTaskStatus(
+    nested?.task_status ??
+    nested?.status ??
+    payload?.task_status ??
+    payload?.status ??
+    output?.task_status,
+  );
+
+  const progressRaw =
+    nested?.progress ??
+    payload?.progress ??
+    output?.progress;
+  const numericProgress = Number(progressRaw);
+  const progress = Number.isFinite(numericProgress)
+    ? Math.max(0, Math.min(100, numericProgress))
+    : 0;
+
+  const taskId =
+    nested?.task_id ??
+    nested?.id ??
+    payload?.task_id ??
+    payload?.id ??
+    output?.task_id ??
+    "";
+
+  return {
+    taskStatus,
+    progress,
+    taskId,
+  };
+};
 
 const clamp = (value: number, minValue: number, maxValue: number) => {
   return Math.min(maxValue, Math.max(minValue, value));
@@ -966,7 +1010,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   }, []);
 
   const startSubtitlePolling = useCallback(
-    (taskId: string, targetNodeId: string) => {
+    (taskId: string, targetNodeId: string, publicUrl: string) => {
       const existing = subtitlePollersRef.current[targetNodeId];
       if (existing) {
         window.clearInterval(existing);
@@ -974,19 +1018,16 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
       const timer = window.setInterval(async () => {
         try {
-          const response = await getWuhenVideoRemovalTaskStatus(taskId);
-          if (!response?.success) {
-            return;
-          }
-          const record = response.data;
+          const response = await getVideoRemovalStatus(taskId);
+          const { taskStatus, progress } = extractTaskStatusInfo(response);
 
-          if (record.status === "success") {
+          if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
             updateVideoNodeData(targetNodeId, {
               status: GenerationStatus.COMPLETED,
               progress: 100,
               result: {
                 type: "video",
-                data: [{ url: record.resultVideoUrl, format: "mp4" }],
+                data: [{ url: publicUrl, format: "mp4" }],
               },
               error: undefined,
             });
@@ -995,13 +1036,13 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             return;
           }
 
-          if (record.status === "failed") {
+          if (["FAILED", "FAIL", "ERROR"].includes(taskStatus)) {
             updateVideoNodeData(targetNodeId, {
               status: GenerationStatus.FAILED,
-              progress: record.progress ?? 0,
+              progress,
               error: {
                 code: "WUHEI_FAILED",
-                message: record.description || record.message || "去字幕失败",
+                message: "去字幕失败",
               },
             });
             window.clearInterval(timer);
@@ -1011,11 +1052,11 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
           updateVideoNodeData(targetNodeId, {
             status: GenerationStatus.IN_PROGRESS,
-            progress: record.progress ?? 0,
+            progress,
           });
         } catch {
         }
-      }, 2000);
+      }, 10000);
 
       subtitlePollersRef.current[targetNodeId] = timer;
     },
@@ -1037,7 +1078,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         const basePosition = sourceNode?.position ?? { x: 0, y: 0 };
         const baseWidth = Number(sourceNode?.width ?? 350) || 350;
 
-        const target = await createSignedUploadTargetToOSS({
+        const target = await createPresignedOssUploadTarget({
           directory: "video",
           extension: "mp4",
           contentType: "video/mp4",
@@ -1070,16 +1111,18 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           });
         }, 50);
 
-        const response = await createWuhenVideoRemovalTask({
-          sourceVideoUrl: currentVideoUrl,
-          uploadUrl: target.uploadUrl,
-          uploadHeaders: target.uploadHeaders,
-          resultVideoUrl: target.publicUrl,
+        const response: any = await videoRemoval({
+          video_url: currentVideoUrl,
+          method: "sel_area",
           rect,
+          upload_url: target.uploadUrl,
+          upload_headers: { "Content-Type": "application/octet-stream" },
           model: "video_removal_std",
         });
 
-        if (!response?.success) {
+        const { taskId, taskStatus } = extractTaskStatusInfo(response);
+
+        if (!taskId) {
           updateVideoNodeData(newNodeId, {
             status: GenerationStatus.FAILED,
             error: {
@@ -1092,19 +1135,19 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
         updateVideoNodeData(newNodeId, {
           wuhen: {
-            taskId: response.data.taskId,
+            taskId,
             rect,
-            resultVideoUrl: response.data.resultVideoUrl,
+            resultVideoUrl: target.publicUrl,
           },
         } as any);
 
-        if (response.data.status === "success") {
+        if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
           updateVideoNodeData(newNodeId, {
             status: GenerationStatus.COMPLETED,
             progress: 100,
             result: {
               type: "video",
-              data: [{ url: response.data.resultVideoUrl, format: "mp4" }],
+              data: [{ url: target.publicUrl, format: "mp4" }],
             },
             error: undefined,
           });
@@ -1113,7 +1156,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             status: GenerationStatus.IN_PROGRESS,
             progress: 0,
           });
-          startSubtitlePolling(response.data.taskId, newNodeId);
+          startSubtitlePolling(taskId, newNodeId, target.publicUrl);
         }
 
       } catch (error: any) {

@@ -3,6 +3,8 @@
 
 import { jikeingAdminService, jikeingService } from "service/aiRequest";
 import {
+  CreateRechargeOrderResponse,
+  GetRechargeOrderStatusResponse,
   GetScoreBalanceResponse,
   UpdateVipScoreRequest,
   UpdateVipScoreResponse,
@@ -96,7 +98,7 @@ export function updateVipScore(
 export function createRechargeOrder(data: {
   userId: string;
   packageId: string;
-}): any {
+}): Promise<CreateRechargeOrderResponse> {
   return jikeingService({
     url: "/recharge/v1/native/create",
     method: "post",
@@ -108,7 +110,9 @@ export function createRechargeOrder(data: {
  * 查询充值订单状态
  * @param orderId - 订单号
  */
-export function getRechargeOrderStatus(orderId: string): any {
+export function getRechargeOrderStatus(
+  orderId: string,
+): Promise<GetRechargeOrderStatusResponse> {
   return jikeingService({
     url: "/recharge/v1/native/status",
     method: "get",
@@ -118,11 +122,6 @@ export function getRechargeOrderStatus(orderId: string): any {
 
 // ===================== 内部接口（jike-web-api）/inner =====================
 
-/**
- * 内部添加积分接口
- * 管理侧加积分的真实执行接口
- * @param data - { userId: string, score: number }
- */
 export function innerAddUserScore(data: {
   userId: string;
   score: number;
