@@ -85,45 +85,40 @@ const ButtonsControl = ({
     param,
     value,
     onChange,
-    twoRows,
 }: {
     param: ParamItem;
     value: string | number | boolean;
     onChange: (value: string | number | boolean) => void;
-    twoRows?: boolean;
 }) => {
     if (!param.options) return null;
 
     return (
-        <div className="w-full">
-            <div className={cn(twoRows ? "grid grid-cols-4 gap-2" : "flex w-full gap-2")}>
-                {param.options.map((option) => {
-                    const isActive = value === option.value;
-                    return (
-                        <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => onChange(option.value)}
+        <div className="flex gap-2">
+            {param.options.map((option) => {
+                const isActive = value === option.value;
+                return (
+                    <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => onChange(option.value)}
+                        className={cn(
+                            "flex flex-1 flex-col items-center gap-0.5 rounded-lg border px-3 py-2 transition-all",
+                            isActive
+                                ? "border-[#B43FEB] bg-[#B43FEB]/10"
+                                : "border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750",
+                        )}
+                    >
+                        <span
                             className={cn(
-                                "flex flex-col items-center gap-0.5 rounded-lg border px-3 py-2 transition-all",
-                                twoRows ? "w-full" : "flex-1",
-                                isActive
-                                    ? "border-[#B43FEB] bg-[#B43FEB]/10"
-                                    : "border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750",
+                                "text-xs font-medium",
+                                isActive ? "text-[#B43FEB]" : "text-neutral-300",
                             )}
                         >
-                            <span
-                                className={cn(
-                                    "text-xs font-medium whitespace-nowrap",
-                                    isActive ? "text-[#B43FEB]" : "text-neutral-300",
-                                )}
-                            >
-                                {option.label}
-                            </span>
-                        </button>
-                    );
-                })}
-            </div>
+                            {option.label}
+                        </span>
+                    </button>
+                );
+            })}
         </div>
     );
 };
@@ -158,12 +153,10 @@ const ParamControl = ({
     param,
     value,
     onChange,
-    twoRowButtons,
 }: {
     param: ParamItem;
     value: string | number | boolean;
     onChange: (value: string | number | boolean) => void;
-    twoRowButtons?: boolean;
 }) => {
     if (param.controlType === "switch") {
         return (
@@ -172,12 +165,7 @@ const ParamControl = ({
     }
 
     return (
-        <ButtonsControl
-            param={param}
-            value={value}
-            onChange={onChange}
-            twoRows={twoRowButtons}
-        />
+        <ButtonsControl param={param} value={value} onChange={onChange} />
     );
 };
 
@@ -341,22 +329,14 @@ export const UnifiedVideoParamsPanel = ({
                 <div className="space-y-5">
                     {paramConfig.params.map((param) => {
                         const value = getParamValue(param, currentVideoData);
-                        const isSwitch = param.controlType === "switch";
-                        const enableTwoRowAspectRatio =
-                            (model === "doubao-seedance-2.0-fast" || model === "doubao-seedance-2.0-pro") &&
-                            param.key === "aspect_ratio";
-
                         return (
-                            <div key={param.key} className={isSwitch ? undefined : "space-y-2"}>
-                                {isSwitch ? null : (
-                                    <label className="text-xs font-medium text-neutral-300">
-                                        {param.label}
-                                    </label>
-                                )}
+                            <div key={param.key} className="space-y-2">
+                                <label className="text-xs font-medium text-neutral-300">
+                                    {param.label}
+                                </label>
                                 <ParamControl
                                     param={param}
                                     value={value}
-                                    twoRowButtons={enableTwoRowAspectRatio}
                                     onChange={(newValue) => handleParamChange(param, newValue)}
                                 />
                             </div>
