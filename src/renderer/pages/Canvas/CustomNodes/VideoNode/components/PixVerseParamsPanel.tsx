@@ -38,7 +38,7 @@ const getDuration = (currentVideoData: any): number => {
 
 /** 获取当前音频状态 */
 const getAudio = (currentVideoData: any): boolean => {
-    return Boolean(currentVideoData?.metadata?.audio ?? false);
+    return Boolean(currentVideoData?.metadata?.audio ?? true);
 };
 
 /** 子模型选项 */
@@ -112,7 +112,8 @@ export const PixVerseParamsPanel = ({
         onPatch({
             metadata: {
                 ...(currentVideoData?.metadata ?? {}),
-                audio: checked,
+                generate_audio: checked, // 统一使用 generate_audio
+                audio: checked, // 兼容旧逻辑
             },
         });
     };

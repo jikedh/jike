@@ -28,7 +28,7 @@ export const getVideoGenerationPoints = ({
   // 特殊逻辑：Seedance 2.0 系列
   if (model?.startsWith("doubao-seedance-2.0")) {
     const isFast = model.includes("-fast");
-    
+
     if (isFast) {
       // Seedance 2.0 Fast: 720p -> 48, 480p -> 24
       basePointsPerSecond = resolution === "480p" ? 24 : 48;
@@ -67,6 +67,8 @@ export const getVideoGenerationPoints = ({
   // 特殊逻辑：PixVerse (pixverse-i2v)
   if (model === "pixverse-i2v") {
     const res = resolution.toLowerCase();
+    let rate = 16; // 默认无声 720p
+
     if (hasAudio) {
       // 有声积分消耗
       const pointsMap: Record<string, number> = {
@@ -75,7 +77,7 @@ export const getVideoGenerationPoints = ({
         "720p": 22,
         "1080p": 40,
       };
-      basePointsPerSecond = pointsMap[res] ?? 22;
+      rate = pointsMap[res] ?? 22;
     } else {
       // 无声积分消耗
       const pointsMap: Record<string, number> = {
@@ -84,10 +86,10 @@ export const getVideoGenerationPoints = ({
         "720p": 16,
         "1080p": 32,
       };
-      basePointsPerSecond = pointsMap[res] ?? 16;
+      rate = pointsMap[res] ?? 16;
     }
 
-    return basePointsPerSecond * duration;
+    return rate * duration;
   }
 
   // 其他模型目前保持原样或默认逻辑
