@@ -108,6 +108,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     referenceImageUrls,
   });
 
+  const currentModelCapability = useMemo(() => {
+    return getVideoModelCapability(model);
+  }, [model]);
+
   const requiredPoints = useMemo(() => {
     return normalizeRequiredPoints(
       getVideoGenerationPoints({
@@ -115,7 +119,13 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         duration: currentVideoData?.duration,
         resolution: currentVideoData?.metadata?.resolution,
         hasVideoInput: (allVideoUrls?.length ?? 0) > 0,
-        hasAudio: currentVideoData?.audio ?? currentVideoData?.metadata?.generate_audio ?? false,
+        hasAudio: Boolean(
+          currentVideoData?.metadata?.generate_audio ?? 
+          currentVideoData?.metadata?.audio ?? 
+          currentVideoData?.generate_audio ?? 
+          currentVideoData?.audio ?? 
+          true
+        ),
         fallback: Math.max(fallbackAIGenPrice, 1),
       }),
     );
@@ -124,9 +134,8 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     model,
     normalizeRequiredPoints,
     currentVideoData?.duration,
-    currentVideoData?.metadata?.resolution,
-    currentVideoData?.audio,
-    currentVideoData?.metadata?.generate_audio,
+    currentVideoData?.metadata,
+    currentModelCapability.provider,
     allVideoUrls?.length,
   ]);
 
@@ -141,10 +150,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       status === GenerationStatus.QUEUED
     );
   }, [currentNode]);
-
-  const currentModelCapability = useMemo(() => {
-    return getVideoModelCapability(model);
-  }, [model]);
 
   /**
    * 参考资源悬浮时，触发来源节点与连接边高亮。
