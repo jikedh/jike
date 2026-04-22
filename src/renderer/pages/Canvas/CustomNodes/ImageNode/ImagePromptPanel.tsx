@@ -26,6 +26,7 @@ import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { getImageGenerationPoints } from "shared/constants/model-points";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import { GeminiParamsPanel } from "./components/GeminiParamsPanel";
+import { GptImage2ParamsPanel } from "./components/GptImage2ParamsPanel";
 import { MidjourneyAdvancedPanel } from "./components/MidjourneyAdvancedPanel";
 import { MidjourneyParamsPanel } from "./components/MidjourneyParamsPanel";
 import { SeedreamParamsPanel } from "./components/SeedreamParamsPanel";
@@ -174,6 +175,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     model === "gemini-3-pro-image-preview" &&
     (currentImageData?.platform === "google" ||
       currentImageData?.platform === undefined);
+  // 判断是否为 GPT-Image-2 模型
+  const isGptImage2Model = model === "gpt-image-2";
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
 
@@ -1119,6 +1122,16 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               }
               onResolutionChange={(value) =>
                 updateImageNodeData(nodeId, { resolution: value })
+              }
+            />
+          )}
+
+          {isGptImage2Model && (
+            // GPT-Image-2 整合参数面板
+            <GptImage2ParamsPanel
+              size={size}
+              onSizeChange={(value) =>
+                updateImageNodeData(nodeId, { size: value })
               }
             />
           )}

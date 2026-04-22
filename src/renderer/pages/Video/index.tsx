@@ -1,7 +1,7 @@
 /**
  * Video 页面 - 视频消除功能 Demo
  */
-import { useState } from "react";
+import { useState, useRef } from "react";
 // import { Input } from "~/components/ui/input";
 // import { Button } from "~/components/ui/button";
 // import { videoRemoval, getVideoRemovalStatus } from "~/api/ai";
@@ -15,6 +15,13 @@ export default function VideoPage() {
   const [loading, setLoading] = useState(false);
   const [taskId, setTaskId] = useState("");
   const [resultVideoUrl, setResultVideoUrl] = useState("");
+
+  // 上传本地视频相关状态
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadedVideoUrl, setUploadedVideoUrl] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async () => {
     if (!videoUrl.trim()) {
@@ -32,6 +39,7 @@ export default function VideoPage() {
       const presignedTarget = await PresignedOssUploader.createTarget({
         directory: "video",
         extension: "mp4",
+        contentType: "application/octet-stream",
       });
       console.log("预签名目标:", presignedTarget);
 
@@ -48,7 +56,6 @@ export default function VideoPage() {
           y2: 1080,
         },
         upload_url: presignedTarget.uploadUrl,
-        upload_headers: { "Content-Type": "application/octet-stream" },
       });
       console.log("视频消除响应:", response);
 
@@ -113,6 +120,60 @@ export default function VideoPage() {
     await poll();
   };
 
+  // 处理本地文件选择
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type === "video/mp4") {
+      setSelectedFile(file);
+      console.log("已选择文件:", file.name, "大小:", (file.size / 1024 / 1024).toFixed(2), "MB");
+    } else {
+      console.warn("请选择 MP4 格式的视频文件");
+    }
+  };
+
+  // 上传本地视频到 OSS
+  const handleFileUpload = async () => {
+    if (!selectedFile) {
+      console.warn("请先选择要上传的视频文件");
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+    console.log("开始上传本地视频:", selectedFile.name);
+
+    try {
+      // 步骤1: 获取预签名上传地址
+      console.log("步骤1: 获取预签名上传地址...");
+      const presignedTarget = await PresignedOssUploader.createTarget({
+        directory: "video",
+        extension: "mp4",
+      });
+      console.log("预签名目标:", presignedTarget);
+
+      // 步骤2: 使用预签名地址上传文件
+      console.log("步骤2: 开始上传文件...");
+      setUploadProgress(30);
+
+      const arrayBuffer = await selectedFile.arrayBuffer();
+      setUploadProgress(60);
+
+      await PresignedOssUploader.upload({
+        target: presignedTarget,
+        data: arrayBuffer,
+        // 不设置 contentType，让 OSS 根据扩展名自动判断
+      });
+
+      setUploadProgress(100);
+      console.log("上传完成，公开访问URL:", presignedTarget.publicUrl);
+      setUploadedVideoUrl(presignedTarget.publicUrl);
+    } catch (error) {
+      console.error("上传失败:", error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white p-8">
       <h1 className="text-2xl font-bold mb-6">视频消除 Demo</h1>
@@ -164,6 +225,64 @@ export default function VideoPage() {
             <li>每3秒轮询一次任务状态，结果打印在控制台</li>
           </ol>
         </div>
+      </div>
+
+      {/* ========== 本地视频上传 Demo ========== */}
+      <div className="max-w-xl space-y-4 mt-8 pt-8 border-t border-white/10">
+        <h2 className="text-xl font-bold mb-4">本地视频上传 Demo</h2>
+
+        <div>
+          <label className="block text-sm text-gray-400 mb-2">选择 MP4 视频文件</label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="video/mp4"
+            onChange={handleFileSelect}
+            className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500"
+          />
+        </div>
+
+        {selectedFile && (
+          <div className="text-sm text-gray-400">
+            已选择: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+          </div>
+        )}
+
+        <Button
+          onClick={handleFileUpload}
+          disabled={uploading || !selectedFile}
+          variant="blue"
+        >
+          {uploading ? `上传中... ${uploadProgress}%` : "上传视频到 OSS"}
+        </Button>
+
+        {uploading && (
+          <div className="w-full bg-white/10 rounded-full h-2">
+            <div
+              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+        )}
+
+        {uploadedVideoUrl && (
+          <div className="mt-4 p-4 bg-white/5 rounded-lg">
+            <p className="text-sm text-gray-400 mb-2">上传成功，公开访问视频URL:</p>
+            <a
+              href={uploadedVideoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 text-sm break-all"
+            >
+              {uploadedVideoUrl}
+            </a>
+            <video
+              src={uploadedVideoUrl}
+              controls
+              className="mt-3 w-full max-w-lg rounded-lg"
+            />
+          </div>
+        )}
       </div>
     </div>
   );

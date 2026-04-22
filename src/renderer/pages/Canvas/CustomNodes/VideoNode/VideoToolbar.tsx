@@ -43,6 +43,8 @@ import { VideoTimeline } from "./components/VideoTimeline";
 import { useVideoFrameCapture } from "./hooks/useVideoFrameCapture";
 import { getVideoUrlsFromNodeData } from "./utils/video-url";
 import { getVideoRemovalStatus, videoRemoval } from "@/api/ai";
+import { updateVipScore } from "@/api/jikeing";
+import { getJikeingUserId } from "shared/utils/utils";
 
 type WuhenRect = {
   x1: number;
@@ -154,7 +156,7 @@ const VideoSubtitleRemovalPanel = ({
   onClose: () => void;
   videoUrl: string;
   isSubmitting: boolean;
-  onSubmit: (rect: WuhenRect) => Promise<void> | void;
+  onSubmit: (rect: WuhenRect, requiredPoints: number) => Promise<void> | void;
 }) => {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -577,7 +579,7 @@ const VideoSubtitleRemovalPanel = ({
     }
 
     onClose();
-    await onSubmit(rect);
+    await onSubmit(rect, requiredPoints);
   }, [
     cropRect,
     ensureEnoughPoints,
@@ -1010,7 +1012,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   }, []);
 
   const startSubtitlePolling = useCallback(
-    (taskId: string, targetNodeId: string, publicUrl: string) => {
+    (taskId: string, targetNodeId: string, publicUrl: string, userId: string, pointsToDeduct: number) => {
       const existing = subtitlePollersRef.current[targetNodeId];
       if (existing) {
         window.clearInterval(existing);
@@ -1031,6 +1033,13 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
               },
               error: undefined,
             });
+            if (pointsToDeduct > 0 && userId) {
+              try {
+                await updateVipScore({ userId, vipScoreDelta: -pointsToDeduct });
+              } catch (scoreError) {
+                console.error("积分扣减失败:", scoreError);
+              }
+            }
             window.clearInterval(timer);
             delete subtitlePollersRef.current[targetNodeId];
             return;
@@ -1064,7 +1073,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   );
 
   const handleSubmitRemoveCaptions = useCallback(
-    async (rect: WuhenRect) => {
+    async (rect: WuhenRect, requiredPoints: number) => {
       if (!currentVideoUrl) {
         return;
       }
@@ -1081,7 +1090,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         const target = await createPresignedOssUploadTarget({
           directory: "video",
           extension: "mp4",
-          contentType: "video/mp4",
+          contentType: "application/octet-stream",
         });
 
         const newNodeId = addNode("video", {
@@ -1116,7 +1125,6 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           method: "sel_area",
           rect,
           upload_url: target.uploadUrl,
-          upload_headers: { "Content-Type": "application/octet-stream" },
           model: "video_removal_std",
         });
 
@@ -1151,12 +1159,21 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             },
             error: undefined,
           });
+          const loginUserId = getJikeingUserId();
+          if (requiredPoints > 0 && loginUserId) {
+            try {
+              await updateVipScore({ userId: loginUserId, vipScoreDelta: -requiredPoints });
+            } catch (scoreError) {
+              console.error("积分扣减失败:", scoreError);
+            }
+          }
         } else {
           updateVideoNodeData(newNodeId, {
             status: GenerationStatus.IN_PROGRESS,
             progress: 0,
           });
-          startSubtitlePolling(taskId, newNodeId, target.publicUrl);
+          const loginUserId = getJikeingUserId();
+          startSubtitlePolling(taskId, newNodeId, target.publicUrl, loginUserId, requiredPoints);
         }
 
       } catch (error: any) {

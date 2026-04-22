@@ -138,6 +138,12 @@ export const IMAGE_MODELS = [
     model: "midjourney-niji7",
     platform: "midjourney",
   },
+  {
+    id: 7,
+    name: "GPT-Image-2",
+    model: "gpt-image-2",
+    platform: "openai",
+  },
   // {
   //   id: 10,
   //   name: "谷歌 Gemini 3 Pro 渠道二",

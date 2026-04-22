@@ -89,7 +89,7 @@ export function PointsView() {
       id: 1,
       packageId: "pkg_500",
       points: 500,
-      price: 9.9,
+      price: 0.01,
       originalPrice: 15,
       tag: "入门首选",
     },
@@ -170,11 +170,12 @@ export function PointsView() {
     const timer = window.setInterval(async () => {
       try {
         const result = await getRechargeOrderStatus(nativePayOrder.orderId);
-        if (result?.code !== 0) {
-          return;
-        }
+        // if (result?.code !== 0) {
+        //   return;
+        // }
 
-        if (result?.data?.status === "PAID") {
+        // tradeState 为 SUCCESS 时表示支付成功，status 为 PAID 是最终状态
+        if (result?.data?.tradeState === "SUCCESS" || result?.data?.status === "PAID") {
           window.clearInterval(timer);
 
           // 充值成功后调用 updateVipScore 增加积分
