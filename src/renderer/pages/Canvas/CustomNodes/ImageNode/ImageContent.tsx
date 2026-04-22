@@ -9,6 +9,11 @@ type ImageContentProps = {
   onReorder?: (fromIndex: number) => void;
   nodeId?: string;
   updateImageNodeData?: (nodeId: string, patch: any) => void;
+  onGalleryExpandedChange?: (expanded: boolean) => void;
+  frameSize?: {
+    width: number;
+    height: number;
+  };
 };
 
 /**
@@ -26,6 +31,8 @@ export const ImageContent = memo(
     onReorder,
     nodeId,
     updateImageNodeData,
+    onGalleryExpandedChange,
+    frameSize,
   }: ImageContentProps) => {
     // 结果图片列表（支持多张），保留原始对象结构用于排序
     const images = data.result?.data?.filter((item) => item?.url) ?? [];
@@ -89,6 +96,8 @@ export const ImageContent = memo(
           onReorder={onReorder}
           nodeId={nodeId}
           updateImageNodeData={updateImageNodeData}
+          onExpandedChange={onGalleryExpandedChange}
+          frameSize={frameSize}
         />
       );
     }

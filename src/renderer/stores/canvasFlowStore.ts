@@ -69,7 +69,14 @@ import {
 } from "@/api/ai";
 import { updateVipScore } from "@/api/jikeing";
 import { buildMidjourneyPrompt } from "@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt";
+import {
+  getClosestAspectRatio,
+  getImageDimensions,
+  getNodeSizeByAspectRatio,
+  getVideoDimensions,
+} from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
+import { saveCurrentCanvasToHistory } from "@/utils/canvasHistoryBridge";
 
 // ==================== 持久化配置 ====================
 
@@ -2087,79 +2094,201 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      * @param nodeId 源节点 ID
      */
     separateToNodes: (nodeId: string) => {
-      const sourceNode = get().nodes.find((node) => node.id === nodeId);
-      if (!sourceNode) return;
+      void (async () => {
+        const sourceNode = get().nodes.find((node) => node.id === nodeId);
+        if (!sourceNode) return;
 
-      const nodeType = sourceNode.type;
-      const sourceData = sourceNode.data as
-        | ImageGenerationNode
-        | VideoGenerationNode;
-      const resultData = sourceData.result?.data;
+        const nodeType = sourceNode.type;
+        const sourceData = sourceNode.data as
+          | ImageGenerationNode
+          | VideoGenerationNode;
+        const resultData = sourceData.result?.data;
 
-      if (!resultData || resultData.length <= 1) return;
+        if (!resultData || resultData.length <= 1) return;
 
-      const targetNodeType = nodeType === "videoNode" ? "video" : "image";
+        saveCurrentCanvasToHistory();
 
-      const nodeWidth = nodeType === "imageNode" ? 350 : 350;
-      const nodeHeight = nodeType === "imageNode" ? 280 : 250;
-      const gap = 20;
+        const targetNodeType = nodeType === "videoNode" ? "video" : "image";
+        const validItems = resultData
+          .slice(1)
+          .filter((item) => item?.url || item?.remoteUrl);
 
-      for (let i = 1; i < resultData.length; i++) {
-        const item = resultData[i];
-        if (!item?.url) continue;
+        if (validItems.length === 0) return;
 
-        const position = {
-          x: sourceNode.position.x + (i - 1) * (nodeWidth + gap),
-          y: sourceNode.position.y + nodeHeight + gap,
-        };
+        const sourceVisualSize =
+          nodeType === "imageNode"
+            ? getNodeSizeByAspectRatio(
+              (sourceData as ImageGenerationNode).size ?? "4:3",
+              250,
+            )
+            : getNodeSizeByAspectRatio(
+              (sourceData as VideoGenerationNode).aspect_ratio ?? "16:9",
+              250,
+            );
+        const verticalGap = 32;
+        const baseY =
+          sourceNode.position.y + sourceVisualSize.height + verticalGap;
+        const minGap = 18;
+        const maxGap = 30;
 
-        const newNodeId = get().addNode(targetNodeType, position);
+        const resolvedItems =
+          targetNodeType === "image"
+            ? await Promise.all(
+              validItems.map(async (item) => {
+                const imageUrl = item.remoteUrl || item.url;
+                let aspectRatio = sourceData.size ?? "4:3";
 
-        if (targetNodeType === "video") {
-          get().updateVideoNodeData(newNodeId, {
-            status: GenerationStatus.COMPLETED,
-            progress: 100,
-            result: {
-              type: "video",
-              data: [{ url: item.url, format: "mp4" }],
-            },
-          });
-        } else {
-          get().updateImageNodeData(newNodeId, {
-            status: GenerationStatus.COMPLETED,
-            progress: 100,
-            result: {
-              type: "image",
-              data: [{ url: item.url }],
-            },
-          });
-        }
-      }
+                if (imageUrl) {
+                  try {
+                    const { width, height } = await getImageDimensions(imageUrl);
+                    aspectRatio = getClosestAspectRatio(width, height);
+                  } catch (error) {
+                    console.warn(
+                      "[separateToNodes] 获取图片比例失败，使用回退比例:",
+                      error,
+                    );
+                  }
+                }
 
-      if (targetNodeType === "video") {
-        get().updateVideoNodeData(nodeId, {
-          result: {
-            type: sourceData.result?.type ?? "video",
-            data: [
-              {
-                ...(resultData[0] as any),
-                format: (resultData[0] as any)?.format ?? "mp4",
+                const nodeSize = getNodeSizeByAspectRatio(aspectRatio, 250);
+
+                return {
+                  item,
+                  aspectRatio,
+                  nodeSize,
+                };
+              }),
+            )
+            : await Promise.all(
+              validItems.map(async (item) => {
+                const videoUrl = item.remoteUrl || item.url;
+                let aspectRatio =
+                  (sourceData as VideoGenerationNode).aspect_ratio ?? "16:9";
+
+                if (videoUrl) {
+                  try {
+                    const { width, height } = await getVideoDimensions(videoUrl);
+                    aspectRatio = getClosestAspectRatio(width, height);
+                  } catch (error) {
+                    console.warn(
+                      "[separateToNodes] 获取视频比例失败，使用回退比例:",
+                      error,
+                    );
+                  }
+                }
+
+                return {
+                  item,
+                  aspectRatio,
+                  nodeSize: getNodeSizeByAspectRatio(aspectRatio, 250),
+                };
+              }),
+            );
+
+        const latestState = get();
+        const latestSourceNode = latestState.nodes.find((node) => node.id === nodeId);
+        if (!latestSourceNode) return;
+
+        let currentX = latestSourceNode.position.x;
+        const newNodes = resolvedItems.map(({ item, aspectRatio, nodeSize }) => {
+          const gap = Math.max(
+            minGap,
+            Math.min(maxGap, Math.round(nodeSize.width * 0.06)),
+          );
+          const newNodeId = get().getNextNodeId(targetNodeType);
+          const factory = nodeFactoryMap[targetNodeType];
+          const baseNode = factory(newNodeId, { x: currentX, y: baseY });
+
+          const finalNode =
+            targetNodeType === "video"
+              ? {
+                ...baseNode,
+                width: nodeSize.width,
+                height: nodeSize.height,
+                data: {
+                  ...baseNode.data,
+                  aspect_ratio: aspectRatio,
+                  status: GenerationStatus.COMPLETED,
+                  progress: 100,
+                  result: {
+                    type: "video",
+                    data: [
+                      {
+                        ...item,
+                        format: item.format ?? "mp4",
+                      },
+                    ],
+                  },
+                },
+              }
+              : {
+                ...baseNode,
+                width: nodeSize.width,
+                height: nodeSize.height,
+                data: {
+                  ...baseNode.data,
+                  status: GenerationStatus.COMPLETED,
+                  progress: 100,
+                  size: aspectRatio,
+                  result: {
+                    type: "image",
+                    data: [{ ...item }],
+                  },
+                },
+              };
+
+          currentX += nodeSize.width + gap;
+          return finalNode as AllNodeType;
+        });
+
+        const nextNodes = latestState.nodes
+          .map((node) => {
+            if (node.id !== nodeId) {
+              return node;
+            }
+
+            if (targetNodeType === "video") {
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  result: {
+                    type: sourceData.result?.type ?? "video",
+                    data: [
+                      {
+                        ...(resultData[0] as any),
+                        format: (resultData[0] as any)?.format ?? "mp4",
+                      },
+                    ],
+                  },
+                },
+              } as AllNodeType;
+            }
+
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                result: {
+                  type: sourceData.result?.type ?? "image",
+                  data: [resultData[0]],
+                },
               },
-            ],
-          },
-        });
-      } else {
-        get().updateImageNodeData(nodeId, {
-          result: {
-            type: sourceData.result?.type ?? "image",
-            data: [resultData[0]],
-          },
-        });
-      }
+            } as AllNodeType;
+          })
+          .concat(newNodes);
 
-      if (useChatSettingsStore.getState().autoSaveEnabled) {
-        get().saveGraph();
-      }
+        set(() => ({
+          nodes: nextNodes,
+          selectedNodesCount: nextNodes.filter((node) => node.selected).length,
+        }));
+
+        get().requestHistorySave();
+
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          get().saveGraph();
+        }
+      })();
     },
 
     /**

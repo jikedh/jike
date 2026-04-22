@@ -1,6 +1,10 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CanvasPersistedState } from "shared/types/zustand/canvas-flow";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import {
+  registerCanvasHistorySaver,
+  unregisterCanvasHistorySaver,
+} from "@/utils/canvasHistoryBridge";
 
 const MAX_HISTORY_SIZE = 50;
 
@@ -47,6 +51,13 @@ export function useUndoRedo() {
     historyIndexRef.current = newHistory.length - 1;
     updateFlags();
   }, [updateFlags]);
+
+  useEffect(() => {
+    registerCanvasHistorySaver(saveToHistory);
+    return () => {
+      unregisterCanvasHistorySaver(saveToHistory);
+    };
+  }, [saveToHistory]);
 
   const resetHistory = useCallback(() => {
     historyRef.current = [];

@@ -120,10 +120,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         resolution: currentVideoData?.metadata?.resolution,
         hasVideoInput: (allVideoUrls?.length ?? 0) > 0,
         hasAudio: Boolean(
-          currentVideoData?.metadata?.generate_audio ?? 
-          currentVideoData?.metadata?.audio ?? 
-          currentVideoData?.generate_audio ?? 
-          currentVideoData?.audio ?? 
+          currentVideoData?.metadata?.generate_audio ??
+          currentVideoData?.metadata?.audio ??
+          currentVideoData?.generate_audio ??
+          currentVideoData?.audio ??
           true
         ),
         fallback: Math.max(fallbackAIGenPrice, 1),

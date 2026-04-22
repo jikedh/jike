@@ -106,12 +106,16 @@ export const SettingsModal = ({
     autoSaveEnabled,
     nodeSearchVisible,
     devToolsVisible,
+    gridVisible,
+    snapToGrid,
     storagePath,
     setDefaultModel,
     setDefaultPersonaId,
     setAutoSaveEnabled,
     setNodeSearchVisible,
     setDevToolsVisible,
+    setGridVisible,
+    setSnapToGrid,
     setStoragePath,
     resetToDefault,
   } = useChatSettingsStore();
@@ -793,6 +797,38 @@ export const SettingsModal = ({
                   {/* 画布设置 - 网格显示开关 */}
                   {activeSection === "canvas" && (
                     <>
+                      <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-sm font-medium text-white/80">
+                              网格点显示
+                            </div>
+                            <div className="text-xs text-white/40 mt-1">
+                              在画布背景显示参考网格点
+                            </div>
+                          </div>
+                          <Switch
+                            checked={gridVisible}
+                            onCheckedChange={setGridVisible}
+                          />
+                        </div>
+                      </section>
+                      <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-sm font-medium text-white/80">
+                              吸附网格
+                            </div>
+                            <div className="text-xs text-white/40 mt-1">
+                              拖拽节点时自动吸附到网格点
+                            </div>
+                          </div>
+                          <Switch
+                            checked={snapToGrid}
+                            onCheckedChange={setSnapToGrid}
+                          />
+                        </div>
+                      </section>
                       <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
                         <div className="flex items-center justify-between">
                           <div>
