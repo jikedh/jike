@@ -8,6 +8,7 @@ type VideoItem = {
   format?: string; // 视频格式
   localPath?: string; // 本地相对路径
   localName?: string; // 本地文件名
+  remoteUrl?: string; // 远程持久化 URL
 };
 
 type CollapsibleVideoGalleryProps = {
@@ -116,6 +117,7 @@ export const CollapsibleVideoGallery = memo(
           newVideos[index] = {
             ...newVideos[index],
             url: ossResult.url,
+            remoteUrl: ossResult.url,
           };
 
           updateVideoNodeData(nodeId, {

@@ -23,7 +23,7 @@ import {
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { getImageGenerationPoints } from "shared/constants/modelPoints";
+import { getImageGenerationPoints } from "shared/constants/model-points";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import { GeminiParamsPanel } from "./components/GeminiParamsPanel";
 import { MidjourneyAdvancedPanel } from "./components/MidjourneyAdvancedPanel";

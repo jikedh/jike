@@ -250,9 +250,10 @@ export const WanxVideoParamsPanel = ({
               </span>
             </div>
             <Switch
-              checked={promptExtend}
-              onCheckedChange={handlePromptExtendChange}
-            />
+            checked={promptExtend}
+            onCheckedChange={handlePromptExtendChange}
+            className="data-[state=checked]:bg-[#B43FEB]"
+          />
           </div>
         </div>
       </PopoverContent>

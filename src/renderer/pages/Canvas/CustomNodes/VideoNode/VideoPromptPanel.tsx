@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { GenerationStatus } from "shared/constants/enum";
-import { getVideoGenerationPoints } from "shared/constants/modelPoints";
+import { getVideoGenerationPoints } from "shared/constants/model-points";
 import type { VideoGenerationNode } from "shared/types/flow";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { PresetDropdown } from "@/components/PresetDropdown";
@@ -90,19 +90,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   const model = currentVideoData?.model ?? "doubao-seedance-2.0";
 
   const promptDraftHtml = currentVideoData?.promptDraftHtml ?? "<p></p>";
-  const requiredPoints = useMemo(() => {
-    return normalizeRequiredPoints(
-      getVideoGenerationPoints({
-        model,
-        fallback: Math.max(fallbackAIGenPrice, 1),
-      }),
-    );
-  }, [fallbackAIGenPrice, model, normalizeRequiredPoints]);
-
-  const currentModelCapability = useMemo(() => {
-    return getVideoModelCapability(model);
-  }, [model]);
-
   const {
     parentVideoNodes,
     parentAudioNodes,
@@ -121,6 +108,28 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     referenceImageUrls,
   });
 
+  const requiredPoints = useMemo(() => {
+    return normalizeRequiredPoints(
+      getVideoGenerationPoints({
+        model,
+        duration: currentVideoData?.duration,
+        resolution: currentVideoData?.metadata?.resolution,
+        hasVideoInput: (allVideoUrls?.length ?? 0) > 0,
+        hasAudio: currentVideoData?.audio ?? currentVideoData?.metadata?.generate_audio ?? false,
+        fallback: Math.max(fallbackAIGenPrice, 1),
+      }),
+    );
+  }, [
+    fallbackAIGenPrice,
+    model,
+    normalizeRequiredPoints,
+    currentVideoData?.duration,
+    currentVideoData?.metadata?.resolution,
+    currentVideoData?.audio,
+    currentVideoData?.metadata?.generate_audio,
+    allVideoUrls?.length,
+  ]);
+
   const isGenerating = useMemo(() => {
     if (!currentNode || currentNode.type !== "videoNode") {
       return false;
@@ -132,6 +141,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       status === GenerationStatus.QUEUED
     );
   }, [currentNode]);
+
+  const currentModelCapability = useMemo(() => {
+    return getVideoModelCapability(model);
+  }, [model]);
 
   /**
    * 参考资源悬浮时，触发来源节点与连接边高亮。

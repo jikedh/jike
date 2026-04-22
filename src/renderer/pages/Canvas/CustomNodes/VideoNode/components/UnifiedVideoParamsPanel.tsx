@@ -12,6 +12,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { cn } from "shared/utils/utils";
 import { Volume2, VolumeX } from "lucide-react";
 
@@ -146,6 +147,42 @@ const SwitchControl = ({
             <Switch
                 checked={Boolean(value)}
                 onCheckedChange={(checked) => onChange(checked)}
+                className="data-[state=checked]:bg-[#B43FEB]"
+            />
+        </div>
+    );
+};
+
+/**
+ * 渲染 slider 类型控件
+ */
+const SliderControl = ({
+    param,
+    value,
+    onChange,
+}: {
+    param: ParamItem;
+    value: string | number | boolean;
+    onChange: (value: string | number | boolean) => void;
+}) => {
+    const min = param.range?.min ?? 0;
+    const max = param.range?.max ?? 100;
+    const numValue = Number(value);
+
+    return (
+        <div className="space-y-3 pt-1">
+            <div className="flex items-center justify-between">
+                <span className="text-[10px] text-neutral-500">{min}s</span>
+                <span className="text-xs font-bold text-[#B43FEB]">{numValue}s</span>
+                <span className="text-[10px] text-neutral-500">{max}s</span>
+            </div>
+            <Slider
+                value={[numValue]}
+                min={min}
+                max={max}
+                step={1}
+                onValueChange={(vals) => onChange(vals[0])}
+                className="[&_[data-slot=slider-range]]:bg-[#B43FEB] [&_[data-slot=slider-thumb]]:border-[#B43FEB]"
             />
         </div>
     );
@@ -168,6 +205,12 @@ const ParamControl = ({
     if (param.controlType === "switch") {
         return (
             <SwitchControl param={param} value={value} onChange={onChange} />
+        );
+    }
+
+    if (param.controlType === "slider") {
+        return (
+            <SliderControl param={param} value={value} onChange={onChange} />
         );
     }
 

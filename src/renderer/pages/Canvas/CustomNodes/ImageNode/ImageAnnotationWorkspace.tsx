@@ -1227,7 +1227,7 @@ export const ImageAnnotationWorkspace = ({
         size: sourceNode.data?.size,
         result: {
           type: "image",
-          data: [{ url: uploadResult.url }],
+          data: [{ url: uploadResult.url, remoteUrl: uploadResult.url }],
         },
         status: GenerationStatus.COMPLETED,
         progress: 100,

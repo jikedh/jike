@@ -1,83 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { electronAPI } from "@electron-toolkit/preload";
-
-export type FileInfo = {
-  name: string;
-  path: string;
-  relativePath: string;
-  mediaType: string;
-  isDirectory: boolean;
-  size: number;
-  modifiedAt: number;
-};
-
-export type ProjectMeta = {
-  name: string;
-  createdAt: number;
-  updatedAt: number;
-};
-
-export type StorageApi = {
-  selectDirectory: () => Promise<string | null>;
-  ensureProject: (
-    basePath: string,
-    projectName: string,
-  ) => Promise<{ success: boolean; project?: ProjectMeta; error?: string }>;
-  listProjects: (
-    basePath: string,
-  ) => Promise<{ success: boolean; projects: ProjectMeta[]; error?: string }>;
-  saveCanvas: (
-    basePath: string,
-    projectName: string,
-    data: any,
-  ) => Promise<{ success: boolean; error?: string }>;
-  loadCanvas: (
-    basePath: string,
-    projectName: string,
-  ) => Promise<{ success: boolean; data: any; error?: string }>;
-  saveMedia: (
-    basePath: string,
-    relativePath: string,
-    buffer: ArrayBuffer,
-  ) => Promise<{ success: boolean; path?: string; error?: string }>;
-  readMedia: (
-    basePath: string,
-    relativePath: string,
-  ) => Promise<{ success: boolean; data: Buffer | null; error?: string }>;
-  listMedia: (
-    basePath: string,
-    projectName: string,
-    mediaType: string,
-  ) => Promise<{ success: boolean; files: FileInfo[]; error?: string }>;
-  deleteMedia: (
-    basePath: string,
-    relativePath: string,
-  ) => Promise<{ success: boolean; error?: string }>;
-  downloadMedia: (
-    basePath: string,
-    url: string,
-    relativePath: string,
-  ) => Promise<{ success: boolean; path?: string; error?: string }>;
-  renameProject: (
-    basePath: string,
-    oldProjectName: string,
-    newProjectName: string,
-  ) => Promise<{ success: boolean; error?: string }>;
-  deleteProject: (
-    basePath: string,
-    projectName: string,
-  ) => Promise<{ success: boolean; error?: string }>;
-  copyProject: (
-    basePath: string,
-    srcProjectName: string,
-    destProjectName: string,
-  ) => Promise<{ success: boolean; error?: string }>;
-  mediaExists: (
-    basePath: string,
-    relativePath: string,
-  ) => Promise<boolean>;
-  getDefaultPath: () => Promise<string>;
-};
+import type {
+  FileInfo,
+  StorageApi,
+} from "shared/types/storage";
 
 export type DebugApi = {
   toggleDevTools: () => Promise<{ success: boolean; error?: string }>;
@@ -103,8 +29,7 @@ const storageApi: StorageApi = {
   selectDirectory: () => ipcRenderer.invoke("storage:selectDirectory"),
   ensureProject: (basePath, projectName) =>
     ipcRenderer.invoke("storage:ensureProject", basePath, projectName),
-  listProjects: (basePath) =>
-    ipcRenderer.invoke("storage:listProjects", basePath),
+  listProjects: (basePath) => ipcRenderer.invoke("storage:listProjects", basePath),
   saveCanvas: (basePath, projectName, data) =>
     ipcRenderer.invoke("storage:saveCanvas", basePath, projectName, data),
   loadCanvas: (basePath, projectName) =>
@@ -119,25 +44,56 @@ const storageApi: StorageApi = {
     ipcRenderer.invoke("storage:deleteMedia", basePath, relativePath),
   downloadMedia: (basePath, url, relativePath) =>
     ipcRenderer.invoke("storage:downloadMedia", basePath, url, relativePath),
+  mediaExists: (basePath, relativePath) =>
+    ipcRenderer.invoke("storage:mediaExists", basePath, relativePath),
   renameProject: (basePath, oldProjectName, newProjectName) =>
-    ipcRenderer.invoke("storage:renameProject", basePath, oldProjectName, newProjectName),
+    ipcRenderer.invoke(
+      "storage:renameProject",
+      basePath,
+      oldProjectName,
+      newProjectName,
+    ),
   deleteProject: (basePath, projectName) =>
     ipcRenderer.invoke("storage:deleteProject", basePath, projectName),
   copyProject: (basePath, srcProjectName, destProjectName) =>
-    ipcRenderer.invoke("storage:copyProject", basePath, srcProjectName, destProjectName),
-  mediaExists: (basePath, relativePath) =>
-    ipcRenderer.invoke("storage:mediaExists", basePath, relativePath),
+    ipcRenderer.invoke(
+      "storage:copyProject",
+      basePath,
+      srcProjectName,
+      destProjectName,
+    ),
   getDefaultPath: () => ipcRenderer.invoke("storage:getDefaultPath"),
+
+  // Compatibility aliases for existing renderer-side service wrappers.
+  ensureProjectDir: (basePath, projectName) =>
+    ipcRenderer.invoke("storage:ensureProject", basePath, projectName),
+  writeFile: (basePath, relativePath, buffer) =>
+    ipcRenderer.invoke("storage:saveMedia", basePath, relativePath, buffer),
+  readFile: (basePath, relativePath) =>
+    ipcRenderer.invoke("storage:readMedia", basePath, relativePath),
+  deleteFile: (basePath, relativePath) =>
+    ipcRenderer.invoke("storage:deleteMedia", basePath, relativePath),
+  listFiles: (basePath, projectName, mediaType) =>
+    ipcRenderer.invoke("storage:listMedia", basePath, projectName, mediaType),
+  downloadFile: (basePath, url, relativePath) =>
+    ipcRenderer.invoke("storage:downloadMedia", basePath, url, relativePath),
+  fileExists: (basePath, relativePath) =>
+    ipcRenderer.invoke("storage:mediaExists", basePath, relativePath),
 };
 
 const debugApi: DebugApi = {
+  // 触发主进程切换 DevTools
   toggleDevTools: () => ipcRenderer.invoke("debug:toggleDevTools"),
+  // 检查是否为开发环境
   isDev: () => ipcRenderer.invoke("debug:isDev"),
 };
 
 const downloadApi: DownloadApi = {
+  // 下载图片作为 Buffer
   imageAsBuffer: (url) => ipcRenderer.invoke("download:imageAsBuffer", url),
+  // 下载图片作为 Base64
   imageAsBase64: (url) => ipcRenderer.invoke("download:imageAsBase64", url),
+  // 下载图片保存到文件
   imageToFile: (url, filePath) =>
     ipcRenderer.invoke("download:imageToFile", url, filePath),
 };

@@ -46,7 +46,7 @@ export function useGenerationPoints() {
     let disposed = false;
 
     void getScoreConfig()
-      .then((res) => {
+      .then((res: any) => {
         if (disposed) {
           return;
         }

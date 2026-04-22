@@ -183,7 +183,7 @@ export const ImageNode = memo(
             image_urls: [uploadResult.url],
             result: {
               type: "image",
-              data: [{ url: uploadResult.url }],
+              data: [{ url: uploadResult.url, remoteUrl: uploadResult.url }],
             },
             status: GenerationStatus.COMPLETED,
             progress: 100,

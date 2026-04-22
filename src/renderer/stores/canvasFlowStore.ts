@@ -8,8 +8,8 @@ import {
   saveGeneratedImageToLocal,
   saveGeneratedVideoToLocal,
 } from "service/projectStorage";
-import { getGenerationScoreCost } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
+import { getGenerationPointsByScene } from "shared/constants/model-points";
 import { POINTS_FEATURE_ENABLED, normalizeRequiredPoints } from "shared/constants/points";
 import type { GeminiYwResponseBody } from "shared/types/detail/gemini-yw";
 import type {
@@ -52,6 +52,7 @@ import {
   wait,
 } from "shared/utils/reactflowUtils";
 import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
+import { hydrateMediaForRuntime } from "shared/utils/mediaPersistence";
 import { getJikeingUserId, toChineseNumber } from "shared/utils/utils";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
 import { create } from "zustand";
@@ -786,7 +787,7 @@ const deductVipScoreAfterGeneration = async ({
   const finalScoreCost =
     Number.isFinite(scoreCost) && scoreCost > 0
       ? scoreCost
-      : getGenerationScoreCost(model);
+      : getGenerationPointsByScene({ scene, model });
   try {
     await updateVipScore({
       userId: loginUserId,
@@ -1085,7 +1086,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (node.type === "imageNode" && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
-                if (!item.url && (item.relativePath || item.localPath)) {
+                if (!(item.remoteUrl || item.url) && (item.relativePath || item.localPath)) {
                   try {
                     const path = item.localPath || item.relativePath;
                     const fileBytes = await readMediaFromLocal(path);
@@ -1098,13 +1099,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                         type: `image/${ext}`,
                       });
                       const blobUrl = URL.createObjectURL(blob);
-                      return { ...item, url: blobUrl };
+                      return hydrateMediaForRuntime(item, blobUrl);
                     }
                   } catch (err) {
                     console.warn("Failed to load local image:", err);
                   }
                 }
-                return item;
+                return hydrateMediaForRuntime(item);
               }),
             );
             return {
@@ -1122,7 +1123,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (node.type === "videoNode" && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
-                if (!item.url && (item.relativePath || item.localPath)) {
+                if (!(item.remoteUrl || item.url) && (item.relativePath || item.localPath)) {
                   try {
                     const path = item.localPath || item.relativePath;
                     const fileBytes = await readMediaFromLocal(path);
@@ -1137,13 +1138,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                         type: `video/${ext}`,
                       });
                       const blobUrl = URL.createObjectURL(blob);
-                      return { ...item, url: blobUrl };
+                      return hydrateMediaForRuntime(item, blobUrl);
                     }
                   } catch (err) {
                     console.warn("Failed to load local video:", err);
                   }
                 }
-                return item;
+                return hydrateMediaForRuntime(item);
               }),
             );
             return {
@@ -1161,7 +1162,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (node.type === "audioNode" && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
-                if (!item.url && (item.relativePath || item.localPath)) {
+                if (!(item.remoteUrl || item.url) && (item.relativePath || item.localPath)) {
                   try {
                     const path = item.localPath || item.relativePath;
                     const fileBytes = await readMediaFromLocal(path);
@@ -1174,13 +1175,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                         type: `audio/${ext}`,
                       });
                       const blobUrl = URL.createObjectURL(blob);
-                      return { ...item, url: blobUrl };
+                      return hydrateMediaForRuntime(item, blobUrl);
                     }
                   } catch (err) {
                     console.warn("Failed to load local audio:", err);
                   }
                 }
-                return item;
+                return hydrateMediaForRuntime(item);
               }),
             );
             return {

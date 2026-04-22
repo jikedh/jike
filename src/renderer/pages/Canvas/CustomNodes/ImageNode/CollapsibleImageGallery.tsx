@@ -9,6 +9,7 @@ type ImageItem = {
   url: string; // 远程 OSS URL
   localPath?: string; // 本地相对路径
   localName?: string; // 本地文件名
+  remoteUrl?: string; // 远程持久化 URL
 };
 
 type CollapsibleImageGalleryProps = {
@@ -141,6 +142,7 @@ export const CollapsibleImageGallery = memo(
           newImages[index] = {
             ...newImages[index],
             url: ossResult.url,
+            remoteUrl: ossResult.url,
           };
 
           updateImageNodeData(nodeId, {

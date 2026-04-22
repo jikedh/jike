@@ -4,7 +4,7 @@
  */
 
 /** 参数控件类型 */
-export type ParamControlType = "buttons" | "select" | "switch";
+export type ParamControlType = "buttons" | "select" | "switch" | "slider";
 
 /** 参数项定义 */
 export interface ParamItem {
@@ -53,18 +53,6 @@ const MODEL_PARAM_CONFIGS: Record<string, ModelParamConfig> = {
         defaultValue: "fast",
       },
       {
-        key: "duration",
-        label: "视频时长",
-        controlType: "buttons",
-        options: [
-          { label: "4秒", value: 4 },
-          { label: "5秒", value: 5 },
-          { label: "8秒", value: 8 },
-          { label: "10秒", value: 10 },
-        ],
-        defaultValue: 8,
-      },
-      {
         key: "aspect_ratio",
         label: "画面比例",
         controlType: "buttons",
@@ -90,10 +78,17 @@ const MODEL_PARAM_CONFIGS: Record<string, ModelParamConfig> = {
         defaultValue: "720p",
       },
       {
+        key: "duration",
+        label: "视频时长",
+        controlType: "slider",
+        range: { min: 4, max: 15 },
+        defaultValue: 8,
+      },
+      {
         key: "generate_audio",
         label: "生成音频",
         controlType: "switch",
-        defaultValue: false,
+        defaultValue: true,
       },
     ],
     defaults: {
@@ -101,7 +96,7 @@ const MODEL_PARAM_CONFIGS: Record<string, ModelParamConfig> = {
       duration: 8,
       aspect_ratio: "16:9",
       resolution: "720p",
-      generate_audio: false,
+      generate_audio: true,
     },
   },
 };
@@ -135,18 +130,6 @@ MODEL_PARAM_CONFIGS["doubao-seedance-2.0-fast"] = {
   model: "doubao-seedance-2.0-fast",
   params: [
     {
-      key: "duration",
-      label: "视频时长",
-      controlType: "buttons",
-      options: [
-        { label: "4秒", value: 4 },
-        { label: "5秒", value: 5 },
-        { label: "8秒", value: 8 },
-        { label: "10秒", value: 10 },
-      ],
-      defaultValue: 8,
-    },
-    {
       key: "aspect_ratio",
       label: "画面比例",
       controlType: "buttons",
@@ -172,17 +155,24 @@ MODEL_PARAM_CONFIGS["doubao-seedance-2.0-fast"] = {
       defaultValue: "720p",
     },
     {
+      key: "duration",
+      label: "视频时长",
+      controlType: "slider",
+      range: { min: 4, max: 15 },
+      defaultValue: 8,
+    },
+    {
       key: "generate_audio",
       label: "生成音频",
       controlType: "switch",
-      defaultValue: false,
+      defaultValue: true,
     },
   ],
   defaults: {
     duration: 8,
     aspect_ratio: "16:9",
     resolution: "720p",
-    generate_audio: false,
+    generate_audio: true,
   },
 };
 
@@ -193,18 +183,6 @@ MODEL_PARAM_CONFIGS["doubao-seedance-2.0-pro"] = {
   model: "doubao-seedance-2.0-pro",
   params: [
     {
-      key: "duration",
-      label: "视频时长",
-      controlType: "buttons",
-      options: [
-        { label: "4秒", value: 4 },
-        { label: "5秒", value: 5 },
-        { label: "8秒", value: 8 },
-        { label: "10秒", value: 10 },
-      ],
-      defaultValue: 10,
-    },
-    {
       key: "aspect_ratio",
       label: "画面比例",
       controlType: "buttons",
@@ -230,17 +208,24 @@ MODEL_PARAM_CONFIGS["doubao-seedance-2.0-pro"] = {
       defaultValue: "720p",
     },
     {
+      key: "duration",
+      label: "视频时长",
+      controlType: "slider",
+      range: { min: 4, max: 15 },
+      defaultValue: 10,
+    },
+    {
       key: "generate_audio",
       label: "生成音频",
       controlType: "switch",
-      defaultValue: false,
+      defaultValue: true,
     },
   ],
   defaults: {
     duration: 10,
     aspect_ratio: "16:9",
     resolution: "720p",
-    generate_audio: false,
+    generate_audio: true,
   },
 };
 /** 万象模型参数配置 */

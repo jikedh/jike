@@ -74,17 +74,15 @@ export const PixVerseParamsPanel = ({
     const duration = getDuration(currentVideoData);
     const audio = getAudio(currentVideoData);
 
-    // 生成摘要文本
-    const summary = useMemo(() => {
-        const parts: string[] = [];
+    // 生成摘要数据
+    const summaryItems = useMemo(() => {
+        const parts: Array<{ kind: "text"; value: string } | { kind: "audio"; enabled: boolean }> = [];
         // 显示子模型简称
         const subModelLabel = subModel.includes("v6") ? "V6" : "C1";
-        parts.push(subModelLabel);
-        parts.push(resolution);
-        parts.push(`${duration}s`);
-        if (audio) {
-            parts.push("音频");
-        }
+        parts.push({ kind: "text", value: subModelLabel });
+        parts.push({ kind: "text", value: resolution });
+        parts.push({ kind: "text", value: `${duration}s` });
+        parts.push({ kind: "audio", enabled: audio });
         return parts;
     }, [subModel, resolution, duration, audio]);
 
@@ -127,21 +125,31 @@ export const PixVerseParamsPanel = ({
                     className="flex h-8 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 text-xs text-neutral-300 transition-colors hover:border-neutral-500 hover:text-neutral-100"
                 >
                     <span className="flex items-center gap-1.5">
-                        {summary.map((text, index) => (
-                            <span key={index} className="flex items-center gap-1.5">
-                                {index > 0 && (
-                                    <span className="text-neutral-500">|</span>
-                                )}
-                                {text === "音频" ? (
-                                    <>
-                                        <Volume2 className="h-3.5 w-3.5 text-[#B43FEB]" />
-                                        <span className="text-[#B43FEB]">{text}</span>
-                                    </>
-                                ) : (
-                                    <span>{text}</span>
-                                )}
-                            </span>
-                        ))}
+                        {summaryItems.map((item, index) => {
+                            const separator = index > 0 && (
+                                <span className="text-neutral-500">|</span>
+                            );
+
+                            if (item.kind === "audio") {
+                                return (
+                                    <span key={index} className="flex items-center gap-1.5">
+                                        {separator}
+                                        {item.enabled ? (
+                                            <Volume2 className="h-3.5 w-3.5 text-neutral-300" />
+                                        ) : (
+                                            <VolumeX className="h-3.5 w-3.5 text-neutral-400" />
+                                        )}
+                                    </span>
+                                );
+                            }
+
+                            return (
+                                <span key={index} className="flex items-center gap-1.5">
+                                    {separator}
+                                    <span>{item.value}</span>
+                                </span>
+                            );
+                        })}
                     </span>
                 </Button>
             </PopoverTrigger>
@@ -258,19 +266,13 @@ export const PixVerseParamsPanel = ({
 
                     {/* 生成音频 */}
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            {audio ? (
-                                <Volume2 className="h-4 w-4 text-[#B43FEB]" />
-                            ) : (
-                                <VolumeX className="h-4 w-4 text-neutral-400" />
-                            )}
-                            <span className="text-xs font-medium text-neutral-300">
-                                生成音频
-                            </span>
-                        </div>
+                        <span className="text-xs text-neutral-300">
+                            生成音频
+                        </span>
                         <Switch
                             checked={audio}
                             onCheckedChange={handleAudioChange}
+                            className="data-[state=checked]:bg-[#B43FEB]"
                         />
                     </div>
                 </div>

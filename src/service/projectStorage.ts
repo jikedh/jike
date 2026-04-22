@@ -2,6 +2,7 @@ import {
   generateSimpleFileName,
   localStorageService,
 } from "service/localStorageService";
+import { sanitizeMediaTreeForPersistence } from "shared/utils/mediaPersistence";
 
 const PROJECT_LIST_KEY = "canvas-projects";
 const CANVAS_DATA_PREFIX = "canvas-flow-data-";
@@ -27,6 +28,8 @@ const STORAGE_VERSION = 2;
 
 export type MediaRef = {
   url: string;
+  remoteUrl?: string;
+  displayUrl?: string;
   localName?: string;
   localPath?: string;
 };
@@ -353,13 +356,15 @@ export const saveCanvasData = async (
   const project = getProjectById(projectId);
   if (!project) return false;
 
-  localStorage.setItem(getCanvasDataKey(projectId), JSON.stringify(data));
+  const sanitizedData = sanitizeMediaTreeForPersistence(data);
+
+  localStorage.setItem(getCanvasDataKey(projectId), JSON.stringify(sanitizedData));
 
   if (localStorageService.isAvailable()) {
     const result = await localStorageService.saveCanvasData(
       projectId,
       project.name,
-      data,
+      sanitizedData,
     );
     return result.success;
   }
@@ -437,6 +442,7 @@ export const saveMediaFromUrl = async (
       const relativePath = getLocalFilePath(projectId, mediaType, fileName);
       return {
         url,
+        remoteUrl: url,
         localName: fileName,
         localPath: relativePath || undefined,
       };
