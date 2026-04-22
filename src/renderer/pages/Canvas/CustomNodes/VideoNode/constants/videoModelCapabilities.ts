@@ -114,7 +114,7 @@ export type VideoModelFamily = "doubao-seedance-2.0" | "wan2.7-r2v" | "pixverse-
 export const VIDEO_MODEL_FAMILY_OPTIONS = [
   { value: "doubao-seedance-2.0-fast" as const, label: "豆包 Seedance 2.0 Fast" },
   { value: "doubao-seedance-2.0-pro" as const, label: "豆包 Seedance 2.0 Pro" },
-  { value: "wan2.7-r2v" as const, label: "万象" },
+  { value: "wan2.7-r2v" as const, label: "Wan2.7" },
   { value: "pixverse-i2v" as const, label: "PixVerse" },
 ];
 
