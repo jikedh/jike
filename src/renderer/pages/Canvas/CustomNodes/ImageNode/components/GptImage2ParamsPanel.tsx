@@ -7,83 +7,85 @@
 import { cn } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
 import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
 } from "@/components/ui/popover";
 
 // GPT-Image-2 尺寸选项（与 API 类型定义保持一致）
 export const GPTIMAGE2_SIZES = [
-    { label: "1024×1024", value: "1024x1024", description: "正方形" },
-    { label: "1536×1024", value: "1536x1024", description: "横向" },
-    { label: "1024×1536", value: "1024x1536", description: "竖向" },
+  { label: "1:1", value: "1024x1024", description: "正方形" },
+  { label: "3:2", value: "1536x1024", description: "横向3:2" },
+  { label: "2:3", value: "1024x1536", description: "竖向2:3" },
 ];
 
 type GptImage2ParamsPanelProps = {
-    // 当前尺寸
-    size: string;
-    // 更新尺寸
-    onSizeChange: (value: string) => void;
+  // 当前尺寸
+  size: string;
+  // 更新尺寸
+  onSizeChange: (value: string) => void;
 };
 
 export const GptImage2ParamsPanel = ({
-    size,
-    onSizeChange,
+  size,
+  onSizeChange,
 }: GptImage2ParamsPanelProps) => {
-    return (
-        <Popover>
-            <PopoverTrigger asChild>
-                <Button
-                    unstyled
-                    className="flex h-8 items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 text-xs text-white/70 transition-colors hover:border-[#B43FEB]/30 hover:text-white/90 hover:bg-white/[0.04]"
+  const currentSizeLabel = GPTIMAGE2_SIZES.find((item) => item.value === size)?.label ?? size;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          unstyled
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 text-xs text-neutral-300 transition-colors hover:border-neutral-500 hover:text-neutral-100"
+        >
+          <span>{currentSizeLabel}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="top"
+        className="w-auto border border-neutral-700 bg-neutral-900 p-3 shadow-xl"
+      >
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-neutral-300">图像尺寸</label>
+          <div className="flex gap-2">
+            {GPTIMAGE2_SIZES.map((item) => {
+              const isActive = size === item.value;
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => onSizeChange(item.value)}
+                  className={cn(
+                    "flex flex-col items-center gap-1 rounded-lg border p-3 transition-all",
+                    isActive
+                      ? "border-[#B43FEB] bg-[#B43FEB]/10"
+                      : "border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750",
+                  )}
                 >
-                    <span>{size}</span>
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent
-                align="start"
-                side="top"
-                className="w-auto border border-white/[0.06] bg-[#09090b] p-3 shadow-xl"
-            >
-                <div className="space-y-2">
-                    <label className="text-xs font-medium text-white/70">图像尺寸</label>
-                    <div className="flex gap-2">
-                        {GPTIMAGE2_SIZES.map((item) => {
-                            const isActive = size === item.value;
-                            return (
-                                <button
-                                    key={item.value}
-                                    type="button"
-                                    onClick={() => onSizeChange(item.value)}
-                                    className={cn(
-                                        "flex flex-col items-center gap-1 rounded-lg border p-3 transition-all",
-                                        isActive
-                                            ? "border-[#B43FEB] bg-[#B43FEB]/10"
-                                            : "border-white/[0.06] bg-white/[0.02] hover:border-[#B43FEB]/30 hover:bg-white/[0.04]",
-                                    )}
-                                >
-                                    <span
-                                        className={cn(
-                                            "text-sm font-medium",
-                                            isActive ? "text-[#B43FEB]" : "text-white/70",
-                                        )}
-                                    >
-                                        {item.label}
-                                    </span>
-                                    <span
-                                        className={cn(
-                                            "text-[10px]",
-                                            isActive ? "text-[#B43FEB]/70" : "text-white/40",
-                                        )}
-                                    >
-                                        {item.description}
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-            </PopoverContent>
-        </Popover>
-    );
+                  <span
+                    className={cn(
+                      "text-sm font-medium",
+                      isActive ? "text-[#B43FEB]" : "text-neutral-300",
+                    )}
+                  >
+                    {item.label}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-[10px]",
+                      isActive ? "text-[#B43FEB]/70" : "text-neutral-500",
+                    )}
+                  >
+                    {item.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 };
