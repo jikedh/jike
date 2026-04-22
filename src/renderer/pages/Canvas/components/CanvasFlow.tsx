@@ -1669,7 +1669,7 @@ export const CanvasFlow = ({
             nodesConnectable={!isAnnotationLocked}
             nodesFocusable={!isAnnotationLocked}
             edgesFocusable={!isAnnotationLocked}
-            elementsSelectable={!isAnnotationLocked}
+            elementsSelectable={!isAnnotationLocked && !isSpacePressed}
             fitView
             minZoom={0.2}
             maxZoom={2}
@@ -1678,6 +1678,7 @@ export const CanvasFlow = ({
             deleteKeyCode={isAnnotationLocked ? null : ["Backspace", "Delete"]}
             panOnDrag={isAnnotationLocked ? false : isSpacePressed ? [0, 2] : [2]}
             panActivationKeyCode={isAnnotationLocked ? null : "Space"}
+            noPanClassName={isSpacePressed ? "__space-pan-disabled" : "nopan"}
             selectionOnDrag={!isAnnotationLocked && !isSpacePressed}
             selectionMode={SelectionMode.Partial}
             multiSelectionKeyCode={["Shift"]}
