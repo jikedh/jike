@@ -1081,7 +1081,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         const target = await createPresignedOssUploadTarget({
           directory: "video",
           extension: "mp4",
-          contentType: "video/mp4",
+          contentType: "application/octet-stream",
         });
 
         const newNodeId = addNode("video", {
