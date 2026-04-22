@@ -1116,7 +1116,6 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           method: "sel_area",
           rect,
           upload_url: target.uploadUrl,
-          upload_headers: { "Content-Type": "application/octet-stream" },
           model: "video_removal_std",
         });
 

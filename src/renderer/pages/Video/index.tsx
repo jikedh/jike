@@ -56,7 +56,6 @@ export default function VideoPage() {
           y2: 1080,
         },
         upload_url: presignedTarget.uploadUrl,
-        upload_headers: { "Content-Type": "application/octet-stream" },
       });
       console.log("视频消除响应:", response);
 
