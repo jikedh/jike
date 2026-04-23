@@ -606,6 +606,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           "leading-6",
           "focus:outline-none",
         ),
+        spellcheck: "false",
       },
       handleKeyDown: (_view, event) => {
         // 当焦点在图片提示词输入区时，空格仅用于输入，不向画布层冒泡。
