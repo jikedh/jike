@@ -36,6 +36,44 @@ import {
 import { useVideoReferenceActions } from "./hooks/useVideoReferenceActions";
 import { getVideoPayloadStrategy } from "./strategies/videoPayloadStrategies";
 
+const SEEEDANCE_SPECIAL_MODELS = new Set([
+  "doubao-seedance-2.0-fast",
+  "doubao-seedance-2.0-pro",
+]);
+
+const buildModelDefaultPatch = (
+  model: string,
+  currentVideoData: VideoGenerationNode | null,
+) => {
+  const defaults = getModelDefaultParams(model);
+  const metadataPatch: Record<string, any> = {
+    ...(currentVideoData?.metadata ?? {}),
+  };
+
+  const nextPatch: Record<string, any> = {
+    model,
+  };
+
+  if (!defaults) {
+    return nextPatch;
+  }
+
+  for (const [key, value] of Object.entries(defaults)) {
+    if (key === "duration" || key === "aspect_ratio") {
+      nextPatch[key] = value;
+      continue;
+    }
+
+    metadataPatch[key] = value;
+  }
+
+  if (Object.keys(metadataPatch).length > 0) {
+    nextPatch.metadata = metadataPatch;
+  }
+
+  return nextPatch;
+};
+
 /**
  * 视频节点提示词面板（容器组件）。
  * 负责：聚合状态、分发子组件、组织“生成”动作。
@@ -88,6 +126,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
   /** 当前视频模型，默认为豆包 Seedance 2.0 */
   const model = currentVideoData?.model ?? "doubao-seedance-2.0";
+  const isCurrentSpecialSeedanceModel = SEEEDANCE_SPECIAL_MODELS.has(model);
 
   const promptDraftHtml = currentVideoData?.promptDraftHtml ?? "<p></p>";
   const {
@@ -122,8 +161,8 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         hasAudio: Boolean(
           currentVideoData?.metadata?.generate_audio ??
           currentVideoData?.metadata?.audio ??
-          currentVideoData?.generate_audio ??
-          currentVideoData?.audio ??
+          (currentVideoData as any)?.generate_audio ??
+          (currentVideoData as any)?.audio ??
           true
         ),
         fallback: Math.max(fallbackAIGenPrice, 1),
@@ -135,7 +174,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     normalizeRequiredPoints,
     currentVideoData?.duration,
     currentVideoData?.metadata,
-    currentModelCapability.provider,
     allVideoUrls?.length,
   ]);
 
@@ -493,12 +531,32 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
           <Select
             value={model}
             onValueChange={(value) => {
-              // 切换模型时，使用该模型的默认参数
-              const defaultParams = getModelDefaultParams(value);
-              updateVideoNodeData(nodeId, {
-                model: value,
-                ...defaultParams,
-              });
+              const isNextSpecialSeedanceModel =
+                SEEEDANCE_SPECIAL_MODELS.has(value);
+
+              if (isNextSpecialSeedanceModel) {
+                // 仅首次从其他模型切到 Fast/Pro 时，重置为约定默认值。
+                if (!isCurrentSpecialSeedanceModel) {
+                  updateVideoNodeData(nodeId, {
+                    model: value,
+                    aspect_ratio: "16:9",
+                    duration: 10,
+                    metadata: {
+                      ...(currentVideoData?.metadata ?? {}),
+                      resolution: "720p",
+                    },
+                  });
+                  return;
+                }
+
+                updateVideoNodeData(nodeId, { model: value });
+                return;
+              }
+
+              updateVideoNodeData(
+                nodeId,
+                buildModelDefaultPatch(value, currentVideoData),
+              );
             }}
           >
             <SelectTrigger className={PROMPT_PANEL_STYLES.modelSelect}>

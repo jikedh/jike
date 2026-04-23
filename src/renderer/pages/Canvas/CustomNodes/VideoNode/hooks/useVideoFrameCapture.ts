@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { generateVideoSnapshotUrl, uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
 import { getVideoDuration } from "shared/utils/getVideoDuration";
+import type { VideoGenerationNode } from "shared/types/flow";
 import { toast } from "sonner";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
@@ -17,6 +18,7 @@ export const useVideoFrameCapture = () => {
 
   const { screenToFlowPosition } = useReactFlow();
   const addNode = useCanvasFlowStore((state) => state.addNode);
+  const nodes = useCanvasFlowStore((state) => state.nodes);
   const updateImageNodeData = useCanvasFlowStore(
     (state) => state.updateImageNodeData,
   );
@@ -37,6 +39,13 @@ export const useVideoFrameCapture = () => {
       });
 
       const newNodeId = addNode("image", centerPosition);
+      const sourceVideoNode = sourceVideoNodeId
+        ? nodes.find((node) => node.id === sourceVideoNodeId)
+        : null;
+      const sourceAspectRatio =
+        sourceVideoNode?.type === "videoNode"
+          ? (sourceVideoNode.data as VideoGenerationNode).aspect_ratio
+          : undefined;
 
       // 把截图写入新节点，并标记为已完成状态
       updateImageNodeData(newNodeId, {
@@ -45,6 +54,7 @@ export const useVideoFrameCapture = () => {
           type: "image",
           data: [{ url: snapshotUrl }],
         },
+        ...(sourceAspectRatio ? { size: sourceAspectRatio } : {}),
         status: GenerationStatus.COMPLETED,
         progress: 100,
       });
@@ -63,7 +73,7 @@ export const useVideoFrameCapture = () => {
 
       return newNodeId;
     },
-    [addNode, updateImageNodeData, onConnect],
+    [addNode, nodes, updateImageNodeData, onConnect],
   );
 
   /**
