@@ -7,6 +7,18 @@ import { persist } from "zustand/middleware";
 const INITIAL_STATE: Pick<
   ChatSettingsStoreType,
   | "defaultModel"
+  | "defaultImageModel"
+  | "defaultImagePlatform"
+  | "defaultImageSize"
+  | "defaultImageResolution"
+  | "defaultVideoModel"
+  | "defaultVideoAspectRatio"
+  | "defaultVideoDuration"
+  | "defaultVideoResolution"
+  | "defaultVideoMode"
+  | "defaultVideoGenerateAudio"
+  | "defaultVideoAudio"
+  | "defaultVideoPromptExtend"
   | "defaultPersonaId"
   | "autoSaveEnabled"
   | "gridVisible"
@@ -17,6 +29,18 @@ const INITIAL_STATE: Pick<
   | "storagePath"
 > = {
   defaultModel: DEFAULT_CANVAS_CHAT_MODEL,
+  defaultImageModel: "gemini-3-pro-image-preview",
+  defaultImagePlatform: "google",
+  defaultImageSize: "1:1",
+  defaultImageResolution: "2K",
+  defaultVideoModel: "wan2.7-r2v",
+  defaultVideoAspectRatio: "16:9",
+  defaultVideoDuration: 5,
+  defaultVideoResolution: "1080P",
+  defaultVideoMode: undefined,
+  defaultVideoGenerateAudio: undefined,
+  defaultVideoAudio: undefined,
+  defaultVideoPromptExtend: false,
   defaultPersonaId: "none" as ChatPersonaId,
   autoSaveEnabled: true,
   gridVisible: true,
@@ -35,6 +59,37 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
       ...INITIAL_STATE,
 
       setDefaultModel: (model) => set({ defaultModel: model }),
+      setDefaultImagePreset: (preset) =>
+        set((state) => ({
+          defaultImageModel: preset.model ?? state.defaultImageModel,
+          defaultImagePlatform:
+            preset.platform ?? state.defaultImagePlatform,
+          defaultImageSize: preset.size ?? state.defaultImageSize,
+          defaultImageResolution:
+            preset.resolution ?? state.defaultImageResolution,
+        })),
+      setDefaultVideoPreset: (preset) =>
+        set((state) => ({
+          defaultVideoModel: preset.model ?? state.defaultVideoModel,
+          defaultVideoAspectRatio:
+            preset.aspectRatio ?? state.defaultVideoAspectRatio,
+          defaultVideoDuration:
+            preset.duration ?? state.defaultVideoDuration,
+          defaultVideoResolution:
+            preset.resolution ?? state.defaultVideoResolution,
+          defaultVideoMode:
+            preset.mode !== undefined ? preset.mode : state.defaultVideoMode,
+          defaultVideoGenerateAudio:
+            preset.generateAudio !== undefined
+              ? preset.generateAudio
+              : state.defaultVideoGenerateAudio,
+          defaultVideoAudio:
+            preset.audio !== undefined ? preset.audio : state.defaultVideoAudio,
+          defaultVideoPromptExtend:
+            preset.promptExtend !== undefined
+              ? preset.promptExtend
+              : state.defaultVideoPromptExtend,
+        })),
       setDefaultPersonaId: (personaId) => set({ defaultPersonaId: personaId }),
       setAutoSaveEnabled: (enabled) => set({ autoSaveEnabled: enabled }),
       setGridVisible: (visible) => set({ gridVisible: visible }),

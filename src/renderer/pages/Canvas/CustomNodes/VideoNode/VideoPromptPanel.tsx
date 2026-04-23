@@ -15,6 +15,7 @@ import {
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 
 import { getModelDefaultParams } from "./components/modelParamsConfig";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
@@ -103,6 +104,9 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   const updateVideoNodeData = useCanvasFlowStore(
     (state) => state.updateVideoNodeData,
   );
+  const setDefaultVideoPreset = useChatSettingsStore(
+    (state) => state.setDefaultVideoPreset,
+  );
   const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge);
   const setReferenceHoverHighlight = useCanvasFlowStore(
     (state) => state.setReferenceHoverHighlight,
@@ -150,6 +154,44 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   const currentModelCapability = useMemo(() => {
     return getVideoModelCapability(model);
   }, [model]);
+
+  const persistVideoDefaultPreset = useCallback(
+    (patch: Record<string, any>) => {
+      const nextMetadata = {
+        ...(currentVideoData?.metadata ?? {}),
+        ...(patch.metadata ?? {}),
+      };
+
+      setDefaultVideoPreset({
+        model: patch.model ?? currentVideoData?.model ?? model,
+        aspectRatio:
+          patch.aspect_ratio ?? currentVideoData?.aspect_ratio ?? "16:9",
+        duration: patch.duration ?? currentVideoData?.duration ?? 5,
+        resolution:
+          nextMetadata.resolution ?? currentVideoData?.metadata?.resolution,
+        mode: nextMetadata.mode,
+        generateAudio: nextMetadata.generate_audio,
+        audio: nextMetadata.audio,
+        promptExtend: nextMetadata.prompt_extend,
+      });
+    },
+    [
+      currentVideoData?.aspect_ratio,
+      currentVideoData?.duration,
+      currentVideoData?.metadata,
+      currentVideoData?.model,
+      model,
+      setDefaultVideoPreset,
+    ],
+  );
+
+  const applyVideoBasicPatch = useCallback(
+    (patch: Record<string, any>) => {
+      persistVideoDefaultPreset(patch);
+      updateVideoNodeData(nodeId, patch);
+    },
+    [nodeId, persistVideoDefaultPreset, updateVideoNodeData],
+  );
 
   const requiredPoints = useMemo(() => {
     return normalizeRequiredPoints(
@@ -537,7 +579,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
               if (isNextSpecialSeedanceModel) {
                 // 仅首次从其他模型切到 Fast/Pro 时，重置为约定默认值。
                 if (!isCurrentSpecialSeedanceModel) {
-                  updateVideoNodeData(nodeId, {
+                  applyVideoBasicPatch({
                     model: value,
                     aspect_ratio: "16:9",
                     duration: 10,
@@ -549,12 +591,11 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
                   return;
                 }
 
-                updateVideoNodeData(nodeId, { model: value });
+                applyVideoBasicPatch({ model: value });
                 return;
               }
 
-              updateVideoNodeData(
-                nodeId,
+              applyVideoBasicPatch(
                 buildModelDefaultPatch(value, currentVideoData),
               );
             }}
@@ -577,14 +618,14 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
           <VideoModelParamsPanel
             currentVideoData={currentVideoData}
-            onPatch={(patch) => updateVideoNodeData(nodeId, patch)}
+            onPatch={(patch) => applyVideoBasicPatch(patch)}
           />
 
           <div className="ml-auto flex items-center gap-3">
             {/* 预设提示词下拉 */}
             <PresetDropdown
               presetType="video"
-              disabled={isGenerating || isUploading}
+              disabled={isUploading}
               onSelect={(content) => {
                 editorRef.current?.insertContent(content);
               }}

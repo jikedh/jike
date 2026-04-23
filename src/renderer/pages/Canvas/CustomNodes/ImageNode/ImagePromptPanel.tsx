@@ -23,6 +23,7 @@ import {
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { getImageGenerationPoints } from "shared/constants/model-points";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import { GeminiParamsPanel } from "./components/GeminiParamsPanel";
@@ -118,6 +119,9 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const updateImageNodeData = useCanvasFlowStore(
     (state) => state.updateImageNodeData,
   );
+  const setDefaultImagePreset = useChatSettingsStore(
+    (state) => state.setDefaultImagePreset,
+  );
   const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge);
   const setReferenceHoverHighlight = useCanvasFlowStore(
     (state) => state.setReferenceHoverHighlight,
@@ -162,6 +166,31 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const resolution = currentImageData?.resolution ?? "2K";
   const referenceImageUrls = currentImageData?.image_urls ?? [];
   const promptDraftHtml = currentImageData?.promptDraftHtml ?? "<p></p>";
+
+  const persistImageDefaultPreset = useCallback(
+    (patch: {
+      model?: string;
+      platform?: string;
+      size?: string;
+      resolution?: string;
+    }) => {
+      setDefaultImagePreset({
+        model: patch.model ?? currentImageData?.model ?? model,
+        platform: patch.platform ?? currentImageData?.platform ?? platform,
+        size: patch.size ?? size,
+        resolution: patch.resolution ?? resolution,
+      });
+    },
+    [
+      currentImageData?.model,
+      currentImageData?.platform,
+      model,
+      platform,
+      resolution,
+      setDefaultImagePreset,
+      size,
+    ],
+  );
 
   // ========== 模型专属参数 ==========
   // 判断是否为 Midjourney 系列模型
@@ -1064,6 +1093,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               const selectedModel = IMAGE_MODELS.find(
                 (item) => item.id === Number(value),
               );
+              persistImageDefaultPreset({
+                model: selectedModel?.model ?? value,
+                platform: selectedModel?.platform,
+              });
               updateImageNodeData(nodeId, {
                 model: selectedModel?.model ?? value,
                 platform: selectedModel?.platform,
@@ -1092,12 +1125,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             <SeedreamParamsPanel
               size={size}
               resolution={resolution}
-              onSizeChange={(value) =>
-                updateImageNodeData(nodeId, { size: value })
-              }
-              onResolutionChange={(value) =>
-                updateImageNodeData(nodeId, { resolution: value })
-              }
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
             />
           )}
           {isGeminiModel && (
@@ -1105,12 +1140,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             <GeminiParamsPanel
               size={size}
               resolution={resolution}
-              onSizeChange={(value) =>
-                updateImageNodeData(nodeId, { size: value })
-              }
-              onResolutionChange={(value) =>
-                updateImageNodeData(nodeId, { resolution: value })
-              }
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
             />
           )}
           {isGeminiPro2Model && (
@@ -1118,12 +1155,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             <GeminiParamsPanel
               size={size}
               resolution={resolution}
-              onSizeChange={(value) =>
-                updateImageNodeData(nodeId, { size: value })
-              }
-              onResolutionChange={(value) =>
-                updateImageNodeData(nodeId, { resolution: value })
-              }
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
             />
           )}
 
@@ -1131,9 +1170,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             // GPT-Image-2 整合参数面板
             <GptImage2ParamsPanel
               size={size}
-              onSizeChange={(value) =>
-                updateImageNodeData(nodeId, { size: value })
-              }
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
             />
           )}
 
@@ -1141,9 +1181,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           {isMidjourneyModel && (
             <MidjourneyParamsPanel
               size={size}
-              onSizeChange={(value) =>
-                updateImageNodeData(nodeId, { size: value })
-              }
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
             />
           )}
 
@@ -1170,7 +1211,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             {/* 预设提示词下拉 */}
             <PresetDropdown
               presetType="image"
-              disabled={isGenerating}
+              disabled={false}
               onSelect={(content) => {
                 editor?.commands.insertContent(content);
               }}

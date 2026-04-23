@@ -1397,6 +1397,20 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const nextPosition = position ?? getNextNodePosition(currentNodes);
 
       const newNode = factory(nextId, nextPosition, options);
+      const {
+        defaultImageModel,
+        defaultImagePlatform,
+        defaultImageSize,
+        defaultImageResolution,
+        defaultVideoModel,
+        defaultVideoAspectRatio,
+        defaultVideoDuration,
+        defaultVideoResolution,
+        defaultVideoMode,
+        defaultVideoGenerateAudio,
+        defaultVideoAudio,
+        defaultVideoPromptExtend,
+      } = useChatSettingsStore.getState();
       const finalNode =
         newNode.type === "audioNode"
           ? {
@@ -1406,6 +1420,47 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               nickname: getAudioNicknameByNodeId(nextId),
             },
           }
+          : newNode.type === "imageNode"
+            ? {
+                ...newNode,
+                data: {
+                  ...newNode.data,
+                  model: defaultImageModel || newNode.data.model,
+                  platform: defaultImagePlatform || newNode.data.platform,
+                  size: defaultImageSize || newNode.data.size,
+                  resolution:
+                    defaultImageResolution || newNode.data.resolution,
+                },
+              }
+          : newNode.type === "videoNode"
+            ? {
+                ...newNode,
+                data: {
+                  ...newNode.data,
+                  model: defaultVideoModel || newNode.data.model,
+                  aspect_ratio:
+                    defaultVideoAspectRatio || newNode.data.aspect_ratio,
+                  duration: defaultVideoDuration || newNode.data.duration,
+                  metadata: {
+                    ...(newNode.data.metadata ?? {}),
+                    resolution:
+                      defaultVideoResolution ||
+                      newNode.data.metadata?.resolution,
+                    ...(defaultVideoMode !== undefined
+                      ? { mode: defaultVideoMode }
+                      : {}),
+                    ...(defaultVideoGenerateAudio !== undefined
+                      ? { generate_audio: defaultVideoGenerateAudio }
+                      : {}),
+                    ...(defaultVideoAudio !== undefined
+                      ? { audio: defaultVideoAudio }
+                      : {}),
+                    ...(defaultVideoPromptExtend !== undefined
+                      ? { prompt_extend: defaultVideoPromptExtend }
+                      : {}),
+                  },
+                },
+              }
           : newNode;
 
       set((state) => ({
