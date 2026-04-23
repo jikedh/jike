@@ -27,7 +27,8 @@ export const PROMPT_PANEL_STYLES = {
     "group relative w-[60px] h-[60px] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#121214] shadow-sm hover:border-[#B43FEB]/40",
 
   modelSelect:
-    "bg-white/5 hover:bg-white/10 border border-transparent hover:border-[#B43FEB]/30 px-4 py-2.5 rounded-xl text-xs text-white/80 font-medium flex items-center gap-2 transition-all cursor-pointer group shadow-sm h-auto min-w-[160px]",
+    "bg-white/5 hover:bg-white/10 border border-transparent hover:border-[#B43FEB]/30 px-4 py-2.5 rounded-xl text-xs text-white/80 font-medium flex items-center gap-2 transition-all cursor-pointer group shadow-sm h-auto w-auto",
+
 
   modelSelectContent:
     "bg-[#1a1a1d] border border-white/[0.08] rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.4)] overflow-hidden",

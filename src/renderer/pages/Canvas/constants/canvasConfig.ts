@@ -9,11 +9,13 @@ import { TableNode } from "../CustomNodes/TableNode";
 import { TextAgentNode } from "../CustomNodes/TextAgentNode";
 import { VideoAgentNode } from "../CustomNodes/VideoAgentNode";
 import { VideoNode } from "../CustomNodes/VideoNode";
+import { VideoDemoNode } from "../CustomNodes/VideoDemoNode";
 
 export const nodeTypes = {
   noteNode: NoteNode,
   imageNode: ImageNode,
   videoNode: VideoNode,
+  videoDemoNode: VideoDemoNode,
   agentNode: AgentNode,
   textAgentNode: TextAgentNode,
   imageAgentNode: ImageAgentNode,

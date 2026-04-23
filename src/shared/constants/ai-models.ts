@@ -92,6 +92,22 @@ export const VIDEO_MODELS = [
     platform: "dashscope",
     platformId: 0,
   },
+  // Wan 2.7 T2V
+  {
+    id: 24,
+    name: "Wan 2.7 T2V",
+    model: "wan2.7-t2v",
+    platform: "dashscope",
+    platformId: 0,
+  },
+  // Wan 2.7 R2V
+  {
+    id: 25,
+    name: "Wan 2.7 R2V",
+    model: "wan2.7-r2v",
+    platform: "dashscope",
+    platformId: 0,
+  },
 ];
 
 /** 宽高比配置 */
@@ -162,6 +178,9 @@ export const GENERATION_SCORE_COST_MAP: Record<string, number> = {
   "midjourney-niji7": 30,
   // 视频模型
   "doubao-seedance-2.0": 30,
+  "wan2.7-i2v": 30,
+  "wan2.7-t2v": 30,
+  "wan2.7-r2v": 30,
 };
 
 /**
