@@ -256,6 +256,8 @@ export function useDragUpload() {
             });
           }
 
+          useCanvasFlowStore.getState().saveGraph();
+
           toast.success(`${file.name} 上传成功`);
         } catch (error) {
           console.error(`上传失败: ${file.name}`, error);
@@ -277,6 +279,8 @@ export function useDragUpload() {
               error: { message: "上传失败，请重试" },
             });
           }
+
+          useCanvasFlowStore.getState().saveGraph();
 
           toast.error(`上传 ${file.name} 失败`);
         }

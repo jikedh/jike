@@ -1,6 +1,7 @@
 import {
   IconCopy,
   IconLayoutGrid,
+  IconPhoto,
   IconTrash,
   IconLayout,
 } from "@tabler/icons-react";
@@ -22,6 +23,7 @@ type NodeContextMenuProps = PropsWithChildren<{
   onDelete: () => void;
   onSplitImage?: (gridSize: 2 | 3 | 4) => void;
   onSeparateToNodes?: () => void;
+  onSetAsCover?: () => void;
   hasMultipleResults?: boolean;
   separateToNodesLabel?: string;
 }>;
@@ -32,6 +34,7 @@ export const NodeContextMenu = ({
   onDelete,
   onSplitImage,
   onSeparateToNodes,
+  onSetAsCover,
   hasMultipleResults,
   separateToNodesLabel = "独立为图片",
 }: NodeContextMenuProps) => {
@@ -83,6 +86,16 @@ export const NodeContextMenu = ({
           >
             <IconLayout size={15} />
             {separateToNodesLabel}
+          </ContextMenuItem>
+        )}
+
+        {onSetAsCover && (
+          <ContextMenuItem
+            className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
+            onSelect={onSetAsCover}
+          >
+            <IconPhoto size={15} />
+            设置为封面图
           </ContextMenuItem>
         )}
 

@@ -34,6 +34,23 @@ export type MediaRef = {
   localPath?: string;
 };
 
+const inferImageExtension = (...candidates: Array<string | undefined>): string => {
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    const cleanValue = candidate.split("?")[0].split("#")[0];
+    const fileName = cleanValue.split("/").pop() || cleanValue;
+    const match = fileName.match(/\.([a-zA-Z0-9]+)$/);
+    const extension = match?.[1]?.toLowerCase();
+
+    if (extension && ["png", "jpg", "jpeg", "webp", "gif"].includes(extension)) {
+      return extension === "jpg" ? "jpeg" : extension;
+    }
+  }
+
+  return "png";
+};
+
 export const getProjectList = (): ProjectMeta[] => {
   try {
     const raw = localStorage.getItem(PROJECT_LIST_KEY);
@@ -102,6 +119,7 @@ export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
               createdAt: canvasData.savedAt || item.createdAt || Date.now(),
               updatedAt: canvasData.savedAt || item.updatedAt || Date.now(),
               description: canvasData.description,
+            coverUrl: canvasData.coverUrl,
               coverLocalPath: canvasData.coverLocalPath,
               type: canvasData.type || "video",
             };
@@ -746,6 +764,42 @@ const arrayBufferToDataUrl = (buffer: ArrayBuffer, extension: string) => {
   return `data:image/${extension};base64,${base64}`;
 };
 
+const persistProjectCoverMeta = async (
+  projectId: string,
+  coverLocalPath: string,
+  coverUrl: string,
+) => {
+  updateProject(projectId, {
+    coverLocalPath,
+    coverUrl,
+  });
+
+  const storageKey = getCanvasDataKey(projectId);
+  const cachedCanvasData = localStorage.getItem(storageKey);
+  let canvasData: any = null;
+
+  if (cachedCanvasData) {
+    try {
+      canvasData = JSON.parse(cachedCanvasData);
+    } catch (error) {
+      console.warn("Failed to parse cached canvas data while saving cover:", error);
+    }
+  }
+
+  if (!canvasData) {
+    canvasData = await loadCanvasData(projectId);
+  }
+
+  if (canvasData) {
+    await saveCanvasData(projectId, {
+      ...canvasData,
+      savedAt: Date.now(),
+      coverLocalPath,
+      coverUrl,
+    });
+  }
+};
+
 export const saveCoverImageToLocal = async (
   projectId: string,
   imageData: ArrayBuffer | string,
@@ -762,11 +816,12 @@ export const saveCoverImageToLocal = async (
       imageData,
     );
     if (result.success) {
-      const ext = imageData.split(".").pop()?.toLowerCase() || "png";
-      updateProject(projectId, {
-        coverLocalPath: `${project.name}/cover.${ext}`,
-        coverUrl: imageData,
-      });
+      const ext = inferImageExtension(imageData);
+      await persistProjectCoverMeta(
+        projectId,
+        `${project.name}/cover.${ext}`,
+        imageData,
+      );
       return `cover.${ext}`;
     }
     return null;
@@ -780,13 +835,40 @@ export const saveCoverImageToLocal = async (
       return null;
     }
 
-    updateProject(projectId, {
-      coverLocalPath: `${project.name}/cover.${extension}`,
-      coverUrl: arrayBufferToDataUrl(imageData, extension),
-    });
+    await persistProjectCoverMeta(
+      projectId,
+      `${project.name}/cover.${extension}`,
+      arrayBufferToDataUrl(imageData, extension),
+    );
 
     return `cover.${extension}`;
   }
+};
+
+export const setProjectCoverFromMediaRef = async (
+  projectId: string,
+  mediaRef: MediaRef,
+): Promise<string | null> => {
+  const extension = inferImageExtension(
+    mediaRef.localName,
+    mediaRef.localPath,
+    mediaRef.remoteUrl,
+    mediaRef.url,
+  );
+
+  if (mediaRef.localPath) {
+    const localMedia = await readMediaFromLocal(mediaRef.localPath);
+    if (localMedia) {
+      return saveCoverImageToLocal(projectId, localMedia, extension);
+    }
+  }
+
+  const remoteSource = mediaRef.remoteUrl || mediaRef.url;
+  if (!remoteSource) {
+    return null;
+  }
+
+  return saveCoverImageToLocal(projectId, remoteSource, extension);
 };
 
 export const readMediaFromLocal = async (

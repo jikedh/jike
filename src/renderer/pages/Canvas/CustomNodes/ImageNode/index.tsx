@@ -5,6 +5,7 @@ import {
 } from "@xyflow/react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { setProjectCoverFromMediaRef } from "service/projectStorage";
 import { uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageNodeType } from "shared/types/flow";
@@ -54,6 +55,7 @@ export const ImageNode = memo(
     const selectedNodesCount = useCanvasFlowStore(
       (state) => state.selectedNodesCount,
     );
+    const projectId = useCanvasFlowStore((state) => state.projectId);
 
     // 全景图查看器状态
     const panoramaViewer = useCanvasFlowStore((state) => state.panoramaViewer);
@@ -142,6 +144,36 @@ export const ImageNode = memo(
     const handleContextMenuSeparateToNodes = useCallback(() => {
       separateToNodes(id);
     }, [separateToNodes, id]);
+
+    const handleContextMenuSetAsCover = useCallback(async () => {
+      if (!projectId) {
+        toast.error("当前项目不存在");
+        return;
+      }
+
+      const primaryImage = data.result?.data?.[0];
+      if (!primaryImage) {
+        toast.info("当前图片节点暂无可用图片");
+        return;
+      }
+
+      try {
+        const savedCoverName = await setProjectCoverFromMediaRef(
+          projectId,
+          primaryImage,
+        );
+
+        if (!savedCoverName) {
+          toast.error("封面图设置失败");
+          return;
+        }
+
+        toast.success("已设置为项目封面图");
+      } catch (error) {
+        console.error("设置项目封面图失败:", error);
+        toast.error("封面图设置失败");
+      }
+    }, [data.result?.data, projectId]);
 
     const hasMultipleResults = (data.result?.data?.length ?? 0) > 1;
 
@@ -246,6 +278,7 @@ export const ImageNode = memo(
           onDelete={handleContextMenuDelete}
           onSplitImage={handleContextMenuSplitImage}
           onSeparateToNodes={handleContextMenuSeparateToNodes}
+          onSetAsCover={handleContextMenuSetAsCover}
           hasMultipleResults={hasMultipleResults}
         >
           <div

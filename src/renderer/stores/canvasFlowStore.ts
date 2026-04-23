@@ -1093,7 +1093,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (node.type === "imageNode" && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
-                if (!(item.remoteUrl || item.url) && (item.relativePath || item.localPath)) {
+                if (item.relativePath || item.localPath) {
                   try {
                     const path = item.localPath || item.relativePath;
                     const fileBytes = await readMediaFromLocal(path);
@@ -1130,7 +1130,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (node.type === "videoNode" && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
-                if (!(item.remoteUrl || item.url) && (item.relativePath || item.localPath)) {
+                if (item.relativePath || item.localPath) {
                   try {
                     const path = item.localPath || item.relativePath;
                     const fileBytes = await readMediaFromLocal(path);
@@ -1169,7 +1169,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (node.type === "audioNode" && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
-                if (!(item.remoteUrl || item.url) && (item.relativePath || item.localPath)) {
+                if (item.relativePath || item.localPath) {
                   try {
                     const path = item.localPath || item.relativePath;
                     const fileBytes = await readMediaFromLocal(path);
@@ -1374,10 +1374,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       // 保存历史记录
       get().requestHistorySave();
 
-      // 自动保存
-      if (useChatSettingsStore.getState().autoSaveEnabled) {
-        get().saveGraph();
-      }
+      // 新建节点属于结构性变更，始终立即落盘，避免 canvas.json 丢节点。
+      get().saveGraph();
 
       return nextId;
     },
@@ -1520,6 +1518,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       });
 
       get().requestHistorySave();
+      get().saveGraph();
     },
 
     requestHistorySave: () => {
