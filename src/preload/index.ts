@@ -62,6 +62,10 @@ const storageApi: StorageApi = {
       srcProjectName,
       destProjectName,
     ),
+  exportProject: (basePath, projectName) =>
+    ipcRenderer.invoke("storage:exportProject", basePath, projectName),
+  importProject: (basePath) =>
+    ipcRenderer.invoke("storage:importProject", basePath),
   getDefaultPath: () => ipcRenderer.invoke("storage:getDefaultPath"),
 
   // Compatibility aliases for existing renderer-side service wrappers.

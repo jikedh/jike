@@ -71,6 +71,13 @@ export type StorageApi = {
     srcProjectName: string,
     destProjectName: string,
   ) => Promise<StorageResult>;
+  exportProject: (
+    basePath: string,
+    projectName: string,
+  ) => Promise<StorageResult<{ path?: string; projectName?: string; canceled?: boolean }>>;
+  importProject: (
+    basePath: string,
+  ) => Promise<StorageResult<{ path?: string; projectName?: string; canceled?: boolean }>>;
   getDefaultPath: () => Promise<string>;
 
   // Legacy aliases retained for compatibility while the renderer migrates.

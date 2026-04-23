@@ -54,6 +54,7 @@ export const getProjectList = (): ProjectMeta[] => {
 
 export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
   const localStorageProjects = getProjectList();
+  let syncedLocalStorageProjects = [...localStorageProjects];
 
   const localFileProjects: ProjectMeta[] = [];
 
@@ -61,6 +62,28 @@ export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
     try {
       const listResult = await localStorageService.listProjects();
       if (listResult.success && listResult.projects) {
+        const diskProjectNames = new Set(listResult.projects.map((item) => item.name));
+        const removedProjects = localStorageProjects.filter(
+          (project) => !diskProjectNames.has(project.name),
+        );
+
+        if (removedProjects.length > 0) {
+          syncedLocalStorageProjects = localStorageProjects.filter((project) =>
+            diskProjectNames.has(project.name),
+          );
+
+          const maxId = syncedLocalStorageProjects.reduce((max, project) => {
+            const numericId = parseInt(project.id, 10);
+            return Number.isNaN(numericId) ? max : Math.max(max, numericId);
+          }, 0);
+
+          saveProjectList(syncedLocalStorageProjects, Math.max(getNextId(), maxId + 1));
+
+          for (const removedProject of removedProjects) {
+            localStorage.removeItem(getCanvasDataKey(removedProject.id));
+          }
+        }
+
         for (const item of listResult.projects) {
           const readResult = await localStorageService.loadCanvasData(item.name);
           if (!readResult.success || !readResult.data) {
@@ -68,7 +91,7 @@ export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
           }
 
           const canvasData = readResult.data;
-          const existingProject = localStorageProjects.find(
+          const existingProject = syncedLocalStorageProjects.find(
             (p) => p.name === item.name,
           );
 
@@ -94,17 +117,17 @@ export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
 
   if (localFileProjects.length > 0) {
     const maxId = Math.max(
-      ...localStorageProjects.map((p) => parseInt(p.id) || 0),
+      ...syncedLocalStorageProjects.map((p) => parseInt(p.id) || 0),
       ...localFileProjects.map(
         (p) => parseInt(p.id.replace("local-", "")) || 0,
       ),
       0,
     );
-    const allProjects = [...localStorageProjects, ...localFileProjects];
+    const allProjects = [...syncedLocalStorageProjects, ...localFileProjects];
     saveProjectList(allProjects, maxId + 1);
   }
 
-  const allProjects = [...localStorageProjects, ...localFileProjects];
+  const allProjects = [...syncedLocalStorageProjects, ...localFileProjects];
 
   const uniqueProjects = allProjects.reduce((acc: ProjectMeta[], project) => {
     if (!acc.find((p) => p.name === project.name)) {
@@ -328,6 +351,41 @@ export const deleteProject = async (id: string): Promise<boolean> => {
   } catch {
     return false;
   }
+};
+
+export const exportProjectDraft = async (
+  id: string,
+): Promise<{
+  success: boolean;
+  error?: string;
+  path?: string;
+  projectName?: string;
+  canceled?: boolean;
+}> => {
+  const project = getProjectById(id);
+  if (!project) {
+    return { success: false, error: "项目不存在" };
+  }
+
+  if (!localStorageService.isAvailable()) {
+    return { success: false, error: "Storage API not available" };
+  }
+
+  return localStorageService.exportProject(project.name);
+};
+
+export const importProjectDraft = async (): Promise<{
+  success: boolean;
+  error?: string;
+  path?: string;
+  projectName?: string;
+  canceled?: boolean;
+}> => {
+  if (!localStorageService.isAvailable()) {
+    return { success: false, error: "Storage API not available" };
+  }
+
+  return localStorageService.importProject();
 };
 
 export const getCanvasDataKey = (projectId: string): string => {

@@ -431,6 +431,42 @@ export const localStorageService = {
     return window.storage.copyProject(basePath, srcName, destName);
   },
 
+  exportProject: async (
+    projectName: string,
+  ): Promise<
+    LocalStorageResult & {
+      path?: string;
+      projectName?: string;
+      canceled?: boolean;
+    }
+  > => {
+    if (!window.storage) {
+      return { success: false, error: "Storage API not available" };
+    }
+
+    const { basePath, error } = requireStoragePath();
+    if (!basePath) return { success: false, error };
+
+    return window.storage.exportProject(basePath, projectName);
+  },
+
+  importProject: async (): Promise<
+    LocalStorageResult & {
+      path?: string;
+      projectName?: string;
+      canceled?: boolean;
+    }
+  > => {
+    if (!window.storage) {
+      return { success: false, error: "Storage API not available" };
+    }
+
+    const { basePath, error } = requireStoragePath();
+    if (!basePath) return { success: false, error };
+
+    return window.storage.importProject(basePath);
+  },
+
   getDefaultPath: async (): Promise<string> => {
     if (!window.storage) {
       return "";

@@ -127,6 +127,49 @@ const rewriteRelativePathRecursively = (
   return value;
 };
 
+const copyDirectoryRecursive = (srcDir: string, destDir: string) => {
+  mkdirSync(destDir, { recursive: true });
+
+  const entries = readdirSync(srcDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = join(srcDir, entry.name);
+    const destPath = join(destDir, entry.name);
+
+    if (entry.isDirectory()) {
+      copyDirectoryRecursive(srcPath, destPath);
+      continue;
+    }
+
+    if (entry.isFile()) {
+      copyFileSync(srcPath, destPath);
+    }
+  }
+};
+
+const getUniqueProjectName = (basePath: string, preferredName: string) => {
+  const index = readIndex(basePath);
+  const normalizedName = preferredName.trim() || "导入项目";
+
+  if (
+    !existsSync(join(basePath, normalizedName)) &&
+    !index.projects?.[normalizedName]
+  ) {
+    return normalizedName;
+  }
+
+  let counter = 1;
+  while (true) {
+    const candidate = `${normalizedName} (${counter})`;
+    if (
+      !existsSync(join(basePath, candidate)) &&
+      !index.projects?.[candidate]
+    ) {
+      return candidate;
+    }
+    counter += 1;
+  }
+};
+
 export function registerStorageHandlers(): void {
   ipcMain.handle("storage:selectDirectory", async () => {
     const result = await dialog.showOpenDialog({
@@ -168,6 +211,17 @@ export function registerStorageHandlers(): void {
       }
 
       const index = readIndex(basePath);
+      const projectEntries = Object.entries(index.projects || {});
+      let indexChanged = false;
+
+      for (const [projectName] of projectEntries) {
+        const projectDir = join(basePath, projectName);
+        if (!existsSync(projectDir)) {
+          delete index.projects[projectName];
+          indexChanged = true;
+        }
+      }
+
       const projects = Object.values(index.projects || {}).sort(
         (a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0),
       );
@@ -198,7 +252,7 @@ export function registerStorageHandlers(): void {
           }
         }
 
-        if (diskProjects.length > 0) {
+        if (diskProjects.length > 0 || indexChanged) {
           writeIndex(basePath, index);
         }
       } catch (e) {
@@ -532,27 +586,7 @@ export function registerStorageHandlers(): void {
           return { success: false, error: "Target project already exists" };
         }
 
-        mkdirSync(destDir, { recursive: true });
-
-        const entries = readdirSync(srcDir, { withFileTypes: true });
-        for (const entry of entries) {
-          const srcPath = join(srcDir, entry.name);
-          const destPath = join(destDir, entry.name);
-
-          if (entry.isFile()) {
-            copyFileSync(srcPath, destPath);
-          } else if (entry.isDirectory()) {
-            mkdirSync(destPath, { recursive: true });
-            const subEntries = readdirSync(srcPath, { withFileTypes: true });
-            for (const subEntry of subEntries) {
-              const subSrc = join(srcPath, subEntry.name);
-              const subDest = join(destPath, subEntry.name);
-              if (subEntry.isFile()) {
-                copyFileSync(subSrc, subDest);
-              }
-            }
-          }
-        }
+        copyDirectoryRecursive(srcDir, destDir);
 
         const canvasPath = join(destDir, CANVAS_FILE);
         const canvasData = safeReadJson(canvasPath);
@@ -576,6 +610,119 @@ export function registerStorageHandlers(): void {
       }
     },
   );
+
+  ipcMain.handle(
+    "storage:exportProject",
+    async (_, basePath: string, projectName: string) => {
+      try {
+        if (!basePath || !projectName) {
+          return { success: false, error: "Missing basePath or projectName" };
+        }
+
+        const projectDir = join(basePath, projectName);
+        if (!existsSync(projectDir)) {
+          return { success: false, error: "Project directory not found" };
+        }
+
+        const result = await dialog.showOpenDialog({
+          properties: ["openDirectory", "createDirectory"],
+          title: "选择导出位置",
+        });
+
+        if (result.canceled || result.filePaths.length === 0) {
+          return { success: false, canceled: true };
+        }
+
+        const exportBasePath = result.filePaths[0];
+        const exportProjectName = getUniqueProjectName(exportBasePath, projectName);
+        const exportProjectDir = join(exportBasePath, exportProjectName);
+
+        copyDirectoryRecursive(projectDir, exportProjectDir);
+
+        return {
+          success: true,
+          path: exportProjectDir,
+          projectName: exportProjectName,
+        };
+      } catch (error: any) {
+        return { success: false, error: error.message };
+      }
+    },
+  );
+
+  ipcMain.handle("storage:importProject", async (_, basePath: string) => {
+    try {
+      if (!basePath) {
+        return { success: false, error: "Missing basePath" };
+      }
+
+      if (!existsSync(basePath)) {
+        mkdirSync(basePath, { recursive: true });
+      }
+
+      const result = await dialog.showOpenDialog({
+        properties: ["openDirectory"],
+        title: "选择要导入的项目文件夹",
+      });
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false, canceled: true };
+      }
+
+      const srcDir = result.filePaths[0];
+      const srcProjectFolderName = basename(srcDir);
+      const srcMetaPath = join(srcDir, PROJECT_META_FILE);
+      const srcCanvasPath = join(srcDir, CANVAS_FILE);
+
+      if (!existsSync(srcMetaPath) && !existsSync(srcCanvasPath)) {
+        return {
+          success: false,
+          error: "所选文件夹不是有效的项目目录，缺少 project.json 或 canvas.json",
+        };
+      }
+
+      const importedProjectName = getUniqueProjectName(basePath, srcProjectFolderName);
+      const destDir = join(basePath, importedProjectName);
+
+      copyDirectoryRecursive(srcDir, destDir);
+
+      const now = Date.now();
+      const canvasPath = join(destDir, CANVAS_FILE);
+      const canvasData = safeReadJson(canvasPath);
+      if (canvasData) {
+        const updatedCanvas = rewriteRelativePathRecursively(
+          canvasData,
+          srcProjectFolderName,
+          importedProjectName,
+        );
+        updatedCanvas.projectName = importedProjectName;
+        updatedCanvas.savedAt = now;
+        safeWriteJson(canvasPath, updatedCanvas);
+      }
+
+      const metaPath = join(destDir, PROJECT_META_FILE);
+      const sourceMeta = safeReadJson(metaPath) || {};
+      const importedMeta = {
+        ...sourceMeta,
+        name: importedProjectName,
+        createdAt: sourceMeta.createdAt || now,
+        updatedAt: now,
+      };
+      safeWriteJson(metaPath, importedMeta);
+
+      const index = readIndex(basePath);
+      index.projects[importedProjectName] = importedMeta;
+      writeIndex(basePath, index);
+
+      return {
+        success: true,
+        projectName: importedProjectName,
+        path: destDir,
+      };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
 
   ipcMain.handle(
     "storage:mediaExists",
