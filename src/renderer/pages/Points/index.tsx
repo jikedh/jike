@@ -111,9 +111,9 @@ export function PointsView() {
       ? null
       : packages.find((pkg) => pkg.id === selectedPackageId) ?? null;
 
-  const payServerBaseUrl =
-    ((import.meta as any).env?.VITE_PAY_SERVER_BASE_URL as string | undefined) ||
-    "http://127.0.0.1:8787";
+  const apiBaseUrl =
+    ((import.meta as any).env?.VITE_API_BASE_URL as string | undefined) ||
+    "http://localhost:9001";
 
   const buildQrcodeImageByCodeUrl = (codeUrl: string) => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(codeUrl)}`;
@@ -122,6 +122,7 @@ export function PointsView() {
   const createNativeRechargeOrder = async (pkg: {
     packageId: string;
     points: number;
+    price: number;
   }) => {
     if (!userId) {
       toast.error("请先登录后再充值");
@@ -130,7 +131,7 @@ export function PointsView() {
 
     setIsCreatingOrder(true);
     try {
-      const response = await fetch(`${payServerBaseUrl}/api/recharge/native/create`, {
+      const response = await fetch(`${apiBaseUrl}/recharge/v1/native/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -139,8 +140,8 @@ export function PointsView() {
         }),
       });
       const result = await response.json();
-      if (!response.ok || !result?.success || !result?.data?.codeUrl) {
-        throw new Error(result?.error || "创建充值订单失败");
+      if (!response.ok || result?.code !== 10000 || !result?.data?.codeUrl) {
+        throw new Error(result?.msg || "创建充值订单失败");
       }
 
       setNativePayOrder({
@@ -167,10 +168,10 @@ export function PointsView() {
     const checkPaymentStatus = async () => {
       try {
         const response = await fetch(
-          `${payServerBaseUrl}/api/recharge/native/status?orderId=${encodeURIComponent(nativePayOrder.orderId)}`,
+          `${apiBaseUrl}/recharge/v1/native/status?orderId=${encodeURIComponent(nativePayOrder.orderId)}`,
         );
         const result = await response.json();
-        if (!response.ok || !result?.success) {
+        if (!response.ok || result?.code !== 10000) {
           return;
         }
 
@@ -218,7 +219,7 @@ export function PointsView() {
         clearInterval(timer);
       }
     };
-  }, [nativePayOrder?.orderId, payServerBaseUrl, selectedPackage]);
+  }, [nativePayOrder?.orderId, apiBaseUrl, selectedPackage]);
 
   const usageHistory = [
     {
