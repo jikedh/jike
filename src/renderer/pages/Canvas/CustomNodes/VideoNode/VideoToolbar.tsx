@@ -145,6 +145,36 @@ const buildDefaultSubtitleRect = (bounds: ViewportRect) => {
   return { x, y, width, height };
 };
 
+const getViewportSize = () => {
+  if (typeof window === "undefined") {
+    return { width: 1280, height: 720 };
+  }
+  return { width: window.innerWidth, height: window.innerHeight };
+};
+
+const getFittedWorkspaceFrame = (
+  media: { width: number; height: number } | null,
+  maxWidth: number,
+  maxHeight: number,
+) => {
+  const safeMaxWidth = Math.max(280, maxWidth);
+  const safeMaxHeight = Math.max(200, maxHeight);
+  const containerRatio = 16 / 9;
+
+  let width = safeMaxWidth;
+  let height = width / containerRatio;
+
+  if (height > safeMaxHeight) {
+    height = safeMaxHeight;
+    width = height * containerRatio;
+  }
+
+  return {
+    width: Math.max(220, Math.round(width)),
+    height: Math.max(140, Math.round(height)),
+  };
+};
+
 const VideoSubtitleRemovalPanel = ({
   open,
   onClose,
@@ -176,9 +206,25 @@ const VideoSubtitleRemovalPanel = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
+  const [viewportSize, setViewportSize] = useState(getViewportSize);
   const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(null);
   const [videoBounds, setVideoBounds] = useState<ViewportRect | null>(null);
   const [cropRect, setCropRect] = useState<ViewportRect | null>(null);
+
+  const workspaceFrame = useMemo(() => {
+    return getFittedWorkspaceFrame(
+      videoSize,
+      Math.min(viewportSize.width - 96, 960),
+      Math.min(viewportSize.height - 420, 560),
+    );
+  }, [videoSize, viewportSize.height, viewportSize.width]);
+
+  const dialogWidth = useMemo(() => {
+    return Math.max(
+      460,
+      Math.min(viewportSize.width - 32, workspaceFrame.width + 40),
+    );
+  }, [viewportSize.width, workspaceFrame.width]);
 
   const requiredPoints = useMemo(() => {
     if (!Number.isFinite(duration) || duration <= 0) {
@@ -342,7 +388,11 @@ const VideoSubtitleRemovalPanel = ({
     if (!open) {
       return;
     }
-    const handleResize = () => syncVideoBounds();
+    const handleResize = () => {
+      setViewportSize(getViewportSize());
+      syncVideoBounds();
+    };
+    handleResize();
     window.addEventListener("resize", handleResize);
     return () => {
       window.removeEventListener("resize", handleResize);
@@ -605,7 +655,10 @@ const VideoSubtitleRemovalPanel = ({
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="flex max-h-[92vh] w-[min(1100px,96vw)] max-w-275 flex-col overflow-hidden border border-white/10 bg-[#121214] p-0 text-white">
+      <DialogContent
+        className="flex max-h-[92vh] w-auto max-w-[96vw] flex-col overflow-hidden border border-white/10 bg-[#121214] p-0 text-white"
+        style={{ width: `${dialogWidth}px` }}
+      >
         <DialogHeader className="shrink-0 border-b border-white/5 bg-[#18181b] px-5 py-4">
           <DialogTitle className="flex items-center gap-2 text-white">
             <IconEraser size={18} />
@@ -614,15 +667,14 @@ const VideoSubtitleRemovalPanel = ({
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col bg-[#18181b]">
-          <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5">
-            <div
-              ref={viewportRef}
-              className="relative overflow-hidden rounded-xl border border-white/8 bg-black"
-            >
+          <div className="flex min-h-0 flex-1 flex-col gap-5 p-5">
+            <div className="flex justify-center">
               <div
-                className="w-full"
+                ref={viewportRef}
+                className="relative overflow-hidden rounded-xl border border-white/8 bg-black"
                 style={{
-                  aspectRatio: videoSize ? `${videoSize.width} / ${videoSize.height}` : "16 / 9",
+                  width: `${workspaceFrame.width}px`,
+                  height: `${workspaceFrame.height}px`,
                 }}
               >
                 <video
@@ -652,7 +704,6 @@ const VideoSubtitleRemovalPanel = ({
                   onPause={() => setIsPlaying(false)}
                   onEnded={() => setIsPlaying(false)}
                 />
-              </div>
 
               {videoBounds && cropRect ? (
                 <div
@@ -718,6 +769,7 @@ const VideoSubtitleRemovalPanel = ({
                   />
                 </>
               ) : null}
+              </div>
             </div>
 
             <VideoTimeline
@@ -1100,6 +1152,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
         updateVideoNodeData(newNodeId, {
           nickname: "去字幕",
+          aspect_ratio: data.aspect_ratio,
           status: GenerationStatus.IN_PROGRESS,
           progress: 0,
           result: { type: "video", data: [] },

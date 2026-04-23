@@ -159,7 +159,7 @@ MODEL_PARAM_CONFIGS["doubao-seedance-2.0-fast"] = {
       label: "视频时长",
       controlType: "slider",
       range: { min: 4, max: 15 },
-      defaultValue: 8,
+      defaultValue: 10,
     },
     {
       key: "generate_audio",
@@ -169,7 +169,7 @@ MODEL_PARAM_CONFIGS["doubao-seedance-2.0-fast"] = {
     },
   ],
   defaults: {
-    duration: 8,
+    duration: 10,
     aspect_ratio: "16:9",
     resolution: "720p",
     generate_audio: true,
