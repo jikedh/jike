@@ -23,6 +23,7 @@ import {
 import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { GenerationStatus } from "shared/constants/enum";
 import type { AllNodeType, EdgeType } from "shared/types/flow";
 import { NodeSearch } from "@/components/node-search";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,10 @@ import {
 import { useCopyPaste } from "@/hooks/useCopyPaste";
 import { useDragUpload } from "@/hooks/useDragUpload";
 import { useUndoRedo } from "@/hooks/useUndoRedo";
+import {
+  CANVAS_DELETE_CONFIRM_EVENT,
+  type CanvasDeleteConfirmDetail,
+} from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { edgeTypes, nodeTypes } from "../constants/canvasConfig";
@@ -102,6 +107,28 @@ const clamp = (value: number, min: number, max: number) => {
   return Math.min(Math.max(value, min), max);
 };
 
+const DELETE_CONFIRM_NODE_LABEL: Partial<Record<AllNodeType["type"], string>> = {
+  imageNode: "图片节点",
+  videoNode: "视频节点",
+  agentNode: "智能体节点",
+  textAgentNode: "文本智能体节点",
+  imageAgentNode: "图片智能体节点",
+  videoAgentNode: "视频智能体节点",
+};
+
+const needsGeneratingDeleteConfirm = (node: AllNodeType) => {
+  if (!(node.type in DELETE_CONFIRM_NODE_LABEL)) {
+    return false;
+  }
+
+  const status = (node.data as { status?: string })?.status;
+  return (
+    status === GenerationStatus.IN_PROGRESS ||
+    status === GenerationStatus.QUEUED ||
+    status === "generating"
+  );
+};
+
 /**
  * 优先从 DOM 直接读取 handle 的真实屏幕坐标。
  * 这样可以避免仅根据节点宽高推算时，ghost 线落到节点内部。
@@ -151,6 +178,8 @@ export const CanvasFlow = ({
   const onEdgesChange = useCanvasFlowStore((state) => state.onEdgesChange);
   const onConnect = useCanvasFlowStore((state) => state.onConnect);
   const addNode = useCanvasFlowStore((state) => state.addNode);
+  const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
+  const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge);
   const switchProject = useCanvasFlowStore((state) => state.switchProject);
   const gridVisible = useChatSettingsStore((state) => state.gridVisible);
   const snapToGrid = useChatSettingsStore((state) => state.snapToGrid);
@@ -186,6 +215,19 @@ export const CanvasFlow = ({
   // 确认对话框状态
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [generatingCount, setGeneratingCount] = useState(0);
+  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    confirmText: string;
+    onConfirm: (() => void) | null;
+  }>({
+    open: false,
+    title: "确认删除",
+    message: "",
+    confirmText: "确认删除",
+    onConfirm: null,
+  });
 
   // 跟踪鼠标在画布上的位置（仅供事件处理读取），用 ref 避免 mousemove 导致整树重渲染。
   const mouseFlowPositionRef = useRef<{
@@ -215,6 +257,38 @@ export const CanvasFlow = ({
   // 获取复制/粘贴方法（通过 useCopyPaste hook）
   const { copySelectedNodes, pasteNodes } = useCopyPaste();
 
+  const openDeleteConfirmDialog = useCallback(
+    ({
+      title = "确认删除",
+      message,
+      confirmText = "确认删除",
+      onConfirm,
+    }: CanvasDeleteConfirmDetail) => {
+      setDeleteConfirmDialog({
+        open: true,
+        title,
+        message,
+        confirmText,
+        onConfirm,
+      });
+    },
+    [],
+  );
+
+  const handleCloseDeleteConfirmDialog = useCallback(() => {
+    setDeleteConfirmDialog((prev) => ({
+      ...prev,
+      open: false,
+      onConfirm: null,
+    }));
+  }, []);
+
+  const handleConfirmDeleteDialog = useCallback(() => {
+    const confirmAction = deleteConfirmDialog.onConfirm;
+    handleCloseDeleteConfirmDialog();
+    confirmAction?.();
+  }, [deleteConfirmDialog.onConfirm, handleCloseDeleteConfirmDialog]);
+
   // 处理键盘快捷键
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
@@ -229,6 +303,47 @@ export const CanvasFlow = ({
       }
 
       if (annotationWorkspace.open) {
+        return;
+      }
+
+      if (event.key === "Backspace" || event.key === "Delete") {
+        const state = useCanvasFlowStore.getState();
+        const selectedNodes = state.nodes.filter((node) => node.selected);
+        const selectedEdges = state.edges.filter((edge) => edge.selected);
+
+        if (selectedNodes.length === 0 && selectedEdges.length === 0) {
+          return;
+        }
+
+        const generatingNodes = selectedNodes.filter(needsGeneratingDeleteConfirm);
+        if (generatingNodes.length > 0) {
+          const uniqueLabels = Array.from(
+            new Set(
+              generatingNodes.map(
+                (node) => DELETE_CONFIRM_NODE_LABEL[node.type] ?? "节点",
+              ),
+            ),
+          );
+          const message =
+            generatingNodes.length === 1
+              ? `当前${uniqueLabels[0]}还在生成中，确定要删除吗？`
+              : `当前选中的节点里有 ${generatingNodes.length} 个生成中的节点（${uniqueLabels.join("、")}），确定要删除吗？`;
+          const nodesToDelete = [...selectedNodes];
+          const edgesToDelete = [...selectedEdges];
+          event.preventDefault();
+          openDeleteConfirmDialog({
+            message,
+            onConfirm: () => {
+              edgesToDelete.forEach((edge) => deleteEdge(edge.id));
+              nodesToDelete.forEach((node) => deleteNode(node.id));
+            },
+          });
+          return;
+        }
+
+        event.preventDefault();
+        selectedEdges.forEach((edge) => deleteEdge(edge.id));
+        selectedNodes.forEach((node) => deleteNode(node.id));
         return;
       }
 
@@ -279,6 +394,9 @@ export const CanvasFlow = ({
       canUndo,
       canRedo,
       copySelectedNodes,
+      openDeleteConfirmDialog,
+      deleteEdge,
+      deleteNode,
       annotationWorkspace.open,
     ],
   );
@@ -290,6 +408,29 @@ export const CanvasFlow = ({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [handleKeyDown]);
+
+  useEffect(() => {
+    const handleDeleteConfirmRequest = (event: Event) => {
+      const detail = (event as CustomEvent<CanvasDeleteConfirmDetail>).detail;
+      if (!detail?.message || !detail.onConfirm) {
+        return;
+      }
+
+      openDeleteConfirmDialog(detail);
+    };
+
+    window.addEventListener(
+      CANVAS_DELETE_CONFIRM_EVENT,
+      handleDeleteConfirmRequest,
+    );
+
+    return () => {
+      window.removeEventListener(
+        CANVAS_DELETE_CONFIRM_EVENT,
+        handleDeleteConfirmRequest,
+      );
+    };
+  }, [openDeleteConfirmDialog]);
 
   useEffect(() => {
     const handleCopy = (event: ClipboardEvent) => {
@@ -1675,7 +1816,7 @@ export const CanvasFlow = ({
             maxZoom={2}
             colorMode="dark"
             style={{ background: "#090909" }}
-            deleteKeyCode={isAnnotationLocked ? null : ["Backspace", "Delete"]}
+            deleteKeyCode={null}
             panOnDrag={isAnnotationLocked ? false : isSpacePressed ? [0, 2] : [2]}
             panActivationKeyCode={isAnnotationLocked ? null : "Space"}
             noPanClassName={isSpacePressed ? "__space-pan-disabled" : "nopan"}
@@ -1927,6 +2068,46 @@ export const CanvasFlow = ({
               className="bg-[#B43FEB] hover:bg-[#B43FEB]/80 text-white"
             >
               确认离开
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deleteConfirmDialog.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCloseDeleteConfirmDialog();
+          }
+        }}
+      >
+        <DialogContent className="border-white/10 bg-[#1a1a1f] shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold text-white">
+              {deleteConfirmDialog.title}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm leading-6 text-gray-300">
+              {deleteConfirmDialog.message}
+            </p>
+          </div>
+          <DialogFooter className="border-white/10">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleCloseDeleteConfirmDialog}
+              className="flex items-center gap-2 border border-white/10 bg-transparent text-gray-300 hover:bg-white/5"
+            >
+              取消
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleConfirmDeleteDialog}
+              className="flex items-center gap-2 bg-[#B43FEB] text-white hover:bg-[#B43FEB]/80"
+            >
+              {deleteConfirmDialog.confirmText}
             </Button>
           </DialogFooter>
         </DialogContent>

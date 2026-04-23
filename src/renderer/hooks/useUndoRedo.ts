@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CanvasPersistedState } from "shared/types/zustand/canvas-flow";
-import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import {
+  hydrateCanvasNodesForRuntime,
+  useCanvasFlowStore,
+} from "@/stores/canvasFlowStore";
 import {
   registerCanvasHistorySaver,
   unregisterCanvasHistorySaver,
@@ -65,32 +68,40 @@ export function useUndoRedo() {
     updateFlags();
   }, [updateFlags]);
 
-  const undo = useCallback(() => {
+  const undo = useCallback(async () => {
     if (historyIndexRef.current <= 0) return;
 
     const newIndex = historyIndexRef.current - 1;
     const entry = historyRef.current[newIndex];
+    const hydratedNodes = await hydrateCanvasNodesForRuntime(
+      JSON.parse(JSON.stringify(entry.nodes)),
+    );
 
     useCanvasFlowStore.setState({
-      nodes: JSON.parse(JSON.stringify(entry.nodes)),
+      nodes: hydratedNodes,
       edges: JSON.parse(JSON.stringify(entry.edges)),
       nodeIdCounters: { ...entry.nodeIdCounters },
+      selectedNodesCount: hydratedNodes.filter((node) => node.selected).length,
     });
 
     historyIndexRef.current = newIndex;
     updateFlags();
   }, [updateFlags]);
 
-  const redo = useCallback(() => {
+  const redo = useCallback(async () => {
     if (historyIndexRef.current >= historyRef.current.length - 1) return;
 
     const newIndex = historyIndexRef.current + 1;
     const entry = historyRef.current[newIndex];
+    const hydratedNodes = await hydrateCanvasNodesForRuntime(
+      JSON.parse(JSON.stringify(entry.nodes)),
+    );
 
     useCanvasFlowStore.setState({
-      nodes: JSON.parse(JSON.stringify(entry.nodes)),
+      nodes: hydratedNodes,
       edges: JSON.parse(JSON.stringify(entry.edges)),
       nodeIdCounters: { ...entry.nodeIdCounters },
+      selectedNodesCount: hydratedNodes.filter((node) => node.selected).length,
     });
 
     historyIndexRef.current = newIndex;

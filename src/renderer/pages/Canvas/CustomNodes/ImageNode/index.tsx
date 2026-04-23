@@ -13,6 +13,7 @@ import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
 import { ButtonHandle } from "@/components/button-handle";
+import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { PanoramaViewer } from "@/components/panorama/PanoramaViewer";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
@@ -121,9 +122,32 @@ export const ImageNode = memo(
       updateNodeInternals(id);
     }, [nodeSize.width, nodeSize.height, id, updateNodeInternals]);
 
+    const isGenerating = useMemo(() => {
+      const status = data.status ?? GenerationStatus.COMPLETED;
+      return (
+        status === GenerationStatus.IN_PROGRESS ||
+        status === GenerationStatus.QUEUED
+      );
+    }, [data.status]);
+
+    const confirmDeleteIfNeeded = useCallback(() => {
+      if (!isGenerating) {
+        return true;
+      }
+
+      requestCanvasDeleteConfirm({
+        message: "当前图片节点还在生成中，确定要删除吗？",
+        onConfirm: () => deleteNode(id),
+      });
+      return false;
+    }, [deleteNode, id, isGenerating]);
+
     const handleDelete = useCallback(() => {
+      if (!confirmDeleteIfNeeded()) {
+        return;
+      }
       deleteNode(id);
-    }, [deleteNode, id]);
+    }, [confirmDeleteIfNeeded, deleteNode, id]);
 
     // 缓存传递给 NodeContextMenu 的回调函数
     const handleContextMenuDuplicate = useCallback(() => {
@@ -131,8 +155,11 @@ export const ImageNode = memo(
     }, [duplicateNode, id]);
 
     const handleContextMenuDelete = useCallback(() => {
+      if (!confirmDeleteIfNeeded()) {
+        return;
+      }
       deleteNode(id);
-    }, [deleteNode, id]);
+    }, [confirmDeleteIfNeeded, deleteNode, id]);
 
     const handleContextMenuSplitImage = useCallback(
       (gridSize: number) => {

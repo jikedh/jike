@@ -4,11 +4,13 @@ import {
   useUpdateNodeInternals,
 } from "@xyflow/react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { GenerationStatus } from "shared/constants/enum";
 import type { VideoNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
 import { getNodeSizeByAspectRatio } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
+import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { VideoContent } from "./VideoContent";
 import { VideoPromptPanel } from "./VideoPromptPanel";
@@ -87,14 +89,37 @@ export const VideoNode = memo(
       updateNodeInternals(id);
     }, [nodeSize.width, nodeSize.height, id, updateNodeInternals]);
 
+    const isGenerating = useMemo(() => {
+      const status = data.status ?? GenerationStatus.COMPLETED;
+      return (
+        status === GenerationStatus.IN_PROGRESS ||
+        status === GenerationStatus.QUEUED
+      );
+    }, [data.status]);
+
+    const confirmDeleteIfNeeded = useCallback(() => {
+      if (!isGenerating) {
+        return true;
+      }
+
+      requestCanvasDeleteConfirm({
+        message: "当前视频节点还在生成中，确定要删除吗？",
+        onConfirm: () => deleteNode(id),
+      });
+      return false;
+    }, [deleteNode, id, isGenerating]);
+
     // 缓存回调函数
     const handleDuplicate = useCallback(() => {
       duplicateNode(id);
     }, [duplicateNode, id]);
 
     const handleDelete = useCallback(() => {
+      if (!confirmDeleteIfNeeded()) {
+        return;
+      }
       deleteNode(id);
-    }, [deleteNode, id]);
+    }, [confirmDeleteIfNeeded, deleteNode, id]);
 
     const handleSeparateToNodes = useCallback(() => {
       separateToNodes(id);

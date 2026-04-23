@@ -11,6 +11,7 @@ import {
 import type { VideoAgentNodeType, VideoAgentPresetId } from "shared/types/flow";
 import { useMessage } from "@/hooks/useMessage";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
+import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { NodeBody } from "./components/NodeBody";
@@ -110,10 +111,22 @@ export const VideoAgentNode = memo(
       [updateNodeData],
     );
 
+    const handleDelete = useCallback(() => {
+      if (isGenerating) {
+        requestCanvasDeleteConfirm({
+          message: "当前视频智能体节点还在生成中，确定要删除吗？",
+          onConfirm: () => deleteNode(id),
+        });
+        return;
+      }
+
+      deleteNode(id);
+    }, [deleteNode, id, isGenerating]);
+
     return (
       <NodeContextMenu
         onDuplicate={() => duplicateNode(id)}
-        onDelete={() => deleteNode(id)}
+        onDelete={handleDelete}
       >
         <div className="group/node relative flex flex-col items-center">
           {showPresetSelector ? (

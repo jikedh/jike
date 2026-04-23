@@ -82,6 +82,129 @@ import { saveCurrentCanvasToHistory } from "@/utils/canvasHistoryBridge";
 
 const CANVAS_STORAGE_VERSION = 1;
 
+export const hydrateCanvasNodesForRuntime = async (
+  nodes: AllNodeType[],
+): Promise<AllNodeType[]> => {
+  return Promise.all(
+    nodes.map(async (node): Promise<AllNodeType> => {
+      if (node.type === "imageNode" && node.data?.result?.data) {
+        const processedData = await Promise.all(
+          node.data.result.data.map(async (item: any) => {
+            if (item.relativePath || item.localPath) {
+              try {
+                const path = item.localPath || item.relativePath;
+                const fileBytes = await readMediaFromLocal(path);
+                if (fileBytes) {
+                  const ext =
+                    (item.localFileName || item.localName || item.fileName)
+                      ?.split(".")
+                      .pop() || "png";
+                  const blob = new Blob([fileBytes], {
+                    type: `image/${ext}`,
+                  });
+                  const blobUrl = URL.createObjectURL(blob);
+                  return hydrateMediaForRuntime(item, blobUrl);
+                }
+              } catch (err) {
+                console.warn("Failed to load local image:", err);
+              }
+            }
+            return hydrateMediaForRuntime(item);
+          }),
+        );
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            result: {
+              ...node.data.result,
+              data: processedData,
+            },
+          },
+        };
+      }
+
+      if (node.type === "videoNode" && node.data?.result?.data) {
+        const processedData = await Promise.all(
+          node.data.result.data.map(async (item: any) => {
+            if (item.relativePath || item.localPath) {
+              try {
+                const path = item.localPath || item.relativePath;
+                const fileBytes = await readMediaFromLocal(path);
+                if (fileBytes) {
+                  const ext =
+                    item.format ||
+                    (item.localFileName || item.localName || item.fileName)
+                      ?.split(".")
+                      .pop() ||
+                    "mp4";
+                  const blob = new Blob([fileBytes], {
+                    type: `video/${ext}`,
+                  });
+                  const blobUrl = URL.createObjectURL(blob);
+                  return hydrateMediaForRuntime(item, blobUrl);
+                }
+              } catch (err) {
+                console.warn("Failed to load local video:", err);
+              }
+            }
+            return hydrateMediaForRuntime(item);
+          }),
+        );
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            result: {
+              ...node.data.result,
+              data: processedData,
+            },
+          },
+        };
+      }
+
+      if (node.type === "audioNode" && node.data?.result?.data) {
+        const processedData = await Promise.all(
+          node.data.result.data.map(async (item: any) => {
+            if (item.relativePath || item.localPath) {
+              try {
+                const path = item.localPath || item.relativePath;
+                const fileBytes = await readMediaFromLocal(path);
+                if (fileBytes) {
+                  const ext =
+                    (item.localFileName || item.localName || item.fileName)
+                      ?.split(".")
+                      .pop() || "mp3";
+                  const blob = new Blob([fileBytes], {
+                    type: `audio/${ext}`,
+                  });
+                  const blobUrl = URL.createObjectURL(blob);
+                  return hydrateMediaForRuntime(item, blobUrl);
+                }
+              } catch (err) {
+                console.warn("Failed to load local audio:", err);
+              }
+            }
+            return hydrateMediaForRuntime(item);
+          }),
+        );
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            result: {
+              ...node.data.result,
+              data: processedData,
+            },
+          },
+        };
+      }
+
+      return node;
+    }),
+  );
+};
+
 /**
  * 标准图片生成轮询逻辑（非 Midjourney 模型）
  */
@@ -237,6 +360,10 @@ const pollImageGeneration = async (
             };
           }),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          getState().saveGraph();
+        }
 
         stopImagePollingInternal(taskId);
         // 如果所有任务都完成了，清理计数
@@ -287,6 +414,10 @@ const pollImageGeneration = async (
             };
           }),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          getState().saveGraph();
+        }
 
         stopImagePollingInternal(taskId);
         const currentData = getState().nodes.find((n) => n.id === nodeId)
@@ -329,6 +460,10 @@ const pollImageGeneration = async (
         },
       })),
     }));
+    saveCurrentCanvasToHistory();
+    if (useChatSettingsStore.getState().autoSaveEnabled) {
+      getState().saveGraph();
+    }
   }
 };
 
@@ -469,6 +604,10 @@ const pollMjImageGeneration = async (
             };
           }),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          getState().saveGraph();
+        }
 
         stopImagePollingInternal(taskId);
         // 如果所有任务都完成了，清理计数
@@ -512,6 +651,10 @@ const pollMjImageGeneration = async (
             };
           }),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          getState().saveGraph();
+        }
 
         stopImagePollingInternal(taskId);
         const currentData = getState().nodes.find((n) => n.id === nodeId)
@@ -551,6 +694,10 @@ const pollMjImageGeneration = async (
         },
       })),
     }));
+    saveCurrentCanvasToHistory();
+    if (useChatSettingsStore.getState().autoSaveEnabled) {
+      getState().saveGraph();
+    }
   }
 };
 
@@ -696,6 +843,10 @@ const pollVideoGeneration = async (
             error: undefined,
           })),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          getState().saveGraph();
+        }
 
         stopVideoPollingInternal(nodeId);
 
@@ -722,6 +873,10 @@ const pollVideoGeneration = async (
             },
           })),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          getState().saveGraph();
+        }
 
         stopVideoPollingInternal(nodeId);
         return;
@@ -755,6 +910,10 @@ const pollVideoGeneration = async (
         },
       })),
     }));
+    saveCurrentCanvasToHistory();
+    if (useChatSettingsStore.getState().autoSaveEnabled) {
+      getState().saveGraph();
+    }
   }
 };
 
@@ -1074,138 +1233,20 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }
 
       // 处理节点中的本地文件，将相对路径转换为可显示的 blob URL
-      const processedNodes: AllNodeType[] = await Promise.all(
-        data.nodes.map(async (node): Promise<AllNodeType> => {
-          // 处理文本智能体节点的生成状态
-          if (
-            node.type === "textAgentNode" &&
-            node.data?.status === "generating"
-          ) {
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                status: "idle" as const,
-              },
-            };
-          }
+      const hydratedNodes = await hydrateCanvasNodesForRuntime(data.nodes);
+      const processedNodes: AllNodeType[] = hydratedNodes.map((node) => {
+        if (node.type === "textAgentNode" && node.data?.status === "generating") {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              status: "idle" as const,
+            },
+          };
+        }
 
-          if (node.type === "imageNode" && node.data?.result?.data) {
-            const processedData = await Promise.all(
-              node.data.result.data.map(async (item: any) => {
-                if (item.relativePath || item.localPath) {
-                  try {
-                    const path = item.localPath || item.relativePath;
-                    const fileBytes = await readMediaFromLocal(path);
-                    if (fileBytes) {
-                      const ext =
-                        (item.localFileName || item.localName || item.fileName)
-                          ?.split(".")
-                          .pop() || "png";
-                      const blob = new Blob([fileBytes], {
-                        type: `image/${ext}`,
-                      });
-                      const blobUrl = URL.createObjectURL(blob);
-                      return hydrateMediaForRuntime(item, blobUrl);
-                    }
-                  } catch (err) {
-                    console.warn("Failed to load local image:", err);
-                  }
-                }
-                return hydrateMediaForRuntime(item);
-              }),
-            );
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                result: {
-                  ...node.data.result,
-                  data: processedData,
-                },
-              },
-            };
-          }
-
-          if (node.type === "videoNode" && node.data?.result?.data) {
-            const processedData = await Promise.all(
-              node.data.result.data.map(async (item: any) => {
-                if (item.relativePath || item.localPath) {
-                  try {
-                    const path = item.localPath || item.relativePath;
-                    const fileBytes = await readMediaFromLocal(path);
-                    if (fileBytes) {
-                      const ext =
-                        item.format ||
-                        (item.localFileName || item.localName || item.fileName)
-                          ?.split(".")
-                          .pop() ||
-                        "mp4";
-                      const blob = new Blob([fileBytes], {
-                        type: `video/${ext}`,
-                      });
-                      const blobUrl = URL.createObjectURL(blob);
-                      return hydrateMediaForRuntime(item, blobUrl);
-                    }
-                  } catch (err) {
-                    console.warn("Failed to load local video:", err);
-                  }
-                }
-                return hydrateMediaForRuntime(item);
-              }),
-            );
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                result: {
-                  ...node.data.result,
-                  data: processedData,
-                },
-              },
-            };
-          }
-
-          if (node.type === "audioNode" && node.data?.result?.data) {
-            const processedData = await Promise.all(
-              node.data.result.data.map(async (item: any) => {
-                if (item.relativePath || item.localPath) {
-                  try {
-                    const path = item.localPath || item.relativePath;
-                    const fileBytes = await readMediaFromLocal(path);
-                    if (fileBytes) {
-                      const ext =
-                        (item.localFileName || item.localName || item.fileName)
-                          ?.split(".")
-                          .pop() || "mp3";
-                      const blob = new Blob([fileBytes], {
-                        type: `audio/${ext}`,
-                      });
-                      const blobUrl = URL.createObjectURL(blob);
-                      return hydrateMediaForRuntime(item, blobUrl);
-                    }
-                  } catch (err) {
-                    console.warn("Failed to load local audio:", err);
-                  }
-                }
-                return hydrateMediaForRuntime(item);
-              }),
-            );
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                result: {
-                  ...node.data.result,
-                  data: processedData,
-                },
-              },
-            };
-          }
-
-          return node;
-        }),
-      );
+        return node;
+      });
 
       set({
         projectId,
@@ -1965,6 +2006,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             };
           }),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          get().saveGraph();
+        }
 
         await deductVipScoreAfterGeneration({
           scene: "image",
@@ -1993,6 +2038,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             },
           })),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          get().saveGraph();
+        }
         throw startError;
       }
     },
