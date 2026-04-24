@@ -48,6 +48,9 @@ export const ImageNode = memo(
     const updateImageNodeData = useCanvasFlowStore(
       (state) => state.updateImageNodeData,
     );
+    const updateNodeDimensions = useCanvasFlowStore(
+      (state) => state.updateNodeDimensions,
+    );
     const onConnect = useCanvasFlowStore((state) => state.onConnect);
     const highlightedSourceNodeIds = useCanvasFlowStore(
       (state) => state.highlightedSourceNodeIds,
@@ -121,6 +124,10 @@ export const ImageNode = memo(
     useEffect(() => {
       updateNodeInternals(id);
     }, [nodeSize.width, nodeSize.height, id, updateNodeInternals]);
+
+    useEffect(() => {
+      updateNodeDimensions(id, nodeSize.width, nodeSize.height);
+    }, [id, nodeSize.height, nodeSize.width, updateNodeDimensions]);
 
     const isGenerating = useMemo(() => {
       const status = data.status ?? GenerationStatus.COMPLETED;

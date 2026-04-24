@@ -1422,18 +1422,18 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           }
           : newNode.type === "imageNode"
             ? {
-                ...newNode,
-                data: {
-                  ...newNode.data,
-                  model: defaultImageModel || newNode.data.model,
-                  platform: defaultImagePlatform || newNode.data.platform,
-                  size: defaultImageSize || newNode.data.size,
-                  resolution:
-                    defaultImageResolution || newNode.data.resolution,
-                },
-              }
-          : newNode.type === "videoNode"
-            ? {
+              ...newNode,
+              data: {
+                ...newNode.data,
+                model: defaultImageModel || newNode.data.model,
+                platform: defaultImagePlatform || newNode.data.platform,
+                size: defaultImageSize || newNode.data.size,
+                resolution:
+                  defaultImageResolution || newNode.data.resolution,
+              },
+            }
+            : newNode.type === "videoNode"
+              ? {
                 ...newNode,
                 data: {
                   ...newNode.data,
@@ -1461,7 +1461,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                   },
                 },
               }
-          : newNode;
+              : newNode;
 
       set((state) => ({
         nodes: [...state.nodes, finalNode],
@@ -2403,6 +2403,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           ...data,
           ...patch,
         })),
+      }));
+    },
+
+    updateNodeDimensions: (nodeId, width, height) => {
+      set((state) => ({
+        nodes: state.nodes.map((node) =>
+          node.id === nodeId ? { ...node, width, height } : node,
+        ),
       }));
     },
 
