@@ -17,13 +17,8 @@ import type {
 import type {
   ToApiImageGenerationRequest,
   ToApiImageGenerationResponse,
-  ToApiImageTaskStatusResponse,
+  ImageTaskStatusResponse,
 } from "shared/types/detail/ToApi/images";
-import type {
-  BailianVideoGenerationRequest,
-  BailianVideoGenerationCreateResponse,
-  BailianVideoGenerationQueryResponse,
-} from "shared/types/detail/Bailian/video";
 import { getAiToken, getBaseURL } from "shared/utils/utils";
 /**
  *
@@ -56,7 +51,7 @@ export function createImageGeneration(
 
 // 获取图片生成任务状态
 export function getImageTaskStatus(id: string) {
-  return aiService<ToApiImageTaskStatusResponse>({
+  return aiService({
     url: `/v1/images/generations/${id}`,
     method: "get",
   });
@@ -332,12 +327,10 @@ export async function createDashscopeChatCompletion(
  * 阿里云百炼视频生成接口
  * 用于提交视频生成任务
  * API 端点: /api/v1/services/aigc/video-generation/video-synthesis
- * @param data 请求数据，支持多种模型的视频生成
+ * @param data 请求数据
  */
-export function createDashscopeVideoSynthesis(
-  data: BailianVideoGenerationRequest,
-) {
-  return dashscopeRequest<BailianVideoGenerationCreateResponse>({
+export function createDashscopeVideoSynthesis(data: any) {
+  return dashscopeRequest({
     url: "/api/v1/services/aigc/video-generation/video-synthesis",
     method: "post",
     data,
@@ -364,7 +357,7 @@ export function createDashscopeVideoSynthesis(
  */
 export function getDashscopeVideoTaskStatus(taskId: string) {
   console.log('测试会不会打印');
-  return dashscopeRequest<BailianVideoGenerationQueryResponse>({
+  return dashscopeRequest({
     url: `/api/v1/tasks/${taskId}`,
     method: "get",
   });
