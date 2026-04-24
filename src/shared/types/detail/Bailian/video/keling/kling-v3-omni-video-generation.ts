@@ -1,52 +1,114 @@
 /**
- * kling-v3-omni-video-generation 请求体 - 可灵视频生成（Omni 全能版）
+ * kling-v3-omni-video-generation 请求体。
  * API 文档: https://help.aliyun.com/zh/model-studio/kling-video-generation
  *
- * Omni 模型支持通过 prompt 与主体、图片、视频等内容实现多种能力：
- * - 参考生视频
- * - 更多媒体素材支持
+ * Omni 支持通过 prompt、媒体和主体引用进行文生视频、图生视频、参考视频生成
+ * 以及视频编辑。
  */
+
 export interface KlingV3OmniVideoGenerationRequest {
-  /** 模型名称 */
   model: "kling/kling-v3-omni-video-generation";
-  /** 输入的基本信息 */
   input: {
-    /** 文本提示词，用来描述生成视频中期望包含的元素和视觉特点。支持中英文，不超过 2500 个字符 */
+    /**
+     * 文本 prompt。
+     *
+     * 当 shot_type 为 intelligence 时必填。当 shot_type 为 customize 时忽略，
+     * 此时使用 multi_prompt。对于参考生成，prompt 可以通过占位符引用媒体和主体，
+     * 如 <<<image_1>>>、<<<video_1>>> 和 <<<element_1>>>。
+     */
     prompt?: string;
-    /** 多提示词（可选），当 shot_type=customize 时以此为准 */
-    multi_prompt?: string;
-    /** 首帧图片 URL（图生视频-基于首帧时使用） */
-    first_frame_image?: string;
-    /** 首视频片段 URL（图生视频-基于首尾帧时使用） */
-    first_clip_video?: string;
-    /** 尾视频片段 URL（图生视频-基于首尾帧时使用） */
-    last_clip_video?: string;
-    /** 参考图片 URL（参考生视频时使用） */
-    reference_image?: string;
-    /** 参考视频 URL（参考生视频时使用） */
-    reference_video?: string;
-    /** 源音频 URL（可选），传入音频文件作为视频的背景音 */
-    source_audio?: string;
-  };
-  /** 视频处理参数（可选） */
-  parameters?: {
-    /** 视频生成模式：pro（专业模式，1080P）/ std（标准模式，720P），默认 pro */
-    mode?: "pro" | "std";
-    /** 生成视频的宽高比例，默认 16:9，可选 16:9、9:16、1:1 */
-    aspect_ratio?: "16:9" | "9:16" | "1:1";
-    /** 生成视频的时长，单位秒，默认 5，可选 5、10 */
-    duration?: 5 | 10;
-    /** 镜头类型：intelligence（智能分镜）/ customize（自定义），默认 customize */
+    /**
+     * 媒体资源。
+     *
+     * 支持的组合包括:
+     * - first_frame
+     * - first_frame + last_frame
+     * - feature
+     * - refer
+     * - feature + refer
+     * - feature + first_frame
+     * - base
+     * - base + refer
+     */
+    media?: Array<
+      | {
+        /** 首帧图片。 */
+        type: "first_frame";
+        /** HTTP 或 HTTPS 图片 URL。 */
+        url: string;
+      }
+      | {
+        /** 尾帧图片。 */
+        type: "last_frame";
+        /** HTTP 或 HTTPS 图片 URL。 */
+        url: string;
+      }
+      | {
+        /** 参考图片。 */
+        type: "refer";
+        /** HTTP 或 HTTPS 图片 URL。 */
+        url: string;
+      }
+      | {
+        /** 待编辑的源视频。 */
+        type: "base";
+        /** HTTP 或 HTTPS 视频 URL。 */
+        url: string;
+        /** 是否保留原视频声音。默认为 no。 */
+        keep_original_sound?: "yes" | "no";
+      }
+      | {
+        /** 特征参考视频。 */
+        type: "feature";
+        /** HTTP 或 HTTPS 视频 URL。 */
+        url: string;
+        /** 是否保留原视频声音。默认为 no。 */
+        keep_original_sound?: "yes" | "no";
+      }
+    >;
+    /** 是否启用多镜头生成。 */
+    multi_shot?: boolean;
+    /** 当 multi_shot 为 true 时必填。 */
     shot_type?: "intelligence" | "customize";
-    /** 是否开启 prompt 智能改写 */
-    prompt_extend?: boolean;
-    /** 是否添加水印 */
+    /** 当 shot_type 为 customize 时必填。 */
+    multi_prompt?: Array<{
+      /** 镜头索引。从 1 开始。 */
+      index: number;
+      /** 该镜头的 prompt。 */
+      prompt: string;
+      /** 镜头持续时间（秒）。 */
+      duration: number;
+    }>;
+    /** 视频中引用元素的的主体列表。这个不用管 */
+    element_list?: Array<{
+      /** Kling 对象 ID 列表中的主体 ID。 */
+      element_id: number;
+    }>;
+  };
+  parameters?: {
+    /** 视频生成模式。pro 输出 1080P；std 输出 720P。默认为 pro。 */
+    mode?: "pro" | "std";
+    /**
+     * 输出宽高比。
+     * 默认是 16:9 
+     */
+    aspect_ratio?: "16:9" | "9:16" | "1:1";
+    /**
+     * 视频持续时间（秒）。
+     *
+     * 有效范围为 3 到 15。当提供 base 或 feature 视频时，有效范围为 3 到 10。
+     * 默认为 5。
+     */
+    duration?: number;
+    /** 是否生成音频。默认为 false。 */
+    audio?: boolean;
+    /** 是否添加水印。默认为 false。 */
     watermark?: boolean;
   };
 }
 
 /**
- * kling-v3-omni-video-generation 成功响应（创建任务）
+ * kling-v3-omni-video-generation 创建任务成功响应。
  */
 export interface KlingV3OmniVideoGenerationCreateResponse {
   output: {
@@ -57,18 +119,27 @@ export interface KlingV3OmniVideoGenerationCreateResponse {
 }
 
 /**
- * kling-v3-omni-video-generation 查询任务结果成功响应
+ * kling-v3-omni-video-generation 任务查询响应。
  */
 export interface KlingV3OmniVideoGenerationQueryResponse {
   request_id: string;
   output: {
     task_id: string;
-    task_status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELED" | "UNKNOWN";
+    task_status:
+    | "PENDING"
+    | "RUNNING"
+    | "SUCCEEDED"
+    | "FAILED"
+    | "CANCELED"
+    | "UNKNOWN";
     submit_time: string;
     scheduled_time?: string;
     end_time?: string;
     video_url?: string;
     watermark_video_url?: string;
+    orig_prompt?: string;
+    code?: string;
+    message?: string;
   };
   usage?: {
     duration: number;
@@ -81,7 +152,7 @@ export interface KlingV3OmniVideoGenerationQueryResponse {
 }
 
 /**
- * kling-v3-omni-video-generation 异常响应
+ * kling-v3-omni-video-generation 错误响应。
  */
 export interface KlingV3OmniVideoGenerationErrorResponse {
   code: string;

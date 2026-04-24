@@ -30,6 +30,9 @@ export const CanvasSidebar = () => {
         case "create-video":
           addNode("video", centerFlowPosition);
           break;
+        case "create-newVideo":
+          addNode("newVideo", centerFlowPosition);
+          break;
         case "create-audio":
           addNode("audio", centerFlowPosition);
           break;

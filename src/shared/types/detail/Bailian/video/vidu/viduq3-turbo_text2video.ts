@@ -14,12 +14,16 @@ export interface ViduQ3TurboText2VideoRequest {
   parameters?: {
     /** 分辨率档位，影响费用。可选值：540P、720P（默认）、1080P */
     resolution?: "540P" | "720P" | "1080P";
-    /** 生成视频的分辨率，格式为 宽*高 的像素值，如 "960*528" */
+    /** 生成视频的分辨率，格式为 宽*高 的像素值，如 "960*528"，默认值根据resolution而定 */
     size?: string;
-    /** 生成视频的时长，单位秒 */
+    /** 生成视频的时长，单位秒，1到16的整数，默认值为5 */
     duration?: number;
-    /** 是否添加水印 */
+    /** 是否生成有声视频（默认false） */
+    audio?: boolean;
+    /** 是否添加水印（默认false） */
     watermark?: boolean;
+    /** 随机数种子，取值范围[0, 2147483647]，未指定时系统自动生成 */
+    seed?: number;
   };
 }
 

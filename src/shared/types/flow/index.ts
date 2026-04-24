@@ -159,6 +159,29 @@ export interface VideoGenerationNode {
 }
 
 /**
+ * 新版视频生成节点数据结构
+ * 用于 AI 视频生成任务（重构版）
+ */
+export interface NewVideoGenerationNode {
+  model: string; // 使用的模型
+  prompt: string; // 生成提示词
+  promptDraft?: string; // 输入面板草稿文本
+  duration?: number; // 视频时长（秒）
+  aspect_ratio: string; // 宽高比，如 "16:9"
+  image_urls?: string[]; // 参考图像 URL 列表
+  status?: GenerationStatus; // 当前生成状态
+  progress?: number; // 进度百分比（0-100）
+  metadata: Record<string, unknown>; // 扩展元数据
+  result?: {
+    type: string;
+    data: Array<{ url: string }>;
+  };
+  createdAt?: number; // 创建时间戳
+  nickname?: string; // 节点昵称
+  [key: string]: any; // React Flow 约束兼容
+}
+
+/**
  * 文本便签节点数据结构
  * 用于画布中的自由文本记录
  * 注：width/height 已移至 Node 级别，由 React Flow 管理
@@ -429,6 +452,8 @@ export type AudioNodeType = Node<AudioGenerationNode, "audioNode">;
 export type TableNodeType = Node<TableNodeData, "tableNode">;
 // React Flow 默认的节点类型
 export type DefaultNodeType = Node<any, "default">;
+// 新版视频节点
+export type NewVideoNodeType = Node<NewVideoGenerationNode, "newVideoNode">;
 
 export type AllNodeType =
   | TextNodeType
@@ -442,7 +467,8 @@ export type AllNodeType =
   | PanoramaNodeType
   | AudioNodeType
   | TableNodeType
-  | DefaultNodeType;
+  | DefaultNodeType
+  | NewVideoNodeType;
 export type EdgeType = Edge<EdgeDataType, "default">;
 
 // ==================== 流类型 ====================

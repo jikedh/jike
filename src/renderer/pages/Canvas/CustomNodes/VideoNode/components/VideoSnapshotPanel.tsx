@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { VideoPlayer } from "@/components/ui/video-player";
 import { VideoTimeline } from "./VideoTimeline";
 
 const DEFAULT_FPS = 30;
@@ -83,7 +84,10 @@ export const VideoSnapshotPanel = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isReady, setIsReady] = useState(false);
-  const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
+  const [videoSize, setVideoSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const [viewportSize, setViewportSize] = useState(getViewportSize);
 
   const workspaceFrame = useMemo(() => {
@@ -108,7 +112,9 @@ export const VideoSnapshotPanel = ({
         return;
       }
 
-      const maxTime = Number.isFinite(video.duration) ? video.duration : duration;
+      const maxTime = Number.isFinite(video.duration)
+        ? video.duration
+        : duration;
       const nextTime = clamp(time, 0, maxTime || 0);
       video.currentTime = nextTime;
       setCurrentTime(nextTime);
@@ -192,7 +198,6 @@ export const VideoSnapshotPanel = ({
     }
   }, [open]);
 
-
   useEffect(() => {
     if (!open) {
       return;
@@ -272,11 +277,12 @@ export const VideoSnapshotPanel = ({
                   height: `${workspaceFrame.height}px`,
                 }}
               >
-                <video
+                <VideoPlayer
                   ref={videoRef}
                   src={videoUrl}
-                  className="h-full w-full object-contain"
-                  controls={false}
+                  containerClassName="h-full w-full rounded-none bg-black"
+                  videoClassName="h-full w-full object-contain"
+                  showDefaultControls={false}
                   playsInline
                   preload="auto"
                   onLoadedMetadata={(event) => {

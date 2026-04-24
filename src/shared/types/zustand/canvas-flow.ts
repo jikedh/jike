@@ -34,6 +34,7 @@ export type NodeType =
   | "note"
   | "image"
   | "video"
+  | "newVideo"
   | "agent"
   | "panorama"
   | "audio"

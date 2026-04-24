@@ -19,7 +19,7 @@ export interface Seedance20Request {
     role?: "reference_audio"; // 固定为参考音频角色
   }[]; // 音频输入列表（仅 pro），最多 3 段，总时长 <= 15s，不能单独输入,需要大沛图片和视频
 
-  resolution?: "480p" | "720p"; // 分辨率："480p" | "720p"（默认 "720p"）
+  resolution?: "480P" | "720P"; // 分辨率："480P" | "720P"（默认 "720P"）
   ratio?: "16:9" | "4:3" | "1:1" | "3:4" | "9:16" | "21:9" | "adaptive"; // 宽高比（默认 "adaptive"）
   duration?: number; // 生成时长（秒）：fast 建议 4-12，pro 建议 4-15，传 -1 由系统自动选择
   generate_audio?: boolean; // 是否生成同步音频（默认 true）
@@ -43,12 +43,12 @@ export interface Seedance20StatusResponse {
   data?: {
     task_id: string; // 任务唯一标识符，用于查询任务状态
     status:
-      | "queued"
-      | "processing"
-      | "running"
-      | "succeeded"
-      | "failed"
-      | "canceled"; // 任务状态
+    | "queued"
+    | "processing"
+    | "running"
+    | "succeeded"
+    | "failed"
+    | "canceled"; // 任务状态
     duration?: number; // 视频时长（秒）
     error?: string; // 错误信息，成功时通常为空字符串
     tos_key?: string; // 对象存储中的资源 Key

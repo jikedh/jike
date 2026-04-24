@@ -10,6 +10,7 @@ import {
 import { uploadFileToOSS } from "service/oss";
 import { readMediaFromLocal } from "service/projectStorage";
 import { cn } from "shared/utils/utils";
+import { VideoPlayer } from "@/components/ui/video-player";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
@@ -17,8 +18,8 @@ type VideoItem = {
   url: string; // 远程 OSS URL
   format?: string; // 视频格式
   localPath?: string; // 本地相对路径
-  localName?: string; // 本地文件名
-  remoteUrl?: string; // 远程持久化 URL
+  localName?: string; // 本地文件�?
+  remoteUrl?: string; // 远程持久�?URL
 };
 
 type CollapsibleVideoGalleryProps = {
@@ -125,11 +126,11 @@ const getStackCardStyle = (
 };
 
 /**
- * 可折叠视频集合卡片
- * - collapsed：仅展示封面视频 + 右上角数量徽标
- * - expanded：2 列网格展示全部视频
- * - 点击展开态中的视频，可将其移动到首位作为新封面
- * - 优先使用本地路径，如果不存在则使用远程 URL
+ * 可折叠视频集合卡�?
+ * - collapsed：仅展示封面视频 + 右上角数量徽�?
+ * - expanded�? 列网格展示全部视�?
+ * - 点击展开态中的视频，可将其移动到首位作为新封�?
+ * - 优先使用本地路径，如果不存在则使用远�?URL
  * - 刷新按钮：重新上传视频到 OSS
  */
 export const CollapsibleVideoGallery = memo(
@@ -142,10 +143,10 @@ export const CollapsibleVideoGallery = memo(
   }: CollapsibleVideoGalleryProps) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-    // 记录加载失败索引，统一渲染占位（使用 ref 避免频繁 setState）
+    // 记录加载失败索引，统一渲染占位（使�?ref 避免频繁 setState�?
     const brokenIndexesRef = useRef<Set<number>>(new Set());
     const [, forceUpdate] = useState(0);
-    // 记录正在刷新的视频索引
+    // 记录正在刷新的视频索�?
     const refreshingIndexesRef = useRef<Set<number>>(new Set());
     const [, forceRefreshUpdate] = useState(0);
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -253,10 +254,10 @@ export const CollapsibleVideoGallery = memo(
             type: `video/${ext}`,
           });
 
-          // 上传到 OSS
+          // 上传�?OSS
           const ossResult = await uploadFileToOSS(file);
           if (!ossResult.url) {
-            throw new Error("上传到 OSS 失败");
+            throw new Error("上传�?OSS 失败");
           }
 
           // 更新节点数据
@@ -418,23 +419,24 @@ export const CollapsibleVideoGallery = memo(
                   }}
                 >
                   {displayUrl ? (
-                    <video
+                    <VideoPlayer
                       src={displayUrl}
-                      controls={isPrimary}
                       muted={!isPrimary}
                       loop={!isPrimary}
                       autoPlay={!isPrimary}
                       playsInline
                       preload="metadata"
-                      className={cn(
-                        "block h-full w-full rounded-[13px] transition-transform duration-300 ease-out",
-                        isExpanded && isSecondary ? "object-contain" : "object-cover",
+                      showDefaultControls={isPrimary}
+                      containerClassName="h-full w-full rounded-[13px] bg-[#111]"
+                      videoClassName={cn(
+                        "h-full w-full rounded-[13px] transition-transform duration-300 ease-out",
+                        isExpanded && isSecondary
+                          ? "object-contain"
+                          : "object-cover",
                         isSecondary && isFocused && "scale-[1.08]",
                       )}
                       onError={() => handleVideoError(index)}
-                    >
-                      你的浏览器不支持视频播放
-                    </video>
+                    />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center rounded-[13px] border border-border/80 bg-muted/40 text-[11px] text-muted-foreground">
                       视频加载失败

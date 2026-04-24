@@ -1170,9 +1170,13 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             // GPT-Image-2 整合参数面板
             <GptImage2ParamsPanel
               size={size}
+              resolution={resolution}
               onSizeChange={(value) => {
                 persistImageDefaultPreset({ size: value });
                 updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                updateImageNodeData(nodeId, { resolution: value });
               }}
             />
           )}

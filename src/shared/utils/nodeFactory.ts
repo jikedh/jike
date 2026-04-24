@@ -139,6 +139,34 @@ export const createVideoNode = (
 });
 
 /**
+ * 创建新版视频节点
+ */
+export const createNewVideoNode = (
+  id: string,
+  position: NodePosition,
+  options?: AddNodeOptions,
+): AllNodeType => ({
+  id,
+  type: "newVideoNode",
+  position,
+  width: 350,
+  height: 250,
+  data: {
+    model: "seedance-2.0-pro",
+    prompt: "",
+    promptDraft: "",
+    duration: 5,
+    aspect_ratio: "16:9",
+    nickname: "新版视频",
+    status: GenerationStatus.COMPLETED,
+    progress: 0,
+    metadata: {},
+    result: { type: "video", data: [] },
+    createdAt: Date.now(),
+  },
+});
+
+/**
  * 创建音频节点
  */
 export const createAudioNode = (
@@ -272,6 +300,7 @@ export const nodeFactoryMap: Record<NodeType, NodeFactory> = {
   agent: createAgentNode,
   panorama: createPanoramaNode,
   video: createVideoNode,
+  newVideo: createNewVideoNode,
   audio: createAudioNode,
   textAgent: createTextAgentNode,
   imageAgent: createImageAgentNode,

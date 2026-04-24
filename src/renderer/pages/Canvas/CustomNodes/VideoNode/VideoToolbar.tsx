@@ -32,12 +32,16 @@ import Video from "yet-another-react-lightbox/plugins/video";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { VideoPlayer } from "@/components/ui/video-player";
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import {
-  getAspectRatioFromMediaFile,
-} from "../ImageNode/utils/aspectRatioUtils";
+import { getAspectRatioFromMediaFile } from "../ImageNode/utils/aspectRatioUtils";
 import { VideoSnapshotPanel } from "./components/VideoSnapshotPanel";
 import { VideoTimeline } from "./components/VideoTimeline";
 import { useVideoFrameCapture } from "./hooks/useVideoFrameCapture";
@@ -69,7 +73,9 @@ const SUBTITLE_REMOVAL_POINTS_PER_SECOND = 0.5;
 const WUHEI_MAX_RECT_AREA = 480_000;
 
 const normalizeTaskStatus = (value?: string) => {
-  return String(value || "").trim().toUpperCase();
+  return String(value || "")
+    .trim()
+    .toUpperCase();
 };
 
 const extractTaskStatusInfo = (response: any) => {
@@ -79,16 +85,13 @@ const extractTaskStatusInfo = (response: any) => {
 
   const taskStatus = normalizeTaskStatus(
     nested?.task_status ??
-    nested?.status ??
-    payload?.task_status ??
-    payload?.status ??
-    output?.task_status,
+      nested?.status ??
+      payload?.task_status ??
+      payload?.status ??
+      output?.task_status,
   );
 
-  const progressRaw =
-    nested?.progress ??
-    payload?.progress ??
-    output?.progress;
+  const progressRaw = nested?.progress ?? payload?.progress ?? output?.progress;
   const numericProgress = Number(progressRaw);
   const progress = Number.isFinite(numericProgress)
     ? Math.max(0, Math.min(100, numericProgress))
@@ -113,8 +116,17 @@ const clamp = (value: number, minValue: number, maxValue: number) => {
   return Math.min(maxValue, Math.max(minValue, value));
 };
 
-const computeContainedRect = (container: ViewportRect, mediaWidth: number, mediaHeight: number) => {
-  if (!mediaWidth || !mediaHeight || container.width <= 0 || container.height <= 0) {
+const computeContainedRect = (
+  container: ViewportRect,
+  mediaWidth: number,
+  mediaHeight: number,
+) => {
+  if (
+    !mediaWidth ||
+    !mediaHeight ||
+    container.width <= 0 ||
+    container.height <= 0
+  ) {
     return { x: 0, y: 0, width: container.width, height: container.height };
   }
 
@@ -140,7 +152,11 @@ const computeContainedRect = (container: ViewportRect, mediaWidth: number, media
 const buildDefaultSubtitleRect = (bounds: ViewportRect) => {
   const width = Math.max(80, bounds.width * 0.8);
   const height = Math.max(60, bounds.height * 0.22);
-  const x = clamp((bounds.width - width) / 2, 0, Math.max(0, bounds.width - width));
+  const x = clamp(
+    (bounds.width - width) / 2,
+    0,
+    Math.max(0, bounds.width - width),
+  );
   const y = clamp(bounds.height * 0.72, 0, Math.max(0, bounds.height - height));
   return { x, y, width, height };
 };
@@ -205,9 +221,15 @@ const VideoSubtitleRemovalPanel = ({
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
+  const [videoSize, setVideoSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const [viewportSize, setViewportSize] = useState(getViewportSize);
-  const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(null);
+  const [containerSize, setContainerSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const [videoBounds, setVideoBounds] = useState<ViewportRect | null>(null);
   const [cropRect, setCropRect] = useState<ViewportRect | null>(null);
 
@@ -243,7 +265,9 @@ const VideoSubtitleRemovalPanel = ({
         return;
       }
 
-      const maxTime = Number.isFinite(video.duration) ? video.duration : duration;
+      const maxTime = Number.isFinite(video.duration)
+        ? video.duration
+        : duration;
       const nextTime = clamp(time, 0, maxTime || 0);
       video.currentTime = nextTime;
       setCurrentTime(nextTime);
@@ -300,7 +324,12 @@ const VideoSubtitleRemovalPanel = ({
       return;
     }
     const viewport = viewportRef.current.getBoundingClientRect();
-    const container = { x: 0, y: 0, width: viewport.width, height: viewport.height };
+    const container = {
+      x: 0,
+      y: 0,
+      width: viewport.width,
+      height: viewport.height,
+    };
     setContainerSize({ width: viewport.width, height: viewport.height });
 
     const mediaWidth = videoRef.current.videoWidth || 0;
@@ -624,7 +653,9 @@ const VideoSubtitleRemovalPanel = ({
     const rectHeight = Math.max(0, rect.y2 - rect.y1);
     const area = rectWidth * rectHeight;
     if (area > WUHEI_MAX_RECT_AREA) {
-      toast.warning(`选区过大（${area}），无痕AI 限制面积 <= ${WUHEI_MAX_RECT_AREA} 像素`);
+      toast.warning(
+        `选区过大（${area}），无痕AI 限制面积 <= ${WUHEI_MAX_RECT_AREA} 像素`,
+      );
       return;
     }
 
@@ -643,13 +674,25 @@ const VideoSubtitleRemovalPanel = ({
   const handleConfig = useMemo(() => {
     return [
       { mode: "nw", className: "-left-2 -top-2 cursor-nwse-resize" },
-      { mode: "n", className: "left-1/2 -top-2 -translate-x-1/2 cursor-ns-resize" },
+      {
+        mode: "n",
+        className: "left-1/2 -top-2 -translate-x-1/2 cursor-ns-resize",
+      },
       { mode: "ne", className: "-right-2 -top-2 cursor-nesw-resize" },
-      { mode: "e", className: "-right-2 top-1/2 -translate-y-1/2 cursor-ew-resize" },
+      {
+        mode: "e",
+        className: "-right-2 top-1/2 -translate-y-1/2 cursor-ew-resize",
+      },
       { mode: "se", className: "-right-2 -bottom-2 cursor-nwse-resize" },
-      { mode: "s", className: "left-1/2 -bottom-2 -translate-x-1/2 cursor-ns-resize" },
+      {
+        mode: "s",
+        className: "left-1/2 -bottom-2 -translate-x-1/2 cursor-ns-resize",
+      },
       { mode: "sw", className: "-left-2 -bottom-2 cursor-nesw-resize" },
-      { mode: "w", className: "-left-2 top-1/2 -translate-y-1/2 cursor-ew-resize" },
+      {
+        mode: "w",
+        className: "-left-2 top-1/2 -translate-y-1/2 cursor-ew-resize",
+      },
     ] as const;
   }, []);
 
@@ -677,11 +720,12 @@ const VideoSubtitleRemovalPanel = ({
                   height: `${workspaceFrame.height}px`,
                 }}
               >
-                <video
+                <VideoPlayer
                   ref={videoRef}
                   src={videoUrl}
-                  className="h-full w-full object-contain"
-                  controls={false}
+                  containerClassName="h-full w-full rounded-none bg-black"
+                  videoClassName="h-full w-full object-contain"
+                  showDefaultControls={false}
                   playsInline
                   preload="auto"
                   onLoadedMetadata={(event) => {
@@ -705,70 +749,74 @@ const VideoSubtitleRemovalPanel = ({
                   onEnded={() => setIsPlaying(false)}
                 />
 
-              {videoBounds && cropRect ? (
-                <div
-                  className="absolute border border-white/90 bg-white/10 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]"
-                  style={{
-                    left: cropRect.x,
-                    top: cropRect.y,
-                    width: cropRect.width,
-                    height: cropRect.height,
-                  }}
-                  onPointerDown={(event) => startDrag("move", event)}
-                >
-                  {handleConfig.map((item) => (
-                    <div
-                      key={item.mode}
-                      className={`absolute h-4 w-4 rounded-full border border-white bg-[#B43FEB] ${item.className}`}
-                      onPointerDown={(event) => startDrag(item.mode as DragMode, event)}
-                    />
-                  ))}
-                </div>
-              ) : null}
+                {videoBounds && cropRect ? (
+                  <div
+                    className="absolute border border-white/90 bg-white/10 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]"
+                    style={{
+                      left: cropRect.x,
+                      top: cropRect.y,
+                      width: cropRect.width,
+                      height: cropRect.height,
+                    }}
+                    onPointerDown={(event) => startDrag("move", event)}
+                  >
+                    {handleConfig.map((item) => (
+                      <div
+                        key={item.mode}
+                        className={`absolute h-4 w-4 rounded-full border border-white bg-[#B43FEB] ${item.className}`}
+                        onPointerDown={(event) =>
+                          startDrag(item.mode as DragMode, event)
+                        }
+                      />
+                    ))}
+                  </div>
+                ) : null}
 
-              {containerSize && videoBounds ? (
-                <>
-                  <div
-                    className="pointer-events-none absolute left-0 top-0 bg-black/55"
-                    style={{
-                      width: containerSize.width,
-                      height: Math.max(0, videoBounds.y),
-                    }}
-                  />
-                  <div
-                    className="pointer-events-none absolute left-0 bg-black/55"
-                    style={{
-                      top: videoBounds.y + videoBounds.height,
-                      width: containerSize.width,
-                      height: Math.max(
-                        0,
-                        containerSize.height - (videoBounds.y + videoBounds.height),
-                      ),
-                    }}
-                  />
-                  <div
-                    className="pointer-events-none absolute top-0 bg-black/55"
-                    style={{
-                      left: 0,
-                      top: videoBounds.y,
-                      width: Math.max(0, videoBounds.x),
-                      height: videoBounds.height,
-                    }}
-                  />
-                  <div
-                    className="pointer-events-none absolute top-0 bg-black/55"
-                    style={{
-                      left: videoBounds.x + videoBounds.width,
-                      top: videoBounds.y,
-                      width: Math.max(
-                        0,
-                        containerSize.width - (videoBounds.x + videoBounds.width),
-                      ),
-                      height: videoBounds.height,
-                    }}
-                  />
-                </>
-              ) : null}
+                {containerSize && videoBounds ? (
+                  <>
+                    <div
+                      className="pointer-events-none absolute left-0 top-0 bg-black/55"
+                      style={{
+                        width: containerSize.width,
+                        height: Math.max(0, videoBounds.y),
+                      }}
+                    />
+                    <div
+                      className="pointer-events-none absolute left-0 bg-black/55"
+                      style={{
+                        top: videoBounds.y + videoBounds.height,
+                        width: containerSize.width,
+                        height: Math.max(
+                          0,
+                          containerSize.height -
+                            (videoBounds.y + videoBounds.height),
+                        ),
+                      }}
+                    />
+                    <div
+                      className="pointer-events-none absolute top-0 bg-black/55"
+                      style={{
+                        left: 0,
+                        top: videoBounds.y,
+                        width: Math.max(0, videoBounds.x),
+                        height: videoBounds.height,
+                      }}
+                    />
+                    <div
+                      className="pointer-events-none absolute top-0 bg-black/55"
+                      style={{
+                        left: videoBounds.x + videoBounds.width,
+                        top: videoBounds.y,
+                        width: Math.max(
+                          0,
+                          containerSize.width -
+                            (videoBounds.x + videoBounds.width),
+                        ),
+                        height: videoBounds.height,
+                      }}
+                    />
+                  </>
+                ) : null}
               </div>
             </div>
 
@@ -819,7 +867,9 @@ const VideoSubtitleRemovalPanel = ({
 
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="text-xs text-white/50">
-                {isReady ? `视频时长 ${formatDuration(duration)}（${Math.ceil(duration)} 秒）` : "读取视频时长中..."}
+                {isReady
+                  ? `视频时长 ${formatDuration(duration)}（${Math.ceil(duration)} 秒）`
+                  : "读取视频时长中..."}
                 {pointsEnabled
                   ? ` · 单价 ${SUBTITLE_REMOVAL_POINTS_PER_SECOND} 积分/秒`
                   : ""}
@@ -1049,7 +1099,6 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       setIsSubtitlePanelOpen(true);
       return;
     }
-
   };
 
   const isPreviewActive = isLightboxOpen;
@@ -1064,7 +1113,13 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   }, []);
 
   const startSubtitlePolling = useCallback(
-    (taskId: string, targetNodeId: string, publicUrl: string, userId: string, pointsToDeduct: number) => {
+    (
+      taskId: string,
+      targetNodeId: string,
+      publicUrl: string,
+      userId: string,
+      pointsToDeduct: number,
+    ) => {
       const existing = subtitlePollersRef.current[targetNodeId];
       if (existing) {
         window.clearInterval(existing);
@@ -1087,7 +1142,10 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             });
             if (pointsToDeduct > 0 && userId) {
               try {
-                await updateVipScore({ userId, vipScoreDelta: -pointsToDeduct });
+                await updateVipScore({
+                  userId,
+                  vipScoreDelta: -pointsToDeduct,
+                });
               } catch (scoreError) {
                 console.error("积分扣减失败:", scoreError);
               }
@@ -1115,8 +1173,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             status: GenerationStatus.IN_PROGRESS,
             progress,
           });
-        } catch {
-        }
+        } catch {}
       }, 10000);
 
       subtitlePollersRef.current[targetNodeId] = timer;
@@ -1215,7 +1272,10 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           const loginUserId = getJikeingUserId();
           if (requiredPoints > 0 && loginUserId) {
             try {
-              await updateVipScore({ userId: loginUserId, vipScoreDelta: -requiredPoints });
+              await updateVipScore({
+                userId: loginUserId,
+                vipScoreDelta: -requiredPoints,
+              });
             } catch (scoreError) {
               console.error("积分扣减失败:", scoreError);
             }
@@ -1226,9 +1286,14 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             progress: 0,
           });
           const loginUserId = getJikeingUserId();
-          startSubtitlePolling(taskId, newNodeId, target.publicUrl, loginUserId, requiredPoints);
+          startSubtitlePolling(
+            taskId,
+            newNodeId,
+            target.publicUrl,
+            loginUserId,
+            requiredPoints,
+          );
         }
-
       } catch (error: any) {
         toast.error(error?.message || "去字幕失败");
       } finally {
@@ -1312,7 +1377,9 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         open={isSnapshotPanelOpen}
         onClose={() => setIsSnapshotPanelOpen(false)}
         videoUrl={currentVideoUrl || ""}
-        onSnapshot={(timeMs) => captureSnapshot(currentVideoUrl || "", timeMs, nodeId)}
+        onSnapshot={(timeMs) =>
+          captureSnapshot(currentVideoUrl || "", timeMs, nodeId)
+        }
         isCapturing={isCapturingSnapshot}
       />
 
