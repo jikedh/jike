@@ -16,40 +16,6 @@ export interface GeminiYwRequestBody {
   };
 }
 
-/**
- *
-{
-  "contents": [
-    {
-      "parts": [
-        {
-          "text": "图中的角色带着的都是红帽子"
-        },
-        {
-          "inline_data": {
-            "mime_type": "image/jpeg",
-            "data": "真实的base64数据"
-          }
-        },
-        {
-          "inline_data": {
-            "mime_type": "image/jpeg",
-            "data": "真实的base64数据"
-          }
-        }
-      ]
-    }
-  ],
-  "generationConfig": {
-    "responseModalities": ["IMAGE"],
-    "imageConfig": {
-      "aspectRatio": "1:1",
-      "imageSize": "2K"
-    }
-  }
-}
- */
-
 // Gemini 响应体类型定义
 export interface GeminiYwResponseBody {
   // 候选回复列表

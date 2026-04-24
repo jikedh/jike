@@ -14,6 +14,16 @@ import type {
   VideoRemovalRequest,
   WuhenAccessTokenResponse,
 } from "shared/types/detail/wuhen";
+import type {
+  ToApiImageGenerationRequest,
+  ToApiImageGenerationResponse,
+  ToApiImageTaskStatusResponse,
+} from "shared/types/detail/ToApi/images";
+import type {
+  BailianVideoGenerationRequest,
+  BailianVideoGenerationCreateResponse,
+  BailianVideoGenerationQueryResponse,
+} from "shared/types/detail/Bailian/video";
 import { getAiToken, getBaseURL } from "shared/utils/utils";
 /**
  *
@@ -34,8 +44,10 @@ export function getBalance() {
 // ===================== 图片生成相关 =====================
 
 // 创建图片生成任务
-export function createImageGeneration(data) {
-  return aiService({
+export function createImageGeneration(
+  data: ToApiImageGenerationRequest,
+) {
+  return aiService<ToApiImageGenerationResponse>({
     url: "/v1/images/generations",
     method: "post",
     data,
@@ -44,7 +56,7 @@ export function createImageGeneration(data) {
 
 // 获取图片生成任务状态
 export function getImageTaskStatus(id: string) {
-  return aiService({
+  return aiService<ToApiImageTaskStatusResponse>({
     url: `/v1/images/generations/${id}`,
     method: "get",
   });
@@ -320,10 +332,12 @@ export async function createDashscopeChatCompletion(
  * 阿里云百炼视频生成接口
  * 用于提交视频生成任务
  * API 端点: /api/v1/services/aigc/video-generation/video-synthesis
- * @param data 请求数据
+ * @param data 请求数据，支持多种模型的视频生成
  */
-export function createDashscopeVideoSynthesis(data: any) {
-  return dashscopeRequest({
+export function createDashscopeVideoSynthesis(
+  data: BailianVideoGenerationRequest,
+) {
+  return dashscopeRequest<BailianVideoGenerationCreateResponse>({
     url: "/api/v1/services/aigc/video-generation/video-synthesis",
     method: "post",
     data,
@@ -350,7 +364,7 @@ export function createDashscopeVideoSynthesis(data: any) {
  */
 export function getDashscopeVideoTaskStatus(taskId: string) {
   console.log('测试会不会打印');
-  return dashscopeRequest({
+  return dashscopeRequest<BailianVideoGenerationQueryResponse>({
     url: `/api/v1/tasks/${taskId}`,
     method: "get",
   });

@@ -11,7 +11,7 @@ import {
 import { GenerationStatus } from "shared/constants/enum";
 import { getGenerationPointsByScene } from "shared/constants/model-points";
 import { POINTS_FEATURE_ENABLED, normalizeRequiredPoints } from "shared/constants/points";
-import type { GeminiYwResponseBody } from "shared/types/detail/gemini-yw";
+import type { GeminiYwResponseBody } from "shared/types/detail/Yunwu/gemini-yw";
 import type {
   AllNodeType,
   AudioGenerationNode,
