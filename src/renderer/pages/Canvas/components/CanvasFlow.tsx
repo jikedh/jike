@@ -45,6 +45,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 import { useCopyPaste } from "@/hooks/useCopyPaste";
 import { useDragUpload } from "@/hooks/useDragUpload";
 import { useUndoRedo } from "@/hooks/useUndoRedo";
@@ -386,6 +387,21 @@ export const CanvasFlow = ({
         !event.shiftKey
       ) {
         return;
+      }
+
+      // Ctrl+S 或 Cmd+S：保存画布
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key === "s" &&
+        !event.shiftKey
+      ) {
+        event.preventDefault();
+        try {
+          useCanvasFlowStore.getState().saveGraph();
+          toast.success("画布已保存");
+        } catch {
+          toast.error("保存失败，请重试");
+        }
       }
     },
     [
