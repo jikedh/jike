@@ -5,12 +5,15 @@ export type {
   GptImage2GenerationRequest,
   GptImage2GenerationResponse,
 } from "./gpt-image-2";
-export type { ImageTaskStatus } from "./image-task-status";
 export type { GrokImageRequest, GrokImageResponse } from "./grok-image";
 export type {
   Seedream5ImageRequest,
   Seedream5ImageResponse,
 } from "./seedream-5-0-image";
+export type {
+  ImageTaskStatusResponse,
+  ImageTaskStatus,
+} from "./image-generation-status";
 
 import type {
   Flux20ImageRequest,
@@ -28,12 +31,15 @@ import type {
   GptImage2GenerationRequest,
   GptImage2GenerationResponse,
 } from "./gpt-image-2";
-import type { ImageTaskStatus } from "./image-task-status";
 import type { GrokImageRequest, GrokImageResponse } from "./grok-image";
 import type {
   Seedream5ImageRequest,
   Seedream5ImageResponse,
 } from "./seedream-5-0-image";
+import type {
+  ImageTaskStatusResponse,
+  ImageTaskStatus,
+} from "./image-generation-status";
 
 export type ToApiImageGenerationRequest =
   | Flux20ImageRequest
@@ -50,5 +56,3 @@ export type ToApiImageGenerationResponse =
   | GptImage2GenerationResponse
   | GrokImageResponse
   | Seedream5ImageResponse;
-
-export type ToApiImageTaskStatusResponse = ImageTaskStatus;

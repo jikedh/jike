@@ -39,6 +39,9 @@ export const VideoNode = memo(
     const updateVideoNodeData = useCanvasFlowStore(
       (state) => state.updateVideoNodeData,
     );
+    const updateNodeDimensions = useCanvasFlowStore(
+      (state) => state.updateNodeDimensions,
+    );
     // 从 store 直接读取选中节点数量，避免 O(n²) 遍历
     const selectedNodesCount = useCanvasFlowStore(
       (state) => state.selectedNodesCount,
@@ -50,8 +53,8 @@ export const VideoNode = memo(
         isGalleryExpanded
           ? "invisible opacity-0"
           : selected
-          ? "visible opacity-100"
-          : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100",
+            ? "visible opacity-100"
+            : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100",
       [isGalleryExpanded, selected],
     );
 
@@ -88,6 +91,10 @@ export const VideoNode = memo(
     useEffect(() => {
       updateNodeInternals(id);
     }, [nodeSize.width, nodeSize.height, id, updateNodeInternals]);
+
+    useEffect(() => {
+      updateNodeDimensions(id, nodeSize.width, nodeSize.height);
+    }, [id, nodeSize.height, nodeSize.width, updateNodeDimensions]);
 
     const isGenerating = useMemo(() => {
       const status = data.status ?? GenerationStatus.COMPLETED;
@@ -201,7 +208,7 @@ export const VideoNode = memo(
               className={cn(
                 "pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-500 group-hover/card:opacity-100",
                 hasMultipleResults &&
-                  "bg-linear-to-tr from-transparent via-white/2 to-transparent",
+                "bg-linear-to-tr from-transparent via-white/2 to-transparent",
               )}
             />
 

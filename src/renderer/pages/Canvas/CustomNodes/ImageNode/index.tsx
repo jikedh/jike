@@ -48,6 +48,9 @@ export const ImageNode = memo(
     const updateImageNodeData = useCanvasFlowStore(
       (state) => state.updateImageNodeData,
     );
+    const updateNodeDimensions = useCanvasFlowStore(
+      (state) => state.updateNodeDimensions,
+    );
     const onConnect = useCanvasFlowStore((state) => state.onConnect);
     const highlightedSourceNodeIds = useCanvasFlowStore(
       (state) => state.highlightedSourceNodeIds,
@@ -79,8 +82,8 @@ export const ImageNode = memo(
         isGalleryExpanded || isAnnotationMode
           ? "invisible opacity-0"
           : selected
-          ? "visible opacity-100"
-          : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100",
+            ? "visible opacity-100"
+            : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100",
       [isAnnotationMode, isGalleryExpanded, selected],
     );
 
@@ -121,6 +124,10 @@ export const ImageNode = memo(
     useEffect(() => {
       updateNodeInternals(id);
     }, [nodeSize.width, nodeSize.height, id, updateNodeInternals]);
+
+    useEffect(() => {
+      updateNodeDimensions(id, nodeSize.width, nodeSize.height);
+    }, [id, nodeSize.height, nodeSize.width, updateNodeDimensions]);
 
     const isGenerating = useMemo(() => {
       const status = data.status ?? GenerationStatus.COMPLETED;
@@ -338,10 +345,10 @@ export const ImageNode = memo(
                 isAnnotationMode
                   ? "border-transparent shadow-none ring-0"
                   : selected
-                  ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
-                  : isSourceHighlighted
-                    ? "border-[#B43FEB]/65 shadow-[0_0_18px_rgba(180,63,235,0.28),0_0_36px_rgba(180,63,235,0.12)] ring-1 ring-[#B43FEB]/20"
-                    : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
+                    ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
+                    : isSourceHighlighted
+                      ? "border-[#B43FEB]/65 shadow-[0_0_18px_rgba(180,63,235,0.28),0_0_36px_rgba(180,63,235,0.12)] ring-1 ring-[#B43FEB]/20"
+                      : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
               )}
             >
               {/* 左侧输入 Handle */}
@@ -378,7 +385,7 @@ export const ImageNode = memo(
                   className={cn(
                     "pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-500 group-hover/card:opacity-100",
                     hasMultipleResults &&
-                      "bg-linear-to-tr from-transparent via-white/2 to-transparent",
+                    "bg-linear-to-tr from-transparent via-white/2 to-transparent",
                   )}
                 />
               ) : null}
@@ -423,31 +430,31 @@ export const ImageNode = memo(
 
         {/* 全景图查看器 - 使用 Portal 渲染到 body，避免 React Flow 的 CSS 隔离影响 fixed 定位 */}
         {typeof document !== "undefined" &&
-        panoramaViewer.open &&
-        panoramaViewer.sourceNodeId === id
+          panoramaViewer.open &&
+          panoramaViewer.sourceNodeId === id
           ? createPortal(
-              <PanoramaViewer
-                open={panoramaViewer.open}
-                onClose={closePanoramaViewer}
-                initialImage={panoramaViewer.imageUrl ?? undefined}
-                sourceNodeId={panoramaViewer.sourceNodeId}
-              />,
-              document.body,
-            )
+            <PanoramaViewer
+              open={panoramaViewer.open}
+              onClose={closePanoramaViewer}
+              initialImage={panoramaViewer.imageUrl ?? undefined}
+              sourceNodeId={panoramaViewer.sourceNodeId}
+            />,
+            document.body,
+          )
           : null}
 
         {typeof document !== "undefined" &&
-        isAnnotationTarget &&
-        annotationWorkspace.open
+          isAnnotationTarget &&
+          annotationWorkspace.open
           ? createPortal(
-              <ImageAnnotationWorkspace
-                open={annotationWorkspace.open}
-                imageUrl={annotationWorkspace.imageUrl}
-                sourceNodeId={annotationWorkspace.sourceNodeId}
-                onClose={() => useCanvasFlowStore.getState().closeImageAnnotation()}
-              />,
-              document.body,
-            )
+            <ImageAnnotationWorkspace
+              open={annotationWorkspace.open}
+              imageUrl={annotationWorkspace.imageUrl}
+              sourceNodeId={annotationWorkspace.sourceNodeId}
+              onClose={() => useCanvasFlowStore.getState().closeImageAnnotation()}
+            />,
+            document.body,
+          )
           : null}
       </>
     );
