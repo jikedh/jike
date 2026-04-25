@@ -116,6 +116,9 @@ export const VIDEO_ASPECT_RATIOS = [
 ];
 
 /** 图片生成模型配置 */
+export const NANO_BANANA_LOCAL_MODEL = "nano-banana-pro-local-gemini";
+export const NANO_BANANA_LOCAL_PLATFORM = "google_local_gemini";
+
 export const IMAGE_MODELS = [
   // { id: 1, name: 'doubao-seedream-4-0', model: 'doubao-seedream-4-0', platform: 'Seedream' },
   // { id: 2, name: 'doubao-seedream-4-5', model: 'doubao-seedream-4-5', platform: 'Seedream' },
@@ -124,6 +127,12 @@ export const IMAGE_MODELS = [
     name: "谷歌 Gemini 3 Pro",
     model: "gemini-3-pro-image-preview",
     platform: "google",
+  },
+  {
+    id: 8,
+    name: "Nano Banana Pro（本地gemini渠道）",
+    model: NANO_BANANA_LOCAL_MODEL,
+    platform: NANO_BANANA_LOCAL_PLATFORM,
   },
   {
     id: 4,

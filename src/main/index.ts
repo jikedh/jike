@@ -19,7 +19,9 @@ import {
   registerStorageHandlers,
   registerDebugHandlers,
   registerDownloadHandlers,
+  registerFlow2ApiHandlers,
 } from "./ipc";
+import { flow2ApiService } from "./ipc/flow2api/service";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -103,6 +105,7 @@ function createWindow(): void {
   registerStorageHandlers();
   registerDebugHandlers();
   registerDownloadHandlers();
+  registerFlow2ApiHandlers();
 }
 
 app.whenReady().then(() => {
@@ -121,5 +124,6 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  void flow2ApiService.stop();
   app.quit();
 });

@@ -1,4 +1,5 @@
 import { ElectronAPI } from "@electron-toolkit/preload";
+import type { Flow2ApiApi } from "shared/types/flow2api";
 import type { StorageApi } from "shared/types/storage";
 
 export type DebugApi = {
@@ -27,5 +28,6 @@ declare global {
     storage: StorageApi;
     debug: DebugApi;
     download: DownloadApi;
+    flow2api: Flow2ApiApi;
   }
 }

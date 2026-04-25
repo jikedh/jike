@@ -1,5 +1,8 @@
+import { NANO_BANANA_LOCAL_MODEL } from "../ai-models";
+
 export const IMAGE_MODEL_POINTS: Record<string, number> = {
   "gemini-3-pro-image-preview": 24,
+  [NANO_BANANA_LOCAL_MODEL]: 0,
   "doubao-seedream-5-0": 15,
   midjourney: 27,
   "midjourney-niji7": 27,

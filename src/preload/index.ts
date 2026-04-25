@@ -4,6 +4,7 @@ import type {
   FileInfo,
   StorageApi,
 } from "shared/types/storage";
+import type { Flow2ApiApi } from "shared/types/flow2api";
 
 export type DebugApi = {
   toggleDevTools: () => Promise<{ success: boolean; error?: string }>;
@@ -102,12 +103,23 @@ const downloadApi: DownloadApi = {
     ipcRenderer.invoke("download:imageToFile", url, filePath),
 };
 
+const flow2ApiApi: Flow2ApiApi = {
+  getState: () => ipcRenderer.invoke("flow2api:getState"),
+  start: () => ipcRenderer.invoke("flow2api:start"),
+  stop: () => ipcRenderer.invoke("flow2api:stop"),
+  restart: () => ipcRenderer.invoke("flow2api:restart"),
+  updateSettings: (patch) => ipcRenderer.invoke("flow2api:updateSettings", patch),
+  getLogs: (limit) => ipcRenderer.invoke("flow2api:getLogs", limit),
+  selectOutputDirectory: () => ipcRenderer.invoke("flow2api:selectOutputDirectory"),
+};
+
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld("electron", electronAPI);
     contextBridge.exposeInMainWorld("storage", storageApi);
     contextBridge.exposeInMainWorld("debug", debugApi);
     contextBridge.exposeInMainWorld("download", downloadApi);
+    contextBridge.exposeInMainWorld("flow2api", flow2ApiApi);
   } catch (error) {
     console.error(error);
   }
@@ -120,4 +132,6 @@ if (process.contextIsolated) {
   window.debug = debugApi;
   // @ts-ignore (define in dts)
   window.download = downloadApi;
+  // @ts-ignore (define in dts)
+  window.flow2api = flow2ApiApi;
 }

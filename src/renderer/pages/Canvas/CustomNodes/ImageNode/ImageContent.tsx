@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageGenerationNode } from "shared/types/flow";
+import { isLocalGeminiFallbackModeMessage } from "shared/utils/localGeminiErrors";
 import { CollapsibleImageGallery } from "./CollapsibleImageGallery";
 
 type ImageContentProps = {
@@ -48,6 +49,12 @@ export const ImageContent = memo(
         error?.serverMessage ||
         error?.message ||
         "生成失败，请稍后再试";
+      const rawMessage =
+        error?.serverMessage ||
+        error?.detail ||
+        error?.message ||
+        "生成失败，请稍后再试";
+      const isFallbackMode = isLocalGeminiFallbackModeMessage(rawMessage);
 
       return (
         <div className="h-full w-full flex flex-col items-center justify-center p-4 text-center bg-[#141418]">
@@ -57,6 +64,11 @@ export const ImageContent = memo(
           <div className="text-xs text-muted-foreground mb-3 line-clamp-3 max-w-full px-2">
             {displayMessage}
           </div>
+          {isFallbackMode && (
+            <div className="text-[11px] text-amber-400/90 mb-3 max-w-full px-2">
+              当前已退回临时标签页模式，浏览器弹窗属于降级行为。建议改为单张或降低批量频率后重试。
+            </div>
+          )}
           {onRetry && (
             <button
               type="button"

@@ -8,6 +8,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   defaultPresets,
   type PresetItem,
@@ -59,6 +60,7 @@ const settingSections = [
   { id: "canvas", label: "画布设置" },
   { id: "interaction", label: "节点交互" },
   { id: "ai", label: "AI 助手" },
+  { id: "local-gemini", label: "模型管理" },
   { id: "presets", label: "预设提示词库" },
   { id: "collab", label: "协作通知" },
   { id: "data", label: "数据与版本" },
@@ -75,6 +77,7 @@ const sectionPlaceholderMap = {
   ],
   interaction: [{ label: "拖拽辅助线", type: "toggle" }],
   ai: [],
+  "local-gemini": [],
   presets: [],
   collab: [{ label: "@我提醒", type: "toggle" }],
   data: [{ label: "自动备份", type: "toggle" }],
@@ -96,6 +99,7 @@ export const SettingsModal = ({
   onClose,
   isFirstLogin = false,
 }: SettingsModalProps) => {
+  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState(
     isFirstLogin ? "data" : settingSections[0].id,
   );
@@ -526,6 +530,28 @@ export const SettingsModal = ({
                         </Select>
                       </section>
                     </>
+                  )}
+
+                  {activeSection === "local-gemini" && (
+                    <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                      <div className="text-sm font-medium text-white/80">
+                        本地 Gemini / Flow2API
+                      </div>
+                      <div className="mt-2 text-sm leading-6 text-white/55">
+                        本地模型管理已经迁移到独立页面，这里可以进入服务控制、日志查看、结果目录配置，以及内嵌的管理页和测试页。
+                      </div>
+                      <div className="mt-4 flex gap-3">
+                        <Button
+                          variant="blue"
+                          onClick={() => {
+                            onClose();
+                            navigate("/settings");
+                          }}
+                        >
+                          打开模型管理
+                        </Button>
+                      </div>
+                    </section>
                   )}
 
                   {/* 预设提示词库 */}

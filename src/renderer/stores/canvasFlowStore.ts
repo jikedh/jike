@@ -52,10 +52,15 @@ import {
   wait,
 } from "shared/utils/reactflowUtils";
 import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
+import { normalizeLocalGeminiErrorDetail } from "shared/utils/localGeminiErrors";
 import { hydrateMediaForRuntime } from "shared/utils/mediaPersistence";
 import { getJikeingUserId, toChineseNumber } from "shared/utils/utils";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
 import { create } from "zustand";
+import {
+  NANO_BANANA_LOCAL_MODEL,
+  NANO_BANANA_LOCAL_PLATFORM,
+} from "shared/constants/ai-models";
 import {
   createDashscopeVideoSynthesis,
   createImageGeneration,
@@ -81,6 +86,87 @@ import { saveCurrentCanvasToHistory } from "@/utils/canvasHistoryBridge";
 // ==================== 持久化配置 ====================
 
 const CANVAS_STORAGE_VERSION = 1;
+
+const NANO_BANANA_MODEL_MAPPING: Record<string, Record<string, string>> = {
+  "1K": {
+    "16:9": "gemini-3.0-pro-image-landscape",
+    "9:16": "gemini-3.0-pro-image-portrait",
+    "1:1": "gemini-3.0-pro-image-square",
+    "4:3": "gemini-3.0-pro-image-four-three",
+    "3:4": "gemini-3.0-pro-image-three-four",
+  },
+  "2K": {
+    "16:9": "gemini-3.0-pro-image-landscape-2k",
+    "9:16": "gemini-3.0-pro-image-portrait-2k",
+    "1:1": "gemini-3.0-pro-image-square-2k",
+    "4:3": "gemini-3.0-pro-image-four-three-2k",
+    "3:4": "gemini-3.0-pro-image-three-four-2k",
+  },
+  "4K": {
+    "16:9": "gemini-3.0-pro-image-landscape-4k",
+    "9:16": "gemini-3.0-pro-image-portrait-4k",
+    "1:1": "gemini-3.0-pro-image-square-4k",
+    "4:3": "gemini-3.0-pro-image-four-three-4k",
+    "3:4": "gemini-3.0-pro-image-three-four-4k",
+  },
+};
+
+const resolveLocalGeminiImageModel = ({
+  model,
+  platform,
+  size,
+  resolution,
+}: {
+  model?: string;
+  platform?: string;
+  size?: string;
+  resolution?: string;
+}) => {
+  if (
+    model !== NANO_BANANA_LOCAL_MODEL ||
+    platform !== NANO_BANANA_LOCAL_PLATFORM
+  ) {
+    return "gemini-3-pro-image-preview";
+  }
+
+  const resolutionMapping = resolution
+    ? NANO_BANANA_MODEL_MAPPING[resolution]
+    : undefined;
+  const resolvedModel = size ? resolutionMapping?.[size] : undefined;
+  if (resolvedModel) {
+    return resolvedModel;
+  }
+
+  throw new Error(
+    `Nano Banana Pro 暂不支持 ${size ?? "未知比例"} / ${resolution ?? "未知分辨率"}，请使用 1:1、16:9、9:16、4:3、3:4，并选择 1K/2K/4K`,
+  );
+};
+
+const inferImageMimeTypeFromUri = (uri: string): string | undefined => {
+  const dataUriMatch = uri.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
+  if (dataUriMatch) {
+    return dataUriMatch[1];
+  }
+
+  const normalizedUri = uri.split("?")[0].toLowerCase();
+  if (
+    normalizedUri.endsWith(".jpg") ||
+    normalizedUri.endsWith(".jpeg")
+  ) {
+    return "image/jpeg";
+  }
+  if (normalizedUri.endsWith(".png")) {
+    return "image/png";
+  }
+  if (normalizedUri.endsWith(".webp")) {
+    return "image/webp";
+  }
+  if (normalizedUri.endsWith(".gif")) {
+    return "image/gif";
+  }
+
+  return undefined;
+};
 
 export const hydrateCanvasNodesForRuntime = async (
   nodes: AllNodeType[],
@@ -954,6 +1040,9 @@ const deductVipScoreAfterGeneration = async ({
     Number.isFinite(scoreCost) && scoreCost > 0
       ? scoreCost
       : getGenerationPointsByScene({ scene, model });
+  if (!(finalScoreCost > 0)) {
+    return;
+  }
   try {
     await updateVipScore({
       userId: loginUserId,
@@ -1884,7 +1973,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     },
 
     /**
-     * Gemini 3 Pro 渠道二：直接调用 API 并上传 OSS（无需轮询）
+     * 本地 Gemini 图片直连：直接调用 API 并上传 OSS（无需轮询）
      * @param nodeId 节点 ID
      * @param payload 包含 prompt, image_urls, size, resolution 等字段
      */
@@ -1897,6 +1986,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       pendingTaskCounts.delete(nodeId);
 
       const {
+        model,
+        platform,
         prompt,
         image_urls: imageUrls,
         size,
@@ -1905,13 +1996,21 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         promptDraftHtml,
         requiredPoints,
       } = payload;
+      const directGeminiModel = resolveLocalGeminiImageModel({
+        model,
+        platform,
+        size,
+        resolution,
+      });
+      const originalModel = payload.originalModel ?? payload.model;
 
       // 更新节点状态为排队中
       set((state) => ({
         nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
           ...data,
-          model: "gemini-3-pro-image-preview",
-          originalModel: payload.originalModel ?? "gemini-3-pro-image-preview",
+          model: originalModel,
+          originalModel,
+          platform: platform ?? data.platform,
           prompt,
           promptDraft: promptDraft ?? "",
           promptDraftHtml: promptDraftHtml ?? "<p></p>",
@@ -1929,35 +2028,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }));
 
       try {
-        // 1. 将参考图 URL 转换为 Base64
-        const imageBase64s: string[] = [];
-        for (const url of imageUrls) {
-          try {
-            const response = await fetch(url);
-            if (response.ok) {
-              const contentType =
-                response.headers.get("content-type") || "image/jpeg";
-              const arrayBuffer = await response.arrayBuffer();
-              const binary = btoa(
-                new Uint8Array(arrayBuffer).reduce(
-                  (data, byte) => data + String.fromCharCode(byte),
-                  "",
-                ),
-              );
-              imageBase64s.push(`data:${contentType};base64,${binary}`);
-            }
-          } catch (err) {
-            console.error(
-              "[startGeminiPro2Generation] 转换参考图失败:",
-              url,
-              err,
-            );
-          }
-        }
-
-        // 2. 构造请求体
-        // 注意：text 和 inline_data 不能同时存在于同一个 part，必须拆成独立的 part
-        // 正确格式：第一个 part 放文本，后续 parts 放图片
+        // 1. 构造请求体
+        // 注意：text 和 fileData 不能同时存在于同一个 part，必须拆成独立的 part。
+        // 参考图直接把 URL 交给 flow2api，由服务端自行拉取，避免前端先转 Base64。
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const parts: any[] = [];
 
@@ -1966,19 +2039,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           parts.push({ text: prompt });
         }
 
-        // 再添加图片 parts（每个图片一个独立的 inline_data part）
-        for (const base64 of imageBase64s) {
-          let mimeType = "image/jpeg";
-          let data = base64;
-          const dataUriMatch = base64.match(/^data:(image\/\w+);base64,(.+)$/);
-          if (dataUriMatch) {
-            mimeType = dataUriMatch[1];
-            data = dataUriMatch[2];
-          }
+        // 再添加图片 parts（每个图片一个独立的 fileData part）
+        for (const url of imageUrls) {
           parts.push({
-            inline_data: {
-              mime_type: mimeType,
-              data: data,
+            fileData: {
+              fileUri: url,
+              mimeType: inferImageMimeTypeFromUri(url),
             },
           });
         }
@@ -1995,7 +2061,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           },
         };
 
-        // 3. 更新状态为生成中
+        // 2. 更新状态为生成中
         set((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
             ...data,
@@ -2004,13 +2070,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           })),
         }));
 
-        // 4. 调用 API
+        // 3. 调用 API
         const response: GeminiYwResponseBody = await generateGeminiContent(
-          "gemini-3-pro-image-preview",
+          directGeminiModel,
           requestBody,
         );
 
-        // 5. 解析响应，提取图片 Base64
+        // 4. 解析响应，提取图片 Base64
         const candidates = response.candidates ?? [];
         if (candidates.length === 0) {
           throw new Error("API 返回为空");
@@ -2020,7 +2086,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           (p) => p.inlineData?.data,
         );
 
-        // 6. 将每张图片上传到 OSS
+        // 5. 将每张图片上传到 OSS
         const processedResultData = await Promise.all(
           imageParts.map(async (part, index) => {
             const base64Data = part.inlineData!.data;
@@ -2044,7 +2110,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           }),
         );
 
-        // 7. 更新节点状态为完成
+        // 6. 更新节点状态为完成
         set((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const existingData = data.result?.data ?? [];
@@ -2077,7 +2143,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           "[startGeminiPro2Generation] Gemini 3 Pro 渠道二生成失败:",
           startError,
         );
-        const serverMessage = getRequestErrorMessage(startError);
+        const rawServerMessage = getRequestErrorMessage(startError);
+        const detailMessage = normalizeLocalGeminiErrorDetail(rawServerMessage);
         set((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
             ...data,
@@ -2088,8 +2155,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                 startError instanceof Error
                   ? startError.message
                   : "生成失败，请稍后再试",
-              detail: serverMessage,
-              serverMessage,
+              detail: detailMessage,
+              serverMessage: rawServerMessage,
             },
           })),
         }));
