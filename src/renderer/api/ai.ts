@@ -3,6 +3,8 @@ import { EventSourceParserStream } from "eventsource-parser/stream";
 import {
   aiService,
   dashscopeRequest,
+  getFlow2ApiState,
+  flow2ApiRequest,
   jikeingService,
   kuaiziRequest,
   wuhenRequest,
@@ -251,11 +253,21 @@ export function getMemberInfoByUUId(id: string): any {
  * @param data 请求数据，包含 contents 等字段
  * @param signal 可选的 AbortSignal 用于取消请求
  */
-export function generateGeminiContent(
+export async function generateGeminiContent(
   modeName: string,
   data: any,
   signal?: AbortSignal,
 ) {
+  const flow2ApiState = await getFlow2ApiState();
+  if (flow2ApiState?.status === "running" && flow2ApiState.baseUrl) {
+    return flow2ApiRequest({
+      url: `/v1beta/models/${modeName}:generateContent`,
+      method: "post",
+      data,
+      signal,
+    });
+  }
+
   return yunwuRequest({
     url: `/v1beta/models/${modeName}:generateContent`,
     method: "post",
@@ -270,11 +282,22 @@ export function generateGeminiContent(
  * @param data 请求数据
  * @param signal 可选的 AbortSignal
  */
-export function generateGeminiContentStream(
+export async function generateGeminiContentStream(
   modeName: string,
   data: any,
   signal?: AbortSignal,
 ) {
+  const flow2ApiState = await getFlow2ApiState();
+  if (flow2ApiState?.status === "running" && flow2ApiState.baseUrl) {
+    return flow2ApiRequest({
+      url: `/v1beta/models/${modeName}:generateContent`,
+      method: "post",
+      data: { ...data, stream: true },
+      signal,
+      responseType: "stream",
+    });
+  }
+
   return yunwuRequest({
     url: `/v1beta/models/${modeName}:generateContent`,
     method: "post",

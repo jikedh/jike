@@ -27,3 +27,4 @@ build
 out
 *.log*
 release
+resources/flow2api-main

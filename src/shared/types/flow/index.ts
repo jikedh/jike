@@ -120,6 +120,7 @@ export interface VideoGenerationNode {
     // Seedance 2.0 专属扩展参数
     input_type?: "reference" | "first_last_frame"; // 输入类型
     generate_audio?: boolean; // 是否生成同步音频
+    audio?: boolean; // 是否生成音频（兼容旧字段与豆包 1.5 Pro）
     web_search?: boolean; // 是否启用联网搜索增强（仅 pro）
     generation_mode?:
     | "text-to-video"

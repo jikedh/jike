@@ -3,6 +3,7 @@ import {
   Folder,
   House,
   Mic,
+  PanelRightOpen,
   Settings,
   SquareDashedMousePointer,
   Type,
@@ -111,6 +112,12 @@ export const SidebarCeBianLan = () => {
             icon={<Film size={24} />}
             label="短片合成"
             onClick={() => handleNavClick("/video")}
+          />
+          <SidebarNavItem
+            id="model-settings"
+            icon={<PanelRightOpen size={24} />}
+            label="模型管理"
+            onClick={() => handleNavClick("/settings")}
           />
         </SidebarNav>
 

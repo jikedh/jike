@@ -1,4 +1,5 @@
 import { ElectronAPI } from "@electron-toolkit/preload";
+import type { Flow2ApiApi } from "shared/types/flow2api";
 import type { StorageApi } from "shared/types/storage";
 
 declare global {
@@ -23,6 +24,7 @@ declare global {
         filePath: string,
       ) => Promise<{ success: boolean; data?: { path: string }; error?: string }>;
     };
+    flow2api: Flow2ApiApi;
   }
 }
 
