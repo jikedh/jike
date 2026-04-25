@@ -115,24 +115,6 @@ export const VideoDemoNode = memo(
             height: `${nodeSize.height}px`,
           }}
         >
-          {/* 左侧输入 Handle */}
-          <ButtonHandle
-            type="target"
-            position={Position.Left}
-            id="input"
-            visible
-            className={`transition-opacity duration-150 ${handleVisibilityClass}`}
-          />
-
-          {/* 右侧输出 Handle */}
-          <ButtonHandle
-            type="source"
-            position={Position.Right}
-            id="output"
-            visible
-            className={`transition-opacity duration-150 ${handleVisibilityClass}`}
-          />
-
           {/* 顶部工具栏：放在节点几何空间内，缩放时自动保持一致 */}
           {/* 使用 CSS 控制显隐，避免条件渲染导致 DOM 销毁重建 */}
           <div
@@ -156,6 +138,23 @@ export const VideoDemoNode = memo(
                   : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
             )}
           >
+            {/* 左侧输入 Handle */}
+            <ButtonHandle
+              type="target"
+              position={Position.Left}
+              id="input"
+              visible
+              className={`transition-opacity duration-150 ${handleVisibilityClass}`}
+            />
+
+            {/* 右侧输出 Handle */}
+            <ButtonHandle
+              type="source"
+              position={Position.Right}
+              id="output"
+              visible
+              className={`transition-opacity duration-150 ${handleVisibilityClass}`}
+            />
             {/* 选中状态角落装饰 */}
             {selected && (
               <>

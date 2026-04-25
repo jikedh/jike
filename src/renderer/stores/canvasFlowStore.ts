@@ -2814,8 +2814,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const sourceNode = nodes.find((n) => n.id === connection.source);
       const targetNode = nodes.find((n) => n.id === connection.target);
 
-      if (targetNode?.type === "videoNode") {
-        const allowedSourceTypes = ["imageNode", "videoNode", "audioNode"];
+      if (targetNode?.type === "videoNode" || targetNode?.type === "videoDemoNode") {
+        const allowedSourceTypes = ["noteNode", "imageNode", "videoNode", "audioNode"];
         if (sourceNode && !allowedSourceTypes.includes(sourceNode.type || "")) {
           console.warn("视频节点只能接受图片、视频、音频节点的输入");
           return;

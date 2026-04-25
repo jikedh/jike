@@ -43,22 +43,6 @@ export const AgentNode = memo(
         onDelete={() => deleteNode(id)}
       >
         <div className="group/node relative">
-          <ButtonHandle
-            type="target"
-            position={Position.Left}
-            id="input"
-            visible
-            className={`transition-opacity duration-150 ${handleVisibilityClass}`}
-          />
-
-          <ButtonHandle
-            type="source"
-            position={Position.Right}
-            id="output"
-            visible
-            className={`transition-opacity duration-150 ${handleVisibilityClass}`}
-          />
-
           <div
             className={cn(
               "group/card relative flex h-48 w-48 items-center justify-center rounded-xl border bg-gradient-to-br from-[#141418] to-[#0d0d10] transition-all duration-300 ease-out",
@@ -67,6 +51,23 @@ export const AgentNode = memo(
                 : "border-white/[0.06] hover:border-white/[0.12] hover:bg-gradient-to-br hover:from-[#18181c] hover:to-[#101014]",
             )}
           >
+            {/* 左侧输入 Handle */}
+            <ButtonHandle
+              type="target"
+              position={Position.Left}
+              id="input"
+              visible
+              className={`transition-opacity duration-150 ${handleVisibilityClass}`}
+            />
+
+            {/* 右侧输出 Handle */}
+            <ButtonHandle
+              type="source"
+              position={Position.Right}
+              id="output"
+              visible
+              className={`transition-opacity duration-150 ${handleVisibilityClass}`}
+            />
             <span className="absolute left-2 top-2 max-w-40 truncate rounded-md border border-white/10 bg-[#1a1a1d] px-2 py-0.5 text-[11px] leading-4 text-white/60">
               {presetLabel}
             </span>
