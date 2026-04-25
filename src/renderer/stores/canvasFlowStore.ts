@@ -651,7 +651,7 @@ const pollVideoGeneration = async (
       const response: any = await getLzVideoTaskStatus(taskId);
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
-      if (!currentNode || currentNode.type !== "videoNode") {
+      if (!currentNode || (currentNode.type !== "videoNode" && currentNode.type !== "videoDemoNode")) {
         stopVideoPollingInternal(nodeId);
         return;
       }
@@ -849,7 +849,7 @@ const pollWanI2vVideoGeneration = async (
       const response: any = await getDashscopeVideoTaskStatus(taskId);
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
-      if (!currentNode || currentNode.type !== "videoNode") {
+      if (!currentNode || (currentNode.type !== "videoNode" && currentNode.type !== "videoDemoNode")) {
         stopVideoPollingInternal(nodeId);
         return;
       }
@@ -1342,7 +1342,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           }
 
           // 处理视频节点的本地文件
-          if (node.type === "videoNode" && node.data?.result?.data) {
+          if ((node.type === "videoNode" || node.type === "videoDemoNode") && node.data?.result?.data) {
             const processedData = await Promise.all(
               node.data.result.data.map(async (item: any) => {
                 if (item.relativePath) {
@@ -2650,7 +2650,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         ) {
           if (node.type === "imageNode") {
             imageNodesToStop.push(node.id);
-          } else if (node.type === "videoNode") {
+          } else if (node.type === "videoNode" || node.type === "videoDemoNode") {
             videoNodesToStop.push(node.id);
           }
         }
@@ -2677,7 +2677,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                   error: { message: "任务已取消" },
                 },
               };
-            } else if (node.type === "videoNode") {
+            } else if (node.type === "videoNode" || node.type === "videoDemoNode") {
               return {
                 ...node,
                 data: {

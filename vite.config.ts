@@ -71,6 +71,13 @@ export default defineConfig({
         changeOrigin: true,
         timeout: 300000,
       },
+      // 阿里云百炼 Dashscope API 代理（解决 CORS 问题）
+      "/dashscope-api": {
+        target: "https://dashscope.aliyuncs.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/dashscope-api/, ""),
+        timeout: 300000,
+      },
     },
   },
 });

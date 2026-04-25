@@ -366,8 +366,26 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       return;
     }
 
-    // 所有图片在上传时已经上传到 OSS，或是在线 URL，直接使用即可
+    // 所有图片在上传时已经上传到 OSS，或是在在线 URL，直接使用即可
     const imageUrls = allImageUrls;
+
+    // Wan 2.7 R2V 模型特殊验证：必须提供参考素材或提示词
+    if (model === "wan2.7-r2v") {
+      const hasReferenceMaterial =
+        imageUrls.length > 0 || allVideoUrls.length > 0;
+      if (!hasReferenceMaterial) {
+        warning(
+          "Wan 2.7 R2V 模型需要连接图片节点或视频节点作为参考素材",
+        );
+        return;
+      }
+    }
+
+    // Wan 2.7 T2V 模型特殊验证：必须提供文本提示词
+    if (model === "wan2.7-t2v" && !mergedPrompt.trim()) {
+      warning("Wan 2.7 T2V 模型需要输入文本提示词来生成视频");
+      return;
+    }
 
     // Seedance 2.0 在存在参考音频时仅允许使用 Pro 模式。
     // 命中该条件时先提示用户，再自动修正为 Pro 并继续本次生成。
@@ -416,8 +434,8 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       return;
     }
 
-    // Wan 2.7 I2V 使用独立的生成方法
-    if (model === "wan2.7-i2v") {
+    // Wan 2.7 系列模型使用 Dashscope API（阿里云百炼）
+    if (model.startsWith("wan2.7")) {
       await startWanI2vVideoGeneration(nodeId, {
         ...payload,
         requiredPoints,
