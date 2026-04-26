@@ -141,16 +141,20 @@ const doubaoSeedance20Strategy: VideoPayloadStrategy = {
     );
 
     const allImages = buildSeedance20Images(imageUrls);
+    const effectiveGenerationMode =
+      allImages.length > 0 && generationMode === VideoInputMode.TextToVideo
+        ? VideoInputMode.MultiImageReference
+        : generationMode;
     const firstLastImages = allImages.slice(0, 2).map((item, index) => ({
       url: item.url,
       role: index === 0 ? "first_frame" : "last_frame",
     }));
     const images =
-      generationMode === VideoInputMode.ImageToVideo
+      effectiveGenerationMode === VideoInputMode.ImageToVideo
         ? allImages.slice(0, 1)
-        : generationMode === VideoInputMode.MultiImageReference
+        : effectiveGenerationMode === VideoInputMode.MultiImageReference
           ? allImages
-          : generationMode === VideoInputMode.LastFrame
+          : effectiveGenerationMode === VideoInputMode.LastFrame
             ? firstLastImages
             : [];
     const videos = buildSeedance20Videos(videoUrls);
@@ -161,7 +165,7 @@ const doubaoSeedance20Strategy: VideoPayloadStrategy = {
     const hasReferenceContent = hasImages || hasVideos || hasAudios;
 
     const videoInputType =
-      generationMode === VideoInputMode.LastFrame
+      effectiveGenerationMode === VideoInputMode.LastFrame
         ? "first_last_frame"
         : "reference";
 
@@ -170,14 +174,14 @@ const doubaoSeedance20Strategy: VideoPayloadStrategy = {
       prompt,
       generation_type: "video",
       mode,
-      resolution: nodeData.metadata?.resolution ?? "720p",
+      resolution: nodeData.metadata?.resolution ?? "720P",
       ratio: nodeData.aspect_ratio ?? "16:9",
       duration: nextDuration,
       generate_audio: nodeData.metadata?.generate_audio ?? true,
       seed: -1,
       web_search: false,
       ...(hasReferenceContent
-        ? { video_input_type: videoInputType }
+        ? { input_type: videoInputType }
         : {}),
       ...(hasImages ? { images } : {}),
       ...(hasVideos ? { videos } : {}),
