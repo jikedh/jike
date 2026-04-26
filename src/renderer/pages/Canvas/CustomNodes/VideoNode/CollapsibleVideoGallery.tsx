@@ -18,8 +18,8 @@ type VideoItem = {
   url: string; // 远程 OSS URL
   format?: string; // 视频格式
   localPath?: string; // 本地相对路径
-  localName?: string; // 本地文件�?
-  remoteUrl?: string; // 远程持久�?URL
+  localName?: string; // 本地文件�?
+  remoteUrl?: string; // 远程持久�?URL
 };
 
 type CollapsibleVideoGalleryProps = {
@@ -126,11 +126,11 @@ const getStackCardStyle = (
 };
 
 /**
- * 可折叠视频集合卡�?
- * - collapsed：仅展示封面视频 + 右上角数量徽�?
- * - expanded�? 列网格展示全部视�?
- * - 点击展开态中的视频，可将其移动到首位作为新封�?
- * - 优先使用本地路径，如果不存在则使用远�?URL
+ * 可折叠视频集合卡�?
+ * - collapsed：仅展示封面视频 + 右上角数量徽�?
+ * - expanded�? 列网格展示全部视�?
+ * - 点击展开态中的视频，可将其移动到首位作为新封�?
+ * - 优先使用本地路径，如果不存在则使用远�?URL
  * - 刷新按钮：重新上传视频到 OSS
  */
 export const CollapsibleVideoGallery = memo(
@@ -143,10 +143,10 @@ export const CollapsibleVideoGallery = memo(
   }: CollapsibleVideoGalleryProps) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-    // 记录加载失败索引，统一渲染占位（使�?ref 避免频繁 setState�?
+    // 记录加载失败索引，统一渲染占位（使�?ref 避免频繁 setState�?
     const brokenIndexesRef = useRef<Set<number>>(new Set());
     const [, forceUpdate] = useState(0);
-    // 记录正在刷新的视频索�?
+    // 记录正在刷新的视频索�?
     const refreshingIndexesRef = useRef<Set<number>>(new Set());
     const [, forceRefreshUpdate] = useState(0);
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -254,10 +254,10 @@ export const CollapsibleVideoGallery = memo(
             type: `video/${ext}`,
           });
 
-          // 上传�?OSS
+          // 上传�?OSS
           const ossResult = await uploadFileToOSS(file);
           if (!ossResult.url) {
-            throw new Error("上传�?OSS 失败");
+            throw new Error("上传�?OSS 失败");
           }
 
           // 更新节点数据
@@ -361,16 +361,16 @@ export const CollapsibleVideoGallery = memo(
                 className={cn(
                   "group/card absolute left-0 top-0 rounded-[14px] transition-[transform,filter,opacity,box-shadow,border-color,width,height] duration-[700ms] ease-[cubic-bezier(0.2,0.85,0.15,1)] will-change-[transform,filter,opacity,width,height]",
                   shouldUseCardChrome &&
-                    "border border-white/8 bg-[#1a1a1a] shadow-[0_10px_30px_rgba(0,0,0,0.28)]",
+                  "border border-white/8 bg-[#1a1a1a] shadow-[0_10px_30px_rgba(0,0,0,0.28)]",
                   isExpanded || isPrimary
                     ? "pointer-events-auto"
                     : "pointer-events-none",
                   isExpanded &&
-                    isSecondary &&
-                    "hover:border-white/14 hover:shadow-[0_18px_36px_rgba(0,0,0,0.34)]",
                   isSecondary &&
-                    isFocused &&
-                    "shadow-[0_24px_48px_rgba(0,0,0,0.38)]",
+                  "hover:border-white/14 hover:shadow-[0_18px_36px_rgba(0,0,0,0.34)]",
+                  isSecondary &&
+                  isFocused &&
+                  "shadow-[0_24px_48px_rgba(0,0,0,0.38)]",
                 )}
                 onMouseEnter={() => {
                   if (isExpanded) {
@@ -447,13 +447,13 @@ export const CollapsibleVideoGallery = memo(
                     className={cn(
                       "pointer-events-none absolute inset-0 rounded-[13px] ring-0 transition-all duration-200",
                       isSecondary &&
-                        isFocused &&
-                        "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]",
+                      isFocused &&
+                      "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]",
                     )}
                   />
 
                   <div className="absolute right-2 top-2 z-30 flex items-center gap-1.5">
-                    {isPrimary && totalCount > 1 && (
+                    {isPrimary && totalCount > 0 && (
                       <button
                         type="button"
                         onClick={handleToggleExpanded}
