@@ -146,7 +146,7 @@ export const ReferenceThumbnails = ({
   onSwap,
 }: ReferenceThumbnailsProps) => {
   return (
-    <div className="flex items-center gap-2 overflow-x-auto">
+    <div className="flex items-center gap-2 overflow-visible">
       {items.map((item, index) => (
         <div
           key={item.id}
