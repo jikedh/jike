@@ -110,14 +110,14 @@ const clamp = (value: number, min: number, max: number) => {
 };
 
 const DELETE_CONFIRM_NODE_LABEL: Partial<Record<AllNodeType["type"], string>> =
-  {
-    imageNode: "图片节点",
-    videoNode: "视频节点",
-    agentNode: "智能体节点",
-    textAgentNode: "文本智能体节点",
-    imageAgentNode: "图片智能体节点",
-    videoAgentNode: "视频智能体节点",
-  };
+{
+  imageNode: "图片节点",
+  videoNode: "视频节点",
+  agentNode: "智能体节点",
+  textAgentNode: "文本智能体节点",
+  imageAgentNode: "图片智能体节点",
+  videoAgentNode: "视频智能体节点",
+};
 
 const getCanvasNodeTypeFromFlowNode = (
   node: AllNodeType | undefined,
@@ -155,7 +155,7 @@ const canPassMediaToNodeType = (
     return sourceNodeType === "image";
   }
 
-  if (targetNodeType === "video") {
+  if (targetNodeType === "video" || targetNodeType === "newVideo") {
     return (
       sourceNodeType === "image" ||
       sourceNodeType === "video" ||
@@ -200,7 +200,7 @@ const isMacOs = () => {
 
 const scheduleIdleWork = (callback: () => void) => {
   if (typeof window === "undefined") {
-    return () => {};
+    return () => { };
   }
 
   if ("requestIdleCallback" in window) {
@@ -688,10 +688,10 @@ export const CanvasFlow = ({
         void handleFiles(
           files,
           mouseFlowPositionRef.current ??
-            screenToFlowPosition({
-              x: window.innerWidth / 2,
-              y: window.innerHeight / 2,
-            }),
+          screenToFlowPosition({
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2,
+          }),
         );
         return;
       }
@@ -2310,8 +2310,8 @@ export const CanvasFlow = ({
 
           {/* 节点搜索框 */}
           {selectionBoundsScreen &&
-          !isSelectionBoxActive &&
-          !isSpacePressed ? (
+            !isSelectionBoxActive &&
+            !isSpacePressed ? (
             <div
               className="pointer-events-none fixed z-[11] rounded-lg border border-dashed border-[#B43FEB]/70 bg-[#B43FEB]/10 shadow-[0_0_0_1px_rgba(180,63,235,0.18),0_0_24px_rgba(180,63,235,0.18)]"
               style={{
@@ -2353,9 +2353,9 @@ export const CanvasFlow = ({
 
           {/* 多选右侧快捷创建按钮（拖拽时隐藏，改用跟踪图标） */}
           {selectionRightCenterScreenPosition &&
-          !isSelectionBoxActive &&
-          !isSpacePressed &&
-          !quickAddDragPreview.active ? (
+            !isSelectionBoxActive &&
+            !isSpacePressed &&
+            !quickAddDragPreview.active ? (
             <MultiSelectQuickCreate
               visible={multiSelectedCount >= 2}
               x={selectionRightCenterScreenPosition.x}
