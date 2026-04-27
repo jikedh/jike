@@ -22,6 +22,8 @@ import type {
   ImageTaskStatusResponse,
 } from "shared/types/detail/ToApi/images";
 import { getAiToken, getBaseURL } from "shared/utils/utils";
+import { Seedance20Request, Seedance20StatusResponse } from "shared/types/detail/kuaizhi/Seedance-2.0";
+import { BailianVideoGenerationCreateResponse, BailianVideoGenerationQueryResponse, BailianVideoGenerationRequest } from "shared/types/detail/Bailian/video";
 /**
  *
  * 为了兼容同一个接口的不同入参，暂定接口的入参和出参都为 any
@@ -184,7 +186,7 @@ export function fetchMjTask(id: string) {
 // ===================== 快手 AI 视频相关 =====================
 
 // 创建快手视频生成任务
-export function createLzVideoTask(data: any) {
+export function createLzVideoTask(data: Seedance20Request) {
   return kuaiziRequest({
     url: "/lz/video/task/create",
     method: "post",
@@ -193,8 +195,9 @@ export function createLzVideoTask(data: any) {
 }
 
 // 查询快手视频生成任务状态
+// Seedance20StatusResponse
 export function getLzVideoTaskStatus(taskId: string) {
-  return kuaiziRequest({
+  return kuaiziRequest<Seedance20StatusResponse>({
     url: "/lz/video/task/status",
     method: "post",
     data: { task_id: taskId },
@@ -352,8 +355,9 @@ export async function createDashscopeChatCompletion(
  * API 端点: /api/v1/services/aigc/video-generation/video-synthesis
  * @param data 请求数据
  */
-export function createDashscopeVideoSynthesis(data: any) {
-  return dashscopeRequest({
+// BailianVideoGenerationCreateResponse
+export function createDashscopeVideoSynthesis(data: BailianVideoGenerationRequest) {
+  return dashscopeRequest<BailianVideoGenerationCreateResponse>({
     url: "/api/v1/services/aigc/video-generation/video-synthesis",
     method: "post",
     data,
@@ -378,9 +382,10 @@ export function createDashscopeVideoSynthesis(data: any) {
  * API 端点: /api/v1/tasks/{task_id}
  * @param taskId 任务 ID
  */
+// BailianVideoGenerationQueryResponse
 export function getDashscopeVideoTaskStatus(taskId: string) {
   console.log('测试会不会打印');
-  return dashscopeRequest({
+  return dashscopeRequest<BailianVideoGenerationQueryResponse>({
     url: `/api/v1/tasks/${taskId}`,
     method: "get",
   });
