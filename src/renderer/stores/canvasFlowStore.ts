@@ -8,6 +8,7 @@ import {
   saveGeneratedImageToLocal,
   saveGeneratedVideoToLocal,
 } from "service/projectStorage";
+import { copyVideoUrlToOss } from "service/oss";
 import {
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
@@ -893,6 +894,10 @@ const pollVideoGeneration = async (
         const projectId = getState().projectId;
         const processedResultData = await Promise.all(
           normalized.videoItems.map(async (item: any) => {
+            let localName = item.localName;
+            let localPath = item.localPath;
+
+            // 1. 保存到本地
             if (item.url && projectId) {
               try {
                 const ext = item.format || "mp4";
@@ -903,16 +908,12 @@ const pollVideoGeneration = async (
                 );
 
                 if (fileName) {
-                  const relativePath = getLocalFilePath(
+                  localName = fileName;
+                  localPath = getLocalFilePath(
                     projectId,
                     "generate_video",
                     fileName,
                   );
-                  return {
-                    ...item,
-                    localName: fileName,
-                    localPath: relativePath,
-                  };
                 }
               } catch (saveError) {
                 console.error(
@@ -921,7 +922,29 @@ const pollVideoGeneration = async (
                 );
               }
             }
-            return item;
+
+            // 2. 转存到用户 OSS
+            let ossUrl = item.url;
+            if (item.url) {
+              try {
+                const copiedUrl = await copyVideoUrlToOss(item.url);
+                if (copiedUrl) {
+                  ossUrl = copiedUrl;
+                }
+              } catch (copyError) {
+                console.error(
+                  "[pollVideoGeneration] 转存视频到 OSS 失败:",
+                  copyError,
+                );
+              }
+            }
+
+            return {
+              ...item,
+              url: ossUrl,
+              localName,
+              localPath,
+            };
           }),
         );
 
@@ -1117,6 +1140,10 @@ const pollNewVideoGeneration = async ({
         const projectId = getState().projectId;
         const processedResultData = await Promise.all(
           normalized.videoItems.map(async (item: any) => {
+            let localName = item.localName;
+            let localPath = item.localPath;
+
+            // 1. 保存到本地
             if (item.url && projectId) {
               try {
                 const ext = item.format || "mp4";
@@ -1127,16 +1154,12 @@ const pollNewVideoGeneration = async ({
                 );
 
                 if (fileName) {
-                  const relativePath = getLocalFilePath(
+                  localName = fileName;
+                  localPath = getLocalFilePath(
                     projectId,
                     "generate_video",
                     fileName,
                   );
-                  return {
-                    ...item,
-                    localName: fileName,
-                    localPath: relativePath,
-                  };
                 }
               } catch (saveError) {
                 console.error(
@@ -1145,7 +1168,29 @@ const pollNewVideoGeneration = async ({
                 );
               }
             }
-            return item;
+
+            // 2. 转存到用户 OSS
+            let ossUrl = item.url;
+            if (item.url) {
+              try {
+                const copiedUrl = await copyVideoUrlToOss(item.url);
+                if (copiedUrl) {
+                  ossUrl = copiedUrl;
+                }
+              } catch (copyError) {
+                console.error(
+                  "[pollNewVideoGeneration] 转存视频到 OSS 失败:",
+                  copyError,
+                );
+              }
+            }
+
+            return {
+              ...item,
+              url: ossUrl,
+              localName,
+              localPath,
+            };
           }),
         );
 
