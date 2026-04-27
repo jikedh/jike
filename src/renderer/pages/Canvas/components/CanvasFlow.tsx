@@ -713,9 +713,6 @@ export const CanvasFlow = ({
           // not our data, ignore
         }
       }
-
-      event.preventDefault();
-      pasteNodes(mouseFlowPositionRef.current ?? undefined);
     };
 
     document.addEventListener("paste", handlePaste);
