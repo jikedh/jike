@@ -130,7 +130,6 @@ const NewVideoNode = ({
         {/* 节点内容区 */}
         <VideoContent
           data={data}
-          isDragging={isDragging}
           nodeId={id}
           updateVideoNodeData={updateVideoNodeData}
           frameSize={{
