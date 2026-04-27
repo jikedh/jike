@@ -73,7 +73,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const [selectedParams, setSelectedParams] = useState<VideoParamState>(() =>
     normalizeVideoParams(currentData?.model ?? VIDEO_MODEL_OPTIONS[0].value),
   );
-  const [selectedCount, setSelectedCount] = useState("1");
 
   const referenceItems = useMemo(
     () =>
@@ -154,7 +153,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       void startNewVideoGeneration(nodeId, {
         ...apiRequest,
         __newVideoInput: request,
-      }, Number(request.count));
+      });
     },
     [nodeId, startNewVideoGeneration],
   );
@@ -186,7 +185,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         <BottomParamsBar
           selectedModel={selectedModel}
           selectedParams={selectedParams}
-          selectedCount={selectedCount}
           prompt={promptText}
           referenceItems={referenceItems}
           mode={activeMode}
@@ -196,7 +194,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
               normalizeVideoParams(selectedModel, params, activeMode),
             )
           }
-          onCountChange={setSelectedCount}
           onGenerate={handleGenerate}
           disabled={isGenerating}
         />

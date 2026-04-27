@@ -12,7 +12,6 @@ import {
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
 import {
   type MentionItem,
-  VIDEO_COUNT_OPTIONS,
   VIDEO_MODEL_OPTIONS,
 } from "../constants/mockData";
 import type { VideoModeKey } from "../constants/videoModelCapabilities";
@@ -23,7 +22,6 @@ import { VideoParamsPopover } from "./VideoParamsPopover";
 export interface VideoGenerateRequest {
   model: string;
   params: VideoParamState;
-  count: string;
   prompt: string;
   referenceItems: MentionItem[];
   mode: VideoModeKey;
@@ -32,13 +30,11 @@ export interface VideoGenerateRequest {
 interface BottomParamsBarProps {
   selectedModel: string;
   selectedParams: VideoParamState;
-  selectedCount: string;
   prompt: string;
   referenceItems: MentionItem[];
   mode: VideoModeKey;
   onModelChange: (value: string) => void;
   onParamsChange: (value: VideoParamState) => void;
-  onCountChange: (value: string) => void;
   onGenerate: (request: VideoGenerateRequest) => void;
   disabled?: boolean;
 }
@@ -46,13 +42,11 @@ interface BottomParamsBarProps {
 export const BottomParamsBar = ({
   selectedModel,
   selectedParams,
-  selectedCount,
   prompt,
   referenceItems,
   mode,
   onModelChange,
   onParamsChange,
-  onCountChange,
   onGenerate,
   disabled = false,
 }: BottomParamsBarProps) => {
@@ -60,7 +54,6 @@ export const BottomParamsBar = ({
     const request: VideoGenerateRequest = {
       model: selectedModel,
       params: selectedParams,
-      count: selectedCount,
       prompt,
       referenceItems,
       mode,
@@ -94,23 +87,6 @@ export const BottomParamsBar = ({
           value={selectedParams}
           onChange={onParamsChange}
         />
-
-        <Select value={selectedCount} onValueChange={onCountChange}>
-          <SelectTrigger size="sm" className={PROMPT_PANEL_STYLES.countButton}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
-            {VIDEO_COUNT_OPTIONS.map((count) => (
-              <SelectItem
-                key={count}
-                value={String(count)}
-                className={PROMPT_PANEL_STYLES.modelSelectItem}
-              >
-                {count}个
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       <div className="flex items-center gap-3">
