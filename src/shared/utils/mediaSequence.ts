@@ -68,5 +68,5 @@ export const appendMediaSequences = <T extends Record<string, any>>(
     };
   });
 
-  return [...normalizedExisting, ...normalizedIncoming];
+  return [...normalizedIncoming, ...normalizedExisting];
 };
