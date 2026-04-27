@@ -98,7 +98,7 @@ export const ALL_MODE_KEYS: VideoModeKey[] = [
 export const MOCK_MAIN_MODELS: MainModelConfig[] = [
   {
     id: "seedance-2.0-pro",
-    label: "Seedance 2.0 Pro",
+    label: "Seedance 2.0",
     variants: [
       {
         id: "seedance-2.0-pro",

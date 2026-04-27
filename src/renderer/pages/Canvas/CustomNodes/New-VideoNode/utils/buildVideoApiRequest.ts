@@ -163,7 +163,7 @@ const buildSeedanceRequest = (
   const body: Seedance20Request = {
     prompt: getPrompt(request.prompt),
     generation_type: "video",
-    mode: "pro",
+    mode: request.params.generationMode ?? "pro",
     resolution: isOneOf(
       request.params.resolution,
       ["480P", "720P"] as const,

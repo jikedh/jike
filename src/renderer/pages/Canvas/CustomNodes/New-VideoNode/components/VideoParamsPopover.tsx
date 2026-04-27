@@ -54,9 +54,14 @@ export const VideoParamsPopover = ({
         ? value.resolution
         : value.quality;
     const quality = getOptionLabel(config.qualityGroup?.options, qualityValue);
+    const generationMode = getOptionLabel(
+      config.generationMode?.options,
+      value.generationMode,
+    );
 
     if (ratio) parts.push(ratio);
     if (quality) parts.push(quality);
+    if (generationMode) parts.push(generationMode);
     if (value.duration) parts.push(`${value.duration}s`);
     if (config.promptExtend && value.promptExtend) parts.push("改写");
 
@@ -153,14 +158,42 @@ export const VideoParamsPopover = ({
                         patch(
                           config.qualityGroup?.key === "resolution"
                             ? {
-                                resolution: String(option.value),
-                                quality: undefined,
-                              }
+                              resolution: String(option.value),
+                              quality: undefined,
+                            }
                             : {
-                                quality: String(option.value),
-                                resolution: undefined,
-                              },
+                              quality: String(option.value),
+                              resolution: undefined,
+                            },
                         )
+                      }
+                      className={optionButtonClass(active, "h-8 px-3")}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          {config.generationMode ? (
+            <section className="space-y-2">
+              <div className="text-xs font-medium text-white/45">
+                {config.generationMode.label}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {config.generationMode.options.map((option) => {
+                  const active = value.generationMode === option.value;
+
+                  return (
+                    <button
+                      key={String(option.value)}
+                      type="button"
+                      onClick={() =>
+                        patch({
+                          generationMode: option.value as "fast" | "pro",
+                        })
                       }
                       className={optionButtonClass(active, "h-8 px-3")}
                     >

@@ -21,6 +21,7 @@ export type VideoParamState = {
   aspectRatio?: string;
   resolution?: string;
   quality?: string;
+  generationMode?: "fast" | "pro";
   duration: number;
   generateAudio: boolean;
   promptExtend?: boolean;
@@ -32,6 +33,10 @@ export type VideoParamConfig = {
   aspectRatios?: VideoParamOption[];
   qualityGroup?: {
     key: "resolution" | "quality";
+    label: string;
+    options: VideoParamOption[];
+  };
+  generationMode?: {
     label: string;
     options: VideoParamOption[];
   };
@@ -160,11 +165,19 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
       label: "分辨率",
       options: resolution480720,
     },
+    generationMode: {
+      label: "生成模式",
+      options: [
+        { label: "Fast", value: "fast" },
+        { label: "Pro", value: "pro" },
+      ],
+    },
     duration: { type: "slider", min: 4, max: 15, step: 1 },
     audio,
     defaults: {
       aspectRatio: "16:9",
       resolution: "720P",
+      generationMode: "pro",
       duration: 8,
       generateAudio: true,
     },
