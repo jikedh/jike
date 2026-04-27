@@ -144,6 +144,12 @@ const isEditableEventTarget = (target: EventTarget | null) => {
   );
 };
 
+const isMacOs = () => {
+  return (
+    typeof navigator !== "undefined" && navigator.userAgent.includes("Mac")
+  );
+};
+
 /**
  * 优先从 DOM 直接读取 handle 的真实屏幕坐标。
  * 这样可以避免仅根据节点宽高推算时，ghost 线落到节点内部。
@@ -671,14 +677,24 @@ export const CanvasFlow = ({
       }
 
       if (event.ctrlKey || event.metaKey) {
+        const target = event.target as HTMLElement | null;
+        if (!target?.closest(".nowheel")) {
+          return;
+        }
+
         event.preventDefault();
 
         const { zoom: currentZoom, x, y } = reactFlowInstance.getViewport();
-        const zoomStep = 0.15;
-        const newZoom =
-          event.deltaY < 0
-            ? Math.min(currentZoom * (1 + zoomStep), 2)
-            : Math.max(currentZoom * (1 - zoomStep), 0.1);
+        const deltaModeFactor =
+          event.deltaMode === 1 ? 0.05 : event.deltaMode ? 1 : 0.002;
+        const wheelDelta =
+          -event.deltaY *
+          deltaModeFactor *
+          (event.ctrlKey && isMacOs() ? 10 : 1);
+        const newZoom = Math.min(
+          2,
+          Math.max(0.2, currentZoom * 2 ** wheelDelta),
+        );
 
         const reactFlowBounds = (
           event.currentTarget as HTMLElement
@@ -691,14 +707,11 @@ export const CanvasFlow = ({
         const newX = mouseX - (mouseX - x) * zoomRatio;
         const newY = mouseY - (mouseY - y) * zoomRatio;
 
-        reactFlowInstance.setViewport(
-          {
-            x: newX,
-            y: newY,
-            zoom: newZoom,
-          },
-          { duration: 100 },
-        );
+        reactFlowInstance.setViewport({
+          x: newX,
+          y: newY,
+          zoom: newZoom,
+        });
       }
     };
 

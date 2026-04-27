@@ -25,7 +25,6 @@ export const VideoContent = ({
   // 结果视频列表（支持多个），保留原始对象结构用于排序
   const videos = data.result?.data?.filter((item) => item?.url) ?? [];
   const status = data.status ?? GenerationStatus.COMPLETED;
-  const progress = data.progress ?? 0;
   const error = data.error;
 
   // 判断是否应该显示失败状态：
@@ -50,7 +49,7 @@ export const VideoContent = ({
       "生成失败，请稍后再试";
 
     return (
-      <div className="nopan h-full w-full flex flex-col items-center justify-center p-4 text-center bg-[#141418]">
+      <div className="nopan h-full w-full flex flex-col items-center justify-center p-4 text-center bg-[#121216]">
         <div className="text-sm font-medium text-destructive mb-2">
           生成失败
         </div>

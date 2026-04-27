@@ -186,6 +186,10 @@ export const CollapsibleVideoGallery = memo(
       return refreshingIndexesRef.current.has(index);
     }, []);
 
+    const isBroken = useCallback((index: number) => {
+      return brokenIndexesRef.current.has(index);
+    }, []);
+
     useEffect(() => {
       onExpandedChange?.(isExpanded);
     }, [isExpanded, onExpandedChange]);
@@ -415,7 +419,7 @@ export const CollapsibleVideoGallery = memo(
                     }
                   }}
                 >
-                  {displayUrl ? (
+                  {displayUrl && !isBroken(index) ? (
                     <VideoPlayer
                       src={displayUrl}
                       muted={!isPrimary}
@@ -435,7 +439,7 @@ export const CollapsibleVideoGallery = memo(
                       onError={() => handleVideoError(index)}
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center rounded-[13px] border border-border/80 bg-muted/40 text-[11px] text-muted-foreground">
+                    <div className="flex h-full w-full items-center justify-center rounded-[13px] bg-[#121216] text-[11px] text-muted-foreground">
                       视频加载失败
                     </div>
                   )}
@@ -481,13 +485,15 @@ export const CollapsibleVideoGallery = memo(
                       disabled={isRefreshing(index)}
                       className={cn(
                         "nodrag absolute left-2 top-2 z-30 cursor-pointer rounded-lg bg-black/60 p-2 text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-50",
-                        isExpanded
-                          ? isSecondary && isFocused
-                            ? "opacity-100"
-                            : "opacity-0"
-                          : isPrimary
-                            ? "opacity-0 group-hover/card:opacity-100"
-                            : "opacity-0",
+                        isBroken(index)
+                          ? "opacity-100"
+                          : isExpanded
+                            ? isSecondary && isFocused
+                              ? "opacity-100"
+                              : "opacity-0"
+                            : isPrimary
+                              ? "opacity-0 group-hover/card:opacity-100"
+                              : "opacity-0",
                       )}
                       aria-label="刷新视频"
                     >

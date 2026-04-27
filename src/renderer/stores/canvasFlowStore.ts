@@ -2575,10 +2575,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           status: GenerationStatus.QUEUED,
           progress: 0,
           error: undefined,
-          result: {
-            type: "video",
-            data: [],
-          },
         })),
       }));
 
