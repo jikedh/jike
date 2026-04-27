@@ -1,11 +1,9 @@
-import { IconVideo } from "@tabler/icons-react";
 import { GenerationStatus } from "shared/constants/enum";
 import type { VideoGenerationNode } from "shared/types/flow";
 import { CollapsibleVideoGallery } from "./CollapsibleVideoGallery";
 
 type VideoContentProps = {
   data: VideoGenerationNode;
-  isDragging?: boolean;
   onRetry?: () => void;
   nodeId?: string;
   updateVideoNodeData?: (nodeId: string, patch: any) => void;
@@ -18,7 +16,6 @@ type VideoContentProps = {
 
 export const VideoContent = ({
   data,
-  isDragging = false,
   onRetry,
   nodeId,
   updateVideoNodeData,
@@ -89,18 +86,9 @@ export const VideoContent = ({
 
   // 已完成状态
   if (videos.length > 0) {
-    if (isDragging) {
-      return (
-        <div className="nopan flex h-full w-full items-center justify-center rounded-xl bg-[#08080a] text-white/35">
-          <IconVideo size={28} stroke={1.6} />
-        </div>
-      );
-    }
-
     return (
       <CollapsibleVideoGallery
         videos={videos}
-        isDragging={isDragging}
         nodeId={nodeId}
         updateVideoNodeData={updateVideoNodeData}
         onExpandedChange={onGalleryExpandedChange}

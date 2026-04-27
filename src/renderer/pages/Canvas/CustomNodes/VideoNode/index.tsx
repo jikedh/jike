@@ -207,7 +207,7 @@ export const VideoNode = memo(
             className={cn(
               "group/card relative flex h-full w-full flex-col rounded-xl border",
               hasMultipleResults &&
-                "bg-linear-to-br from-[#141418] to-[#0d0d10]",
+              "bg-linear-to-br from-[#141418] to-[#0d0d10]",
               selected
                 ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
                 : isSourceHighlighted
@@ -230,7 +230,7 @@ export const VideoNode = memo(
               className={cn(
                 "pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-500 group-hover/card:opacity-100",
                 hasMultipleResults &&
-                  "bg-linear-to-tr from-transparent via-white/2 to-transparent",
+                "bg-linear-to-tr from-transparent via-white/2 to-transparent",
               )}
             />
 
@@ -244,7 +244,6 @@ export const VideoNode = memo(
             >
               <VideoContent
                 data={data}
-                isDragging={isDragging}
                 nodeId={id}
                 updateVideoNodeData={updateVideoNodeData}
                 onGalleryExpandedChange={setIsGalleryExpanded}
