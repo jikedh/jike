@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { GenerationStatus } from "shared/constants/enum";
+import { arrayMove } from "@dnd-kit/sortable";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
@@ -62,6 +63,9 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   );
   const startNewVideoGeneration = useCanvasFlowStore(
     (state) => state.startNewVideoGeneration,
+  );
+  const updateNewVideoNodeData = useCanvasFlowStore(
+    (state) => state.updateNewVideoNodeData,
   );
   const [activeMode, setActiveMode] = useState<VideoModeKey>("all-reference");
   const [selectedModel, setSelectedModel] = useState(
@@ -147,6 +151,36 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     [activeMode],
   );
 
+  const handleReferenceReorder = useCallback(
+    (type: MentionItem["type"], fromIndex: number, toIndex: number) => {
+      if (fromIndex === toIndex) {
+        return;
+      }
+
+      const fieldByType = {
+        image: "image_urls",
+        video: "video_urls",
+        audio: "audio_urls",
+      } as const;
+      const field = fieldByType[type];
+      const urls = currentData?.[field] ?? [];
+
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= urls.length ||
+        toIndex >= urls.length
+      ) {
+        return;
+      }
+
+      updateNewVideoNodeData(nodeId, {
+        [field]: arrayMove(urls, fromIndex, toIndex),
+      });
+    },
+    [currentData, nodeId, updateNewVideoNodeData],
+  );
+
   const handleGenerate = useCallback(
     (request: VideoGenerateRequest) => {
       const apiRequest = buildVideoApiRequest(request);
@@ -173,6 +207,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
 
         <ReferenceThumbnails
           items={referenceItems}
+          onReorder={handleReferenceReorder}
         />
 
         <div className={PROMPT_PANEL_STYLES.textAreaWrap}>

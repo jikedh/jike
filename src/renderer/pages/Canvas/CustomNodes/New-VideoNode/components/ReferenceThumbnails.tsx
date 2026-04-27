@@ -1,17 +1,30 @@
 import {
-  IconArrowsExchange,
-  IconMusic,
-  IconPhoto,
-  IconVideo,
-} from "@tabler/icons-react";
-import { useEffect, useState } from "react";
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  horizontalListSortingStrategy,
+  SortableContext,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { IconGripVertical, IconMusic, IconPhoto, IconVideo } from "@tabler/icons-react";
+import { useEffect, useMemo, useState } from "react";
 import { cn, getVideoThumbnail } from "shared/utils/utils";
 import { ThumbnailPreviewPopover } from "@/components/ThumbnailPreviewPopover";
 import type { MentionItem } from "../constants/mockData";
 
 interface ReferenceThumbnailsProps {
   items: MentionItem[];
-  onSwap?: (indexA: number, indexB: number) => void;
+  onReorder?: (
+    type: MentionItem["type"],
+    fromIndex: number,
+    toIndex: number,
+  ) => void;
 }
 
 const TYPE_LABELS: Record<MentionItem["type"], string> = {
@@ -141,33 +154,144 @@ const ReferenceCard = ({
   );
 };
 
+const SortableReferenceItem = ({
+  item,
+  index,
+  typeIndex,
+}: {
+  item: MentionItem;
+  index: number;
+  typeIndex: number;
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: item.id,
+    data: {
+      item,
+      typeIndex,
+    },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "group relative flex shrink-0 items-center",
+        isDragging && "z-10 opacity-60",
+      )}
+    >
+      <ReferenceCard item={item} index={index} />
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="absolute right-1 bottom-1 flex h-6 w-6 cursor-grab items-center justify-center rounded-full bg-black/55 text-white opacity-0 shadow-sm transition-opacity active:cursor-grabbing group-hover:opacity-100"
+        title={`拖动排序${TYPE_LABELS[item.type]}`}
+      >
+        <IconGripVertical size={18} stroke={1.8} />
+      </button>
+    </div>
+  );
+};
+
 export const ReferenceThumbnails = ({
   items,
-  onSwap,
+  onReorder,
 }: ReferenceThumbnailsProps) => {
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+  );
+
+  const sortableItems = useMemo(() => {
+    const typeIndexes: Record<MentionItem["type"], number> = {
+      image: 0,
+      video: 0,
+      audio: 0,
+    };
+
+    return items.map((item, index) => {
+      const typeIndex = typeIndexes[item.type];
+      typeIndexes[item.type] += 1;
+
+      return {
+        item,
+        index,
+        typeIndex,
+      };
+    });
+  }, [items]);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const activeData = event.active.data.current as
+      | { item?: MentionItem; typeIndex?: number }
+      | undefined;
+    const overData = event.over?.data.current as
+      | { item?: MentionItem; typeIndex?: number }
+      | undefined;
+
+    if (!activeData?.item || !overData?.item) {
+      return;
+    }
+
+    if (activeData.item.id === overData.item.id) {
+      return;
+    }
+
+    if (activeData.item.type !== overData.item.type) {
+      return;
+    }
+
+    if (
+      typeof activeData.typeIndex !== "number" ||
+      typeof overData.typeIndex !== "number"
+    ) {
+      return;
+    }
+
+    onReorder?.(
+      activeData.item.type,
+      activeData.typeIndex,
+      overData.typeIndex,
+    );
+  };
+
   return (
-    <div className="flex items-center gap-2 overflow-visible">
-      {items.map((item, index) => (
-        <div
-          key={item.id}
-          className="group relative flex shrink-0 items-center gap-1"
-        >
-          <ReferenceCard item={item} index={index} />
-          {index < items.length - 1 && onSwap && (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onSwap(index, index + 1);
-              }}
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-white/60 transition-colors hover:bg-white/20 hover:text-white"
-              title="交换位置"
-            >
-              <IconArrowsExchange size={14} />
-            </button>
-          )}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
+      <SortableContext
+        items={sortableItems.map(({ item }) => item.id)}
+        strategy={horizontalListSortingStrategy}
+      >
+        <div className="flex items-center gap-2 overflow-visible">
+          {sortableItems.map(({ item, index, typeIndex }) => (
+            <SortableReferenceItem
+              key={item.id}
+              item={item}
+              index={index}
+              typeIndex={typeIndex}
+            />
+          ))}
         </div>
-      ))}
-    </div>
+      </SortableContext>
+    </DndContext>
   );
 };
