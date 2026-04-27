@@ -62,6 +62,9 @@ export const ImageNode = memo(
     const selectedNodesCount = useCanvasFlowStore(
       (state) => state.selectedNodesCount,
     );
+    const isSelectionBoxActive = useCanvasFlowStore(
+      (state) => state.isSelectionBoxActive,
+    );
     const projectId = useCanvasFlowStore((state) => state.projectId);
 
     // 全景图查看器状态
@@ -109,12 +112,14 @@ export const ImageNode = memo(
     const shouldShowToolbar = useMemo(
       () =>
         selected &&
+        !isSelectionBoxActive &&
         !isDragging &&
         isDragUiSettled &&
         selectedNodesCount <= 1 &&
         !isAnnotationMode,
       [
         selected,
+        isSelectionBoxActive,
         isDragging,
         isDragUiSettled,
         isAnnotationMode,
@@ -349,7 +354,7 @@ export const ImageNode = memo(
           >
             {/* 节点内顶部工具栏：直接参与节点缩放，保证几何一致性 */}
             {shouldShowToolbar && (
-              <div className="nodrag nopan nowheel absolute -top-12 left-1/2 z-50 -translate-x-1/2">
+              <div className="selection-box-deferred-ui nodrag nopan nowheel absolute -top-12 left-1/2 z-50 -translate-x-1/2">
                 <ImageToolbar
                   nodeId={id}
                   data={data}
@@ -439,7 +444,7 @@ export const ImageNode = memo(
             {/* 节点内底部增强输入区：与节点同一几何空间，缩放时保持一致 */}
             {/* 拖动结束后再挂载，降低首次拖拽时的渲染负担 */}
             {shouldShowToolbar && (
-              <div className="nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2">
+              <div className="selection-box-deferred-ui nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2">
                 <ImagePromptPanel nodeId={id} />
               </div>
             )}

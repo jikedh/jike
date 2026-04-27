@@ -49,6 +49,9 @@ export const VideoNode = memo(
     const selectedNodesCount = useCanvasFlowStore(
       (state) => state.selectedNodesCount,
     );
+    const isSelectionBoxActive = useCanvasFlowStore(
+      (state) => state.isSelectionBoxActive,
+    );
 
     // 使用 useMemo 缓存样式类名
     useEffect(() => {
@@ -77,8 +80,18 @@ export const VideoNode = memo(
     // 使用 useMemo 缓存工具栏显示条件
     const shouldShowToolbar = useMemo(
       () =>
-        selected && !isDragging && isDragUiSettled && selectedNodesCount <= 1,
-      [selected, isDragging, isDragUiSettled, selectedNodesCount],
+        selected &&
+        !isSelectionBoxActive &&
+        !isDragging &&
+        isDragUiSettled &&
+        selectedNodesCount <= 1,
+      [
+        selected,
+        isSelectionBoxActive,
+        isDragging,
+        isDragUiSettled,
+        selectedNodesCount,
+      ],
     );
 
     // 根据 data.aspect_ratio（如 "1:1", "16:9"）动态计算节点尺寸，按视频原始比例展示
@@ -185,7 +198,7 @@ export const VideoNode = memo(
           {/* 顶部工具栏：放在节点几何空间内，缩放时自动保持一致 */}
           {/* 拖动结束后再挂载，降低首次拖拽时的渲染负担 */}
           {shouldShowToolbar && (
-            <div className="nodrag nopan nowheel absolute -top-13 left-1/2 z-50 -translate-x-1/2">
+            <div className="selection-box-deferred-ui nodrag nopan nowheel absolute -top-13 left-1/2 z-50 -translate-x-1/2">
               <VideoToolbar nodeId={id} data={data} onDelete={handleDelete} />
             </div>
           )}
@@ -246,7 +259,7 @@ export const VideoNode = memo(
           {/* 底部增强输入区：放在节点几何空间内，缩放时自动保持一致 */}
           {/* 拖动结束后再挂载，降低首次拖拽时的渲染负担 */}
           {shouldShowToolbar && (
-            <div className="nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2">
+            <div className="selection-box-deferred-ui nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2">
               <VideoPromptPanel nodeId={id} />
             </div>
           )}

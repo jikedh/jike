@@ -872,6 +872,12 @@ export const CanvasFlow = ({
   const [displayEdges, setDisplayEdges] = useState<EdgeType[]>(
     () => useCanvasFlowStore.getState().edges,
   );
+  const isSelectionBoxActive = useCanvasFlowStore(
+    (state) => state.isSelectionBoxActive,
+  );
+  const setSelectionBoxActive = useCanvasFlowStore(
+    (state) => state.setSelectionBoxActive,
+  );
   const [viewportState, setViewportState] = useState(() =>
     reactFlowInstance.getViewport(),
   );
@@ -1152,11 +1158,31 @@ export const CanvasFlow = ({
     storeOnNodesChange,
   ]);
 
+  const handleSelectionStart = useCallback(() => {
+    if (annotationWorkspace.open) {
+      return;
+    }
+
+    setSelectionBoxActive(true);
+  }, [annotationWorkspace.open, setSelectionBoxActive]);
+
+  const handleSelectionEnd = useCallback(() => {
+    setSelectionBoxActive(false);
+  }, [setSelectionBoxActive]);
+
+  useEffect(() => {
+    return () => {
+      setSelectionBoxActive(false);
+    };
+  }, [setSelectionBoxActive]);
+
   // 点击画布空白区域时取消所有节点的选中状态
   const handlePaneClick = useCallback(() => {
     if (annotationWorkspace.open) {
       return;
     }
+
+    setSelectionBoxActive(false);
 
     const allNodes = useCanvasFlowStore.getState().nodes;
     const selectedNodes = allNodes.filter((node) => node.selected);
@@ -1169,7 +1195,7 @@ export const CanvasFlow = ({
       }));
       storeOnNodesChange(changes);
     }
-  }, [annotationWorkspace.open, storeOnNodesChange]);
+  }, [annotationWorkspace.open, setSelectionBoxActive, storeOnNodesChange]);
 
   // 为高频读取场景建立节点索引，避免重复线性扫描。
   const displayNodeById = useMemo(() => {
@@ -1371,7 +1397,7 @@ export const CanvasFlow = ({
   const handleViewportMove = useCallback(
     (_: unknown, viewport: unknown) => {
       // 使用 unknown 避免在高频事件中引入额外类型噪音。
-      if (!shouldTrackViewport || spacePressedRef.current) {
+      if (!shouldTrackViewport) {
         return;
       }
 
@@ -2162,6 +2188,7 @@ export const CanvasFlow = ({
         <div
           ref={contextMenuTriggerRef}
           className="h-full w-full relative"
+          data-selection-box-active={isSelectionBoxActive ? "true" : undefined}
           onDoubleClick={handleNativeDblClick}
           onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
@@ -2221,6 +2248,8 @@ export const CanvasFlow = ({
             onConnectEnd={handleConnectEnd}
             onNodeDragStart={handleNodeDragStart}
             onNodeDragStop={handleNodeDragStop}
+            onSelectionStart={handleSelectionStart}
+            onSelectionEnd={handleSelectionEnd}
             onPaneClick={handlePaneClick}
             onMove={shouldTrackViewport ? handleViewportMove : undefined}
             nodeTypes={nodeTypes}
@@ -2280,7 +2309,9 @@ export const CanvasFlow = ({
           </ReactFlow>
 
           {/* 节点搜索框 */}
-          {selectionBoundsScreen ? (
+          {selectionBoundsScreen &&
+          !isSelectionBoxActive &&
+          !isSpacePressed ? (
             <div
               className="pointer-events-none fixed z-[11] rounded-lg border border-dashed border-[#B43FEB]/70 bg-[#B43FEB]/10 shadow-[0_0_0_1px_rgba(180,63,235,0.18),0_0_24px_rgba(180,63,235,0.18)]"
               style={{
@@ -2321,7 +2352,10 @@ export const CanvasFlow = ({
           </div>
 
           {/* 多选右侧快捷创建按钮（拖拽时隐藏，改用跟踪图标） */}
-          {selectionRightCenterScreenPosition && !quickAddDragPreview.active ? (
+          {selectionRightCenterScreenPosition &&
+          !isSelectionBoxActive &&
+          !isSpacePressed &&
+          !quickAddDragPreview.active ? (
             <MultiSelectQuickCreate
               visible={multiSelectedCount >= 2}
               x={selectionRightCenterScreenPosition.x}

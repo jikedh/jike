@@ -1524,6 +1524,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     historyResetTrigger: 0,
     // 选中节点数量初始化（用于避免 O(n²) 遍历）
     selectedNodesCount: 0,
+    isSelectionBoxActive: false,
 
     // ── 配对 setter ───────────────────────────────
     setNodes: (nodes) => set({ nodes }),
@@ -1537,6 +1538,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     setPanoramaViewer: (panoramaViewer) => set({ panoramaViewer }),
     setAnnotationWorkspace: (annotationWorkspace) =>
       set({ annotationWorkspace }),
+    setSelectionBoxActive: (isSelectionBoxActive) => {
+      if (get().isSelectionBoxActive !== isSelectionBoxActive) {
+        set({ isSelectionBoxActive });
+      }
+    },
 
     // ==================== 持久化方法实现 ====================
 

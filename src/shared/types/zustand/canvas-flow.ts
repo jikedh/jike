@@ -101,6 +101,7 @@ export type CanvasFlowStoreType = {
   historyResetTrigger: number;
   // 选中的节点数量（用于避免 O(n²) 遍历计算）
   selectedNodesCount: number;
+  isSelectionBoxActive: boolean;
 
   // ── 配对 setter ───────────────────────────────
   setNodes: (nodes: AllNodeType[]) => void;
@@ -128,6 +129,7 @@ export type CanvasFlowStoreType = {
     imageUrl: string | null;
     sourceNodeId: string | null;
   }) => void;
+  setSelectionBoxActive: (active: boolean) => void;
 
   // ── 基础流程事件 ──────────────────────────────
   onNodesChange: (changes: NodeChange<AllNodeType>[]) => void;

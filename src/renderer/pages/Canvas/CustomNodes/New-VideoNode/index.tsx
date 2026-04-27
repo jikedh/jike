@@ -77,6 +77,9 @@ const NewVideoNode = ({
   }, [deleteNode, id]);
 
   const selectedNodesCount = useCanvasFlowStore((s) => s.selectedNodesCount);
+  const isSelectionBoxActive = useCanvasFlowStore(
+    (s) => s.isSelectionBoxActive,
+  );
 
   useEffect(() => {
     if (isDragging) {
@@ -92,7 +95,11 @@ const NewVideoNode = ({
   }, [isDragging]);
 
   const shouldShowToolbar =
-    selected && !isDragging && isDragUiSettled && selectedNodesCount <= 1;
+    selected &&
+    !isSelectionBoxActive &&
+    !isDragging &&
+    isDragUiSettled &&
+    selectedNodesCount <= 1;
 
   return (
     <NodeContextMenu onDuplicate={handleDuplicate} onDelete={handleDelete}>
@@ -143,7 +150,7 @@ const NewVideoNode = ({
 
         {/* 底部面板 */}
         {shouldShowToolbar && (
-          <div className="absolute top-full left-1/2 z-50 mt-4 -translate-x-1/2">
+          <div className="selection-box-deferred-ui absolute top-full left-1/2 z-50 mt-4 -translate-x-1/2">
             <VideoPromptPanel nodeId={id} />
           </div>
         )}

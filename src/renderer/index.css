@@ -5,6 +5,10 @@
 @import "yet-another-react-lightbox/styles.css";
 @plugin "@tailwindcss/typography";
 
+[data-selection-box-active="true"] .selection-box-deferred-ui {
+  display: none !important;
+}
+
 /* TODO @ 和 / 提及的样式修改在这里，后续有空再修改 */
 .image-node-mention-pill {
   display: inline-flex;
