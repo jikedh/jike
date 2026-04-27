@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GenerationStatus } from "shared/constants/enum";
 import type { AllNodeType, EdgeType } from "shared/types/flow";
+import { toast } from "sonner";
 import { NodeSearch } from "@/components/node-search";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,7 +46,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { toast } from "sonner";
 import { useCopyPaste } from "@/hooks/useCopyPaste";
 import { useDragUpload } from "@/hooks/useDragUpload";
 import { useUndoRedo } from "@/hooks/useUndoRedo";
@@ -108,14 +108,15 @@ const clamp = (value: number, min: number, max: number) => {
   return Math.min(Math.max(value, min), max);
 };
 
-const DELETE_CONFIRM_NODE_LABEL: Partial<Record<AllNodeType["type"], string>> = {
-  imageNode: "图片节点",
-  videoNode: "视频节点",
-  agentNode: "智能体节点",
-  textAgentNode: "文本智能体节点",
-  imageAgentNode: "图片智能体节点",
-  videoAgentNode: "视频智能体节点",
-};
+const DELETE_CONFIRM_NODE_LABEL: Partial<Record<AllNodeType["type"], string>> =
+  {
+    imageNode: "图片节点",
+    videoNode: "视频节点",
+    agentNode: "智能体节点",
+    textAgentNode: "文本智能体节点",
+    imageAgentNode: "图片智能体节点",
+    videoAgentNode: "视频智能体节点",
+  };
 
 const needsGeneratingDeleteConfirm = (node: AllNodeType) => {
   if (!(node.type in DELETE_CONFIRM_NODE_LABEL)) {
@@ -127,6 +128,25 @@ const needsGeneratingDeleteConfirm = (node: AllNodeType) => {
     status === GenerationStatus.IN_PROGRESS ||
     status === GenerationStatus.QUEUED ||
     status === "generating"
+  );
+};
+
+const isEditableEventTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return (
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.isContentEditable ||
+    Boolean(target.closest('[contenteditable="true"], [role="textbox"]'))
+  );
+};
+
+const isMacOs = () => {
+  return (
+    typeof navigator !== "undefined" && navigator.userAgent.includes("Mac")
   );
 };
 
@@ -294,12 +314,7 @@ export const CanvasFlow = ({
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       // 检查是否在输入框中
-      const target = event.target as HTMLElement;
-      if (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable
-      ) {
+      if (isEditableEventTarget(event.target)) {
         return;
       }
 
@@ -316,7 +331,9 @@ export const CanvasFlow = ({
           return;
         }
 
-        const generatingNodes = selectedNodes.filter(needsGeneratingDeleteConfirm);
+        const generatingNodes = selectedNodes.filter(
+          needsGeneratingDeleteConfirm,
+        );
         if (generatingNodes.length > 0) {
           const uniqueLabels = Array.from(
             new Set(
@@ -454,11 +471,7 @@ export const CanvasFlow = ({
         return;
       }
 
-      const target = event.target as HTMLElement | null;
-      const isEditableTarget =
-        target?.tagName === "INPUT" ||
-        target?.tagName === "TEXTAREA" ||
-        target?.isContentEditable;
+      const isEditableTarget = isEditableEventTarget(event.target);
 
       if (isEditableTarget) return;
 
@@ -533,12 +546,7 @@ export const CanvasFlow = ({
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable
-      ) {
+      if (isEditableEventTarget(e.target)) {
         return;
       }
 
@@ -595,11 +603,7 @@ export const CanvasFlow = ({
         return;
       }
 
-      const target = event.target as HTMLElement | null;
-      const isEditableTarget =
-        target?.tagName === "INPUT" ||
-        target?.tagName === "TEXTAREA" ||
-        target?.isContentEditable;
+      const isEditableTarget = isEditableEventTarget(event.target);
 
       const files = Array.from(event.clipboardData?.items ?? [])
         .map((item) => item.getAsFile())
@@ -614,10 +618,10 @@ export const CanvasFlow = ({
         void handleFiles(
           files,
           mouseFlowPositionRef.current ??
-          screenToFlowPosition({
-            x: window.innerWidth / 2,
-            y: window.innerHeight / 2,
-          }),
+            screenToFlowPosition({
+              x: window.innerWidth / 2,
+              y: window.innerHeight / 2,
+            }),
         );
         return;
       }
@@ -673,14 +677,24 @@ export const CanvasFlow = ({
       }
 
       if (event.ctrlKey || event.metaKey) {
+        const target = event.target as HTMLElement | null;
+        if (!target?.closest(".nowheel")) {
+          return;
+        }
+
         event.preventDefault();
 
         const { zoom: currentZoom, x, y } = reactFlowInstance.getViewport();
-        const zoomStep = 0.15;
-        const newZoom =
-          event.deltaY < 0
-            ? Math.min(currentZoom * (1 + zoomStep), 2)
-            : Math.max(currentZoom * (1 - zoomStep), 0.1);
+        const deltaModeFactor =
+          event.deltaMode === 1 ? 0.05 : event.deltaMode ? 1 : 0.002;
+        const wheelDelta =
+          -event.deltaY *
+          deltaModeFactor *
+          (event.ctrlKey && isMacOs() ? 10 : 1);
+        const newZoom = Math.min(
+          2,
+          Math.max(0.2, currentZoom * 2 ** wheelDelta),
+        );
 
         const reactFlowBounds = (
           event.currentTarget as HTMLElement
@@ -693,14 +707,11 @@ export const CanvasFlow = ({
         const newX = mouseX - (mouseX - x) * zoomRatio;
         const newY = mouseY - (mouseY - y) * zoomRatio;
 
-        reactFlowInstance.setViewport(
-          {
-            x: newX,
-            y: newY,
-            zoom: newZoom,
-          },
-          { duration: 100 },
-        );
+        reactFlowInstance.setViewport({
+          x: newX,
+          y: newY,
+          zoom: newZoom,
+        });
       }
     };
 
@@ -1165,7 +1176,9 @@ export const CanvasFlow = ({
     const viewportElement = document.querySelector(
       ".react-flow__viewport",
     ) as HTMLElement | null;
-    const flowElement = document.querySelector(".react-flow") as HTMLElement | null;
+    const flowElement = document.querySelector(
+      ".react-flow",
+    ) as HTMLElement | null;
     const bounds = flowElement?.getBoundingClientRect();
     const viewportWidth = bounds?.width ?? window.innerWidth;
     const viewportHeight = bounds?.height ?? window.innerHeight;
@@ -1173,7 +1186,10 @@ export const CanvasFlow = ({
     const nodeWidth = annotationTargetNode.width ?? FALLBACK_NODE_WIDTH;
     const nodeHeight = annotationTargetNode.height ?? FALLBACK_NODE_HEIGHT;
     const targetZoom = clamp(
-      Math.min((viewportWidth * 0.7) / nodeWidth, (viewportHeight * 0.64) / nodeHeight),
+      Math.min(
+        (viewportWidth * 0.7) / nodeWidth,
+        (viewportHeight * 0.64) / nodeHeight,
+      ),
       0.45,
       1.85,
     );
@@ -1190,7 +1206,11 @@ export const CanvasFlow = ({
     viewportStateRef.current = nextViewport;
     pendingViewportRef.current = nextViewport;
     setViewportState(nextViewport);
-    viewportElement?.classList.add("transition-transform", "duration-300", "ease-out");
+    viewportElement?.classList.add(
+      "transition-transform",
+      "duration-300",
+      "ease-out",
+    );
   }, [
     annotationTargetNode,
     annotationWorkspace.open,
@@ -1389,7 +1409,12 @@ export const CanvasFlow = ({
       // 未命中节点时，保留虚拟连线并打开菜单。
       openContextMenuAt(pointer.clientX, pointer.clientY);
     },
-    [annotationWorkspace.open, screenToFlowPosition, onConnect, openContextMenuAt],
+    [
+      annotationWorkspace.open,
+      screenToFlowPosition,
+      onConnect,
+      openContextMenuAt,
+    ],
   );
 
   const handleCreateNodeFromMenu = useCallback(
@@ -1427,7 +1452,13 @@ export const CanvasFlow = ({
       pendingConnectRef.current = null;
       setConnectionGhost(null);
     },
-    [annotationWorkspace.open, addNode, menuScreenPosition, onConnect, screenToFlowPosition],
+    [
+      annotationWorkspace.open,
+      addNode,
+      menuScreenPosition,
+      onConnect,
+      screenToFlowPosition,
+    ],
   );
 
   // 菜单态预览线：根据拖线开始的节点和菜单位置，计算出一个稳定的显示路径。
@@ -1556,7 +1587,13 @@ export const CanvasFlow = ({
         const startFlowY = sourceNode.position.y + nodeHeight / 2;
         const startX = startFlowX * viewportState.zoom + viewportState.x;
         const startY = startFlowY * viewportState.zoom + viewportState.y;
-        const endPoint = shortenLineEnd(startX, startY, targetX, targetY, inset);
+        const endPoint = shortenLineEnd(
+          startX,
+          startY,
+          targetX,
+          targetY,
+          inset,
+        );
 
         return {
           nodeId,
@@ -1582,10 +1619,7 @@ export const CanvasFlow = ({
         return;
       }
 
-      if (
-        !selectionRightCenterScreenPosition ||
-        multiSelectedCount < 2
-      ) {
+      if (!selectionRightCenterScreenPosition || multiSelectedCount < 2) {
         return;
       }
 
@@ -1833,7 +1867,9 @@ export const CanvasFlow = ({
             colorMode="dark"
             style={{ background: "#090909" }}
             deleteKeyCode={null}
-            panOnDrag={isAnnotationLocked ? false : isSpacePressed ? [0, 2] : [2]}
+            panOnDrag={
+              isAnnotationLocked ? false : isSpacePressed ? [0, 2] : [2]
+            }
             panActivationKeyCode={isAnnotationLocked ? null : "Space"}
             noPanClassName={isSpacePressed ? "__space-pan-disabled" : "nopan"}
             selectionOnDrag={!isAnnotationLocked && !isSpacePressed}

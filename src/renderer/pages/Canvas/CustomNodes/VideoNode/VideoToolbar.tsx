@@ -17,9 +17,9 @@ import { uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
 import { normalizeRequiredPoints } from "shared/constants/points";
 import type { VideoGenerationNode } from "shared/types/flow";
-import { createPresignedOssUploadTarget } from "shared/utils/presignedOssUploader";
 import { formatDuration } from "shared/utils/getVideoDuration";
-import { cn, downloadImageFromUrl } from "shared/utils/utils";
+import { createPresignedOssUploadTarget } from "shared/utils/presignedOssUploader";
+import { cn, downloadImageFromUrl, getJikeingUserId } from "shared/utils/utils";
 import { toast } from "sonner";
 import Lightbox from "yet-another-react-lightbox";
 // import Captions from 'yet-another-react-lightbox/plugins/captions'
@@ -30,6 +30,8 @@ import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
 import Video from "yet-another-react-lightbox/plugins/video";
 // import Thumbnails from 'yet-another-react-lightbox/plugins/thumbnails'
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import { getVideoRemovalStatus, videoRemoval } from "@/api/ai";
+import { updateVipScore } from "@/api/jikeing";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,9 +48,6 @@ import { VideoSnapshotPanel } from "./components/VideoSnapshotPanel";
 import { VideoTimeline } from "./components/VideoTimeline";
 import { useVideoFrameCapture } from "./hooks/useVideoFrameCapture";
 import { getVideoUrlsFromNodeData } from "./utils/video-url";
-import { getVideoRemovalStatus, videoRemoval } from "@/api/ai";
-import { updateVipScore } from "@/api/jikeing";
-import { getJikeingUserId } from "shared/utils/utils";
 
 type WuhenRect = {
   x1: number;
@@ -898,7 +897,11 @@ const VideoSubtitleRemovalPanel = ({
             </Button>
             <Button
               onClick={() => void handleSend()}
-              disabled={!isReady || isSubmitting || requiredPoints <= 0}
+              disabled={
+                !isReady ||
+                isSubmitting ||
+                (pointsEnabled && requiredPoints <= 0)
+              }
               className="min-w-44 border border-[#f3d5ff]/50 bg-[#B43FEB] font-semibold text-white shadow-[0_12px_34px_rgba(180,63,235,0.44)] ring-1 ring-[#f0c7ff]/25 hover:bg-[#C45BF0] hover:shadow-[0_16px_40px_rgba(180,63,235,0.52)]"
             >
               {isSubmitting ? "发送中..." : "发送并生成新视频"}
@@ -1011,8 +1014,14 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       const updatePatch: Record<string, any> = {
         result: {
           type: "video",
-          data: [...currentData, { url: uploadedUrl, format: fileExt }],
+          data: [
+            ...currentData,
+            { url: uploadedUrl, remoteUrl: uploadedUrl, format: fileExt },
+          ],
         },
+        status: GenerationStatus.COMPLETED,
+        progress: 100,
+        error: undefined,
       };
 
       if (currentData.length === 0) {

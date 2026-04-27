@@ -328,7 +328,6 @@ function DefaultVideoControls({
     duration,
     volume,
     muted,
-    bufferedEnd,
     isReady,
     togglePlay,
     seek,
@@ -344,7 +343,10 @@ function DefaultVideoControls({
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (volumeRef.current && !volumeRef.current.contains(event.target as Node)) {
+      if (
+        volumeRef.current &&
+        !volumeRef.current.contains(event.target as Node)
+      ) {
         setShowVolumeSlider(false);
       }
     };
@@ -361,29 +363,65 @@ function DefaultVideoControls({
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent px-3 pb-2 pt-12",
+        "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent px-2 pb-2 pt-10",
         className,
       )}
     >
-      <div className="pointer-events-auto flex items-center gap-3">
-        <button
-          type="button"
-          aria-label={isPlaying ? "Pause video" : "Play video"}
-          title={isPlaying ? "Pause" : "Play"}
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-white/90 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43FEB]/70"
-          onClick={() => {
-            void togglePlay();
-          }}
-        >
-          {isPlaying ? (
-            <Pause className="size-4" />
-          ) : (
-            <Play className="size-4" />
-          )}
-        </button>
+      <div className="pointer-events-auto flex min-w-0 flex-col gap-1.5">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <button
+            type="button"
+            aria-label={isPlaying ? "Pause video" : "Play video"}
+            title={isPlaying ? "Pause" : "Play"}
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-white/90 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43FEB]/70"
+            onClick={() => {
+              void togglePlay();
+            }}
+          >
+            {isPlaying ? (
+              <Pause className="size-3.5" />
+            ) : (
+              <Play className="size-3.5" />
+            )}
+          </button>
 
-        <div className="shrink-0 text-xs tabular-nums text-white/70">
-          {formatTime(currentTime)}
+          <div className="min-w-0 flex-1 truncate text-[10px] tabular-nums text-white/70">
+            {formatTime(currentTime)} / {formatTime(safeDuration)}
+          </div>
+
+          <div ref={volumeRef} className="relative">
+            <button
+              type="button"
+              aria-label={muted ? "Unmute video" : "Mute video"}
+              title={muted ? "Unmute" : "Mute"}
+              className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43FEB]/70"
+              onClick={toggleMuted}
+              onMouseEnter={() => setShowVolumeSlider(true)}
+            >
+              {muted || volume === 0 ? (
+                <VolumeX className="size-3.5" />
+              ) : (
+                <Volume2 className="size-3.5" />
+              )}
+            </button>
+
+            {showVolumeSlider && (
+              <div className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2">
+                <div className="rounded-md bg-black/80 p-2 backdrop-blur-sm">
+                  <Slider
+                    aria-label="Video volume"
+                    value={[muted ? 0 : volume]}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    orientation="vertical"
+                    onValueChange={([nextVolume = 0]) => setVolume(nextVolume)}
+                    className="h-24 data-[orientation=vertical]:**:**[:where(.radix-slider-track)]:w-1 **:data-[slot=slider-track]:bg-white/20 **:data-[slot=slider-range]:bg-white/80 **:data-[slot=slider-thumb]:size-2.5 **:data-[slot=slider-thumb]:border-white **:data-[slot=slider-thumb]:bg-white"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <Slider
@@ -394,46 +432,8 @@ function DefaultVideoControls({
           step={0.1}
           disabled={!isReady || safeDuration <= 0}
           onValueChange={([nextTime = 0]) => seek(nextTime)}
-          className="min-w-[80px] flex-1 **:data-[slot=slider-track]:h-1 **:data-[slot=slider-track]:bg-white/20 **:data-[slot=slider-range]:bg-[#B43FEB] **:data-[slot=slider-thumb]:size-3 **:data-[slot=slider-thumb]:border-[#f1d2ff] **:data-[slot=slider-thumb]:bg-[#B43FEB] **:data-[slot=slider-thumb]:ring-[#B43FEB]/45"
+          className="min-w-0 flex-none **:data-[slot=slider-track]:h-1 **:data-[slot=slider-track]:bg-white/20 **:data-[slot=slider-range]:bg-[#B43FEB] **:data-[slot=slider-thumb]:size-2.5 **:data-[slot=slider-thumb]:border-[#f1d2ff] **:data-[slot=slider-thumb]:bg-[#B43FEB] **:data-[slot=slider-thumb]:ring-[#B43FEB]/45"
         />
-
-        <div className="shrink-0 text-xs tabular-nums text-white/70">
-          {formatTime(safeDuration)}
-        </div>
-
-        <div ref={volumeRef} className="relative">
-          <button
-            type="button"
-            aria-label={muted ? "Unmute video" : "Mute video"}
-            title={muted ? "Unmute" : "Mute"}
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43FEB]/70"
-            onClick={toggleMuted}
-            onMouseEnter={() => setShowVolumeSlider(true)}
-          >
-            {muted || volume === 0 ? (
-              <VolumeX className="size-4" />
-            ) : (
-              <Volume2 className="size-4" />
-            )}
-          </button>
-
-          {showVolumeSlider && (
-            <div className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2">
-              <div className="rounded-md bg-black/80 p-2 backdrop-blur-sm">
-                <Slider
-                  aria-label="Video volume"
-                  value={[muted ? 0 : volume]}
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  orientation="vertical"
-                  onValueChange={([nextVolume = 0]) => setVolume(nextVolume)}
-                  className="h-24 data-[orientation=vertical]:**:**[:where(.radix-slider-track)]:w-1 **:data-[slot=slider-track]:bg-white/20 **:data-[slot=slider-range]:bg-white/80 **:data-[slot=slider-thumb]:size-2.5 **:data-[slot=slider-thumb]:border-white **:data-[slot=slider-thumb]:bg-white"
-                />
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
