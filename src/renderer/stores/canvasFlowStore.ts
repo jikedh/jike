@@ -36,7 +36,10 @@ import type {
 import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
 import { normalizeLocalGeminiErrorDetail } from "shared/utils/localGeminiErrors";
 import { hydrateMediaForRuntime } from "shared/utils/mediaPersistence";
-import { cloneNodeDataForCopy } from "shared/utils/nodeCopy";
+import {
+  cloneNodeDataForCopy,
+  resetNodeDataRuntimeState,
+} from "shared/utils/nodeCopy";
 import { nodeFactoryMap } from "shared/utils/nodeFactory";
 import {
   buildReferenceHighlightState,
@@ -1333,16 +1336,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       // 处理节点中的本地文件，将相对路径转换为可显示的 blob URL
       const hydratedNodes = await hydrateCanvasNodesForRuntime(data.nodes);
       const processedNodes: AllNodeType[] = hydratedNodes.map((node) => {
-        if (
-          node.type === "textAgentNode" &&
-          node.data?.status === "generating"
-        ) {
+        const runtimeSafeData = resetNodeDataRuntimeState(node.type, node.data);
+
+        if (runtimeSafeData !== node.data) {
           return {
             ...node,
-            data: {
-              ...node.data,
-              status: "idle" as const,
-            },
+            data: runtimeSafeData as AllNodeType["data"],
           };
         }
 

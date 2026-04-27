@@ -18,14 +18,18 @@ const getIdleStatusForCopiedNode = (nodeType: AllNodeType["type"]) => {
   return GenerationStatus.COMPLETED;
 };
 
-export const cloneNodeDataForCopy = (
+export const resetNodeDataRuntimeState = <T>(
   nodeType: AllNodeType["type"],
-  data: unknown,
-) => {
-  const clonedData = JSON.parse(JSON.stringify(data ?? {}));
+  data: T,
+): T => {
+  if (!data || typeof data !== "object") {
+    return data;
+  }
 
-  if (!isRunningGenerationStatus(clonedData.status)) {
-    return clonedData;
+  const nodeData = data as Record<string, unknown>;
+
+  if (!isRunningGenerationStatus(nodeData.status)) {
+    return data;
   }
 
   const {
@@ -35,12 +39,24 @@ export const cloneNodeDataForCopy = (
     task_id: _taskIdSnake,
     taskId: _taskIdCamel,
     ...rest
-  } = clonedData;
+  } = nodeData;
 
   return {
     ...rest,
     status: getIdleStatusForCopiedNode(nodeType),
     progress: 0,
     isLoading: false,
-  };
+  } as T;
+};
+
+export const cloneNodeDataForCopy = (
+  nodeType: AllNodeType["type"],
+  data: unknown,
+): Record<string, unknown> => {
+  const clonedData = JSON.parse(JSON.stringify(data ?? {})) as Record<
+    string,
+    unknown
+  >;
+
+  return resetNodeDataRuntimeState(nodeType, clonedData);
 };
