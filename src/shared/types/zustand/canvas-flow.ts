@@ -5,6 +5,7 @@ import type {
   AudioGenerationNode,
   EdgeType,
   ImageGenerationNode,
+  NewVideoGenerationNode,
   VideoGenerationNode,
 } from "shared/types/flow";
 
@@ -169,6 +170,10 @@ export type CanvasFlowStoreType = {
     nodeId: string,
     patch: Partial<VideoGenerationNode>,
   ) => void;
+  updateNewVideoNodeData: (
+    nodeId: string,
+    patch: Partial<NewVideoGenerationNode>,
+  ) => void;
   updateNodeDimensions: (
     nodeId: string,
     width: number,
@@ -206,6 +211,11 @@ export type CanvasFlowStoreType = {
 
   // ── 视频生成 ─────────────────────────────────
   startVideoGeneration: (nodeId: string, payload: any) => Promise<void>;
+  startNewVideoGeneration: (
+    nodeId: string,
+    payload: any,
+    count?: number,
+  ) => Promise<void>;
   stopVideoPolling: (nodeId: string) => void;
 
   // ── 任务管理 ─────────────────────────────────

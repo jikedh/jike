@@ -12,8 +12,8 @@ import {
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
 import {
   type MentionItem,
-  MOCK_COUNT_OPTIONS,
-  MOCK_MODELS,
+  VIDEO_COUNT_OPTIONS,
+  VIDEO_MODEL_OPTIONS,
 } from "../constants/mockData";
 import type { VideoModeKey } from "../constants/videoModelCapabilities";
 import type { VideoParamState } from "../constants/videoParamConfigs";
@@ -40,6 +40,7 @@ interface BottomParamsBarProps {
   onParamsChange: (value: VideoParamState) => void;
   onCountChange: (value: string) => void;
   onGenerate: (request: VideoGenerateRequest) => void;
+  disabled?: boolean;
 }
 
 export const BottomParamsBar = ({
@@ -53,6 +54,7 @@ export const BottomParamsBar = ({
   onParamsChange,
   onCountChange,
   onGenerate,
+  disabled = false,
 }: BottomParamsBarProps) => {
   const handleClick = () => {
     const request: VideoGenerateRequest = {
@@ -74,7 +76,7 @@ export const BottomParamsBar = ({
             <SelectValue />
           </SelectTrigger>
           <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
-            {MOCK_MODELS.map((model) => (
+            {VIDEO_MODEL_OPTIONS.map((model) => (
               <SelectItem
                 key={model.value}
                 value={model.value}
@@ -98,7 +100,7 @@ export const BottomParamsBar = ({
             <SelectValue />
           </SelectTrigger>
           <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
-            {MOCK_COUNT_OPTIONS.map((count) => (
+            {VIDEO_COUNT_OPTIONS.map((count) => (
               <SelectItem
                 key={count}
                 value={String(count)}
@@ -116,6 +118,7 @@ export const BottomParamsBar = ({
           variant="blue"
           size="sm"
           onClick={handleClick}
+          disabled={disabled}
           className="px-7 py-2.5 rounded-xl text-sm font-bold"
         >
           <IconPlayerPlay size={16} />

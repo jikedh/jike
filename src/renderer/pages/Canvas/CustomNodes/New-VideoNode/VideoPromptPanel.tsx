@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { GenerationStatus } from "shared/constants/enum";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import {
   BottomParamsBar,
@@ -11,8 +13,7 @@ import { PromptEditor } from "./components/PromptEditor";
 import { ReferenceThumbnails } from "./components/ReferenceThumbnails";
 import {
   type MentionItem,
-  MOCK_MODELS,
-  MOCK_REFERENCE_ITEMS,
+  VIDEO_MODEL_OPTIONS,
 } from "./constants/mockData";
 import type { VideoModeKey } from "./constants/videoModelCapabilities";
 import { ALL_MODE_KEYS } from "./constants/videoModelCapabilities";
@@ -27,16 +28,62 @@ interface VideoPromptPanelProps {
   nodeId: string;
 }
 
+const buildReferenceItems = (
+  imageUrls: string[] = [],
+  videoUrls: string[] = [],
+  audioUrls: string[] = [],
+): MentionItem[] => [
+    ...imageUrls.map((url, index) => ({
+      id: `image-${index}-${url}`,
+      label: `图片${index + 1}`,
+      value: url,
+      thumbnail: url,
+      type: "image" as const,
+    })),
+    ...videoUrls.map((url, index) => ({
+      id: `video-${index}-${url}`,
+      label: `视频${index + 1}`,
+      value: url,
+      thumbnail: url,
+      type: "video" as const,
+    })),
+    ...audioUrls.map((url, index) => ({
+      id: `audio-${index}-${url}`,
+      label: `音频${index + 1}`,
+      value: url,
+      thumbnail: url,
+      type: "audio" as const,
+    })),
+  ];
+
 export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
+  const currentData = useCanvasFlowStore(
+    (state) => state.nodes.find((node) => node.id === nodeId)?.data,
+  );
+  const startNewVideoGeneration = useCanvasFlowStore(
+    (state) => state.startNewVideoGeneration,
+  );
   const [activeMode, setActiveMode] = useState<VideoModeKey>("all-reference");
-  const [selectedModel, setSelectedModel] = useState(MOCK_MODELS[0].value);
-  const [referenceItems, setReferenceItems] =
-    useState<MentionItem[]>(MOCK_REFERENCE_ITEMS);
-  const [promptText, setPromptText] = useState("");
+  const [selectedModel, setSelectedModel] = useState(
+    currentData?.model ?? VIDEO_MODEL_OPTIONS[0].value,
+  );
+  const [promptText, setPromptText] = useState(
+    currentData?.promptDraft ?? currentData?.prompt ?? "",
+  );
   const [selectedParams, setSelectedParams] = useState<VideoParamState>(() =>
-    normalizeVideoParams(MOCK_MODELS[0].value),
+    normalizeVideoParams(currentData?.model ?? VIDEO_MODEL_OPTIONS[0].value),
   );
   const [selectedCount, setSelectedCount] = useState("1");
+
+  const referenceItems = useMemo(
+    () =>
+      buildReferenceItems(
+        currentData?.image_urls,
+        currentData?.video_urls,
+        currentData?.audio_urls,
+      ),
+    [currentData?.image_urls, currentData?.video_urls, currentData?.audio_urls],
+  );
 
   const referenceImages = useMemo(
     () =>
@@ -45,20 +92,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         .map((item) => item.thumbnail)
         .filter(Boolean),
     [referenceItems],
-  );
-
-  const handleSwapReferenceItems = useCallback(
-    (indexA: number, indexB: number) => {
-      setReferenceItems((prev) => {
-        const nextItems = [...prev];
-        [nextItems[indexA], nextItems[indexB]] = [
-          nextItems[indexB],
-          nextItems[indexA],
-        ];
-        return nextItems;
-      });
-    },
-    [],
   );
 
   const referenceAllImages =
@@ -108,9 +141,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const handleModelChange = useCallback(
     (modelId: string) => {
       setSelectedModel(modelId);
-      setReferenceItems((prev) =>
-        modelId === "vidu" ? [] : prev.length > 0 ? prev : MOCK_REFERENCE_ITEMS,
-      );
       setSelectedParams((prev) =>
         normalizeVideoParams(modelId, prev, activeMode),
       );
@@ -118,15 +148,20 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     [activeMode],
   );
 
-  const handleGenerate = useCallback((request: VideoGenerateRequest) => {
-    const apiRequest = buildVideoApiRequest(request);
-    // biome-ignore lint/suspicious/noConsole: This mock node must print the real request body before API wiring.
-    console.log("Video generate API request:", apiRequest);
-    // biome-ignore lint/suspicious/noConsole: Keep batch count visible without adding it to the API body.
-    console.log("Video generate count:", Number(request.count));
-  }, []);
+  const handleGenerate = useCallback(
+    (request: VideoGenerateRequest) => {
+      const apiRequest = buildVideoApiRequest(request);
+      void startNewVideoGeneration(nodeId, {
+        ...apiRequest,
+        __newVideoInput: request,
+      }, Number(request.count));
+    },
+    [nodeId, startNewVideoGeneration],
+  );
 
-  void nodeId;
+  const isGenerating =
+    currentData?.status === GenerationStatus.QUEUED ||
+    currentData?.status === GenerationStatus.IN_PROGRESS;
 
   return (
     <TooltipProvider>
@@ -139,7 +174,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
 
         <ReferenceThumbnails
           items={referenceItems}
-          onSwap={handleSwapReferenceItems}
         />
 
         <div className={PROMPT_PANEL_STYLES.textAreaWrap}>
@@ -164,6 +198,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
           }
           onCountChange={setSelectedCount}
           onGenerate={handleGenerate}
+          disabled={isGenerating}
         />
       </div>
     </TooltipProvider>

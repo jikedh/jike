@@ -28,17 +28,25 @@ const extractSeedance20VideoItems = (response: any) => {
 };
 
 const extractWan27I2vVideoItems = (response: any) => {
-  const resultUrl = response?.output?.video_url;
-  if (!resultUrl) {
+  const output = response?.output ?? {};
+  const resultUrls = [
+    output.video_url,
+    output.watermark_video_url,
+    output.url,
+    ...(Array.isArray(output.video_urls) ? output.video_urls : []),
+    ...(Array.isArray(output.results)
+      ? output.results.map((item: any) => item?.video_url ?? item?.url)
+      : []),
+  ].filter((url): url is string => typeof url === "string" && url.length > 0);
+
+  if (resultUrls.length === 0) {
     return [];
   }
 
-  return [
-    {
-      url: resultUrl,
-      format: "mp4",
-    },
-  ];
+  return Array.from(new Set(resultUrls)).map((url) => ({
+    url,
+    format: "mp4",
+  }));
 };
 
 const getErrorMessage = (response: any, fallbackMessage: string) => {

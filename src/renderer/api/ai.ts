@@ -22,7 +22,7 @@ import type {
   ImageTaskStatusResponse,
 } from "shared/types/detail/ToApi/images";
 import { getAiToken, getBaseURL } from "shared/utils/utils";
-import { Seedance20Request, Seedance20StatusResponse } from "shared/types/detail/kuaizhi/Seedance-2.0";
+import { Seedance20Request, Seedance20Response, Seedance20StatusResponse } from "shared/types/detail/kuaizhi/Seedance-2.0";
 import { BailianVideoGenerationCreateResponse, BailianVideoGenerationQueryResponse, BailianVideoGenerationRequest } from "shared/types/detail/Bailian/video";
 /**
  *
@@ -187,7 +187,7 @@ export function fetchMjTask(id: string) {
 
 // 创建快手视频生成任务
 export function createLzVideoTask(data: Seedance20Request) {
-  return kuaiziRequest({
+  return kuaiziRequest<Seedance20Response>({
     url: "/lz/video/task/create",
     method: "post",
     data,
@@ -384,7 +384,6 @@ export function createDashscopeVideoSynthesis(data: BailianVideoGenerationReques
  */
 // BailianVideoGenerationQueryResponse
 export function getDashscopeVideoTaskStatus(taskId: string) {
-  console.log('测试会不会打印');
   return dashscopeRequest<BailianVideoGenerationQueryResponse>({
     url: `/api/v1/tasks/${taskId}`,
     method: "get",

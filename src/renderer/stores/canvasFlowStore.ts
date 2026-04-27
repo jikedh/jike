@@ -54,6 +54,7 @@ import {
   updateAudioNodeInList,
   updateImageAgentNodeInList,
   updateImageNodeInList,
+  updateNewVideoNodeInList,
   updateTableNodeInList,
   updateTextAgentNodeInList,
   updateVideoAgentNodeInList,
@@ -214,7 +215,10 @@ export const hydrateCanvasNodesForRuntime = async (
         };
       }
 
-      if (node.type === "videoNode" && node.data?.result?.data) {
+      if (
+        (node.type === "videoNode" || node.type === "newVideoNode") &&
+        node.data?.result?.data
+      ) {
         const processedData = await Promise.all(
           node.data.result.data.map(async (item: any) => {
             if (item.relativePath || item.localPath) {
@@ -373,9 +377,9 @@ const pollImageGeneration = async (
 
       const progressValue = Number(
         response?.data?.progress ??
-          response?.result?.progress ??
-          response?.progress ??
-          50,
+        response?.result?.progress ??
+        response?.progress ??
+        50,
       );
 
       // 成功状态：小写 completed 或大写 SUCCESS/SUCCEEDED/COMPLETED
@@ -1014,6 +1018,247 @@ const pollVideoGeneration = async (
   }
 };
 
+const pollNewVideoGeneration = async ({
+  taskId,
+  nodeId,
+  signal,
+  setState,
+  getState,
+  isSeedance20,
+  taskIndex,
+  totalTasks,
+}: {
+  taskId: string;
+  nodeId: string;
+  signal: AbortSignal;
+  setState: (
+    updater: (state: CanvasFlowStoreType) => Partial<CanvasFlowStoreType>,
+  ) => void;
+  getState: () => CanvasFlowStoreType;
+  isSeedance20: boolean;
+  taskIndex: number;
+  totalTasks: number;
+}) => {
+  const startTime = Date.now();
+  let missingResultUrlStartTime: number | null = null;
+
+  try {
+    while (true) {
+      await wait(VIDEO_POLL_INTERVAL, signal);
+      if (signal.aborted) return;
+
+      if (Date.now() - startTime > VIDEO_TIMEOUT) {
+        setState((state) => ({
+          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
+            ...data,
+            status: GenerationStatus.FAILED,
+            error: {
+              code: "TIMEOUT",
+              message: "视频生成超时，请稍后再试",
+            },
+          })),
+        }));
+        return;
+      }
+
+      const response: any = isSeedance20
+        ? await getLzVideoTaskStatus(taskId)
+        : await getDashscopeVideoTaskStatus(taskId);
+
+      const currentNode = getState().nodes.find((node) => node.id === nodeId);
+      if (!currentNode || currentNode.type !== "newVideoNode") {
+        return;
+      }
+
+      const normalized = normalizeVideoTaskResponse(response);
+      const normalizedTaskId = normalized.taskId ?? taskId;
+
+      if (normalized.status === GenerationStatus.COMPLETED) {
+        if (normalized.missingResultUrl) {
+          if (!missingResultUrlStartTime) {
+            missingResultUrlStartTime = Date.now();
+          }
+
+          if (
+            Date.now() - missingResultUrlStartTime <=
+            VIDEO_RESULT_WAIT_TIMEOUT
+          ) {
+            continue;
+          }
+
+          setState((state) => ({
+            nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
+              const failedTasks = [
+                ...(((data.metadata?.failedTasks as unknown[]) ?? [])),
+                normalizedTaskId,
+              ];
+              const completedCount =
+                (data.result?.data?.length ?? 0) + failedTasks.length;
+              return {
+                ...data,
+                status:
+                  completedCount >= totalTasks && !data.result?.data?.length
+                    ? GenerationStatus.FAILED
+                    : data.status,
+                metadata: {
+                  ...data.metadata,
+                  failedTasks,
+                },
+                error: {
+                  code: "VIDEO_MISSING_URL",
+                  message: "任务已完成但未返回视频地址，请稍后重试",
+                },
+              };
+            }),
+          }));
+          return;
+        }
+
+        const projectId = getState().projectId;
+        const processedResultData = await Promise.all(
+          normalized.videoItems.map(async (item: any) => {
+            if (item.url && projectId) {
+              try {
+                const ext = item.format || "mp4";
+                const fileName = await saveGeneratedVideoToLocal(
+                  projectId,
+                  item.url,
+                  ext,
+                );
+
+                if (fileName) {
+                  const relativePath = getLocalFilePath(
+                    projectId,
+                    "generate_video",
+                    fileName,
+                  );
+                  return {
+                    ...item,
+                    localName: fileName,
+                    localPath: relativePath,
+                  };
+                }
+              } catch (saveError) {
+                console.error(
+                  "[pollNewVideoGeneration] 保存视频到本地失败:",
+                  saveError,
+                );
+              }
+            }
+            return item;
+          }),
+        );
+
+        setState((state) => ({
+          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
+            const existingData = data.result?.data ?? [];
+            const mergedData = [...existingData, ...processedResultData];
+            const failedCount =
+              ((data.metadata?.failedTasks as unknown[]) ?? []).length;
+            const completedCount = mergedData.length + failedCount;
+            const completed = completedCount >= totalTasks;
+
+            return {
+              ...data,
+              status: completed
+                ? GenerationStatus.COMPLETED
+                : GenerationStatus.IN_PROGRESS,
+              progress: completed
+                ? 100
+                : Math.min(99, Math.round((completedCount / totalTasks) * 100)),
+              task_id: normalizedTaskId,
+              result: {
+                type: "video",
+                data: mergedData,
+              },
+              error: undefined,
+            };
+          }),
+        }));
+
+        const updatedNode = getState().nodes.find((node) => node.id === nodeId);
+        if (
+          (updatedNode?.data as any)?.status === GenerationStatus.COMPLETED
+        ) {
+          saveCurrentCanvasToHistory();
+          if (useChatSettingsStore.getState().autoSaveEnabled) {
+            getState().saveGraph();
+          }
+        }
+        return;
+      }
+
+      if (normalized.status === GenerationStatus.FAILED) {
+        setState((state) => ({
+          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
+            const failedTasks = [
+              ...(((data.metadata?.failedTasks as unknown[]) ?? [])),
+              normalizedTaskId,
+            ];
+            const successCount = data.result?.data?.length ?? 0;
+            const completedCount = successCount + failedTasks.length;
+            const allDone = completedCount >= totalTasks;
+
+            return {
+              ...data,
+              status:
+                allDone && successCount === 0
+                  ? GenerationStatus.FAILED
+                  : allDone
+                    ? GenerationStatus.COMPLETED
+                    : GenerationStatus.IN_PROGRESS,
+              progress: allDone
+                ? 100
+                : Math.round((completedCount / totalTasks) * 100),
+              metadata: {
+                ...data.metadata,
+                failedTasks,
+              },
+              error:
+                allDone && successCount === 0
+                  ? {
+                    code: "VIDEO_FAILED",
+                    message: normalized.errorMessage || "生成失败，请稍后再试",
+                  }
+                  : data.error,
+            };
+          }),
+        }));
+        return;
+      }
+
+      missingResultUrlStartTime = null;
+      setState((state) => ({
+        nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
+          ...data,
+          status: normalized.status,
+          progress: Math.max(
+            data.progress ?? 0,
+            Math.round(
+              ((taskIndex + normalized.progress / 100) / totalTasks) * 100,
+            ),
+          ),
+          task_id: normalizedTaskId,
+        })),
+      }));
+    }
+  } catch (pollError) {
+    const serverMessage = getRequestErrorMessage(pollError);
+    setState((state) => ({
+      nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
+        ...data,
+        status: GenerationStatus.FAILED,
+        error: {
+          code: "POLL_ERROR",
+          message: "轮询失败，请稍后再试",
+          detail: serverMessage,
+          serverMessage,
+        },
+      })),
+    }));
+  }
+};
+
 /**
  * 生成任务成功后的积分扣减。
  * 说明：扣费失败不会影响已完成结果，仅记录日志用于后续补偿处理。
@@ -1150,7 +1395,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       if (sourceNode.type === "imageNode") {
         if (
           targetNode.type === "imageNode" ||
-          targetNode.type === "videoNode"
+          targetNode.type === "videoNode" ||
+          targetNode.type === "newVideoNode"
         ) {
           return "image_urls";
         }
@@ -1160,11 +1406,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         }
       }
 
-      if (targetNode.type === "videoNode" && sourceNode.type === "videoNode") {
+      if (
+        (targetNode.type === "videoNode" || targetNode.type === "newVideoNode") &&
+        sourceNode.type === "videoNode"
+      ) {
         return "video_urls";
       }
 
-      if (targetNode.type === "videoNode" && sourceNode.type === "audioNode") {
+      if (
+        (targetNode.type === "videoNode" || targetNode.type === "newVideoNode") &&
+        sourceNode.type === "audioNode"
+      ) {
         return "audio_urls";
       }
 
@@ -1532,52 +1784,52 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const finalNode =
         newNode.type === "audioNode"
           ? {
+            ...newNode,
+            data: {
+              ...newNode.data,
+              nickname: getAudioNicknameByNodeId(nextId),
+            },
+          }
+          : newNode.type === "imageNode"
+            ? {
               ...newNode,
               data: {
                 ...newNode.data,
-                nickname: getAudioNicknameByNodeId(nextId),
+                model: defaultImageModel || newNode.data.model,
+                platform: defaultImagePlatform || newNode.data.platform,
+                size: defaultImageSize || newNode.data.size,
+                resolution: defaultImageResolution || newNode.data.resolution,
               },
             }
-          : newNode.type === "imageNode"
-            ? {
+            : newNode.type === "videoNode"
+              ? {
                 ...newNode,
                 data: {
                   ...newNode.data,
-                  model: defaultImageModel || newNode.data.model,
-                  platform: defaultImagePlatform || newNode.data.platform,
-                  size: defaultImageSize || newNode.data.size,
-                  resolution: defaultImageResolution || newNode.data.resolution,
+                  model: defaultVideoModel || newNode.data.model,
+                  aspect_ratio:
+                    defaultVideoAspectRatio || newNode.data.aspect_ratio,
+                  duration: defaultVideoDuration || newNode.data.duration,
+                  metadata: {
+                    ...(newNode.data.metadata ?? {}),
+                    resolution:
+                      defaultVideoResolution ||
+                      newNode.data.metadata?.resolution,
+                    ...(defaultVideoMode !== undefined
+                      ? { mode: defaultVideoMode }
+                      : {}),
+                    ...(defaultVideoGenerateAudio !== undefined
+                      ? { generate_audio: defaultVideoGenerateAudio }
+                      : {}),
+                    ...(defaultVideoAudio !== undefined
+                      ? { audio: defaultVideoAudio }
+                      : {}),
+                    ...(defaultVideoPromptExtend !== undefined
+                      ? { prompt_extend: defaultVideoPromptExtend }
+                      : {}),
+                  },
                 },
               }
-            : newNode.type === "videoNode"
-              ? {
-                  ...newNode,
-                  data: {
-                    ...newNode.data,
-                    model: defaultVideoModel || newNode.data.model,
-                    aspect_ratio:
-                      defaultVideoAspectRatio || newNode.data.aspect_ratio,
-                    duration: defaultVideoDuration || newNode.data.duration,
-                    metadata: {
-                      ...(newNode.data.metadata ?? {}),
-                      resolution:
-                        defaultVideoResolution ||
-                        newNode.data.metadata?.resolution,
-                      ...(defaultVideoMode !== undefined
-                        ? { mode: defaultVideoMode }
-                        : {}),
-                      ...(defaultVideoGenerateAudio !== undefined
-                        ? { generate_audio: defaultVideoGenerateAudio }
-                        : {}),
-                      ...(defaultVideoAudio !== undefined
-                        ? { audio: defaultVideoAudio }
-                        : {}),
-                      ...(defaultVideoPromptExtend !== undefined
-                        ? { prompt_extend: defaultVideoPromptExtend }
-                        : {}),
-                    },
-                  },
-                }
               : newNode;
 
       set((state) => ({
@@ -1701,12 +1953,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const finalDuplicatedNode =
         newNode.type === "audioNode"
           ? {
-              ...newNode,
-              data: {
-                ...newNode.data,
-                nickname: getAudioNicknameByNodeId(newId),
-              },
-            }
+            ...newNode,
+            data: {
+              ...newNode.data,
+              nickname: getAudioNicknameByNodeId(newId),
+            },
+          }
           : newNode;
 
       set((state) => {
@@ -1719,16 +1971,16 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const copiedIncomingEdges =
           node.type === "imageNode" || node.type === "videoNode"
             ? state.edges
-                .filter((edge) => edge.target === node.id)
-                .map((edge, edgeIndex) => {
-                  const { id: _id, target: _target, ...edgePayload } = edge;
+              .filter((edge) => edge.target === node.id)
+              .map((edge, edgeIndex) => {
+                const { id: _id, target: _target, ...edgePayload } = edge;
 
-                  return {
-                    ...edgePayload,
-                    id: `edge-${edge.source}-${newId}-${Date.now()}-${edgeIndex}`,
-                    target: newId,
-                  } as EdgeType;
-                })
+                return {
+                  ...edgePayload,
+                  id: `edge-${edge.source}-${newId}-${Date.now()}-${edgeIndex}`,
+                  target: newId,
+                } as EdgeType;
+              })
             : [];
         const nextEdges = [...state.edges, ...copiedIncomingEdges];
         let nextNodes = [...updatedNodes, finalDuplicatedNode];
@@ -2332,13 +2584,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const sourceVisualSize =
           nodeType === "imageNode"
             ? getNodeSizeByAspectRatio(
-                (sourceData as ImageGenerationNode).size ?? "4:3",
-                250,
-              )
+              (sourceData as ImageGenerationNode).size ?? "4:3",
+              250,
+            )
             : getNodeSizeByAspectRatio(
-                (sourceData as VideoGenerationNode).aspect_ratio ?? "16:9",
-                250,
-              );
+              (sourceData as VideoGenerationNode).aspect_ratio ?? "16:9",
+              250,
+            );
         const verticalGap = 32;
         const baseY =
           sourceNode.position.y + sourceVisualSize.height + verticalGap;
@@ -2348,58 +2600,58 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const resolvedItems =
           targetNodeType === "image"
             ? await Promise.all(
-                validItems.map(async (item) => {
-                  const imageUrl = item.remoteUrl || item.url;
-                  let aspectRatio = sourceData.size ?? "4:3";
+              validItems.map(async (item) => {
+                const imageUrl = item.remoteUrl || item.url;
+                let aspectRatio = sourceData.size ?? "4:3";
 
-                  if (imageUrl) {
-                    try {
-                      const { width, height } =
-                        await getImageDimensions(imageUrl);
-                      aspectRatio = getClosestAspectRatio(width, height);
-                    } catch (error) {
-                      console.warn(
-                        "[separateToNodes] 获取图片比例失败，使用回退比例:",
-                        error,
-                      );
-                    }
+                if (imageUrl) {
+                  try {
+                    const { width, height } =
+                      await getImageDimensions(imageUrl);
+                    aspectRatio = getClosestAspectRatio(width, height);
+                  } catch (error) {
+                    console.warn(
+                      "[separateToNodes] 获取图片比例失败，使用回退比例:",
+                      error,
+                    );
                   }
+                }
 
-                  const nodeSize = getNodeSizeByAspectRatio(aspectRatio, 250);
+                const nodeSize = getNodeSizeByAspectRatio(aspectRatio, 250);
 
-                  return {
-                    item,
-                    aspectRatio,
-                    nodeSize,
-                  };
-                }),
-              )
+                return {
+                  item,
+                  aspectRatio,
+                  nodeSize,
+                };
+              }),
+            )
             : await Promise.all(
-                validItems.map(async (item) => {
-                  const videoUrl = item.remoteUrl || item.url;
-                  let aspectRatio =
-                    (sourceData as VideoGenerationNode).aspect_ratio ?? "16:9";
+              validItems.map(async (item) => {
+                const videoUrl = item.remoteUrl || item.url;
+                let aspectRatio =
+                  (sourceData as VideoGenerationNode).aspect_ratio ?? "16:9";
 
-                  if (videoUrl) {
-                    try {
-                      const { width, height } =
-                        await getVideoDimensions(videoUrl);
-                      aspectRatio = getClosestAspectRatio(width, height);
-                    } catch (error) {
-                      console.warn(
-                        "[separateToNodes] 获取视频比例失败，使用回退比例:",
-                        error,
-                      );
-                    }
+                if (videoUrl) {
+                  try {
+                    const { width, height } =
+                      await getVideoDimensions(videoUrl);
+                    aspectRatio = getClosestAspectRatio(width, height);
+                  } catch (error) {
+                    console.warn(
+                      "[separateToNodes] 获取视频比例失败，使用回退比例:",
+                      error,
+                    );
                   }
+                }
 
-                  return {
-                    item,
-                    aspectRatio,
-                    nodeSize: getNodeSizeByAspectRatio(aspectRatio, 250),
-                  };
-                }),
-              );
+                return {
+                  item,
+                  aspectRatio,
+                  nodeSize: getNodeSizeByAspectRatio(aspectRatio, 250),
+                };
+              }),
+            );
 
         const latestState = get();
         const latestSourceNode = latestState.nodes.find(
@@ -2421,40 +2673,40 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             const finalNode =
               targetNodeType === "video"
                 ? {
-                    ...baseNode,
-                    width: nodeSize.width,
-                    height: nodeSize.height,
-                    data: {
-                      ...baseNode.data,
-                      aspect_ratio: aspectRatio,
-                      status: GenerationStatus.COMPLETED,
-                      progress: 100,
-                      result: {
-                        type: "video",
-                        data: [
-                          {
-                            ...item,
-                            format: item.format ?? "mp4",
-                          },
-                        ],
-                      },
+                  ...baseNode,
+                  width: nodeSize.width,
+                  height: nodeSize.height,
+                  data: {
+                    ...baseNode.data,
+                    aspect_ratio: aspectRatio,
+                    status: GenerationStatus.COMPLETED,
+                    progress: 100,
+                    result: {
+                      type: "video",
+                      data: [
+                        {
+                          ...item,
+                          format: item.format ?? "mp4",
+                        },
+                      ],
                     },
-                  }
+                  },
+                }
                 : {
-                    ...baseNode,
-                    width: nodeSize.width,
-                    height: nodeSize.height,
-                    data: {
-                      ...baseNode.data,
-                      status: GenerationStatus.COMPLETED,
-                      progress: 100,
-                      size: aspectRatio,
-                      result: {
-                        type: "image",
-                        data: [{ ...item }],
-                      },
+                  ...baseNode,
+                  width: nodeSize.width,
+                  height: nodeSize.height,
+                  data: {
+                    ...baseNode.data,
+                    status: GenerationStatus.COMPLETED,
+                    progress: 100,
+                    size: aspectRatio,
+                    result: {
+                      type: "image",
+                      data: [{ ...item }],
                     },
-                  };
+                  },
+                };
 
             currentX += nodeSize.width + gap;
             return finalNode as AllNodeType;
@@ -2517,6 +2769,15 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     updateVideoNodeData: (nodeId, patch) => {
       set((state) => ({
         nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+          ...data,
+          ...patch,
+        })),
+      }));
+    },
+
+    updateNewVideoNodeData: (nodeId, patch) => {
+      set((state) => ({
+        nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
           ...data,
           ...patch,
         })),
@@ -2668,6 +2929,103 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const serverMessage = getRequestErrorMessage(startError);
         set((state) => ({
           nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+            ...data,
+            status: GenerationStatus.FAILED,
+            error: {
+              code: "CREATE_TASK_FAILED",
+              message: "创建任务失败，请稍后再试",
+              detail: serverMessage,
+              serverMessage,
+            },
+          })),
+        }));
+        throw startError;
+      }
+    },
+
+    startNewVideoGeneration: async (nodeId, payload, count = 1) => {
+      stopVideoPollingInternal(nodeId);
+
+      const input = payload.__newVideoInput;
+      const requestPayload = { ...payload };
+      delete requestPayload.__newVideoInput;
+      const totalTasks = Math.max(1, Math.min(Number(count) || 1, 4));
+      const model = input?.model ?? requestPayload.model ?? '';
+      const isSeedance20 = model === "seedance-2.0-pro";
+
+      set((state) => ({
+        nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
+          ...data,
+          model,
+          prompt: input?.prompt ?? data.prompt,
+          promptDraft: input?.prompt ?? data.promptDraft,
+          duration: input?.params?.duration ?? data.duration,
+          aspect_ratio: input?.params?.aspectRatio ?? data.aspect_ratio,
+          status: GenerationStatus.QUEUED,
+          progress: 0,
+          result: { type: "video", data: [] },
+          error: undefined,
+          metadata: {
+            ...data.metadata,
+            params: input?.params,
+            mode: input?.mode,
+            count: totalTasks,
+            tasks: [],
+            failedTasks: [],
+          },
+        })),
+      }));
+
+      try {
+        const createTask = async () => {
+          const response: any = isSeedance20
+            ? await createLzVideoTask(requestPayload)
+            : await createDashscopeVideoSynthesis(requestPayload);
+          const taskId = response?.data?.task_id ?? response?.output?.task_id;
+
+          if (!taskId) {
+            throw new Error("任务 ID 为空");
+          }
+
+          return taskId as string;
+        };
+
+        const taskIds = await Promise.all(
+          Array.from({ length: totalTasks }, () => createTask()),
+        );
+
+        set((state) => ({
+          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
+            ...data,
+            task_id: taskIds[0],
+            status: GenerationStatus.IN_PROGRESS,
+            progress: 0,
+            metadata: {
+              ...data.metadata,
+              tasks: taskIds,
+              failedTasks: [],
+            },
+          })),
+        }));
+
+        const controller = new AbortController();
+        videoPollingControllers.set(nodeId, controller);
+        taskIds.forEach((taskId, index) => {
+          void pollNewVideoGeneration({
+            taskId,
+            nodeId,
+            signal: controller.signal,
+            setState: set,
+            getState: get,
+            isSeedance20,
+            taskIndex: index,
+            totalTasks,
+          });
+        });
+      } catch (startError) {
+        const serverMessage = getRequestErrorMessage(startError);
+        set((state) => ({
+          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
             ...data,
             status: GenerationStatus.FAILED,
             error: {

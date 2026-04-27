@@ -170,12 +170,30 @@ export interface NewVideoGenerationNode {
   duration?: number; // 视频时长（秒）
   aspect_ratio: string; // 宽高比，如 "16:9"
   image_urls?: string[]; // 参考图像 URL 列表
+  video_urls?: string[]; // 参考视频 URL 列表
+  audio_urls?: string[]; // 参考音频 URL 列表
   status?: GenerationStatus; // 当前生成状态
   progress?: number; // 进度百分比（0-100）
   metadata: Record<string, unknown>; // 扩展元数据
+  task_id?: string; // 最近一次生成任务 ID
+  error?: {
+    code?: string;
+    message?: string;
+    detail?: string;
+    serverMessage?: string;
+    status?: number;
+  };
   result?: {
     type: string;
-    data: Array<{ url: string }>;
+    data: Array<{
+      url: string;
+      remoteUrl?: string;
+      displayUrl?: string;
+      format?: string;
+      localPath?: string;
+      localName?: string;
+      [key: string]: any;
+    }>;
   };
   createdAt?: number; // 创建时间戳
   nickname?: string; // 节点昵称
