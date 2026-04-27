@@ -62,6 +62,7 @@ import { MultiSelectQuickCreate } from "./MultiSelectQuickCreate";
 
 const FALLBACK_NODE_WIDTH = 175;
 const FALLBACK_NODE_HEIGHT = 175;
+const SELECTION_STORE_SYNC_DELAY = 90;
 
 /**
  * 根据起点和终点绘制一条柔和的贝塞尔曲线。
@@ -117,6 +118,53 @@ const DELETE_CONFIRM_NODE_LABEL: Partial<Record<AllNodeType["type"], string>> =
     imageAgentNode: "图片智能体节点",
     videoAgentNode: "视频智能体节点",
   };
+
+const getCanvasNodeTypeFromFlowNode = (
+  node: AllNodeType | undefined,
+): CanvasNodeType | null => {
+  if (!node) {
+    return null;
+  }
+
+  if (node.type === "imageNode") {
+    return "image";
+  }
+
+  if (node.type === "videoNode" || node.type === "newVideoNode") {
+    return "video";
+  }
+
+  if (node.type === "audioNode") {
+    return "audio";
+  }
+
+  return null;
+};
+
+const canPassMediaToNodeType = (
+  sourceNode: AllNodeType | undefined,
+  targetNodeType: CanvasNodeType | null,
+) => {
+  const sourceNodeType = getCanvasNodeTypeFromFlowNode(sourceNode);
+
+  if (!sourceNodeType || !targetNodeType) {
+    return false;
+  }
+
+  if (targetNodeType === "image") {
+    return sourceNodeType === "image";
+  }
+
+  if (targetNodeType === "video") {
+    return (
+      sourceNodeType === "image" ||
+      sourceNodeType === "video" ||
+      sourceNodeType === "audio"
+    );
+  }
+
+  return false;
+};
 
 const needsGeneratingDeleteConfirm = (node: AllNodeType) => {
   if (!(node.type in DELETE_CONFIRM_NODE_LABEL)) {
@@ -836,6 +884,10 @@ export const CanvasFlow = ({
   const isDraggingRef = useRef(false);
   const pendingNodeChangesRef = useRef<NodeChange<AllNodeType>[]>([]);
   const nodeChangeRafRef = useRef<number | null>(null);
+  const pendingStoreNodeChangesRef = useRef<NodeChange<AllNodeType>[]>([]);
+  const storeNodeChangeRafRef = useRef<number | null>(null);
+  const pendingSelectStoreChangesRef = useRef<NodeChange<AllNodeType>[]>([]);
+  const selectStoreChangeTimerRef = useRef<number | null>(null);
 
   // 稳定 ReactFlow 对象型 props 的引用，避免每次 render 生成新对象导致子树无效更新
   const connectionLineStyle = useMemo(
@@ -876,6 +928,7 @@ export const CanvasFlow = ({
   const compactNodeChanges = useCallback(
     (changes: NodeChange<AllNodeType>[]) => {
       const latestPositionChanges = new Map<string, NodeChange<AllNodeType>>();
+      const latestSelectChanges = new Map<string, NodeChange<AllNodeType>>();
       const otherChanges: NodeChange<AllNodeType>[] = [];
 
       changes.forEach((change) => {
@@ -884,10 +937,19 @@ export const CanvasFlow = ({
           return;
         }
 
+        if (change.type === "select") {
+          latestSelectChanges.set(change.id, change);
+          return;
+        }
+
         otherChanges.push(change);
       });
 
-      return [...otherChanges, ...latestPositionChanges.values()];
+      return [
+        ...otherChanges,
+        ...latestPositionChanges.values(),
+        ...latestSelectChanges.values(),
+      ];
     },
     [],
   );
@@ -917,10 +979,66 @@ export const CanvasFlow = ({
     [compactNodeChanges],
   );
 
+  const scheduleStoreNodeChanges = useCallback(
+    (changes: NodeChange<AllNodeType>[]) => {
+      pendingStoreNodeChangesRef.current.push(...changes);
+
+      if (storeNodeChangeRafRef.current !== null) {
+        return;
+      }
+
+      storeNodeChangeRafRef.current = window.requestAnimationFrame(() => {
+        storeNodeChangeRafRef.current = null;
+        const pendingChanges = compactNodeChanges(
+          pendingStoreNodeChangesRef.current,
+        );
+        pendingStoreNodeChangesRef.current = [];
+
+        if (pendingChanges.length === 0) {
+          return;
+        }
+
+        storeOnNodesChange(pendingChanges);
+      });
+    },
+    [compactNodeChanges, storeOnNodesChange],
+  );
+
+  const scheduleSelectStoreNodeChanges = useCallback(
+    (changes: NodeChange<AllNodeType>[]) => {
+      pendingSelectStoreChangesRef.current.push(...changes);
+
+      if (selectStoreChangeTimerRef.current !== null) {
+        window.clearTimeout(selectStoreChangeTimerRef.current);
+      }
+
+      selectStoreChangeTimerRef.current = window.setTimeout(() => {
+        selectStoreChangeTimerRef.current = null;
+        const pendingChanges = compactNodeChanges(
+          pendingSelectStoreChangesRef.current,
+        );
+        pendingSelectStoreChangesRef.current = [];
+
+        if (pendingChanges.length === 0) {
+          return;
+        }
+
+        scheduleStoreNodeChanges(pendingChanges);
+      }, SELECTION_STORE_SYNC_DELAY);
+    },
+    [compactNodeChanges, scheduleStoreNodeChanges],
+  );
+
   useEffect(() => {
     return () => {
       if (nodeChangeRafRef.current !== null) {
         window.cancelAnimationFrame(nodeChangeRafRef.current);
+      }
+      if (storeNodeChangeRafRef.current !== null) {
+        window.cancelAnimationFrame(storeNodeChangeRafRef.current);
+      }
+      if (selectStoreChangeTimerRef.current !== null) {
+        window.clearTimeout(selectStoreChangeTimerRef.current);
       }
     };
   }, []);
@@ -933,10 +1051,27 @@ export const CanvasFlow = ({
       // 只处理非位置相关的变更（选中、删除等），位置变更在 handleNodeDragStop 中处理
       const nonPositionChanges = changes.filter((c) => c.type !== "position");
       if (nonPositionChanges.length > 0) {
-        storeOnNodesChange(nonPositionChanges);
+        const selectChanges = nonPositionChanges.filter(
+          (change) => change.type === "select",
+        );
+        const otherChanges = nonPositionChanges.filter(
+          (change) => change.type !== "select",
+        );
+
+        if (selectChanges.length > 0) {
+          scheduleSelectStoreNodeChanges(selectChanges);
+        }
+
+        if (otherChanges.length > 0) {
+          scheduleStoreNodeChanges(otherChanges);
+        }
       }
     },
-    [scheduleDisplayNodeChanges, storeOnNodesChange],
+    [
+      scheduleDisplayNodeChanges,
+      scheduleSelectStoreNodeChanges,
+      scheduleStoreNodeChanges,
+    ],
   );
 
   const handleNodeDragStart = useCallback(() => {
@@ -1525,19 +1660,33 @@ export const CanvasFlow = ({
 
             if (!hasConnection) {
               if (pendingConnect.handleType === "source") {
-                onConnect({
-                  source: pendingConnect.nodeId,
-                  sourceHandle: pendingConnect.handleId ?? "output",
-                  target: targetNode.id,
-                  targetHandle: "input",
-                });
+                const sourceNode = allNodes.find(
+                  (node) => node.id === pendingConnect.nodeId,
+                );
+                const targetNodeType =
+                  getCanvasNodeTypeFromFlowNode(targetNode);
+                if (canPassMediaToNodeType(sourceNode, targetNodeType)) {
+                  onConnect({
+                    source: pendingConnect.nodeId,
+                    sourceHandle: pendingConnect.handleId ?? "output",
+                    target: targetNode.id,
+                    targetHandle: "input",
+                  });
+                }
               } else {
-                onConnect({
-                  source: targetNode.id,
-                  sourceHandle: "output",
-                  target: pendingConnect.nodeId,
-                  targetHandle: pendingConnect.handleId ?? "input",
-                });
+                const pendingNode = allNodes.find(
+                  (node) => node.id === pendingConnect.nodeId,
+                );
+                const targetNodeType =
+                  getCanvasNodeTypeFromFlowNode(pendingNode);
+                if (canPassMediaToNodeType(targetNode, targetNodeType)) {
+                  onConnect({
+                    source: targetNode.id,
+                    sourceHandle: "output",
+                    target: pendingConnect.nodeId,
+                    targetHandle: pendingConnect.handleId ?? "input",
+                  });
+                }
               }
             }
 
@@ -1568,6 +1717,8 @@ export const CanvasFlow = ({
 
       const flowPosition = screenToFlowPosition(menuScreenPosition);
       const newNodeId = addNode(nodeType, flowPosition);
+      const allNodes = useCanvasFlowStore.getState().nodes;
+      const sourceNodeById = new Map(allNodes.map((node) => [node.id, node]));
 
       const pendingConnect = pendingConnectRef.current;
       if (!pendingConnect) {
@@ -1576,19 +1727,36 @@ export const CanvasFlow = ({
       }
 
       if (pendingConnect.handleType === "source") {
-        onConnect({
-          source: pendingConnect.nodeId,
-          sourceHandle: pendingConnect.handleId ?? "output",
-          target: newNodeId,
-          targetHandle: "input",
-        });
+        if (
+          canPassMediaToNodeType(
+            sourceNodeById.get(pendingConnect.nodeId),
+            nodeType,
+          )
+        ) {
+          onConnect({
+            source: pendingConnect.nodeId,
+            sourceHandle: pendingConnect.handleId ?? "output",
+            target: newNodeId,
+            targetHandle: "input",
+          });
+        }
       } else {
-        onConnect({
-          source: newNodeId,
-          sourceHandle: "output",
-          target: pendingConnect.nodeId,
-          targetHandle: pendingConnect.handleId ?? "input",
-        });
+        const pendingTargetNodeType = getCanvasNodeTypeFromFlowNode(
+          sourceNodeById.get(pendingConnect.nodeId),
+        );
+        if (
+          canPassMediaToNodeType(
+            sourceNodeById.get(newNodeId),
+            pendingTargetNodeType,
+          )
+        ) {
+          onConnect({
+            source: newNodeId,
+            sourceHandle: "output",
+            target: pendingConnect.nodeId,
+            targetHandle: pendingConnect.handleId ?? "input",
+          });
+        }
       }
 
       pendingConnectRef.current = null;
@@ -1824,6 +1992,59 @@ export const CanvasFlow = ({
           endY,
         }));
 
+        const flowPosition = screenToFlowPosition({ x: endX, y: endY });
+        const allNodes = useCanvasFlowStore.getState().nodes;
+        const targetNode = allNodes.find((node) => {
+          const nodeWidth =
+            node.width ?? node.measured?.width ?? FALLBACK_NODE_WIDTH;
+          const nodeHeight =
+            node.height ?? node.measured?.height ?? FALLBACK_NODE_HEIGHT;
+
+          return (
+            flowPosition.x >= node.position.x &&
+            flowPosition.x <= node.position.x + nodeWidth &&
+            flowPosition.y >= node.position.y &&
+            flowPosition.y <= node.position.y + nodeHeight
+          );
+        });
+
+        const targetNodeType = getCanvasNodeTypeFromFlowNode(targetNode);
+        if (targetNode && targetNodeType) {
+          const nodeById = new Map(allNodes.map((node) => [node.id, node]));
+          const existingEdges = useCanvasFlowStore.getState().edges;
+          const edgeKeySet = new Set(
+            existingEdges.map(
+              (edge) =>
+                `${edge.source}:${edge.sourceHandle ?? "output"}->${edge.target}:${edge.targetHandle ?? "input"}`,
+            ),
+          );
+
+          quickAddSelectionSnapshotRef.current
+            .filter((sourceId) => sourceId !== targetNode.id)
+            .filter((sourceId) =>
+              canPassMediaToNodeType(nodeById.get(sourceId), targetNodeType),
+            )
+            .forEach((sourceId) => {
+              const edgeKey = `${sourceId}:output->${targetNode.id}:input`;
+              if (edgeKeySet.has(edgeKey)) {
+                return;
+              }
+
+              edgeKeySet.add(edgeKey);
+              onConnect({
+                source: sourceId,
+                sourceHandle: "output",
+                target: targetNode.id,
+                targetHandle: "input",
+              });
+            });
+
+          quickAddSelectionSnapshotRef.current = [];
+          setQuickAddMenuScreenPosition(null);
+          setQuickAddMenuOpen(false);
+          return;
+        }
+
         setQuickAddMenuScreenPosition({ x: endX, y: endY });
         setQuickAddMenuOpen(true);
       };
@@ -1853,6 +2074,8 @@ export const CanvasFlow = ({
       annotationWorkspace.open,
       multiSelectedCount,
       multiSelectedNodeIds,
+      onConnect,
+      screenToFlowPosition,
       selectionRightCenterScreenPosition,
     ],
   );
@@ -1886,6 +2109,10 @@ export const CanvasFlow = ({
       const sourceNodeIds = quickAddSelectionSnapshotRef.current.filter((id) =>
         allNodeIdSet.has(id),
       );
+      const sourceNodeById = new Map(allNodes.map((node) => [node.id, node]));
+      const connectableSourceNodeIds = sourceNodeIds.filter((sourceId) =>
+        canPassMediaToNodeType(sourceNodeById.get(sourceId), nodeType),
+      );
 
       const existingEdges = useCanvasFlowStore.getState().edges;
       const edgeKeySet = new Set(
@@ -1895,7 +2122,7 @@ export const CanvasFlow = ({
         ),
       );
 
-      sourceNodeIds.forEach((sourceId) => {
+      connectableSourceNodeIds.forEach((sourceId) => {
         if (sourceId === newNodeId) {
           return;
         }
