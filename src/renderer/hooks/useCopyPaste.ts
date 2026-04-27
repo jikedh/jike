@@ -16,7 +16,94 @@ interface CopiedNodeTemplate {
 interface CopiedEdgeTemplate {
   originalSource: string;
   originalTarget: string;
+  edge: Omit<EdgeType, "id" | "source" | "target">;
 }
+
+const shouldKeepIncomingEdgeForCopiedNode = (node?: AllNodeType) => {
+  return node?.type === "imageNode" || node?.type === "videoNode";
+};
+
+const resolveNodeTypeForCounter = (nodeType: AllNodeType["type"]): NodeType => {
+  const nodeTypeMap: Partial<Record<AllNodeType["type"], NodeType>> = {
+    noteNode: "note",
+    imageNode: "image",
+    videoNode: "video",
+    agentNode: "agent",
+    panoramaNode: "panorama",
+    audioNode: "audio",
+    textAgentNode: "textAgent",
+    imageAgentNode: "imageAgent",
+    videoAgentNode: "videoAgent",
+    tableNode: "table",
+    newVideoNode: "newVideo",
+  };
+
+  return nodeTypeMap[nodeType] ?? "default";
+};
+
+const getNodeResultUrls = (node?: AllNodeType): string[] => {
+  const nodeData = node?.data as any;
+
+  return (nodeData?.result?.data ?? [])
+    .map((item: any) => item?.url)
+    .filter(Boolean);
+};
+
+const getTargetMediaFieldByEdge = (
+  sourceNode?: AllNodeType,
+  targetNode?: AllNodeType,
+) => {
+  if (!sourceNode || !targetNode) return null;
+
+  if (sourceNode.type === "imageNode") {
+    if (targetNode.type === "imageNode" || targetNode.type === "videoNode") {
+      return "image_urls";
+    }
+  }
+
+  if (targetNode.type === "videoNode" && sourceNode.type === "videoNode") {
+    return "video_urls";
+  }
+
+  if (targetNode.type === "videoNode" && sourceNode.type === "audioNode") {
+    return "audio_urls";
+  }
+
+  return null;
+};
+
+const syncMediaUrlsForPastedEdges = (
+  nodes: AllNodeType[],
+  edges: EdgeType[],
+): AllNodeType[] => {
+  return edges.reduce((currentNodes, edge) => {
+    const sourceNode = currentNodes.find((node) => node.id === edge.source);
+    const targetNode = currentNodes.find((node) => node.id === edge.target);
+    const targetField = getTargetMediaFieldByEdge(sourceNode, targetNode);
+    const sourceUrls = getNodeResultUrls(sourceNode);
+
+    if (!targetNode || !targetField || sourceUrls.length === 0) {
+      return currentNodes;
+    }
+
+    return currentNodes.map((node) => {
+      if (node.id !== targetNode.id) {
+        return node;
+      }
+
+      const nodeData = node.data as any;
+      const currentUrls = nodeData?.[targetField] ?? [];
+
+      return {
+        ...node,
+        data: {
+          ...nodeData,
+          [targetField]: Array.from(new Set([...currentUrls, ...sourceUrls])),
+        },
+      } as AllNodeType;
+    });
+  }, nodes);
+};
 
 export function useCopyPaste() {
   const copiedNodesRef = useRef<CopiedNodeTemplate[]>([]);
@@ -45,15 +132,40 @@ export function useCopyPaste() {
       };
     });
 
-    const copiedEdges: CopiedEdgeTemplate[] = state.edges
-      .filter(
-        (edge) =>
-          selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target),
-      )
-      .map((edge) => ({
-        originalSource: edge.source,
-        originalTarget: edge.target,
-      }));
+    const selectedNodeMap = new Map(
+      selectedNodes.map((node) => [node.id, node]),
+    );
+    const copiedEdgeMap = new Map<string, CopiedEdgeTemplate>();
+
+    state.edges.forEach((edge) => {
+      const isInternalEdge =
+        selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target);
+      const shouldKeepIncomingEdge =
+        selectedNodeIds.has(edge.target) &&
+        shouldKeepIncomingEdgeForCopiedNode(selectedNodeMap.get(edge.target));
+
+      if (!isInternalEdge && !shouldKeepIncomingEdge) {
+        return;
+      }
+
+      const {
+        id: _id,
+        source: _source,
+        target: _target,
+        ...edgePayload
+      } = JSON.parse(JSON.stringify(edge)) as EdgeType;
+
+      copiedEdgeMap.set(
+        `${edge.source}:${edge.sourceHandle ?? "output"}->${edge.target}:${edge.targetHandle ?? "input"}`,
+        {
+          originalSource: edge.source,
+          originalTarget: edge.target,
+          edge: edgePayload,
+        },
+      );
+    });
+
+    const copiedEdges = Array.from(copiedEdgeMap.values());
 
     copiedNodesRef.current = copiedNodes;
     copiedEdgesRef.current = copiedEdges;
@@ -88,7 +200,9 @@ export function useCopyPaste() {
     const REPEAT_OFFSET_X = 200;
 
     const newNodes: AllNodeType[] = copiedNodes.map((nodeTemplate) => {
-      const newId = state.getNextNodeId(nodeTemplate.type as NodeType);
+      const newId = state.getNextNodeId(
+        resolveNodeTypeForCounter(nodeTemplate.type as AllNodeType["type"]),
+      );
       originalToNewIdMap.set(nodeTemplate.originalId, newId);
 
       let newPositionX: number;
@@ -124,14 +238,19 @@ export function useCopyPaste() {
     });
 
     const newEdges: EdgeType[] = copiedEdges
-      .map((edgeTemplate) => {
-        const newSource = originalToNewIdMap.get(edgeTemplate.originalSource);
+      .map((edgeTemplate, edgeIndex) => {
+        const newSource =
+          originalToNewIdMap.get(edgeTemplate.originalSource) ??
+          (state.nodes.some((node) => node.id === edgeTemplate.originalSource)
+            ? edgeTemplate.originalSource
+            : undefined);
         const newTarget = originalToNewIdMap.get(edgeTemplate.originalTarget);
 
         if (!newSource || !newTarget) return null;
 
         return {
-          id: `edge-${newSource}-${newTarget}-${Date.now()}`,
+          ...edgeTemplate.edge,
+          id: `edge-${newSource}-${newTarget}-${Date.now()}-${edgeIndex}`,
           source: newSource,
           target: newTarget,
         } as EdgeType;
@@ -144,8 +263,13 @@ export function useCopyPaste() {
         selected: false,
       }));
 
+      const nextNodes = syncMediaUrlsForPastedEdges(
+        [...updatedNodes, ...newNodes],
+        newEdges,
+      );
+
       return {
-        nodes: [...updatedNodes, ...newNodes],
+        nodes: nextNodes,
         edges: [...state.edges, ...newEdges],
       };
     });

@@ -1105,14 +1105,31 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     return nodeTypeMap[node.type] ?? "default";
   };
 
+  const getNodeResultUrls = (node: AllNodeType | undefined): string[] => {
+    const nodeData = node?.data as any;
+
+    return (nodeData?.result?.data ?? [])
+      .map((item: any) => item?.url)
+      .filter(Boolean);
+  };
+
+  const updateUrlListByMode = (
+    currentUrls: string[],
+    sourceUrls: string[],
+    mode: "add" | "remove",
+  ) => {
+    if (mode === "add") {
+      return Array.from(new Set([...currentUrls, ...sourceUrls]));
+    }
+
+    const sourceUrlSet = new Set(sourceUrls);
+    return currentUrls.filter((url) => !sourceUrlSet.has(url));
+  };
+
   /**
-   * 同步图片节点的 image_urls 依赖
-   * 支持 Image→Image 和 Image→Video 的边操作
-   * @param nodes 当前节点数组
-   * @param edge 要处理的边
-   * @param mode 'add' = 连接时合并, 'remove' = 删除时清理
+   * 同步由连接线带来的媒体参数依赖。
    */
-  const syncImageUrlsByEdge = (
+  const syncMediaUrlsByEdge = (
     nodes: any[],
     edge: any,
     mode: "add" | "remove",
@@ -1120,30 +1137,42 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     const sourceNode = nodes.find((n) => n.id === edge.source);
     const targetNode = nodes.find((n) => n.id === edge.target);
 
-    // 只处理来自 imageNode 的关联，且目标是 imageNode、videoNode 或 panoramaNode
-    if (!sourceNode || sourceNode.type !== "imageNode") {
-      return nodes;
-    }
-    if (
-      !targetNode ||
-      (targetNode.type !== "imageNode" &&
-        targetNode.type !== "videoNode" &&
-        targetNode.type !== "panoramaNode")
-    ) {
+    if (!sourceNode || !targetNode) {
       return nodes;
     }
 
-    // 从 source 的 result.data 提取 URL 字符串数组
-    const sourceData = sourceNode.data as any;
-    const sourceUrls = (sourceData?.result?.data ?? [])
-      .map((item: any) => item.url)
-      .filter(Boolean);
-
+    const sourceUrls = getNodeResultUrls(sourceNode);
     if (sourceUrls.length === 0) {
       return nodes;
     }
 
-    // 更新 target 的字段
+    const targetField = (() => {
+      if (sourceNode.type === "imageNode") {
+        if (
+          targetNode.type === "imageNode" ||
+          targetNode.type === "videoNode"
+        ) {
+          return "image_urls";
+        }
+
+        if (targetNode.type === "panoramaNode") {
+          return "image_url";
+        }
+      }
+
+      if (targetNode.type === "videoNode" && sourceNode.type === "videoNode") {
+        return "video_urls";
+      }
+
+      if (targetNode.type === "videoNode" && sourceNode.type === "audioNode") {
+        return "audio_urls";
+      }
+
+      return null;
+    })();
+
+    if (!targetField) return nodes;
+
     return nodes.map((node) => {
       if (node.id !== targetNode.id) {
         return node;
@@ -1151,8 +1180,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       const nodeData = node.data as any;
 
-      // 对于 panoramaNode，更新 image_url 字段
-      if (node.type === "panoramaNode") {
+      if (targetField === "image_url") {
         if (mode === "add") {
           return {
             ...node,
@@ -1172,18 +1200,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         }
       }
 
-      // 对于 imageNode 和 videoNode，更新 image_urls 字段
-      const currentUrls = nodeData?.image_urls ?? [];
-      let nextUrls: string[];
-
-      if (mode === "add") {
-        // 连接时：合并去重
-        nextUrls = Array.from(new Set([...currentUrls, ...sourceUrls]));
-      } else {
-        // 删除时：移除 source URLs
-        const sourceUrlSet = new Set(sourceUrls);
-        nextUrls = currentUrls.filter((url) => !sourceUrlSet.has(url));
-      }
+      const currentUrls = nodeData?.[targetField] ?? [];
+      const nextUrls = updateUrlListByMode(currentUrls, sourceUrls, mode);
 
       // 对于 imageNode，mode === "remove" 时也需要清理 midjourneyAdvanced 中的 URL
       let nextMidjourneyAdvanced = nodeData?.midjourneyAdvanced;
@@ -1210,7 +1228,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         ...node,
         data: {
           ...nodeData,
-          image_urls: nextUrls,
+          [targetField]: nextUrls,
           ...(nextMidjourneyAdvanced && {
             midjourneyAdvanced: nextMidjourneyAdvanced,
           }),
@@ -1698,8 +1716,33 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           selected: false,
         }));
 
+        const copiedIncomingEdges =
+          node.type === "imageNode" || node.type === "videoNode"
+            ? state.edges
+                .filter((edge) => edge.target === node.id)
+                .map((edge, edgeIndex) => {
+                  const { id: _id, target: _target, ...edgePayload } = edge;
+
+                  return {
+                    ...edgePayload,
+                    id: `edge-${edge.source}-${newId}-${Date.now()}-${edgeIndex}`,
+                    target: newId,
+                  } as EdgeType;
+                })
+            : [];
+        const nextEdges = [...state.edges, ...copiedIncomingEdges];
+        let nextNodes = [...updatedNodes, finalDuplicatedNode];
+        copiedIncomingEdges.forEach((edge) => {
+          nextNodes = syncMediaUrlsByEdge(nextNodes, edge, "add");
+        });
+
         return {
-          nodes: [...updatedNodes, finalDuplicatedNode],
+          nodes: nextNodes,
+          edges: nextEdges,
+          ...buildReferenceHighlightState(
+            state.referenceHoverRefCounts,
+            nextEdges,
+          ),
         };
       });
 
@@ -1725,7 +1768,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             return state.nodes;
           }
 
-          return syncImageUrlsByEdge(state.nodes, edgeToDelete, "remove");
+          return syncMediaUrlsByEdge(state.nodes, edgeToDelete, "remove");
         })(),
         ...(() => {
           const nextEdges = state.edges.filter((edge) => edge.id !== edgeId);
@@ -1769,7 +1812,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         let nextNodes = state.nodes;
 
         removedEdges.forEach((edge) => {
-          nextNodes = syncImageUrlsByEdge(nextNodes, edge, "remove");
+          nextNodes = syncMediaUrlsByEdge(nextNodes, edge, "remove");
         });
 
         return {
@@ -2831,7 +2874,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         let nextNodes = state.nodes;
 
         removedEdges.forEach((edge) => {
-          nextNodes = syncImageUrlsByEdge(nextNodes, edge, "remove");
+          nextNodes = syncMediaUrlsByEdge(nextNodes, edge, "remove");
         });
 
         return {
@@ -2883,7 +2926,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         return {
           nodes: createdEdge
-            ? syncImageUrlsByEdge(state.nodes, createdEdge as EdgeType, "add")
+            ? syncMediaUrlsByEdge(state.nodes, createdEdge as EdgeType, "add")
             : state.nodes,
           edges: nextEdges,
           ...buildReferenceHighlightState(
