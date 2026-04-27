@@ -898,7 +898,9 @@ const VideoSubtitleRemovalPanel = ({
             </Button>
             <Button
               onClick={() => void handleSend()}
-              disabled={!isReady || isSubmitting || requiredPoints <= 0}
+              disabled={
+                !isReady || isSubmitting || (pointsEnabled && requiredPoints <= 0)
+              }
               className="min-w-44 border border-[#f3d5ff]/50 bg-[#B43FEB] font-semibold text-white shadow-[0_12px_34px_rgba(180,63,235,0.44)] ring-1 ring-[#f0c7ff]/25 hover:bg-[#C45BF0] hover:shadow-[0_16px_40px_rgba(180,63,235,0.52)]"
             >
               {isSubmitting ? "发送中..." : "发送并生成新视频"}
