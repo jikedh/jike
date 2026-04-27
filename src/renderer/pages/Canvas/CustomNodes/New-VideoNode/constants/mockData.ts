@@ -35,22 +35,22 @@ export const MOCK_REFERENCE_ITEMS: MentionItem[] = [
     thumbnail: "https://picsum.photos/seed/ref2/200/200",
     type: "image",
   },
-  {
-    id: "mock-vid-1",
-    label: "素材3",
-    value: "素材3",
-    thumbnail:
-      "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-    type: "video",
-  },
-  {
-    id: "mock-aud-1",
-    label: "素材4",
-    value: "素材4",
-    thumbnail:
-      "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
-    type: "audio",
-  },
+  // {
+  //   id: "mock-vid-1",
+  //   label: "素材3",
+  //   value: "素材3",
+  //   thumbnail:
+  //     "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+  //   type: "video",
+  // },
+  // {
+  //   id: "mock-aud-1",
+  //   label: "素材4",
+  //   value: "素材4",
+  //   thumbnail:
+  //     "https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3",
+  //   type: "audio",
+  // },
 ];
 
 export const MOCK_MENTION_ITEMS = MOCK_REFERENCE_ITEMS;
