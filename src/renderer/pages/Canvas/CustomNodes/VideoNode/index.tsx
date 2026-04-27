@@ -16,6 +16,8 @@ import { VideoContent } from "./VideoContent";
 import { VideoPromptPanel } from "./VideoPromptPanel";
 import { VideoToolbar } from "./VideoToolbar";
 
+const DRAG_UI_RESTORE_DELAY = 140;
+
 /**
  * 视频节点组件
  * 职责：
@@ -27,14 +29,15 @@ import { VideoToolbar } from "./VideoToolbar";
 export const VideoNode = memo(
   ({ id, data, selected, dragging }: NodeProps<VideoNodeType>) => {
     const isDragging = Boolean(dragging);
+    const [isDragUiSettled, setIsDragUiSettled] = useState(!isDragging);
     const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
     const separateToNodes = useCanvasFlowStore(
       (state) => state.separateToNodes,
     );
-    const highlightedSourceNodeIds = useCanvasFlowStore(
-      (state) => state.highlightedSourceNodeIds,
+    const isSourceHighlighted = useCanvasFlowStore((state) =>
+      state.highlightedSourceNodeIds.includes(id),
     );
     const updateVideoNodeData = useCanvasFlowStore(
       (state) => state.updateVideoNodeData,
@@ -48,6 +51,19 @@ export const VideoNode = memo(
     );
 
     // 使用 useMemo 缓存样式类名
+    useEffect(() => {
+      if (isDragging) {
+        setIsDragUiSettled(false);
+        return;
+      }
+
+      const timer = window.setTimeout(() => {
+        setIsDragUiSettled(true);
+      }, DRAG_UI_RESTORE_DELAY);
+
+      return () => window.clearTimeout(timer);
+    }, [isDragging]);
+
     const handleVisibilityClass = useMemo(
       () =>
         isGalleryExpanded
@@ -60,13 +76,10 @@ export const VideoNode = memo(
 
     // 使用 useMemo 缓存工具栏显示条件
     const shouldShowToolbar = useMemo(
-      () => selected && !isDragging && selectedNodesCount <= 1,
-      [selected, isDragging, selectedNodesCount],
+      () =>
+        selected && !isDragging && isDragUiSettled && selectedNodesCount <= 1,
+      [selected, isDragging, isDragUiSettled, selectedNodesCount],
     );
-
-    const isSourceHighlighted = useMemo(() => {
-      return highlightedSourceNodeIds.includes(id);
-    }, [highlightedSourceNodeIds, id]);
 
     // 根据 data.aspect_ratio（如 "1:1", "16:9"）动态计算节点尺寸，按视频原始比例展示
     const nodeSize = useMemo(() => {
@@ -170,22 +183,18 @@ export const VideoNode = memo(
           />
 
           {/* 顶部工具栏：放在节点几何空间内，缩放时自动保持一致 */}
-          {/* 使用 CSS 控制显隐，避免条件渲染导致 DOM 销毁重建 */}
-          <div
-            className={cn(
-              "nodrag nopan nowheel absolute -top-13 left-1/2 z-50 -translate-x-1/2 transition-opacity duration-200",
-              shouldShowToolbar
-                ? "opacity-100 visible"
-                : "opacity-0 invisible pointer-events-none",
-            )}
-          >
-            <VideoToolbar nodeId={id} data={data} onDelete={handleDelete} />
-          </div>
+          {/* 拖动结束后再挂载，降低首次拖拽时的渲染负担 */}
+          {shouldShowToolbar && (
+            <div className="nodrag nopan nowheel absolute -top-13 left-1/2 z-50 -translate-x-1/2">
+              <VideoToolbar nodeId={id} data={data} onDelete={handleDelete} />
+            </div>
+          )}
 
           <div
             className={cn(
               "group/card relative flex h-full w-full flex-col rounded-xl border",
-              hasMultipleResults && "bg-linear-to-br from-[#141418] to-[#0d0d10]",
+              hasMultipleResults &&
+                "bg-linear-to-br from-[#141418] to-[#0d0d10]",
               selected
                 ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
                 : isSourceHighlighted
@@ -194,7 +203,7 @@ export const VideoNode = memo(
             )}
           >
             {/* 选中状态角落装饰 */}
-            {selected && (
+            {selected && !isDragging && (
               <>
                 <div className="absolute -top-px -left-px w-4 h-4 border-l-2 border-t-2 border-[#B43FEB] rounded-tl-xl" />
                 <div className="absolute -top-px -right-px w-4 h-4 border-r-2 border-t-2 border-[#B43FEB] rounded-tr-xl" />
@@ -208,7 +217,7 @@ export const VideoNode = memo(
               className={cn(
                 "pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-500 group-hover/card:opacity-100",
                 hasMultipleResults &&
-                "bg-linear-to-tr from-transparent via-white/2 to-transparent",
+                  "bg-linear-to-tr from-transparent via-white/2 to-transparent",
               )}
             />
 
@@ -222,6 +231,7 @@ export const VideoNode = memo(
             >
               <VideoContent
                 data={data}
+                isDragging={isDragging}
                 nodeId={id}
                 updateVideoNodeData={updateVideoNodeData}
                 onGalleryExpandedChange={setIsGalleryExpanded}
@@ -234,17 +244,12 @@ export const VideoNode = memo(
           </div>
 
           {/* 底部增强输入区：放在节点几何空间内，缩放时自动保持一致 */}
-          {/* 使用 CSS 控制显隐，避免条件渲染导致 DOM 销毁重建 */}
-          <div
-            className={cn(
-              "nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2 transition-opacity duration-200",
-              shouldShowToolbar
-                ? "opacity-100 visible"
-                : "opacity-0 invisible pointer-events-none",
-            )}
-          >
-            <VideoPromptPanel nodeId={id} />
-          </div>
+          {/* 拖动结束后再挂载，降低首次拖拽时的渲染负担 */}
+          {shouldShowToolbar && (
+            <div className="nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2">
+              <VideoPromptPanel nodeId={id} />
+            </div>
+          )}
         </div>
       </NodeContextMenu>
     );

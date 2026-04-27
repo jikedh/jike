@@ -946,7 +946,6 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   // 隐藏的文件输入框引用：用于点击"上传"按钮时拉起文件选择器
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const nodes = useCanvasFlowStore((state) => state.nodes);
   const addNode = useCanvasFlowStore((state) => state.addNode);
   const onConnect = useCanvasFlowStore((state) => state.onConnect);
 
@@ -1201,7 +1200,9 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
       setIsSubmittingSubtitle(true);
       try {
-        const sourceNode = nodes.find((n) => n.id === nodeId);
+        const sourceNode = useCanvasFlowStore
+          .getState()
+          .nodes.find((n) => n.id === nodeId);
         const basePosition = sourceNode?.position ?? { x: 0, y: 0 };
         const baseWidth = Number(sourceNode?.width ?? 350) || 350;
 
@@ -1314,7 +1315,6 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       currentVideoUrl,
       isSubmittingSubtitle,
       nodeId,
-      nodes,
       onConnect,
       startSubtitlePolling,
       updateVideoNodeData,

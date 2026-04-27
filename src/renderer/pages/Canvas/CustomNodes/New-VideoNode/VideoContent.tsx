@@ -1,9 +1,11 @@
+import { IconVideo } from "@tabler/icons-react";
 import { GenerationStatus } from "shared/constants/enum";
 import type { NewVideoGenerationNode } from "shared/types/flow";
 import { VideoPlayer } from "@/components/ui/video-player";
 
 type VideoContentProps = {
   data: NewVideoGenerationNode;
+  isDragging?: boolean;
   nodeId?: string;
   updateVideoNodeData?: (
     nodeId: string,
@@ -17,6 +19,7 @@ type VideoContentProps = {
 
 export const VideoContent = ({
   data,
+  isDragging = false,
   nodeId,
   updateVideoNodeData,
   frameSize,
@@ -28,6 +31,14 @@ export const VideoContent = ({
   // 有视频结果时展示视频
   if (videos.length > 0) {
     const firstVideo = videos[0];
+    if (isDragging) {
+      return (
+        <div className="nopan flex h-full w-full items-center justify-center rounded-xl bg-[#08080a] text-white/35">
+          <IconVideo size={28} stroke={1.6} />
+        </div>
+      );
+    }
+
     return (
       <VideoPlayer
         src={firstVideo.url}

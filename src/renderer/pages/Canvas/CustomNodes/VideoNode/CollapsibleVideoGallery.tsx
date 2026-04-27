@@ -17,6 +17,7 @@ type VideoItem = {
 
 type CollapsibleVideoGalleryProps = {
   videos: VideoItem[];
+  isDragging?: boolean;
   nodeId?: string;
   updateVideoNodeData?: (nodeId: string, patch: any) => void;
   onExpandedChange?: (expanded: boolean) => void;
@@ -130,6 +131,7 @@ const getStackCardStyle = (
 export const CollapsibleVideoGallery = memo(
   ({
     videos,
+    isDragging = false,
     nodeId,
     updateVideoNodeData,
     onExpandedChange,
@@ -357,6 +359,7 @@ export const CollapsibleVideoGallery = memo(
             return (
               <div
                 key={`${item.remoteUrl || item.localPath || item.url}-${index}`}
+                role="presentation"
                 className={cn(
                   "group/card absolute left-0 top-0 rounded-[14px] transition-[transform,filter,opacity,box-shadow,border-color,width,height] duration-[700ms] ease-[cubic-bezier(0.2,0.85,0.15,1)] will-change-[transform,filter,opacity,width,height]",
                   shouldUseCardChrome &&
@@ -408,6 +411,7 @@ export const CollapsibleVideoGallery = memo(
                 }}
               >
                 <div
+                  role="presentation"
                   className={cn(
                     "relative flex h-full w-full items-center justify-center overflow-hidden rounded-[13px]",
                     shouldUseCardChrome && "bg-[#111]",
@@ -419,7 +423,11 @@ export const CollapsibleVideoGallery = memo(
                     }
                   }}
                 >
-                  {displayUrl && !isBroken(index) ? (
+                  {isDragging ? (
+                    <div className="flex h-full w-full items-center justify-center rounded-[13px] bg-[#08080a] text-white/35">
+                      <IconVideo size={26} stroke={1.6} />
+                    </div>
+                  ) : displayUrl && !isBroken(index) ? (
                     <VideoPlayer
                       src={displayUrl}
                       muted={!isPrimary}

@@ -2,8 +2,8 @@ import { useReactFlow } from "@xyflow/react";
 import { useCallback, useState } from "react";
 import { generateVideoSnapshotUrl, uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
-import { getVideoDuration } from "shared/utils/getVideoDuration";
 import type { VideoGenerationNode } from "shared/types/flow";
+import { getVideoDuration } from "shared/utils/getVideoDuration";
 import { toast } from "sonner";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
@@ -18,7 +18,6 @@ export const useVideoFrameCapture = () => {
 
   const { screenToFlowPosition } = useReactFlow();
   const addNode = useCanvasFlowStore((state) => state.addNode);
-  const nodes = useCanvasFlowStore((state) => state.nodes);
   const updateImageNodeData = useCanvasFlowStore(
     (state) => state.updateImageNodeData,
   );
@@ -40,7 +39,9 @@ export const useVideoFrameCapture = () => {
 
       const newNodeId = addNode("image", centerPosition);
       const sourceVideoNode = sourceVideoNodeId
-        ? nodes.find((node) => node.id === sourceVideoNodeId)
+        ? useCanvasFlowStore
+            .getState()
+            .nodes.find((node) => node.id === sourceVideoNodeId)
         : null;
       const sourceAspectRatio =
         sourceVideoNode?.type === "videoNode"
@@ -73,7 +74,7 @@ export const useVideoFrameCapture = () => {
 
       return newNodeId;
     },
-    [addNode, nodes, updateImageNodeData, onConnect],
+    [addNode, updateImageNodeData, onConnect],
   );
 
   /**

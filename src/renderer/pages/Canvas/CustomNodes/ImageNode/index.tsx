@@ -5,24 +5,26 @@ import {
 } from "@xyflow/react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { setProjectCoverFromMediaRef } from "service/projectStorage";
 import { uploadFileToOSS } from "service/oss";
+import { setProjectCoverFromMediaRef } from "service/projectStorage";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageNodeType } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
 import { ButtonHandle } from "@/components/button-handle";
-import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { PanoramaViewer } from "@/components/panorama/PanoramaViewer";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
-import { useChatSettingsStore } from "@/stores/chatSettingsStore";
+import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { ImageAnnotationWorkspace } from "./ImageAnnotationWorkspace";
 import { ImageContent } from "./ImageContent";
 import { ImagePromptPanel } from "./ImagePromptPanel";
 import { ImageToolbar } from "./ImageToolbar";
 import { getNodeSizeByAspectRatio } from "./utils/aspectRatioUtils";
+
+const DRAG_UI_RESTORE_DELAY = 140;
 
 /**
  * 图片节点组件
@@ -37,6 +39,7 @@ import { getNodeSizeByAspectRatio } from "./utils/aspectRatioUtils";
 export const ImageNode = memo(
   ({ id, data, selected, dragging }: NodeProps<ImageNodeType>) => {
     const isDragging = Boolean(dragging);
+    const [isDragUiSettled, setIsDragUiSettled] = useState(!isDragging);
     const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
@@ -77,6 +80,21 @@ export const ImageNode = memo(
     const isAnnotationTarget = annotationWorkspace.sourceNodeId === id;
 
     // 使用 useMemo 缓存样式类名，避免每次渲染都重新拼接字符串
+    useEffect(() => {
+      if (isDragging) {
+        setIsDragUiSettled(false);
+        return;
+      }
+
+      const timer = window.setTimeout(() => {
+        setIsDragUiSettled(true);
+      }, DRAG_UI_RESTORE_DELAY);
+
+      return () => {
+        window.clearTimeout(timer);
+      };
+    }, [isDragging]);
+
     const handleVisibilityClass = useMemo(
       () =>
         isGalleryExpanded || isAnnotationMode
@@ -92,9 +110,16 @@ export const ImageNode = memo(
       () =>
         selected &&
         !isDragging &&
+        isDragUiSettled &&
         selectedNodesCount <= 1 &&
         !isAnnotationMode,
-      [selected, isDragging, isAnnotationMode, selectedNodesCount],
+      [
+        selected,
+        isDragging,
+        isDragUiSettled,
+        isAnnotationMode,
+        selectedNodesCount,
+      ],
     );
 
     const isSourceHighlighted = useMemo(() => {
@@ -316,10 +341,7 @@ export const ImageNode = memo(
           hasMultipleResults={hasMultipleResults}
         >
           <div
-            className={cn(
-              "group/node relative",
-              isGalleryExpanded && "z-40",
-            )}
+            className={cn("group/node relative", isGalleryExpanded && "z-40")}
             style={{
               width: `${nodeSize.width}px`,
               height: `${nodeSize.height}px`,
@@ -341,7 +363,8 @@ export const ImageNode = memo(
             <div
               className={cn(
                 "group/card relative flex h-full w-full flex-col rounded-xl border",
-                hasMultipleResults && "bg-linear-to-br from-[#141418] to-[#0d0d10]",
+                hasMultipleResults &&
+                  "bg-linear-to-br from-[#141418] to-[#0d0d10]",
                 isAnnotationMode
                   ? "border-transparent shadow-none ring-0"
                   : selected
@@ -370,7 +393,7 @@ export const ImageNode = memo(
               />
 
               {/* 选中状态角落装饰 */}
-              {selected && !isAnnotationMode && (
+              {selected && !isDragging && !isAnnotationMode && (
                 <>
                   <div className="absolute -top-px -left-px w-4 h-4 border-l-2 border-t-2 border-[#B43FEB] rounded-tl-xl" />
                   <div className="absolute -top-px -right-px w-4 h-4 border-r-2 border-t-2 border-[#B43FEB] rounded-tr-xl" />
@@ -385,7 +408,7 @@ export const ImageNode = memo(
                   className={cn(
                     "pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-500 group-hover/card:opacity-100",
                     hasMultipleResults &&
-                    "bg-linear-to-tr from-transparent via-white/2 to-transparent",
+                      "bg-linear-to-tr from-transparent via-white/2 to-transparent",
                   )}
                 />
               ) : null}
@@ -414,47 +437,44 @@ export const ImageNode = memo(
             </div>
 
             {/* 节点内底部增强输入区：与节点同一几何空间，缩放时保持一致 */}
-            {/* 使用 CSS 控制显隐，避免条件渲染导致 DOM 销毁重建，TipTap editor 状态丢失 */}
-            <div
-              className={cn(
-                "nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2 transition-opacity duration-200",
-                shouldShowToolbar
-                  ? "opacity-100 visible"
-                  : "opacity-0 invisible pointer-events-none",
-              )}
-            >
-              <ImagePromptPanel nodeId={id} />
-            </div>
+            {/* 拖动结束后再挂载，降低首次拖拽时的渲染负担 */}
+            {shouldShowToolbar && (
+              <div className="nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2">
+                <ImagePromptPanel nodeId={id} />
+              </div>
+            )}
           </div>
         </NodeContextMenu>
 
         {/* 全景图查看器 - 使用 Portal 渲染到 body，避免 React Flow 的 CSS 隔离影响 fixed 定位 */}
         {typeof document !== "undefined" &&
-          panoramaViewer.open &&
-          panoramaViewer.sourceNodeId === id
+        panoramaViewer.open &&
+        panoramaViewer.sourceNodeId === id
           ? createPortal(
-            <PanoramaViewer
-              open={panoramaViewer.open}
-              onClose={closePanoramaViewer}
-              initialImage={panoramaViewer.imageUrl ?? undefined}
-              sourceNodeId={panoramaViewer.sourceNodeId}
-            />,
-            document.body,
-          )
+              <PanoramaViewer
+                open={panoramaViewer.open}
+                onClose={closePanoramaViewer}
+                initialImage={panoramaViewer.imageUrl ?? undefined}
+                sourceNodeId={panoramaViewer.sourceNodeId}
+              />,
+              document.body,
+            )
           : null}
 
         {typeof document !== "undefined" &&
-          isAnnotationTarget &&
-          annotationWorkspace.open
+        isAnnotationTarget &&
+        annotationWorkspace.open
           ? createPortal(
-            <ImageAnnotationWorkspace
-              open={annotationWorkspace.open}
-              imageUrl={annotationWorkspace.imageUrl}
-              sourceNodeId={annotationWorkspace.sourceNodeId}
-              onClose={() => useCanvasFlowStore.getState().closeImageAnnotation()}
-            />,
-            document.body,
-          )
+              <ImageAnnotationWorkspace
+                open={annotationWorkspace.open}
+                imageUrl={annotationWorkspace.imageUrl}
+                sourceNodeId={annotationWorkspace.sourceNodeId}
+                onClose={() =>
+                  useCanvasFlowStore.getState().closeImageAnnotation()
+                }
+              />,
+              document.body,
+            )
           : null}
       </>
     );

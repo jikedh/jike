@@ -3,7 +3,7 @@ import {
   Position,
   useUpdateNodeInternals,
 } from "@xyflow/react";
-import { memo, useCallback, useEffect, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
 import type { NewVideoNodeType } from "shared/types/flow";
 import { ButtonHandle } from "@/components/button-handle";
@@ -12,6 +12,8 @@ import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { VideoContent } from "./VideoContent";
 import { VideoPromptPanel } from "./VideoPromptPanel";
+
+const DRAG_UI_RESTORE_DELAY = 140;
 
 /**
  * 新版视频节点入口组件 (Node Shell)
@@ -23,6 +25,7 @@ const NewVideoNode = ({
   dragging,
 }: NodeProps<NewVideoNodeType>) => {
   const isDragging = Boolean(dragging);
+  const [isDragUiSettled, setIsDragUiSettled] = useState(!isDragging);
 
   // Store actions
   const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
@@ -74,7 +77,22 @@ const NewVideoNode = ({
   }, [deleteNode, id]);
 
   const selectedNodesCount = useCanvasFlowStore((s) => s.selectedNodesCount);
-  const shouldShowToolbar = selected && !isDragging && selectedNodesCount <= 1;
+
+  useEffect(() => {
+    if (isDragging) {
+      setIsDragUiSettled(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setIsDragUiSettled(true);
+    }, DRAG_UI_RESTORE_DELAY);
+
+    return () => window.clearTimeout(timer);
+  }, [isDragging]);
+
+  const shouldShowToolbar =
+    selected && !isDragging && isDragUiSettled && selectedNodesCount <= 1;
 
   return (
     <NodeContextMenu onDuplicate={handleDuplicate} onDelete={handleDelete}>
@@ -105,6 +123,7 @@ const NewVideoNode = ({
         {/* 节点内容区 */}
         <VideoContent
           data={data}
+          isDragging={isDragging}
           nodeId={id}
           updateVideoNodeData={updateVideoNodeData}
           frameSize={{
@@ -123,15 +142,11 @@ const NewVideoNode = ({
         />
 
         {/* 底部面板 */}
-        <div
-          className={`absolute top-full left-1/2 z-50 mt-4 -translate-x-1/2 transition-opacity duration-200 ${
-            shouldShowToolbar
-              ? "opacity-100 visible"
-              : "opacity-0 invisible pointer-events-none"
-          }`}
-        >
-          <VideoPromptPanel nodeId={id} />
-        </div>
+        {shouldShowToolbar && (
+          <div className="absolute top-full left-1/2 z-50 mt-4 -translate-x-1/2">
+            <VideoPromptPanel nodeId={id} />
+          </div>
+        )}
       </div>
     </NodeContextMenu>
   );
