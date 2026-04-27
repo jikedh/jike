@@ -55,7 +55,11 @@ export const localStorageService = {
     }
   > => {
     if (!window.storage) {
-      return { success: false, error: "Storage API not available", projects: [] };
+      return {
+        success: false,
+        error: "Storage API not available",
+        projects: [],
+      };
     }
 
     const { basePath, error } = requireStoragePath();
@@ -538,6 +542,7 @@ export const getCoverImagePath = (
 
 // ========== 预设提示词库 ==========
 const CANVAS_PRESETS_KEY = "canvas-presets";
+export const CANVAS_PRESETS_UPDATED_EVENT = "canvas-presets-updated";
 
 export type PresetItem = {
   id: string;
@@ -586,6 +591,7 @@ export const presetsService = {
   save(presets: PresetsMap): void {
     try {
       localStorage.setItem(CANVAS_PRESETS_KEY, JSON.stringify(presets));
+      window.dispatchEvent(new CustomEvent(CANVAS_PRESETS_UPDATED_EVENT));
     } catch (e) {
       console.error("[presetsService] save failed:", e);
     }

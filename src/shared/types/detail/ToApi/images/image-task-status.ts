@@ -32,3 +32,5 @@ export interface ImageTaskStatus {
     }>;
   };
 }
+
+export type ImageTaskStatusResponse = ImageTaskStatus;
