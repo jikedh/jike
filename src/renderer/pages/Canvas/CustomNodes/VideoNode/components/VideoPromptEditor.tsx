@@ -289,6 +289,26 @@ export const VideoPromptEditor = forwardRef<
         // 返回 false 让编辑器继续执行默认输入行为（插入空格字符）。
         return false;
       },
+      handleDOMEvents: {
+        pointerdown: (_view, event) => {
+          if (event.shiftKey && event.button === 0) {
+            event.stopPropagation();
+          }
+          return false;
+        },
+        mousedown: (_view, event) => {
+          if (event.shiftKey && event.button === 0) {
+            event.stopPropagation();
+          }
+          return false;
+        },
+        click: (_view, event) => {
+          if (event.shiftKey && event.button === 0) {
+            event.stopPropagation();
+          }
+          return false;
+        },
+      },
     },
     onUpdate: ({ editor: currentEditor }) => {
       onDraftChange({

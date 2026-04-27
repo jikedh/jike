@@ -747,6 +747,26 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
         return false;
       },
+      handleDOMEvents: {
+        pointerdown: (_view, event) => {
+          if (event.shiftKey && event.button === 0) {
+            event.stopPropagation();
+          }
+          return false;
+        },
+        mousedown: (_view, event) => {
+          if (event.shiftKey && event.button === 0) {
+            event.stopPropagation();
+          }
+          return false;
+        },
+        click: (_view, event) => {
+          if (event.shiftKey && event.button === 0) {
+            event.stopPropagation();
+          }
+          return false;
+        },
+      },
     },
     onUpdate: ({ editor: currentEditor }) => {
       updateImageNodeData(nodeId, {
