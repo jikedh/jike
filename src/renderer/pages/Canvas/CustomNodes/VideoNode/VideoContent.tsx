@@ -1,5 +1,6 @@
 import { GenerationStatus } from "shared/constants/enum";
 import type { VideoGenerationNode } from "shared/types/flow";
+import { assignMissingMediaSequences } from "shared/utils/mediaSequence";
 import { CollapsibleVideoGallery } from "./CollapsibleVideoGallery";
 
 type VideoContentProps = {
@@ -23,7 +24,9 @@ export const VideoContent = ({
   frameSize,
 }: VideoContentProps) => {
   // 结果视频列表（支持多个），保留原始对象结构用于排序
-  const videos = data.result?.data?.filter((item) => item?.url) ?? [];
+  const videos = assignMissingMediaSequences(
+    data.result?.data?.filter((item) => item?.url) ?? [],
+  );
   const status = data.status ?? GenerationStatus.COMPLETED;
   const error = data.error;
 

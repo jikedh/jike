@@ -15,6 +15,7 @@ import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
+import { appendMediaSequences } from "shared/utils/mediaSequence";
 import { normalizeRequiredPoints } from "shared/constants/points";
 import type { VideoGenerationNode } from "shared/types/flow";
 import { formatDuration } from "shared/utils/getVideoDuration";
@@ -1013,10 +1014,9 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       const updatePatch: Record<string, any> = {
         result: {
           type: "video",
-          data: [
-            ...currentData,
+          data: appendMediaSequences(currentData, [
             { url: uploadedUrl, remoteUrl: uploadedUrl, format: fileExt },
-          ],
+          ]),
         },
         status: GenerationStatus.COMPLETED,
         progress: 100,

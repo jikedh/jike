@@ -2,6 +2,7 @@ import { IconChevronDown, IconRefresh, IconVideo } from "@tabler/icons-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import { readMediaFromLocal } from "service/projectStorage";
+import { getMediaSequence } from "shared/utils/mediaSequence";
 import { cn } from "shared/utils/utils";
 import { VideoPlayer } from "@/components/ui/video-player";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
@@ -339,6 +340,7 @@ export const CollapsibleVideoGallery = memo(
             const isPrimary = index === 0;
             const isSecondary = index > 0;
             const isFocused = isExpanded && hoveredIndex === index;
+            const sequence = getMediaSequence(item, index);
             const shouldUseCardChrome =
               totalCount > 1 && (!isExpanded || isSecondary);
             const displayUrl = displayUrls[index] ?? "";
@@ -456,6 +458,12 @@ export const CollapsibleVideoGallery = memo(
                   />
 
                   <div className="absolute right-2 top-2 z-30 flex items-center gap-1.5">
+                    {totalCount > 1 && (
+                      <span className="pointer-events-none inline-flex h-8 min-w-8 items-center justify-center rounded-lg border border-white/12 bg-black/60 px-2 text-[11px] font-semibold text-white shadow-[0_6px_14px_rgba(0,0,0,0.22)] backdrop-blur-sm">
+                        #{sequence}
+                      </span>
+                    )}
+
                     {isPrimary && totalCount > 1 && (
                       <button
                         type="button"

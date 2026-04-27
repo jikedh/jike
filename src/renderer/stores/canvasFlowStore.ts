@@ -37,6 +37,10 @@ import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
 import { normalizeLocalGeminiErrorDetail } from "shared/utils/localGeminiErrors";
 import { hydrateMediaForRuntime } from "shared/utils/mediaPersistence";
 import {
+  appendMediaSequences,
+  assignMissingMediaSequences,
+} from "shared/utils/mediaSequence";
+import {
   cloneNodeDataForCopy,
   resetNodeDataRuntimeState,
 } from "shared/utils/nodeCopy";
@@ -209,7 +213,7 @@ export const hydrateCanvasNodesForRuntime = async (
             ...node.data,
             result: {
               ...node.data.result,
-              data: processedData,
+              data: assignMissingMediaSequences(processedData),
             },
           },
         };
@@ -251,7 +255,7 @@ export const hydrateCanvasNodesForRuntime = async (
             ...node.data,
             result: {
               ...node.data.result,
-              data: processedData,
+              data: assignMissingMediaSequences(processedData),
             },
           },
         };
@@ -433,7 +437,10 @@ const pollImageGeneration = async (
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             // 追加新结果到 result.data，而不是覆盖
             const existingData = data.result?.data ?? [];
-            const mergedData = [...existingData, ...processedResultData];
+            const mergedData = appendMediaSequences(
+              existingData,
+              processedResultData,
+            );
 
             // 更新已完成数量
             const completedCount = (data.completedCount ?? 0) + 1;
@@ -678,7 +685,10 @@ const pollMjImageGeneration = async (
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             // 追加新结果到 result.data，而不是覆盖
             const existingData = data.result?.data ?? [];
-            const mergedData = [...existingData, ...processedResultData];
+            const mergedData = appendMediaSequences(
+              existingData,
+              processedResultData,
+            );
 
             // 更新已完成数量
             const completedCount = (data.completedCount ?? 0) + 1;
@@ -928,7 +938,10 @@ const pollVideoGeneration = async (
         setState((state) => ({
           nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => {
             const existingData = data.result?.data ?? [];
-            const mergedData = [...existingData, ...processedResultData];
+            const mergedData = appendMediaSequences(
+              existingData,
+              processedResultData,
+            );
 
             return {
               ...data,
@@ -1152,7 +1165,10 @@ const pollNewVideoGeneration = async ({
         setState((state) => ({
           nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
             const existingData = data.result?.data ?? [];
-            const mergedData = [...existingData, ...processedResultData];
+            const mergedData = appendMediaSequences(
+              existingData,
+              processedResultData,
+            );
             const failedCount =
               ((data.metadata?.failedTasks as unknown[]) ?? []).length;
             const completedCount = mergedData.length + failedCount;
@@ -2416,7 +2432,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         set((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const existingData = data.result?.data ?? [];
-            const mergedData = [...existingData, ...processedResultData];
+            const mergedData = appendMediaSequences(
+              existingData,
+              processedResultData,
+            );
             return {
               ...data,
               status: GenerationStatus.COMPLETED,

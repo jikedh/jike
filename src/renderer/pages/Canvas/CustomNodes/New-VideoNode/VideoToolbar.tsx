@@ -18,6 +18,7 @@ import { GenerationStatus } from "shared/constants/enum";
 import { normalizeRequiredPoints } from "shared/constants/points";
 import type { NewVideoGenerationNode } from "shared/types/flow";
 import { formatDuration } from "shared/utils/getVideoDuration";
+import { appendMediaSequences } from "shared/utils/mediaSequence";
 import { createPresignedOssUploadTarget } from "shared/utils/presignedOssUploader";
 import { cn, downloadImageFromUrl, getJikeingUserId } from "shared/utils/utils";
 import { toast } from "sonner";
@@ -982,10 +983,9 @@ export const VideoToolbar = ({
             const updatePatch: Record<string, unknown> = {
                 result: {
                     type: "video",
-                    data: [
-                        ...currentData,
+                    data: appendMediaSequences(currentData, [
                         { url: uploadedUrl, remoteUrl: uploadedUrl, format: fileExt },
-                    ],
+                    ]),
                 },
                 status: GenerationStatus.COMPLETED,
                 progress: 100,

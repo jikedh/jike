@@ -10,6 +10,7 @@ import { setProjectCoverFromMediaRef } from "service/projectStorage";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageNodeType } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
+import { assignMissingMediaSequences } from "shared/utils/mediaSequence";
 import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
 import { ButtonHandle } from "@/components/button-handle";
@@ -315,7 +316,7 @@ export const ImageNode = memo(
         if (!resultData || fromIndex <= 0 || fromIndex >= resultData.length)
           return;
 
-        const newData = [...resultData];
+        const newData = assignMissingMediaSequences(resultData);
         [newData[0], newData[fromIndex]] = [newData[fromIndex], newData[0]];
 
         // 通过 store 更新节点数据

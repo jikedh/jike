@@ -2,6 +2,7 @@ import { memo } from "react";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageGenerationNode } from "shared/types/flow";
 import { isLocalGeminiFallbackModeMessage } from "shared/utils/localGeminiErrors";
+import { assignMissingMediaSequences } from "shared/utils/mediaSequence";
 import { CollapsibleImageGallery } from "./CollapsibleImageGallery";
 
 type ImageContentProps = {
@@ -36,7 +37,9 @@ export const ImageContent = memo(
     frameSize,
   }: ImageContentProps) => {
     // 结果图片列表（支持多张），保留原始对象结构用于排序
-    const images = data.result?.data?.filter((item) => item?.url) ?? [];
+    const images = assignMissingMediaSequences(
+      data.result?.data?.filter((item) => item?.url) ?? [],
+    );
     const status = data.status ?? GenerationStatus.COMPLETED;
     const progress = data.progress ?? 0;
     const error = data.error;

@@ -13,6 +13,7 @@ import { memo, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import type { ImageGenerationNode } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
+import { appendMediaSequences } from "shared/utils/mediaSequence";
 import {
   getAspectRatioFromMediaFile,
 } from "./utils/aspectRatioUtils";
@@ -120,7 +121,9 @@ export const ImageToolbar = memo(
         const updatePatch: Record<string, any> = {
           result: {
             type: "image",
-            data: [...currentData, { url: uploadedUrl }],
+            data: appendMediaSequences(currentData, [
+              { url: uploadedUrl, remoteUrl: uploadedUrl },
+            ]),
           },
         };
 

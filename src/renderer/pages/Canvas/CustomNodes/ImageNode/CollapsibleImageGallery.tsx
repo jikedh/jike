@@ -8,6 +8,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { generateThumbnailWithFormat, uploadFileToOSS } from "service/oss";
 import { readMediaFromLocal } from "service/projectStorage";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
+import { getMediaSequence } from "shared/utils/mediaSequence";
 import { cn, downloadImageFromUrl } from "shared/utils/utils";
 import { toast } from "sonner";
 import { ImageTile } from "./ImageTile";
@@ -390,6 +391,7 @@ export const CollapsibleImageGallery = memo(
             const isPrimary = index === 0;
             const isSecondary = index > 0;
             const isFocused = isExpanded && hoveredIndex === index;
+            const sequence = getMediaSequence(item, index);
             const shouldUseCardChrome = totalCount > 1 && (!isExpanded || isSecondary);
             const cardKey =
               item.remoteUrl || item.localPath || item.url || `image-${index}`;
@@ -498,6 +500,12 @@ export const CollapsibleImageGallery = memo(
                   />
 
                   <div className="absolute right-2 top-2 z-30 flex items-center gap-1.5">
+                    {totalCount > 1 && (
+                      <span className="pointer-events-none inline-flex h-8 min-w-8 items-center justify-center rounded-lg border border-white/12 bg-black/60 px-2 text-[11px] font-semibold text-white shadow-[0_6px_14px_rgba(0,0,0,0.22)] backdrop-blur-sm">
+                        #{sequence}
+                      </span>
+                    )}
+
                     {isPrimary && totalCount > 1 && (
                       <button
                         type="button"
