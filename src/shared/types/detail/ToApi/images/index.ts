@@ -7,26 +7,17 @@ export type {
 } from "./gpt-image-2";
 export type { GrokImageRequest, GrokImageResponse } from "./grok-image";
 export type {
+  ImageTaskStatus,
+  ImageTaskStatusResponse,
+} from "./image-task-status";
+export type {
   Seedream5ImageRequest,
   Seedream5ImageResponse,
 } from "./seedream-5-0-image";
-export type {
-  ImageTaskStatusResponse,
-  ImageTaskStatus,
-} from "./image-generation-status";
 
-import type {
-  Flux20ImageRequest,
-  Flux20ImageResponse,
-} from "./flux-2-0-image";
-import type {
-  Gemini3ProRequest,
-  Gemini3ProResponse,
-} from "./gemini-image";
-import type {
-  GPT4oImageRequest,
-  GPT4oImageResponse,
-} from "./gpt-4o-image";
+import type { Flux20ImageRequest, Flux20ImageResponse } from "./flux-2-0-image";
+import type { Gemini3ProRequest, Gemini3ProResponse } from "./gemini-image";
+import type { GPT4oImageRequest, GPT4oImageResponse } from "./gpt-4o-image";
 import type {
   GptImage2GenerationRequest,
   GptImage2GenerationResponse,
@@ -36,10 +27,6 @@ import type {
   Seedream5ImageRequest,
   Seedream5ImageResponse,
 } from "./seedream-5-0-image";
-import type {
-  ImageTaskStatusResponse,
-  ImageTaskStatus,
-} from "./image-generation-status";
 
 export type ToApiImageGenerationRequest =
   | Flux20ImageRequest

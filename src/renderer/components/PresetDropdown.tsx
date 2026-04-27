@@ -1,6 +1,11 @@
 import { IconBook2 } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
-import { type PresetItem, presetsService } from "service/localStorageService";
+import {
+  CANVAS_PRESETS_UPDATED_EVENT,
+  defaultPresets,
+  type PresetItem,
+  presetsService,
+} from "service/localStorageService";
 import { cn } from "shared/utils/utils";
 import {
   Tooltip,
@@ -29,11 +34,22 @@ export const PresetDropdown = ({
 
   // 加载预设
   useEffect(() => {
-    const loaded = presetsService.load();
-    if (loaded) {
-      const filtered = (loaded[presetType] || []).filter((p) => p.enabled);
+    const loadPresets = () => {
+      const loaded = presetsService.load() ?? defaultPresets;
+      const filtered = [
+        ...(loaded.general ?? []),
+        ...(loaded[presetType] ?? []),
+      ].filter((p) => p.enabled);
+
       setPresets(filtered);
-    }
+    };
+
+    loadPresets();
+    window.addEventListener(CANVAS_PRESETS_UPDATED_EVENT, loadPresets);
+
+    return () => {
+      window.removeEventListener(CANVAS_PRESETS_UPDATED_EVENT, loadPresets);
+    };
   }, [presetType]);
 
   // 点击外部关闭
