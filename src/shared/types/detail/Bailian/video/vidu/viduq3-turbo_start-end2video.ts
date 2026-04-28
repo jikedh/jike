@@ -4,7 +4,7 @@
  */
 export interface ViduQ3TurboStartEnd2VideoRequest {
     /** 模型名称 */
-    model: "vidu/viduq3-turbo_start-end2video";
+    model: "vidu/viduq3_turbo_start-end2video" | "vidu/viduq3-pro_start-end2video";
     /** 输入的基本信息 */
     input: {
         /** 文本提示词，用来描述首帧到尾帧之间的变化过程。支持中英文，不超过 5000 个字符 */

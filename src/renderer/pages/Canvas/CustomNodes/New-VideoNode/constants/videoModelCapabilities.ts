@@ -97,8 +97,25 @@ export const ALL_MODE_KEYS: VideoModeKey[] = [
  */
 export const MOCK_MAIN_MODELS: MainModelConfig[] = [
   {
+    id: "seedance-2.0-fast",
+    label: "Seedance 2.0 Fast",
+    variants: [
+      {
+        id: "seedance-2.0-fast",
+        supportedModes: [
+          "text-to-video",
+          "all-reference",
+          "image-to-video",
+          "first-last-frame",
+        ],
+        // 与旧版视频节点一致：Fast/Pro 作为独立模型展示，生成档位由模型项固定。
+        defaultParams: { generationMode: "fast" },
+      },
+    ],
+  },
+  {
     id: "seedance-2.0-pro",
-    label: "Seedance 2.0",
+    label: "Seedance 2.0 Pro",
     variants: [
       {
         id: "seedance-2.0-pro",
@@ -108,12 +125,14 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
           "image-to-video",
           "first-last-frame",
         ],
+        // 与旧版视频节点一致：Fast/Pro 作为独立模型展示，生成档位由模型项固定。
+        defaultParams: { generationMode: "pro" },
       },
     ],
   },
   {
     id: "wanxiang",
-    label: "Wanxiang Wan2.7",
+    label: "Wan2.7",
     variants: [
       {
         id: "wan2.7-t2v",
@@ -130,32 +149,44 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
     ],
   },
   {
-    id: "vidu",
-    label: "Vidu Q3 Turbo",
+    id: "vidu-q3-pro",
+    label: "Vidu Q3 Pro",
     variants: [
       {
-        id: "vidu/viduq3-turbo_text2video",
+        id: "vidu/viduq3-pro_text2video",
         supportedModes: ["text-to-video"],
       },
       {
-        id: "vidu/viduq3-turbo_start-end2video",
+        id: "vidu/viduq3-pro_img2video",
+        supportedModes: ["image-to-video"],
+      },
+      {
+        id: "vidu/viduq3-pro_start-end2video",
         supportedModes: ["first-last-frame"],
       },
     ],
   },
   {
-    id: "vidu-reference",
-    label: "Vidu Q2 Pro 参考",
+    id: "vidu",
+    label: "Vidu Q3 Turbo",
     variants: [
       {
-        id: "vidu/viduq2-pro_reference2video",
-        supportedModes: ["all-reference", "image-to-video"],
+        id: "vidu/viduq3_turbo_text2video",
+        supportedModes: ["text-to-video"],
+      },
+      {
+        id: "vidu/viduq3_turbo_img2video",
+        supportedModes: ["image-to-video"],
+      },
+      {
+        id: "vidu/viduq3_turbo_start-end2video",
+        supportedModes: ["first-last-frame"],
       },
     ],
   },
   {
     id: "pixverse",
-    label: "PixVerse",
+    label: "PixVerse C1",
     variants: [
       {
         id: "pixverse/pixverse-v6-t2v",
@@ -190,6 +221,24 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
     ],
   },
 ];
+
+export const getSupportedModesForModel = (modelId: string): VideoModeKey[] => {
+  const modelConfig = MOCK_MAIN_MODELS.find((model) => model.id === modelId);
+  const modes = new Set<VideoModeKey>();
+
+  for (const variant of modelConfig?.variants ?? []) {
+    for (const mode of variant.supportedModes) {
+      modes.add(mode);
+    }
+  }
+
+  return Array.from(modes);
+};
+
+export const getFirstSupportedModeForModel = (
+  modelId: string,
+  fallback: VideoModeKey = "text-to-video",
+) => getSupportedModesForModel(modelId)[0] ?? fallback;
 
 /**
  * 模式可用性状态

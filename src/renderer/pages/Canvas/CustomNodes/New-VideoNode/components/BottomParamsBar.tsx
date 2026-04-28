@@ -1,4 +1,5 @@
-import { IconPlayerPlay } from "@tabler/icons-react";
+import { IconPlayerStop } from "@tabler/icons-react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -36,7 +37,10 @@ interface BottomParamsBarProps {
   onModelChange: (value: string) => void;
   onParamsChange: (value: VideoParamState) => void;
   onGenerate: (request: VideoGenerateRequest) => void;
+  onStop?: () => void;
+  isGenerating?: boolean;
   disabled?: boolean;
+  accessory?: ReactNode;
 }
 
 export const BottomParamsBar = ({
@@ -48,7 +52,10 @@ export const BottomParamsBar = ({
   onModelChange,
   onParamsChange,
   onGenerate,
+  onStop,
+  isGenerating = false,
   disabled = false,
+  accessory,
 }: BottomParamsBarProps) => {
   const handleClick = () => {
     const request: VideoGenerateRequest = {
@@ -89,16 +96,27 @@ export const BottomParamsBar = ({
         />
       </div>
 
-      <div className="flex items-center gap-3">
-        <Button
-          variant="blue"
-          size="sm"
-          onClick={handleClick}
-          disabled={disabled}
-          className="px-7 py-2.5 rounded-xl text-sm font-bold"
-        >
-          <IconPlayerPlay size={16} />
-        </Button>
+      <div className="ml-auto flex items-center gap-3">
+        {accessory}
+        {isGenerating ? (
+          <Button
+            unstyled
+            onClick={onStop}
+            className={PROMPT_PANEL_STYLES.stopButton}
+          >
+            <IconPlayerStop size={16} />
+            停止
+          </Button>
+        ) : (
+          <Button
+            unstyled
+            onClick={handleClick}
+            disabled={disabled}
+            className={PROMPT_PANEL_STYLES.generateButton}
+          >
+            生成
+          </Button>
+        )}
       </div>
     </div>
   );

@@ -2,6 +2,8 @@ export const VIDEO_MODEL_POINTS: Record<string, number> = {
   "doubao-seedance-2.0": 60, // 默认 720p 基础分
   "doubao-seedance-2.0-fast": 48, // 默认 720p 基础分
   "doubao-seedance-2.0-pro": 60, // 默认 720p 基础分
+  "seedance-2.0-fast": 48, // 新版视频节点 Seedance 2.0 Fast
+  "seedance-2.0-pro": 60, // 新版视频节点 Seedance 2.0 Pro
   "wan2.7-r2v": 36, // 默认 720p 基础分
   "pixverse-i2v": 60,
 };
@@ -26,15 +28,19 @@ export const getVideoGenerationPoints = ({
   let basePointsPerSecond = (model ? VIDEO_MODEL_POINTS[model] : undefined) ?? fallback;
 
   // 特殊逻辑：Seedance 2.0 系列
-  if (model?.startsWith("doubao-seedance-2.0")) {
+  if (
+    model?.startsWith("doubao-seedance-2.0") ||
+    model?.startsWith("seedance-2.0")
+  ) {
     const isFast = model.includes("-fast");
+    const res = resolution.toLowerCase();
 
     if (isFast) {
       // Seedance 2.0 Fast: 720p -> 48, 480p -> 24
-      basePointsPerSecond = resolution === "480p" ? 24 : 48;
+      basePointsPerSecond = res === "480p" ? 24 : 48;
     } else {
       // Seedance 2.0 (Standard/Pro): 720p -> 60, 480p -> 30
-      basePointsPerSecond = resolution === "480p" ? 30 : 60;
+      basePointsPerSecond = res === "480p" ? 30 : 60;
     }
 
     // 按秒计算

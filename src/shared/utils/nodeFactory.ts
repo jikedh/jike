@@ -155,6 +155,7 @@ export const createNewVideoNode = (
     model: "seedance-2.0-pro",
     prompt: "",
     promptDraft: "",
+    promptDraftHtml: "<p></p>",
     duration: 5,
     aspect_ratio: "16:9",
     nickname: "新版视频",

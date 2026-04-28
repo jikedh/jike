@@ -4,7 +4,7 @@
  */
 export interface ViduQ3TurboText2VideoRequest {
   /** 模型名称 */
-  model: "vidu/viduq3-turbo_text2video";
+  model: "vidu/viduq3_turbo_text2video" | "vidu/viduq3-pro_text2video";
   /** 输入的基本信息 */
   input: {
     /** 文本提示词，用来描述生成视频中期望包含的元素和视觉特点。支持中英文，不超过 5000 个字符 */

@@ -156,32 +156,54 @@ const pixverseSizeConfig = (mode: VideoModeKey): VideoParamConfig => ({
   },
 });
 
-export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
-  "seedance-2.0-pro": {
-    modelId: "seedance-2.0-pro",
-    aspectRatios: seedanceRatios,
-    qualityGroup: {
-      key: "resolution",
-      label: "分辨率",
-      options: resolution480720,
-    },
-    generationMode: {
-      label: "生成模式",
-      options: [
-        { label: "Fast", value: "fast" },
-        { label: "Pro", value: "pro" },
-      ],
-    },
-    duration: { type: "slider", min: 4, max: 15, step: 1 },
-    audio,
-    defaults: {
-      aspectRatio: "16:9",
-      resolution: "720P",
-      generationMode: "pro",
-      duration: 8,
-      generateAudio: true,
-    },
+const seedance20Config = (
+  modelId: "seedance-2.0-fast" | "seedance-2.0-pro",
+  generationMode: "fast" | "pro",
+): VideoParamConfig => ({
+  modelId,
+  aspectRatios: seedanceRatios,
+  qualityGroup: {
+    key: "resolution",
+    label: "分辨率",
+    options: resolution480720,
   },
+  duration: { type: "slider", min: 4, max: 15, step: 1 },
+  audio,
+  defaults: {
+    aspectRatio: "16:9",
+    resolution: "720P",
+    // Fast/Pro 已经拆成两个模型，参数里只保留固定值给请求层使用，不再暴露成二级开关。
+    generationMode,
+    duration: 8,
+    generateAudio: true,
+  },
+});
+
+const viduQ3Config = (
+  modelId: "vidu" | "vidu-q3-pro",
+  mode: VideoModeKey,
+): VideoParamConfig => ({
+  modelId,
+  mode,
+  aspectRatios: squareRatios,
+  qualityGroup: {
+    key: "resolution",
+    label: "分辨率",
+    options: viduResolutions,
+  },
+  duration: { type: "slider", min: 1, max: 16, step: 1 },
+  audio,
+  defaults: {
+    aspectRatio: "16:9",
+    resolution: "720P",
+    duration: 5,
+    generateAudio: false,
+  },
+});
+
+export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
+  "seedance-2.0-fast": seedance20Config("seedance-2.0-fast", "fast"),
+  "seedance-2.0-pro": seedance20Config("seedance-2.0-pro", "pro"),
   [byModeKey("wanxiang", "text-to-video")]:
     wanxiangReferenceConfig("text-to-video"),
   [byModeKey("wanxiang", "all-reference")]:
@@ -220,35 +242,26 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
       promptExtend: false,
     },
   },
-  vidu: {
-    modelId: "vidu",
-    mode: "text-to-video",
-    aspectRatios: squareRatios,
-    qualityGroup: {
-      key: "resolution",
-      label: "分辨率",
-      options: viduResolutions,
-    },
-    duration: { type: "slider", min: 1, max: 16, step: 1 },
-    audio,
-    defaults: {
-      aspectRatio: "16:9",
-      resolution: "720P",
-      duration: 5,
-      generateAudio: false,
-    },
-  },
+  vidu: viduQ3Config("vidu", "text-to-video"),
+  [byModeKey("vidu", "image-to-video")]: viduQ3Config("vidu", "image-to-video"),
   // vidu 首尾帧模式
-  [byModeKey("vidu", "first-last-frame")]: {
-    modelId: "vidu",
-    mode: "first-last-frame",
+  [byModeKey("vidu", "first-last-frame")]: viduQ3Config("vidu", "first-last-frame"),
+  "vidu-q3-pro": viduQ3Config("vidu-q3-pro", "text-to-video"),
+  [byModeKey("vidu-q3-pro", "image-to-video")]:
+    viduQ3Config("vidu-q3-pro", "image-to-video"),
+  [byModeKey("vidu-q3-pro", "first-last-frame")]:
+    viduQ3Config("vidu-q3-pro", "first-last-frame"),
+  // Vidu Q2 Fast/Pro 按模型档位拆分，底层分别对应 viduq2 与 viduq2-pro 的 reference2video 接口。
+  [byModeKey("vidu-q2-fast", "image-to-video")]: {
+    modelId: "vidu-q2-fast",
+    mode: "image-to-video",
     aspectRatios: squareRatios,
     qualityGroup: {
       key: "resolution",
       label: "分辨率",
-      options: viduResolutions,
+      options: viduReferenceResolutions,
     },
-    duration: { type: "slider", min: 1, max: 16, step: 1 },
+    duration: { type: "slider", min: 1, max: 10, step: 1 },
     audio,
     defaults: {
       aspectRatio: "16:9",
@@ -257,7 +270,43 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
       generateAudio: false,
     },
   },
-  // vidu-reference 全能参考模式
+  [byModeKey("vidu-q2-pro", "image-to-video")]: {
+    modelId: "vidu-q2-pro",
+    mode: "image-to-video",
+    aspectRatios: squareRatios,
+    qualityGroup: {
+      key: "resolution",
+      label: "分辨率",
+      options: viduReferenceResolutions,
+    },
+    duration: { type: "slider", min: 1, max: 10, step: 1 },
+    audio,
+    defaults: {
+      aspectRatio: "16:9",
+      resolution: "720P",
+      duration: 5,
+      generateAudio: false,
+    },
+  },
+  [byModeKey("vidu-q2-pro", "all-reference")]: {
+    modelId: "vidu-q2-pro",
+    mode: "all-reference",
+    aspectRatios: squareRatios,
+    qualityGroup: {
+      key: "resolution",
+      label: "分辨率",
+      options: viduReferenceResolutions,
+    },
+    duration: { type: "slider", min: 1, max: 10, step: 1 },
+    audio,
+    defaults: {
+      aspectRatio: "16:9",
+      resolution: "720P",
+      duration: 5,
+      generateAudio: false,
+    },
+  },
+  // vidu-reference 是旧数据兼容入口，新 UI 不再展示。
   [byModeKey("vidu-reference", "all-reference")]: {
     modelId: "vidu-reference",
     mode: "all-reference",
@@ -427,6 +476,11 @@ export const normalizeVideoParams = (
     next.promptExtend = undefined;
   } else {
     next.promptExtend = Boolean(next.promptExtend);
+  }
+
+  if (!config.generationMode) {
+    // Fast/Pro 拆成独立模型后，历史参数里残留的 generationMode 不能覆盖当前模型的固定档位。
+    next.generationMode = config.defaults.generationMode;
   }
 
   return next;

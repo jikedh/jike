@@ -2,11 +2,29 @@ import { useMemo } from "react";
 import type {
   AudioGenerationNode,
   ImageGenerationNode,
+  NewVideoGenerationNode,
   NoteNodeData,
   VideoGenerationNode,
 } from "shared/types/flow";
 import { toChineseNumber } from "shared/utils/utils";
 import { getPrimaryVideoUrlFromNodeData } from "../utils/video-url";
+
+const getPrimaryVideoUrlFromAnyVideoNode = (
+  data?: Partial<VideoGenerationNode | NewVideoGenerationNode> | null,
+) => {
+  if (!data) {
+    return undefined;
+  }
+
+  const resultUrl = data.result?.data?.find((item) => item?.url)?.url;
+  const metadataUrl = (data.metadata as Record<string, unknown> | undefined)
+    ?.url as string | undefined;
+  const legacyUrl = (data as Record<string, unknown>)?.video_url as
+    | string
+    | undefined;
+
+  return resultUrl ?? metadataUrl ?? legacyUrl;
+};
 
 /**
  * 视频节点引用项类型。
@@ -70,10 +88,16 @@ export const useVideoNodeReferences = ({
   const parentVideoNodes = useMemo(() => {
     return parentNodeIds
       .map((parentId) => nodes.find((node) => node.id === parentId))
-      .filter((node) => node?.type === "videoNode")
+      // 新旧视频节点都可以作为视频智能输入和参考视频来源。
+      .filter((node) => node?.type === "videoNode" || node?.type === "newVideoNode")
       .map((node) => ({
         id: node.id,
-        url: getPrimaryVideoUrlFromNodeData(node.data as VideoGenerationNode),
+        url:
+          node.type === "videoNode"
+            ? getPrimaryVideoUrlFromNodeData(node.data as VideoGenerationNode)
+            : getPrimaryVideoUrlFromAnyVideoNode(
+                node.data as NewVideoGenerationNode,
+              ),
       }))
       .filter((item) => item.url) as VideoReferenceItem[];
   }, [parentNodeIds, nodes]);

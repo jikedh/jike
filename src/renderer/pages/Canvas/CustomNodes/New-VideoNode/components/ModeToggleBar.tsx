@@ -31,15 +31,12 @@ export const ModeToggleBar = ({
               size="sm"
               onClick={() => onModeChange(mode.key)}
               className={[
-                "relative px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                "relative h-8 rounded-lg border px-3 text-xs font-medium transition-all",
                 mode.key === activeMode
-                  ? "bg-[#B43FEB]/15 text-[#B43FEB] hover:bg-[#B43FEB]/20 hover:text-[#B43FEB]"
-                  : "bg-white/3 text-white/60 hover:bg-white/6 hover:text-white/80",
+                  ? "border-[#B43FEB] bg-[#B43FEB]/10 text-[#B43FEB] hover:bg-[#B43FEB]/15 hover:text-[#B43FEB]"
+                  : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:border-neutral-500 hover:bg-neutral-800 hover:text-neutral-100",
               ].join(" ")}
             >
-              {mode.key === activeMode && (
-                <span className="absolute -left-0.5 top-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-[#B43FEB]" />
-              )}
               {mode.label}
             </Button>
           ) : (
@@ -54,7 +51,7 @@ export const ModeToggleBar = ({
                     variant="ghost"
                     size="sm"
                     disabled
-                    className="relative px-3 py-1.5 rounded-lg text-xs font-medium bg-white/2 text-white/25 cursor-not-allowed opacity-40 pointer-events-none"
+                    className="relative h-8 rounded-lg border border-neutral-800 bg-neutral-900 px-3 text-xs font-medium text-neutral-600 cursor-not-allowed opacity-60 pointer-events-none"
                   >
                     {mode.label}
                     <IconAlertCircle size={12} className="ml-1 opacity-60" />

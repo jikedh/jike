@@ -33,8 +33,8 @@ const optionButtonClass = (active: boolean, className?: string) =>
   cn(
     "rounded-lg border text-xs font-medium transition-all",
     active
-      ? "border-white bg-white/10 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.16)]"
-      : "border-white/[0.08] bg-white/[0.025] text-white/45 hover:border-white/20 hover:bg-white/[0.06] hover:text-white/75",
+      ? "border-[#B43FEB] bg-[#B43FEB]/10 text-[#B43FEB]"
+      : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:border-neutral-500 hover:bg-neutral-800 hover:text-neutral-100",
     className,
   );
 
@@ -77,12 +77,12 @@ export const VideoParamsPopover = ({
       <PopoverTrigger asChild>
         <Button unstyled className={PROMPT_PANEL_STYLES.paramsButton}>
           <span className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate">{summary.join(" · ")}</span>
+            <span className="truncate">{summary.join(" | ")}</span>
             {config.audio ? (
               value.generateAudio ? (
-                <Volume2 className="h-3.5 w-3.5 shrink-0 text-white/65" />
+                <Volume2 className="h-3.5 w-3.5 shrink-0 text-neutral-300" />
               ) : (
-                <VolumeX className="h-3.5 w-3.5 shrink-0 text-white/35" />
+                <VolumeX className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
               )
             ) : null}
           </span>
@@ -93,12 +93,12 @@ export const VideoParamsPopover = ({
         align="start"
         side="top"
         sideOffset={8}
-        className="w-[340px] rounded-xl border border-white/[0.08] bg-[#242424] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.45)]"
+        className="w-80 border border-neutral-700 bg-neutral-900 p-4 shadow-xl"
       >
-        <div className="space-y-4">
+        <div className="space-y-5">
           {config.aspectRatios ? (
             <section className="space-y-2">
-              <div className="text-xs font-medium text-white/45">比例</div>
+              <div className="text-xs font-medium text-neutral-300">比例</div>
               <div className="grid grid-cols-5 gap-2">
                 {config.aspectRatios.map((option) => {
                   const active = value.aspectRatio === option.value;
@@ -120,7 +120,7 @@ export const VideoParamsPopover = ({
                         <span
                           className={cn(
                             "h-3 w-3 rounded-[2px] border",
-                            active ? "border-white" : "border-white/35",
+                            active ? "border-[#B43FEB]" : "border-neutral-400",
                           )}
                         />
                       ) : (
@@ -140,7 +140,7 @@ export const VideoParamsPopover = ({
 
           {config.qualityGroup ? (
             <section className="space-y-2">
-              <div className="text-xs font-medium text-white/45">
+              <div className="text-xs font-medium text-neutral-300">
                 {config.qualityGroup.label}
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -158,13 +158,13 @@ export const VideoParamsPopover = ({
                         patch(
                           config.qualityGroup?.key === "resolution"
                             ? {
-                              resolution: String(option.value),
-                              quality: undefined,
-                            }
+                                resolution: String(option.value),
+                                quality: undefined,
+                              }
                             : {
-                              quality: String(option.value),
-                              resolution: undefined,
-                            },
+                                quality: String(option.value),
+                                resolution: undefined,
+                              },
                         )
                       }
                       className={optionButtonClass(active, "h-8 px-3")}
@@ -179,7 +179,7 @@ export const VideoParamsPopover = ({
 
           {config.generationMode ? (
             <section className="space-y-2">
-              <div className="text-xs font-medium text-white/45">
+              <div className="text-xs font-medium text-neutral-300">
                 {config.generationMode.label}
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -207,8 +207,8 @@ export const VideoParamsPopover = ({
 
           <section className="space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-medium text-white/45">视频时长</span>
-              <span className="font-semibold text-white/65">
+              <span className="font-medium text-neutral-300">视频时长</span>
+              <span className="font-semibold text-[#B43FEB]">
                 {value.duration}s
               </span>
             </div>
@@ -221,9 +221,9 @@ export const VideoParamsPopover = ({
                   max={config.duration.max}
                   step={config.duration.step ?? 1}
                   onValueChange={(values) => patch({ duration: values[0] })}
-                  className="[&_[data-slot=slider-track]]:bg-white/14 [&_[data-slot=slider-range]]:bg-[#2D8CFF] [&_[data-slot=slider-thumb]]:border-white [&_[data-slot=slider-thumb]]:bg-white"
+                  className="[&_[data-slot=slider-range]]:bg-[#B43FEB] [&_[data-slot=slider-thumb]]:border-[#B43FEB]"
                 />
-                <div className="flex justify-between text-[11px] text-white/35">
+                <div className="flex justify-between text-[11px] text-neutral-500">
                   <span>{config.duration.min}s</span>
                   <span>{config.duration.max}s</span>
                 </div>
@@ -249,7 +249,7 @@ export const VideoParamsPopover = ({
 
           {config.audio ? (
             <section className="space-y-2">
-              <div className="text-xs font-medium text-white/45">
+              <div className="text-xs font-medium text-neutral-300">
                 {config.audio.label}
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -276,7 +276,7 @@ export const VideoParamsPopover = ({
 
           {config.promptExtend ? (
             <section className="space-y-2">
-              <div className="text-xs font-medium text-white/45">
+              <div className="text-xs font-medium text-neutral-300">
                 {config.promptExtend.label}
               </div>
               <div className="grid grid-cols-2 gap-2">

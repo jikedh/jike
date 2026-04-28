@@ -36,7 +36,7 @@ export const PROMPT_PANEL_STYLES = {
     "text-white/80 text-xs px-3 py-2 cursor-pointer transition-colors focus:bg-[#B43FEB]/10 focus:text-white data-[state=checked]:bg-[#B43FEB]/15 data-[state=checked]:text-[#B43FEB] hover:bg-white/[0.04] hover:text-white",
 
   paramsButton:
-    "flex h-8 items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 text-xs text-white/70 transition-colors hover:border-[#B43FEB]/30 hover:text-white/90 hover:bg-white/[0.04]",
+    "flex h-8 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 text-xs text-neutral-300 transition-colors hover:border-neutral-500 hover:text-neutral-100",
 
   paramsPopover: "border border-white/[0.06] bg-[#09090b] p-3 shadow-xl",
 

@@ -25,6 +25,7 @@ import type {
   AudioGenerationNode,
   EdgeType,
   ImageGenerationNode,
+  NewVideoGenerationNode,
   VideoGenerationNode,
 } from "shared/types/flow";
 import type {
@@ -1245,6 +1246,16 @@ const pollNewVideoGeneration = async ({
           if (useChatSettingsStore.getState().autoSaveEnabled) {
             getState().saveGraph();
           }
+          // 多任务都收敛后清理轮询控制器，避免后续停止/重新生成时拿到旧控制器。
+          stopVideoPollingInternal(nodeId);
+          await deductVipScoreAfterGeneration({
+            scene: "video",
+            nodeId,
+            taskId: normalizedTaskId,
+            model: (updatedNode?.data as NewVideoGenerationNode)?.model,
+            requiredPoints: (updatedNode?.data as NewVideoGenerationNode)
+              ?.requiredPoints,
+          });
         }
         return;
       }
@@ -1285,6 +1296,14 @@ const pollNewVideoGeneration = async ({
             };
           }),
         }));
+        const failedNode = getState().nodes.find((node) => node.id === nodeId);
+        const failedStatus = (failedNode?.data as any)?.status;
+        if (
+          failedStatus === GenerationStatus.FAILED ||
+          failedStatus === GenerationStatus.COMPLETED
+        ) {
+          stopVideoPollingInternal(nodeId);
+        }
         return;
       }
 
@@ -1399,6 +1418,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       noteNode: "note",
       imageNode: "image",
       videoNode: "video",
+      newVideoNode: "newVideo",
       agentNode: "agent",
       panoramaNode: "panorama",
       audioNode: "audio",
@@ -1468,8 +1488,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }
 
       if (
-        (targetNode.type === "videoNode" || targetNode.type === "newVideoNode") &&
-        sourceNode.type === "videoNode"
+        (targetNode.type === "videoNode" ||
+          targetNode.type === "newVideoNode") &&
+        (sourceNode.type === "videoNode" || sourceNode.type === "newVideoNode")
       ) {
         return "video_urls";
       }
@@ -1868,7 +1889,47 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                 resolution: defaultImageResolution || newNode.data.resolution,
               },
             }
-            : newNode.type === "videoNode"
+            : newNode.type === "newVideoNode"
+              ? {
+                ...newNode,
+                data: {
+                  ...newNode.data,
+                  // 新版视频只沿用新版模型的记忆，避免老版默认模型把新版下拉框顶成空值。
+                  model: [
+                    "seedance-2.0-fast",
+                    "seedance-2.0-pro",
+                    "wanxiang",
+                    "vidu-q3-pro",
+                    "vidu",
+                    "pixverse",
+                    "keling",
+                  ].includes(defaultVideoModel)
+                    ? defaultVideoModel
+                    : newNode.data.model,
+                  aspect_ratio:
+                    defaultVideoAspectRatio || newNode.data.aspect_ratio,
+                  duration: defaultVideoDuration || newNode.data.duration,
+                  metadata: {
+                    ...(newNode.data.metadata ?? {}),
+                    params: {
+                      ...(newNode.data.metadata?.params as Record<
+                        string,
+                        unknown
+                      > | undefined),
+                      aspectRatio:
+                        defaultVideoAspectRatio || newNode.data.aspect_ratio,
+                      duration: defaultVideoDuration || newNode.data.duration,
+                      resolution: defaultVideoResolution,
+                      generateAudio: defaultVideoGenerateAudio,
+                      promptExtend: defaultVideoPromptExtend,
+                    },
+                    ...(defaultVideoMode !== undefined
+                      ? { mode: defaultVideoMode }
+                      : {}),
+                  },
+                },
+              }
+              : newNode.type === "videoNode"
               ? {
                 ...newNode,
                 data: {
@@ -2036,7 +2097,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         }));
 
         const copiedIncomingEdges =
-          node.type === "imageNode" || node.type === "videoNode"
+          node.type === "imageNode" ||
+          node.type === "videoNode" ||
+          node.type === "newVideoNode"
             ? state.edges
               .filter((edge) => edge.target === node.id)
               .map((edge, edgeIndex) => {
@@ -2120,7 +2183,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       if (targetNode?.type === "imageNode") {
         stopImagePollingInternal(nodeId);
       }
-      if (targetNode?.type === "videoNode") {
+      if (
+        targetNode?.type === "videoNode" ||
+        targetNode?.type === "newVideoNode"
+      ) {
         stopVideoPollingInternal(nodeId);
       }
 
@@ -2637,14 +2703,21 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const nodeType = sourceNode.type;
         const sourceData = sourceNode.data as
           | ImageGenerationNode
-          | VideoGenerationNode;
+          | VideoGenerationNode
+          | NewVideoGenerationNode;
         const resultData = sourceData.result?.data;
 
         if (!resultData || resultData.length <= 1) return;
 
         saveCurrentCanvasToHistory();
 
-        const targetNodeType = nodeType === "videoNode" ? "video" : "image";
+        // 新版视频节点拆分后仍创建新版视频节点，避免多结果拆分时退回旧版体验。
+        const targetNodeType =
+          nodeType === "videoNode"
+            ? "video"
+            : nodeType === "newVideoNode"
+              ? "newVideo"
+              : "image";
         const validItems = resultData
           .slice(1)
           .filter((item) => item?.url || item?.remoteUrl);
@@ -2658,9 +2731,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               250,
             )
             : getNodeSizeByAspectRatio(
-              (sourceData as VideoGenerationNode).aspect_ratio ?? "16:9",
-              250,
-            );
+                (sourceData as VideoGenerationNode | NewVideoGenerationNode)
+                  .aspect_ratio ?? "16:9",
+                250,
+              );
         const verticalGap = 32;
         const baseY =
           sourceNode.position.y + sourceVisualSize.height + verticalGap;
@@ -2700,7 +2774,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               validItems.map(async (item) => {
                 const videoUrl = item.remoteUrl || item.url;
                 let aspectRatio =
-                  (sourceData as VideoGenerationNode).aspect_ratio ?? "16:9";
+                  (sourceData as VideoGenerationNode | NewVideoGenerationNode)
+                    .aspect_ratio ?? "16:9";
 
                 if (videoUrl) {
                   try {
@@ -2741,7 +2816,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             const baseNode = factory(newNodeId, { x: currentX, y: baseY });
 
             const finalNode =
-              targetNodeType === "video"
+              targetNodeType === "video" || targetNodeType === "newVideo"
                 ? {
                   ...baseNode,
                   width: nodeSize.width,
@@ -2789,7 +2864,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               return node;
             }
 
-            if (targetNodeType === "video") {
+            if (targetNodeType === "video" || targetNodeType === "newVideo") {
               return {
                 ...node,
                 data: {
@@ -3019,9 +3094,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const input = payload.__newVideoInput;
       const requestPayload = { ...payload };
       delete requestPayload.__newVideoInput;
-      const totalTasks = Math.max(1, Math.min(Number(count) || 1, 4));
+      const requiredPoints = requestPayload.requiredPoints;
+      delete requestPayload.requiredPoints;
+      // 新版视频节点固定一次只创建一个视频任务，避免一个节点同时产出多条结果影响体验。
+      const totalTasks = 1;
       const model = input?.model ?? requestPayload.model ?? '';
-      const isSeedance20 = model === "seedance-2.0-pro";
+      const isSeedance20 =
+        model === "seedance-2.0-fast" || model === "seedance-2.0-pro";
 
       set((state) => ({
         nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
@@ -3031,6 +3110,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           promptDraft: input?.prompt ?? data.promptDraft,
           duration: input?.params?.duration ?? data.duration,
           aspect_ratio: input?.params?.aspectRatio ?? data.aspect_ratio,
+          requiredPoints,
           status: GenerationStatus.QUEUED,
           progress: 0,
           result: { type: "video", data: [] },
@@ -3162,7 +3242,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         ) {
           if (node.type === "imageNode") {
             imageNodesToStop.push(node.id);
-          } else if (node.type === "videoNode") {
+          } else if (
+            node.type === "videoNode" ||
+            node.type === "newVideoNode"
+          ) {
             videoNodesToStop.push(node.id);
           }
         }
@@ -3189,7 +3272,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                   error: { message: "任务已取消" },
                 },
               };
-            } else if (node.type === "videoNode") {
+            } else if (
+              node.type === "videoNode" ||
+              node.type === "newVideoNode"
+            ) {
               return {
                 ...node,
                 data: {
@@ -3326,8 +3412,16 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const sourceNode = nodes.find((n) => n.id === connection.source);
       const targetNode = nodes.find((n) => n.id === connection.target);
 
-      if (targetNode?.type === "videoNode") {
-        const allowedSourceTypes = ["imageNode", "videoNode", "audioNode"];
+      if (
+        targetNode?.type === "videoNode" ||
+        targetNode?.type === "newVideoNode"
+      ) {
+        const allowedSourceTypes = [
+          "imageNode",
+          "videoNode",
+          "newVideoNode",
+          "audioNode",
+        ];
         if (sourceNode && !allowedSourceTypes.includes(sourceNode.type || "")) {
           console.warn("视频节点只能接受图片、视频、音频节点的输入");
           return;

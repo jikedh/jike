@@ -20,7 +20,26 @@ import type { VideoModeKey } from "../constants/videoModelCapabilities";
 
 export type NewVideoApiRequest =
   | Seedance20Request
-  | BailianVideoGenerationRequest;
+  | BailianVideoGenerationRequest
+  | ViduQ3Image2VideoRequest;
+
+type ViduQ3Image2VideoRequest = {
+  model: "vidu/viduq3_turbo_img2video" | "vidu/viduq3-pro_img2video";
+  input: {
+    prompt?: string;
+    media: Array<{
+      type: "image";
+      url: string;
+    }>;
+  };
+  parameters: {
+    resolution?: "540P" | "720P" | "1080P";
+    size?: string;
+    duration?: number;
+    audio?: boolean;
+    watermark?: boolean;
+  };
+};
 
 const isOneOf = <T extends string>(
   value: string | undefined,
@@ -81,6 +100,29 @@ const getRatio = (request: VideoGenerateRequest) =>
 
 const getSquareRatio = (request: VideoGenerateRequest) =>
   isOneOf(getRatio(request), ["16:9", "9:16", "1:1"] as const, "16:9");
+
+const getSeedanceGenerationMode = (
+  request: VideoGenerateRequest,
+): "fast" | "pro" => {
+  // 新节点现在与旧版一致：Seedance Fast/Pro 是两个模型，接口里的 mode 由模型 ID 固定。
+  if (request.model === "seedance-2.0-fast") {
+    return "fast";
+  }
+  if (request.model === "seedance-2.0-pro") {
+    return "pro";
+  }
+  return request.params.generationMode ?? "pro";
+};
+
+const isViduQ2ProModel = (model: string) =>
+  model === "vidu-reference" ||
+  model === "vidu-q2-pro" ||
+  model === "vidu-q2-pro-reference" ||
+  model === "vidu-q2-pro-image-to-video";
+
+const isViduQ2FastModel = (model: string) => model === "vidu-q2-fast";
+
+const isViduQ3ProModel = (model: string) => model === "vidu-q3-pro";
 
 const buildSize = (
   resolution: string | undefined,
@@ -163,7 +205,7 @@ const buildSeedanceRequest = (
   const body: Seedance20Request = {
     prompt: getPrompt(request.prompt),
     generation_type: "video",
-    mode: request.params.generationMode ?? "pro",
+    mode: getSeedanceGenerationMode(request),
     resolution: isOneOf(
       request.params.resolution,
       ["480P", "720P"] as const,
@@ -298,7 +340,10 @@ const buildViduRequest = (
   );
 
   return {
-    model: "vidu/viduq3-turbo_text2video",
+    // Vidu Q3 Pro/Turbo 在 UI 上是两个模型，底层按同一任务模式切换模型名。
+    model: isViduQ3ProModel(request.model)
+      ? "vidu/viduq3-pro_text2video"
+      : "vidu/viduq3_turbo_text2video",
     input: {
       prompt: getPrompt(request.prompt),
     },
@@ -306,6 +351,39 @@ const buildViduRequest = (
       resolution,
       size: buildSize(resolution, getSquareRatio(request)),
       duration: request.params.duration,
+      audio: request.params.generateAudio,
+      watermark: false,
+    },
+  };
+};
+
+// 构建 Vidu Q3 图生视频请求
+const buildViduImageRequest = (
+  request: VideoGenerateRequest,
+): ViduQ3Image2VideoRequest => {
+  const images = getImages(request);
+  const resolution = isOneOf(
+    request.params.resolution,
+    ["540P", "720P", "1080P"] as const,
+    "720P",
+  );
+
+  return {
+    model: isViduQ3ProModel(request.model)
+      ? "vidu/viduq3-pro_img2video"
+      : "vidu/viduq3_turbo_img2video",
+    input: {
+      prompt: getPrompt(request.prompt) || undefined,
+      media: images.slice(0, 1).map((url) => ({
+        type: "image" as const,
+        url,
+      })),
+    },
+    parameters: {
+      resolution,
+      size: buildSize(resolution, getSquareRatio(request)),
+      duration: clampNumber(request.params.duration, 1, 16, 5),
+      audio: request.params.generateAudio,
       watermark: false,
     },
   };
@@ -328,7 +406,9 @@ const buildViduStartEndRequest = (
   const secondImage = images[1] ?? images[0] ?? "";
 
   return {
-    model: "vidu/viduq3-turbo_start-end2video",
+    model: isViduQ3ProModel(request.model)
+      ? "vidu/viduq3-pro_start-end2video"
+      : "vidu/viduq3_turbo_start-end2video",
     input: {
       prompt: getPrompt(request.prompt),
       media: [
@@ -358,7 +438,10 @@ const buildViduReferenceRequest = (
   );
 
   return {
-    model: "vidu/viduq2-pro_reference2video",
+    // Vidu Q2 Fast/Pro 使用不同底层模型名；旧 vidu-reference 兼容为 Pro。
+    model: isViduQ2FastModel(request.model)
+      ? "vidu/viduq2_reference2video"
+      : "vidu/viduq2-pro_reference2video",
     input: {
       prompt: getPrompt(request.prompt),
       media: [
@@ -366,7 +449,9 @@ const buildViduReferenceRequest = (
           type: "image" as const,
           url,
         })),
-        ...videos.slice(0, 1).map((url) => ({
+        ...(
+          isViduQ2FastModel(request.model) ? [] : videos.slice(0, 1)
+        ).map((url) => ({
           type: "video" as const,
           url,
         })),
@@ -557,20 +642,25 @@ const buildKelingRequest = (
 export const buildVideoApiRequest = (
   request: VideoGenerateRequest,
 ): NewVideoApiRequest => {
-  // vidu-reference 模型（全能参考 / 图生视频）
-  if (request.model === "vidu-reference") {
+  // Vidu Q2 Fast/Pro 在 UI 上拆成两个模型，底层走对应的 reference2video 请求。
+  if (isViduQ2FastModel(request.model) || isViduQ2ProModel(request.model)) {
     return buildViduReferenceRequest(request);
   }
 
   switch (request.model) {
+    case "seedance-2.0-fast":
     case "seedance-2.0-pro":
       return buildSeedanceRequest(request);
     case "wanxiang":
       return buildWanxiangRequest(request);
     case "vidu":
+    case "vidu-q3-pro":
       // vidu 首尾帧模式
       if (request.mode === "first-last-frame") {
         return buildViduStartEndRequest(request);
+      }
+      if (request.mode === "image-to-video") {
+        return buildViduImageRequest(request);
       }
       // 默认文生视频模式
       return buildViduRequest(request);

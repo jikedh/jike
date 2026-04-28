@@ -20,7 +20,11 @@ interface CopiedEdgeTemplate {
 }
 
 const shouldKeepIncomingEdgeForCopiedNode = (node?: AllNodeType) => {
-  return node?.type === "imageNode" || node?.type === "videoNode";
+  return (
+    node?.type === "imageNode" ||
+    node?.type === "videoNode" ||
+    node?.type === "newVideoNode"
+  );
 };
 
 const resolveNodeTypeForCounter = (nodeType: AllNodeType["type"]): NodeType => {
@@ -56,16 +60,26 @@ const getTargetMediaFieldByEdge = (
   if (!sourceNode || !targetNode) return null;
 
   if (sourceNode.type === "imageNode") {
-    if (targetNode.type === "imageNode" || targetNode.type === "videoNode") {
+    if (
+      targetNode.type === "imageNode" ||
+      targetNode.type === "videoNode" ||
+      targetNode.type === "newVideoNode"
+    ) {
       return "image_urls";
     }
   }
 
-  if (targetNode.type === "videoNode" && sourceNode.type === "videoNode") {
+  if (
+    (targetNode.type === "videoNode" || targetNode.type === "newVideoNode") &&
+    (sourceNode.type === "videoNode" || sourceNode.type === "newVideoNode")
+  ) {
     return "video_urls";
   }
 
-  if (targetNode.type === "videoNode" && sourceNode.type === "audioNode") {
+  if (
+    (targetNode.type === "videoNode" || targetNode.type === "newVideoNode") &&
+    sourceNode.type === "audioNode"
+  ) {
     return "audio_urls";
   }
 

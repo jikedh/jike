@@ -90,7 +90,10 @@ export const VideoAgentNode = memo(
 
       const parentVideoNode = incomingEdges
         .map((edge) => nodes.find((node) => node.id === edge.source))
-        .find((node) => node?.type === "videoNode");
+        // 视频智能体同时接受旧版和新版视频节点作为输入。
+        .find(
+          (node) => node?.type === "videoNode" || node?.type === "newVideoNode",
+        );
 
       return !!parentVideoNode;
     }, [id, nodes]);

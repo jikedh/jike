@@ -4,9 +4,9 @@ import {
   useUpdateNodeInternals,
 } from "@xyflow/react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
-
 import { GenerationStatus } from "shared/constants/enum";
 import type { NewVideoNodeType } from "shared/types/flow";
+import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
 import { getNodeSizeByAspectRatio } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
@@ -19,7 +19,8 @@ import { VideoToolbar } from "./VideoToolbar";
 const DRAG_UI_RESTORE_DELAY = 140;
 
 /**
- * 新版视频节点入口组件 (Node Shell)
+ * 新版视频节点入口。
+ * 这里保留新版参数面板，同时把旧版成熟的尺寸同步、右键拆分和多结果承载能力补回来。
  */
 const NewVideoNode = ({
   id,
@@ -29,24 +30,38 @@ const NewVideoNode = ({
 }: NodeProps<NewVideoNodeType>) => {
   const isDragging = Boolean(dragging);
   const [isDragUiSettled, setIsDragUiSettled] = useState(!isDragging);
+  const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
 
-  // Store actions
   const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
   const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
-  const updateVideoNodeData = useCanvasFlowStore(
-    (state) => state.updateVideoNodeData,
+  const separateToNodes = useCanvasFlowStore((state) => state.separateToNodes);
+  const updateNewVideoNodeData = useCanvasFlowStore(
+    (state) => state.updateNewVideoNodeData,
+  );
+  const updateNodeDimensions = useCanvasFlowStore(
+    (state) => state.updateNodeDimensions,
+  );
+  const isSourceHighlighted = useCanvasFlowStore((state) =>
+    state.highlightedSourceNodeIds.includes(id),
   );
 
-  // Handle 显示逻辑
+  const selectedNodesCount = useCanvasFlowStore(
+    (state) => state.selectedNodesCount,
+  );
+  const isSelectionBoxActive = useCanvasFlowStore(
+    (state) => state.isSelectionBoxActive,
+  );
+
   const handleVisibilityClass = useMemo(
     () =>
-      selected
+      isGalleryExpanded
+        ? "invisible opacity-0"
+        : selected
         ? "visible opacity-100"
         : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100",
-    [selected],
+    [isGalleryExpanded, selected],
   );
 
-  // 动态计算节点尺寸
   const nodeSize = useMemo(() => {
     const sizeStr = data.aspect_ratio;
     if (!sizeStr || !sizeStr.includes(":")) {
@@ -64,16 +79,28 @@ const NewVideoNode = ({
     };
   }, [data.aspect_ratio]);
 
-  // 尺寸变化时通知 ReactFlow 重新计算 Handle 位置
   const updateNodeInternals = useUpdateNodeInternals();
   useEffect(() => {
     updateNodeInternals(id);
   }, [nodeSize.width, nodeSize.height, id, updateNodeInternals]);
 
-  // 缓存回调
-  const handleDuplicate = useCallback(() => {
-    duplicateNode(id);
-  }, [duplicateNode, id]);
+  useEffect(() => {
+    // React Flow 的 measured 尺寸不会自动跟随我们的内容比例，手动同步给框选、连线和命中检测使用。
+    updateNodeDimensions(id, nodeSize.width, nodeSize.height);
+  }, [id, nodeSize.height, nodeSize.width, updateNodeDimensions]);
+
+  useEffect(() => {
+    if (isDragging) {
+      setIsDragUiSettled(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setIsDragUiSettled(true);
+    }, DRAG_UI_RESTORE_DELAY);
+
+    return () => window.clearTimeout(timer);
+  }, [isDragging]);
 
   const isGenerating = useMemo(() => {
     const status = data.status ?? GenerationStatus.COMPLETED;
@@ -95,6 +122,10 @@ const NewVideoNode = ({
     return false;
   }, [deleteNode, id, isGenerating]);
 
+  const handleDuplicate = useCallback(() => {
+    duplicateNode(id);
+  }, [duplicateNode, id]);
+
   const handleDelete = useCallback(() => {
     if (!confirmDeleteIfNeeded()) {
       return;
@@ -102,23 +133,9 @@ const NewVideoNode = ({
     deleteNode(id);
   }, [confirmDeleteIfNeeded, deleteNode, id]);
 
-  const selectedNodesCount = useCanvasFlowStore((s) => s.selectedNodesCount);
-  const isSelectionBoxActive = useCanvasFlowStore(
-    (s) => s.isSelectionBoxActive,
-  );
-
-  useEffect(() => {
-    if (isDragging) {
-      setIsDragUiSettled(false);
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setIsDragUiSettled(true);
-    }, DRAG_UI_RESTORE_DELAY);
-
-    return () => window.clearTimeout(timer);
-  }, [isDragging]);
+  const handleSeparateToNodes = useCallback(() => {
+    separateToNodes(id);
+  }, [separateToNodes, id]);
 
   const shouldShowToolbar =
     selected &&
@@ -127,8 +144,16 @@ const NewVideoNode = ({
     isDragUiSettled &&
     selectedNodesCount <= 1;
 
+  const hasMultipleResults = (data.result?.data?.length ?? 0) > 1;
+
   return (
-    <NodeContextMenu onDuplicate={handleDuplicate} onDelete={handleDelete}>
+    <NodeContextMenu
+      onDuplicate={handleDuplicate}
+      onDelete={handleDelete}
+      onSeparateToNodes={handleSeparateToNodes}
+      hasMultipleResults={hasMultipleResults}
+      separateToNodesLabel="独立为视频"
+    >
       <div
         className="group/node relative"
         style={{
@@ -136,22 +161,12 @@ const NewVideoNode = ({
           height: `${nodeSize.height}px`,
         }}
       >
-        {/* 选中态高亮：紫色边框 + 四角装饰 + 发光 */}
-        <div
-          className={
-            selected
-              ? "absolute inset-0 rounded-xl border-2 border-[#B43FEB] shadow-[0_0_20px_rgba(180,63,235,0.3)] pointer-events-none z-10"
-              : "absolute inset-0 rounded-xl border border-neutral-700 pointer-events-none"
-          }
-        />
-
-        {/* 顶部工具栏 */}
         {shouldShowToolbar && (
           <div className="selection-box-deferred-ui nodrag nopan nowheel absolute -top-13 left-1/2 z-50 -translate-x-1/2">
             <VideoToolbar nodeId={id} data={data} onDelete={handleDelete} />
           </div>
         )}
-        {/* 左侧输入 Handle */}
+
         <ButtonHandle
           type="target"
           position={Position.Left}
@@ -160,18 +175,55 @@ const NewVideoNode = ({
           className={`transition-opacity duration-150 ${handleVisibilityClass}`}
         />
 
-        {/* 节点内容区 */}
-        <VideoContent
-          data={data}
-          nodeId={id}
-          updateVideoNodeData={updateVideoNodeData}
-          frameSize={{
-            width: nodeSize.width,
-            height: nodeSize.height,
-          }}
-        />
+        <div
+          className={cn(
+            "group/card relative flex h-full w-full flex-col rounded-xl border",
+            hasMultipleResults &&
+              "bg-linear-to-br from-[#141418] to-[#0d0d10]",
+            selected
+              ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
+              : isSourceHighlighted
+                ? "border-[#B43FEB]/65 shadow-[0_0_18px_rgba(180,63,235,0.28),0_0_36px_rgba(180,63,235,0.12)] ring-1 ring-[#B43FEB]/20"
+              : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
+          )}
+        >
+          {selected && !isDragging && (
+            <>
+              <div className="absolute -top-px -left-px w-4 h-4 border-l-2 border-t-2 border-[#B43FEB] rounded-tl-xl" />
+              <div className="absolute -top-px -right-px w-4 h-4 border-r-2 border-t-2 border-[#B43FEB] rounded-tr-xl" />
+              <div className="absolute -bottom-px -left-px w-4 h-4 border-l-2 border-b-2 border-[#B43FEB] rounded-bl-xl" />
+              <div className="absolute -bottom-px -right-px w-4 h-4 border-r-2 border-b-2 border-[#B43FEB] rounded-br-xl" />
+            </>
+          )}
 
-        {/* 右侧输出 Handle */}
+          <div
+            className={cn(
+              "pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-500 group-hover/card:opacity-100",
+              hasMultipleResults &&
+                "bg-linear-to-tr from-transparent via-white/2 to-transparent",
+            )}
+          />
+
+          <div
+            className={cn(
+              "relative flex h-full w-full",
+              hasMultipleResults ? "rounded-lg bg-black/30" : "rounded-xl",
+              isGalleryExpanded ? "overflow-visible" : "overflow-hidden",
+            )}
+          >
+            <VideoContent
+              data={data}
+              nodeId={id}
+              updateVideoNodeData={updateNewVideoNodeData}
+              onGalleryExpandedChange={setIsGalleryExpanded}
+              frameSize={{
+                width: nodeSize.width,
+                height: nodeSize.height,
+              }}
+            />
+          </div>
+        </div>
+
         <ButtonHandle
           type="source"
           position={Position.Right}
@@ -180,9 +232,8 @@ const NewVideoNode = ({
           className={`transition-opacity duration-150 ${handleVisibilityClass}`}
         />
 
-        {/* 底部面板 */}
         {shouldShowToolbar && (
-          <div className="selection-box-deferred-ui absolute top-full left-1/2 z-50 mt-4 -translate-x-1/2">
+          <div className="selection-box-deferred-ui nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2">
             <VideoPromptPanel nodeId={id} />
           </div>
         )}
