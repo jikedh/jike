@@ -101,6 +101,16 @@ const getRatio = (request: VideoGenerateRequest) =>
 const getSquareRatio = (request: VideoGenerateRequest) =>
   isOneOf(getRatio(request), ["16:9", "9:16", "1:1"] as const, "16:9");
 
+const getHappyHorseRatio = (request: VideoGenerateRequest) =>
+  isOneOf(
+    getRatio(request),
+    ["16:9", "9:16", "1:1", "4:3", "3:4"] as const,
+    "16:9",
+  );
+
+const getHappyHorseResolution = (request: VideoGenerateRequest) =>
+  isOneOf(request.params.resolution, ["720P", "1080P"] as const, "1080P");
+
 const getSeedanceGenerationMode = (
   request: VideoGenerateRequest,
 ): "fast" | "pro" => {
@@ -188,19 +198,19 @@ const buildSeedanceRequest = (
     request.mode !== "text-to-video" && request.mode !== "first-last-frame";
   const videos = supportsReferenceMedia
     ? getVideos(request)
-      .slice(0, 3)
-      .map((url) => ({
-        url,
-        role: "reference_video" as const,
-      }))
+        .slice(0, 3)
+        .map((url) => ({
+          url,
+          role: "reference_video" as const,
+        }))
     : [];
   const audios = supportsReferenceMedia
     ? getAudios(request)
-      .slice(0, 3)
-      .map((url) => ({
-        url,
-        role: "reference_audio" as const,
-      }))
+        .slice(0, 3)
+        .map((url) => ({
+          url,
+          role: "reference_audio" as const,
+        }))
     : [];
   const body: Seedance20Request = {
     prompt: getPrompt(request.prompt),
@@ -277,13 +287,13 @@ const buildWanxiangRequest = (request: VideoGenerateRequest) => {
     const media: Wan27I2vRequest["input"]["media"] =
       request.mode === "first-last-frame"
         ? images.slice(0, 2).map((url, index) => ({
-          type: index === 0 ? "first_frame" : "last_frame",
-          url,
-        }))
+            type: index === 0 ? "first_frame" : "last_frame",
+            url,
+          }))
         : images.slice(0, 1).map((url) => ({
-          type: "first_frame",
-          url,
-        }));
+            type: "first_frame",
+            url,
+          }));
 
     const body: Wan27I2vRequest = {
       model: "wan2.7-i2v",
@@ -450,12 +460,12 @@ const buildViduReferenceRequest = (
           type: "image" as const,
           url,
         })),
-        ...(
-          isViduQ2FastModel(request.model) ? [] : videos.slice(0, 1)
-        ).map((url) => ({
-          type: "video" as const,
-          url,
-        })),
+        ...(isViduQ2FastModel(request.model) ? [] : videos.slice(0, 1)).map(
+          (url) => ({
+            type: "video" as const,
+            url,
+          }),
+        ),
       ],
     },
     parameters: {
@@ -640,6 +650,87 @@ const buildKelingRequest = (
   };
 };
 
+const buildHappyHorseRequest = (request: VideoGenerateRequest) => {
+  const images = getImages(request);
+  const videos = getVideos(request);
+  const resolution = getHappyHorseResolution(request);
+  const duration = clampNumber(request.params.duration, 3, 15, 5);
+
+  if (request.mode === "text-to-video") {
+    return {
+      model: "happyhorse-1.0-t2v",
+      input: {
+        prompt: getPrompt(request.prompt),
+      },
+      parameters: {
+        resolution,
+        ratio: getHappyHorseRatio(request),
+        duration,
+        watermark: false,
+      },
+    } satisfies BailianVideoGenerationRequest;
+  }
+
+  if (request.mode === "image-to-video") {
+    return {
+      model: "happyhorse-1.0-i2v",
+      input: {
+        prompt: getPrompt(request.prompt) || undefined,
+        media: images.slice(0, 1).map((url) => ({
+          type: "first_frame" as const,
+          url,
+        })),
+      },
+      parameters: {
+        resolution,
+        duration,
+        watermark: false,
+      },
+    } satisfies BailianVideoGenerationRequest;
+  }
+
+  if (request.mode === "video-edit") {
+    return {
+      model: "happyhorse-1.0-video-edit",
+      input: {
+        prompt: getPrompt(request.prompt),
+        media: [
+          ...videos.slice(0, 1).map((url) => ({
+            type: "video" as const,
+            url,
+          })),
+          ...images.slice(0, 5).map((url) => ({
+            type: "reference_image" as const,
+            url,
+          })),
+        ],
+      },
+      parameters: {
+        resolution,
+        watermark: false,
+        audio_setting: "auto",
+      },
+    } satisfies BailianVideoGenerationRequest;
+  }
+
+  return {
+    model: "happyhorse-1.0-r2v",
+    input: {
+      prompt: getPrompt(request.prompt),
+      media: images.slice(0, 9).map((url) => ({
+        type: "reference_image" as const,
+        url,
+      })),
+    },
+    parameters: {
+      resolution,
+      ratio: getHappyHorseRatio(request),
+      duration,
+      watermark: false,
+    },
+  } satisfies BailianVideoGenerationRequest;
+};
+
 export const buildVideoApiRequest = (
   request: VideoGenerateRequest,
 ): NewVideoApiRequest => {
@@ -667,6 +758,8 @@ export const buildVideoApiRequest = (
       return buildViduRequest(request);
     case "pixverse":
       return buildPixverseRequest(request);
+    case "happyhorse":
+      return buildHappyHorseRequest(request);
     case "keling":
       return buildKelingRequest(request);
     default:

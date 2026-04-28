@@ -11,6 +11,7 @@ export type VideoModeKey =
   | "text-to-video" // 文生视频：纯文本生成，无参考图
   | "all-reference" // 全能参考：同时支持图片/视频/音频参考
   | "image-to-video" // 图生视频：以单张或多张图片为参考
+  | "video-edit" // 视频编辑：以视频素材为主体，可附加参考图
   | "first-last-frame"; // 首尾帧：仅支持 1-2 张图作为首帧/尾帧
 
 // ==================== 子模型定义 ====================
@@ -49,6 +50,7 @@ export const MODE_LABELS: Record<VideoModeKey, string> = {
   "text-to-video": "文生视频",
   "all-reference": "全能参考",
   "image-to-video": "图生视频",
+  "video-edit": "视频编辑",
   "first-last-frame": "首尾帧",
 };
 
@@ -73,6 +75,7 @@ export const MODE_REFERENCE_CONSTRAINTS: Record<
   "text-to-video": { maxRefCount: 0 }, // 文生视频不允许参考图
   "all-reference": {}, // 全能参考保持默认可选；生成时再校验是否已有参考素材
   "image-to-video": { minRefCount: 1, requiresAllImages: true }, // 至少一张图，且全部为图片
+  "video-edit": { requiresAnyReference: true }, // 具体视频/图片数量由模型适配层判断
   "first-last-frame": {}, // 首尾帧在 useModeAvailability 中特殊判断：恰好2项且全为图片
 };
 
@@ -82,6 +85,7 @@ export const ALL_MODE_KEYS: VideoModeKey[] = [
   "text-to-video",
   "all-reference",
   "image-to-video",
+  "video-edit",
   "first-last-frame",
 ];
 
@@ -203,6 +207,28 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
       {
         id: "pixverse/pixverse-c1-r2v",
         supportedModes: ["all-reference"],
+      },
+    ],
+  },
+  {
+    id: "happyhorse",
+    label: "HappyHores",
+    variants: [
+      {
+        id: "happyhorse-1.0-t2v",
+        supportedModes: ["text-to-video"],
+      },
+      {
+        id: "happyhorse-1.0-r2v",
+        supportedModes: ["all-reference"],
+      },
+      {
+        id: "happyhorse-1.0-i2v",
+        supportedModes: ["image-to-video"],
+      },
+      {
+        id: "happyhorse-1.0-video-edit",
+        supportedModes: ["video-edit"],
       },
     ],
   },
