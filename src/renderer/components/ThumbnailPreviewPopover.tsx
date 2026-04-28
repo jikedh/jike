@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 interface ThumbnailPreviewPopoverProps {
     src: string;
@@ -13,6 +14,10 @@ export const ThumbnailPreviewPopover = ({
     children,
 }: ThumbnailPreviewPopoverProps) => {
     const [visible, setVisible] = useState(false);
+    const [previewPosition, setPreviewPosition] = useState({
+        left: 0,
+        top: 0,
+    });
     const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -31,6 +36,14 @@ export const ThumbnailPreviewPopover = ({
     const handleMouseEnter = useCallback(() => {
         clearTimers();
         showTimerRef.current = setTimeout(() => {
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (rect) {
+                // 大图预览用 fixed 浮层，避免被素材条裁切或撑开布局。
+                setPreviewPosition({
+                    left: rect.left + rect.width / 2,
+                    top: Math.max(12, rect.top - 8),
+                });
+            }
             setVisible(true);
         }, 200);
     }, []);
@@ -52,8 +65,15 @@ export const ThumbnailPreviewPopover = ({
             {children}
 
             {/* 大图预览浮窗 */}
-            {visible && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
+            {visible && createPortal(
+                <div
+                    className="fixed z-[9999] pointer-events-none"
+                    style={{
+                        left: previewPosition.left,
+                        top: previewPosition.top,
+                        transform: "translate(-50%, -100%)",
+                    }}
+                >
                     <div className="w-60 h-60 rounded-xl overflow-hidden border border-white/10 shadow-2xl bg-neutral-900 transition-opacity duration-150">
                         <img
                             src={src}
@@ -65,7 +85,8 @@ export const ThumbnailPreviewPopover = ({
                             {index + 1}
                         </span>
                     </div>
-                </div>
+                </div>,
+                document.body,
             )}
         </div>
     );

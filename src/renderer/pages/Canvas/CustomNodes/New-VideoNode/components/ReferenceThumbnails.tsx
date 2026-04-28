@@ -12,7 +12,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { IconGripVertical, IconMusic, IconPhoto, IconVideo } from "@tabler/icons-react";
+import { IconGripVertical, IconMusic, IconPhoto, IconVideo, IconX } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn, getVideoThumbnail } from "shared/utils/utils";
 import { ThumbnailPreviewPopover } from "@/components/ThumbnailPreviewPopover";
@@ -20,11 +20,9 @@ import type { MentionItem } from "../constants/mockData";
 
 interface ReferenceThumbnailsProps {
   items: MentionItem[];
-  onReorder?: (
-    type: MentionItem["type"],
-    fromIndex: number,
-    toIndex: number,
-  ) => void;
+  onReorder?: (fromIndex: number, toIndex: number) => void;
+  onRemove?: (item: MentionItem) => void;
+  onHoverChange?: (item: MentionItem, isHovering: boolean) => void;
 }
 
 const TYPE_LABELS: Record<MentionItem["type"], string> = {
@@ -157,11 +155,15 @@ const ReferenceCard = ({
 const SortableReferenceItem = ({
   item,
   index,
-  typeIndex,
+  displayIndex,
+  onRemove,
+  onHoverChange,
 }: {
   item: MentionItem;
   index: number;
-  typeIndex: number;
+  displayIndex: number;
+  onRemove?: (item: MentionItem) => void;
+  onHoverChange?: (item: MentionItem, isHovering: boolean) => void;
 }) => {
   const {
     attributes,
@@ -174,12 +176,15 @@ const SortableReferenceItem = ({
     id: item.id,
     data: {
       item,
-      typeIndex,
+      index,
     },
   });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
+    // 参考素材只允许横向换位，禁用纵向位移，避免长按拖拽时把图片区域往下拉。
+    transform: CSS.Transform.toString(
+      transform ? { ...transform, y: 0 } : null,
+    ),
     transition,
   };
 
@@ -191,8 +196,23 @@ const SortableReferenceItem = ({
         "group relative flex shrink-0 items-center",
         isDragging && "z-10 opacity-60",
       )}
+      onMouseEnter={() => onHoverChange?.(item, true)}
+      onMouseLeave={() => onHoverChange?.(item, false)}
     >
-      <ReferenceCard item={item} index={index} />
+      <ReferenceCard item={item} index={displayIndex} />
+      {onRemove ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onRemove(item);
+          }}
+          className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-neutral-900 text-neutral-300 opacity-0 shadow-sm transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100"
+          title="移除参考素材"
+        >
+          <IconX size={10} />
+        </button>
+      ) : null}
       <button
         type="button"
         {...attributes}
@@ -206,9 +226,48 @@ const SortableReferenceItem = ({
   );
 };
 
+const StaticReferenceItem = ({
+  item,
+  index,
+  displayIndex,
+  onRemove,
+  onHoverChange,
+}: {
+  item: MentionItem;
+  index: number;
+  displayIndex: number;
+  onRemove?: (item: MentionItem) => void;
+  onHoverChange?: (item: MentionItem, isHovering: boolean) => void;
+}) => {
+  return (
+    <div
+      className="group relative flex shrink-0 items-center"
+      onMouseEnter={() => onHoverChange?.(item, true)}
+      onMouseLeave={() => onHoverChange?.(item, false)}
+    >
+      <ReferenceCard item={item} index={displayIndex} />
+      {onRemove ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onRemove(item);
+          }}
+          className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-neutral-900 text-neutral-300 opacity-0 shadow-sm transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100"
+          title="移除参考素材"
+        >
+          <IconX size={10} />
+        </button>
+      ) : null}
+    </div>
+  );
+};
+
 export const ReferenceThumbnails = ({
   items,
   onReorder,
+  onRemove,
+  onHoverChange,
 }: ReferenceThumbnailsProps) => {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -226,23 +285,41 @@ export const ReferenceThumbnails = ({
     };
 
     return items.map((item, index) => {
-      const typeIndex = typeIndexes[item.type];
+      const displayIndex = typeIndexes[item.type];
       typeIndexes[item.type] += 1;
 
       return {
         item,
         index,
-        typeIndex,
+        displayIndex,
       };
     });
   }, [items]);
 
+  if (!onReorder) {
+    // 新版视频节点暂时禁用拖拽排序，避免缩略图长按/拖动时把素材区域向下拉伸。
+    return (
+      <div className="flex h-[60px] items-center gap-2 overflow-visible">
+        {sortableItems.map(({ item, index, displayIndex }) => (
+          <StaticReferenceItem
+            key={item.id}
+            item={item}
+            index={index}
+            displayIndex={displayIndex}
+            onRemove={onRemove}
+            onHoverChange={onHoverChange}
+          />
+        ))}
+      </div>
+    );
+  }
+
   const handleDragEnd = (event: DragEndEvent) => {
     const activeData = event.active.data.current as
-      | { item?: MentionItem; typeIndex?: number }
+      | { item?: MentionItem; index?: number }
       | undefined;
     const overData = event.over?.data.current as
-      | { item?: MentionItem; typeIndex?: number }
+      | { item?: MentionItem; index?: number }
       | undefined;
 
     if (!activeData?.item || !overData?.item) {
@@ -253,22 +330,14 @@ export const ReferenceThumbnails = ({
       return;
     }
 
-    if (activeData.item.type !== overData.item.type) {
-      return;
-    }
-
     if (
-      typeof activeData.typeIndex !== "number" ||
-      typeof overData.typeIndex !== "number"
+      typeof activeData.index !== "number" ||
+      typeof overData.index !== "number"
     ) {
       return;
     }
 
-    onReorder?.(
-      activeData.item.type,
-      activeData.typeIndex,
-      overData.typeIndex,
-    );
+    onReorder?.(activeData.index, overData.index);
   };
 
   return (
@@ -281,13 +350,15 @@ export const ReferenceThumbnails = ({
         items={sortableItems.map(({ item }) => item.id)}
         strategy={horizontalListSortingStrategy}
       >
-        <div className="flex items-center gap-2 overflow-visible">
-          {sortableItems.map(({ item, index, typeIndex }) => (
+        <div className="flex h-[60px] items-center gap-2 overflow-visible">
+          {sortableItems.map(({ item, index, displayIndex }) => (
             <SortableReferenceItem
               key={item.id}
               item={item}
               index={index}
-              typeIndex={typeIndex}
+              displayIndex={displayIndex}
+              onRemove={onRemove}
+              onHoverChange={onHoverChange}
             />
           ))}
         </div>

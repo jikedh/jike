@@ -161,7 +161,10 @@ export const createNewVideoNode = (
     nickname: "新版视频",
     status: GenerationStatus.COMPLETED,
     progress: 0,
-    metadata: {},
+    metadata: {
+      // 新版视频节点默认进入全能参考模式，和老版默认体验保持一致。
+      mode: "all-reference",
+    },
     result: { type: "video", data: [] },
     createdAt: Date.now(),
   },

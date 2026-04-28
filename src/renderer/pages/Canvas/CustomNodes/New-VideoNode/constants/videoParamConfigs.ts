@@ -1,4 +1,4 @@
-import type { VideoModeKey } from "./videoModelCapabilities";
+﻿import type { VideoModeKey } from "./videoModelCapabilities";
 
 export type VideoParamOption = {
   label: string;
@@ -74,27 +74,27 @@ const squareRatios = [RATIO.wide, RATIO.vertical, RATIO.square];
 const audio = { label: "生成音频" };
 const promptExtend = { label: "智能改写 Prompt" };
 
-// vidu 的分辨率选项（支持 audio 和 seed）
+// vidu 鐨勫垎杈ㄧ巼閫夐」锛堟敮鎸?audio 鍜?seed锛?
 const viduResolutions = [
-  { label: "540P", value: "540P" },
-  { label: "720P", value: "720P" },
-  { label: "1080P", value: "1080P" },
+  { label: "540p", value: "540P" },
+  { label: "720p", value: "720P" },
+  { label: "1080p", value: "1080P" },
 ];
 
-// vidu-reference 的分辨率选项
+// vidu-reference 鐨勫垎杈ㄧ巼閫夐」
 const viduReferenceResolutions = viduResolutions;
 
 const resolution480720 = [
-  { label: "480P", value: "480P" },
-  { label: "720P", value: "720P" },
+  { label: "480p", value: "480P" },
+  { label: "720p", value: "720P" },
 ];
 
 const resolution7201080 = resolution480720.concat([
-  { label: "1080P", value: "1080P" },
+  { label: "1080p", value: "1080P" },
 ]);
 
 const pixverseResolutions = resolution7201080.concat([
-  { label: "360P", value: "360P" },
+  { label: "360p", value: "360P" },
 ]);
 
 const duration4_5_8 = {
@@ -251,7 +251,7 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
     viduQ3Config("vidu-q3-pro", "image-to-video"),
   [byModeKey("vidu-q3-pro", "first-last-frame")]:
     viduQ3Config("vidu-q3-pro", "first-last-frame"),
-  // Vidu Q2 Fast/Pro 按模型档位拆分，底层分别对应 viduq2 与 viduq2-pro 的 reference2video 接口。
+  // Vidu Q2 仅保留历史兼容配置，新 UI 不再展示。
   [byModeKey("vidu-q2-fast", "image-to-video")]: {
     modelId: "vidu-q2-fast",
     mode: "image-to-video",

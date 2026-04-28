@@ -258,7 +258,7 @@ export const UnifiedVideoParamsPanel = ({
 
         if (keySet.has("resolution")) {
             const raw = String(getParamValue({ key: "resolution", label: "", controlType: "buttons", defaultValue: "" } as any, currentVideoData));
-            const normalized = raw ? raw.toUpperCase() : "";
+            const normalized = raw ? raw.toLowerCase() : "";
             if (normalized) {
                 parts.push({ kind: "resolution", value: normalized });
             }

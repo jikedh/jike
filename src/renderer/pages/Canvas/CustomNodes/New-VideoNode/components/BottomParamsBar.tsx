@@ -1,4 +1,3 @@
-import { IconPlayerStop } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -104,7 +103,6 @@ export const BottomParamsBar = ({
             onClick={onStop}
             className={PROMPT_PANEL_STYLES.stopButton}
           >
-            <IconPlayerStop size={16} />
             停止
           </Button>
         ) : (

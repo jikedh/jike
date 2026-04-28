@@ -137,10 +137,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     parentVideoNodes,
     parentAudioNodes,
     parentImageNodes,
-    parentImageNodeUrls,
-    parentImageNodeIdByUrl,
     parentNoteContents,
     videoMentionItems,
+    localReferenceImageUrls,
+    localReferenceImageIndexes,
     allImageUrls,
     allVideoUrls,
     allAudioUrls,
@@ -546,9 +546,9 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
           fileInputRef={fileInputRef}
           onUploadClick={handleUploadClick}
           onFileChange={handleFileChange}
-          referenceImageUrls={referenceImageUrls}
-          parentImageNodeUrls={parentImageNodeUrls}
-          parentImageNodeIdByUrl={parentImageNodeIdByUrl}
+          referenceImageUrls={localReferenceImageUrls}
+          referenceImageIndexes={localReferenceImageIndexes}
+          parentImageNodes={parentImageNodes}
           parentAudioNodes={parentAudioNodes}
           parentVideoNodes={parentVideoNodes}
           onDisconnectNode={handleDisconnectNode}

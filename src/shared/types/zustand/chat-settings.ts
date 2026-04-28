@@ -18,6 +18,13 @@ export type ChatSettingsStoreType = {
   defaultVideoGenerateAudio?: boolean;
   defaultVideoAudio?: boolean;
   defaultVideoPromptExtend?: boolean;
+  defaultNewVideoModel?: string;
+  defaultNewVideoAspectRatio?: string;
+  defaultNewVideoDuration?: number;
+  defaultNewVideoResolution?: string;
+  defaultNewVideoMode?: string;
+  defaultNewVideoGenerateAudio?: boolean;
+  defaultNewVideoPromptExtend?: boolean;
   defaultPersonaId: ChatPersonaId;
   autoSaveEnabled: boolean;
   gridVisible: boolean;
@@ -43,6 +50,15 @@ export type ChatSettingsStoreType = {
     mode?: string;
     generateAudio?: boolean;
     audio?: boolean;
+    promptExtend?: boolean;
+  }) => void;
+  setDefaultNewVideoPreset: (preset: {
+    model?: string;
+    aspectRatio?: string;
+    duration?: number;
+    resolution?: string;
+    mode?: string;
+    generateAudio?: boolean;
     promptExtend?: boolean;
   }) => void;
   setDefaultPersonaId: (personaId: ChatPersonaId) => void;

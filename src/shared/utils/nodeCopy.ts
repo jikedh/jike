@@ -40,9 +40,25 @@ export const resetNodeDataRuntimeState = <T>(
     taskId: _taskIdCamel,
     ...rest
   } = nodeData;
+  const nextRest = { ...rest };
+
+  if (
+    nodeType === "newVideoNode" &&
+    nextRest.metadata &&
+    typeof nextRest.metadata === "object"
+  ) {
+    const {
+      tasks: _tasks,
+      failedTasks: _failedTasks,
+      count: _count,
+      ...metadataRest
+    } = nextRest.metadata as Record<string, unknown>;
+    // 复制生成中的新版视频节点时，只保留用户参数，清掉运行时任务队列，行为对齐老版视频节点。
+    nextRest.metadata = metadataRest;
+  }
 
   return {
-    ...rest,
+    ...nextRest,
     status: getIdleStatusForCopiedNode(nodeType),
     progress: 0,
     isLoading: false,

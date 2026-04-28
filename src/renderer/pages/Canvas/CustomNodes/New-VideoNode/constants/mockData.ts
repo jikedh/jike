@@ -17,5 +17,7 @@ export interface MentionItem {
   label: string;
   value: string;
   thumbnail: string;
+  url?: string;
+  mentionId?: string;
   type: "image" | "video" | "audio";
 }

@@ -104,10 +104,11 @@ export const VideoReferenceAssetsBar = ({
   onUploadClick,
   onFileChange,
   referenceImageUrls,
-  parentImageNodeUrls,
-  parentImageNodeIdByUrl,
+  referenceImageIndexes,
+  parentImageNodes,
   parentAudioNodes,
   parentVideoNodes,
+  referenceContent,
   onDisconnectNode,
   onRemoveReferenceImage,
   onReferenceHoverChange,
@@ -117,16 +118,17 @@ export const VideoReferenceAssetsBar = ({
   onUploadClick: () => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   referenceImageUrls: string[];
-  parentImageNodeUrls: Set<string>;
-  parentImageNodeIdByUrl: Record<string, string>;
+  referenceImageIndexes?: number[];
+  parentImageNodes: { id: string; url: string; displayUrl?: string }[];
   parentAudioNodes: { id: string; url: string }[];
   parentVideoNodes: { id: string; url: string }[];
+  referenceContent?: ReactNode;
   onDisconnectNode: (sourceNodeId: string) => void;
-  onRemoveReferenceImage: (url: string) => void;
+  onRemoveReferenceImage: (url: string, index: number) => void;
   onReferenceHoverChange: (sourceNodeId: string, isHovering: boolean) => void;
 }) => {
   return (
-    <div className="nodrag nopan nowheel flex gap-2 overflow-x-auto pb-1">
+    <div className="nodrag nopan nowheel flex h-[60px] items-center gap-2 overflow-x-auto overflow-y-hidden">
       <Button
         unstyled
         className={PROMPT_PANEL_STYLES.uploadButton}
@@ -148,38 +150,18 @@ export const VideoReferenceAssetsBar = ({
         onChange={onFileChange}
       />
 
+      {referenceContent ? referenceContent : (
+        <>
       {referenceImageUrls.map((url, index) => {
-        const isFromParent = parentImageNodeUrls.has(url);
-        const parentNodeId = isFromParent
-          ? parentImageNodeIdByUrl[url]
-          : undefined;
-        const handleRemove = () => {
-          if (parentNodeId) {
-            onDisconnectNode(parentNodeId);
-            return;
-          }
-
-          onRemoveReferenceImage(url);
-        };
-
         return (
           <ReferenceItemWrapper
             key={`${url}-${index}`}
-            onDisconnect={handleRemove}
-            onMouseEnter={() => {
-              if (!parentNodeId) {
-                return;
-              }
-
-              onReferenceHoverChange(parentNodeId, true);
-            }}
-            onMouseLeave={() => {
-              if (!parentNodeId) {
-                return;
-              }
-
-              onReferenceHoverChange(parentNodeId, false);
-            }}
+            onDisconnect={() =>
+              onRemoveReferenceImage(
+                url,
+                referenceImageIndexes?.[index] ?? index,
+              )
+            }
           >
             <img
               src={url}
@@ -190,6 +172,22 @@ export const VideoReferenceAssetsBar = ({
           </ReferenceItemWrapper>
         );
       })}
+
+      {parentImageNodes.map((item, index) => (
+        <ReferenceItemWrapper
+          key={`parent-image-${item.id}-${index}`}
+          onDisconnect={() => onDisconnectNode(item.id)}
+          onMouseEnter={() => onReferenceHoverChange(item.id, true)}
+          onMouseLeave={() => onReferenceHoverChange(item.id, false)}
+        >
+          <img
+            src={item.displayUrl ?? item.url}
+            alt="鍙傝€冨浘"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+            loading="lazy"
+          />
+        </ReferenceItemWrapper>
+      ))}
 
       {parentAudioNodes.map((item, index) => (
         <ReferenceItemWrapper
@@ -231,6 +229,8 @@ export const VideoReferenceAssetsBar = ({
           <VideoThumbnailButton videoUrl={item.url} />
         </ReferenceItemWrapper>
       ))}
+        </>
+      )}
     </div>
   );
 };

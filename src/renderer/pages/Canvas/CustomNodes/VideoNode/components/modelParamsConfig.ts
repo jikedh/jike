@@ -1,40 +1,38 @@
-/**
- * 视频模型参数配置表
- * 定义每个模型的参数项、选项、默认值和字段映射
+﻿/**
+ * 瑙嗛妯″瀷鍙傛暟閰嶇疆琛? * 瀹氫箟姣忎釜妯″瀷鐨勫弬鏁伴」銆侀€夐」銆侀粯璁ゅ€煎拰瀛楁鏄犲皠
  */
 
-/** 参数控件类型 */
+/** 鍙傛暟鎺т欢绫诲瀷 */
 export type ParamControlType = "buttons" | "select" | "switch" | "slider";
 
-/** 参数项定义 */
+/** 鍙傛暟椤瑰畾涔?*/
 export interface ParamItem {
-  /** 参数键名 */
+  /** 鍙傛暟閿悕 */
   key: string;
-  /** UI 显示标签 */
+  /** UI 鏄剧ず鏍囩 */
   label: string;
-  /** 控件类型 */
+  /** 鎺т欢绫诲瀷 */
   controlType: ParamControlType;
-  /** 选项列表（buttons/select 用） */
+  /** 閫夐」鍒楄〃锛坆uttons/select 鐢級 */
   options?: Array<{ label: string; value: string | number }>;
-  /** 默认值 */
+  /** 榛樿鍊?*/
   defaultValue: string | number | boolean;
-  /** 取值范围描述（用于 label 动态显示） */
+  /** 鍙栧€艰寖鍥存弿杩帮紙鐢ㄤ簬 label 鍔ㄦ€佹樉绀猴級 */
   range?: { min: number; max: number };
 }
 
-/** 单个模型的参数配置 */
+/** 鍗曚釜妯″瀷鐨勫弬鏁伴厤缃?*/
 export interface ModelParamConfig {
-  /** 模型标识 */
+  /** 妯″瀷鏍囪瘑 */
   model: string;
-  /** 参数项列表 */
+  /** 鍙傛暟椤瑰垪琛?*/
   params: ParamItem[];
-  /** 默认值映射（用于快速重置） */
+  /** 榛樿鍊兼槧灏勶紙鐢ㄤ簬蹇€熼噸缃級 */
   defaults: Record<string, string | number | boolean>;
 }
 
 /**
- * 模型参数配置表
- * key: 模型完整名称
+ * 妯″瀷鍙傛暟閰嶇疆琛? * key: 妯″瀷瀹屾暣鍚嶇О
  * value: ModelParamConfig
  */
 const MODEL_PARAM_CONFIGS: Record<string, ModelParamConfig> = {
@@ -44,7 +42,7 @@ const MODEL_PARAM_CONFIGS: Record<string, ModelParamConfig> = {
     params: [
       {
         key: "mode",
-        label: "生成模式",
+        label: "鐢熸垚妯″紡",
         controlType: "buttons",
         options: [
           { label: "Fast", value: "fast" },
@@ -54,7 +52,7 @@ const MODEL_PARAM_CONFIGS: Record<string, ModelParamConfig> = {
       },
       {
         key: "aspect_ratio",
-        label: "画面比例",
+        label: "鐢婚潰姣斾緥",
         controlType: "buttons",
         options: [
           { label: "16:9", value: "16:9" },
@@ -63,7 +61,7 @@ const MODEL_PARAM_CONFIGS: Record<string, ModelParamConfig> = {
           { label: "3:4", value: "3:4" },
           { label: "9:16", value: "9:16" },
           { label: "21:9", value: "21:9" },
-          { label: "自适应", value: "adaptive" },
+          { label: "鑷€傚簲", value: "adaptive" },
         ],
         defaultValue: "16:9",
       },
@@ -79,14 +77,14 @@ const MODEL_PARAM_CONFIGS: Record<string, ModelParamConfig> = {
       },
       {
         key: "duration",
-        label: "视频时长",
+        label: "瑙嗛鏃堕暱",
         controlType: "slider",
         range: { min: 4, max: 15 },
         defaultValue: 8,
       },
       {
         key: "generate_audio",
-        label: "生成音频",
+        label: "鐢熸垚闊抽",
         controlType: "switch",
         defaultValue: true,
       },
@@ -102,9 +100,8 @@ const MODEL_PARAM_CONFIGS: Record<string, ModelParamConfig> = {
 };
 
 /**
- * 获取模型的参数配置
- * @param model 模型名称
- * @returns 模型参数配置，未找到返回 undefined
+ * 鑾峰彇妯″瀷鐨勫弬鏁伴厤缃? * @param model 妯″瀷鍚嶇О
+ * @returns 妯″瀷鍙傛暟閰嶇疆锛屾湭鎵惧埌杩斿洖 undefined
  */
 export const getModelParamConfig = (
   model: string,
@@ -113,10 +110,8 @@ export const getModelParamConfig = (
 };
 
 /**
- * 获取模型的默认参数值
- * @param model 模型名称
- * @returns 默认值映射
- */
+ * 鑾峰彇妯″瀷鐨勯粯璁ゅ弬鏁板€? * @param model 妯″瀷鍚嶇О
+ * @returns 榛樿鍊兼槧灏? */
 export const getModelDefaultParams = (
   model: string,
 ): Record<string, string | number | boolean> | undefined => {
@@ -125,13 +120,13 @@ export const getModelDefaultParams = (
 };
 
 // ===================== Doubao Seedance 2.0 Fast =====================
-/** 豆包 Seedance 2.0 Fast 参数配置（mode 固定为 fast，不暴露给用户） */
+/** 璞嗗寘 Seedance 2.0 Fast 鍙傛暟閰嶇疆锛坢ode 鍥哄畾涓?fast锛屼笉鏆撮湶缁欑敤鎴凤級 */
 MODEL_PARAM_CONFIGS["doubao-seedance-2.0-fast"] = {
   model: "doubao-seedance-2.0-fast",
   params: [
     {
       key: "aspect_ratio",
-      label: "画面比例",
+      label: "鐢婚潰姣斾緥",
       controlType: "buttons",
       options: [
         { label: "16:9", value: "16:9" },
@@ -140,7 +135,7 @@ MODEL_PARAM_CONFIGS["doubao-seedance-2.0-fast"] = {
         { label: "3:4", value: "3:4" },
         { label: "9:16", value: "9:16" },
         { label: "21:9", value: "21:9" },
-        { label: "自适应", value: "adaptive" },
+        { label: "鑷€傚簲", value: "adaptive" },
       ],
       defaultValue: "16:9",
     },
@@ -156,14 +151,14 @@ MODEL_PARAM_CONFIGS["doubao-seedance-2.0-fast"] = {
     },
     {
       key: "duration",
-      label: "视频时长",
+      label: "瑙嗛鏃堕暱",
       controlType: "slider",
       range: { min: 4, max: 15 },
       defaultValue: 10,
     },
     {
       key: "generate_audio",
-      label: "生成音频",
+      label: "鐢熸垚闊抽",
       controlType: "switch",
       defaultValue: true,
     },
@@ -178,13 +173,13 @@ MODEL_PARAM_CONFIGS["doubao-seedance-2.0-fast"] = {
 
 
 // ===================== Doubao Seedance 2.0 Pro =====================
-/** 豆包 Seedance 2.0 Pro 参数配置（mode 固定为 pro，不暴露给用户） */
+/** 璞嗗寘 Seedance 2.0 Pro 鍙傛暟閰嶇疆锛坢ode 鍥哄畾涓?pro锛屼笉鏆撮湶缁欑敤鎴凤級 */
 MODEL_PARAM_CONFIGS["doubao-seedance-2.0-pro"] = {
   model: "doubao-seedance-2.0-pro",
   params: [
     {
       key: "aspect_ratio",
-      label: "画面比例",
+      label: "鐢婚潰姣斾緥",
       controlType: "buttons",
       options: [
         { label: "16:9", value: "16:9" },
@@ -193,7 +188,7 @@ MODEL_PARAM_CONFIGS["doubao-seedance-2.0-pro"] = {
         { label: "3:4", value: "3:4" },
         { label: "9:16", value: "9:16" },
         { label: "21:9", value: "21:9" },
-        { label: "自适应", value: "adaptive" },
+        { label: "鑷€傚簲", value: "adaptive" },
       ],
       defaultValue: "16:9",
     },
@@ -209,14 +204,14 @@ MODEL_PARAM_CONFIGS["doubao-seedance-2.0-pro"] = {
     },
     {
       key: "duration",
-      label: "视频时长",
+      label: "瑙嗛鏃堕暱",
       controlType: "slider",
       range: { min: 4, max: 15 },
       defaultValue: 10,
     },
     {
       key: "generate_audio",
-      label: "生成音频",
+      label: "鐢熸垚闊抽",
       controlType: "switch",
       defaultValue: true,
     },
@@ -228,21 +223,21 @@ MODEL_PARAM_CONFIGS["doubao-seedance-2.0-pro"] = {
     generate_audio: true,
   },
 };
-/** 万象模型参数配置 */
+/** 涓囪薄妯″瀷鍙傛暟閰嶇疆 */
 const WAN27R2V_PARAMS: ParamItem[] = [
   {
     key: "resolution",
     label: "分辨率",
     controlType: "buttons",
     options: [
-      { label: "720P", value: "720P" },
-      { label: "1080P", value: "1080P" },
+      { label: "720p", value: "720P" },
+      { label: "1080p", value: "1080P" },
     ],
     defaultValue: "1080P",
   },
   {
     key: "ratio",
-    label: "画面比例",
+    label: "鐢婚潰姣斾緥",
     controlType: "buttons",
     options: [
       { label: "16:9", value: "16:9" },
@@ -253,30 +248,30 @@ const WAN27R2V_PARAMS: ParamItem[] = [
   },
   {
     key: "duration",
-    label: "视频时长",
+    label: "瑙嗛鏃堕暱",
     controlType: "buttons",
     options: [
-      { label: "2秒", value: 2 },
-      { label: "3秒", value: 3 },
-      { label: "4秒", value: 4 },
-      { label: "5秒", value: 5 },
-      { label: "6秒", value: 6 },
-      { label: "7秒", value: 7 },
-      { label: "8秒", value: 8 },
-      { label: "9秒", value: 9 },
-      { label: "10秒", value: 10 },
+      { label: "2s", value: 2 },
+      { label: "3s", value: 3 },
+      { label: "4s", value: 4 },
+      { label: "5s", value: 5 },
+      { label: "6s", value: 6 },
+      { label: "7s", value: 7 },
+      { label: "8s", value: 8 },
+      { label: "9s", value: 9 },
+      { label: "10s", value: 10 },
     ],
     defaultValue: 5,
   },
   {
     key: "prompt_extend",
-    label: "智能改写 prompt",
+    label: "鏅鸿兘鏀瑰啓 prompt",
     controlType: "switch",
     defaultValue: false,
   },
 ];
 
-// 注册到 MODEL_PARAM_CONFIGS
+// 娉ㄥ唽鍒?MODEL_PARAM_CONFIGS
 MODEL_PARAM_CONFIGS["wan2.7-r2v"] = {
   model: "wan2.7-r2v",
   params: WAN27R2V_PARAMS,
@@ -288,8 +283,8 @@ MODEL_PARAM_CONFIGS["wan2.7-r2v"] = {
   },
 };
 
-// ===================== PixVerse (万象秒创) =====================
-/** PixVerse 模型参数配置 */
+// ===================== PixVerse (涓囪薄绉掑垱) =====================
+/** PixVerse 妯″瀷鍙傛暟閰嶇疆 */
 const PIXVERSE_PARAMS: ParamItem[] = [
   {
     key: "subModel",
@@ -306,33 +301,33 @@ const PIXVERSE_PARAMS: ParamItem[] = [
     label: "分辨率",
     controlType: "buttons",
     options: [
-      { label: "360P", value: "360P" },
-      { label: "540P", value: "540P" },
-      { label: "720P", value: "720P" },
-      { label: "1080P", value: "1080P" },
+      { label: "360p", value: "360P" },
+      { label: "540p", value: "540P" },
+      { label: "720p", value: "720P" },
+      { label: "1080p", value: "1080P" },
     ],
     defaultValue: "720P",
   },
   {
     key: "duration",
-    label: "视频时长",
+    label: "瑙嗛鏃堕暱",
     controlType: "buttons",
     options: [
-      { label: "4秒", value: 4 },
-      { label: "5秒", value: 5 },
-      { label: "8秒", value: 8 },
+      { label: "4s", value: 4 },
+      { label: "5s", value: 5 },
+      { label: "8s", value: 8 },
     ],
     defaultValue: 5,
   },
   {
     key: "audio",
-    label: "生成音频",
+    label: "鐢熸垚闊抽",
     controlType: "switch",
     defaultValue: false,
   },
 ];
 
-// 注册到 MODEL_PARAM_CONFIGS
+// 娉ㄥ唽鍒?MODEL_PARAM_CONFIGS
 MODEL_PARAM_CONFIGS["pixverse-i2v"] = {
   model: "pixverse-i2v",
   params: PIXVERSE_PARAMS,

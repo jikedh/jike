@@ -338,6 +338,7 @@ function DefaultVideoControls({
 
   const [showVolumeSlider, setShowVolumeSlider] = React.useState(false);
   const volumeRef = React.useRef<HTMLDivElement>(null);
+  const volumeHideTimerRef = React.useRef<number | null>(null);
 
   const safeDuration = duration > 0 ? duration : 0;
 
@@ -359,6 +360,33 @@ function DefaultVideoControls({
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showVolumeSlider]);
+
+  const clearVolumeHideTimer = React.useCallback(() => {
+    if (volumeHideTimerRef.current) {
+      window.clearTimeout(volumeHideTimerRef.current);
+      volumeHideTimerRef.current = null;
+    }
+  }, []);
+
+  const showVolumeControl = React.useCallback(() => {
+    clearVolumeHideTimer();
+    setShowVolumeSlider(true);
+  }, [clearVolumeHideTimer]);
+
+  const hideVolumeControlSoon = React.useCallback(() => {
+    clearVolumeHideTimer();
+    // 给鼠标从喇叭移动到竖向音量条留一点缓冲，避免还没调节就被收起。
+    volumeHideTimerRef.current = window.setTimeout(() => {
+      setShowVolumeSlider(false);
+      volumeHideTimerRef.current = null;
+    }, 220);
+  }, [clearVolumeHideTimer]);
+
+  React.useEffect(() => {
+    return () => {
+      clearVolumeHideTimer();
+    };
+  }, [clearVolumeHideTimer]);
 
   return (
     <div
@@ -389,14 +417,18 @@ function DefaultVideoControls({
             {formatTime(currentTime)} / {formatTime(safeDuration)}
           </div>
 
-          <div ref={volumeRef} className="relative">
+          <div
+            ref={volumeRef}
+            className="relative"
+            onMouseEnter={showVolumeControl}
+            onMouseLeave={hideVolumeControlSoon}
+          >
             <button
               type="button"
               aria-label={muted ? "Unmute video" : "Mute video"}
               title={muted ? "Unmute" : "Mute"}
               className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43FEB]/70"
               onClick={toggleMuted}
-              onMouseEnter={() => setShowVolumeSlider(true)}
             >
               {muted || volume === 0 ? (
                 <VolumeX className="size-3.5" />

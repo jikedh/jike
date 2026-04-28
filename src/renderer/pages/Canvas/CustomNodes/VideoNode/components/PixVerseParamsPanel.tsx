@@ -1,6 +1,6 @@
-/**
- * PixVerse（万象秒创）视频参数面板
- * 支持子模型选择、分辨率、时长、音频等参数配置
+﻿/**
+ * PixVerse锛堜竾璞＄鍒涳級瑙嗛鍙傛暟闈㈡澘
+ * 鏀寔瀛愭ā鍨嬮€夋嫨銆佸垎杈ㄧ巼銆佹椂闀裤€侀煶棰戠瓑鍙傛暟閰嶇疆
  */
 
 import { useMemo } from "react";
@@ -15,55 +15,55 @@ import { cn } from "shared/utils/utils";
 import { Volume2, VolumeX } from "lucide-react";
 
 type PixVerseParamsPanelProps = {
-    /** 当前视频数据 */
+    /** 褰撳墠瑙嗛鏁版嵁 */
     currentVideoData: any;
-    /** 更新回调 */
+    /** 鏇存柊鍥炶皟 */
     onPatch: (patch: any) => void;
 };
 
-/** 获取当前子模型值 */
+/** 鑾峰彇褰撳墠瀛愭ā鍨嬪€?*/
 const getSubModel = (currentVideoData: any): string => {
     return currentVideoData?.metadata?.subModel ?? "pixverse/pixverse-v6-it2v";
 };
 
-/** 获取当前分辨率值 */
+/** 鑾峰彇褰撳墠鍒嗚鲸鐜囧€?*/
 const getResolution = (currentVideoData: any): string => {
     return currentVideoData?.metadata?.resolution ?? "720P";
 };
 
-/** 获取当前时长值 */
+/** 鑾峰彇褰撳墠鏃堕暱鍊?*/
 const getDuration = (currentVideoData: any): number => {
     return currentVideoData?.duration ?? 5;
 };
 
-/** 获取当前音频状态 */
+/** 鑾峰彇褰撳墠闊抽鐘舵€?*/
 const getAudio = (currentVideoData: any): boolean => {
     return Boolean(currentVideoData?.metadata?.audio ?? true);
 };
 
-/** 子模型选项 */
+/** 瀛愭ā鍨嬮€夐」 */
 const SUB_MODEL_OPTIONS = [
     { label: "V6（通用）", value: "pixverse/pixverse-v6-it2v" },
-    { label: "C1（特效）", value: "pixverse/pixverse-c1-it2v" },
+    { label: "C1锛堢壒鏁堬級", value: "pixverse/pixverse-c1-it2v" },
 ];
 
-/** 分辨率选项 */
+/** 鍒嗚鲸鐜囬€夐」 */
 const RESOLUTION_OPTIONS = [
-    { label: "360P", value: "360P" },
-    { label: "540P", value: "540P" },
-    { label: "720P", value: "720P" },
-    { label: "1080P", value: "1080P" },
+    { label: "360p", value: "360P" },
+    { label: "540p", value: "540P" },
+    { label: "720p", value: "720P" },
+    { label: "1080p", value: "1080P" },
 ];
 
-/** 时长选项 */
+/** 鏃堕暱閫夐」 */
 const DURATION_OPTIONS = [
-    { label: "4秒", value: 4 },
-    { label: "5秒", value: 5 },
-    { label: "8秒", value: 8 },
+    { label: "4s", value: 4 },
+    { label: "5s", value: 5 },
+    { label: "8s", value: 8 },
 ];
 
 /**
- * PixVerse 视频参数面板组件
+ * PixVerse 瑙嗛鍙傛暟闈㈡澘缁勪欢
  */
 export const PixVerseParamsPanel = ({
     currentVideoData,
@@ -74,13 +74,13 @@ export const PixVerseParamsPanel = ({
     const duration = getDuration(currentVideoData);
     const audio = getAudio(currentVideoData);
 
-    // 生成摘要数据
+    // 鐢熸垚鎽樿鏁版嵁
     const summaryItems = useMemo(() => {
         const parts: Array<{ kind: "text"; value: string } | { kind: "audio"; enabled: boolean }> = [];
         // 显示子模型简称
         const subModelLabel = subModel.includes("v6") ? "V6" : "C1";
         parts.push({ kind: "text", value: subModelLabel });
-        parts.push({ kind: "text", value: resolution });
+        parts.push({ kind: "text", value: resolution.toLowerCase() });
         parts.push({ kind: "text", value: `${duration}s` });
         parts.push({ kind: "audio", enabled: audio });
         return parts;
@@ -112,8 +112,8 @@ export const PixVerseParamsPanel = ({
         onPatch({
             metadata: {
                 ...(currentVideoData?.metadata ?? {}),
-                generate_audio: checked, // 统一使用 generate_audio
-                audio: checked, // 兼容旧逻辑
+                generate_audio: checked, // 缁熶竴浣跨敤 generate_audio
+                audio: checked, // 鍏煎鏃ч€昏緫
             },
         });
     };
@@ -160,11 +160,10 @@ export const PixVerseParamsPanel = ({
                 className="w-80 border border-neutral-700 bg-neutral-900 p-4 shadow-xl"
             >
                 <div className="space-y-5">
-                    {/* 子模型选择 */}
+                    {/* 瀛愭ā鍨嬮€夋嫨 */}
                     <div className="space-y-2">
                         <label className="text-xs font-medium text-neutral-300">
-                            子模型
-                        </label>
+                            瀛愭ā鍨?                        </label>
                         <div className="flex gap-2">
                             {SUB_MODEL_OPTIONS.map((option) => {
                                 const isActive = subModel === option.value;
@@ -193,15 +192,13 @@ export const PixVerseParamsPanel = ({
                             })}
                         </div>
                         <p className="text-xs text-neutral-500">
-                            V6：通用场景推荐 | C1：打斗、法术特效及高速运动
-                        </p>
+                            V6锛氶€氱敤鍦烘櫙鎺ㄨ崘 | C1锛氭墦鏂椼€佹硶鏈壒鏁堝強楂橀€熻繍鍔?                        </p>
                     </div>
 
-                    {/* 分辨率 */}
+                    {/* 鍒嗚鲸鐜?*/}
                     <div className="space-y-2">
                         <label className="text-xs font-medium text-neutral-300">
-                            分辨率
-                        </label>
+                            鍒嗚鲸鐜?                        </label>
                         <div className="flex gap-2">
                             {RESOLUTION_OPTIONS.map((option) => {
                                 const isActive = resolution === option.value;
@@ -231,10 +228,10 @@ export const PixVerseParamsPanel = ({
                         </div>
                     </div>
 
-                    {/* 视频时长 */}
+                    {/* 瑙嗛鏃堕暱 */}
                     <div className="space-y-2">
                         <label className="text-xs font-medium text-neutral-300">
-                            视频时长
+                            瑙嗛鏃堕暱
                         </label>
                         <div className="flex gap-2">
                             {DURATION_OPTIONS.map((option) => {
@@ -265,10 +262,10 @@ export const PixVerseParamsPanel = ({
                         </div>
                     </div>
 
-                    {/* 生成音频 */}
+                    {/* 鐢熸垚闊抽 */}
                     <div className="flex items-center justify-between">
                         <span className="text-xs text-neutral-300">
-                            生成音频
+                            鐢熸垚闊抽
                         </span>
                         <Switch
                             checked={audio}

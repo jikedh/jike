@@ -50,6 +50,29 @@ const isVideoModeKey = (value: unknown): value is VideoModeKey => {
   return typeof value === "string" && ALL_MODE_KEYS.includes(value as VideoModeKey);
 };
 
+const escapeHtml = (value: string) => {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+};
+
+const buildPromptDraftHtml = (html?: string, text?: string) => {
+  if (html && html.trim() && html !== "<p></p>") {
+    return html;
+  }
+
+  const normalizedText = text?.trim();
+  if (!normalizedText) {
+    return "<p></p>";
+  }
+
+  // 兼容旧数据：部分节点只有纯文本草稿，没有富文本 HTML，切换模式时不能把提示词清空。
+  return `<p>${escapeHtml(normalizedText).replace(/\n/g, "<br>")}</p>`;
+};
+
 const normalizeNewVideoModelId = (
   value: string | undefined,
   mode?: VideoModeKey,
@@ -95,6 +118,137 @@ const buildReferenceItems = (
   })),
 ];
 
+type ReferenceSource =
+  | string
+  | {
+      id?: string;
+      mentionId?: string;
+      url: string;
+      thumbnail?: string;
+    };
+
+const normalizeReferenceSource = (
+  item: ReferenceSource,
+  fallbackId: string,
+) => {
+  if (typeof item === "string") {
+    return {
+      id: fallbackId,
+      mentionId: undefined,
+      url: item,
+      thumbnail: item,
+    };
+  }
+
+  return {
+    id: item.id ?? fallbackId,
+    mentionId: item.mentionId,
+    url: item.url,
+    thumbnail: item.thumbnail ?? item.url,
+  };
+};
+
+const buildOrderedReferenceItems = (
+  imageUrls: ReferenceSource[] = [],
+  videoUrls: ReferenceSource[] = [],
+  audioUrls: ReferenceSource[] = [],
+): MentionItem[] => [
+  ...imageUrls.map((item, index) => {
+    const source = normalizeReferenceSource(
+      item,
+      `image-${index}-${typeof item === "string" ? item : item.url}`,
+    );
+    return {
+      id: source.id,
+      label: `图片${index + 1}`,
+      value: source.url,
+      thumbnail: source.thumbnail,
+      url: source.url,
+      mentionId: source.mentionId,
+      type: "image" as const,
+    };
+  }),
+  ...videoUrls.map((item, index) => {
+    const source = normalizeReferenceSource(
+      item,
+      `video-${index}-${typeof item === "string" ? item : item.url}`,
+    );
+    return {
+      id: source.id,
+      label: `视频${index + 1}`,
+      value: source.url,
+      thumbnail: source.thumbnail,
+      url: source.url,
+      mentionId: source.mentionId,
+      type: "video" as const,
+    };
+  }),
+  ...audioUrls.map((item, index) => {
+    const source = normalizeReferenceSource(
+      item,
+      `audio-${index}-${typeof item === "string" ? item : item.url}`,
+    );
+    return {
+      id: source.id,
+      label: `音频${index + 1}`,
+      value: source.url,
+      thumbnail: source.thumbnail,
+      url: source.url,
+      mentionId: source.mentionId,
+      type: "audio" as const,
+    };
+  }),
+];
+
+const relabelReferenceItemsByOrder = (items: MentionItem[]) => {
+  const counters: Record<MentionItem["type"], number> = {
+    image: 0,
+    video: 0,
+    audio: 0,
+  };
+  const labelPrefix: Record<MentionItem["type"], string> = {
+    image: "图片",
+    video: "视频",
+    audio: "音频",
+  };
+
+  return items.map((item) => {
+    counters[item.type] += 1;
+    return {
+      ...item,
+      label: `${labelPrefix[item.type]}${counters[item.type]}`,
+    };
+  });
+};
+
+const orderReferenceItems = (
+  items: MentionItem[],
+  order: unknown,
+): MentionItem[] => {
+  if (!Array.isArray(order) || order.length === 0) {
+    return items;
+  }
+
+  const itemMap = new Map(items.map((item) => [item.id, item]));
+  const usedIds = new Set<string>();
+  const orderedItems = order.flatMap((id) => {
+    if (typeof id !== "string" || usedIds.has(id)) {
+      return [];
+    }
+    const item = itemMap.get(id);
+    if (!item) {
+      return [];
+    }
+    usedIds.add(id);
+    return [item];
+  });
+
+  return [
+    ...orderedItems,
+    ...items.filter((item) => !usedIds.has(item.id)),
+  ];
+};
+
 export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const editorRef = useRef<VideoPromptEditorHandle | null>(null);
   const { success, warning } = useMessage();
@@ -121,8 +275,8 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const setReferenceHoverHighlight = useCanvasFlowStore(
     (state) => state.setReferenceHoverHighlight,
   );
-  const setDefaultVideoPreset = useChatSettingsStore(
-    (state) => state.setDefaultVideoPreset,
+  const setDefaultNewVideoPreset = useChatSettingsStore(
+    (state) => state.setDefaultNewVideoPreset,
   );
 
   const currentNode = useMemo(
@@ -144,6 +298,15 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const [promptText, setPromptText] = useState(
     currentData?.promptDraft ?? currentData?.prompt ?? "",
   );
+  const promptDraftHtml = useMemo(
+    () =>
+      buildPromptDraftHtml(
+        (currentData as { promptDraftHtml?: string } | undefined)
+          ?.promptDraftHtml,
+        currentData?.promptDraft ?? currentData?.prompt,
+      ),
+    [currentData?.prompt, currentData?.promptDraft, (currentData as any)?.promptDraftHtml],
+  );
   const [selectedParams, setSelectedParams] = useState<VideoParamState>(() =>
     normalizeVideoParams(model, metadataParams, initialMode),
   );
@@ -161,11 +324,10 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     parentVideoNodes,
     parentAudioNodes,
     parentImageNodes,
-    parentImageNodeUrls,
-    parentImageNodeIdByUrl,
     parentNoteContents,
     videoMentionItems,
-    allImageUrls,
+    localReferenceImageUrls,
+    localReferenceImageIndexes,
     allVideoUrls,
     allAudioUrls,
   } = useVideoNodeReferences({
@@ -177,28 +339,123 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
 
   // 兼容两种来源：连线带来的父节点引用，以及粘贴/历史数据里已经落到节点字段的媒体 URL。
   const mergedVideoUrls = useMemo(
-    () => Array.from(new Set([...(currentData?.video_urls ?? []), ...allVideoUrls])),
+    () => [...(currentData?.video_urls ?? []), ...allVideoUrls],
     [allVideoUrls, currentData?.video_urls],
   );
   const mergedAudioUrls = useMemo(
-    () => Array.from(new Set([...(currentData?.audio_urls ?? []), ...allAudioUrls])),
+    () => [...(currentData?.audio_urls ?? []), ...allAudioUrls],
     [allAudioUrls, currentData?.audio_urls],
   );
 
-  const generationReferenceItems = useMemo(
-    () => buildReferenceItems(allImageUrls, mergedVideoUrls, mergedAudioUrls),
-    [allImageUrls, mergedAudioUrls, mergedVideoUrls],
-  );
+  const imageReferenceSources = useMemo<ReferenceSource[]>(() => {
+    return [
+      ...localReferenceImageUrls.map((url, index) => ({
+        id: `local-image-${localReferenceImageIndexes[index]}-${url}`,
+        mentionId: getVideoLocalImageMentionId(url),
+        url,
+        thumbnail: url,
+      })),
+      ...parentImageNodes.map((item) => ({
+        id: `parent-image-${item.id}`,
+        mentionId: getVideoParentImageMentionId(item.id),
+        url: item.url,
+        thumbnail: item.displayUrl ?? item.url,
+      })),
+    ];
+  }, [localReferenceImageIndexes, localReferenceImageUrls, parentImageNodes]);
 
-  const sortableReferenceItems = useMemo(
-    () =>
-      buildReferenceItems(
-        currentData?.image_urls,
-        currentData?.video_urls,
-        currentData?.audio_urls,
-      ),
-    [currentData?.audio_urls, currentData?.image_urls, currentData?.video_urls],
-  );
+  const videoReferenceSources = useMemo<ReferenceSource[]>(() => {
+    const parentVideoUrlCounts = new Map<string, number>();
+    parentVideoNodes.forEach((item) => {
+      parentVideoUrlCounts.set(
+        item.url,
+        (parentVideoUrlCounts.get(item.url) ?? 0) + 1,
+      );
+    });
+    const localVideoUrls = (currentData?.video_urls ?? []).flatMap((url) => {
+      const parentCount = parentVideoUrlCounts.get(url) ?? 0;
+      if (parentCount > 0) {
+        parentVideoUrlCounts.set(url, parentCount - 1);
+        return [];
+      }
+      return [url];
+    });
+
+    return [
+      ...localVideoUrls.map((url, index) => ({
+        id: `local-video-${index}-${url}`,
+        url,
+        thumbnail: url,
+      })),
+      ...parentVideoNodes.map((item) => ({
+        id: `parent-video-${item.id}`,
+        mentionId: getVideoParentVideoMentionId(item.id),
+        url: item.url,
+        thumbnail: item.url,
+      })),
+    ];
+  }, [currentData?.video_urls, parentVideoNodes]);
+
+  const audioReferenceSources = useMemo<ReferenceSource[]>(() => {
+    const parentAudioUrlCounts = new Map<string, number>();
+    parentAudioNodes.forEach((item) => {
+      parentAudioUrlCounts.set(
+        item.url,
+        (parentAudioUrlCounts.get(item.url) ?? 0) + 1,
+      );
+    });
+    const localAudioUrls = (currentData?.audio_urls ?? []).flatMap((url) => {
+      const parentCount = parentAudioUrlCounts.get(url) ?? 0;
+      if (parentCount > 0) {
+        parentAudioUrlCounts.set(url, parentCount - 1);
+        return [];
+      }
+      return [url];
+    });
+
+    return [
+      ...localAudioUrls.map((url, index) => ({
+        id: `local-audio-${index}-${url}`,
+        url,
+        thumbnail: "/audio-icon.svg",
+      })),
+      ...parentAudioNodes.map((item) => ({
+        id: `parent-audio-${item.id}`,
+        mentionId: getVideoParentAudioMentionId(item.id),
+        url: item.url,
+        thumbnail: "/audio-icon.svg",
+      })),
+    ];
+  }, [currentData?.audio_urls, parentAudioNodes]);
+
+  const generationReferenceItems = useMemo(() => {
+    // 新版视频节点独立维护参考素材顺序：UI 缩略图可以是低清图，但传参始终使用 url 字段里的真实资源地址。
+    const items = buildOrderedReferenceItems(
+      imageReferenceSources,
+      videoReferenceSources,
+      audioReferenceSources,
+    );
+    return relabelReferenceItemsByOrder(
+      orderReferenceItems(items, currentData?.metadata?.referenceOrder),
+    );
+  }, [
+    currentData?.metadata?.referenceOrder,
+    audioReferenceSources,
+    imageReferenceSources,
+    videoReferenceSources,
+  ]);
+
+  const sortableReferenceItems = generationReferenceItems;
+
+  const editorMentionItems = useMemo(() => {
+    return generationReferenceItems.map((item) => ({
+      id: item.mentionId ?? item.id,
+      label: item.label,
+      value: item.label,
+      thumbnail: item.thumbnail,
+      type: item.type,
+    }));
+  }, [generationReferenceItems]);
 
   const referenceImages = useMemo(
     () =>
@@ -259,7 +516,8 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     }) => {
       const nextParams = params.videoParams ?? selectedParams;
       // 与老版保持一致：用户调整模型/参数后立即记忆，下次新建视频节点沿用这组常用配置。
-      setDefaultVideoPreset({
+      // 新版视频节点使用独立记忆，避免和老版视频节点的模型/模式/参数互相覆盖。
+      setDefaultNewVideoPreset({
         model: params.model ?? selectedModel,
         aspectRatio: nextParams.aspectRatio ?? currentData?.aspect_ratio ?? "16:9",
         duration: nextParams.duration ?? currentData?.duration ?? 5,
@@ -275,7 +533,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       currentData?.duration,
       selectedModel,
       selectedParams,
-      setDefaultVideoPreset,
+      setDefaultNewVideoPreset,
     ],
   );
 
@@ -438,32 +696,102 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     [nodeId, setReferenceHoverHighlight],
   );
 
-  const handleReferenceReorder = useCallback(
-    (type: MentionItem["type"], fromIndex: number, toIndex: number) => {
-      if (fromIndex === toIndex) return;
+  const handleSortableReferenceHoverChange = useCallback(
+    (item: MentionItem, isHovering: boolean) => {
+      const parentPrefixes = [
+        "parent-image-",
+        "parent-video-",
+        "parent-audio-",
+      ];
+      const matchedPrefix = parentPrefixes.find((prefix) =>
+        item.id.startsWith(prefix),
+      );
 
-      const fieldByType = {
-        image: "image_urls",
-        video: "video_urls",
-        audio: "audio_urls",
-      } as const;
-      const field = fieldByType[type];
-      const urls = currentData?.[field] ?? [];
+      if (!matchedPrefix) {
+        return;
+      }
+
+      // 新版可排序缩略图替代原父节点缩略图后，悬浮时仍需要高亮对应连线。
+      handleReferenceHoverChange(item.id.slice(matchedPrefix.length), isHovering);
+    },
+    [handleReferenceHoverChange],
+  );
+
+  const handleReferenceReorder = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      if (fromIndex === toIndex) return;
 
       if (
         fromIndex < 0 ||
         toIndex < 0 ||
-        fromIndex >= urls.length ||
-        toIndex >= urls.length
+        fromIndex >= sortableReferenceItems.length ||
+        toIndex >= sortableReferenceItems.length
       ) {
         return;
       }
 
+      const nextItems = relabelReferenceItemsByOrder(
+        arrayMove(sortableReferenceItems, fromIndex, toIndex),
+      );
+      editorRef.current?.updateReferenceMentions(
+        nextItems.map((item) => ({
+          id: item.mentionId ?? item.id,
+          label: item.label,
+          value: item.label,
+          thumbnail: item.thumbnail,
+          type: item.type,
+        })),
+      );
+      // 新版视频节点的参考素材支持图片/视频/音频跨类型排序，顺序单独记录在 metadata.referenceOrder。
       updateNewVideoNodeData(nodeId, {
-        [field]: arrayMove(urls, fromIndex, toIndex),
+        metadata: {
+          ...(currentData?.metadata ?? {}),
+          referenceOrder: nextItems.map((item) => item.id),
+        },
       });
     },
-    [currentData, nodeId, updateNewVideoNodeData],
+    [
+      currentData?.metadata,
+      nodeId,
+      sortableReferenceItems,
+      updateNewVideoNodeData,
+    ],
+  );
+
+  const handleSortableReferenceRemove = useCallback(
+    (item: MentionItem) => {
+      const localImageIndex = localReferenceImageUrls.findIndex((url, index) => {
+        return item.id === `local-image-${localReferenceImageIndexes[index]}-${url}`;
+      });
+
+      if (localImageIndex >= 0) {
+        // 新版排序缩略图替代原素材缩略图后，仍然要保留本地参考图的移除能力。
+        handleRemoveReferenceImage(
+          localReferenceImageUrls[localImageIndex],
+          localReferenceImageIndexes[localImageIndex] ?? localImageIndex,
+        );
+        return;
+      }
+
+      const parentPrefixes = [
+        "parent-image-",
+        "parent-video-",
+        "parent-audio-",
+      ];
+      const matchedPrefix = parentPrefixes.find((prefix) =>
+        item.id.startsWith(prefix),
+      );
+
+      if (matchedPrefix) {
+        handleDisconnectNode(item.id.slice(matchedPrefix.length));
+      }
+    },
+    [
+      handleDisconnectNode,
+      handleRemoveReferenceImage,
+      localReferenceImageIndexes,
+      localReferenceImageUrls,
+    ],
   );
 
   const requiredPoints = useMemo(() => {
@@ -518,6 +846,15 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
 
       if (!mergedPrompt) {
         warning("请输入提示词");
+        return;
+      }
+
+      if (
+        request.mode === "all-reference" &&
+        generationReferenceItems.length === 0
+      ) {
+        // 全能参考模式默认保持可选，但真正生成前必须至少有一个图片/视频/音频参考素材。
+        warning("全能参考模式需要至少上传或连接一个参考素材");
         return;
       }
 
@@ -584,14 +921,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
               activeMode={activeMode}
               onModeChange={(key) => handleModeChange(key as VideoModeKey)}
             />
-            {sortableReferenceItems.length > 1 ? (
-              <div className="min-w-0 flex-1 overflow-visible">
-                <ReferenceThumbnails
-                  items={sortableReferenceItems}
-                  onReorder={handleReferenceReorder}
-                />
-              </div>
-            ) : null}
           </div>
 
           <VideoReferenceAssetsBar
@@ -599,11 +928,21 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
             fileInputRef={fileInputRef}
             onUploadClick={handleUploadClick}
             onFileChange={handleFileChange}
-            referenceImageUrls={currentData?.image_urls ?? []}
-            parentImageNodeUrls={parentImageNodeUrls}
-            parentImageNodeIdByUrl={parentImageNodeIdByUrl}
+            referenceImageUrls={localReferenceImageUrls}
+            referenceImageIndexes={localReferenceImageIndexes}
+            parentImageNodes={parentImageNodes}
             parentAudioNodes={parentAudioNodes}
             parentVideoNodes={parentVideoNodes}
+            referenceContent={
+              sortableReferenceItems.length > 0 ? (
+                <ReferenceThumbnails
+                  items={sortableReferenceItems}
+                  onReorder={handleReferenceReorder}
+                  onRemove={handleSortableReferenceRemove}
+                  onHoverChange={handleSortableReferenceHoverChange}
+                />
+              ) : undefined
+            }
             onDisconnectNode={handleDisconnectNode}
             onRemoveReferenceImage={handleRemoveReferenceImage}
             onReferenceHoverChange={handleReferenceHoverChange}
@@ -612,10 +951,8 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
           <div className={PROMPT_PANEL_STYLES.textAreaWrap}>
             <VideoPromptEditor
               ref={editorRef}
-              promptDraftHtml={
-                (currentData as any)?.promptDraftHtml ?? "<p></p>"
-              }
-              mentionItems={videoMentionItems}
+              promptDraftHtml={promptDraftHtml}
+              mentionItems={editorMentionItems.length > 0 ? editorMentionItems : videoMentionItems}
               onDraftChange={handleDraftChange}
             />
           </div>

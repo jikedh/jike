@@ -19,7 +19,7 @@ export interface Seedance20Request {
     role?: "reference_audio"; // 固定为参考音频角色
   }[]; // 音频输入列表（仅 pro），最多 3 段，总时长 <= 15s，不能单独输入,需要大沛图片和视频
 
-  resolution?: "480P" | "720P"; // 分辨率："480P" | "720P"（默认 "720P"）
+  resolution?: "480p" | "720p"; // 分辨率："480P" | "720P"（默认 "720P"）
   ratio?: "16:9" | "4:3" | "1:1" | "3:4" | "9:16" | "21:9" | "adaptive"; // 宽高比（默认 "adaptive"）
   duration?: number; // 生成时长（秒）：fast 建议 4-12，pro 建议 4-15，传 -1 由系统自动选择
   generate_audio?: boolean; // 是否生成同步音频（默认 true）

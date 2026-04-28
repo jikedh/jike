@@ -19,6 +19,13 @@ const INITIAL_STATE: Pick<
   | "defaultVideoGenerateAudio"
   | "defaultVideoAudio"
   | "defaultVideoPromptExtend"
+  | "defaultNewVideoModel"
+  | "defaultNewVideoAspectRatio"
+  | "defaultNewVideoDuration"
+  | "defaultNewVideoResolution"
+  | "defaultNewVideoMode"
+  | "defaultNewVideoGenerateAudio"
+  | "defaultNewVideoPromptExtend"
   | "defaultPersonaId"
   | "autoSaveEnabled"
   | "gridVisible"
@@ -41,6 +48,13 @@ const INITIAL_STATE: Pick<
   defaultVideoGenerateAudio: undefined,
   defaultVideoAudio: undefined,
   defaultVideoPromptExtend: false,
+  defaultNewVideoModel: "seedance-2.0-pro",
+  defaultNewVideoAspectRatio: "16:9",
+  defaultNewVideoDuration: 5,
+  defaultNewVideoResolution: undefined,
+  defaultNewVideoMode: "all-reference",
+  defaultNewVideoGenerateAudio: undefined,
+  defaultNewVideoPromptExtend: undefined,
   defaultPersonaId: "none" as ChatPersonaId,
   autoSaveEnabled: true,
   gridVisible: true,
@@ -89,6 +103,29 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
             preset.promptExtend !== undefined
               ? preset.promptExtend
               : state.defaultVideoPromptExtend,
+        })),
+      setDefaultNewVideoPreset: (preset) =>
+        set((state) => ({
+          // 新版视频节点单独记忆模型、模式与参数，避免影响老版视频节点。
+          defaultNewVideoModel: preset.model ?? state.defaultNewVideoModel,
+          defaultNewVideoAspectRatio:
+            preset.aspectRatio ?? state.defaultNewVideoAspectRatio,
+          defaultNewVideoDuration:
+            preset.duration ?? state.defaultNewVideoDuration,
+          defaultNewVideoResolution:
+            preset.resolution ?? state.defaultNewVideoResolution,
+          defaultNewVideoMode:
+            preset.mode !== undefined
+              ? preset.mode
+              : state.defaultNewVideoMode,
+          defaultNewVideoGenerateAudio:
+            preset.generateAudio !== undefined
+              ? preset.generateAudio
+              : state.defaultNewVideoGenerateAudio,
+          defaultNewVideoPromptExtend:
+            preset.promptExtend !== undefined
+              ? preset.promptExtend
+              : state.defaultNewVideoPromptExtend,
         })),
       setDefaultPersonaId: (personaId) => set({ defaultPersonaId: personaId }),
       setAutoSaveEnabled: (enabled) => set({ autoSaveEnabled: enabled }),

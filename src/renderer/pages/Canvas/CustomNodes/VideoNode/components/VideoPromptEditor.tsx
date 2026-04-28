@@ -31,6 +31,15 @@ export interface VideoPromptEditorHandle {
       type?: "image" | "video" | "audio";
     }>,
   ) => number;
+  updateReferenceMentions: (
+    updates: Array<{
+      id: string;
+      label: string;
+      value?: string;
+      thumbnail?: string;
+      type?: "image" | "video" | "audio";
+    }>,
+  ) => number;
 }
 
 /**
@@ -396,6 +405,44 @@ export const VideoPromptEditor = forwardRef<
         editor.view.dispatch(transaction);
 
         return uniqueRanges.length;
+      },
+      updateReferenceMentions: (updates) => {
+        if (!editor || updates.length === 0) {
+          return 0;
+        }
+
+        const updateMap = new Map(updates.map((item) => [item.id, item]));
+        let transaction = editor.state.tr;
+        let updatedCount = 0;
+
+        editor.state.doc.descendants((node, pos) => {
+          if (node.type.name !== "mention") {
+            return true;
+          }
+
+          const mentionId = String(node.attrs.id ?? "");
+          const update = updateMap.get(mentionId);
+          if (!update) {
+            return true;
+          }
+
+          // 参考素材重新排序后，同步已插入提示词里的 @图片1/@图片2 标签。
+          transaction = transaction.setNodeMarkup(pos, undefined, {
+            ...node.attrs,
+            label: update.label,
+            value: update.value ?? update.label,
+            thumbnail: update.thumbnail ?? node.attrs.thumbnail,
+            type: update.type ?? node.attrs.type,
+          });
+          updatedCount += 1;
+          return true;
+        });
+
+        if (updatedCount > 0) {
+          editor.view.dispatch(transaction);
+        }
+
+        return updatedCount;
       },
     }),
     [editor],

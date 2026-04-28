@@ -38,6 +38,7 @@ import type {
 import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
 import { normalizeLocalGeminiErrorDetail } from "shared/utils/localGeminiErrors";
 import { hydrateMediaForRuntime } from "shared/utils/mediaPersistence";
+import { getRemoteMediaUrl } from "shared/utils/mediaPersistence";
 import {
   appendMediaSequences,
   assignMissingMediaSequences,
@@ -1435,7 +1436,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     const nodeData = node?.data as any;
 
     return (nodeData?.result?.data ?? [])
-      .map((item: any) => item?.url)
+      .map((item: any) => getRemoteMediaUrl(item) ?? item?.url)
       .filter(Boolean);
   };
 
@@ -1445,11 +1446,19 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     mode: "add" | "remove",
   ) => {
     if (mode === "add") {
-      return Array.from(new Set([...currentUrls, ...sourceUrls]));
+      // 相同远程 URL 可能来自复制后的多个图片节点，必须按引用次数保留。
+      return [...currentUrls, ...sourceUrls];
     }
 
-    const sourceUrlSet = new Set(sourceUrls);
-    return currentUrls.filter((url) => !sourceUrlSet.has(url));
+    // 删除连接时只移除当前边贡献的引用次数，避免同 URL 的其他连接一起失效。
+    const nextUrls = [...currentUrls];
+    sourceUrls.forEach((sourceUrl) => {
+      const removeIndex = nextUrls.findIndex((url) => url === sourceUrl);
+      if (removeIndex >= 0) {
+        nextUrls.splice(removeIndex, 1);
+      }
+    });
+    return nextUrls;
   };
 
   /**
@@ -1868,6 +1877,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         defaultVideoGenerateAudio,
         defaultVideoAudio,
         defaultVideoPromptExtend,
+        defaultNewVideoModel,
+        defaultNewVideoAspectRatio,
+        defaultNewVideoDuration,
+        defaultNewVideoResolution,
+        defaultNewVideoMode,
+        defaultNewVideoGenerateAudio,
+        defaultNewVideoPromptExtend,
       } = useChatSettingsStore.getState();
       const finalNode =
         newNode.type === "audioNode"
@@ -1903,12 +1919,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                     "vidu",
                     "pixverse",
                     "keling",
-                  ].includes(defaultVideoModel)
-                    ? defaultVideoModel
+                  ].includes(defaultNewVideoModel ?? "")
+                    ? defaultNewVideoModel
                     : newNode.data.model,
                   aspect_ratio:
-                    defaultVideoAspectRatio || newNode.data.aspect_ratio,
-                  duration: defaultVideoDuration || newNode.data.duration,
+                    defaultNewVideoAspectRatio || newNode.data.aspect_ratio,
+                  duration: defaultNewVideoDuration || newNode.data.duration,
                   metadata: {
                     ...(newNode.data.metadata ?? {}),
                     params: {
@@ -1917,14 +1933,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                         unknown
                       > | undefined),
                       aspectRatio:
-                        defaultVideoAspectRatio || newNode.data.aspect_ratio,
-                      duration: defaultVideoDuration || newNode.data.duration,
-                      resolution: defaultVideoResolution,
-                      generateAudio: defaultVideoGenerateAudio,
-                      promptExtend: defaultVideoPromptExtend,
+                        defaultNewVideoAspectRatio || newNode.data.aspect_ratio,
+                      duration: defaultNewVideoDuration || newNode.data.duration,
+                      resolution: defaultNewVideoResolution,
+                      generateAudio: defaultNewVideoGenerateAudio,
+                      promptExtend: defaultNewVideoPromptExtend,
                     },
-                    ...(defaultVideoMode !== undefined
-                      ? { mode: defaultVideoMode }
+                    ...(defaultNewVideoMode !== undefined
+                      ? { mode: defaultNewVideoMode }
                       : {}),
                   },
                 },
@@ -3113,7 +3129,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           requiredPoints,
           status: GenerationStatus.QUEUED,
           progress: 0,
-          result: { type: "video", data: [] },
+          // 新版视频节点和老版保持一致：开始生成时保留已有视频结果，
+          // 新结果完成后追加进画廊，这样上传视频/生成视频可以一起展开和显示序号标记。
+          result: {
+            type: "video",
+            data: data.result?.data ?? [],
+          },
           error: undefined,
           metadata: {
             ...data.metadata,

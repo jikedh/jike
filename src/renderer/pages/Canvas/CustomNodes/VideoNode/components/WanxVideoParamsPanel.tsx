@@ -1,6 +1,5 @@
-/**
- * 万象（wan2.7-r2v）视频参数面板
- * 独立参数面板组件，支持 resolution、ratio、duration、prompt_extend
+﻿/**
+ * 涓囪薄锛坵an2.7-r2v锛夎棰戝弬鏁伴潰鏉? * 鐙珛鍙傛暟闈㈡澘缁勪欢锛屾敮鎸?resolution銆乺atio銆乨uration銆乸rompt_extend
  */
 
 import { useMemo } from "react";
@@ -17,50 +16,50 @@ import { Sparkles } from "lucide-react";
 import { AspectRatioIcon } from "../../ImageNode/components/AspectRatioIcon";
 
 type WanxVideoParamsPanelProps = {
-  /** 当前视频数据 */
+  /** 褰撳墠瑙嗛鏁版嵁 */
   currentVideoData: any;
-  /** 更新回调 */
+  /** 鏇存柊鍥炶皟 */
   onPatch: (patch: any) => void;
 };
 
-/** 获取 resolution 值 */
+/** 鑾峰彇 resolution 鍊?*/
 const getResolution = (currentVideoData: any): string => {
   return currentVideoData?.metadata?.resolution ?? "1080P";
 };
 
-/** 获取 ratio 值 */
+/** 鑾峰彇 ratio 鍊?*/
 const getRatio = (currentVideoData: any): string => {
   return currentVideoData?.aspect_ratio ?? "16:9";
 };
 
-/** 获取 duration 值 */
+/** 鑾峰彇 duration 鍊?*/
 const getDuration = (currentVideoData: any): number => {
   return currentVideoData?.duration ?? 5;
 };
 
-/** 获取 prompt_extend 值 */
+/** 鑾峰彇 prompt_extend 鍊?*/
 const getPromptExtend = (currentVideoData: any): boolean => {
   return currentVideoData?.metadata?.prompt_extend ?? false;
 };
 
-/** 分辨率选项 */
+/** 鍒嗚鲸鐜囬€夐」 */
 const RESOLUTION_OPTIONS = [
-  { label: "720P", value: "720P" },
-  { label: "1080P", value: "1080P" },
+  { label: "720p", value: "720P" },
+  { label: "1080p", value: "1080P" },
 ];
 
-/** 画面比例选项 */
+/** 鐢婚潰姣斾緥閫夐」 */
 const RATIO_OPTIONS = [
   { label: "16:9", value: "16:9" },
   { label: "9:16", value: "9:16" },
   { label: "1:1", value: "1:1" },
 ];
 
-/** 时长选项 */
+/** 鏃堕暱閫夐」 */
 const DURATION_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 /**
- * 万象视频参数面板组件
+ * 涓囪薄瑙嗛鍙傛暟闈㈡澘缁勪欢
  */
 export const WanxVideoParamsPanel = ({
   currentVideoData,
@@ -71,14 +70,14 @@ export const WanxVideoParamsPanel = ({
   const duration = getDuration(currentVideoData);
   const promptExtend = getPromptExtend(currentVideoData);
 
-  // 生成摘要文本
+  // 鐢熸垚鎽樿鏂囨湰
   const summary = useMemo(() => {
     const parts: string[] = [];
     parts.push(ratio === "adaptive" ? "Auto" : ratio);
-    parts.push(resolution);
+    parts.push(resolution.toLowerCase());
     parts.push(`${duration}s`);
     if (promptExtend) {
-      parts.push("智能改写");
+      parts.push("鏅鸿兘鏀瑰啓");
     }
     return parts;
   }, [ratio, resolution, duration, promptExtend]);
@@ -127,7 +126,7 @@ export const WanxVideoParamsPanel = ({
                     <AspectRatioIcon ratio={text} size={14} active={false} />
                     <span>{text}</span>
                   </>
-                ) : text === "智能改写" ? (
+                ) : text === "鏅鸿兘鏀瑰啓" ? (
                   <>
                     <Sparkles className="h-3.5 w-3.5 text-[#B43FEB]" />
                     <span className="text-[#B43FEB]">{text}</span>
@@ -146,11 +145,10 @@ export const WanxVideoParamsPanel = ({
         className="w-80 border border-neutral-700 bg-neutral-900 p-4 shadow-xl"
       >
         <div className="space-y-5">
-          {/* 分辨率 */}
+          {/* 鍒嗚鲸鐜?*/}
           <div className="space-y-2">
             <label className="text-xs font-medium text-neutral-300">
-              分辨率
-            </label>
+              鍒嗚鲸鐜?            </label>
             <div className="flex gap-2">
               {RESOLUTION_OPTIONS.map((option) => {
                 const isActive = resolution === option.value;
@@ -180,10 +178,10 @@ export const WanxVideoParamsPanel = ({
             </div>
           </div>
 
-          {/* 画面比例 */}
+          {/* 鐢婚潰姣斾緥 */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-neutral-300">
-              画面比例
+              鐢婚潰姣斾緥
             </label>
             <div className="flex gap-2">
               {RATIO_OPTIONS.map((option) => {
@@ -214,11 +212,10 @@ export const WanxVideoParamsPanel = ({
             </div>
           </div>
 
-          {/* 视频时长 */}
+          {/* 瑙嗛鏃堕暱 */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-neutral-300">
-              视频时长（秒）
-            </label>
+              瑙嗛鏃堕暱锛堢锛?            </label>
             <div className="flex flex-wrap gap-1.5">
               {DURATION_OPTIONS.map((value) => {
                 const isActive = duration === value;
@@ -241,12 +238,12 @@ export const WanxVideoParamsPanel = ({
             </div>
           </div>
 
-          {/* Prompt 智能改写 */}
+          {/* Prompt 鏅鸿兘鏀瑰啓 */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-[#B43FEB]" />
               <span className="text-xs font-medium text-neutral-300">
-                智能改写 prompt
+                鏅鸿兘鏀瑰啓 prompt
               </span>
             </div>
             <Switch

@@ -71,7 +71,7 @@ export const MODE_REFERENCE_CONSTRAINTS: Record<
   ModeReferenceConstraint
 > = {
   "text-to-video": { maxRefCount: 0 }, // 文生视频不允许参考图
-  "all-reference": { requiresAnyReference: true }, // 至少有一个参考（任意类型）
+  "all-reference": {}, // 全能参考保持默认可选；生成时再校验是否已有参考素材
   "image-to-video": { minRefCount: 1, requiresAllImages: true }, // 至少一张图，且全部为图片
   "first-last-frame": {}, // 首尾帧在 useModeAvailability 中特殊判断：恰好2项且全为图片
 };
