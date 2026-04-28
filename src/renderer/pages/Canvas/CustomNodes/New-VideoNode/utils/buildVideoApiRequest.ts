@@ -206,10 +206,11 @@ const buildSeedanceRequest = (
     prompt: getPrompt(request.prompt),
     generation_type: "video",
     mode: getSeedanceGenerationMode(request),
+    // Seedance 2.0 接口类型使用小写 p，前端历史配置可能仍是大写，传参前统一归一化。
     resolution: isOneOf(
-      request.params.resolution,
-      ["480P", "720P"] as const,
-      "720P",
+      request.params.resolution?.toLowerCase(),
+      ["480p", "720p"] as const,
+      "720p",
     ),
     ratio: isOneOf(
       getRatio(request),

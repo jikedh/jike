@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import { GenerationStatus } from "shared/constants/enum";
 import type { NewVideoGenerationNode } from "shared/types/flow";
 import { assignMissingMediaSequences } from "shared/utils/mediaSequence";
@@ -18,7 +19,7 @@ type VideoContentProps = {
   };
 };
 
-export const VideoContent = ({
+export const VideoContent = memo(({
   data,
   nodeId,
   updateVideoNodeData,
@@ -27,13 +28,37 @@ export const VideoContent = ({
   frameSize,
 }: VideoContentProps) => {
   const status = data.status ?? GenerationStatus.COMPLETED;
-  // 新版生成支持多任务，内容区必须展示完整结果列表，而不是只取第一个视频。
-  const videos = assignMissingMediaSequences(
-    data.result?.data?.filter((item) => item?.url) ?? [],
+  const videos = useMemo(
+    () => assignMissingMediaSequences(
+      data.result?.data?.filter((item) => item?.url) ?? [],
+    ),
+    [data.result?.data],
   );
   const hasError = Boolean(
     data.error?.message || data.error?.detail || data.error?.serverMessage,
   );
+  const isGenerating =
+    status === GenerationStatus.IN_PROGRESS ||
+    status === GenerationStatus.QUEUED;
+
+  const displayVideos = useMemo(() => {
+    if (!isGenerating || videos.length === 0) {
+      return videos;
+    }
+
+    return [
+      {
+        url: "",
+        pending: true,
+        sequence:
+          videos.reduce(
+            (max, item) => Math.max(max, Number(item.sequence) || 0),
+            0,
+          ) + 1,
+      },
+      ...videos,
+    ];
+  }, [isGenerating, videos]);
 
   if (
     status === GenerationStatus.FAILED ||
@@ -68,38 +93,30 @@ export const VideoContent = ({
     );
   }
 
-  if (
-    status === GenerationStatus.IN_PROGRESS ||
-    status === GenerationStatus.QUEUED
-  ) {
-    const progress = data.progress ?? 0;
+  if (displayVideos.length > 0) {
+    return (
+      <div className="relative h-full w-full">
+        {/* 生成中也保留旧结果区，并加一个临时占位卡，让数量、序号和展开体验与旧版一致。 */}
+        <CollapsibleVideoGallery
+          videos={displayVideos}
+          nodeId={nodeId}
+          updateVideoNodeData={updateVideoNodeData}
+          onExpandedChange={onGalleryExpandedChange}
+          frameSize={frameSize}
+        />
+      </div>
+    );
+  }
+
+  if (isGenerating) {
     return (
       <div className="nopan flex h-full w-full flex-col items-center justify-center bg-[#141418] p-4">
         <div className="relative mb-3 h-8 w-8">
           <div className="absolute inset-0 rounded-full border-2 border-primary/30" />
           <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary" />
         </div>
-        <div className="mb-2 text-xs text-muted-foreground">生成中...</div>
-        <div className="h-1.5 w-48 overflow-hidden rounded-full bg-neutral-700">
-          <div
-            className="h-full bg-[#B43FEB] transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        <div className="mt-2 text-xs text-neutral-500">{progress}%</div>
+        <div className="text-xs text-muted-foreground">生成中...</div>
       </div>
-    );
-  }
-
-  if (videos.length > 0) {
-    return (
-      <CollapsibleVideoGallery
-        videos={videos}
-        nodeId={nodeId}
-        updateVideoNodeData={updateVideoNodeData}
-        onExpandedChange={onGalleryExpandedChange}
-        frameSize={frameSize}
-      />
     );
   }
 
@@ -108,4 +125,6 @@ export const VideoContent = ({
       暂无视频
     </div>
   );
-};
+});
+
+VideoContent.displayName = "NewVideoContent";

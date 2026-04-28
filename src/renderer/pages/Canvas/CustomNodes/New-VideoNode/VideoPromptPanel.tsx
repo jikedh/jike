@@ -271,6 +271,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const updateNewVideoNodeData = useCanvasFlowStore(
     (state) => state.updateNewVideoNodeData,
   );
+  const syncNodeSelection = useCanvasFlowStore((state) => state.onNodesChange);
   const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge);
   const setReferenceHoverHighlight = useCanvasFlowStore(
     (state) => state.setReferenceHoverHighlight,
@@ -503,9 +504,27 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
 
   const persistPanelPatch = useCallback(
     (patch: Partial<NewVideoGenerationNode>) => {
+      const { nodes } = useCanvasFlowStore.getState();
+      const selectionChanges = nodes.flatMap((node) => {
+        if (node.id === nodeId) {
+          return node.selected
+            ? []
+            : [{ id: node.id, type: "select" as const, selected: true }];
+        }
+
+        return node.selected
+          ? [{ id: node.id, type: "select" as const, selected: false }]
+          : [];
+      });
+
+      if (selectionChanges.length > 0) {
+        /* 同步选中态，避免切换模型时关闭提示词面板。 */
+        syncNodeSelection(selectionChanges);
+      }
+
       updateNewVideoNodeData(nodeId, patch);
     },
-    [nodeId, updateNewVideoNodeData],
+    [nodeId, syncNodeSelection, updateNewVideoNodeData],
   );
 
   const persistVideoDefaultPreset = useCallback(
@@ -608,13 +627,24 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const handleDraftChange = useCallback(
     (payload: { text: string; html: string }) => {
       setPromptText(payload.text);
+      const { nodes } = useCanvasFlowStore.getState();
+      const currentNodeSelected = nodes.some(
+        (node) => node.id === nodeId && node.selected,
+      );
+
+      if (!currentNodeSelected) {
+        /* 同步选中态，避免输入草稿时提示词面板被关闭。 */
+        syncNodeSelection([
+          { id: nodeId, type: "select" as const, selected: true },
+        ]);
+      }
       // 新版恢复旧版的富文本草稿持久化，节点收起、保存工程和撤销重做都能找回输入。
       updateNewVideoNodeData(nodeId, {
         promptDraft: payload.text,
         promptDraftHtml: payload.html,
       } as Partial<NewVideoGenerationNode>);
     },
-    [nodeId, updateNewVideoNodeData],
+    [nodeId, syncNodeSelection, updateNewVideoNodeData],
   );
 
   const removeReferenceMentions = useCallback(

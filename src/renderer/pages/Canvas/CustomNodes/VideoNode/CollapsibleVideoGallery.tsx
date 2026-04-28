@@ -14,6 +14,7 @@ type VideoItem = {
   localPath?: string; // 本地相对路径
   localName?: string; // 本地文件�?
   remoteUrl?: string; // 远程持久�?URL
+  pending?: boolean;
 };
 
 type CollapsibleVideoGalleryProps = {
@@ -295,12 +296,14 @@ export const CollapsibleVideoGallery = memo(
         if (nodeId && updateVideoNodeData) {
           const newVideos = [...videos];
           const clickedVideo = newVideos.splice(index, 1)[0];
+          if (clickedVideo?.pending) return;
           newVideos.unshift(clickedVideo);
 
           updateVideoNodeData(nodeId, {
             result: {
               type: "video",
-              data: newVideos,
+              // 生成中的占位卡只参与 UI 展示，不写入真实视频结果。
+              data: newVideos.filter((item) => !item.pending),
             },
           });
 
@@ -339,6 +342,7 @@ export const CollapsibleVideoGallery = memo(
           {videos.map((item, index) => {
             const isPrimary = index === 0;
             const isSecondary = index > 0;
+            const isPending = Boolean(item.pending);
             const isFocused = isExpanded && hoveredIndex === index;
             const sequence = getMediaSequence(item, index);
             const shouldUseCardChrome =
@@ -423,7 +427,15 @@ export const CollapsibleVideoGallery = memo(
                     }
                   }}
                 >
-                  {displayUrl && !isBroken(index) ? (
+                  {isPending ? (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-[13px] bg-[#121216] text-[11px] text-muted-foreground">
+                      <div className="relative h-7 w-7">
+                        <div className="absolute inset-0 rounded-full border-2 border-primary/25" />
+                        <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary" />
+                      </div>
+                      <span>生成中...</span>
+                    </div>
+                  ) : displayUrl && !isBroken(index) ? (
                     <VideoPlayer
                       src={displayUrl}
                       muted={!isPrimary}
@@ -488,7 +500,7 @@ export const CollapsibleVideoGallery = memo(
                     )}
                   </div>
 
-                  {nodeId && updateVideoNodeData && item.localPath && (
+                  {nodeId && updateVideoNodeData && item.localPath && !isPending && (
                     <button
                       type="button"
                       onClick={(e) => handleRefreshVideo(e, index)}

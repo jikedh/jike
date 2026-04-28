@@ -2722,8 +2722,19 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           | VideoGenerationNode
           | NewVideoGenerationNode;
         const resultData = sourceData.result?.data;
+        const isNewVideoGenerating =
+          nodeType === "newVideoNode" &&
+          (sourceData.status === GenerationStatus.IN_PROGRESS ||
+            sourceData.status === GenerationStatus.QUEUED);
+        const shouldSeparateGeneratingNewVideo =
+          isNewVideoGenerating && resultData?.length === 1;
 
-        if (!resultData || resultData.length <= 1) return;
+        if (
+          !resultData ||
+          (resultData.length <= 1 && !shouldSeparateGeneratingNewVideo)
+        ) {
+          return;
+        }
 
         saveCurrentCanvasToHistory();
 
@@ -2734,8 +2745,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             : nodeType === "newVideoNode"
               ? "newVideo"
               : "image";
-        const validItems = resultData
-          .slice(1)
+        const validItems = (shouldSeparateGeneratingNewVideo
+          ? resultData.slice(0, 1)
+          : resultData.slice(1))
           .filter((item) => item?.url || item?.remoteUrl);
 
         if (validItems.length === 0) return;
@@ -2887,12 +2899,15 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                   ...node.data,
                   result: {
                     type: sourceData.result?.type ?? "video",
-                    data: [
-                      {
-                        ...(resultData[0] as any),
-                        format: (resultData[0] as any)?.format ?? "mp4",
-                      },
-                    ],
+                    // 新版视频节点生成中有一个 UI 占位卡；当只有一个真实视频时，独立后源节点继续保留生成状态。
+                    data: shouldSeparateGeneratingNewVideo
+                      ? []
+                      : [
+                          {
+                            ...(resultData[0] as any),
+                            format: (resultData[0] as any)?.format ?? "mp4",
+                          },
+                        ],
                   },
                 },
               } as AllNodeType;

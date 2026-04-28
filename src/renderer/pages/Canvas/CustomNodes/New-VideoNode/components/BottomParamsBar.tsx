@@ -101,6 +101,7 @@ export const BottomParamsBar = ({
           <Button
             unstyled
             onClick={onStop}
+            disabled
             className={PROMPT_PANEL_STYLES.stopButton}
           >
             停止

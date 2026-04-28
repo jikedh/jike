@@ -137,14 +137,32 @@ const NewVideoNode = ({
     separateToNodes(id);
   }, [separateToNodes, id]);
 
-  const shouldShowToolbar =
-    selected &&
-    !isSelectionBoxActive &&
-    !isDragging &&
-    isDragUiSettled &&
-    selectedNodesCount <= 1;
+  const shouldShowToolbar = useMemo(
+    () =>
+      selected &&
+      !isSelectionBoxActive &&
+      !isDragging &&
+      isDragUiSettled &&
+      selectedNodesCount <= 1,
+    [
+      selected,
+      isSelectionBoxActive,
+      isDragging,
+      isDragUiSettled,
+      selectedNodesCount,
+    ],
+  );
 
-  const hasMultipleResults = (data.result?.data?.length ?? 0) > 1;
+  // 生成中的占位卡在新版节点里也算一个视频，用于支持“1 个真实视频 + 1 个生成中占位”时独立为视频。
+  const hasMultipleResults =
+    (data.result?.data?.length ?? 0) + (isGenerating ? 1 : 0) > 1;
+  const contentFrameSize = useMemo(
+    () => ({
+      width: nodeSize.width,
+      height: nodeSize.height,
+    }),
+    [nodeSize.height, nodeSize.width],
+  );
 
   return (
     <NodeContextMenu
@@ -221,10 +239,7 @@ const NewVideoNode = ({
               nodeId={id}
               updateVideoNodeData={updateNewVideoNodeData}
               onGalleryExpandedChange={setIsGalleryExpanded}
-              frameSize={{
-                width: nodeSize.width,
-                height: nodeSize.height,
-              }}
+              frameSize={contentFrameSize}
             />
           </div>
         </div>
