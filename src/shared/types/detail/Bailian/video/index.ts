@@ -1,4 +1,28 @@
 export type {
+  HappyHorse10I2vCreateResponse,
+  HappyHorse10I2vErrorResponse,
+  HappyHorse10I2vQueryResponse,
+  HappyHorse10I2vRequest,
+} from "./HappyHorse/happyhorse-1.0-i2v";
+export type {
+  HappyHorse10R2vCreateResponse,
+  HappyHorse10R2vErrorResponse,
+  HappyHorse10R2vQueryResponse,
+  HappyHorse10R2vRequest,
+} from "./HappyHorse/happyhorse-1.0-r2v";
+export type {
+  HappyHorse10T2vCreateResponse,
+  HappyHorse10T2vErrorResponse,
+  HappyHorse10T2vQueryResponse,
+  HappyHorse10T2vRequest,
+} from "./HappyHorse/happyhorse-1.0-t2v";
+export type {
+  HappyHorse10VideoEditCreateResponse,
+  HappyHorse10VideoEditErrorResponse,
+  HappyHorse10VideoEditQueryResponse,
+  HappyHorse10VideoEditRequest,
+} from "./HappyHorse/happyhorse-1.0-video-edit";
+export type {
   KlingV3OmniVideoGenerationCreateResponse,
   KlingV3OmniVideoGenerationErrorResponse,
   KlingV3OmniVideoGenerationQueryResponse,
@@ -71,6 +95,30 @@ export type {
   Wan27T2vRequest,
 } from "./wanxiang/wan2.7-t2v";
 
+import type {
+  HappyHorse10I2vCreateResponse,
+  HappyHorse10I2vErrorResponse,
+  HappyHorse10I2vQueryResponse,
+  HappyHorse10I2vRequest,
+} from "./HappyHorse/happyhorse-1.0-i2v";
+import type {
+  HappyHorse10R2vCreateResponse,
+  HappyHorse10R2vErrorResponse,
+  HappyHorse10R2vQueryResponse,
+  HappyHorse10R2vRequest,
+} from "./HappyHorse/happyhorse-1.0-r2v";
+import type {
+  HappyHorse10T2vCreateResponse,
+  HappyHorse10T2vErrorResponse,
+  HappyHorse10T2vQueryResponse,
+  HappyHorse10T2vRequest,
+} from "./HappyHorse/happyhorse-1.0-t2v";
+import type {
+  HappyHorse10VideoEditCreateResponse,
+  HappyHorse10VideoEditErrorResponse,
+  HappyHorse10VideoEditQueryResponse,
+  HappyHorse10VideoEditRequest,
+} from "./HappyHorse/happyhorse-1.0-video-edit";
 import type {
   KlingV3OmniVideoGenerationCreateResponse,
   KlingV3OmniVideoGenerationErrorResponse,
@@ -146,6 +194,10 @@ import type {
 
 // 请求体联合类型
 export type BailianVideoGenerationRequest =
+  | HappyHorse10I2vRequest
+  | HappyHorse10R2vRequest
+  | HappyHorse10T2vRequest
+  | HappyHorse10VideoEditRequest
   | KlingV3OmniVideoGenerationRequest
   | KlingV3VideoGenerationRequest
   | ViduQ2Reference2VideoRequest
@@ -161,6 +213,10 @@ export type BailianVideoGenerationRequest =
 
 // 响应体联合类型
 export type BailianVideoGenerationCreateResponse =
+  | HappyHorse10I2vCreateResponse
+  | HappyHorse10R2vCreateResponse
+  | HappyHorse10T2vCreateResponse
+  | HappyHorse10VideoEditCreateResponse
   | KlingV3OmniVideoGenerationCreateResponse
   | KlingV3VideoGenerationCreateResponse
   | ViduQ2Reference2VideoCreateResponse
@@ -176,6 +232,10 @@ export type BailianVideoGenerationCreateResponse =
 
 // 轮询接口的响应体联合类型
 export type BailianVideoGenerationQueryResponse =
+  | HappyHorse10I2vQueryResponse
+  | HappyHorse10R2vQueryResponse
+  | HappyHorse10T2vQueryResponse
+  | HappyHorse10VideoEditQueryResponse
   | KlingV3OmniVideoGenerationQueryResponse
   | KlingV3VideoGenerationQueryResponse
   | ViduQ2Reference2VideoQueryResponse
@@ -191,6 +251,10 @@ export type BailianVideoGenerationQueryResponse =
 
 // 异常响应联合类型
 export type BailianVideoGenerationErrorResponse =
+  | HappyHorse10I2vErrorResponse
+  | HappyHorse10R2vErrorResponse
+  | HappyHorse10T2vErrorResponse
+  | HappyHorse10VideoEditErrorResponse
   | KlingV3OmniVideoGenerationErrorResponse
   | KlingV3VideoGenerationErrorResponse
   | ViduQ2Reference2VideoErrorResponse
