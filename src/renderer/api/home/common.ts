@@ -143,22 +143,35 @@ export function commitAiMultiScene(
 
 // ===================== 视频任务 =====================
 
-/** 提交 Sora 视频任务 */
-export function commitSoraTask(data: CommitSoraTaskRequest): Promise<any> {
-  // 发送埋点
-  aiVideoTrackingService.track({
-    apiName: "/sorotask/v1/submit",
-    model: data.model || "",
-    taskId: "",
-    prompt: data.prompt,
-    status: "PENDING",
-  });
+function extractVideoTaskId(response: any): string {
+  return (
+    response?.data?.task_id ||
+    response?.output?.task_id ||
+    response?.task_id ||
+    response?.id ||
+    ""
+  );
+}
 
-  return jikeingService({
+/** 提交 Sora 视频任务 */
+export async function commitSoraTask(data: CommitSoraTaskRequest): Promise<any> {
+  const response = await jikeingService({
     url: "/sorotask/v1/submit",
     method: "post",
     data,
   });
+
+  await aiVideoTrackingService.track({
+    apiName: "/sorotask/v1/submit",
+    model: data.model || "",
+    taskId: extractVideoTaskId(response),
+    prompt: data.prompt,
+    provider: "jikeing",
+    requestParams: data as unknown as Record<string, unknown>,
+    status: "PENDING",
+  });
+
+  return response;
 }
 
 /** Sora 视频任务列表 */
@@ -189,18 +202,20 @@ export function videoHpTaskList(params?: {
 export function commitVideoHpTask(
   data: CommitVideoHpTaskRequest,
 ): Promise<any> {
-  // 发送埋点
-  aiVideoTrackingService.track({
-    apiName: "/sorotask/v1/hp/submit",
-    model: "",
-    taskId: "",
-    status: "PENDING",
-  });
-
   return jikeingService({
     url: "/sorotask/v1/hp/submit",
     method: "post",
     data,
+  }).then(async (response) => {
+    await aiVideoTrackingService.track({
+      apiName: "/sorotask/v1/hp/submit",
+      model: "",
+      taskId: extractVideoTaskId(response),
+      provider: "jikeing",
+      requestParams: data as unknown as Record<string, unknown>,
+      status: "PENDING",
+    });
+    return response;
   });
 }
 
@@ -208,18 +223,20 @@ export function commitVideoHpTask(
 export function commitVideoTaskHp(
   data: CommitVideoTaskHpRequest,
 ): Promise<any> {
-  // 发送埋点
-  aiVideoTrackingService.track({
-    apiName: "/sorotask/v1/task/hp",
-    model: "",
-    taskId: data.taskId || "",
-    status: "PENDING",
-  });
-
   return jikeingService({
     url: "/sorotask/v1/task/hp",
     method: "post",
     data,
+  }).then(async (response) => {
+    await aiVideoTrackingService.track({
+      apiName: "/sorotask/v1/task/hp",
+      model: "",
+      taskId: extractVideoTaskId(response) || data.taskId || "",
+      provider: "jikeing",
+      requestParams: data as unknown as Record<string, unknown>,
+      status: "PENDING",
+    });
+    return response;
   });
 }
 

@@ -1,4 +1,5 @@
 import { addEdge, applyEdgeChanges, applyNodeChanges } from "@xyflow/react";
+import { copyVideoUrlToOss } from "service/oss";
 import {
   getCanvasDataKey,
   getLocalFilePath,
@@ -8,7 +9,6 @@ import {
   saveGeneratedImageToLocal,
   saveGeneratedVideoToLocal,
 } from "service/projectStorage";
-import { copyVideoUrlToOss } from "service/oss";
 import {
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
@@ -37,8 +37,10 @@ import type {
 } from "shared/types/zustand/canvas-flow";
 import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
 import { normalizeLocalGeminiErrorDetail } from "shared/utils/localGeminiErrors";
-import { hydrateMediaForRuntime } from "shared/utils/mediaPersistence";
-import { getRemoteMediaUrl } from "shared/utils/mediaPersistence";
+import {
+  getRemoteMediaUrl,
+  hydrateMediaForRuntime,
+} from "shared/utils/mediaPersistence";
 import {
   appendMediaSequences,
   assignMissingMediaSequences,
@@ -95,12 +97,24 @@ import {
   getVideoDimensions,
 } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { buildMidjourneyPrompt } from "@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt";
+import { aiVideoTrackingService } from "@/services/aiVideoTracking";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { saveCurrentCanvasToHistory } from "@/utils/canvasHistoryBridge";
 
 // ==================== 持久化配置 ====================
 
 const CANVAS_STORAGE_VERSION = 1;
+
+const updateVideoTrackFinalStatus = async (
+  taskId: string | undefined,
+  status: "SUCCESS" | "FAIL",
+  errorMessage?: string,
+) => {
+  if (!taskId) {
+    return;
+  }
+  await aiVideoTrackingService.updateStatus(taskId, status, errorMessage);
+};
 
 const NANO_BANANA_MODEL_MAPPING: Record<string, Record<string, string>> = {
   "1K": {
@@ -846,6 +860,11 @@ const pollVideoGeneration = async (
             },
           })),
         }));
+        await updateVideoTrackFinalStatus(
+          taskId,
+          "FAIL",
+          "视频生成超时，请稍后再试",
+        );
         return;
       }
 
@@ -898,6 +917,11 @@ const pollVideoGeneration = async (
           }));
 
           stopVideoPollingInternal(nodeId);
+          await updateVideoTrackFinalStatus(
+            normalizedTaskId,
+            "FAIL",
+            "任务已完成但未返回视频地址，请稍后重试",
+          );
           return;
         }
 
@@ -987,6 +1011,7 @@ const pollVideoGeneration = async (
         }
 
         stopVideoPollingInternal(nodeId);
+        await updateVideoTrackFinalStatus(normalizedTaskId, "SUCCESS");
 
         await deductVipScoreAfterGeneration({
           scene: "video",
@@ -1018,6 +1043,11 @@ const pollVideoGeneration = async (
         }
 
         stopVideoPollingInternal(nodeId);
+        await updateVideoTrackFinalStatus(
+          normalizedTaskId,
+          "FAIL",
+          normalized.errorMessage || "生成失败，请稍后再试",
+        );
         return;
       }
 
@@ -1053,6 +1083,11 @@ const pollVideoGeneration = async (
     if (useChatSettingsStore.getState().autoSaveEnabled) {
       getState().saveGraph();
     }
+    await updateVideoTrackFinalStatus(
+      taskId,
+      "FAIL",
+      serverMessage || "轮询失败，请稍后再试",
+    );
   }
 };
 
@@ -1096,6 +1131,11 @@ const pollNewVideoGeneration = async ({
             },
           })),
         }));
+        await updateVideoTrackFinalStatus(
+          taskId,
+          "FAIL",
+          "视频生成超时，请稍后再试",
+        );
         return;
       }
 
@@ -1149,6 +1189,11 @@ const pollNewVideoGeneration = async ({
               };
             }),
           }));
+          await updateVideoTrackFinalStatus(
+            normalizedTaskId,
+            "FAIL",
+            "任务已完成但未返回视频地址，请稍后重试",
+          );
           return;
         }
 
@@ -1257,6 +1302,7 @@ const pollNewVideoGeneration = async ({
               ?.requiredPoints,
           });
         }
+        await updateVideoTrackFinalStatus(normalizedTaskId, "SUCCESS");
         return;
       }
 
@@ -1305,6 +1351,11 @@ const pollNewVideoGeneration = async ({
         ) {
           stopVideoPollingInternal(nodeId);
         }
+        await updateVideoTrackFinalStatus(
+          normalizedTaskId,
+          "FAIL",
+          normalized.errorMessage || "生成失败，请稍后再试",
+        );
         return;
       }
 
@@ -1337,6 +1388,11 @@ const pollNewVideoGeneration = async ({
         },
       })),
     }));
+    await updateVideoTrackFinalStatus(
+      taskId,
+      "FAIL",
+      serverMessage || "轮询失败，请稍后再试",
+    );
   }
 };
 

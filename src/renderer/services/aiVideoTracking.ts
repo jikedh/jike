@@ -13,6 +13,8 @@ export interface AIVideoTrackData {
   timestamp: number;
 }
 
+type AIVideoTrackStatus = AIVideoTrackData["status"];
+
 /**
  * AI 视频生成埋点服务
  * 用于采集并发送视频生成相关的埋点数据
@@ -55,11 +57,28 @@ class AIVideoTrackingService {
    */
   async updateStatus(
     taskId: string,
-    status: "SUCCESS" | "FAIL" | "PENDING",
+    status: AIVideoTrackStatus,
     errorMessage?: string,
   ): Promise<void> {
+    if (!taskId || status === "PENDING") {
+      return;
+    }
+
     try {
-      await window.tracking.updateStatus(taskId, status, errorMessage);
+      await jikeingRequest({
+        url: "/sorotask/v1/track/status",
+        method: "post",
+        data: {
+          taskId,
+          status,
+          errorMessage,
+          updateTime: Date.now(),
+        },
+      });
+
+      if (window.tracking) {
+        await window.tracking.updateStatus(taskId, status, errorMessage);
+      }
     } catch (error) {
       console.error("[AIVideoTracking] 状态更新失败:", error);
     }
