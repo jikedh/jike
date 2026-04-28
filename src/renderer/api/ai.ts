@@ -3,27 +3,35 @@ import { EventSourceParserStream } from "eventsource-parser/stream";
 import {
   aiService,
   dashscopeRequest,
-  getFlow2ApiState,
   flow2ApiRequest,
+  getFlow2ApiState,
   jikeingService,
   kuaiziRequest,
   wuhenRequest,
   yunwuRequest,
   zeakaiRequest,
 } from "service/aiRequest";
+import {
+  BailianVideoGenerationCreateResponse,
+  BailianVideoGenerationQueryResponse,
+  BailianVideoGenerationRequest,
+} from "shared/types/detail/Bailian/video";
+import {
+  Seedance20Request,
+  Seedance20Response,
+  Seedance20StatusResponse,
+} from "shared/types/detail/kuaizhi/Seedance-2.0";
+import type {
+  ToApiImageGenerationRequest,
+  ToApiImageGenerationResponse,
+} from "shared/types/detail/ToApi/images";
 import type {
   TaskResponse,
   VideoRemovalRequest,
   WuhenAccessTokenResponse,
 } from "shared/types/detail/wuhen";
-import type {
-  ToApiImageGenerationRequest,
-  ToApiImageGenerationResponse,
-  ImageTaskStatusResponse,
-} from "shared/types/detail/ToApi/images";
 import { getAiToken, getBaseURL } from "shared/utils/utils";
-import { Seedance20Request, Seedance20Response, Seedance20StatusResponse } from "shared/types/detail/kuaizhi/Seedance-2.0";
-import { BailianVideoGenerationCreateResponse, BailianVideoGenerationQueryResponse, BailianVideoGenerationRequest } from "shared/types/detail/Bailian/video";
+import { aiVideoTrackingService } from "@/services/aiVideoTracking";
 /**
  *
  * 为了兼容同一个接口的不同入参，暂定接口的入参和出参都为 any
@@ -43,9 +51,7 @@ export function getBalance() {
 // ===================== 图片生成相关 =====================
 
 // 创建图片生成任务
-export function createImageGeneration(
-  data: ToApiImageGenerationRequest,
-) {
+export function createImageGeneration(data: ToApiImageGenerationRequest) {
   return aiService<ToApiImageGenerationResponse>({
     url: "/v1/images/generations",
     method: "post",
@@ -68,8 +74,6 @@ export function getImageTaskStatus(id: string) {
 // - stream: true → 返回 async generator，逐块 yield 文本内容
 
 export async function createChatCompletion(data: any, signal?: AbortSignal) {
-  console.log(data);
-  console.log("测试会不会打印");
   if (data.stream) {
     // 构建请求头 - 动态从 localStorage 获取 API 密钥
     const token = getAiToken();
@@ -186,12 +190,24 @@ export function fetchMjTask(id: string) {
 // ===================== 快手 AI 视频相关 =====================
 
 // 创建快手视频生成任务
-export function createLzVideoTask(data: Seedance20Request) {
-  return kuaiziRequest<Seedance20Response>({
+export async function createLzVideoTask(data: Seedance20Request) {
+  const response = await kuaiziRequest<Seedance20Response>({
     url: "/lz/video/task/create",
     method: "post",
     data,
   });
+
+  await aiVideoTrackingService.track({
+    apiName: "/lz/video/task/create",
+    model: "seedance-2.0",
+    taskId: response.data?.task_id || "",
+    prompt: data.prompt,
+    provider: "kuaizi",
+    requestParams: data as unknown as Record<string, unknown>,
+    status: response.code === 200 ? "PENDING" : "FAIL",
+  });
+
+  return response;
 }
 
 // 查询快手视频生成任务状态
@@ -321,8 +337,6 @@ export async function createDashscopeChatCompletion(
   data: any,
   signal?: AbortSignal,
 ) {
-  console.log(data);
-  console.log("测试会不会打印111");
   // 处理 extra_body 参数
   const requestBody = {
     ...data,
@@ -356,15 +370,36 @@ export async function createDashscopeChatCompletion(
  * @param data 请求数据
  */
 // BailianVideoGenerationCreateResponse
-export function createDashscopeVideoSynthesis(data: BailianVideoGenerationRequest) {
-  return dashscopeRequest<BailianVideoGenerationCreateResponse>({
-    url: "/api/v1/services/aigc/video-generation/video-synthesis",
-    method: "post",
-    data,
-    headers: {
-      "X-DashScope-Async": "enable",
+export async function createDashscopeVideoSynthesis(
+  data: BailianVideoGenerationRequest,
+) {
+  const response = await dashscopeRequest<BailianVideoGenerationCreateResponse>(
+    {
+      url: "/api/v1/services/aigc/video-generation/video-synthesis",
+      method: "post",
+      data,
+      headers: {
+        "X-DashScope-Async": "enable",
+      },
     },
+  );
+
+  const trackData = data as unknown as Record<string, unknown>;
+  const trackResponse = response as {
+    output?: { task_id?: string; task_status?: string };
+  };
+
+  await aiVideoTrackingService.track({
+    apiName: "/api/v1/services/aigc/video-generation/video-synthesis",
+    model: String(trackData.model || ""),
+    taskId: trackResponse.output?.task_id || "",
+    prompt: String(trackData.prompt || ""),
+    provider: "dashscope",
+    requestParams: trackData,
+    status: trackResponse.output?.task_status === "FAILED" ? "FAIL" : "PENDING",
   });
+
+  return response;
 }
 // 响应体的格式如下
 // {
@@ -374,7 +409,6 @@ export function createDashscopeVideoSynthesis(data: BailianVideoGenerationReques
 //         "task_status": "PENDING"
 //     }
 // }
-
 
 /**
  * 阿里云百炼视频生成任务状态查询接口
@@ -451,7 +485,10 @@ async function ensureWuhenAccessToken(forceRefresh = false): Promise<string> {
   });
   localStorage.setItem(WUHEN_TOKEN_KEY, res.data.access_token);
   // expired 为秒级时间戳，转毫秒后存储
-  localStorage.setItem(WUHEN_TOKEN_EXPIRED_KEY, String((res.data.expired ?? 0) * 1000));
+  localStorage.setItem(
+    WUHEN_TOKEN_EXPIRED_KEY,
+    String((res.data.expired ?? 0) * 1000),
+  );
   return res.data.access_token;
 }
 
@@ -483,7 +520,9 @@ export async function videoRemoval(data: VideoRemovalRequest): Promise<any> {
  * API 端点: https://api.wuhenai.com/v2/status
  * @param taskId 任务 ID
  */
-export async function getVideoRemovalStatus(taskId: string): Promise<TaskResponse> {
+export async function getVideoRemovalStatus(
+  taskId: string,
+): Promise<TaskResponse> {
   const nonce = crypto.randomUUID();
   const t = Date.now();
   const token = await ensureWuhenAccessToken();
@@ -497,10 +536,3 @@ export async function getVideoRemovalStatus(taskId: string): Promise<TaskRespons
     },
   });
 }
-
-
-
-
-
-
-

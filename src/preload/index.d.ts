@@ -22,6 +22,28 @@ export type DownloadApi = {
   ) => Promise<{ success: boolean; data?: { path: string }; error?: string }>;
 };
 
+export interface AIVideoTrackData {
+  userId: string;
+  userUuid?: string;
+  apiName: string;
+  model: string;
+  taskId: string;
+  prompt?: string;
+  provider?: string;
+  requestParams?: Record<string, unknown>;
+  status: "SUCCESS" | "FAIL" | "PENDING";
+  timestamp: number;
+}
+
+export type TrackingApi = {
+  send: (data: AIVideoTrackData) => Promise<{ success: boolean; error?: string }>;
+  updateStatus: (
+    taskId: string,
+    status: string,
+    errorMessage?: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+};
+
 declare global {
   interface Window {
     electron: ElectronAPI;
@@ -29,5 +51,6 @@ declare global {
     debug: DebugApi;
     download: DownloadApi;
     flow2api: Flow2ApiApi;
+    tracking: TrackingApi;
   }
 }

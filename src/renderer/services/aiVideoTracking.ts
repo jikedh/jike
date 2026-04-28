@@ -1,3 +1,5 @@
+import { jikeingRequest } from "service/aiRequest";
+
 export interface AIVideoTrackData {
   userId: string;
   userUuid?: string;
@@ -27,7 +29,22 @@ class AIVideoTrackingService {
         timestamp: Date.now(),
       };
 
-      await window.tracking.send(trackData);
+      await jikeingRequest({
+        url: "/sorotask/v1/track",
+        method: "post",
+        data: {
+          ...trackData,
+          userUuid: this.getCurrentUserUuid(),
+          requestParams: trackData.requestParams
+            ? JSON.stringify(trackData.requestParams)
+            : undefined,
+          createTime: trackData.timestamp,
+        },
+      });
+
+      if (window.tracking) {
+        await window.tracking.send(trackData);
+      }
     } catch (error) {
       console.error("[AIVideoTracking] 埋点数据发送失败:", error);
     }

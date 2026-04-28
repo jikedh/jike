@@ -192,7 +192,7 @@ export function commitVideoHpTask(
   // 发送埋点
   aiVideoTrackingService.track({
     apiName: "/sorotask/v1/hp/submit",
-    model: data.model || "",
+    model: "",
     taskId: "",
     status: "PENDING",
   });
