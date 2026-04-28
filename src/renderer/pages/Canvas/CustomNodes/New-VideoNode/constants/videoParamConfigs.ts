@@ -7,15 +7,15 @@ export type VideoParamOption = {
 
 export type VideoDurationConfig =
   | {
-    type: "slider";
-    min: number;
-    max: number;
-    step?: number;
-  }
+      type: "slider";
+      min: number;
+      max: number;
+      step?: number;
+    }
   | {
-    type: "buttons";
-    options: VideoParamOption[];
-  };
+      type: "buttons";
+      options: VideoParamOption[];
+    };
 
 export type VideoParamState = {
   aspectRatio?: string;
@@ -71,6 +71,13 @@ const seedanceRatios = [
 ];
 
 const squareRatios = [RATIO.wide, RATIO.vertical, RATIO.square];
+const happyHorseRatios = [
+  RATIO.wide,
+  RATIO.vertical,
+  RATIO.square,
+  RATIO.classic,
+  RATIO.portrait,
+];
 const audio = { label: "生成音频" };
 const promptExtend = { label: "智能改写 Prompt" };
 
@@ -92,6 +99,11 @@ const resolution480720 = [
 const resolution7201080 = resolution480720.concat([
   { label: "1080p", value: "1080P" },
 ]);
+
+const happyHorseResolutions = [
+  { label: "720p", value: "720P" },
+  { label: "1080p", value: "1080P" },
+];
 
 const pixverseResolutions = resolution7201080.concat([
   { label: "360p", value: "360P" },
@@ -201,6 +213,31 @@ const viduQ3Config = (
   },
 });
 
+const happyHorseConfig = (mode: VideoModeKey): VideoParamConfig => ({
+  modelId: "happyhorse",
+  mode,
+  aspectRatios:
+    mode === "image-to-video" || mode === "video-edit"
+      ? undefined
+      : happyHorseRatios,
+  qualityGroup: {
+    key: "resolution",
+    label: "分辨率",
+    options: happyHorseResolutions,
+  },
+  duration:
+    mode === "video-edit"
+      ? { type: "buttons", options: [{ label: "原视频", value: 0 }] }
+      : { type: "slider", min: 3, max: 15, step: 1 },
+  defaults: {
+    aspectRatio:
+      mode === "image-to-video" || mode === "video-edit" ? undefined : "16:9",
+    resolution: "1080P",
+    duration: mode === "video-edit" ? 0 : 5,
+    generateAudio: false,
+  },
+});
+
 export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
   "seedance-2.0-fast": seedance20Config("seedance-2.0-fast", "fast"),
   "seedance-2.0-pro": seedance20Config("seedance-2.0-pro", "pro"),
@@ -245,12 +282,24 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
   vidu: viduQ3Config("vidu", "text-to-video"),
   [byModeKey("vidu", "image-to-video")]: viduQ3Config("vidu", "image-to-video"),
   // vidu 首尾帧模式
-  [byModeKey("vidu", "first-last-frame")]: viduQ3Config("vidu", "first-last-frame"),
+  [byModeKey("vidu", "first-last-frame")]: viduQ3Config(
+    "vidu",
+    "first-last-frame",
+  ),
   "vidu-q3-pro": viduQ3Config("vidu-q3-pro", "text-to-video"),
-  [byModeKey("vidu-q3-pro", "image-to-video")]:
-    viduQ3Config("vidu-q3-pro", "image-to-video"),
-  [byModeKey("vidu-q3-pro", "first-last-frame")]:
-    viduQ3Config("vidu-q3-pro", "first-last-frame"),
+  [byModeKey("vidu-q3-pro", "image-to-video")]: viduQ3Config(
+    "vidu-q3-pro",
+    "image-to-video",
+  ),
+  [byModeKey("vidu-q3-pro", "first-last-frame")]: viduQ3Config(
+    "vidu-q3-pro",
+    "first-last-frame",
+  ),
+  [byModeKey("happyhorse", "text-to-video")]: happyHorseConfig("text-to-video"),
+  [byModeKey("happyhorse", "all-reference")]: happyHorseConfig("all-reference"),
+  [byModeKey("happyhorse", "image-to-video")]:
+    happyHorseConfig("image-to-video"),
+  [byModeKey("happyhorse", "video-edit")]: happyHorseConfig("video-edit"),
   // Vidu Q2 仅保留历史兼容配置，新 UI 不再展示。
   [byModeKey("vidu-q2-fast", "image-to-video")]: {
     modelId: "vidu-q2-fast",

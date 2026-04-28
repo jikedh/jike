@@ -47,7 +47,9 @@ interface VideoPromptPanelProps {
 }
 
 const isVideoModeKey = (value: unknown): value is VideoModeKey => {
-  return typeof value === "string" && ALL_MODE_KEYS.includes(value as VideoModeKey);
+  return (
+    typeof value === "string" && ALL_MODE_KEYS.includes(value as VideoModeKey)
+  );
 };
 
 const escapeHtml = (value: string) => {
@@ -243,10 +245,7 @@ const orderReferenceItems = (
     return [item];
   });
 
-  return [
-    ...orderedItems,
-    ...items.filter((item) => !usedIds.has(item.id)),
-  ];
+  return [...orderedItems, ...items.filter((item) => !usedIds.has(item.id))];
 };
 
 export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
@@ -267,7 +266,9 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const startNewVideoGeneration = useCanvasFlowStore(
     (state) => state.startNewVideoGeneration,
   );
-  const stopVideoPolling = useCanvasFlowStore((state) => state.stopVideoPolling);
+  const stopVideoPolling = useCanvasFlowStore(
+    (state) => state.stopVideoPolling,
+  );
   const updateNewVideoNodeData = useCanvasFlowStore(
     (state) => state.updateNewVideoNodeData,
   );
@@ -281,7 +282,8 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   );
 
   const currentNode = useMemo(
-    () => nodes.find((node) => node.id === nodeId && node.type === "newVideoNode"),
+    () =>
+      nodes.find((node) => node.id === nodeId && node.type === "newVideoNode"),
     [nodes, nodeId],
   );
   const currentData = currentNode?.data as NewVideoGenerationNode | undefined;
@@ -306,7 +308,11 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
           ?.promptDraftHtml,
         currentData?.promptDraft ?? currentData?.prompt,
       ),
-    [currentData?.prompt, currentData?.promptDraft, (currentData as any)?.promptDraftHtml],
+    [
+      currentData?.prompt,
+      currentData?.promptDraft,
+      (currentData as any)?.promptDraftHtml,
+    ],
   );
   const [selectedParams, setSelectedParams] = useState<VideoParamState>(() =>
     normalizeVideoParams(model, metadataParams, initialMode),
@@ -474,6 +480,9 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const { modeStates } = useModeAvailability({
     selectedModelId: selectedModel,
     referenceCount: referenceImages.length,
+    videoReferenceCount: generationReferenceItems.filter(
+      (item) => item.type === "video",
+    ).length,
     hasAnyReference: generationReferenceItems.length > 0,
     referenceAllImages,
   });
@@ -487,7 +496,10 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     if (currentModeEnabled) return activeMode;
     const firstEnabled = modeStates.find((mode) => mode.enabled);
     // 如果当前模型因为缺少参考图而暂时没有可用模式，仍停留在该模型支持的模式上，避免参数配置回落到默认模型。
-    return firstEnabled?.key ?? getFirstSupportedModeForModel(selectedModel, activeMode);
+    return (
+      firstEnabled?.key ??
+      getFirstSupportedModeForModel(selectedModel, activeMode)
+    );
   }, [currentModeEnabled, activeMode, modeStates, selectedModel]);
 
   useEffect(() => {
@@ -538,7 +550,8 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       // 新版视频节点使用独立记忆，避免和老版视频节点的模型/模式/参数互相覆盖。
       setDefaultNewVideoPreset({
         model: params.model ?? selectedModel,
-        aspectRatio: nextParams.aspectRatio ?? currentData?.aspect_ratio ?? "16:9",
+        aspectRatio:
+          nextParams.aspectRatio ?? currentData?.aspect_ratio ?? "16:9",
         duration: nextParams.duration ?? currentData?.duration ?? 5,
         resolution: nextParams.resolution,
         mode: params.mode ?? activeMode,
@@ -572,7 +585,12 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         },
       });
     },
-    [currentData?.metadata, modeStates, persistPanelPatch, persistVideoDefaultPreset],
+    [
+      currentData?.metadata,
+      modeStates,
+      persistPanelPatch,
+      persistVideoDefaultPreset,
+    ],
   );
 
   const handleModelChange = useCallback(
@@ -582,7 +600,11 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       const nextMode = supportedModes.includes(activeMode)
         ? activeMode
         : getFirstSupportedModeForModel(modelId, activeMode);
-      const nextParams = normalizeVideoParams(modelId, selectedParams, nextMode);
+      const nextParams = normalizeVideoParams(
+        modelId,
+        selectedParams,
+        nextMode,
+      );
       setSelectedModel(modelId);
       setActiveMode(nextMode);
       setSelectedParams(nextParams);
@@ -595,7 +617,8 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       persistPanelPatch({
         model: modelId,
         duration: nextParams.duration,
-        aspect_ratio: nextParams.aspectRatio ?? currentData?.aspect_ratio ?? "16:9",
+        aspect_ratio:
+          nextParams.aspectRatio ?? currentData?.aspect_ratio ?? "16:9",
         metadata: {
           ...(currentData?.metadata ?? {}),
           params: nextParams,
@@ -603,17 +626,29 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         },
       });
     },
-    [activeMode, currentData?.aspect_ratio, currentData?.metadata, persistPanelPatch, persistVideoDefaultPreset, selectedParams],
+    [
+      activeMode,
+      currentData?.aspect_ratio,
+      currentData?.metadata,
+      persistPanelPatch,
+      persistVideoDefaultPreset,
+      selectedParams,
+    ],
   );
 
   const handleParamsChange = useCallback(
     (params: VideoParamState) => {
-      const nextParams = normalizeVideoParams(selectedModel, params, activeMode);
+      const nextParams = normalizeVideoParams(
+        selectedModel,
+        params,
+        activeMode,
+      );
       setSelectedParams(nextParams);
       persistVideoDefaultPreset({ videoParams: nextParams });
       persistPanelPatch({
         duration: nextParams.duration,
-        aspect_ratio: nextParams.aspectRatio ?? currentData?.aspect_ratio ?? "16:9",
+        aspect_ratio:
+          nextParams.aspectRatio ?? currentData?.aspect_ratio ?? "16:9",
         metadata: {
           ...(currentData?.metadata ?? {}),
           params: nextParams,
@@ -621,7 +656,14 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         },
       });
     },
-    [activeMode, currentData?.aspect_ratio, currentData?.metadata, persistPanelPatch, persistVideoDefaultPreset, selectedModel],
+    [
+      activeMode,
+      currentData?.aspect_ratio,
+      currentData?.metadata,
+      persistPanelPatch,
+      persistVideoDefaultPreset,
+      selectedModel,
+    ],
   );
 
   const handleDraftChange = useCallback(
@@ -662,7 +704,9 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
 
   const handleDisconnectedReferenceNode = useCallback(
     (sourceNodeId: string) => {
-      const parentImage = parentImageNodes.find((item) => item.id === sourceNodeId);
+      const parentImage = parentImageNodes.find(
+        (item) => item.id === sourceNodeId,
+      );
       if (parentImage) {
         removeReferenceMentions([
           { ids: [getVideoParentImageMentionId(sourceNodeId)], type: "image" },
@@ -670,7 +714,9 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         return;
       }
 
-      const parentVideo = parentVideoNodes.find((item) => item.id === sourceNodeId);
+      const parentVideo = parentVideoNodes.find(
+        (item) => item.id === sourceNodeId,
+      );
       if (parentVideo) {
         removeReferenceMentions([
           { ids: [getVideoParentVideoMentionId(sourceNodeId)], type: "video" },
@@ -678,14 +724,21 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         return;
       }
 
-      const parentAudio = parentAudioNodes.find((item) => item.id === sourceNodeId);
+      const parentAudio = parentAudioNodes.find(
+        (item) => item.id === sourceNodeId,
+      );
       if (parentAudio) {
         removeReferenceMentions([
           { ids: [getVideoParentAudioMentionId(sourceNodeId)], type: "audio" },
         ]);
       }
     },
-    [parentAudioNodes, parentImageNodes, parentVideoNodes, removeReferenceMentions],
+    [
+      parentAudioNodes,
+      parentImageNodes,
+      parentVideoNodes,
+      removeReferenceMentions,
+    ],
   );
 
   const handleRemovedUploadedReferenceImage = useCallback(
@@ -742,7 +795,10 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       }
 
       // 新版可排序缩略图替代原父节点缩略图后，悬浮时仍需要高亮对应连线。
-      handleReferenceHoverChange(item.id.slice(matchedPrefix.length), isHovering);
+      handleReferenceHoverChange(
+        item.id.slice(matchedPrefix.length),
+        isHovering,
+      );
     },
     [handleReferenceHoverChange],
   );
@@ -790,9 +846,14 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
 
   const handleSortableReferenceRemove = useCallback(
     (item: MentionItem) => {
-      const localImageIndex = localReferenceImageUrls.findIndex((url, index) => {
-        return item.id === `local-image-${localReferenceImageIndexes[index]}-${url}`;
-      });
+      const localImageIndex = localReferenceImageUrls.findIndex(
+        (url, index) => {
+          return (
+            item.id ===
+            `local-image-${localReferenceImageIndexes[index]}-${url}`
+          );
+        },
+      );
 
       if (localImageIndex >= 0) {
         // 新版排序缩略图替代原素材缩略图后，仍然要保留本地参考图的移除能力。
@@ -886,6 +947,30 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         // 全能参考模式默认保持可选，但真正生成前必须至少有一个图片/视频/音频参考素材。
         warning("全能参考模式需要至少上传或连接一个参考素材");
         return;
+      }
+
+      if (request.model === "happyhorse") {
+        const imageCount = generationReferenceItems.filter(
+          (item) => item.type === "image",
+        ).length;
+        const videoCount = generationReferenceItems.filter(
+          (item) => item.type === "video",
+        ).length;
+
+        if (request.mode === "all-reference" && imageCount === 0) {
+          warning("HappyHores 参考生视频需要至少 1 张参考图");
+          return;
+        }
+
+        if (request.mode === "image-to-video" && imageCount !== 1) {
+          warning("HappyHores 图生视频需要且仅支持 1 张首帧图");
+          return;
+        }
+
+        if (request.mode === "video-edit" && videoCount !== 1) {
+          warning("HappyHores 视频编辑需要且仅支持 1 个视频素材");
+          return;
+        }
       }
 
       if (
@@ -982,7 +1067,11 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
             <VideoPromptEditor
               ref={editorRef}
               promptDraftHtml={promptDraftHtml}
-              mentionItems={editorMentionItems.length > 0 ? editorMentionItems : videoMentionItems}
+              mentionItems={
+                editorMentionItems.length > 0
+                  ? editorMentionItems
+                  : videoMentionItems
+              }
               onDraftChange={handleDraftChange}
             />
           </div>
@@ -1004,20 +1093,20 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
           disabled={isUploading}
           accessory={
             <>
-            <PresetDropdown
-              presetType="video"
-              disabled={isUploading}
-              onSelect={(content) => {
-                editorRef.current?.insertContent(content);
-              }}
-            />
-            {pointsEnabled ? (
-              <ModelPointsBadge
-                totalPoints={totalPoints}
-                requiredPoints={requiredPoints}
-                title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
+              <PresetDropdown
+                presetType="video"
+                disabled={isUploading}
+                onSelect={(content) => {
+                  editorRef.current?.insertContent(content);
+                }}
               />
-            ) : null}
+              {pointsEnabled ? (
+                <ModelPointsBadge
+                  totalPoints={totalPoints}
+                  requiredPoints={requiredPoints}
+                  title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
+                />
+              ) : null}
             </>
           }
         />
