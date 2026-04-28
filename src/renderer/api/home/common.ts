@@ -5,25 +5,26 @@
 
 import { jikeingService } from "service/aiRequest";
 import type {
-  GetSceneQrcodeResponse,
-  QuerySceneStatusRequest,
-  QuerySceneStatusResponse,
-  StudentInfoRequest,
-  CommitAiTaskRequest,
+  AiBatTaskDetailRequest,
   AiTaskListItem,
   AiTaskListResponse,
-  AiBatTaskDetailRequest,
-  UploadSplitListItem,
-  ScoreConfigResponse,
   CommitAiHpRequest,
   CommitAiMultiSceneRequest,
+  CommitAiTaskRequest,
   CommitSoraTaskRequest,
-  SoraTaskListItem,
-  VideoHpTaskListItem,
   CommitVideoHpTaskRequest,
   CommitVideoTaskHpRequest,
+  GetSceneQrcodeResponse,
   GetSysConfigResponse,
+  QuerySceneStatusRequest,
+  QuerySceneStatusResponse,
+  ScoreConfigResponse,
+  SoraTaskListItem,
+  StudentInfoRequest,
+  UploadSplitListItem,
+  VideoHpTaskListItem,
 } from "shared/types/api/home";
+import { aiVideoTrackingService } from "@/services/aiVideoTracking";
 
 // ===================== 微信扫码登录 =====================
 
@@ -144,6 +145,15 @@ export function commitAiMultiScene(
 
 /** 提交 Sora 视频任务 */
 export function commitSoraTask(data: CommitSoraTaskRequest): Promise<any> {
+  // 发送埋点
+  aiVideoTrackingService.track({
+    apiName: "/sorotask/v1/submit",
+    model: data.model || "",
+    taskId: "",
+    prompt: data.prompt,
+    status: "PENDING",
+  });
+
   return jikeingService({
     url: "/sorotask/v1/submit",
     method: "post",
@@ -179,6 +189,14 @@ export function videoHpTaskList(params?: {
 export function commitVideoHpTask(
   data: CommitVideoHpTaskRequest,
 ): Promise<any> {
+  // 发送埋点
+  aiVideoTrackingService.track({
+    apiName: "/sorotask/v1/hp/submit",
+    model: data.model || "",
+    taskId: "",
+    status: "PENDING",
+  });
+
   return jikeingService({
     url: "/sorotask/v1/hp/submit",
     method: "post",
@@ -190,6 +208,14 @@ export function commitVideoHpTask(
 export function commitVideoTaskHp(
   data: CommitVideoTaskHpRequest,
 ): Promise<any> {
+  // 发送埋点
+  aiVideoTrackingService.track({
+    apiName: "/sorotask/v1/task/hp",
+    model: "",
+    taskId: data.taskId || "",
+    status: "PENDING",
+  });
+
   return jikeingService({
     url: "/sorotask/v1/task/hp",
     method: "post",

@@ -1,10 +1,7 @@
-import { contextBridge, ipcRenderer } from "electron";
 import { electronAPI } from "@electron-toolkit/preload";
-import type {
-  FileInfo,
-  StorageApi,
-} from "shared/types/storage";
+import { contextBridge, ipcRenderer } from "electron";
 import type { Flow2ApiApi } from "shared/types/flow2api";
+import type { FileInfo, StorageApi } from "shared/types/storage";
 
 export type DebugApi = {
   toggleDevTools: () => Promise<{ success: boolean; error?: string }>;
@@ -30,7 +27,8 @@ const storageApi: StorageApi = {
   selectDirectory: () => ipcRenderer.invoke("storage:selectDirectory"),
   ensureProject: (basePath, projectName) =>
     ipcRenderer.invoke("storage:ensureProject", basePath, projectName),
-  listProjects: (basePath) => ipcRenderer.invoke("storage:listProjects", basePath),
+  listProjects: (basePath) =>
+    ipcRenderer.invoke("storage:listProjects", basePath),
   saveCanvas: (basePath, projectName, data) =>
     ipcRenderer.invoke("storage:saveCanvas", basePath, projectName, data),
   loadCanvas: (basePath, projectName) =>
@@ -108,9 +106,41 @@ const flow2ApiApi: Flow2ApiApi = {
   start: () => ipcRenderer.invoke("flow2api:start"),
   stop: () => ipcRenderer.invoke("flow2api:stop"),
   restart: () => ipcRenderer.invoke("flow2api:restart"),
-  updateSettings: (patch) => ipcRenderer.invoke("flow2api:updateSettings", patch),
+  updateSettings: (patch) =>
+    ipcRenderer.invoke("flow2api:updateSettings", patch),
   getLogs: (limit) => ipcRenderer.invoke("flow2api:getLogs", limit),
-  selectOutputDirectory: () => ipcRenderer.invoke("flow2api:selectOutputDirectory"),
+  selectOutputDirectory: () =>
+    ipcRenderer.invoke("flow2api:selectOutputDirectory"),
+};
+
+export type TrackingApi = {
+  send: (
+    data: AIVideoTrackData,
+  ) => Promise<{ success: boolean; error?: string }>;
+  updateStatus: (
+    taskId: string,
+    status: string,
+    errorMessage?: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+};
+
+export interface AIVideoTrackData {
+  userId: string;
+  userUuid?: string;
+  apiName: string;
+  model: string;
+  taskId: string;
+  prompt?: string;
+  provider?: string;
+  requestParams?: Record<string, unknown>;
+  status: "SUCCESS" | "FAIL" | "PENDING";
+  timestamp: number;
+}
+
+const trackingApi: TrackingApi = {
+  send: (data) => ipcRenderer.invoke("tracking:send", data),
+  updateStatus: (taskId, status, errorMessage) =>
+    ipcRenderer.invoke("tracking:updateStatus", taskId, status, errorMessage),
 };
 
 if (process.contextIsolated) {
@@ -120,6 +150,7 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld("debug", debugApi);
     contextBridge.exposeInMainWorld("download", downloadApi);
     contextBridge.exposeInMainWorld("flow2api", flow2ApiApi);
+    contextBridge.exposeInMainWorld("tracking", trackingApi);
   } catch (error) {
     console.error(error);
   }
@@ -134,4 +165,6 @@ if (process.contextIsolated) {
   window.download = downloadApi;
   // @ts-ignore (define in dts)
   window.flow2api = flow2ApiApi;
+  // @ts-ignore (define in dts)
+  window.tracking = trackingApi;
 }
