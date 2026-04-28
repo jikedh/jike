@@ -192,6 +192,36 @@ export const VideoPromptEditor = forwardRef<
         allowSpaces: true,
         allowedPrefixes: null, // 允许任意字符作为前缀
         startOfLine: false, // 不限制行首
+        findSuggestionMatch: ({ $position }) => {
+          const textBeforeCursor =
+            $position.nodeBefore?.isText && $position.nodeBefore.text;
+
+          if (!textBeforeCursor || !textBeforeCursor.endsWith("@")) {
+            return null;
+          }
+
+          // 只把光标前最近的 @ 作为当前触发范围，避免“第一个 @ 到第二个 @”
+          // 被 TipTap 默认规则合并成一段，导致选择资产时误删前面的提示词。
+          return {
+            range: {
+              from: $position.pos - 1,
+              to: $position.pos,
+            },
+            query: "",
+            text: "@",
+          };
+        },
+        allow: ({ state, range }) => {
+          const { from, to } = state.selection;
+
+          // 只有光标紧跟在 @ 后面时才弹出资产表。
+          // 即使 @ 后面已经有文字，只要用户把光标点回 @ 后面，也应该重新弹出。
+          if (from !== to) {
+            return false;
+          }
+
+          return state.doc.textBetween(to - 1, to, "", "") === "@";
+        },
         items: () => {
           return mentionItemsRef.current;
         },
