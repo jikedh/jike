@@ -62,11 +62,8 @@ import { MultiSelectQuickCreate } from "./MultiSelectQuickCreate";
 
 const FALLBACK_NODE_WIDTH = 175;
 const FALLBACK_NODE_HEIGHT = 175;
-<<<<<<< HEAD
 const DEFAULT_OPEN_ZOOM = 0.67;
-=======
 const SELECTION_STORE_SYNC_DELAY = 90;
->>>>>>> origin/develop
 
 /**
  * 鏍规嵁璧风偣鍜岀粓鐐圭粯鍒朵竴鏉℃煍鍜岀殑璐濆灏旀洸绾裤€?

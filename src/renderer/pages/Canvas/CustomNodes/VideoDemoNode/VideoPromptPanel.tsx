@@ -53,9 +53,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   const startVideoGeneration = useCanvasFlowStore(
     (state) => state.startVideoGeneration,
   );
-  const startWanI2vVideoGeneration = useCanvasFlowStore(
-    (state) => state.startWanI2vVideoGeneration,
-  );
   const stopVideoPolling = useCanvasFlowStore(
     (state) => state.stopVideoPolling,
   );
@@ -481,17 +478,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     }
 
     // Wan 2.7 系列模型使用 Dashscope API（阿里云百炼）
-    if (model.startsWith("wan2.7")) {
-      await startWanI2vVideoGeneration(nodeId, {
-        ...payload,
-        requiredPoints,
-      });
-    } else {
-      await startVideoGeneration(nodeId, {
-        ...payload,
-        requiredPoints,
-      });
-    }
+    await startVideoGeneration(nodeId, {
+      ...payload,
+      requiredPoints,
+    });
     success("已开始生成视频");
     void refreshBalanceInfo();
   }, [
@@ -505,7 +495,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     allAudioUrls,
     updateVideoNodeData,
     startVideoGeneration,
-    startWanI2vVideoGeneration,
     nodeId,
     success,
     requiredPoints,

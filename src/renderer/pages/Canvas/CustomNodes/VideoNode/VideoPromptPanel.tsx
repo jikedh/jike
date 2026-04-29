@@ -531,25 +531,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       return;
     }
 
-<<<<<<< HEAD
-    // Wan 2.7 系列模型使用 Dashscope API（阿里云百炼）
-    if (model.startsWith("wan2.7")) {
-      await startWanI2vVideoGeneration(nodeId, {
-        ...payload,
-        requiredPoints,
-      });
-    } else {
-      await startVideoGeneration(nodeId, {
-        ...payload,
-        requiredPoints,
-      });
-    }
-=======
     await startVideoGeneration(nodeId, {
       ...payload,
       requiredPoints,
     });
->>>>>>> origin/develop
     success("已开始生成视频");
     void refreshBalanceInfo();
   }, [

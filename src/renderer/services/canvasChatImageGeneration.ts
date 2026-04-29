@@ -16,7 +16,7 @@ import {
 } from "shared/constants/ai-models";
 import { getImageGenerationPoints } from "shared/constants/modelPoints";
 import type { NoteGenerationImage } from "shared/types/NoteGeneration";
-import type { GeminiYwResponseBody } from "shared/types/detail/gemini-yw";
+import type { GeminiYwResponseBody } from "shared/types/detail/Yunwu/gemini-yw";
 import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
 import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
 import { getJikeingUserId } from "shared/utils/utils";

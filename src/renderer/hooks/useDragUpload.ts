@@ -2,7 +2,12 @@ import { useReactFlow } from "@xyflow/react";
 import { useCallback, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import {
-<<<<<<< HEAD
+  getLocalFilePath,
+  saveAudioToLocal,
+  saveImageToLocal,
+  saveVideoToLocal,
+} from "service/projectStorage";
+import {
   CANVAS_IMAGE_DRAG_MIME,
   CANVAS_IMAGE_DRAG_TYPE,
   type CanvasImageDragPayload,
@@ -16,18 +21,6 @@ import {
   getAspectRatioFromMediaFile,
   getExactAspectRatio,
 } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
-=======
-  getLocalFilePath,
-  saveImageToLocal,
-  saveVideoToLocal,
-  saveAudioToLocal,
-} from "service/projectStorage";
-import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { GenerationStatus } from "shared/constants/enum";
-import { getMediaType, type MediaType } from "shared/constants/mediaTypes";
-import { toast } from "sonner";
-import { getAspectRatioFromMediaFile } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
->>>>>>> origin/develop
 
 /** 拖拽状态 */
 interface DragState {

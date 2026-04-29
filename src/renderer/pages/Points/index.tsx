@@ -125,13 +125,6 @@ export function PointsView() {
       ? null
       : packages.find((pkg) => pkg.id === selectedPackageId) ?? null;
 
-<<<<<<< HEAD
-  const apiBaseUrl =
-    ((import.meta as any).env?.VITE_API_BASE_URL as string | undefined) ||
-    "http://localhost:9001";
-
-=======
->>>>>>> origin/develop
   const buildQrcodeImageByCodeUrl = (codeUrl: string) => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(codeUrl)}`;
   };
@@ -149,25 +142,12 @@ export function PointsView() {
 
     setIsCreatingOrder(true);
     try {
-<<<<<<< HEAD
-      const response = await fetch(`${apiBaseUrl}/recharge/v1/native/create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          packageId: pkg.packageId,
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok || result?.code !== 10000 || !result?.data?.codeUrl) {
-=======
       const result = await createRechargeOrder({
         userId,
         packageId: pkg.packageId,
       });
 
       if (!result?.data?.codeUrl) {
->>>>>>> origin/develop
         throw new Error(result?.msg || "创建充值订单失败");
       }
 
@@ -194,15 +174,6 @@ export function PointsView() {
 
     const checkPaymentStatus = async () => {
       try {
-<<<<<<< HEAD
-        const response = await fetch(
-          `${apiBaseUrl}/recharge/v1/native/status?orderId=${encodeURIComponent(nativePayOrder.orderId)}`,
-        );
-        const result = await response.json();
-        if (!response.ok || result?.code !== 10000) {
-          return;
-        }
-=======
         const result = await getRechargeOrderStatus(nativePayOrder.orderId);
         // if (result?.code !== 0) {
         //   return;
@@ -230,15 +201,10 @@ export function PointsView() {
             console.error(error);
             toast.error("充值成功但积分更新失败，请刷新页面");
           }
->>>>>>> origin/develop
 
           setSelectedPackageId(null);
           setNativePayOrder(null);
-<<<<<<< HEAD
-          if (timer) {
-            clearInterval(timer);
-          }
-        } else if (result?.data?.status === "CANCELED" || result?.data?.status === "FAILED") {
+        } else if (result?.data?.status === "CLOSED") {
           // 订单取消或失败时停止轮询
           toast.error("支付失败或已取消");
           setSelectedPackageId(null);
@@ -246,8 +212,6 @@ export function PointsView() {
           if (timer) {
             clearInterval(timer);
           }
-=======
->>>>>>> origin/develop
         }
       } catch (error) {
         console.error("轮询支付状态失败:", error);
@@ -277,11 +241,13 @@ export function PointsView() {
         clearInterval(timer);
       }
     };
-<<<<<<< HEAD
-  }, [nativePayOrder?.orderId, apiBaseUrl, selectedPackage]);
-=======
-  }, [nativePayOrder?.orderId, selectedPackage]);
->>>>>>> origin/develop
+  }, [
+    balanceInfo,
+    nativePayOrder?.orderId,
+    selectedPackage,
+    setBalanceInfo,
+    userId,
+  ]);
 
   const usageHistory = [
     {

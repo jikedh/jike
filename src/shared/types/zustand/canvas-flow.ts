@@ -36,11 +36,8 @@ export type NodeType =
   | "note"
   | "image"
   | "video"
-<<<<<<< HEAD
   | "videoDemo"
-=======
   | "newVideo"
->>>>>>> origin/develop
   | "agent"
   | "panorama"
   | "audio"

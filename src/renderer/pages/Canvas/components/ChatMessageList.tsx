@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-import type { RefObject } from "react";
-=======
 import { useEffect, useState, type RefObject } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -13,7 +10,6 @@ import type {
   NoteGenerationImage,
   NoteGenerationMessage,
 } from "shared/types/NoteGeneration";
->>>>>>> temp
 import { cn } from "shared/utils/utils";
 
 type ChatMessageListProps = {
@@ -21,8 +17,6 @@ type ChatMessageListProps = {
   isLoading?: boolean;
   className?: string;
   containerRef?: RefObject<HTMLDivElement | null>;
-<<<<<<< HEAD
-=======
 };
 
 type ChatImagePreviewProps = {
@@ -164,7 +158,6 @@ const ChatImagePreview = ({ image, imageIndex }: ChatImagePreviewProps) => {
       />
     </a>
   );
->>>>>>> temp
 };
 
 export const ChatMessageList = ({
@@ -202,11 +195,6 @@ export const ChatMessageList = ({
                     : "rounded-bl-[8px] border border-white/10 bg-[#151821] text-white/88",
                 )}
               >
-<<<<<<< HEAD
-                <div className="text-[14px] leading-[1.7] whitespace-pre-wrap">
-                  {message.content}
-                </div>
-=======
                 <div className="text-[14px] leading-[1.7] prose prose-invert max-w-none">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {message.content}
@@ -223,7 +211,6 @@ export const ChatMessageList = ({
                     ))}
                   </div>
                 )}
->>>>>>> temp
               </div>
             </div>
           );

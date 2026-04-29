@@ -9,21 +9,15 @@ import { TableNode } from "../CustomNodes/TableNode";
 import { TextAgentNode } from "../CustomNodes/TextAgentNode";
 import { VideoAgentNode } from "../CustomNodes/VideoAgentNode";
 import { VideoNode } from "../CustomNodes/VideoNode";
-<<<<<<< HEAD
 import { VideoDemoNode } from "../CustomNodes/VideoDemoNode";
-=======
 import NewVideoNode from "../CustomNodes/New-VideoNode";
->>>>>>> origin/develop
 
 export const nodeTypes = {
   noteNode: NoteNode,
   imageNode: ImageNode,
   videoNode: VideoNode,
-<<<<<<< HEAD
   videoDemoNode: VideoDemoNode,
-=======
   newVideoNode: NewVideoNode,
->>>>>>> origin/develop
   agentNode: AgentNode,
   textAgentNode: TextAgentNode,
   imageAgentNode: ImageAgentNode,

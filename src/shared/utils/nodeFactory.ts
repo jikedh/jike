@@ -332,11 +332,8 @@ export const nodeFactoryMap: Record<NodeType, NodeFactory> = {
   agent: createAgentNode,
   panorama: createPanoramaNode,
   video: createVideoNode,
-<<<<<<< HEAD
   videoDemo: createVideoDemoNode,
-=======
   newVideo: createNewVideoNode,
->>>>>>> origin/develop
   audio: createAudioNode,
   textAgent: createTextAgentNode,
   imageAgent: createImageAgentNode,

@@ -177,7 +177,6 @@ export const IMAGE_MODELS = [
   // },
 ];
 
-<<<<<<< HEAD
 export const CANVAS_CHAT_IMAGE_MODEL_PREFIX = "canvas-image:";
 
 export const CANVAS_CHAT_IMAGE_MODELS = IMAGE_MODELS.map((item) => ({
@@ -224,8 +223,6 @@ export const getGenerationScoreCost = (model?: string) => {
   return GENERATION_SCORE_COST_MAP[model] ?? DEFAULT_GENERATION_SCORE_COST;
 };
 
-=======
->>>>>>> origin/develop
 /** 图片尺寸配置 */
 export const IMAGE_SIZES = [
   { label: "256×256", value: "256x256" },

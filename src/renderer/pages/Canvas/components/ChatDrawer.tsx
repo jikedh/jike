@@ -118,8 +118,6 @@ const SKILL_SUGGESTIONS: SkillSuggestion[] = [
 
 const ACTION_BUTTON_CLASSNAME =
   "flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 shadow-[0_6px_18px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-all hover:bg-white/10 hover:text-white";
-<<<<<<< HEAD
-=======
 const MIN_PROMPT_INPUT_HEIGHT = 42;
 const DEFAULT_PROMPT_INPUT_HEIGHT = 64;
 const MAX_PROMPT_INPUT_HEIGHT = 240;
@@ -131,7 +129,6 @@ const resolveCanvasChatModel = (model?: string) => {
 
   return DEFAULT_CANVAS_CHAT_MODEL;
 };
->>>>>>> temp
 
 export const ChatDrawer = ({
   open,
@@ -147,11 +144,7 @@ export const ChatDrawer = ({
     defaultWidth: 460,
     minWidth: 380,
   });
-<<<<<<< HEAD
-  const { defaultPersonaId } = useChatSettingsStore();
-=======
   const { defaultModel, defaultPersonaId } = useChatSettingsStore();
->>>>>>> temp
 
   const [inputValue, setInputValue] = useState("");
   const [promptInputHeight, setPromptInputHeight] = useState(
@@ -180,15 +173,12 @@ export const ChatDrawer = ({
     setSelectedPersonaId(defaultPersonaId);
   }, [defaultPersonaId]);
 
-<<<<<<< HEAD
-=======
   useEffect(() => {
     if (!currentSession) {
       setSelectedModel(resolveCanvasChatModel(defaultModel));
     }
   }, [currentSession, defaultModel]);
 
->>>>>>> temp
   useEffect(() => {
     if (currentSession) {
       setSelectedPersonaId(currentSession.personaId);
@@ -348,18 +338,6 @@ export const ChatDrawer = ({
     CANVAS_CHAT_SELECT_MODELS.find((item) => item.model === selectedModel)
       ?.name ?? selectedModel;
 
-  const handleSelectSkill = useCallback((prompt: string) => {
-    setInputValue(prompt);
-    requestAnimationFrame(() => textareaRef.current?.focus());
-  }, []);
-
-  const selectedPersonaLabel =
-    selectedPersonaId === NO_CHAT_PERSONA_ID
-      ? "自由对话"
-      : (CANVAS_CHAT_PERSONAS.find(
-          (persona) => persona.id === selectedPersonaId,
-        )?.label ?? "自由对话");
-
   const userMessageCount = messages.filter(
     (message) => message.role === "user",
   ).length;
@@ -403,42 +381,7 @@ export const ChatDrawer = ({
                   AI 对话
                 </DrawerTitle>
 
-<<<<<<< HEAD
-                <div className="min-w-0 flex-1">
-                  <Select
-                    value={selectedPersonaId}
-                    onValueChange={(value) =>
-                      setSelectedPersonaId(value as ChatPersonaId)
-                    }
-                  >
-                    <SelectTrigger className="h-9 w-full rounded-[14px] border border-white/10 bg-white/[0.04] px-3 text-sm text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.14)]">
-                      <SelectValue placeholder="选择对话模式" />
-                    </SelectTrigger>
-                    <SelectContent
-                      align="start"
-                      className="border-white/10 bg-[#14161d] text-white shadow-[0_18px_40px_rgba(0,0,0,0.35)]"
-                    >
-                      <SelectItem
-                        value={NO_CHAT_PERSONA_ID}
-                        className="text-white/80 focus:bg-white/10 focus:text-white"
-                      >
-                        自由对话
-                      </SelectItem>
-                      {CANVAS_CHAT_PERSONAS.map((persona) => (
-                        <SelectItem
-                          key={persona.id}
-                          value={persona.id}
-                          className="text-white/80 focus:bg-white/10 focus:text-white"
-                        >
-                          {persona.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-=======
                 <div className="min-w-0 flex-1" />
->>>>>>> temp
 
                 <div className="flex shrink-0 items-center gap-1.5">
                   <button
@@ -479,8 +422,6 @@ export const ChatDrawer = ({
                   </button>
                 </div>
               </div>
-<<<<<<< HEAD
-=======
 
               <div className="mt-2 grid grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)] gap-2">
                 <Select
@@ -520,7 +461,6 @@ export const ChatDrawer = ({
                   models={CANVAS_CHAT_SELECT_MODELS}
                 />
               </div>
->>>>>>> temp
             </header>
 
             {messages.length === 0 ? (
@@ -564,9 +504,6 @@ export const ChatDrawer = ({
 
             <div className="px-4 pb-3 pt-0.5">
               <div className="overflow-hidden rounded-[22px] border border-white/10 bg-[#10131b] shadow-[0_14px_36px_rgba(0,0,0,0.26)]">
-<<<<<<< HEAD
-                <div className="px-3 pt-2">
-=======
                 <div
                   className="nodrag nopan nowheel flex h-3 cursor-ns-resize items-center justify-center border-b border-white/[0.03] bg-white/[0.015]"
                   role="separator"
@@ -580,7 +517,6 @@ export const ChatDrawer = ({
                   className="px-3 pt-2"
                   style={{ height: `${promptInputHeight}px` }}
                 >
->>>>>>> temp
                   <Textarea
                     ref={textareaRef}
                     value={inputValue}
@@ -588,11 +524,7 @@ export const ChatDrawer = ({
                     onKeyDown={handleKeyDown}
                     placeholder="输入你的想法，或直接从上面的 Skills 开始"
                     rows={1}
-<<<<<<< HEAD
-                    className="min-h-[38px] max-h-[84px] resize-none border-transparent bg-transparent px-0.5 py-0 text-[15px] leading-[1.35] text-white shadow-none placeholder:text-white/30"
-=======
                     className="model-selector-scroll h-full min-h-0 resize-none border-transparent bg-transparent px-0.5 py-0 text-[15px] leading-[1.35] text-white shadow-none placeholder:text-white/30"
->>>>>>> temp
                     disabled={isLoading}
                   />
                 </div>
@@ -602,15 +534,8 @@ export const ChatDrawer = ({
                     <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-white/70">
                       {selectedPersonaLabel}
                     </span>
-<<<<<<< HEAD
-                    <span>
-                      {userMessageCount > 0
-                        ? `已发送 ${userMessageCount} 条消息`
-                        : "从技能卡开始，或直接输入需求"}
-=======
                     <span className="max-w-[180px] truncate rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-white/70">
                       {selectedModelLabel}
->>>>>>> temp
                     </span>
                   </div>
 
