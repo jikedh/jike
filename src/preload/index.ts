@@ -1,7 +1,7 @@
 import { electronAPI } from "@electron-toolkit/preload";
 import { contextBridge, ipcRenderer } from "electron";
 import type { Flow2ApiApi } from "shared/types/flow2api";
-import type { FileInfo, StorageApi } from "shared/types/storage";
+import type { StorageApi } from "shared/types/storage";
 
 export type DebugApi = {
   toggleDevTools: () => Promise<{ success: boolean; error?: string }>;
@@ -121,6 +121,7 @@ export type TrackingApi = {
     taskId: string,
     status: string,
     errorMessage?: string,
+    generatedVideoUrl?: string,
   ) => Promise<{ success: boolean; error?: string }>;
 };
 
@@ -131,16 +132,24 @@ export interface AIVideoTrackData {
   model: string;
   taskId: string;
   prompt?: string;
+  referenceImageUrl?: string;
   provider?: string;
   requestParams?: Record<string, unknown>;
+  generatedVideoUrl?: string;
   status: "SUCCESS" | "FAIL" | "PENDING";
   timestamp: number;
 }
 
 const trackingApi: TrackingApi = {
   send: (data) => ipcRenderer.invoke("tracking:send", data),
-  updateStatus: (taskId, status, errorMessage) =>
-    ipcRenderer.invoke("tracking:updateStatus", taskId, status, errorMessage),
+  updateStatus: (taskId, status, errorMessage, generatedVideoUrl) =>
+    ipcRenderer.invoke(
+      "tracking:updateStatus",
+      taskId,
+      status,
+      errorMessage,
+      generatedVideoUrl,
+    ),
 };
 
 if (process.contextIsolated) {

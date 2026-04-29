@@ -29,8 +29,10 @@ export interface AIVideoTrackData {
   model: string;
   taskId: string;
   prompt?: string;
+  referenceImageUrl?: string;
   provider?: string;
   requestParams?: Record<string, unknown>;
+  generatedVideoUrl?: string;
   status: "SUCCESS" | "FAIL" | "PENDING";
   timestamp: number;
 }
@@ -41,6 +43,7 @@ export type TrackingApi = {
     taskId: string,
     status: string,
     errorMessage?: string,
+    generatedVideoUrl?: string,
   ) => Promise<{ success: boolean; error?: string }>;
 };
 

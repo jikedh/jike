@@ -8,13 +8,22 @@ export interface AIVideoTrackData {
   model: string;
   taskId: string;
   prompt?: string;
+  referenceImageUrl?: string;
   provider?: string;
   requestParams?: Record<string, unknown>;
+  generatedVideoUrl?: string;
   status: "SUCCESS" | "FAIL" | "PENDING";
   timestamp: number;
 }
 
 type AIVideoTrackStatus = AIVideoTrackData["status"];
+
+type AIVideoTrackStatusResponse = {
+  data?: {
+    generated_video_url?: string;
+    generatedVideoUrl?: string;
+  };
+};
 
 /**
  * AI 视频生成埋点服务
@@ -43,6 +52,7 @@ class AIVideoTrackingService {
           requestParams: trackData.requestParams
             ? JSON.stringify(trackData.requestParams)
             : undefined,
+          reference_image_url: trackData.referenceImageUrl,
           createTime: trackData.timestamp,
         },
       });
@@ -62,26 +72,37 @@ class AIVideoTrackingService {
     taskId: string,
     status: AIVideoTrackStatus,
     errorMessage?: string,
-  ): Promise<void> {
+    generatedVideoUrl?: string,
+  ): Promise<{ generatedVideoUrl?: string } | void> {
     if (!taskId || status === "PENDING") {
       return;
     }
 
     try {
-      await jikeingRequest({
+      const response = await jikeingRequest<AIVideoTrackStatusResponse>({
         url: "/sorotask/v1/track/status",
         method: "post",
         data: {
           taskId,
           status,
           errorMessage,
+          generated_video_url: generatedVideoUrl,
           updateTime: Date.now(),
         },
       });
 
       if (window.tracking) {
-        await window.tracking.updateStatus(taskId, status, errorMessage);
+        await window.tracking.updateStatus(
+          taskId,
+          status,
+          errorMessage,
+          generatedVideoUrl,
+        );
       }
+      return {
+        generatedVideoUrl:
+          response.data?.generated_video_url || response.data?.generatedVideoUrl,
+      };
     } catch (error) {
       console.error("[AIVideoTracking] 状态更新失败:", error);
     }
