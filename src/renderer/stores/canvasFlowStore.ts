@@ -880,7 +880,7 @@ const pollVideoGeneration = async (
         : await getDashscopeVideoTaskStatus(taskId);
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
-      if (!currentNode || currentNode.type !== "videoNode") {
+      if (!currentNode || (currentNode.type !== "videoNode" && currentNode.type !== "videoDemoNode")) {
         stopVideoPollingInternal(nodeId);
         return;
       }
@@ -1155,7 +1155,12 @@ const pollNewVideoGeneration = async ({
         : await getDashscopeVideoTaskStatus(taskId);
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
+<<<<<<< HEAD
+      if (!currentNode || (currentNode.type !== "videoNode" && currentNode.type !== "videoDemoNode")) {
+        stopVideoPollingInternal(nodeId);
+=======
       if (!currentNode || currentNode.type !== "newVideoNode") {
+>>>>>>> origin/develop
         return;
       }
 
@@ -1491,7 +1496,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       noteNode: "note",
       imageNode: "image",
       videoNode: "video",
+<<<<<<< HEAD
+      videoDemoNode: "videoDemo",
+=======
       newVideoNode: "newVideo",
+>>>>>>> origin/develop
       agentNode: "agent",
       panoramaNode: "panorama",
       audioNode: "audio",
@@ -1663,6 +1672,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       note: 1,
       image: 1,
       video: 1,
+      videoDemo: 1,
       agent: 1,
       panorama: 1,
       audio: 1,
@@ -1761,6 +1771,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             note: 1,
             image: 1,
             video: 1,
+            videoDemo: 1,
             agent: 1,
             panorama: 1,
             audio: 1,
@@ -1785,8 +1796,94 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           };
         }
 
+<<<<<<< HEAD
+          // 处理视频节点的本地文件
+          if ((node.type === "videoNode" || node.type === "videoDemoNode") && node.data?.result?.data) {
+            const processedData = await Promise.all(
+              node.data.result.data.map(async (item: any) => {
+                if (item.relativePath) {
+                  try {
+                    const fileBytes = await readMediaFromLocal(
+                      item.relativePath,
+                    );
+                    if (fileBytes) {
+                      const ext =
+                        item.format ||
+                        (item.localFileName || item.fileName)
+                          ?.split(".")
+                          .pop() ||
+                        "mp4";
+                      const blob = new Blob([fileBytes], {
+                        type: `video/${ext}`,
+                      });
+                      const blobUrl = URL.createObjectURL(blob);
+                      return { ...item, url: blobUrl };
+                    }
+                  } catch (err) {
+                    console.warn("Failed to load local video:", err);
+                  }
+                }
+                return item;
+              }),
+            );
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                result: {
+                  ...node.data.result,
+                  data: processedData,
+                },
+              },
+            };
+          }
+
+          // 处理音频节点的本地文件
+          if (node.type === "audioNode" && node.data?.result?.data) {
+            const processedData = await Promise.all(
+              node.data.result.data.map(async (item: any) => {
+                if (item.relativePath) {
+                  try {
+                    const fileBytes = await readMediaFromLocal(
+                      item.relativePath,
+                    );
+                    if (fileBytes) {
+                      const ext =
+                        (item.localFileName || item.fileName)
+                          ?.split(".")
+                          .pop() || "mp3";
+                      const blob = new Blob([fileBytes], {
+                        type: `audio/${ext}`,
+                      });
+                      const blobUrl = URL.createObjectURL(blob);
+                      return { ...item, url: blobUrl };
+                    }
+                  } catch (err) {
+                    console.warn("Failed to load local audio:", err);
+                  }
+                }
+                return item;
+              }),
+            );
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                result: {
+                  ...node.data.result,
+                  data: processedData,
+                },
+              },
+            };
+          }
+
+          return node;
+        }),
+      );
+=======
         return node;
       });
+>>>>>>> origin/develop
 
       set({
         projectId,
@@ -1886,6 +1983,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           note: 1,
           image: 1,
           video: 1,
+          videoDemo: 1,
           agent: 1,
           panorama: 1,
           audio: 1,
@@ -3354,10 +3452,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         ) {
           if (node.type === "imageNode") {
             imageNodesToStop.push(node.id);
+<<<<<<< HEAD
+          } else if (node.type === "videoNode" || node.type === "videoDemoNode") {
+=======
           } else if (
             node.type === "videoNode" ||
             node.type === "newVideoNode"
           ) {
+>>>>>>> origin/develop
             videoNodesToStop.push(node.id);
           }
         }
@@ -3384,10 +3486,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                   error: { message: "任务已取消" },
                 },
               };
+<<<<<<< HEAD
+            } else if (node.type === "videoNode" || node.type === "videoDemoNode") {
+=======
             } else if (
               node.type === "videoNode" ||
               node.type === "newVideoNode"
             ) {
+>>>>>>> origin/develop
               return {
                 ...node,
                 data: {
@@ -3524,6 +3630,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const sourceNode = nodes.find((n) => n.id === connection.source);
       const targetNode = nodes.find((n) => n.id === connection.target);
 
+<<<<<<< HEAD
+      if (targetNode?.type === "videoNode" || targetNode?.type === "videoDemoNode") {
+        const allowedSourceTypes = ["noteNode", "imageNode", "videoNode", "audioNode"];
+=======
       if (
         targetNode?.type === "videoNode" ||
         targetNode?.type === "newVideoNode"
@@ -3534,6 +3644,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           "newVideoNode",
           "audioNode",
         ];
+>>>>>>> origin/develop
         if (sourceNode && !allowedSourceTypes.includes(sourceNode.type || "")) {
           console.warn("视频节点只能接受图片、视频、音频节点的输入");
           return;

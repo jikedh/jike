@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { VIDEO_MODELS } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
-import { getVideoGenerationPoints } from "shared/constants/model-points";
+import { getVideoGenerationPoints } from "shared/constants/modelPoints";
 import type { VideoGenerationNode } from "shared/types/flow";
+import { getBalanceInfo } from "@/api/jikeing";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { PresetDropdown } from "@/components/PresetDropdown";
 import { Button } from "@/components/ui/button";
@@ -15,18 +17,12 @@ import {
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 
-import { getModelDefaultParams } from "./components/modelParamsConfig";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import { VideoModelParamsPanel } from "./components/VideoModelParamsPanel";
 import type { VideoPromptEditorHandle } from "./components/VideoPromptEditor";
 import { VideoPromptEditor } from "./components/VideoPromptEditor";
 import { VideoReferenceAssetsBar } from "./components/VideoReferenceAssetsBar";
-import {
-  getVideoModelCapability,
-  VIDEO_MODEL_FAMILY_OPTIONS,
-} from "./constants/videoModelCapabilities";
 import {
   getVideoLocalImageMentionId,
   getVideoParentAudioMentionId,
@@ -37,44 +33,6 @@ import {
 import { useVideoReferenceActions } from "./hooks/useVideoReferenceActions";
 import { getVideoPayloadStrategy } from "./strategies/videoPayloadStrategies";
 
-const SEEEDANCE_SPECIAL_MODELS = new Set([
-  "doubao-seedance-2.0-fast",
-  "doubao-seedance-2.0-pro",
-]);
-
-const buildModelDefaultPatch = (
-  model: string,
-  currentVideoData: VideoGenerationNode | null,
-) => {
-  const defaults = getModelDefaultParams(model);
-  const metadataPatch: Record<string, any> = {
-    ...(currentVideoData?.metadata ?? {}),
-  };
-
-  const nextPatch: Record<string, any> = {
-    model,
-  };
-
-  if (!defaults) {
-    return nextPatch;
-  }
-
-  for (const [key, value] of Object.entries(defaults)) {
-    if (key === "duration" || key === "aspect_ratio") {
-      nextPatch[key] = value;
-      continue;
-    }
-
-    metadataPatch[key] = value;
-  }
-
-  if (Object.keys(metadataPatch).length > 0) {
-    nextPatch.metadata = metadataPatch;
-  }
-
-  return nextPatch;
-};
-
 /**
  * 视频节点提示词面板（容器组件）。
  * 负责：聚合状态、分发子组件、组织“生成”动作。
@@ -84,13 +42,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
   const { success, warning } = useMessage();
   const {
-    pointsEnabled,
     totalPoints,
     fallbackAIGenPrice,
-    normalizeRequiredPoints,
     refreshBalanceInfo,
     ensureEnoughPoints,
-    validateBalanceBeforeGenerate,
   } = useGenerationPoints();
 
   const nodes = useCanvasFlowStore((state) => state.nodes);
@@ -98,14 +53,14 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   const startVideoGeneration = useCanvasFlowStore(
     (state) => state.startVideoGeneration,
   );
+  const startWanI2vVideoGeneration = useCanvasFlowStore(
+    (state) => state.startWanI2vVideoGeneration,
+  );
   const stopVideoPolling = useCanvasFlowStore(
     (state) => state.stopVideoPolling,
   );
   const updateVideoNodeData = useCanvasFlowStore(
     (state) => state.updateVideoNodeData,
-  );
-  const setDefaultVideoPreset = useChatSettingsStore(
-    (state) => state.setDefaultVideoPreset,
   );
   const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge);
   const setReferenceHoverHighlight = useCanvasFlowStore(
@@ -117,7 +72,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   }, [nodes, nodeId]);
 
   const currentVideoData = useMemo(() => {
-    if (!currentNode || currentNode.type !== "videoNode") {
+    if (!currentNode || (currentNode.type !== "videoNode" && currentNode.type !== "videoDemoNode")) {
       return null;
     }
 
@@ -128,19 +83,82 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     return currentVideoData?.image_urls ?? [];
   }, [currentVideoData?.image_urls]);
 
-  /** 当前视频模型，默认为豆包 Seedance 2.0 */
-  const model = currentVideoData?.model ?? "doubao-seedance-2.0";
-  const isCurrentSpecialSeedanceModel = SEEEDANCE_SPECIAL_MODELS.has(model);
+  const model = useMemo(() => {
+    const fallbackModel = VIDEO_MODELS[0]?.model ?? "doubao-seedance-2.0";
+    const currentModel = currentVideoData?.model;
+    if (!currentModel) {
+      return fallbackModel;
+    }
 
+    const isSupportedModel = VIDEO_MODELS.some(
+      (item) => item.model === currentModel,
+    );
+    return isSupportedModel ? currentModel : fallbackModel;
+  }, [currentVideoData?.model]);
+  const aspectRatio = currentVideoData?.aspect_ratio ?? "16:9";
   const promptDraftHtml = currentVideoData?.promptDraftHtml ?? "<p></p>";
+  const seedance20Metadata = currentVideoData?.metadata ?? {};
+  const requiredPoints = useMemo(() => {
+    return getVideoGenerationPoints({
+      model,
+      fallback: Math.max(fallbackAIGenPrice, 1),
+    });
+  }, [fallbackAIGenPrice, model]);
+
+  // 根据当前模型计算支持的功能
+  const supportedFeatures = useMemo(() => {
+    switch (model) {
+      case 'doubao-seedance-2.0':
+        return {
+          textToVideo: true,
+          reference: true,
+          imageToVideo: true,
+          firstLastFrame: true,
+          multiImageReference: true,
+        };
+      case 'wan2.7-i2v':
+        return {
+          textToVideo: false,
+          reference: false,
+          imageToVideo: true,
+          firstLastFrame: true,
+          multiImageReference: false,
+        };
+      case 'wan2.7-t2v':
+        return {
+          textToVideo: true,
+          reference: false,
+          imageToVideo: false,
+          firstLastFrame: false,
+          multiImageReference: false,
+        };
+      case 'wan2.7-r2v':
+        return {
+          textToVideo: false,
+          reference: true,
+          imageToVideo: true,
+          firstLastFrame: false,
+          multiImageReference: true,
+        };
+      default:
+        return {
+          textToVideo: true,
+          reference: true,
+          imageToVideo: true,
+          firstLastFrame: true,
+          multiImageReference: true,
+        };
+    }
+  }, [model]);
+
   const {
     parentVideoNodes,
     parentAudioNodes,
     parentImageNodes,
+    parentImageNodeUrls,
+    parentImageNodeIdByUrl,
     parentNoteContents,
     videoMentionItems,
-    localReferenceImageUrls,
-    localReferenceImageIndexes,
     allImageUrls,
     allVideoUrls,
     allAudioUrls,
@@ -151,76 +169,8 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     referenceImageUrls,
   });
 
-  const currentModelCapability = useMemo(() => {
-    return getVideoModelCapability(model);
-  }, [model]);
-
-  const persistVideoDefaultPreset = useCallback(
-    (patch: Record<string, any>) => {
-      const nextMetadata = {
-        ...(currentVideoData?.metadata ?? {}),
-        ...(patch.metadata ?? {}),
-      };
-
-      setDefaultVideoPreset({
-        model: patch.model ?? currentVideoData?.model ?? model,
-        aspectRatio:
-          patch.aspect_ratio ?? currentVideoData?.aspect_ratio ?? "16:9",
-        duration: patch.duration ?? currentVideoData?.duration ?? 5,
-        resolution:
-          nextMetadata.resolution ?? currentVideoData?.metadata?.resolution,
-        mode: nextMetadata.mode,
-        generateAudio: nextMetadata.generate_audio,
-        audio: nextMetadata.audio,
-        promptExtend: nextMetadata.prompt_extend,
-      });
-    },
-    [
-      currentVideoData?.aspect_ratio,
-      currentVideoData?.duration,
-      currentVideoData?.metadata,
-      currentVideoData?.model,
-      model,
-      setDefaultVideoPreset,
-    ],
-  );
-
-  const applyVideoBasicPatch = useCallback(
-    (patch: Record<string, any>) => {
-      persistVideoDefaultPreset(patch);
-      updateVideoNodeData(nodeId, patch);
-    },
-    [nodeId, persistVideoDefaultPreset, updateVideoNodeData],
-  );
-
-  const requiredPoints = useMemo(() => {
-    return normalizeRequiredPoints(
-      getVideoGenerationPoints({
-        model,
-        duration: currentVideoData?.duration,
-        resolution: currentVideoData?.metadata?.resolution,
-        hasVideoInput: (allVideoUrls?.length ?? 0) > 0,
-        hasAudio: Boolean(
-          currentVideoData?.metadata?.generate_audio ??
-          currentVideoData?.metadata?.audio ??
-          (currentVideoData as any)?.generate_audio ??
-          (currentVideoData as any)?.audio ??
-          true
-        ),
-        fallback: Math.max(fallbackAIGenPrice, 1),
-      }),
-    );
-  }, [
-    fallbackAIGenPrice,
-    model,
-    normalizeRequiredPoints,
-    currentVideoData?.duration,
-    currentVideoData?.metadata,
-    allVideoUrls?.length,
-  ]);
-
   const isGenerating = useMemo(() => {
-    if (!currentNode || currentNode.type !== "videoNode") {
+    if (!currentNode || (currentNode.type !== "videoNode" && currentNode.type !== "videoDemoNode")) {
       return false;
     }
 
@@ -452,11 +402,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       return;
     }
 
-    if (!currentModelCapability.callable) {
-      warning("当前模型暂不可用，请切换其他模型");
-      return;
-    }
-
     if (
       !ensureEnoughPoints({
         requiredPoints,
@@ -522,16 +467,19 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       audioUrls: allAudioUrls,
     });
 
-    if (
-      !(await validateBalanceBeforeGenerate({
-        requiredPoints,
-        warning,
-      }))
-    ) {
+    const scoreCost = requiredPoints;
+    try {
+      const balanceResponse = await getBalanceInfo();
+      const currentVipScore = Number(balanceResponse?.data?.vipScore ?? 0);
+      if (currentVipScore < scoreCost) {
+        warning(`积分不足，当前生成需 ${scoreCost} 积分`);
+        return;
+      }
+    } catch (_balanceError: any) {
+      warning("积分校验失败，请稍后重试");
       return;
     }
 
-<<<<<<< HEAD
     // Wan 2.7 系列模型使用 Dashscope API（阿里云百炼）
     if (model.startsWith("wan2.7")) {
       await startWanI2vVideoGeneration(nodeId, {
@@ -544,17 +492,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         requiredPoints,
       });
     }
-=======
-    await startVideoGeneration(nodeId, {
-      ...payload,
-      requiredPoints,
-    });
->>>>>>> origin/develop
     success("已开始生成视频");
     void refreshBalanceInfo();
   }, [
     currentVideoData,
-    currentModelCapability.callable,
     warning,
     isGenerating,
     parentNoteContents,
@@ -564,6 +505,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     allAudioUrls,
     updateVideoNodeData,
     startVideoGeneration,
+    startWanI2vVideoGeneration,
     nodeId,
     success,
     requiredPoints,
@@ -571,24 +513,74 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     ensureEnoughPoints,
   ]);
 
+  // 视频生成模式类型
+  type VideoGenerationMode = 'text-to-video' | 'reference' | 'image-to-video' | 'first-last-frame' | 'multi-image-reference';
+
+  // 当前选中的模式
+  const [currentMode, setCurrentMode] = useState<VideoGenerationMode>('text-to-video');
+
+  // 当模型切换时，自动选择第一个支持的功能
+  useEffect(() => {
+    const getFirstSupportedMode = (): VideoGenerationMode => {
+      if (supportedFeatures.textToVideo) return 'text-to-video';
+      if (supportedFeatures.imageToVideo) return 'image-to-video';
+      if (supportedFeatures.reference) return 'reference';
+      if (supportedFeatures.firstLastFrame) return 'first-last-frame';
+      if (supportedFeatures.multiImageReference) return 'multi-image-reference';
+      return 'text-to-video'; // 默认值
+    };
+
+    const firstMode = getFirstSupportedMode();
+    setCurrentMode(firstMode);
+  }, [model, supportedFeatures]);
+
   return (
     <div className={PROMPT_PANEL_STYLES.container}>
+      {/* 模式切换标签页 */}
+      <div className="flex bg-[#1a1a1e] p-0.5 rounded-md mb-0">
+        {supportedFeatures.textToVideo && (
+          <button
+            className={`px-4 py-1.5 text-sm rounded-md transition-colors ${currentMode === 'text-to-video' ? 'bg-[#2a2a2e] text-[#B43FEB]' : 'text-gray-400 hover:text-white'}`}
+            onClick={() => setCurrentMode('text-to-video')}
+          >
+            文生视频
+          </button>
+        )}
+        {supportedFeatures.reference && (
+          <button
+            className={`px-4 py-1.5 text-sm rounded-md transition-colors ${currentMode === 'reference' ? 'bg-[#2a2a2e] text-[#B43FEB]' : 'text-gray-400 hover:text-white'}`}
+            onClick={() => setCurrentMode('reference')}
+          >
+            全能参考
+          </button>
+        )}
+        {supportedFeatures.imageToVideo && (
+          <button
+            className={`px-4 py-1.5 text-sm rounded-md transition-colors ${currentMode === 'image-to-video' ? 'bg-[#2a2a2e] text-[#B43FEB]' : 'text-gray-400 hover:text-white'}`}
+            onClick={() => setCurrentMode('image-to-video')}
+          >
+            图生视频
+          </button>
+        )}
+        {supportedFeatures.firstLastFrame && (
+          <button
+            className={`px-4 py-1.5 text-sm rounded-md transition-colors ${currentMode === 'first-last-frame' ? 'bg-[#2a2a2e] text-[#B43FEB]' : 'text-gray-400 hover:text-white'}`}
+            onClick={() => setCurrentMode('first-last-frame')}
+          >
+            首尾帧
+          </button>
+        )}
+        {supportedFeatures.multiImageReference && (
+          <button
+            className={`px-4 py-1.5 text-sm rounded-md transition-colors ${currentMode === 'multi-image-reference' ? 'bg-[#2a2a2e] text-[#B43FEB]' : 'text-gray-400 hover:text-white'}`}
+            onClick={() => setCurrentMode('multi-image-reference')}
+          >
+            多图参考
+          </button>
+        )}
+      </div>
+      
       <div className={PROMPT_PANEL_STYLES.inputArea}>
-        <VideoReferenceAssetsBar
-          isUploading={isUploading}
-          fileInputRef={fileInputRef}
-          onUploadClick={handleUploadClick}
-          onFileChange={handleFileChange}
-          referenceImageUrls={localReferenceImageUrls}
-          referenceImageIndexes={localReferenceImageIndexes}
-          parentImageNodes={parentImageNodes}
-          parentAudioNodes={parentAudioNodes}
-          parentVideoNodes={parentVideoNodes}
-          onDisconnectNode={handleDisconnectNode}
-          onRemoveReferenceImage={handleRemoveReferenceImage}
-          onReferenceHoverChange={handleReferenceHoverChange}
-        />
-
         <div className={PROMPT_PANEL_STYLES.textAreaWrap}>
           <VideoPromptEditor
             ref={editorRef}
@@ -597,6 +589,21 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
             onDraftChange={handleDraftChange}
           />
         </div>
+
+        <VideoReferenceAssetsBar
+          isUploading={isUploading}
+          fileInputRef={fileInputRef}
+          onUploadClick={handleUploadClick}
+          onFileChange={handleFileChange}
+          referenceImageUrls={referenceImageUrls}
+          parentImageNodeUrls={parentImageNodeUrls}
+          parentImageNodeIdByUrl={parentImageNodeIdByUrl}
+          parentAudioNodes={parentAudioNodes}
+          parentVideoNodes={parentVideoNodes}
+          onDisconnectNode={handleDisconnectNode}
+          onRemoveReferenceImage={handleRemoveReferenceImage}
+          onReferenceHoverChange={handleReferenceHoverChange}
+        />
       </div>
 
       <div className={PROMPT_PANEL_STYLES.divider} />
@@ -606,44 +613,20 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
           <Select
             value={model}
             onValueChange={(value) => {
-              const isNextSpecialSeedanceModel =
-                SEEEDANCE_SPECIAL_MODELS.has(value);
-
-              if (isNextSpecialSeedanceModel) {
-                // 仅首次从其他模型切到 Fast/Pro 时，重置为约定默认值。
-                if (!isCurrentSpecialSeedanceModel) {
-                  applyVideoBasicPatch({
-                    model: value,
-                    aspect_ratio: "16:9",
-                    duration: 10,
-                    metadata: {
-                      ...(currentVideoData?.metadata ?? {}),
-                      resolution: "720p",
-                    },
-                  });
-                  return;
-                }
-
-                applyVideoBasicPatch({ model: value });
-                return;
-              }
-
-              applyVideoBasicPatch(
-                buildModelDefaultPatch(value, currentVideoData),
-              );
+              updateVideoNodeData(nodeId, { model: value });
             }}
           >
             <SelectTrigger className={PROMPT_PANEL_STYLES.modelSelect}>
               <SelectValue placeholder="选择模型" />
             </SelectTrigger>
             <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
-              {VIDEO_MODEL_FAMILY_OPTIONS.map((item) => (
+              {VIDEO_MODELS.map((item) => (
                 <SelectItem
-                  key={item.value}
-                  value={item.value}
+                  key={item.id}
+                  value={item.model}
                   className={PROMPT_PANEL_STYLES.modelSelectItem}
                 >
-                  {item.label}
+                  {item.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -651,26 +634,26 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
 
           <VideoModelParamsPanel
             currentVideoData={currentVideoData}
-            onPatch={(patch) => applyVideoBasicPatch(patch)}
+            aspectRatio={aspectRatio}
+            seedance20Metadata={seedance20Metadata}
+            onPatch={(patch) => updateVideoNodeData(nodeId, patch)}
           />
 
           <div className="ml-auto flex items-center gap-3">
             {/* 预设提示词下拉 */}
             <PresetDropdown
               presetType="video"
-              disabled={isUploading}
+              disabled={isGenerating || isUploading}
               onSelect={(content) => {
                 editorRef.current?.insertContent(content);
               }}
             />
 
-            {pointsEnabled ? (
-              <ModelPointsBadge
-                totalPoints={totalPoints}
-                requiredPoints={requiredPoints}
-                title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
-              />
-            ) : null}
+            <ModelPointsBadge
+              totalPoints={totalPoints}
+              requiredPoints={requiredPoints}
+              title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
+            />
 
             {isGenerating ? (
               <Button

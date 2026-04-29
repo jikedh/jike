@@ -20,7 +20,21 @@ export type NoteGenerationRequest = {
   user?: string; // 业务侧用户标识
 };
 
-export type NoteGenerationMessage = NoteGenerationRequest["messages"][number];
+export type NoteGenerationImage = {
+  url: string;
+  previewUrl?: string;
+  originalUrl?: string;
+  localPath?: string;
+  localName?: string;
+  width?: number;
+  height?: number;
+};
+
+export type NoteGenerationMessage =
+  NoteGenerationRequest["messages"][number] & {
+    images?: NoteGenerationImage[];
+    status?: "pending" | "generating" | "completed" | "failed" | "stopped";
+  };
 
 /**
  * 笔记生成（聊天补全）- 响应体类型

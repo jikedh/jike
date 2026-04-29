@@ -2,7 +2,8 @@
  * 聊天历史存储工具
  * 使用 idb-keyval 将聊天会话持久化到 IndexedDB
  */
-import { get, set, del } from "idb-keyval";
+import { del, get, set } from "idb-keyval";
+import { DEFAULT_CANVAS_CHAT_MODEL } from "shared/constants/ai-models";
 import type {
   ChatPersonaId,
   NoteGenerationMessage,
@@ -18,6 +19,7 @@ export type ChatSession = {
   title: string; // 会话标题
   projectId?: string; // 关联的项目 ID（可选）
   personaId: ChatPersonaId; // 使用的 persona
+  model: string; // 使用的对话模型
   messages: NoteGenerationMessage[]; // 消息列表
   createdAt: number; // 创建时间戳
   updatedAt: number; // 更新时间戳
@@ -29,6 +31,7 @@ export type ChatSessionMeta = {
   title: string;
   projectId?: string;
   personaId: ChatPersonaId;
+  model: string;
   createdAt: number;
   updatedAt: number;
   messageCount: number; // 消息数量
@@ -53,8 +56,13 @@ export const getSessionList = async (): Promise<ChatSessionMeta[]> => {
     const data = JSON.parse(raw) as SessionListData;
     if (data.version !== STORAGE_VERSION) return [];
 
-    // 按更新时间倒序排列
-    return data.sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+    // 按更新时间倒序排列，并兼容旧版未保存 model 的历史记录
+    return data.sessions
+      .map((session) => ({
+        ...session,
+        model: session.model ?? DEFAULT_CANVAS_CHAT_MODEL,
+      }))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
   } catch {
     return [];
   }
@@ -95,6 +103,7 @@ const generateTitle = (messages: NoteGenerationMessage[]): string => {
 export const createSession = async (
   projectId?: string,
   personaId: ChatPersonaId = "none",
+  model: string = DEFAULT_CANVAS_CHAT_MODEL,
 ): Promise<ChatSession> => {
   const now = Date.now();
   const session: ChatSession = {
@@ -102,6 +111,7 @@ export const createSession = async (
     title: "新对话",
     projectId,
     personaId,
+    model,
     messages: [],
     createdAt: now,
     updatedAt: now,
@@ -117,6 +127,7 @@ export const createSession = async (
     title: session.title,
     projectId: session.projectId,
     personaId: session.personaId,
+    model: session.model,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
     messageCount: 0,
@@ -136,7 +147,11 @@ export const getSession = async (
     const raw = await get<string>(`${CHAT_HISTORY_PREFIX}${sessionId}`);
     if (!raw) return null;
 
-    return JSON.parse(raw) as ChatSession;
+    const session = JSON.parse(raw) as ChatSession;
+    return {
+      ...session,
+      model: session.model ?? DEFAULT_CANVAS_CHAT_MODEL,
+    };
   } catch {
     return null;
   }
@@ -149,6 +164,7 @@ export const updateSession = async (
   sessionId: string,
   messages: NoteGenerationMessage[],
   personaId?: ChatPersonaId,
+  model?: string,
 ): Promise<boolean> => {
   try {
     const session = await getSession(sessionId);
@@ -160,6 +176,7 @@ export const updateSession = async (
       messages,
       title: messages.length > 0 ? generateTitle(messages) : session.title,
       personaId: personaId ?? session.personaId,
+      model: model ?? session.model ?? DEFAULT_CANVAS_CHAT_MODEL,
       updatedAt: now,
     };
 
@@ -178,6 +195,7 @@ export const updateSession = async (
         title: updatedSession.title,
         projectId: updatedSession.projectId,
         personaId: updatedSession.personaId,
+        model: updatedSession.model,
         createdAt: updatedSession.createdAt,
         updatedAt: updatedSession.updatedAt,
         messageCount: messages.length,

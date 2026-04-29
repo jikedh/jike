@@ -125,6 +125,13 @@ export function PointsView() {
       ? null
       : packages.find((pkg) => pkg.id === selectedPackageId) ?? null;
 
+<<<<<<< HEAD
+  const apiBaseUrl =
+    ((import.meta as any).env?.VITE_API_BASE_URL as string | undefined) ||
+    "http://localhost:9001";
+
+=======
+>>>>>>> origin/develop
   const buildQrcodeImageByCodeUrl = (codeUrl: string) => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(codeUrl)}`;
   };
@@ -132,6 +139,7 @@ export function PointsView() {
   const createNativeRechargeOrder = async (pkg: {
     packageId: string;
     points: number;
+    price: number;
   }) => {
     if (!userId) {
       toast.error("请先登录后再充值");
@@ -141,12 +149,25 @@ export function PointsView() {
 
     setIsCreatingOrder(true);
     try {
+<<<<<<< HEAD
+      const response = await fetch(`${apiBaseUrl}/recharge/v1/native/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          packageId: pkg.packageId,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || result?.code !== 10000 || !result?.data?.codeUrl) {
+=======
       const result = await createRechargeOrder({
         userId,
         packageId: pkg.packageId,
       });
 
       if (!result?.data?.codeUrl) {
+>>>>>>> origin/develop
         throw new Error(result?.msg || "创建充值订单失败");
       }
 
@@ -167,8 +188,21 @@ export function PointsView() {
       return;
     }
 
-    const timer = window.setInterval(async () => {
+    let timer: NodeJS.Timeout;
+    let pollingCount = 0;
+    const MAX_POLLING_COUNT = 60; // 最多轮询60次（约90秒）
+
+    const checkPaymentStatus = async () => {
       try {
+<<<<<<< HEAD
+        const response = await fetch(
+          `${apiBaseUrl}/recharge/v1/native/status?orderId=${encodeURIComponent(nativePayOrder.orderId)}`,
+        );
+        const result = await response.json();
+        if (!response.ok || result?.code !== 10000) {
+          return;
+        }
+=======
         const result = await getRechargeOrderStatus(nativePayOrder.orderId);
         // if (result?.code !== 0) {
         //   return;
@@ -196,19 +230,58 @@ export function PointsView() {
             console.error(error);
             toast.error("充值成功但积分更新失败，请刷新页面");
           }
+>>>>>>> origin/develop
 
           setSelectedPackageId(null);
           setNativePayOrder(null);
+<<<<<<< HEAD
+          if (timer) {
+            clearInterval(timer);
+          }
+        } else if (result?.data?.status === "CANCELED" || result?.data?.status === "FAILED") {
+          // 订单取消或失败时停止轮询
+          toast.error("支付失败或已取消");
+          setSelectedPackageId(null);
+          setNativePayOrder(null);
+          if (timer) {
+            clearInterval(timer);
+          }
+=======
+>>>>>>> origin/develop
         }
-      } catch {
+      } catch (error) {
+        console.error("轮询支付状态失败:", error);
         // 轮询失败忽略，下一轮继续
+      } finally {
+        pollingCount++;
+        if (pollingCount >= MAX_POLLING_COUNT) {
+          // 超过最大轮询次数，停止轮询
+          toast.info("支付超时，请重新尝试");
+          setSelectedPackageId(null);
+          setNativePayOrder(null);
+          if (timer) {
+            clearInterval(timer);
+          }
+        }
       }
-    }, 1500);
+    };
+
+    // 立即执行一次检查
+    checkPaymentStatus();
+    
+    // 然后开始轮询
+    timer = setInterval(checkPaymentStatus, 1500);
 
     return () => {
-      window.clearInterval(timer);
+      if (timer) {
+        clearInterval(timer);
+      }
     };
+<<<<<<< HEAD
+  }, [nativePayOrder?.orderId, apiBaseUrl, selectedPackage]);
+=======
   }, [nativePayOrder?.orderId, selectedPackage]);
+>>>>>>> origin/develop
 
   const usageHistory = [
     {

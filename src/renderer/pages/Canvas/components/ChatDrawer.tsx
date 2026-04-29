@@ -12,6 +12,10 @@ import {
 } from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  CANVAS_CHAT_SELECT_MODELS,
+  DEFAULT_CANVAS_CHAT_MODEL,
+} from "shared/constants/ai-models";
+import {
   CANVAS_CHAT_PERSONAS,
   NO_CHAT_PERSONA_ID,
 } from "shared/constants/chat-personas";
@@ -20,6 +24,7 @@ import type {
   NoteGenerationMessage,
 } from "shared/types/NoteGeneration";
 import { cn } from "shared/utils/utils";
+import { ModelSelector } from "@/components/ModelSelector";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import {
   Select,
@@ -113,6 +118,20 @@ const SKILL_SUGGESTIONS: SkillSuggestion[] = [
 
 const ACTION_BUTTON_CLASSNAME =
   "flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 shadow-[0_6px_18px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-all hover:bg-white/10 hover:text-white";
+<<<<<<< HEAD
+=======
+const MIN_PROMPT_INPUT_HEIGHT = 42;
+const DEFAULT_PROMPT_INPUT_HEIGHT = 64;
+const MAX_PROMPT_INPUT_HEIGHT = 240;
+
+const resolveCanvasChatModel = (model?: string) => {
+  if (model && CANVAS_CHAT_SELECT_MODELS.some((item) => item.model === model)) {
+    return model;
+  }
+
+  return DEFAULT_CANVAS_CHAT_MODEL;
+};
+>>>>>>> temp
 
 export const ChatDrawer = ({
   open,
@@ -128,11 +147,21 @@ export const ChatDrawer = ({
     defaultWidth: 460,
     minWidth: 380,
   });
+<<<<<<< HEAD
   const { defaultPersonaId } = useChatSettingsStore();
+=======
+  const { defaultModel, defaultPersonaId } = useChatSettingsStore();
+>>>>>>> temp
 
   const [inputValue, setInputValue] = useState("");
+  const [promptInputHeight, setPromptInputHeight] = useState(
+    DEFAULT_PROMPT_INPUT_HEIGHT,
+  );
   const [selectedPersonaId, setSelectedPersonaId] =
     useState<ChatPersonaId>(defaultPersonaId);
+  const [selectedModel, setSelectedModel] = useState(
+    resolveCanvasChatModel(defaultModel),
+  );
   const [showHistory, setShowHistory] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
@@ -151,17 +180,33 @@ export const ChatDrawer = ({
     setSelectedPersonaId(defaultPersonaId);
   }, [defaultPersonaId]);
 
+<<<<<<< HEAD
+=======
+  useEffect(() => {
+    if (!currentSession) {
+      setSelectedModel(resolveCanvasChatModel(defaultModel));
+    }
+  }, [currentSession, defaultModel]);
+
+>>>>>>> temp
   useEffect(() => {
     if (currentSession) {
       setSelectedPersonaId(currentSession.personaId);
+      setSelectedModel(resolveCanvasChatModel(currentSession.model));
     }
-  }, [currentSession]);
+  }, [currentSession?.id]);
 
   useEffect(() => {
     if (messages.length > 0 && !isLoading) {
-      saveCurrentSession(messages, selectedPersonaId);
+      saveCurrentSession(messages, selectedPersonaId, selectedModel);
     }
-  }, [messages, isLoading, saveCurrentSession, selectedPersonaId]);
+  }, [
+    messages,
+    isLoading,
+    saveCurrentSession,
+    selectedPersonaId,
+    selectedModel,
+  ]);
 
   useEffect(() => {
     const listElement = messageListRef.current;
@@ -185,9 +230,13 @@ export const ChatDrawer = ({
   const handleSend = useCallback(() => {
     const content = inputValue.trim();
     if (!content || isLoading) return;
-    sendMessage({ content, personaId: selectedPersonaId });
+    sendMessage({
+      content,
+      personaId: selectedPersonaId,
+      model: selectedModel,
+    });
     setInputValue("");
-  }, [inputValue, isLoading, sendMessage, selectedPersonaId]);
+  }, [inputValue, isLoading, sendMessage, selectedPersonaId, selectedModel]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -209,6 +258,7 @@ export const ChatDrawer = ({
       const session = await switchSession(sessionId);
       if (session) {
         setMessages(session.messages);
+        setSelectedModel(resolveCanvasChatModel(session.model));
         setShowHistory(false);
       }
     },
@@ -238,10 +288,65 @@ export const ChatDrawer = ({
   );
 
   const handleNewChat = useCallback(async () => {
-    await createNewSession(selectedPersonaId);
+    await createNewSession(selectedPersonaId, selectedModel);
     clearLocalMessages();
     setShowHistory(false);
-  }, [createNewSession, selectedPersonaId, clearLocalMessages]);
+  }, [createNewSession, selectedPersonaId, selectedModel, clearLocalMessages]);
+
+  const handleSelectSkill = useCallback((prompt: string) => {
+    setInputValue(prompt);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, []);
+
+  const handlePromptResizePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const startY = event.clientY;
+      const startHeight = promptInputHeight;
+      const previousCursor = document.body.style.cursor;
+      const previousUserSelect = document.body.style.userSelect;
+
+      document.body.style.cursor = "ns-resize";
+      document.body.style.userSelect = "none";
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        const nextHeight = Math.min(
+          MAX_PROMPT_INPUT_HEIGHT,
+          Math.max(
+            MIN_PROMPT_INPUT_HEIGHT,
+            startHeight + (startY - moveEvent.clientY),
+          ),
+        );
+        setPromptInputHeight(nextHeight);
+      };
+
+      const finishResize = () => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", finishResize);
+        window.removeEventListener("pointercancel", finishResize);
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+      };
+
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", finishResize, { once: true });
+      window.addEventListener("pointercancel", finishResize, { once: true });
+    },
+    [promptInputHeight],
+  );
+
+  const selectedPersonaLabel =
+    selectedPersonaId === NO_CHAT_PERSONA_ID
+      ? "自由对话"
+      : (CANVAS_CHAT_PERSONAS.find(
+          (persona) => persona.id === selectedPersonaId,
+        )?.label ?? "自由对话");
+
+  const selectedModelLabel =
+    CANVAS_CHAT_SELECT_MODELS.find((item) => item.model === selectedModel)
+      ?.name ?? selectedModel;
 
   const handleSelectSkill = useCallback((prompt: string) => {
     setInputValue(prompt);
@@ -260,9 +365,15 @@ export const ChatDrawer = ({
   ).length;
 
   return (
-    <Drawer open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+    <Drawer
+      open={open}
+      modal={false}
+      onOpenChange={(nextOpen) => !nextOpen && onClose()}
+    >
       <DrawerContent
         aria-label="AI 对话抽屉"
+        withOverlay={false}
+        onInteractOutside={(event) => event.preventDefault()}
         className={cn(
           "overflow-hidden border-l border-white/10 bg-[#0a0a0f] text-white transition-none",
           isResizing && "select-none",
@@ -292,6 +403,7 @@ export const ChatDrawer = ({
                   AI 对话
                 </DrawerTitle>
 
+<<<<<<< HEAD
                 <div className="min-w-0 flex-1">
                   <Select
                     value={selectedPersonaId}
@@ -324,6 +436,9 @@ export const ChatDrawer = ({
                     </SelectContent>
                   </Select>
                 </div>
+=======
+                <div className="min-w-0 flex-1" />
+>>>>>>> temp
 
                 <div className="flex shrink-0 items-center gap-1.5">
                   <button
@@ -364,6 +479,48 @@ export const ChatDrawer = ({
                   </button>
                 </div>
               </div>
+<<<<<<< HEAD
+=======
+
+              <div className="mt-2 grid grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)] gap-2">
+                <Select
+                  value={selectedPersonaId}
+                  onValueChange={(value) =>
+                    setSelectedPersonaId(value as ChatPersonaId)
+                  }
+                >
+                  <SelectTrigger className="h-9 w-full rounded-[14px] border border-white/10 bg-white/[0.04] px-3 text-sm text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.14)]">
+                    <SelectValue placeholder="选择对话模式" />
+                  </SelectTrigger>
+                  <SelectContent
+                    align="start"
+                    className="border-white/10 bg-[#14161d] text-white shadow-[0_18px_40px_rgba(0,0,0,0.35)]"
+                  >
+                    <SelectItem
+                      value={NO_CHAT_PERSONA_ID}
+                      className="text-white/80 focus:bg-white/10 focus:text-white"
+                    >
+                      自由对话
+                    </SelectItem>
+                    {CANVAS_CHAT_PERSONAS.map((persona) => (
+                      <SelectItem
+                        key={persona.id}
+                        value={persona.id}
+                        className="text-white/80 focus:bg-white/10 focus:text-white"
+                      >
+                        {persona.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <ModelSelector
+                  value={selectedModel}
+                  onChange={setSelectedModel}
+                  models={CANVAS_CHAT_SELECT_MODELS}
+                />
+              </div>
+>>>>>>> temp
             </header>
 
             {messages.length === 0 ? (
@@ -407,7 +564,23 @@ export const ChatDrawer = ({
 
             <div className="px-4 pb-3 pt-0.5">
               <div className="overflow-hidden rounded-[22px] border border-white/10 bg-[#10131b] shadow-[0_14px_36px_rgba(0,0,0,0.26)]">
+<<<<<<< HEAD
                 <div className="px-3 pt-2">
+=======
+                <div
+                  className="nodrag nopan nowheel flex h-3 cursor-ns-resize items-center justify-center border-b border-white/[0.03] bg-white/[0.015]"
+                  role="separator"
+                  aria-label="调整输入框高度"
+                  aria-orientation="horizontal"
+                  onPointerDown={handlePromptResizePointerDown}
+                >
+                  <span className="h-0.5 w-10 rounded-full bg-white/15" />
+                </div>
+                <div
+                  className="px-3 pt-2"
+                  style={{ height: `${promptInputHeight}px` }}
+                >
+>>>>>>> temp
                   <Textarea
                     ref={textareaRef}
                     value={inputValue}
@@ -415,7 +588,11 @@ export const ChatDrawer = ({
                     onKeyDown={handleKeyDown}
                     placeholder="输入你的想法，或直接从上面的 Skills 开始"
                     rows={1}
+<<<<<<< HEAD
                     className="min-h-[38px] max-h-[84px] resize-none border-transparent bg-transparent px-0.5 py-0 text-[15px] leading-[1.35] text-white shadow-none placeholder:text-white/30"
+=======
+                    className="model-selector-scroll h-full min-h-0 resize-none border-transparent bg-transparent px-0.5 py-0 text-[15px] leading-[1.35] text-white shadow-none placeholder:text-white/30"
+>>>>>>> temp
                     disabled={isLoading}
                   />
                 </div>
@@ -425,10 +602,15 @@ export const ChatDrawer = ({
                     <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-white/70">
                       {selectedPersonaLabel}
                     </span>
+<<<<<<< HEAD
                     <span>
                       {userMessageCount > 0
                         ? `已发送 ${userMessageCount} 条消息`
                         : "从技能卡开始，或直接输入需求"}
+=======
+                    <span className="max-w-[180px] truncate rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-white/70">
+                      {selectedModelLabel}
+>>>>>>> temp
                     </span>
                   </div>
 

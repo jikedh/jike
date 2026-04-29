@@ -21,6 +21,7 @@ export type CanvasPersistedState = {
     note: number;
     image: number;
     video: number;
+    videoDemo: number;
     agent: number;
     panorama: number;
     audio: number;
@@ -35,7 +36,11 @@ export type NodeType =
   | "note"
   | "image"
   | "video"
+<<<<<<< HEAD
+  | "videoDemo"
+=======
   | "newVideo"
+>>>>>>> origin/develop
   | "agent"
   | "panorama"
   | "audio"
@@ -80,6 +85,7 @@ export type CanvasFlowStoreType = {
     note: number;
     image: number;
     video: number;
+    videoDemo: number;
     agent: number;
     panorama: number;
     audio: number;
@@ -112,6 +118,7 @@ export type CanvasFlowStoreType = {
     note: number;
     image: number;
     video: number;
+    videoDemo: number;
     agent: number;
     panorama: number;
     audio: number;

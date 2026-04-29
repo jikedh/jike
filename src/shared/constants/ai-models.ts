@@ -94,6 +94,22 @@ export const VIDEO_MODELS = [
     platformId: 2,
     callable: true,
   },
+  // Wan 2.7 T2V
+  {
+    id: 24,
+    name: "Wan 2.7 T2V",
+    model: "wan2.7-t2v",
+    platform: "dashscope",
+    platformId: 0,
+  },
+  // Wan 2.7 R2V
+  {
+    id: 25,
+    name: "Wan 2.7 R2V",
+    model: "wan2.7-r2v",
+    platform: "dashscope",
+    platformId: 0,
+  },
 ];
 
 /** 宽高比配置 */
@@ -161,6 +177,55 @@ export const IMAGE_MODELS = [
   // },
 ];
 
+<<<<<<< HEAD
+export const CANVAS_CHAT_IMAGE_MODEL_PREFIX = "canvas-image:";
+
+export const CANVAS_CHAT_IMAGE_MODELS = IMAGE_MODELS.map((item) => ({
+  id: 2000 + item.id,
+  name: item.name,
+  model: `${CANVAS_CHAT_IMAGE_MODEL_PREFIX}${item.id}`,
+  platform: "image",
+  platformId: 0,
+  imageModel: item.model,
+  imagePlatform: item.platform,
+}));
+
+/**
+ * 生成任务默认积分消耗。
+ * 说明：当前阶段所有生图/生视频模型统一消耗 30 分，后续可按模型单独调整。
+ */
+export const DEFAULT_GENERATION_SCORE_COST = 30;
+
+/**
+ * 模型积分消耗映射。
+ * 说明：未命中的模型会回退到 DEFAULT_GENERATION_SCORE_COST。
+ */
+export const GENERATION_SCORE_COST_MAP: Record<string, number> = {
+  // 图片模型
+  "gemini-3-pro-image-preview": 30,
+  "doubao-seedream-5-0": 30,
+  midjourney: 30,
+  "midjourney-niji7": 30,
+  // 视频模型
+  "doubao-seedance-2.0": 30,
+  "wan2.7-i2v": 30,
+  "wan2.7-t2v": 30,
+  "wan2.7-r2v": 30,
+};
+
+/**
+ * 按模型获取生成任务积分消耗。
+ */
+export const getGenerationScoreCost = (model?: string) => {
+  if (!model) {
+    return DEFAULT_GENERATION_SCORE_COST;
+  }
+
+  return GENERATION_SCORE_COST_MAP[model] ?? DEFAULT_GENERATION_SCORE_COST;
+};
+
+=======
+>>>>>>> origin/develop
 /** 图片尺寸配置 */
 export const IMAGE_SIZES = [
   { label: "256×256", value: "256x256" },
@@ -479,6 +544,23 @@ export const CANVAS_CHAT_MODELS = [
     platformId: 12,
   },
 ];
+
+export const CANVAS_CHAT_SELECT_MODELS = [
+  ...CANVAS_CHAT_MODELS,
+  ...CANVAS_CHAT_IMAGE_MODELS,
+];
+
+export const getCanvasChatImageModelConfig = (model?: string) => {
+  if (!model?.startsWith(CANVAS_CHAT_IMAGE_MODEL_PREFIX)) {
+    return undefined;
+  }
+
+  return CANVAS_CHAT_IMAGE_MODELS.find((item) => item.model === model);
+};
+
+export const isCanvasChatImageModel = (model?: string) => {
+  return Boolean(getCanvasChatImageModelConfig(model));
+};
 
 /** 画布聊天默认模型 */
 export const DEFAULT_CANVAS_CHAT_MODEL = CANVAS_CHAT_MODELS[0].model;

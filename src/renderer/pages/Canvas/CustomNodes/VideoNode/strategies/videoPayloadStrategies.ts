@@ -287,12 +287,100 @@ const pixverseStrategy: VideoPayloadStrategy = {
 };
 
 /**
+<<<<<<< HEAD
+ * Wan 2.7 R2V 策略
+ * 参考生视频模型，以图片/视频为参考生成新视频
+ * 支持多张参考图和多个参考视频作为输入
+ * 参考图 type 为 "reference_video"，参考视频 type 为 "reference_video"
+ */
+const wan27R2vStrategy: VideoPayloadStrategy = {
+  model: "wan2.7-r2v",
+  buildPayload: (
+    nodeData,
+    { prompt, imageUrls, videoUrls = [] },
+  ) => {
+    const imageMedia = imageUrls
+      .filter((url) => Boolean(url))
+      .slice(0, 9)
+      .map((url) => ({
+        type: "reference_image" as const,
+        url,
+      }));
+
+    const videoMedia = videoUrls
+      .filter((url) => Boolean(url))
+      .slice(0, 3)
+      .map((url) => ({
+        type: "reference_video" as const,
+        url,
+      }));
+
+    const media = [...imageMedia, ...videoMedia];
+
+    return {
+      model: "wan2.7-r2v",
+      input: {
+        prompt,
+        ...(media.length > 0 ? { media } : {}),
+      },
+      parameters: {
+        resolution: nodeData.metadata?.resolution ?? "1080P",
+        ratio: nodeData.aspect_ratio ?? "16:9",
+        duration: nodeData.duration ?? 5,
+        prompt_extend: false,
+        watermark: false,
+      },
+    };
+  },
+};
+
+/**
+ * Wan 2.7 T2V 策略
+ * 文生视频模型，基于文本提示词生成视频
+ * 不支持参考图片或视频输入
+ * 支持可选的背景音频和反向提示词
+ */
+const wan27T2vStrategy: VideoPayloadStrategy = {
+  model: "wan2.7-t2v",
+  buildPayload: (
+    nodeData,
+    { prompt, audioUrls = [] },
+  ) => {
+    const audioUrl = audioUrls.find((url) => Boolean(url));
+
+    return {
+      model: "wan2.7-t2v",
+      input: {
+        prompt,
+      },
+      parameters: {
+        resolution: nodeData.metadata?.resolution ?? "1080P",
+        ratio: nodeData.aspect_ratio ?? "16:9",
+        duration: nodeData.duration ?? 5,
+        prompt_extend: false,
+        watermark: false,
+        ...(audioUrl ? { audio_url: audioUrl } : {}),
+      },
+    };
+  },
+};
+
+/**
+ * 策略注册表
+ */
+export const videoPayloadStrategies: Record<string, VideoPayloadStrategy> = {
+  "doubao-seedance-2.0": doubaoSeedance20Strategy,
+  "wan2.7-i2v": wan27I2vStrategy,
+  "wan2.7-t2v": wan27T2vStrategy,
+  "wan2.7-r2v": wan27R2vStrategy,
+=======
  * 策略注册表（豆包 Seedance 2.0、万象、PixVerse）
  */
 export const videoPayloadStrategies: Record<string, VideoPayloadStrategy> = {
   "doubao-seedance-2.0": doubaoSeedance20Strategy,
   "wan2.7-r2v": wan27R2vStrategy,
   "pixverse-i2v": pixverseStrategy,
+>>>>>>> origin/develop
 };
 
 /**

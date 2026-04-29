@@ -371,22 +371,6 @@ export const TableNode = memo(
               handleClassName="!w-5 !h-5 !bg-transparent !border-0"
             />
 
-            <ButtonHandle
-              type="target"
-              position={Position.Left}
-              id="input"
-              visible
-              className={`${handleVisibilityClass}`}
-            />
-
-            <ButtonHandle
-              type="source"
-              position={Position.Right}
-              id="output"
-              visible
-              className={` ${handleVisibilityClass}`}
-            />
-
             <div
               style={{
                 width: width || 700,
@@ -399,6 +383,21 @@ export const TableNode = memo(
                   : "border-white/[0.06] hover:border-white/[0.12] hover:bg-gradient-to-br hover:from-[#18181c] hover:to-[#101014] bg-gradient-to-br from-[#141418] to-[#0d0d10]",
               )}
             >
+              <ButtonHandle
+                type="target"
+                position={Position.Left}
+                id="input"
+                visible
+                className={`${handleVisibilityClass}`}
+              />
+
+              <ButtonHandle
+                type="source"
+                position={Position.Right}
+                id="output"
+                visible
+                className={` ${handleVisibilityClass}`}
+              />
               {shouldShowToolbar && (
                 <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
                   <button

@@ -44,6 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ModelSelector } from "@/components/ModelSelector";
 import { Switch } from "@/components/ui/switch";
 import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
@@ -487,21 +488,11 @@ export const SettingsModal = ({
                         <div className="mb-3 text-sm font-medium text-white/80">
                           默认模型
                         </div>
-                        <Select
+                        <ModelSelector
                           value={defaultModel}
-                          onValueChange={setDefaultModel}
-                        >
-                          <SelectTrigger className="h-9 w-full border-white/10 bg-black/50 text-sm text-white">
-                            <SelectValue placeholder="请选择模型" />
-                          </SelectTrigger>
-                          <SelectContent align="end" className="max-h-60">
-                            {CANVAS_CHAT_MODELS.map((m) => (
-                              <SelectItem key={m.model} value={m.model}>
-                                {m.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          onChange={setDefaultModel}
+                          models={CANVAS_CHAT_MODELS}
+                        />
                       </section>
 
                       <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">

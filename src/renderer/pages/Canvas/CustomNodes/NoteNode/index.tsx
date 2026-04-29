@@ -48,24 +48,6 @@ export const NoteNode = memo(
             }}
           />
 
-          {/* 左侧输入 Handle：用于接收其他节点连接。 */}
-          <ButtonHandle
-            type="target"
-            position={Position.Left}
-            id="input"
-            visible
-            className={`${handleVisibilityClass}`}
-          />
-
-          {/* 右侧输出 Handle：用于连接到其他节点。 */}
-          <ButtonHandle
-            type="source"
-            position={Position.Right}
-            id="output"
-            visible
-            className={` ${handleVisibilityClass}`}
-          />
-
           <div
             style={{
               width,
@@ -78,6 +60,23 @@ export const NoteNode = memo(
                 : "border-white/[0.06] hover:border-white/[0.12] hover:bg-gradient-to-br hover:from-[#18181c] hover:to-[#101014]",
             )}
           >
+            {/* 左侧输入 Handle：用于接收其他节点连接。 */}
+            <ButtonHandle
+              type="target"
+              position={Position.Left}
+              id="input"
+              visible
+              className={`${handleVisibilityClass}`}
+            />
+
+            {/* 右侧输出 Handle：用于连接到其他节点。 */}
+            <ButtonHandle
+              type="source"
+              position={Position.Right}
+              id="output"
+              visible
+              className={` ${handleVisibilityClass}`}
+            />
             {/* 节点外壳区域 - 可拖拽 */}
             <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] cursor-grab active:cursor-grabbing">
               <div className="flex items-center gap-2">
