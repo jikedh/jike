@@ -1,4 +1,5 @@
 import { jikeingRequest } from "service/aiRequest";
+import { getJikeingUserId, getJikeingUserInfo } from "shared/utils/utils";
 
 export interface AIVideoTrackData {
   userId: string;
@@ -23,11 +24,14 @@ class AIVideoTrackingService {
   /**
    * 发送埋点数据
    */
-  async track(data: Omit<AIVideoTrackData, "userId" | "timestamp">): Promise<void> {
+  async track(
+    data: Omit<AIVideoTrackData, "userId" | "timestamp">,
+  ): Promise<void> {
     try {
       const trackData: AIVideoTrackData = {
         ...data,
         userId: this.getCurrentUserId(),
+        userUuid: this.getCurrentUserUuid(),
         timestamp: Date.now(),
       };
 
@@ -36,7 +40,6 @@ class AIVideoTrackingService {
         method: "post",
         data: {
           ...trackData,
-          userUuid: this.getCurrentUserUuid(),
           requestParams: trackData.requestParams
             ? JSON.stringify(trackData.requestParams)
             : undefined,
@@ -88,33 +91,17 @@ class AIVideoTrackingService {
    * 获取当前用户ID
    */
   private getCurrentUserId(): string {
-    // 从 localStorage 或其他方式获取用户ID
-    const userInfo = localStorage.getItem("userInfo");
-    if (userInfo) {
-      try {
-        const parsed = JSON.parse(userInfo);
-        return parsed.userId || parsed.id || "UNKNOWN";
-      } catch {
-        return "UNKNOWN";
-      }
-    }
-    return "UNKNOWN";
+    const userInfo = getJikeingUserInfo();
+    return String(userInfo?.userId || userInfo?.id || getJikeingUserId() || "UNKNOWN");
   }
 
   /**
    * 获取当前用户UUID
    */
   private getCurrentUserUuid(): string | undefined {
-    const userInfo = localStorage.getItem("userInfo");
-    if (userInfo) {
-      try {
-        const parsed = JSON.parse(userInfo);
-        return parsed.uuid || parsed.userUuid;
-      } catch {
-        return undefined;
-      }
-    }
-    return undefined;
+    const userInfo = getJikeingUserInfo();
+    const uuid = userInfo?.uuid || userInfo?.userUuid || getJikeingUserId();
+    return uuid ? String(uuid) : undefined;
   }
 
   /**
