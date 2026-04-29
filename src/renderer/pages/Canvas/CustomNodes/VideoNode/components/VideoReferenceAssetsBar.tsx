@@ -128,10 +128,10 @@ export const VideoReferenceAssetsBar = ({
   onReferenceHoverChange: (sourceNodeId: string, isHovering: boolean) => void;
 }) => {
   return (
-    <div className="nodrag nopan nowheel flex h-[60px] items-center gap-2 overflow-x-auto overflow-y-hidden">
+    <div className="nodrag nopan nowheel no-scrollbar flex h-[60px] items-center gap-2 overflow-x-auto overflow-y-hidden">
       <Button
         unstyled
-        className={PROMPT_PANEL_STYLES.uploadButton}
+        className={cn(PROMPT_PANEL_STYLES.uploadButton, "shrink-0")}
         onClick={onUploadClick}
         title={isUploading ? "上传中..." : "上传参考图"}
         disabled={isUploading}
