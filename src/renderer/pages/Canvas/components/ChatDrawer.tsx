@@ -118,6 +118,9 @@ const SKILL_SUGGESTIONS: SkillSuggestion[] = [
 
 const ACTION_BUTTON_CLASSNAME =
   "flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 shadow-[0_6px_18px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-all hover:bg-white/10 hover:text-white";
+const MIN_PROMPT_INPUT_HEIGHT = 42;
+const DEFAULT_PROMPT_INPUT_HEIGHT = 64;
+const MAX_PROMPT_INPUT_HEIGHT = 240;
 
 const resolveCanvasChatModel = (model?: string) => {
   if (model && CANVAS_CHAT_SELECT_MODELS.some((item) => item.model === model)) {
@@ -144,6 +147,9 @@ export const ChatDrawer = ({
   const { defaultModel, defaultPersonaId } = useChatSettingsStore();
 
   const [inputValue, setInputValue] = useState("");
+  const [promptInputHeight, setPromptInputHeight] = useState(
+    DEFAULT_PROMPT_INPUT_HEIGHT,
+  );
   const [selectedPersonaId, setSelectedPersonaId] =
     useState<ChatPersonaId>(defaultPersonaId);
   const [selectedModel, setSelectedModel] = useState(
@@ -281,6 +287,45 @@ export const ChatDrawer = ({
     setInputValue(prompt);
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, []);
+
+  const handlePromptResizePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const startY = event.clientY;
+      const startHeight = promptInputHeight;
+      const previousCursor = document.body.style.cursor;
+      const previousUserSelect = document.body.style.userSelect;
+
+      document.body.style.cursor = "ns-resize";
+      document.body.style.userSelect = "none";
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        const nextHeight = Math.min(
+          MAX_PROMPT_INPUT_HEIGHT,
+          Math.max(
+            MIN_PROMPT_INPUT_HEIGHT,
+            startHeight + (startY - moveEvent.clientY),
+          ),
+        );
+        setPromptInputHeight(nextHeight);
+      };
+
+      const finishResize = () => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", finishResize);
+        window.removeEventListener("pointercancel", finishResize);
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+      };
+
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", finishResize, { once: true });
+      window.addEventListener("pointercancel", finishResize, { once: true });
+    },
+    [promptInputHeight],
+  );
 
   const selectedPersonaLabel =
     selectedPersonaId === NO_CHAT_PERSONA_ID
@@ -455,7 +500,19 @@ export const ChatDrawer = ({
 
             <div className="px-4 pb-3 pt-0.5">
               <div className="overflow-hidden rounded-[22px] border border-white/10 bg-[#10131b] shadow-[0_14px_36px_rgba(0,0,0,0.26)]">
-                <div className="px-3 pt-2">
+                <div
+                  className="nodrag nopan nowheel flex h-3 cursor-ns-resize items-center justify-center border-b border-white/[0.03] bg-white/[0.015]"
+                  role="separator"
+                  aria-label="调整输入框高度"
+                  aria-orientation="horizontal"
+                  onPointerDown={handlePromptResizePointerDown}
+                >
+                  <span className="h-0.5 w-10 rounded-full bg-white/15" />
+                </div>
+                <div
+                  className="px-3 pt-2"
+                  style={{ height: `${promptInputHeight}px` }}
+                >
                   <Textarea
                     ref={textareaRef}
                     value={inputValue}
@@ -463,7 +520,7 @@ export const ChatDrawer = ({
                     onKeyDown={handleKeyDown}
                     placeholder="输入你的想法，或直接从上面的 Skills 开始"
                     rows={1}
-                    className="min-h-[38px] max-h-[84px] resize-none border-transparent bg-transparent px-0.5 py-0 text-[15px] leading-[1.35] text-white shadow-none placeholder:text-white/30"
+                    className="model-selector-scroll h-full min-h-0 resize-none border-transparent bg-transparent px-0.5 py-0 text-[15px] leading-[1.35] text-white shadow-none placeholder:text-white/30"
                     disabled={isLoading}
                   />
                 </div>
