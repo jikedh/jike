@@ -24,6 +24,7 @@ import type {
   NoteGenerationMessage,
 } from "shared/types/NoteGeneration";
 import { cn } from "shared/utils/utils";
+import { ModelSelector } from "@/components/ModelSelector";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import {
   Select,
@@ -403,25 +404,11 @@ export const ChatDrawer = ({
                   </SelectContent>
                 </Select>
 
-                <Select value={selectedModel} onValueChange={setSelectedModel}>
-                  <SelectTrigger className="h-9 w-full rounded-[14px] border border-white/10 bg-white/[0.04] px-3 text-sm text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.14)]">
-                    <SelectValue placeholder="选择模型" />
-                  </SelectTrigger>
-                  <SelectContent
-                    align="start"
-                    className="max-h-72 border-white/10 bg-[#14161d] text-white shadow-[0_18px_40px_rgba(0,0,0,0.35)]"
-                  >
-                    {CANVAS_CHAT_MODELS.map((model) => (
-                      <SelectItem
-                        key={model.model}
-                        value={model.model}
-                        className="text-white/80 focus:bg-white/10 focus:text-white"
-                      >
-                        {model.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ModelSelector
+                  value={selectedModel}
+                  onChange={setSelectedModel}
+                  models={CANVAS_CHAT_MODELS}
+                />
               </div>
             </header>
 
