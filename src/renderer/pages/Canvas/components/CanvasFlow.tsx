@@ -56,6 +56,7 @@ import { MultiSelectQuickCreate } from "./MultiSelectQuickCreate";
 
 const FALLBACK_NODE_WIDTH = 175;
 const FALLBACK_NODE_HEIGHT = 175;
+const DEFAULT_OPEN_ZOOM = 0.67;
 
 /**
  * 根据起点和终点绘制一条柔和的贝塞尔曲线。
@@ -1418,6 +1419,11 @@ export const CanvasFlow = ({
             edgeTypes={edgeTypes}
             nodesDraggable={!spacePressed}
             fitView
+            fitViewOptions={{
+              padding: 0.1,
+              minZoom: DEFAULT_OPEN_ZOOM,
+              maxZoom: DEFAULT_OPEN_ZOOM,
+            }}
             minZoom={0.2}
             maxZoom={2}
             colorMode="dark"
