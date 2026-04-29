@@ -550,22 +550,6 @@ export const PanoramaNode = memo(
           onDelete={handleContextMenuDelete}
         >
           <div className="group/node relative">
-            <ButtonHandle
-              type="target"
-              position={Position.Left}
-              id="input"
-              visible
-              className={`transition-opacity duration-150 ${handleVisibilityClass}`}
-            />
-
-            <ButtonHandle
-              type="source"
-              position={Position.Right}
-              id="output"
-              visible
-              className={`transition-opacity duration-150 ${handleVisibilityClass}`}
-            />
-
             <NodeToolbar
               isVisible={shouldShowToolbar}
               position={Position.Top}
@@ -625,6 +609,23 @@ export const PanoramaNode = memo(
                   : "border-white/[0.06] hover:border-white/[0.12] hover:bg-gradient-to-br hover:from-[#18181c] hover:to-[#101014]",
               )}
             >
+              {/* 左侧输入 Handle */}
+              <ButtonHandle
+                type="target"
+                position={Position.Left}
+                id="input"
+                visible
+                className={`transition-opacity duration-150 ${handleVisibilityClass}`}
+              />
+
+              {/* 右侧输出 Handle */}
+              <ButtonHandle
+                type="source"
+                position={Position.Right}
+                id="output"
+                visible
+                className={`transition-opacity duration-150 ${handleVisibilityClass}`}
+              />
               {selected && (
                 <>
                   <div className="absolute -top-px -left-px w-4 h-4 border-l-2 border-t-2 border-[#B43FEB] rounded-tl-xl" />

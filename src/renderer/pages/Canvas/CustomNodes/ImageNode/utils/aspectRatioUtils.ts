@@ -49,6 +49,30 @@ export function getClosestAspectRatio(
 }
 
 /**
+ * Convert actual media dimensions into a ratio string without snapping to a preset.
+ * Keeping the exact simplified ratio lets dropped/uploaded images size themselves
+ * to the source image instead of a nearby generation preset.
+ */
+export function getExactAspectRatio(
+  imageWidth: number,
+  imageHeight: number,
+): string | null {
+  const width = Math.round(imageWidth);
+  const height = Math.round(imageHeight);
+
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+
+  const gcd = (a: number, b: number): number => {
+    return b === 0 ? a : gcd(b, a % b);
+  };
+
+  const divisor = gcd(width, height);
+  return `${width / divisor}:${height / divisor}`;
+}
+
+/**
  * 根据比例计算节点尺寸（基于基准高度）
  * @param aspectRatio 比例值，如 '16:9'
  * @param baseHeight 基准高度（默认 250px）
@@ -148,10 +172,21 @@ export async function getAspectRatioFromMediaFile(
         ? await getImageDimensions(blobUrl)
         : await getVideoDimensions(blobUrl);
 
-    return getClosestAspectRatio(dimensions.width, dimensions.height);
+    return getExactAspectRatio(dimensions.width, dimensions.height);
   } catch {
     return null;
   } finally {
     URL.revokeObjectURL(blobUrl);
+  }
+}
+
+export async function getAspectRatioFromImageUrl(
+  imageUrl: string,
+): Promise<string | null> {
+  try {
+    const dimensions = await getImageDimensions(imageUrl);
+    return getExactAspectRatio(dimensions.width, dimensions.height);
+  } catch {
+    return null;
   }
 }

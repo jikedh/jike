@@ -124,16 +124,6 @@ function getSeedance20Model(data: Seedance20Request): string {
   return data.mode === "fast" ? "seedance-2.0-fast" : "seedance-2.0-pro";
 }
 
-// ===================== 账户余额相关 =====================
-
-// 查询令牌余额
-export function getBalance() {
-  return aiService({
-    url: "/v1/balance",
-    method: "get",
-  });
-}
-
 // ===================== 图片生成相关 =====================
 
 // 创建图片生成任务
@@ -212,46 +202,6 @@ export async function createChatCompletion(data: any, signal?: AbortSignal) {
     data,
     signal,
   });
-}
-
-// 兼容 Anthropic 格式的文字对话接口
-export function createMessages(data: any) {
-  return aiService({
-    url: "/v1/messages",
-    method: "post",
-    data,
-  });
-}
-
-// ===================== 文件上传相关 =====================
-
-// 上传图片
-export function uploadImage(data: any) {
-  return aiService({
-    url: "/v1/uploads/images",
-    method: "post",
-    data,
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
-}
-
-/**
- * 上传图片并获取 URL
- * @param file 要上传的文件
- * @returns 上传成功后的图片 URL，失败返回 undefined
- */
-export async function uploadImageFile(file: File): Promise<string | undefined> {
-  try {
-    const formData = new FormData();
-    formData.append("file", file);
-    const response = await uploadImage(formData);
-    return response.data.url;
-  } catch (error) {
-    console.error("上传图片失败:", error);
-    return undefined;
-  }
 }
 
 // ===================== Midjourney 相关 =====================
@@ -340,16 +290,6 @@ export function getUserInfo(): any {
   });
 }
 
-// 获取用户信息（包含会员等级）
-export function getMemberInfoByUUId(id: string): any {
-  return jikeingService({
-    url: `/get-member-info-by-uuid/${id}`,
-    method: "get",
-    // params: { uuid: data.uuid || data }
-    // params: 1933128037681942528
-  });
-}
-
 // ===================== Gemini 多模型内容生成相关 =====================
 
 /**
@@ -380,37 +320,6 @@ export async function generateGeminiContent(
     method: "post",
     data,
     signal,
-  });
-}
-
-/**
- * Gemini 多模型内容生成接口（流式响应版本）
- * @param modeName 模型名称
- * @param data 请求数据
- * @param signal 可选的 AbortSignal
- */
-export async function generateGeminiContentStream(
-  modeName: string,
-  data: any,
-  signal?: AbortSignal,
-) {
-  const flow2ApiState = await getFlow2ApiState();
-  if (flow2ApiState?.status === "running" && flow2ApiState.baseUrl) {
-    return flow2ApiRequest({
-      url: `/v1beta/models/${modeName}:generateContent`,
-      method: "post",
-      data: { ...data, stream: true },
-      signal,
-      responseType: "stream",
-    });
-  }
-
-  return yunwuRequest({
-    url: `/v1beta/models/${modeName}:generateContent`,
-    method: "post",
-    data: { ...data, stream: true },
-    signal,
-    responseType: "stream",
   });
 }
 

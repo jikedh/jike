@@ -287,10 +287,42 @@ const pixverseStrategy: VideoPayloadStrategy = {
 };
 
 /**
- * 策略注册表（豆包 Seedance 2.0、万象、PixVerse）
+ * Wan 2.7 T2V 策略
+ * 文生视频模型，基于文本提示词生成视频
+ * 不支持参考图片或视频输入
+ * 支持可选的背景音频和反向提示词
+ */
+const wan27T2vStrategy: VideoPayloadStrategy = {
+  model: "wan2.7-t2v",
+  buildPayload: (
+    nodeData,
+    { prompt, audioUrls = [] },
+  ) => {
+    const audioUrl = audioUrls.find((url) => Boolean(url));
+
+    return {
+      model: "wan2.7-t2v",
+      input: {
+        prompt,
+      },
+      parameters: {
+        resolution: nodeData.metadata?.resolution ?? "1080P",
+        ratio: nodeData.aspect_ratio ?? "16:9",
+        duration: nodeData.duration ?? 5,
+        prompt_extend: false,
+        watermark: false,
+        ...(audioUrl ? { audio_url: audioUrl } : {}),
+      },
+    };
+  },
+};
+
+/**
+ * 策略注册表
  */
 export const videoPayloadStrategies: Record<string, VideoPayloadStrategy> = {
   "doubao-seedance-2.0": doubaoSeedance20Strategy,
+  "wan2.7-t2v": wan27T2vStrategy,
   "wan2.7-r2v": wan27R2vStrategy,
   "pixverse-i2v": pixverseStrategy,
 };

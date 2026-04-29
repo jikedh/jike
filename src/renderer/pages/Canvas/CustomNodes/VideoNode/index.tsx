@@ -177,24 +177,6 @@ export const VideoNode = memo(
             height: `${nodeSize.height}px`,
           }}
         >
-          {/* 左侧输入 Handle */}
-          <ButtonHandle
-            type="target"
-            position={Position.Left}
-            id="input"
-            visible
-            className={`transition-opacity duration-150 ${handleVisibilityClass}`}
-          />
-
-          {/* 右侧输出 Handle */}
-          <ButtonHandle
-            type="source"
-            position={Position.Right}
-            id="output"
-            visible
-            className={`transition-opacity duration-150 ${handleVisibilityClass}`}
-          />
-
           {/* 顶部工具栏：放在节点几何空间内，缩放时自动保持一致 */}
           {/* 拖动结束后再挂载，降低首次拖拽时的渲染负担 */}
           {shouldShowToolbar && (
@@ -215,6 +197,23 @@ export const VideoNode = memo(
                   : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
             )}
           >
+            {/* 左侧输入 Handle */}
+            <ButtonHandle
+              type="target"
+              position={Position.Left}
+              id="input"
+              visible
+              className={`transition-opacity duration-150 ${handleVisibilityClass}`}
+            />
+
+            {/* 右侧输出 Handle */}
+            <ButtonHandle
+              type="source"
+              position={Position.Right}
+              id="output"
+              visible
+              className={`transition-opacity duration-150 ${handleVisibilityClass}`}
+            />
             {/* 选中状态角落装饰 */}
             {selected && !isDragging && (
               <>

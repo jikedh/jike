@@ -1,5 +1,5 @@
 // 积分 API 测试 Demo 页面
-// 用于测试 jikeing.ts 和 manager/score.ts 中的各个接口
+// 用于测试 jikeing.ts 中仍保留的接口
 
 import { useState } from "react";
 import { getJikeingUserId } from "shared/utils/utils";
@@ -7,19 +7,11 @@ import { createDashscopeChatCompletion } from "@/api/ai";
 import QRCode from "qrcode";
 import {
   createRechargeOrder,
-  dailyResign,
   getBalanceInfo,
   getRechargeOrderStatus,
   getScoreConfig,
-  initScore,
-  innerAddUserScore,
   updateVipScore,
 } from "@/api/jikeing";
-import {
-  addScore,
-  adminGetScoreConfig,
-  getUserScore,
-} from "@/api/manager/score";
 import { useUserStore } from "@/stores/useUserStore";
 
 // ===================== 测试按钮组件 =====================
@@ -141,9 +133,6 @@ export default function TestPage() {
 
   // ===================== 用户侧 API =====================
 
-  const handleDailyResign = () =>
-    callApi("dailyResign (每日签到)", dailyResign);
-  const handleInitScore = () => callApi("initScore (初始化积分)", initScore);
   const handleGetScoreConfig = () =>
     callApi("getScoreConfig (获取积分配置)", getScoreConfig);
   const handleGetBalanceInfo = () =>
@@ -175,54 +164,6 @@ export default function TestPage() {
 
       return res;
     });
-  };
-
-  // ===================== 管理侧 API =====================
-
-  const [uuidInput, setUuidInput] = useState("");
-  const [adminScoreData, setAdminScoreData] = useState({
-    toUserId: "",
-    score: 0,
-  });
-
-  const handleAdminAddScore = () => {
-    if (!adminScoreData.toUserId) {
-      alert("请输入用户 ID");
-      return;
-    }
-    callApi("adminAddScore (管理员加积分)", () => addScore(adminScoreData));
-  };
-
-  const handleGetUserScoreByUuid = () => {
-    if (!uuidInput) {
-      alert("请输入 UUID");
-      return;
-    }
-    callApi("getUserScoreByUuid (查询用户积分)", () =>
-      getUserScore({ uuid: uuidInput }),
-    );
-  };
-
-  const handleAdminGetScoreConfig = () =>
-    callApi("adminGetScoreConfig (管理员获取配置)", () =>
-      adminGetScoreConfig(),
-    );
-
-  // ===================== 内部接口 =====================
-
-  const [innerScoreData, setInnerScoreData] = useState({
-    userId: "",
-    score: 0,
-  });
-
-  const handleInnerAddUserScore = () => {
-    if (!innerScoreData.userId) {
-      alert("请输入用户 ID");
-      return;
-    }
-    callApi("innerAddUserScore (内部加积分)", () =>
-      innerAddUserScore(innerScoreData),
-    );
   };
 
   // ===================== 充值订单 API =====================
@@ -453,16 +394,6 @@ export default function TestPage() {
               <div className="space-y-4">
                 <div className="flex flex-wrap gap-3">
                   <TestButton
-                    label="每日签到"
-                    onClick={handleDailyResign}
-                    loading={loadingMap["dailyResign (每日签到)"]}
-                  />
-                  <TestButton
-                    label="初始化积分"
-                    onClick={handleInitScore}
-                    loading={loadingMap["initScore (初始化积分)"]}
-                  />
-                  <TestButton
                     label="获取积分配置"
                     onClick={handleGetScoreConfig}
                     loading={loadingMap["getScoreConfig (获取积分配置)"]}
@@ -516,122 +447,6 @@ export default function TestPage() {
                     variant="outline"
                   />
                 </div>
-              </div>
-            </section>
-
-            {/* 管理侧 API */}
-            <section className="bg-white/5 rounded-xl p-5 border border-white/10">
-              <h2 className="text-lg font-semibold text-purple-400 mb-4">
-                管理侧 API（jike-admin-api）
-              </h2>
-              <div className="space-y-4">
-                <div className="flex flex-wrap gap-3 items-end">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-white/50">用户 UUID</label>
-                    <input
-                      type="text"
-                      value={uuidInput}
-                      onChange={(e) => setUuidInput(e.target.value)}
-                      placeholder="输入 UUID"
-                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-40 focus:border-cyan-500 outline-none"
-                    />
-                  </div>
-                  <TestButton
-                    label="查询用户积分"
-                    onClick={handleGetUserScoreByUuid}
-                    loading={loadingMap["getUserScoreByUuid (查询用户积分)"]}
-                    variant="outline"
-                  />
-                </div>
-                <div className="flex flex-wrap gap-3 items-end">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-white/50">目标用户 ID</label>
-                    <input
-                      type="text"
-                      value={adminScoreData.toUserId}
-                      onChange={(e) =>
-                        setAdminScoreData((prev) => ({
-                          ...prev,
-                          toUserId: e.target.value,
-                        }))
-                      }
-                      placeholder="toUserId"
-                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-40 focus:border-cyan-500 outline-none"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-white/50">积分数量</label>
-                    <input
-                      type="number"
-                      value={adminScoreData.score}
-                      onChange={(e) =>
-                        setAdminScoreData((prev) => ({
-                          ...prev,
-                          score: Number(e.target.value),
-                        }))
-                      }
-                      placeholder="score"
-                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-28 focus:border-cyan-500 outline-none"
-                    />
-                  </div>
-                  <TestButton
-                    label="管理员加积分"
-                    onClick={handleAdminAddScore}
-                    loading={loadingMap["adminAddScore (管理员加积分)"]}
-                    variant="outline"
-                  />
-                </div>
-                <TestButton
-                  label="获取管理员配置"
-                  onClick={handleAdminGetScoreConfig}
-                  loading={loadingMap["adminGetScoreConfig (管理员获取配置)"]}
-                  variant="ghost"
-                />
-              </div>
-            </section>
-
-            {/* 内部接口 */}
-            <section className="bg-white/5 rounded-xl p-5 border border-white/10">
-              <h2 className="text-lg font-semibold text-orange-400 mb-4">
-                内部接口（jike-web-api /inner）
-              </h2>
-              <div className="flex flex-wrap gap-3 items-end">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">用户 ID</label>
-                  <input
-                    type="text"
-                    value={innerScoreData.userId}
-                    onChange={(e) =>
-                      setInnerScoreData((prev) => ({
-                        ...prev,
-                        userId: e.target.value,
-                      }))
-                    }
-                    placeholder="userId"
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-40 focus:border-cyan-500 outline-none"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">积分数量</label>
-                  <input
-                    type="number"
-                    value={innerScoreData.score}
-                    onChange={(e) =>
-                      setInnerScoreData((prev) => ({
-                        ...prev,
-                        score: Number(e.target.value),
-                      }))
-                    }
-                    placeholder="score"
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-28 focus:border-cyan-500 outline-none"
-                  />
-                </div>
-                <TestButton
-                  label="内部添加积分"
-                  onClick={handleInnerAddUserScore}
-                  loading={loadingMap["innerAddUserScore (内部加积分)"]}
-                  variant="outline"
-                />
               </div>
             </section>
 

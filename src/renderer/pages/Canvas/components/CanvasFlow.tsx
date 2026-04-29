@@ -62,6 +62,7 @@ import { MultiSelectQuickCreate } from "./MultiSelectQuickCreate";
 
 const FALLBACK_NODE_WIDTH = 175;
 const FALLBACK_NODE_HEIGHT = 175;
+const DEFAULT_OPEN_ZOOM = 0.67;
 const SELECTION_STORE_SYNC_DELAY = 90;
 
 /**
@@ -2297,6 +2298,11 @@ export const CanvasFlow = ({
             edgesFocusable={!isAnnotationLocked}
             elementsSelectable={!isAnnotationLocked && !isSpacePressed}
             fitView
+            fitViewOptions={{
+              padding: 0.1,
+              minZoom: DEFAULT_OPEN_ZOOM,
+              maxZoom: DEFAULT_OPEN_ZOOM,
+            }}
             minZoom={0.2}
             maxZoom={2}
             colorMode="dark"

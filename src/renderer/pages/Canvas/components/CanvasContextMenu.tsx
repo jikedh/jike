@@ -25,6 +25,7 @@ export type CanvasNodeType =
   | "note"
   | "image"
   | "video"
+  | "videoDemo"
   | "newVideo"
   | "panorama"
   | "audio"
@@ -70,6 +71,13 @@ export const CanvasContextMenu = ({
         >
           <IconVideo size={16} />
           新建视频节点
+        </ContextMenuItem>
+        <ContextMenuItem
+          className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
+          onSelect={() => onCreateNode("videoDemo")}
+        >
+          <IconVideo size={16} />
+          新建视频Demo节点
         </ContextMenuItem>
         <ContextMenuItem
           className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"

@@ -1,8 +1,9 @@
 // 积分相关 API 接口
 // 基于 score-api-analysis.md 文档生成
 
-import { jikeingAdminService, jikeingService } from "service/aiRequest";
+import { jikeingService } from "service/aiRequest";
 import {
+  CreateRechargeOrderRequest,
   CreateRechargeOrderResponse,
   GetRechargeOrderStatusResponse,
   GetScoreBalanceResponse,
@@ -12,29 +13,6 @@ import {
 import { getJikeingUserId } from "shared/utils/utils";
 
 // ===================== 用户侧 API（jike-web-api）/userscore/v1 =====================
-
-/**
- * 每日签到
- * 发放签到积分，有幂等控制
- */
-export function dailyResign(): any {
-  return jikeingService({
-    url: "/userscore/v1/daily-resign",
-    method: "get",
-  });
-}
-
-/**
- * 初始化积分
- * 固定发放 300 积分
- * ⚠️ 注意：当前代码未看到幂等限制
- */
-export function initScore(): any {
-  return jikeingService({
-    url: "/userscore/v1/init",
-    method: "get",
-  });
-}
 
 /**
  * 获取积分配置
@@ -85,20 +63,15 @@ export function updateVipScore(
   });
 }
 
-// ===================== 管理侧 API（jike-admin-api）/userscore/v1 =====================
-// 管理侧积分接口已迁移至 manager/score.ts
-// import { addScore, getUserScore, adminGetScoreConfig } from './manager/score'
-
 // ===================== 充值订单 API（jike-web-api）/recharge/v1 =====================
 
 /**
  * 创建充值订单（微信 Native 扫码支付）
  * @param data - { userId: string, packageId: string }
  */
-export function createRechargeOrder(data: {
-  userId: string;
-  packageId: string;
-}): Promise<CreateRechargeOrderResponse> {
+export function createRechargeOrder(
+  data: CreateRechargeOrderRequest,
+): Promise<CreateRechargeOrderResponse> {
   return jikeingService({
     url: "/recharge/v1/native/create",
     method: "post",
@@ -120,15 +93,3 @@ export function getRechargeOrderStatus(
   });
 }
 
-// ===================== 内部接口（jike-web-api）/inner =====================
-
-export function innerAddUserScore(data: {
-  userId: string;
-  score: number;
-}): any {
-  return jikeingAdminService({
-    url: "/inner/addUserScore",
-    method: "post",
-    data,
-  });
-}

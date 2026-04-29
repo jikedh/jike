@@ -880,7 +880,7 @@ const pollVideoGeneration = async (
         : await getDashscopeVideoTaskStatus(taskId);
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
-      if (!currentNode || currentNode.type !== "videoNode") {
+      if (!currentNode || (currentNode.type !== "videoNode" && currentNode.type !== "videoDemoNode")) {
         stopVideoPollingInternal(nodeId);
         return;
       }
@@ -1491,6 +1491,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       noteNode: "note",
       imageNode: "image",
       videoNode: "video",
+      videoDemoNode: "videoDemo",
       newVideoNode: "newVideo",
       agentNode: "agent",
       panoramaNode: "panorama",
@@ -1663,6 +1664,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       note: 1,
       image: 1,
       video: 1,
+      videoDemo: 1,
       agent: 1,
       panorama: 1,
       audio: 1,
@@ -1761,6 +1763,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             note: 1,
             image: 1,
             video: 1,
+            videoDemo: 1,
             agent: 1,
             panorama: 1,
             audio: 1,
@@ -1775,18 +1778,108 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       // 处理节点中的本地文件，将相对路径转换为可显示的 blob URL
       const hydratedNodes = await hydrateCanvasNodesForRuntime(data.nodes);
-      const processedNodes: AllNodeType[] = hydratedNodes.map((node) => {
-        const runtimeSafeData = resetNodeDataRuntimeState(node.type, node.data);
+      const processedNodes: AllNodeType[] = await Promise.all(
+        hydratedNodes.map(async (node) => {
+          const runtimeSafeData = resetNodeDataRuntimeState(
+            node.type,
+            node.data,
+          );
 
-        if (runtimeSafeData !== node.data) {
-          return {
-            ...node,
-            data: runtimeSafeData as AllNodeType["data"],
-          };
-        }
+          if (runtimeSafeData !== node.data) {
+            return {
+              ...node,
+              data: runtimeSafeData as AllNodeType["data"],
+            };
+          }
 
-        return node;
-      });
+          // Hydrate persisted local video files into blob URLs for runtime.
+          if (
+            (node.type === "videoNode" ||
+              node.type === "videoDemoNode" ||
+              node.type === "newVideoNode") &&
+            node.data?.result?.data
+          ) {
+            const processedData = await Promise.all(
+              node.data.result.data.map(async (item: any) => {
+                if (item.relativePath) {
+                  try {
+                    const fileBytes = await readMediaFromLocal(
+                      item.relativePath,
+                    );
+                    if (fileBytes) {
+                      const ext =
+                        item.format ||
+                        (item.localFileName || item.fileName)
+                          ?.split(".")
+                          .pop() ||
+                        "mp4";
+                      const blob = new Blob([fileBytes], {
+                        type: `video/${ext}`,
+                      });
+                      const blobUrl = URL.createObjectURL(blob);
+                      return { ...item, url: blobUrl };
+                    }
+                  } catch (err) {
+                    console.warn("Failed to load local video:", err);
+                  }
+                }
+                return item;
+              }),
+            );
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                result: {
+                  ...node.data.result,
+                  data: processedData,
+                },
+              },
+            };
+          }
+
+          // Hydrate persisted local audio files into blob URLs for runtime.
+          if (node.type === "audioNode" && node.data?.result?.data) {
+            const processedData = await Promise.all(
+              node.data.result.data.map(async (item: any) => {
+                if (item.relativePath) {
+                  try {
+                    const fileBytes = await readMediaFromLocal(
+                      item.relativePath,
+                    );
+                    if (fileBytes) {
+                      const ext =
+                        (item.localFileName || item.fileName)
+                          ?.split(".")
+                          .pop() || "mp3";
+                      const blob = new Blob([fileBytes], {
+                        type: `audio/${ext}`,
+                      });
+                      const blobUrl = URL.createObjectURL(blob);
+                      return { ...item, url: blobUrl };
+                    }
+                  } catch (err) {
+                    console.warn("Failed to load local audio:", err);
+                  }
+                }
+                return item;
+              }),
+            );
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                result: {
+                  ...node.data.result,
+                  data: processedData,
+                },
+              },
+            };
+          }
+
+          return node;
+        }),
+      );
 
       set({
         projectId,
@@ -1886,6 +1979,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           note: 1,
           image: 1,
           video: 1,
+          videoDemo: 1,
           agent: 1,
           panorama: 1,
           audio: 1,
@@ -3356,6 +3450,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             imageNodesToStop.push(node.id);
           } else if (
             node.type === "videoNode" ||
+            node.type === "videoDemoNode" ||
             node.type === "newVideoNode"
           ) {
             videoNodesToStop.push(node.id);
@@ -3386,6 +3481,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               };
             } else if (
               node.type === "videoNode" ||
+              node.type === "videoDemoNode" ||
               node.type === "newVideoNode"
             ) {
               return {
@@ -3526,11 +3622,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       if (
         targetNode?.type === "videoNode" ||
+        targetNode?.type === "videoDemoNode" ||
         targetNode?.type === "newVideoNode"
       ) {
         const allowedSourceTypes = [
+          "noteNode",
           "imageNode",
           "videoNode",
+          "videoDemoNode",
           "newVideoNode",
           "audioNode",
         ];

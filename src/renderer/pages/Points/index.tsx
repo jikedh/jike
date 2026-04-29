@@ -132,6 +132,7 @@ export function PointsView() {
   const createNativeRechargeOrder = async (pkg: {
     packageId: string;
     points: number;
+    price: number;
   }) => {
     if (!userId) {
       toast.error("请先登录后再充值");
@@ -167,7 +168,11 @@ export function PointsView() {
       return;
     }
 
-    const timer = window.setInterval(async () => {
+    let timer: NodeJS.Timeout;
+    let pollingCount = 0;
+    const MAX_POLLING_COUNT = 60; // 最多轮询60次（约90秒）
+
+    const checkPaymentStatus = async () => {
       try {
         const result = await getRechargeOrderStatus(nativePayOrder.orderId);
         // if (result?.code !== 0) {
@@ -199,16 +204,50 @@ export function PointsView() {
 
           setSelectedPackageId(null);
           setNativePayOrder(null);
+        } else if (result?.data?.status === "CLOSED") {
+          // 订单取消或失败时停止轮询
+          toast.error("支付失败或已取消");
+          setSelectedPackageId(null);
+          setNativePayOrder(null);
+          if (timer) {
+            clearInterval(timer);
+          }
         }
-      } catch {
+      } catch (error) {
+        console.error("轮询支付状态失败:", error);
         // 轮询失败忽略，下一轮继续
+      } finally {
+        pollingCount++;
+        if (pollingCount >= MAX_POLLING_COUNT) {
+          // 超过最大轮询次数，停止轮询
+          toast.info("支付超时，请重新尝试");
+          setSelectedPackageId(null);
+          setNativePayOrder(null);
+          if (timer) {
+            clearInterval(timer);
+          }
+        }
       }
-    }, 1500);
+    };
+
+    // 立即执行一次检查
+    checkPaymentStatus();
+    
+    // 然后开始轮询
+    timer = setInterval(checkPaymentStatus, 1500);
 
     return () => {
-      window.clearInterval(timer);
+      if (timer) {
+        clearInterval(timer);
+      }
     };
-  }, [nativePayOrder?.orderId, selectedPackage]);
+  }, [
+    balanceInfo,
+    nativePayOrder?.orderId,
+    selectedPackage,
+    setBalanceInfo,
+    userId,
+  ]);
 
   const usageHistory = [
     {
