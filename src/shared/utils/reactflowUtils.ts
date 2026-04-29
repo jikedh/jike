@@ -120,7 +120,7 @@ export const updateVideoNodeInList = (
   updater: (data: VideoGenerationNode) => VideoGenerationNode,
 ): AllNodeType[] => {
   return nodes.map((node) => {
-    if (node.id !== nodeId || (node.type !== "videoNode" && node.type !== "videoDemoNode")) {
+    if (node.id !== nodeId || node.type !== "videoNode") {
       return node;
     }
 

@@ -880,7 +880,7 @@ const pollVideoGeneration = async (
         : await getDashscopeVideoTaskStatus(taskId);
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
-      if (!currentNode || (currentNode.type !== "videoNode" && currentNode.type !== "videoDemoNode")) {
+      if (!currentNode || currentNode.type !== "videoNode") {
         stopVideoPollingInternal(nodeId);
         return;
       }
@@ -1491,7 +1491,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       noteNode: "note",
       imageNode: "image",
       videoNode: "video",
-      videoDemoNode: "videoDemo",
       newVideoNode: "newVideo",
       agentNode: "agent",
       panoramaNode: "panorama",
@@ -1664,7 +1663,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       note: 1,
       image: 1,
       video: 1,
-      videoDemo: 1,
       agent: 1,
       panorama: 1,
       audio: 1,
@@ -1763,7 +1761,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             note: 1,
             image: 1,
             video: 1,
-            videoDemo: 1,
             agent: 1,
             panorama: 1,
             audio: 1,
@@ -1794,9 +1791,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
           // Hydrate persisted local video files into blob URLs for runtime.
           if (
-            (node.type === "videoNode" ||
-              node.type === "videoDemoNode" ||
-              node.type === "newVideoNode") &&
+            (node.type === "videoNode" || node.type === "newVideoNode") &&
             node.data?.result?.data
           ) {
             const processedData = await Promise.all(
@@ -1979,7 +1974,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           note: 1,
           image: 1,
           video: 1,
-          videoDemo: 1,
           agent: 1,
           panorama: 1,
           audio: 1,
@@ -3450,7 +3444,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             imageNodesToStop.push(node.id);
           } else if (
             node.type === "videoNode" ||
-            node.type === "videoDemoNode" ||
             node.type === "newVideoNode"
           ) {
             videoNodesToStop.push(node.id);
@@ -3481,7 +3474,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               };
             } else if (
               node.type === "videoNode" ||
-              node.type === "videoDemoNode" ||
               node.type === "newVideoNode"
             ) {
               return {
@@ -3622,14 +3614,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       if (
         targetNode?.type === "videoNode" ||
-        targetNode?.type === "videoDemoNode" ||
         targetNode?.type === "newVideoNode"
       ) {
         const allowedSourceTypes = [
           "noteNode",
           "imageNode",
           "videoNode",
-          "videoDemoNode",
           "newVideoNode",
           "audioNode",
         ];

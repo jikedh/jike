@@ -454,7 +454,6 @@ export interface FlowStyleType {
 export type TextNodeType = Node<TextGenerationNode, "textNode">;
 export type ImageNodeType = Node<ImageGenerationNode, "imageNode">;
 export type VideoNodeType = Node<VideoGenerationNode, "videoNode">;
-export type VideoDemoNodeType = Node<VideoGenerationNode, "videoDemoNode">;
 // 节点里面的 data 结构是 NoteNodeData
 export type NoteNodeType = Node<NoteNodeData, "noteNode">;
 export type AgentNodeType = Node<AgentNode, "agentNode">;
@@ -479,7 +478,6 @@ export type AllNodeType =
   | TextNodeType
   | ImageNodeType
   | VideoNodeType
-  | VideoDemoNodeType
   | NoteNodeType
   | AgentNodeType
   | TextAgentNodeType

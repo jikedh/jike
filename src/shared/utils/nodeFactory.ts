@@ -171,34 +171,6 @@ export const createNewVideoNode = (
 });
 
 /**
- * 创建视频Demo节点
- */
-export const createVideoDemoNode = (
-  id: string,
-  position: NodePosition,
-  options?: AddNodeOptions,
-): AllNodeType => ({
-  id,
-  type: "videoDemoNode",
-  position,
-  width: 350,
-  height: 250,
-  data: {
-    model: "doubao-seedance-1-5-pro",
-    prompt: "",
-    promptDraft: "",
-    promptDraftHtml: "<p></p>",
-    aspect_ratio: "16:9",
-    nickname: "视频Demo",
-    status: GenerationStatus.COMPLETED,
-    progress: 0,
-    metadata: { size: "1280x720" },
-    result: { type: "video", data: [] },
-    createdAt: Date.now(),
-  },
-});
-
-/**
  * 创建音频节点
  */
 export const createAudioNode = (
@@ -332,7 +304,6 @@ export const nodeFactoryMap: Record<NodeType, NodeFactory> = {
   agent: createAgentNode,
   panorama: createPanoramaNode,
   video: createVideoNode,
-  videoDemo: createVideoDemoNode,
   newVideo: createNewVideoNode,
   audio: createAudioNode,
   textAgent: createTextAgentNode,
