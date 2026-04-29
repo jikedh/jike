@@ -1174,7 +1174,9 @@ export const VideoToolbar = ({
                     .getState()
                     .nodes.find((n) => n.id === nodeId);
                 const basePosition = sourceNode?.position ?? { x: 0, y: 0 };
-                const baseWidth = Number(sourceNode?.width ?? 350) || 350;
+                const outputIndex = useCanvasFlowStore
+                    .getState()
+                    .edges.filter((edge) => edge.source === nodeId).length;
 
                 const target = await createPresignedOssUploadTarget({
                     directory: "video",
@@ -1183,8 +1185,8 @@ export const VideoToolbar = ({
                 });
 
                 const newNodeId = addNode("newVideo", {
-                    x: basePosition.x + baseWidth + 120,
-                    y: basePosition.y,
+                    x: basePosition.x - 390,
+                    y: basePosition.y + (sourceNode?.height ?? 250) + 48 + outputIndex * 298,
                 } as any);
 
                 updateNewVideoNodeData(newNodeId, {

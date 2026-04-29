@@ -34,12 +34,25 @@ export const useVideoFrameCapture = () => {
         y: window.innerHeight / 2,
       });
 
-      const newNodeId = addNode("image", centerPosition);
       const sourceVideoNode = sourceVideoNodeId
         ? useCanvasFlowStore
           .getState()
           .nodes.find((node) => node.id === sourceVideoNodeId)
         : null;
+      const outputIndex = sourceVideoNodeId
+        ? useCanvasFlowStore
+          .getState()
+          .edges.filter((edge) => edge.source === sourceVideoNodeId).length
+        : 0;
+      const newNodeId = addNode(
+        "image",
+        sourceVideoNode
+          ? {
+            x: sourceVideoNode.position.x - 390,
+            y: sourceVideoNode.position.y + (sourceVideoNode.height ?? 250) + 48 + outputIndex * 298,
+          }
+          : centerPosition,
+      );
       // 兼容新旧视频节点类型读取 aspect_ratio
       const sourceAspectRatio = (() => {
         if (!sourceVideoNode) return undefined;
