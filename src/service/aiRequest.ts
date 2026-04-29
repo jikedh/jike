@@ -117,7 +117,7 @@ const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
     getToken: getYunwuToken,
   },
   dashscope: {
-    getBaseURL: () => "/dashscope-api",
+    getBaseURL: () => "https://dashscope.aliyuncs.com",
     getToken: getDashscopeToken,
   },
   jikeingAdmin: {
