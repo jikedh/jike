@@ -39,13 +39,20 @@ function DrawerOverlay({
   );
 }
 
+type DrawerContentProps = React.ComponentProps<
+  typeof DialogPrimitive.Content
+> & {
+  withOverlay?: boolean;
+};
+
 function DrawerContent({
   className,
+  withOverlay = true,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+}: DrawerContentProps) {
   return (
     <DrawerPortal>
-      <DrawerOverlay />
+      {withOverlay ? <DrawerOverlay /> : null}
       <DialogPrimitive.Content
         data-slot="drawer-content"
         className={cn(

@@ -298,9 +298,15 @@ export const ChatDrawer = ({
   ).length;
 
   return (
-    <Drawer open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+    <Drawer
+      open={open}
+      modal={false}
+      onOpenChange={(nextOpen) => !nextOpen && onClose()}
+    >
       <DrawerContent
         aria-label="AI 对话抽屉"
+        withOverlay={false}
+        onInteractOutside={(event) => event.preventDefault()}
         className={cn(
           "overflow-hidden border-l border-white/10 bg-[#0a0a0f] text-white transition-none",
           isResizing && "select-none",
