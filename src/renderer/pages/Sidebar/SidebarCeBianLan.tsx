@@ -35,9 +35,15 @@ export const SidebarCeBianLan = () => {
 
   useEffect(() => {
     let isMounted = true;
+    const getAppVersion = window.debug?.getAppVersion;
 
-    window.debug
-      .getAppVersion()
+    if (!getAppVersion) {
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    getAppVersion()
       .then((version) => {
         if (isMounted) {
           setAppVersion(version);
