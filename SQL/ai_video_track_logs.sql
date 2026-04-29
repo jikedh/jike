@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS `ai_video_track_logs` (
   `model_version` VARCHAR(64) DEFAULT NULL COMMENT '模型版本',
   `task_id` VARCHAR(128) NOT NULL COMMENT '任务ID',
   `prompt` TEXT DEFAULT NULL COMMENT '视频描述提示词',
+  `duration` INT DEFAULT NULL COMMENT '视频时长（秒）',
   `reference_image_url` TEXT DEFAULT NULL COMMENT '用户提供的参考图URL',
   `provider` VARCHAR(64) DEFAULT NULL COMMENT '服务提供商',
   `request_params` TEXT DEFAULT NULL COMMENT '请求参数JSON',

@@ -93,6 +93,28 @@ function extractReferenceImageUrl(data: unknown): string | undefined {
   return undefined;
 }
 
+function extractDurationSeconds(data: unknown): number | undefined {
+  if (!data || typeof data !== "object") {
+    return undefined;
+  }
+
+  const record = data as Record<string, any>;
+  const duration =
+    record.duration ??
+    record.parameters?.duration ??
+    record.input?.duration ??
+    record.input?.parameters?.duration;
+
+  if (typeof duration === "number" && Number.isFinite(duration)) {
+    return Math.trunc(duration);
+  }
+  if (typeof duration === "string" && duration.trim()) {
+    const parsedDuration = Number(duration);
+    return Number.isFinite(parsedDuration) ? Math.trunc(parsedDuration) : undefined;
+  }
+  return undefined;
+}
+
 function extractPrompt(data: unknown): string {
   if (!data || typeof data !== "object") {
     return "";
@@ -239,6 +261,7 @@ export async function createLzVideoTask(data: Seedance20Request) {
     model: getSeedance20Model(data),
     taskId,
     prompt: data.prompt,
+    duration: extractDurationSeconds(data),
     referenceImageUrl: extractReferenceImageUrl(data),
     provider: "kuaizi",
     requestParams: data as unknown as Record<string, unknown>,
@@ -391,6 +414,7 @@ export async function createDashscopeVideoSynthesis(
     model: String(trackData.model || ""),
     taskId: trackResponse.output?.task_id || "",
     prompt: extractPrompt(data),
+    duration: extractDurationSeconds(data),
     referenceImageUrl: extractReferenceImageUrl(data),
     provider: "dashscope",
     requestParams: trackData,

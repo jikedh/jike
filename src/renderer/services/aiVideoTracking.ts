@@ -8,6 +8,7 @@ export interface AIVideoTrackData {
   model: string;
   taskId: string;
   prompt?: string;
+  duration?: number;
   referenceImageUrl?: string;
   provider?: string;
   requestParams?: Record<string, unknown>;
@@ -52,6 +53,7 @@ class AIVideoTrackingService {
           requestParams: trackData.requestParams
             ? JSON.stringify(trackData.requestParams)
             : undefined,
+          duration: trackData.duration,
           reference_image_url: trackData.referenceImageUrl,
           createTime: trackData.timestamp,
         },

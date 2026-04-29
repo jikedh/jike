@@ -30,6 +30,7 @@ export interface AIVideoTrackData {
   model: string;
   taskId: string;
   prompt?: string;
+  duration?: number;
   referenceImageUrl?: string;
   provider?: string;
   requestParams?: Record<string, unknown>;
