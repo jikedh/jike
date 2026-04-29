@@ -1,8 +1,7 @@
-import { app, shell, BrowserWindow } from "electron";
-import { join } from "path";
-import { electronApp, optimizer, is } from "@electron-toolkit/utils";
-import { dialog } from "electron";
+import { electronApp, is, optimizer } from "@electron-toolkit/utils";
+import { app, BrowserWindow, dialog, shell } from "electron";
 import { autoUpdater } from "electron-updater";
+import { join } from "path";
 // @ts-ignore
 import icon from "../../resources/icon.png?asset";
 /**
@@ -16,10 +15,13 @@ import icon from "../../resources/icon.png?asset";
 
 // 导入 IPC handlers
 import {
-  registerStorageHandlers,
   registerDebugHandlers,
   registerDownloadHandlers,
+  registerFlow2ApiHandlers,
+  registerStorageHandlers,
+  registerTrackingHandlers,
 } from "./ipc";
+import { flow2ApiService } from "./ipc/flow2api/service";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -103,10 +105,12 @@ function createWindow(): void {
   registerStorageHandlers();
   registerDebugHandlers();
   registerDownloadHandlers();
+  registerFlow2ApiHandlers();
+  registerTrackingHandlers();
 }
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId("com.jike.app");
+  electronApp.setAppUserModelId("com.electron");
 
   app.on("browser-window-created", (_, window) => {
     optimizer.watchWindowShortcuts(window);
@@ -121,5 +125,6 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  void flow2ApiService.stop();
   app.quit();
 });

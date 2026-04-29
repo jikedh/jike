@@ -6,6 +6,25 @@ import type { ChatPersonaId } from "shared/types/NoteGeneration";
 export type ChatSettingsStoreType = {
   // ── 数据字段 ──────────────────────────────────
   defaultModel: string;
+  defaultImageModel: string;
+  defaultImagePlatform?: string;
+  defaultImageSize: string;
+  defaultImageResolution: string;
+  defaultVideoModel: string;
+  defaultVideoAspectRatio: string;
+  defaultVideoDuration: number;
+  defaultVideoResolution: string;
+  defaultVideoMode?: string;
+  defaultVideoGenerateAudio?: boolean;
+  defaultVideoAudio?: boolean;
+  defaultVideoPromptExtend?: boolean;
+  defaultNewVideoModel?: string;
+  defaultNewVideoAspectRatio?: string;
+  defaultNewVideoDuration?: number;
+  defaultNewVideoResolution?: string;
+  defaultNewVideoMode?: string;
+  defaultNewVideoGenerateAudio?: boolean;
+  defaultNewVideoPromptExtend?: boolean;
   defaultPersonaId: ChatPersonaId;
   autoSaveEnabled: boolean;
   gridVisible: boolean;
@@ -17,6 +36,31 @@ export type ChatSettingsStoreType = {
 
   // ── 配对 setter ───────────────────────────────
   setDefaultModel: (model: string) => void;
+  setDefaultImagePreset: (preset: {
+    model?: string;
+    platform?: string;
+    size?: string;
+    resolution?: string;
+  }) => void;
+  setDefaultVideoPreset: (preset: {
+    model?: string;
+    aspectRatio?: string;
+    duration?: number;
+    resolution?: string;
+    mode?: string;
+    generateAudio?: boolean;
+    audio?: boolean;
+    promptExtend?: boolean;
+  }) => void;
+  setDefaultNewVideoPreset: (preset: {
+    model?: string;
+    aspectRatio?: string;
+    duration?: number;
+    resolution?: string;
+    mode?: string;
+    generateAudio?: boolean;
+    promptExtend?: boolean;
+  }) => void;
   setDefaultPersonaId: (personaId: ChatPersonaId) => void;
   setAutoSaveEnabled: (enabled: boolean) => void;
   setGridVisible: (visible: boolean) => void;

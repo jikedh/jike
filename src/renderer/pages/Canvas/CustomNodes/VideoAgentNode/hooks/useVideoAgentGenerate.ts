@@ -65,7 +65,10 @@ export const useVideoAgentGenerate = ({
 
     const parentVideoNode = incomingEdges
       .map((edge) => currentNodes.find((node) => node.id === edge.source))
-      .find((node) => node?.type === "videoNode");
+      // 新版视频节点的结果结构与旧版兼容，这里一并作为视频输入处理。
+      .find(
+        (node) => node?.type === "videoNode" || node?.type === "newVideoNode",
+      );
 
     if (!parentVideoNode) {
       return { videoUrl: null, inputError: "输入节点必须是视频节点" };

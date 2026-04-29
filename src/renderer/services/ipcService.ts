@@ -1,6 +1,6 @@
 export const ipcRenderService = {
   send: (channel: string, data?: any) =>
-    window.electronApi.ipcService.send(channel, data),
+    window.electron.ipcRenderer.send(channel, data),
   invoke: (channel: string, data?: any) =>
-    window.electronApi.ipcService.invoke(channel, data),
+    window.electron.ipcRenderer.invoke(channel, data),
 };

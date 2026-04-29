@@ -1,5 +1,5 @@
 import { addEdge, applyEdgeChanges, applyNodeChanges } from "@xyflow/react";
-import { uploadFileToOSS } from "service/oss";
+import { copyVideoUrlToOss } from "service/oss";
 import {
   getCanvasDataKey,
   getLocalFilePath,
@@ -9,14 +9,23 @@ import {
   saveGeneratedImageToLocal,
   saveGeneratedVideoToLocal,
 } from "service/projectStorage";
-import { getGenerationScoreCost } from "shared/constants/ai-models";
+import {
+  NANO_BANANA_LOCAL_MODEL,
+  NANO_BANANA_LOCAL_PLATFORM,
+} from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
-import type { GeminiYwResponseBody } from "shared/types/detail/gemini-yw";
+import { getGenerationPointsByScene } from "shared/constants/model-points";
+import {
+  normalizeRequiredPoints,
+  POINTS_FEATURE_ENABLED,
+} from "shared/constants/points";
+import type { GeminiYwResponseBody } from "shared/types/detail/Yunwu/gemini-yw";
 import type {
   AllNodeType,
   AudioGenerationNode,
   EdgeType,
   ImageGenerationNode,
+  NewVideoGenerationNode,
   VideoGenerationNode,
 } from "shared/types/flow";
 import type {
@@ -27,6 +36,19 @@ import type {
   NodeType,
 } from "shared/types/zustand/canvas-flow";
 import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
+import { normalizeLocalGeminiErrorDetail } from "shared/utils/localGeminiErrors";
+import {
+  getRemoteMediaUrl,
+  hydrateMediaForRuntime,
+} from "shared/utils/mediaPersistence";
+import {
+  appendMediaSequences,
+  assignMissingMediaSequences,
+} from "shared/utils/mediaSequence";
+import {
+  cloneNodeDataForCopy,
+  resetNodeDataRuntimeState,
+} from "shared/utils/nodeCopy";
 import { nodeFactoryMap } from "shared/utils/nodeFactory";
 import {
   buildReferenceHighlightState,
@@ -41,6 +63,7 @@ import {
   updateAudioNodeInList,
   updateImageAgentNodeInList,
   updateImageNodeInList,
+  updateNewVideoNodeInList,
   updateTableNodeInList,
   updateTextAgentNodeInList,
   updateVideoAgentNodeInList,
@@ -67,12 +90,235 @@ import {
   submitMjImagine,
 } from "@/api/ai";
 import { updateVipScore } from "@/api/jikeing";
+import {
+  getClosestAspectRatio,
+  getImageDimensions,
+  getNodeSizeByAspectRatio,
+  getVideoDimensions,
+} from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { buildMidjourneyPrompt } from "@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt";
+import { aiVideoTrackingService } from "@/services/aiVideoTracking";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
+import { saveCurrentCanvasToHistory } from "@/utils/canvasHistoryBridge";
 
 // ==================== 持久化配置 ====================
 
 const CANVAS_STORAGE_VERSION = 1;
+
+const updateVideoTrackFinalStatus = async (
+  taskId: string | undefined,
+  status: "SUCCESS" | "FAIL",
+  errorMessage?: string,
+) => {
+  if (!taskId) {
+    return;
+  }
+  await aiVideoTrackingService.updateStatus(taskId, status, errorMessage);
+};
+
+const NANO_BANANA_MODEL_MAPPING: Record<string, Record<string, string>> = {
+  "1K": {
+    "16:9": "gemini-3.0-pro-image-landscape",
+    "9:16": "gemini-3.0-pro-image-portrait",
+    "1:1": "gemini-3.0-pro-image-square",
+    "4:3": "gemini-3.0-pro-image-four-three",
+    "3:4": "gemini-3.0-pro-image-three-four",
+  },
+  "2K": {
+    "16:9": "gemini-3.0-pro-image-landscape-2k",
+    "9:16": "gemini-3.0-pro-image-portrait-2k",
+    "1:1": "gemini-3.0-pro-image-square-2k",
+    "4:3": "gemini-3.0-pro-image-four-three-2k",
+    "3:4": "gemini-3.0-pro-image-three-four-2k",
+  },
+  "4K": {
+    "16:9": "gemini-3.0-pro-image-landscape-4k",
+    "9:16": "gemini-3.0-pro-image-portrait-4k",
+    "1:1": "gemini-3.0-pro-image-square-4k",
+    "4:3": "gemini-3.0-pro-image-four-three-4k",
+    "3:4": "gemini-3.0-pro-image-three-four-4k",
+  },
+};
+
+const resolveLocalGeminiImageModel = ({
+  model,
+  platform,
+  size,
+  resolution,
+}: {
+  model?: string;
+  platform?: string;
+  size?: string;
+  resolution?: string;
+}) => {
+  if (
+    model !== NANO_BANANA_LOCAL_MODEL ||
+    platform !== NANO_BANANA_LOCAL_PLATFORM
+  ) {
+    return "gemini-3-pro-image-preview";
+  }
+
+  const resolutionMapping = resolution
+    ? NANO_BANANA_MODEL_MAPPING[resolution]
+    : undefined;
+  const resolvedModel = size ? resolutionMapping?.[size] : undefined;
+  if (resolvedModel) {
+    return resolvedModel;
+  }
+
+  throw new Error(
+    `Nano Banana Pro 暂不支持 ${size ?? "未知比例"} / ${resolution ?? "未知分辨率"}，请使用 1:1、16:9、9:16、4:3、3:4，并选择 1K/2K/4K`,
+  );
+};
+
+const inferImageMimeTypeFromUri = (uri: string): string | undefined => {
+  const dataUriMatch = uri.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
+  if (dataUriMatch) {
+    return dataUriMatch[1];
+  }
+
+  const normalizedUri = uri.split("?")[0].toLowerCase();
+  if (normalizedUri.endsWith(".jpg") || normalizedUri.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+  if (normalizedUri.endsWith(".png")) {
+    return "image/png";
+  }
+  if (normalizedUri.endsWith(".webp")) {
+    return "image/webp";
+  }
+  if (normalizedUri.endsWith(".gif")) {
+    return "image/gif";
+  }
+
+  return undefined;
+};
+
+export const hydrateCanvasNodesForRuntime = async (
+  nodes: AllNodeType[],
+): Promise<AllNodeType[]> => {
+  return Promise.all(
+    nodes.map(async (node): Promise<AllNodeType> => {
+      if (node.type === "imageNode" && node.data?.result?.data) {
+        const processedData = await Promise.all(
+          node.data.result.data.map(async (item: any) => {
+            if (item.relativePath || item.localPath) {
+              try {
+                const path = item.localPath || item.relativePath;
+                const fileBytes = await readMediaFromLocal(path);
+                if (fileBytes) {
+                  const ext =
+                    (item.localFileName || item.localName || item.fileName)
+                      ?.split(".")
+                      .pop() || "png";
+                  const blob = new Blob([fileBytes], {
+                    type: `image/${ext}`,
+                  });
+                  const blobUrl = URL.createObjectURL(blob);
+                  return hydrateMediaForRuntime(item, blobUrl);
+                }
+              } catch (err) {
+                console.warn("Failed to load local image:", err);
+              }
+            }
+            return hydrateMediaForRuntime(item);
+          }),
+        );
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            result: {
+              ...node.data.result,
+              data: assignMissingMediaSequences(processedData),
+            },
+          },
+        };
+      }
+
+      if (
+        (node.type === "videoNode" || node.type === "newVideoNode") &&
+        node.data?.result?.data
+      ) {
+        const processedData = await Promise.all(
+          node.data.result.data.map(async (item: any) => {
+            if (item.relativePath || item.localPath) {
+              try {
+                const path = item.localPath || item.relativePath;
+                const fileBytes = await readMediaFromLocal(path);
+                if (fileBytes) {
+                  const ext =
+                    item.format ||
+                    (item.localFileName || item.localName || item.fileName)
+                      ?.split(".")
+                      .pop() ||
+                    "mp4";
+                  const blob = new Blob([fileBytes], {
+                    type: `video/${ext}`,
+                  });
+                  const blobUrl = URL.createObjectURL(blob);
+                  return hydrateMediaForRuntime(item, blobUrl);
+                }
+              } catch (err) {
+                console.warn("Failed to load local video:", err);
+              }
+            }
+            return hydrateMediaForRuntime(item);
+          }),
+        );
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            result: {
+              ...node.data.result,
+              data: assignMissingMediaSequences(processedData),
+            },
+          },
+        };
+      }
+
+      if (node.type === "audioNode" && node.data?.result?.data) {
+        const processedData = await Promise.all(
+          node.data.result.data.map(async (item: any) => {
+            if (item.relativePath || item.localPath) {
+              try {
+                const path = item.localPath || item.relativePath;
+                const fileBytes = await readMediaFromLocal(path);
+                if (fileBytes) {
+                  const ext =
+                    (item.localFileName || item.localName || item.fileName)
+                      ?.split(".")
+                      .pop() || "mp3";
+                  const blob = new Blob([fileBytes], {
+                    type: `audio/${ext}`,
+                  });
+                  const blobUrl = URL.createObjectURL(blob);
+                  return hydrateMediaForRuntime(item, blobUrl);
+                }
+              } catch (err) {
+                console.warn("Failed to load local audio:", err);
+              }
+            }
+            return hydrateMediaForRuntime(item);
+          }),
+        );
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            result: {
+              ...node.data.result,
+              data: processedData,
+            },
+          },
+        };
+      }
+
+      return node;
+    }),
+  );
+};
 
 /**
  * 标准图片生成轮询逻辑（非 Midjourney 模型）
@@ -136,9 +382,7 @@ const pollImageGeneration = async (
 
       // 解析任务状态（兼容大小写）
       const taskStatus =
-        response?.data?.status ??
-        response?.result?.status ??
-        response?.status;
+        response?.data?.status ?? response?.result?.status ?? response?.status;
 
       // 解析图片 URL：优先从 result.data[] 提取（Gemini/Seedream 格式）
       // 兼容结构：response.result.data = [{ url: string }]
@@ -153,7 +397,10 @@ const pollImageGeneration = async (
         .filter(Boolean);
 
       const progressValue = Number(
-        response?.data?.progress ?? response?.result?.progress ?? response?.progress ?? 50,
+        response?.data?.progress ??
+          response?.result?.progress ??
+          response?.progress ??
+          50,
       );
 
       // 成功状态：小写 completed 或大写 SUCCESS/SUCCEEDED/COMPLETED
@@ -170,11 +417,9 @@ const pollImageGeneration = async (
           images.map(async (url: string) => {
             if (url && projectId) {
               try {
-                // 从 URL 中提取扩展名
                 const urlPath = new URL(url).pathname;
                 const ext = urlPath.split(".").pop()?.toLowerCase() || "png";
 
-                // 下载并保存到本地
                 const fileName = await saveGeneratedImageToLocal(
                   projectId,
                   url,
@@ -182,37 +427,14 @@ const pollImageGeneration = async (
                 );
 
                 if (fileName) {
-                  // 获取相对路径
                   const relativePath = getLocalFilePath(
                     projectId,
                     "generate_image",
                     fileName,
                   );
 
-                  // 上传到 OSS
-                  let ossUrl: string | undefined;
-                  try {
-                    const fileBytes = relativePath
-                      ? await readMediaFromLocal(relativePath)
-                      : null;
-                    if (fileBytes) {
-                      const file = new File([fileBytes], fileName, {
-                        type: `image/${ext}`,
-                      });
-                      const ossResult = await uploadFileToOSS(file);
-                      if (ossResult.url) {
-                        ossUrl = ossResult.url;
-                      }
-                    }
-                  } catch (ossError) {
-                    console.error(
-                      "[pollImageGeneration] 上传图片到 OSS 失败:",
-                      ossError,
-                    );
-                  }
-
                   return {
-                    url: ossUrl || url,
+                    url,
                     localName: fileName,
                     localPath: relativePath,
                   };
@@ -232,7 +454,10 @@ const pollImageGeneration = async (
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             // 追加新结果到 result.data，而不是覆盖
             const existingData = data.result?.data ?? [];
-            const mergedData = [...existingData, ...processedResultData];
+            const mergedData = appendMediaSequences(
+              existingData,
+              processedResultData,
+            );
 
             // 更新已完成数量
             const completedCount = (data.completedCount ?? 0) + 1;
@@ -254,6 +479,10 @@ const pollImageGeneration = async (
             };
           }),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          getState().saveGraph();
+        }
 
         stopImagePollingInternal(taskId);
         // 如果所有任务都完成了，清理计数
@@ -304,6 +533,10 @@ const pollImageGeneration = async (
             };
           }),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          getState().saveGraph();
+        }
 
         stopImagePollingInternal(taskId);
         const currentData = getState().nodes.find((n) => n.id === nodeId)
@@ -346,6 +579,10 @@ const pollImageGeneration = async (
         },
       })),
     }));
+    saveCurrentCanvasToHistory();
+    if (useChatSettingsStore.getState().autoSaveEnabled) {
+      getState().saveGraph();
+    }
   }
 };
 
@@ -428,11 +665,9 @@ const pollMjImageGeneration = async (
           newImageUrls.map(async (url: string) => {
             if (url && projectId) {
               try {
-                // 从 URL 中提取扩展名
                 const urlPath = new URL(url).pathname;
                 const ext = urlPath.split(".").pop()?.toLowerCase() || "png";
 
-                // 下载并保存到本地
                 const fileName = await saveGeneratedImageToLocal(
                   projectId,
                   url,
@@ -440,37 +675,14 @@ const pollMjImageGeneration = async (
                 );
 
                 if (fileName) {
-                  // 获取相对路径
                   const relativePath = getLocalFilePath(
                     projectId,
                     "generate_image",
                     fileName,
                   );
 
-                  // 上传到 OSS
-                  let ossUrl: string | undefined;
-                  try {
-                    const fileBytes = relativePath
-                      ? await readMediaFromLocal(relativePath)
-                      : null;
-                    if (fileBytes) {
-                      const file = new File([fileBytes], fileName, {
-                        type: `image/${ext}`,
-                      });
-                      const ossResult = await uploadFileToOSS(file);
-                      if (ossResult.url) {
-                        ossUrl = ossResult.url;
-                      }
-                    }
-                  } catch (ossError) {
-                    console.error(
-                      "[pollMjImageGeneration] 上传图片到 OSS 失败:",
-                      ossError,
-                    );
-                  }
-
                   return {
-                    url: ossUrl || url, // 使用 OSS URL，如果上传失败则使用原始 URL
+                    url,
                     localName: fileName,
                     localPath: relativePath,
                   };
@@ -490,24 +702,14 @@ const pollMjImageGeneration = async (
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             // 追加新结果到 result.data，而不是覆盖
             const existingData = data.result?.data ?? [];
-            const mergedData = [...existingData, ...processedResultData];
+            const mergedData = appendMediaSequences(
+              existingData,
+              processedResultData,
+            );
 
             // 更新已完成数量
             const completedCount = (data.completedCount ?? 0) + 1;
-            // 判断是否所有任务都已完成
             const allCompleted = completedCount >= totalTaskCount;
-
-            // 更新 ossUrlMap 缓存
-            const newOssUrlMap: Record<string, string> = { ...data.ossUrlMap };
-            processedResultData.forEach((item: any, index: number) => {
-              if (item.url && item.url.includes("aliyuncs.com")) {
-                // 使用原始 URL 作为 key
-                const originalUrl = newImageUrls[index];
-                if (originalUrl) {
-                  newOssUrlMap[originalUrl] = item.url;
-                }
-              }
-            });
 
             return {
               ...data,
@@ -520,11 +722,14 @@ const pollMjImageGeneration = async (
                 data: mergedData,
               },
               completedCount,
-              ossUrlMap: newOssUrlMap,
               error: allCompleted ? undefined : data.error,
             };
           }),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          getState().saveGraph();
+        }
 
         stopImagePollingInternal(taskId);
         // 如果所有任务都完成了，清理计数
@@ -568,6 +773,10 @@ const pollMjImageGeneration = async (
             };
           }),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          getState().saveGraph();
+        }
 
         stopImagePollingInternal(taskId);
         const currentData = getState().nodes.find((n) => n.id === nodeId)
@@ -607,11 +816,16 @@ const pollMjImageGeneration = async (
         },
       })),
     }));
+    saveCurrentCanvasToHistory();
+    if (useChatSettingsStore.getState().autoSaveEnabled) {
+      getState().saveGraph();
+    }
   }
 };
 
 /**
  * 视频生成轮询逻辑
+ * @param isSeedance20 是否为豆包 Seedance 2.0（使用快手 API 轮询）
  */
 const pollVideoGeneration = async (
   taskId: string,
@@ -621,6 +835,7 @@ const pollVideoGeneration = async (
     updater: (state: CanvasFlowStoreType) => Partial<CanvasFlowStoreType>,
   ) => void,
   getState: () => CanvasFlowStoreType,
+  isSeedance20 = false,
 ) => {
   const startTime = Date.now();
   let missingResultUrlStartTime: number | null = null;
@@ -645,10 +860,18 @@ const pollVideoGeneration = async (
             },
           })),
         }));
+        await updateVideoTrackFinalStatus(
+          taskId,
+          "FAIL",
+          "视频生成超时，请稍后再试",
+        );
         return;
       }
 
-      const response: any = await getLzVideoTaskStatus(taskId);
+      // 根据模型类型选择不同的轮询接口
+      const response: any = isSeedance20
+        ? await getLzVideoTaskStatus(taskId)
+        : await getDashscopeVideoTaskStatus(taskId);
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
       if (!currentNode || (currentNode.type !== "videoNode" && currentNode.type !== "videoDemoNode")) {
@@ -687,13 +910,18 @@ const pollVideoGeneration = async (
               progress: normalized.progress,
               task_id: normalizedTaskId,
               error: {
-                code: "LZ_VIDEO_MISSING_URL",
+                code: "VIDEO_MISSING_URL",
                 message: "任务已完成但未返回视频地址，请稍后重试",
               },
             })),
           }));
 
           stopVideoPollingInternal(nodeId);
+          await updateVideoTrackFinalStatus(
+            normalizedTaskId,
+            "FAIL",
+            "任务已完成但未返回视频地址，请稍后重试",
+          );
           return;
         }
 
@@ -702,6 +930,10 @@ const pollVideoGeneration = async (
         const projectId = getState().projectId;
         const processedResultData = await Promise.all(
           normalized.videoItems.map(async (item: any) => {
+            let localName = item.localName;
+            let localPath = item.localPath;
+
+            // 1. 保存到本地
             if (item.url && projectId) {
               try {
                 const ext = item.format || "mp4";
@@ -712,16 +944,12 @@ const pollVideoGeneration = async (
                 );
 
                 if (fileName) {
-                  const relativePath = getLocalFilePath(
+                  localName = fileName;
+                  localPath = getLocalFilePath(
                     projectId,
                     "generate_video",
                     fileName,
                   );
-                  return {
-                    ...item,
-                    localName: fileName,
-                    localPath: relativePath,
-                  };
                 }
               } catch (saveError) {
                 console.error(
@@ -730,32 +958,68 @@ const pollVideoGeneration = async (
                 );
               }
             }
-            return item;
+
+            // 2. 转存到用户 OSS
+            let ossUrl = item.url;
+            if (item.url) {
+              try {
+                const copiedUrl = await copyVideoUrlToOss(item.url);
+                if (copiedUrl) {
+                  ossUrl = copiedUrl;
+                }
+              } catch (copyError) {
+                console.error(
+                  "[pollVideoGeneration] 转存视频到 OSS 失败:",
+                  copyError,
+                );
+              }
+            }
+
+            return {
+              ...item,
+              url: ossUrl,
+              localName,
+              localPath,
+            };
           }),
         );
 
         setState((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            status: GenerationStatus.COMPLETED,
-            progress: 100,
-            task_id: normalizedTaskId,
-            result: {
-              type: "video",
-              data: processedResultData,
-            },
-            error: undefined,
-          })),
+          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => {
+            const existingData = data.result?.data ?? [];
+            const mergedData = appendMediaSequences(
+              existingData,
+              processedResultData,
+            );
+
+            return {
+              ...data,
+              status: GenerationStatus.COMPLETED,
+              progress: 100,
+              task_id: normalizedTaskId,
+              result: {
+                type: "video",
+                data: mergedData,
+              },
+              error: undefined,
+            };
+          }),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          getState().saveGraph();
+        }
 
         stopVideoPollingInternal(nodeId);
+        await updateVideoTrackFinalStatus(normalizedTaskId, "SUCCESS");
 
         await deductVipScoreAfterGeneration({
           scene: "video",
           nodeId,
           taskId: normalizedTaskId,
           model: (currentNode.data as VideoGenerationNode)?.model,
-          requiredPoints: (currentNode.data as VideoGenerationNode)?.requiredPoints,
+          requiredPoints: (currentNode.data as VideoGenerationNode)
+            ?.requiredPoints,
         });
         return;
       }
@@ -768,13 +1032,22 @@ const pollVideoGeneration = async (
             progress: normalized.progress,
             task_id: normalizedTaskId,
             error: {
-              code: "LZ_VIDEO_FAILED",
+              code: "VIDEO_FAILED",
               message: normalized.errorMessage || "生成失败，请稍后再试",
             },
           })),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          getState().saveGraph();
+        }
 
         stopVideoPollingInternal(nodeId);
+        await updateVideoTrackFinalStatus(
+          normalizedTaskId,
+          "FAIL",
+          normalized.errorMessage || "生成失败，请稍后再试",
+        );
         return;
       }
 
@@ -806,35 +1079,50 @@ const pollVideoGeneration = async (
         },
       })),
     }));
+    saveCurrentCanvasToHistory();
+    if (useChatSettingsStore.getState().autoSaveEnabled) {
+      getState().saveGraph();
+    }
+    await updateVideoTrackFinalStatus(
+      taskId,
+      "FAIL",
+      serverMessage || "轮询失败，请稍后再试",
+    );
   }
 };
 
-/**
- * Wan 2.7 I2V 视频生成轮询逻辑
- */
-const pollWanI2vVideoGeneration = async (
-  taskId: string,
-  nodeId: string,
-  signal: AbortSignal,
+const pollNewVideoGeneration = async ({
+  taskId,
+  nodeId,
+  signal,
+  setState,
+  getState,
+  isSeedance20,
+  taskIndex,
+  totalTasks,
+}: {
+  taskId: string;
+  nodeId: string;
+  signal: AbortSignal;
   setState: (
     updater: (state: CanvasFlowStoreType) => Partial<CanvasFlowStoreType>,
-  ) => void,
-  getState: () => CanvasFlowStoreType,
-) => {
+  ) => void;
+  getState: () => CanvasFlowStoreType;
+  isSeedance20: boolean;
+  taskIndex: number;
+  totalTasks: number;
+}) => {
   const startTime = Date.now();
+  let missingResultUrlStartTime: number | null = null;
+
   try {
     while (true) {
       await wait(VIDEO_POLL_INTERVAL, signal);
-      if (signal.aborted) {
-        return;
-      }
+      if (signal.aborted) return;
 
-      // 检查是否超时
       if (Date.now() - startTime > VIDEO_TIMEOUT) {
-        console.error("[Wan I2V] 视频生成超时");
-        stopVideoPollingInternal(nodeId);
         setState((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
             ...data,
             status: GenerationStatus.FAILED,
             error: {
@@ -843,14 +1131,25 @@ const pollWanI2vVideoGeneration = async (
             },
           })),
         }));
+        await updateVideoTrackFinalStatus(
+          taskId,
+          "FAIL",
+          "视频生成超时，请稍后再试",
+        );
         return;
       }
 
-      const response: any = await getDashscopeVideoTaskStatus(taskId);
+      const response: any = isSeedance20
+        ? await getLzVideoTaskStatus(taskId)
+        : await getDashscopeVideoTaskStatus(taskId);
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
+<<<<<<< HEAD
       if (!currentNode || (currentNode.type !== "videoNode" && currentNode.type !== "videoDemoNode")) {
         stopVideoPollingInternal(nodeId);
+=======
+      if (!currentNode || currentNode.type !== "newVideoNode") {
+>>>>>>> origin/develop
         return;
       }
 
@@ -859,25 +1158,57 @@ const pollWanI2vVideoGeneration = async (
 
       if (normalized.status === GenerationStatus.COMPLETED) {
         if (normalized.missingResultUrl) {
+          if (!missingResultUrlStartTime) {
+            missingResultUrlStartTime = Date.now();
+          }
+
+          if (
+            Date.now() - missingResultUrlStartTime <=
+            VIDEO_RESULT_WAIT_TIMEOUT
+          ) {
+            continue;
+          }
+
           setState((state) => ({
-            nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-              ...data,
-              status: GenerationStatus.FAILED,
-              progress: normalized.progress,
-              task_id: normalizedTaskId,
-              error: {
-                code: "WAN_I2V_MISSING_URL",
-                message: "任务已完成但未返回视频地址，请稍后重试",
-              },
-            })),
+            nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
+              const failedTasks = [
+                ...((data.metadata?.failedTasks as unknown[]) ?? []),
+                normalizedTaskId,
+              ];
+              const completedCount =
+                (data.result?.data?.length ?? 0) + failedTasks.length;
+              return {
+                ...data,
+                status:
+                  completedCount >= totalTasks && !data.result?.data?.length
+                    ? GenerationStatus.FAILED
+                    : data.status,
+                metadata: {
+                  ...data.metadata,
+                  failedTasks,
+                },
+                error: {
+                  code: "VIDEO_MISSING_URL",
+                  message: "任务已完成但未返回视频地址，请稍后重试",
+                },
+              };
+            }),
           }));
-          stopVideoPollingInternal(nodeId);
+          await updateVideoTrackFinalStatus(
+            normalizedTaskId,
+            "FAIL",
+            "任务已完成但未返回视频地址，请稍后重试",
+          );
           return;
         }
 
         const projectId = getState().projectId;
         const processedResultData = await Promise.all(
           normalized.videoItems.map(async (item: any) => {
+            let localName = item.localName;
+            let localPath = item.localPath;
+
+            // 1. 保存到本地
             if (item.url && projectId) {
               try {
                 const ext = item.format || "mp4";
@@ -886,84 +1217,172 @@ const pollWanI2vVideoGeneration = async (
                   item.url,
                   ext,
                 );
+
                 if (fileName) {
-                  const relativePath = getLocalFilePath(
+                  localName = fileName;
+                  localPath = getLocalFilePath(
                     projectId,
                     "generate_video",
                     fileName,
                   );
-                  return {
-                    ...item,
-                    localName: fileName,
-                    localPath: relativePath,
-                  };
                 }
               } catch (saveError) {
-                console.error("[Wan I2V] 保存视频到本地失败:", saveError);
+                console.error(
+                  "[pollNewVideoGeneration] 保存视频到本地失败:",
+                  saveError,
+                );
               }
             }
-            return item;
+
+            // 2. 转存到用户 OSS
+            let ossUrl = item.url;
+            if (item.url) {
+              try {
+                const copiedUrl = await copyVideoUrlToOss(item.url);
+                if (copiedUrl) {
+                  ossUrl = copiedUrl;
+                }
+              } catch (copyError) {
+                console.error(
+                  "[pollNewVideoGeneration] 转存视频到 OSS 失败:",
+                  copyError,
+                );
+              }
+            }
+
+            return {
+              ...item,
+              url: ossUrl,
+              localName,
+              localPath,
+            };
           }),
         );
 
         setState((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            status: GenerationStatus.COMPLETED,
-            progress: 100,
-            task_id: normalizedTaskId,
-            result: {
-              type: "video",
-              data: processedResultData,
-            },
-            error: undefined,
-          })),
+          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
+            const existingData = data.result?.data ?? [];
+            const mergedData = appendMediaSequences(
+              existingData,
+              processedResultData,
+            );
+            const failedCount = (
+              (data.metadata?.failedTasks as unknown[]) ?? []
+            ).length;
+            const completedCount = mergedData.length + failedCount;
+            const completed = completedCount >= totalTasks;
+
+            return {
+              ...data,
+              status: completed
+                ? GenerationStatus.COMPLETED
+                : GenerationStatus.IN_PROGRESS,
+              progress: completed
+                ? 100
+                : Math.min(99, Math.round((completedCount / totalTasks) * 100)),
+              task_id: normalizedTaskId,
+              result: {
+                type: "video",
+                data: mergedData,
+              },
+              error: undefined,
+            };
+          }),
         }));
 
-        stopVideoPollingInternal(nodeId);
-
-        await deductVipScoreAfterGeneration({
-          scene: "video",
-          nodeId,
-          taskId: normalizedTaskId,
-          model: (currentNode.data as VideoGenerationNode)?.model,
-          requiredPoints: (currentNode.data as VideoGenerationNode)?.requiredPoints,
-        });
+        const updatedNode = getState().nodes.find((node) => node.id === nodeId);
+        if ((updatedNode?.data as any)?.status === GenerationStatus.COMPLETED) {
+          saveCurrentCanvasToHistory();
+          if (useChatSettingsStore.getState().autoSaveEnabled) {
+            getState().saveGraph();
+          }
+          // 多任务都收敛后清理轮询控制器，避免后续停止/重新生成时拿到旧控制器。
+          stopVideoPollingInternal(nodeId);
+          await deductVipScoreAfterGeneration({
+            scene: "video",
+            nodeId,
+            taskId: normalizedTaskId,
+            model: (updatedNode?.data as NewVideoGenerationNode)?.model,
+            requiredPoints: (updatedNode?.data as NewVideoGenerationNode)
+              ?.requiredPoints,
+          });
+        }
+        await updateVideoTrackFinalStatus(normalizedTaskId, "SUCCESS");
         return;
       }
 
       if (normalized.status === GenerationStatus.FAILED) {
         setState((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            status: GenerationStatus.FAILED,
-            progress: normalized.progress,
-            task_id: normalizedTaskId,
-            error: {
-              code: "WAN_I2V_FAILED",
-              message: normalized.errorMessage || "生成失败，请稍后再试",
-            },
-          })),
+          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
+            const failedTasks = [
+              ...((data.metadata?.failedTasks as unknown[]) ?? []),
+              normalizedTaskId,
+            ];
+            const successCount = data.result?.data?.length ?? 0;
+            const completedCount = successCount + failedTasks.length;
+            const allDone = completedCount >= totalTasks;
+
+            return {
+              ...data,
+              status:
+                allDone && successCount === 0
+                  ? GenerationStatus.FAILED
+                  : allDone
+                    ? GenerationStatus.COMPLETED
+                    : GenerationStatus.IN_PROGRESS,
+              progress: allDone
+                ? 100
+                : Math.round((completedCount / totalTasks) * 100),
+              metadata: {
+                ...data.metadata,
+                failedTasks,
+              },
+              error:
+                allDone && successCount === 0
+                  ? {
+                      code: "VIDEO_FAILED",
+                      message:
+                        normalized.errorMessage || "生成失败，请稍后再试",
+                    }
+                  : data.error,
+            };
+          }),
         }));
-        stopVideoPollingInternal(nodeId);
+        const failedNode = getState().nodes.find((node) => node.id === nodeId);
+        const failedStatus = (failedNode?.data as any)?.status;
+        if (
+          failedStatus === GenerationStatus.FAILED ||
+          failedStatus === GenerationStatus.COMPLETED
+        ) {
+          stopVideoPollingInternal(nodeId);
+        }
+        await updateVideoTrackFinalStatus(
+          normalizedTaskId,
+          "FAIL",
+          normalized.errorMessage || "生成失败，请稍后再试",
+        );
         return;
       }
 
+      missingResultUrlStartTime = null;
       setState((state) => ({
-        nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+        nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
           ...data,
           status: normalized.status,
-          progress: normalized.progress,
+          progress: Math.max(
+            data.progress ?? 0,
+            Math.round(
+              ((taskIndex + normalized.progress / 100) / totalTasks) * 100,
+            ),
+          ),
           task_id: normalizedTaskId,
         })),
       }));
     }
   } catch (pollError) {
-    console.error("[Wan I2V] 视频生成轮询失败:", pollError);
-    stopVideoPollingInternal(nodeId);
     const serverMessage = getRequestErrorMessage(pollError);
     setState((state) => ({
-      nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+      nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
         ...data,
         status: GenerationStatus.FAILED,
         error: {
@@ -974,6 +1393,11 @@ const pollWanI2vVideoGeneration = async (
         },
       })),
     }));
+    await updateVideoTrackFinalStatus(
+      taskId,
+      "FAIL",
+      serverMessage || "轮询失败，请稍后再试",
+    );
   }
 };
 
@@ -994,6 +1418,10 @@ const deductVipScoreAfterGeneration = async ({
   taskId?: string;
   requiredPoints?: number;
 }) => {
+  if (!POINTS_FEATURE_ENABLED) {
+    return;
+  }
+
   const loginUserId = getJikeingUserId();
   if (!loginUserId) {
     console.warn("[score] 扣费跳过：未获取到登录用户", {
@@ -1005,11 +1433,14 @@ const deductVipScoreAfterGeneration = async ({
     return;
   }
 
-  const scoreCost = Number(requiredPoints);
+  const scoreCost = normalizeRequiredPoints(requiredPoints);
   const finalScoreCost =
     Number.isFinite(scoreCost) && scoreCost > 0
       ? scoreCost
-      : getGenerationScoreCost(model);
+      : getGenerationPointsByScene({ scene, model });
+  if (!(finalScoreCost > 0)) {
+    return;
+  }
   try {
     await updateVipScore({
       userId: loginUserId,
@@ -1049,7 +1480,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       noteNode: "note",
       imageNode: "image",
       videoNode: "video",
+<<<<<<< HEAD
       videoDemoNode: "videoDemo",
+=======
+      newVideoNode: "newVideo",
+>>>>>>> origin/develop
       agentNode: "agent",
       panoramaNode: "panorama",
       audioNode: "audio",
@@ -1062,14 +1497,39 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     return nodeTypeMap[node.type] ?? "default";
   };
 
+  const getNodeResultUrls = (node: AllNodeType | undefined): string[] => {
+    const nodeData = node?.data as any;
+
+    return (nodeData?.result?.data ?? [])
+      .map((item: any) => getRemoteMediaUrl(item) ?? item?.url)
+      .filter(Boolean);
+  };
+
+  const updateUrlListByMode = (
+    currentUrls: string[],
+    sourceUrls: string[],
+    mode: "add" | "remove",
+  ) => {
+    if (mode === "add") {
+      // 相同远程 URL 可能来自复制后的多个图片节点，必须按引用次数保留。
+      return [...currentUrls, ...sourceUrls];
+    }
+
+    // 删除连接时只移除当前边贡献的引用次数，避免同 URL 的其他连接一起失效。
+    const nextUrls = [...currentUrls];
+    sourceUrls.forEach((sourceUrl) => {
+      const removeIndex = nextUrls.findIndex((url) => url === sourceUrl);
+      if (removeIndex >= 0) {
+        nextUrls.splice(removeIndex, 1);
+      }
+    });
+    return nextUrls;
+  };
+
   /**
-   * 同步图片节点的 image_urls 依赖
-   * 支持 Image→Image 和 Image→Video 的边操作
-   * @param nodes 当前节点数组
-   * @param edge 要处理的边
-   * @param mode 'add' = 连接时合并, 'remove' = 删除时清理
+   * 同步由连接线带来的媒体参数依赖。
    */
-  const syncImageUrlsByEdge = (
+  const syncMediaUrlsByEdge = (
     nodes: any[],
     edge: any,
     mode: "add" | "remove",
@@ -1077,30 +1537,51 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     const sourceNode = nodes.find((n) => n.id === edge.source);
     const targetNode = nodes.find((n) => n.id === edge.target);
 
-    // 只处理来自 imageNode 的关联，且目标是 imageNode、videoNode 或 panoramaNode
-    if (!sourceNode || sourceNode.type !== "imageNode") {
-      return nodes;
-    }
-    if (
-      !targetNode ||
-      (targetNode.type !== "imageNode" &&
-        targetNode.type !== "videoNode" &&
-        targetNode.type !== "panoramaNode")
-    ) {
+    if (!sourceNode || !targetNode) {
       return nodes;
     }
 
-    // 从 source 的 result.data 提取 URL 字符串数组
-    const sourceData = sourceNode.data as any;
-    const sourceUrls = (sourceData?.result?.data ?? [])
-      .map((item: any) => item.url)
-      .filter(Boolean);
-
+    const sourceUrls = getNodeResultUrls(sourceNode);
     if (sourceUrls.length === 0) {
       return nodes;
     }
 
-    // 更新 target 的字段
+    const targetField = (() => {
+      if (sourceNode.type === "imageNode") {
+        if (
+          targetNode.type === "imageNode" ||
+          targetNode.type === "videoNode" ||
+          targetNode.type === "newVideoNode"
+        ) {
+          return "image_urls";
+        }
+
+        if (targetNode.type === "panoramaNode") {
+          return "image_url";
+        }
+      }
+
+      if (
+        (targetNode.type === "videoNode" ||
+          targetNode.type === "newVideoNode") &&
+        (sourceNode.type === "videoNode" || sourceNode.type === "newVideoNode")
+      ) {
+        return "video_urls";
+      }
+
+      if (
+        (targetNode.type === "videoNode" ||
+          targetNode.type === "newVideoNode") &&
+        sourceNode.type === "audioNode"
+      ) {
+        return "audio_urls";
+      }
+
+      return null;
+    })();
+
+    if (!targetField) return nodes;
+
     return nodes.map((node) => {
       if (node.id !== targetNode.id) {
         return node;
@@ -1108,8 +1589,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       const nodeData = node.data as any;
 
-      // 对于 panoramaNode，更新 image_url 字段
-      if (node.type === "panoramaNode") {
+      if (targetField === "image_url") {
         if (mode === "add") {
           return {
             ...node,
@@ -1129,18 +1609,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         }
       }
 
-      // 对于 imageNode 和 videoNode，更新 image_urls 字段
-      const currentUrls = nodeData?.image_urls ?? [];
-      let nextUrls: string[];
-
-      if (mode === "add") {
-        // 连接时：合并去重
-        nextUrls = Array.from(new Set([...currentUrls, ...sourceUrls]));
-      } else {
-        // 删除时：移除 source URLs
-        const sourceUrlSet = new Set(sourceUrls);
-        nextUrls = currentUrls.filter((url) => !sourceUrlSet.has(url));
-      }
+      const currentUrls = nodeData?.[targetField] ?? [];
+      const nextUrls = updateUrlListByMode(currentUrls, sourceUrls, mode);
 
       // 对于 imageNode，mode === "remove" 时也需要清理 midjourneyAdvanced 中的 URL
       let nextMidjourneyAdvanced = nodeData?.midjourneyAdvanced;
@@ -1167,7 +1637,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         ...node,
         data: {
           ...nodeData,
-          image_urls: nextUrls,
+          [targetField]: nextUrls,
           ...(nextMidjourneyAdvanced && {
             midjourneyAdvanced: nextMidjourneyAdvanced,
           }),
@@ -1200,6 +1670,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       imageUrl: null,
       sourceNodeId: null,
     },
+    annotationWorkspace: {
+      open: false,
+      imageUrl: null,
+      sourceNodeId: null,
+    },
 
     // 历史版本计数器（用于通知 useUndoRedo hook 保存快照）
     historyVersion: 0,
@@ -1207,6 +1682,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     historyResetTrigger: 0,
     // 选中节点数量初始化（用于避免 O(n²) 遍历）
     selectedNodesCount: 0,
+    isSelectionBoxActive: false,
 
     // ── 配对 setter ───────────────────────────────
     setNodes: (nodes) => set({ nodes }),
@@ -1218,6 +1694,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     setHydrated: (hydrated) => set({ hydrated }),
     setProjectId: (projectId) => set({ projectId }),
     setPanoramaViewer: (panoramaViewer) => set({ panoramaViewer }),
+    setAnnotationWorkspace: (annotationWorkspace) =>
+      set({ annotationWorkspace }),
+    setSelectionBoxActive: (isSelectionBoxActive) => {
+      if (get().isSelectionBoxActive !== isSelectionBoxActive) {
+        set({ isSelectionBoxActive });
+      }
+    },
 
     // ==================== 持久化方法实现 ====================
 
@@ -1286,61 +1769,18 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }
 
       // 处理节点中的本地文件，将相对路径转换为可显示的 blob URL
-      const processedNodes: AllNodeType[] = await Promise.all(
-        data.nodes.map(async (node): Promise<AllNodeType> => {
-          // 处理文本智能体节点的生成状态
-          if (
-            node.type === "textAgentNode" &&
-            node.data?.status === "generating"
-          ) {
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                status: "idle" as const,
-              },
-            };
-          }
+      const hydratedNodes = await hydrateCanvasNodesForRuntime(data.nodes);
+      const processedNodes: AllNodeType[] = hydratedNodes.map((node) => {
+        const runtimeSafeData = resetNodeDataRuntimeState(node.type, node.data);
 
-          // 处理图片节点的本地文件
-          if (node.type === "imageNode" && node.data?.result?.data) {
-            const processedData = await Promise.all(
-              node.data.result.data.map(async (item: any) => {
-                if (item.relativePath) {
-                  try {
-                    const fileBytes = await readMediaFromLocal(
-                      item.relativePath,
-                    );
-                    if (fileBytes) {
-                      const ext =
-                        (item.localFileName || item.fileName)
-                          ?.split(".")
-                          .pop() || "png";
-                      const blob = new Blob([fileBytes], {
-                        type: `image/${ext}`,
-                      });
-                      const blobUrl = URL.createObjectURL(blob);
-                      return { ...item, url: blobUrl };
-                    }
-                  } catch (err) {
-                    console.warn("Failed to load local image:", err);
-                  }
-                }
-                return item;
-              }),
-            );
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                result: {
-                  ...node.data.result,
-                  data: processedData,
-                },
-              },
-            };
-          }
+        if (runtimeSafeData !== node.data) {
+          return {
+            ...node,
+            data: runtimeSafeData as AllNodeType["data"],
+          };
+        }
 
+<<<<<<< HEAD
           // 处理视频节点的本地文件
           if ((node.type === "videoNode" || node.type === "videoDemoNode") && node.data?.result?.data) {
             const processedData = await Promise.all(
@@ -1424,6 +1864,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           return node;
         }),
       );
+=======
+        return node;
+      });
+>>>>>>> origin/develop
 
       set({
         projectId,
@@ -1575,16 +2019,119 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const nextPosition = position ?? getNextNodePosition(currentNodes);
 
       const newNode = factory(nextId, nextPosition, options);
+      const {
+        defaultImageModel,
+        defaultImagePlatform,
+        defaultImageSize,
+        defaultImageResolution,
+        defaultVideoModel,
+        defaultVideoAspectRatio,
+        defaultVideoDuration,
+        defaultVideoResolution,
+        defaultVideoMode,
+        defaultVideoGenerateAudio,
+        defaultVideoAudio,
+        defaultVideoPromptExtend,
+        defaultNewVideoModel,
+        defaultNewVideoAspectRatio,
+        defaultNewVideoDuration,
+        defaultNewVideoResolution,
+        defaultNewVideoMode,
+        defaultNewVideoGenerateAudio,
+        defaultNewVideoPromptExtend,
+      } = useChatSettingsStore.getState();
       const finalNode =
         newNode.type === "audioNode"
           ? {
-            ...newNode,
-            data: {
-              ...newNode.data,
-              nickname: getAudioNicknameByNodeId(nextId),
-            },
-          }
-          : newNode;
+              ...newNode,
+              data: {
+                ...newNode.data,
+                nickname: getAudioNicknameByNodeId(nextId),
+              },
+            }
+          : newNode.type === "imageNode"
+            ? {
+                ...newNode,
+                data: {
+                  ...newNode.data,
+                  model: defaultImageModel || newNode.data.model,
+                  platform: defaultImagePlatform || newNode.data.platform,
+                  size: defaultImageSize || newNode.data.size,
+                  resolution: defaultImageResolution || newNode.data.resolution,
+                },
+              }
+            : newNode.type === "newVideoNode"
+              ? {
+                  ...newNode,
+                  data: {
+                    ...newNode.data,
+                    // 新版视频只沿用新版模型的记忆，避免老版默认模型把新版下拉框顶成空值。
+                    model: [
+                      "seedance-2.0-fast",
+                      "seedance-2.0-pro",
+                      "wanxiang",
+                      "vidu-q3-pro",
+                      "vidu",
+                      "pixverse",
+                      "happyhorse",
+                      "keling",
+                    ].includes(defaultNewVideoModel ?? "")
+                      ? defaultNewVideoModel
+                      : newNode.data.model,
+                    aspect_ratio:
+                      defaultNewVideoAspectRatio || newNode.data.aspect_ratio,
+                    duration: defaultNewVideoDuration || newNode.data.duration,
+                    metadata: {
+                      ...(newNode.data.metadata ?? {}),
+                      params: {
+                        ...(newNode.data.metadata?.params as
+                          | Record<string, unknown>
+                          | undefined),
+                        aspectRatio:
+                          defaultNewVideoAspectRatio ||
+                          newNode.data.aspect_ratio,
+                        duration:
+                          defaultNewVideoDuration || newNode.data.duration,
+                        resolution: defaultNewVideoResolution,
+                        generateAudio: defaultNewVideoGenerateAudio,
+                        promptExtend: defaultNewVideoPromptExtend,
+                      },
+                      ...(defaultNewVideoMode !== undefined
+                        ? { mode: defaultNewVideoMode }
+                        : {}),
+                    },
+                  },
+                }
+              : newNode.type === "videoNode"
+                ? {
+                    ...newNode,
+                    data: {
+                      ...newNode.data,
+                      model: defaultVideoModel || newNode.data.model,
+                      aspect_ratio:
+                        defaultVideoAspectRatio || newNode.data.aspect_ratio,
+                      duration: defaultVideoDuration || newNode.data.duration,
+                      metadata: {
+                        ...(newNode.data.metadata ?? {}),
+                        resolution:
+                          defaultVideoResolution ||
+                          newNode.data.metadata?.resolution,
+                        ...(defaultVideoMode !== undefined
+                          ? { mode: defaultVideoMode }
+                          : {}),
+                        ...(defaultVideoGenerateAudio !== undefined
+                          ? { generate_audio: defaultVideoGenerateAudio }
+                          : {}),
+                        ...(defaultVideoAudio !== undefined
+                          ? { audio: defaultVideoAudio }
+                          : {}),
+                        ...(defaultVideoPromptExtend !== undefined
+                          ? { prompt_extend: defaultVideoPromptExtend }
+                          : {}),
+                      },
+                    },
+                  }
+                : newNode;
 
       set((state) => ({
         nodes: [...state.nodes, finalNode],
@@ -1593,10 +2140,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       // 保存历史记录
       get().requestHistorySave();
 
-      // 自动保存
-      if (useChatSettingsStore.getState().autoSaveEnabled) {
-        get().saveGraph();
-      }
+      // 新建节点属于结构性变更，始终立即落盘，避免 canvas.json 丢节点。
+      get().saveGraph();
 
       return nextId;
     },
@@ -1686,16 +2231,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const offsetX = 350;
       const offsetY = 300;
 
-      // 深拷贝 data，避免引用类型共享（如 result.data, image_urls 等）
-      const deepCopiedData = JSON.parse(JSON.stringify(node.data));
-      // 清除运行时状态，避免 Loading 等状态被复制
-      const {
-        status: _status,
-        isLoading: _isLoading,
-        progress: _progress,
-        error: _error,
-        ...cleanData
-      } = deepCopiedData;
+      const cleanData = cloneNodeDataForCopy(node.type, node.data);
       const newNode = {
         id: newId,
         type: node.type,
@@ -1718,12 +2254,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const finalDuplicatedNode =
         newNode.type === "audioNode"
           ? {
-            ...newNode,
-            data: {
-              ...newNode.data,
-              nickname: getAudioNicknameByNodeId(newId),
-            },
-          }
+              ...newNode,
+              data: {
+                ...newNode.data,
+                nickname: getAudioNicknameByNodeId(newId),
+              },
+            }
           : newNode;
 
       set((state) => {
@@ -1733,12 +2269,40 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           selected: false,
         }));
 
+        const copiedIncomingEdges =
+          node.type === "imageNode" ||
+          node.type === "videoNode" ||
+          node.type === "newVideoNode"
+            ? state.edges
+                .filter((edge) => edge.target === node.id)
+                .map((edge, edgeIndex) => {
+                  const { id: _id, target: _target, ...edgePayload } = edge;
+
+                  return {
+                    ...edgePayload,
+                    id: `edge-${edge.source}-${newId}-${Date.now()}-${edgeIndex}`,
+                    target: newId,
+                  } as EdgeType;
+                })
+            : [];
+        const nextEdges = [...state.edges, ...copiedIncomingEdges];
+        let nextNodes = [...updatedNodes, finalDuplicatedNode];
+        copiedIncomingEdges.forEach((edge) => {
+          nextNodes = syncMediaUrlsByEdge(nextNodes, edge, "add");
+        });
+
         return {
-          nodes: [...updatedNodes, finalDuplicatedNode],
+          nodes: nextNodes,
+          edges: nextEdges,
+          ...buildReferenceHighlightState(
+            state.referenceHoverRefCounts,
+            nextEdges,
+          ),
         };
       });
 
       get().requestHistorySave();
+      get().saveGraph();
     },
 
     requestHistorySave: () => {
@@ -1759,7 +2323,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             return state.nodes;
           }
 
-          return syncImageUrlsByEdge(state.nodes, edgeToDelete, "remove");
+          return syncMediaUrlsByEdge(state.nodes, edgeToDelete, "remove");
         })(),
         ...(() => {
           const nextEdges = state.edges.filter((edge) => edge.id !== edgeId);
@@ -1792,7 +2356,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       if (targetNode?.type === "imageNode") {
         stopImagePollingInternal(nodeId);
       }
-      if (targetNode?.type === "videoNode") {
+      if (
+        targetNode?.type === "videoNode" ||
+        targetNode?.type === "newVideoNode"
+      ) {
         stopVideoPollingInternal(nodeId);
       }
 
@@ -1803,7 +2370,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         let nextNodes = state.nodes;
 
         removedEdges.forEach((edge) => {
-          nextNodes = syncImageUrlsByEdge(nextNodes, edge, "remove");
+          nextNodes = syncMediaUrlsByEdge(nextNodes, edge, "remove");
         });
 
         return {
@@ -2008,7 +2575,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     },
 
     /**
-     * Gemini 3 Pro 渠道二：直接调用 API 并上传 OSS（无需轮询）
+     * 本地 Gemini 图片直连：直接调用 API 并上传 OSS（无需轮询）
      * @param nodeId 节点 ID
      * @param payload 包含 prompt, image_urls, size, resolution 等字段
      */
@@ -2021,6 +2588,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       pendingTaskCounts.delete(nodeId);
 
       const {
+        model,
+        platform,
         prompt,
         image_urls: imageUrls,
         size,
@@ -2029,13 +2598,21 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         promptDraftHtml,
         requiredPoints,
       } = payload;
+      const directGeminiModel = resolveLocalGeminiImageModel({
+        model,
+        platform,
+        size,
+        resolution,
+      });
+      const originalModel = payload.originalModel ?? payload.model;
 
       // 更新节点状态为排队中
       set((state) => ({
         nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
           ...data,
-          model: "gemini-3-pro-image-preview",
-          originalModel: payload.originalModel ?? "gemini-3-pro-image-preview",
+          model: originalModel,
+          originalModel,
+          platform: platform ?? data.platform,
           prompt,
           promptDraft: promptDraft ?? "",
           promptDraftHtml: promptDraftHtml ?? "<p></p>",
@@ -2053,35 +2630,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }));
 
       try {
-        // 1. 将参考图 URL 转换为 Base64
-        const imageBase64s: string[] = [];
-        for (const url of imageUrls) {
-          try {
-            const response = await fetch(url);
-            if (response.ok) {
-              const contentType =
-                response.headers.get("content-type") || "image/jpeg";
-              const arrayBuffer = await response.arrayBuffer();
-              const binary = btoa(
-                new Uint8Array(arrayBuffer).reduce(
-                  (data, byte) => data + String.fromCharCode(byte),
-                  "",
-                ),
-              );
-              imageBase64s.push(`data:${contentType};base64,${binary}`);
-            }
-          } catch (err) {
-            console.error(
-              "[startGeminiPro2Generation] 转换参考图失败:",
-              url,
-              err,
-            );
-          }
-        }
-
-        // 2. 构造请求体
-        // 注意：text 和 inline_data 不能同时存在于同一个 part，必须拆成独立的 part
-        // 正确格式：第一个 part 放文本，后续 parts 放图片
+        // 1. 构造请求体
+        // 注意：text 和 fileData 不能同时存在于同一个 part，必须拆成独立的 part。
+        // 参考图直接把 URL 交给 flow2api，由服务端自行拉取，避免前端先转 Base64。
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const parts: any[] = [];
 
@@ -2090,19 +2641,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           parts.push({ text: prompt });
         }
 
-        // 再添加图片 parts（每个图片一个独立的 inline_data part）
-        for (const base64 of imageBase64s) {
-          let mimeType = "image/jpeg";
-          let data = base64;
-          const dataUriMatch = base64.match(/^data:(image\/\w+);base64,(.+)$/);
-          if (dataUriMatch) {
-            mimeType = dataUriMatch[1];
-            data = dataUriMatch[2];
-          }
+        // 再添加图片 parts（每个图片一个独立的 fileData part）
+        for (const url of imageUrls) {
           parts.push({
-            inline_data: {
-              mime_type: mimeType,
-              data: data,
+            fileData: {
+              fileUri: url,
+              mimeType: inferImageMimeTypeFromUri(url),
             },
           });
         }
@@ -2119,7 +2663,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           },
         };
 
-        // 3. 更新状态为生成中
+        // 2. 更新状态为生成中
         set((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
             ...data,
@@ -2128,13 +2672,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           })),
         }));
 
-        // 4. 调用 API
+        // 3. 调用 API
         const response: GeminiYwResponseBody = await generateGeminiContent(
-          "gemini-3-pro-image-preview",
+          directGeminiModel,
           requestBody,
         );
 
-        // 5. 解析响应，提取图片 Base64
+        // 4. 解析响应，提取图片 Base64
         const candidates = response.candidates ?? [];
         if (candidates.length === 0) {
           throw new Error("API 返回为空");
@@ -2144,7 +2688,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           (p) => p.inlineData?.data,
         );
 
-        // 6. 将每张图片上传到 OSS
+        // 5. 将每张图片上传到 OSS
         const processedResultData = await Promise.all(
           imageParts.map(async (part, index) => {
             const base64Data = part.inlineData!.data;
@@ -2168,11 +2712,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           }),
         );
 
-        // 7. 更新节点状态为完成
+        // 6. 更新节点状态为完成
         set((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const existingData = data.result?.data ?? [];
-            const mergedData = [...existingData, ...processedResultData];
+            const mergedData = appendMediaSequences(
+              existingData,
+              processedResultData,
+            );
             return {
               ...data,
               status: GenerationStatus.COMPLETED,
@@ -2185,6 +2732,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             };
           }),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          get().saveGraph();
+        }
 
         await deductVipScoreAfterGeneration({
           scene: "image",
@@ -2197,7 +2748,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           "[startGeminiPro2Generation] Gemini 3 Pro 渠道二生成失败:",
           startError,
         );
-        const serverMessage = getRequestErrorMessage(startError);
+        const rawServerMessage = getRequestErrorMessage(startError);
+        const detailMessage = normalizeLocalGeminiErrorDetail(rawServerMessage);
         set((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
             ...data,
@@ -2208,11 +2760,15 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                 startError instanceof Error
                   ? startError.message
                   : "生成失败，请稍后再试",
-              detail: serverMessage,
-              serverMessage,
+              detail: detailMessage,
+              serverMessage: rawServerMessage,
             },
           })),
         }));
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          get().saveGraph();
+        }
         throw startError;
       }
     },
@@ -2313,79 +2869,232 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      * @param nodeId 源节点 ID
      */
     separateToNodes: (nodeId: string) => {
-      const sourceNode = get().nodes.find((node) => node.id === nodeId);
-      if (!sourceNode) return;
+      void (async () => {
+        const sourceNode = get().nodes.find((node) => node.id === nodeId);
+        if (!sourceNode) return;
 
-      const nodeType = sourceNode.type;
-      const sourceData = sourceNode.data as
-        | ImageGenerationNode
-        | VideoGenerationNode;
-      const resultData = sourceData.result?.data;
+        const nodeType = sourceNode.type;
+        const sourceData = sourceNode.data as
+          | ImageGenerationNode
+          | VideoGenerationNode
+          | NewVideoGenerationNode;
+        const resultData = sourceData.result?.data;
+        const isNewVideoGenerating =
+          nodeType === "newVideoNode" &&
+          (sourceData.status === GenerationStatus.IN_PROGRESS ||
+            sourceData.status === GenerationStatus.QUEUED);
+        const shouldSeparateGeneratingNewVideo =
+          isNewVideoGenerating && resultData?.length === 1;
 
-      if (!resultData || resultData.length <= 1) return;
-
-      const targetNodeType = nodeType === "videoNode" ? "video" : "image";
-
-      const nodeWidth = nodeType === "imageNode" ? 350 : 350;
-      const nodeHeight = nodeType === "imageNode" ? 280 : 250;
-      const gap = 20;
-
-      for (let i = 1; i < resultData.length; i++) {
-        const item = resultData[i];
-        if (!item?.url) continue;
-
-        const position = {
-          x: sourceNode.position.x + (i - 1) * (nodeWidth + gap),
-          y: sourceNode.position.y + nodeHeight + gap,
-        };
-
-        const newNodeId = get().addNode(targetNodeType, position);
-
-        if (targetNodeType === "video") {
-          get().updateVideoNodeData(newNodeId, {
-            status: GenerationStatus.COMPLETED,
-            progress: 100,
-            result: {
-              type: "video",
-              data: [{ url: item.url, format: "mp4" }],
-            },
-          });
-        } else {
-          get().updateImageNodeData(newNodeId, {
-            status: GenerationStatus.COMPLETED,
-            progress: 100,
-            result: {
-              type: "image",
-              data: [{ url: item.url }],
-            },
-          });
+        if (
+          !resultData ||
+          (resultData.length <= 1 && !shouldSeparateGeneratingNewVideo)
+        ) {
+          return;
         }
-      }
 
-      if (targetNodeType === "video") {
-        get().updateVideoNodeData(nodeId, {
-          result: {
-            type: sourceData.result?.type ?? "video",
-            data: [
-              {
-                ...(resultData[0] as any),
-                format: (resultData[0] as any)?.format ?? "mp4",
+        saveCurrentCanvasToHistory();
+
+        // 新版视频节点拆分后仍创建新版视频节点，避免多结果拆分时退回旧版体验。
+        const targetNodeType =
+          nodeType === "videoNode"
+            ? "video"
+            : nodeType === "newVideoNode"
+              ? "newVideo"
+              : "image";
+        const validItems = (
+          shouldSeparateGeneratingNewVideo
+            ? resultData.slice(0, 1)
+            : resultData.slice(1)
+        ).filter((item) => item?.url || item?.remoteUrl);
+
+        if (validItems.length === 0) return;
+
+        const sourceVisualSize =
+          nodeType === "imageNode"
+            ? getNodeSizeByAspectRatio(
+                (sourceData as ImageGenerationNode).size ?? "4:3",
+                250,
+              )
+            : getNodeSizeByAspectRatio(
+                (sourceData as VideoGenerationNode | NewVideoGenerationNode)
+                  .aspect_ratio ?? "16:9",
+                250,
+              );
+        const verticalGap = 32;
+        const baseY =
+          sourceNode.position.y + sourceVisualSize.height + verticalGap;
+        const minGap = 18;
+        const maxGap = 30;
+
+        const resolvedItems =
+          targetNodeType === "image"
+            ? await Promise.all(
+                validItems.map(async (item) => {
+                  const imageUrl = item.remoteUrl || item.url;
+                  let aspectRatio = sourceData.size ?? "4:3";
+
+                  if (imageUrl) {
+                    try {
+                      const { width, height } =
+                        await getImageDimensions(imageUrl);
+                      aspectRatio = getClosestAspectRatio(width, height);
+                    } catch (error) {
+                      console.warn(
+                        "[separateToNodes] 获取图片比例失败，使用回退比例:",
+                        error,
+                      );
+                    }
+                  }
+
+                  const nodeSize = getNodeSizeByAspectRatio(aspectRatio, 250);
+
+                  return {
+                    item,
+                    aspectRatio,
+                    nodeSize,
+                  };
+                }),
+              )
+            : await Promise.all(
+                validItems.map(async (item) => {
+                  const videoUrl = item.remoteUrl || item.url;
+                  let aspectRatio =
+                    (sourceData as VideoGenerationNode | NewVideoGenerationNode)
+                      .aspect_ratio ?? "16:9";
+
+                  if (videoUrl) {
+                    try {
+                      const { width, height } =
+                        await getVideoDimensions(videoUrl);
+                      aspectRatio = getClosestAspectRatio(width, height);
+                    } catch (error) {
+                      console.warn(
+                        "[separateToNodes] 获取视频比例失败，使用回退比例:",
+                        error,
+                      );
+                    }
+                  }
+
+                  return {
+                    item,
+                    aspectRatio,
+                    nodeSize: getNodeSizeByAspectRatio(aspectRatio, 250),
+                  };
+                }),
+              );
+
+        const latestState = get();
+        const latestSourceNode = latestState.nodes.find(
+          (node) => node.id === nodeId,
+        );
+        if (!latestSourceNode) return;
+
+        let currentX = latestSourceNode.position.x;
+        const newNodes = resolvedItems.map(
+          ({ item, aspectRatio, nodeSize }) => {
+            const gap = Math.max(
+              minGap,
+              Math.min(maxGap, Math.round(nodeSize.width * 0.06)),
+            );
+            const newNodeId = get().getNextNodeId(targetNodeType);
+            const factory = nodeFactoryMap[targetNodeType];
+            const baseNode = factory(newNodeId, { x: currentX, y: baseY });
+
+            const finalNode =
+              targetNodeType === "video" || targetNodeType === "newVideo"
+                ? {
+                    ...baseNode,
+                    width: nodeSize.width,
+                    height: nodeSize.height,
+                    data: {
+                      ...baseNode.data,
+                      aspect_ratio: aspectRatio,
+                      status: GenerationStatus.COMPLETED,
+                      progress: 100,
+                      result: {
+                        type: "video",
+                        data: [
+                          {
+                            ...item,
+                            format: item.format ?? "mp4",
+                          },
+                        ],
+                      },
+                    },
+                  }
+                : {
+                    ...baseNode,
+                    width: nodeSize.width,
+                    height: nodeSize.height,
+                    data: {
+                      ...baseNode.data,
+                      status: GenerationStatus.COMPLETED,
+                      progress: 100,
+                      size: aspectRatio,
+                      result: {
+                        type: "image",
+                        data: [{ ...item }],
+                      },
+                    },
+                  };
+
+            currentX += nodeSize.width + gap;
+            return finalNode as AllNodeType;
+          },
+        );
+
+        const nextNodes = latestState.nodes
+          .map((node) => {
+            if (node.id !== nodeId) {
+              return node;
+            }
+
+            if (targetNodeType === "video" || targetNodeType === "newVideo") {
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  result: {
+                    type: sourceData.result?.type ?? "video",
+                    // 新版视频节点生成中有一个 UI 占位卡；当只有一个真实视频时，独立后源节点继续保留生成状态。
+                    data: shouldSeparateGeneratingNewVideo
+                      ? []
+                      : [
+                          {
+                            ...(resultData[0] as any),
+                            format: (resultData[0] as any)?.format ?? "mp4",
+                          },
+                        ],
+                  },
+                },
+              } as AllNodeType;
+            }
+
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                result: {
+                  type: sourceData.result?.type ?? "image",
+                  data: [resultData[0]],
+                },
               },
-            ],
-          },
-        });
-      } else {
-        get().updateImageNodeData(nodeId, {
-          result: {
-            type: sourceData.result?.type ?? "image",
-            data: [resultData[0]],
-          },
-        });
-      }
+            } as AllNodeType;
+          })
+          .concat(newNodes);
 
-      if (useChatSettingsStore.getState().autoSaveEnabled) {
-        get().saveGraph();
-      }
+        set(() => ({
+          nodes: nextNodes,
+          selectedNodesCount: nextNodes.filter((node) => node.selected).length,
+        }));
+
+        get().requestHistorySave();
+
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          get().saveGraph();
+        }
+      })();
     },
 
     /**
@@ -2397,6 +3106,23 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           ...data,
           ...patch,
         })),
+      }));
+    },
+
+    updateNewVideoNodeData: (nodeId, patch) => {
+      set((state) => ({
+        nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
+          ...data,
+          ...patch,
+        })),
+      }));
+    },
+
+    updateNodeDimensions: (nodeId, width, height) => {
+      set((state) => ({
+        nodes: state.nodes.map((node) =>
+          node.id === nodeId ? { ...node, width, height } : node,
+        ),
       }));
     },
 
@@ -2486,17 +3212,26 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           status: GenerationStatus.QUEUED,
           progress: 0,
           error: undefined,
-          result: {
-            type: "video",
-            data: [],
-          },
         })),
       }));
 
       try {
-        const response: any = await createLzVideoTask(payload);
+        const model = (payload as any).model ?? "";
+        // 判断是否为豆包 Seedance 2.0 Fast/Pro（使用快手 API）
+        const isSeedance20 =
+          model === "doubao-seedance-2.0-fast" ||
+          model === "doubao-seedance-2.0-pro";
 
-        const taskId = response?.data?.task_id;
+        let response: any;
+        if (isSeedance20) {
+          // 豆包 Seedance 2.0 使用快手 AI 视频接口
+          response = await createLzVideoTask(payload);
+        } else {
+          // 万象、PixVerse 等使用阿里云百炼视频接口
+          response = await createDashscopeVideoSynthesis(payload);
+        }
+
+        const taskId = response?.data?.task_id ?? response?.output?.task_id;
 
         if (!taskId) {
           throw new Error("任务 ID 为空");
@@ -2514,9 +3249,16 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         const controller = new AbortController();
         videoPollingControllers.set(nodeId, controller);
-        pollVideoGeneration(taskId, nodeId, controller.signal, set, get);
+        pollVideoGeneration(
+          taskId,
+          nodeId,
+          controller.signal,
+          set,
+          get,
+          isSeedance20,
+        );
       } catch (startError) {
-        console.error("创建视频生成任务失败:", startError);
+        console.error("[Dashscope] 创建视频生成任务失败:", startError);
         // 从 error 对象中提取后端返回的详细信息
         const serverMessage = getRequestErrorMessage(startError);
         set((state) => ({
@@ -2535,55 +3277,99 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }
     },
 
-    /**
-     * Wan 2.7 I2V 视频生成任务并启动轮询
-     */
-    startWanI2vVideoGeneration: async (nodeId, payload) => {
-      // 先中止旧轮询
+    startNewVideoGeneration: async (nodeId, payload, count = 1) => {
       stopVideoPollingInternal(nodeId);
 
-      // 更新节点状态
+      const input = payload.__newVideoInput;
+      const requestPayload = { ...payload };
+      delete requestPayload.__newVideoInput;
+      const requiredPoints = requestPayload.requiredPoints;
+      delete requestPayload.requiredPoints;
+      // 新版视频节点固定一次只创建一个视频任务，避免一个节点同时产出多条结果影响体验。
+      const totalTasks = 1;
+      const model = input?.model ?? requestPayload.model ?? "";
+      const isSeedance20 =
+        model === "seedance-2.0-fast" || model === "seedance-2.0-pro";
+
       set((state) => ({
-        nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+        nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
           ...data,
-          ...payload,
+          model,
+          prompt: input?.prompt ?? data.prompt,
+          promptDraft: input?.prompt ?? data.promptDraft,
+          duration: input?.params?.duration ?? data.duration,
+          aspect_ratio: input?.params?.aspectRatio ?? data.aspect_ratio,
+          requiredPoints,
           status: GenerationStatus.QUEUED,
           progress: 0,
-          error: undefined,
+          // 新版视频节点和老版保持一致：开始生成时保留已有视频结果，
+          // 新结果完成后追加进画廊，这样上传视频/生成视频可以一起展开和显示序号标记。
           result: {
             type: "video",
-            data: [],
+            data: data.result?.data ?? [],
+          },
+          error: undefined,
+          metadata: {
+            ...data.metadata,
+            params: input?.params,
+            mode: input?.mode,
+            count: totalTasks,
+            tasks: [],
+            failedTasks: [],
           },
         })),
       }));
 
       try {
-        const response: any = await createDashscopeVideoSynthesis(payload);
+        const createTask = async () => {
+          const response: any = isSeedance20
+            ? await createLzVideoTask(requestPayload)
+            : await createDashscopeVideoSynthesis(requestPayload);
+          const taskId = response?.data?.task_id ?? response?.output?.task_id;
 
-        const taskId = response?.output?.task_id;
+          if (!taskId) {
+            throw new Error("任务 ID 为空");
+          }
 
-        if (!taskId) {
-          throw new Error("任务 ID 为空");
-        }
+          return taskId as string;
+        };
 
-        // 标记为生成中
+        const taskIds = await Promise.all(
+          Array.from({ length: totalTasks }, () => createTask()),
+        );
+
         set((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
             ...data,
-            task_id: taskId,
+            task_id: taskIds[0],
             status: GenerationStatus.IN_PROGRESS,
             progress: 0,
+            metadata: {
+              ...data.metadata,
+              tasks: taskIds,
+              failedTasks: [],
+            },
           })),
         }));
 
         const controller = new AbortController();
         videoPollingControllers.set(nodeId, controller);
-        pollWanI2vVideoGeneration(taskId, nodeId, controller.signal, set, get);
+        taskIds.forEach((taskId, index) => {
+          void pollNewVideoGeneration({
+            taskId,
+            nodeId,
+            signal: controller.signal,
+            setState: set,
+            getState: get,
+            isSeedance20,
+            taskIndex: index,
+            totalTasks,
+          });
+        });
       } catch (startError) {
-        console.error("[Wan I2V] 创建视频生成任务失败:", startError);
         const serverMessage = getRequestErrorMessage(startError);
         set((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
             ...data,
             status: GenerationStatus.FAILED,
             error: {
@@ -2650,7 +3436,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         ) {
           if (node.type === "imageNode") {
             imageNodesToStop.push(node.id);
+<<<<<<< HEAD
           } else if (node.type === "videoNode" || node.type === "videoDemoNode") {
+=======
+          } else if (
+            node.type === "videoNode" ||
+            node.type === "newVideoNode"
+          ) {
+>>>>>>> origin/develop
             videoNodesToStop.push(node.id);
           }
         }
@@ -2677,7 +3470,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                   error: { message: "任务已取消" },
                 },
               };
+<<<<<<< HEAD
             } else if (node.type === "videoNode" || node.type === "videoDemoNode") {
+=======
+            } else if (
+              node.type === "videoNode" ||
+              node.type === "newVideoNode"
+            ) {
+>>>>>>> origin/develop
               return {
                 ...node,
                 data: {
@@ -2790,7 +3590,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         let nextNodes = state.nodes;
 
         removedEdges.forEach((edge) => {
-          nextNodes = syncImageUrlsByEdge(nextNodes, edge, "remove");
+          nextNodes = syncMediaUrlsByEdge(nextNodes, edge, "remove");
         });
 
         return {
@@ -2814,8 +3614,21 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const sourceNode = nodes.find((n) => n.id === connection.source);
       const targetNode = nodes.find((n) => n.id === connection.target);
 
+<<<<<<< HEAD
       if (targetNode?.type === "videoNode" || targetNode?.type === "videoDemoNode") {
         const allowedSourceTypes = ["noteNode", "imageNode", "videoNode", "audioNode"];
+=======
+      if (
+        targetNode?.type === "videoNode" ||
+        targetNode?.type === "newVideoNode"
+      ) {
+        const allowedSourceTypes = [
+          "imageNode",
+          "videoNode",
+          "newVideoNode",
+          "audioNode",
+        ];
+>>>>>>> origin/develop
         if (sourceNode && !allowedSourceTypes.includes(sourceNode.type || "")) {
           console.warn("视频节点只能接受图片、视频、音频节点的输入");
           return;
@@ -2842,7 +3655,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         return {
           nodes: createdEdge
-            ? syncImageUrlsByEdge(state.nodes, createdEdge as EdgeType, "add")
+            ? syncMediaUrlsByEdge(state.nodes, createdEdge as EdgeType, "add")
             : state.nodes,
           edges: nextEdges,
           ...buildReferenceHighlightState(
@@ -2925,6 +3738,26 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         historyResetTrigger: get().historyResetTrigger + 1,
         // 选中节点数量初始化（用于避免 O(n²) 遍历）
         selectedNodesCount: 0,
+      });
+    },
+
+    openImageAnnotation: (imageUrl: string, sourceNodeId: string) => {
+      set({
+        annotationWorkspace: {
+          open: true,
+          imageUrl,
+          sourceNodeId,
+        },
+      });
+    },
+
+    closeImageAnnotation: () => {
+      set({
+        annotationWorkspace: {
+          open: false,
+          imageUrl: null,
+          sourceNodeId: null,
+        },
       });
     },
 

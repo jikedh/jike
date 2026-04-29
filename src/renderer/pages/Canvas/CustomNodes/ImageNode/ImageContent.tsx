@@ -1,6 +1,8 @@
 import { memo } from "react";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageGenerationNode } from "shared/types/flow";
+import { isLocalGeminiFallbackModeMessage } from "shared/utils/localGeminiErrors";
+import { assignMissingMediaSequences } from "shared/utils/mediaSequence";
 import { CollapsibleImageGallery } from "./CollapsibleImageGallery";
 
 type ImageContentProps = {
@@ -9,6 +11,11 @@ type ImageContentProps = {
   onReorder?: (fromIndex: number) => void;
   nodeId?: string;
   updateImageNodeData?: (nodeId: string, patch: any) => void;
+  onGalleryExpandedChange?: (expanded: boolean) => void;
+  frameSize?: {
+    width: number;
+    height: number;
+  };
 };
 
 /**
@@ -26,9 +33,13 @@ export const ImageContent = memo(
     onReorder,
     nodeId,
     updateImageNodeData,
+    onGalleryExpandedChange,
+    frameSize,
   }: ImageContentProps) => {
     // 结果图片列表（支持多张），保留原始对象结构用于排序
-    const images = data.result?.data?.filter((item) => item?.url) ?? [];
+    const images = assignMissingMediaSequences(
+      data.result?.data?.filter((item) => item?.url) ?? [],
+    );
     const status = data.status ?? GenerationStatus.COMPLETED;
     const progress = data.progress ?? 0;
     const error = data.error;
@@ -41,15 +52,26 @@ export const ImageContent = memo(
         error?.serverMessage ||
         error?.message ||
         "生成失败，请稍后再试";
+      const rawMessage =
+        error?.serverMessage ||
+        error?.detail ||
+        error?.message ||
+        "生成失败，请稍后再试";
+      const isFallbackMode = isLocalGeminiFallbackModeMessage(rawMessage);
 
       return (
-        <div className="h-full w-full flex flex-col items-center justify-center p-4 text-center bg-destructive/5">
+        <div className="h-full w-full flex flex-col items-center justify-center p-4 text-center bg-[#141418]">
           <div className="text-sm font-medium text-destructive mb-2">
             生成失败
           </div>
           <div className="text-xs text-muted-foreground mb-3 line-clamp-3 max-w-full px-2">
             {displayMessage}
           </div>
+          {isFallbackMode && (
+            <div className="text-[11px] text-amber-400/90 mb-3 max-w-full px-2">
+              当前已退回临时标签页模式，浏览器弹窗属于降级行为。建议改为单张或降低批量频率后重试。
+            </div>
+          )}
           {onRetry && (
             <button
               type="button"
@@ -69,7 +91,7 @@ export const ImageContent = memo(
       status === GenerationStatus.QUEUED
     ) {
       return (
-        <div className="h-full w-full flex flex-col items-center justify-center p-4 bg-muted/20">
+        <div className="h-full w-full flex flex-col items-center justify-center p-4 bg-[#141418]">
           <div className="relative w-8 h-8 mb-3">
             <div className="absolute inset-0 border-2 border-primary/30 rounded-full"></div>
             <div className="absolute inset-0 border-2 border-transparent border-t-primary rounded-full animate-spin"></div>
@@ -89,13 +111,15 @@ export const ImageContent = memo(
           onReorder={onReorder}
           nodeId={nodeId}
           updateImageNodeData={updateImageNodeData}
+          onExpandedChange={onGalleryExpandedChange}
+          frameSize={frameSize}
         />
       );
     }
 
     // 空状态
     return (
-      <div className="h-full w-full flex items-center justify-center p-4 text-center text-muted-foreground text-sm bg-muted/10">
+      <div className="h-full w-full flex items-center justify-center p-4 text-center text-muted-foreground text-sm bg-[#121216]">
         暂无图片
       </div>
     );

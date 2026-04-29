@@ -3,22 +3,29 @@ import {
   Position,
   useUpdateNodeInternals,
 } from "@xyflow/react";
-import { memo, useCallback, useEffect, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { uploadFileToOSS } from "service/oss";
+import { setProjectCoverFromMediaRef } from "service/projectStorage";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageNodeType } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
+import { assignMissingMediaSequences } from "shared/utils/mediaSequence";
 import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
 import { ButtonHandle } from "@/components/button-handle";
 import { PanoramaViewer } from "@/components/panorama/PanoramaViewer";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
+import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
+import { ImageAnnotationWorkspace } from "./ImageAnnotationWorkspace";
 import { ImageContent } from "./ImageContent";
 import { ImagePromptPanel } from "./ImagePromptPanel";
 import { ImageToolbar } from "./ImageToolbar";
 import { getNodeSizeByAspectRatio } from "./utils/aspectRatioUtils";
+
+const DRAG_UI_RESTORE_DELAY = 140;
 
 /**
  * 图片节点组件
@@ -33,6 +40,8 @@ import { getNodeSizeByAspectRatio } from "./utils/aspectRatioUtils";
 export const ImageNode = memo(
   ({ id, data, selected, dragging }: NodeProps<ImageNodeType>) => {
     const isDragging = Boolean(dragging);
+    const [isDragUiSettled, setIsDragUiSettled] = useState(!isDragging);
+    const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
     const addNode = useCanvasFlowStore((state) => state.addNode);
@@ -43,6 +52,9 @@ export const ImageNode = memo(
     const updateImageNodeData = useCanvasFlowStore(
       (state) => state.updateImageNodeData,
     );
+    const updateNodeDimensions = useCanvasFlowStore(
+      (state) => state.updateNodeDimensions,
+    );
     const onConnect = useCanvasFlowStore((state) => state.onConnect);
     const highlightedSourceNodeIds = useCanvasFlowStore(
       (state) => state.highlightedSourceNodeIds,
@@ -51,26 +63,69 @@ export const ImageNode = memo(
     const selectedNodesCount = useCanvasFlowStore(
       (state) => state.selectedNodesCount,
     );
+    const isSelectionBoxActive = useCanvasFlowStore(
+      (state) => state.isSelectionBoxActive,
+    );
+    const projectId = useCanvasFlowStore((state) => state.projectId);
 
     // 全景图查看器状态
     const panoramaViewer = useCanvasFlowStore((state) => state.panoramaViewer);
     const closePanoramaViewer = useCanvasFlowStore(
       (state) => state.closePanoramaViewer,
     );
+    const annotationWorkspace = useCanvasFlowStore(
+      (state) => state.annotationWorkspace,
+    );
+    const openImageAnnotation = useCanvasFlowStore(
+      (state) => state.openImageAnnotation,
+    );
+
+    const isAnnotationMode = annotationWorkspace.open;
+    const isAnnotationTarget = annotationWorkspace.sourceNodeId === id;
 
     // 使用 useMemo 缓存样式类名，避免每次渲染都重新拼接字符串
+    useEffect(() => {
+      if (isDragging) {
+        setIsDragUiSettled(false);
+        return;
+      }
+
+      const timer = window.setTimeout(() => {
+        setIsDragUiSettled(true);
+      }, DRAG_UI_RESTORE_DELAY);
+
+      return () => {
+        window.clearTimeout(timer);
+      };
+    }, [isDragging]);
+
     const handleVisibilityClass = useMemo(
       () =>
-        selected
-          ? "visible opacity-100"
-          : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100",
-      [selected],
+        isGalleryExpanded || isAnnotationMode
+          ? "invisible opacity-0"
+          : selected
+            ? "visible opacity-100"
+            : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100",
+      [isAnnotationMode, isGalleryExpanded, selected],
     );
 
     // 使用 useMemo 缓存工具栏显示条件，避免每次渲染都重新计算
     const shouldShowToolbar = useMemo(
-      () => selected && !isDragging && selectedNodesCount <= 1,
-      [selected, isDragging, selectedNodesCount],
+      () =>
+        selected &&
+        !isSelectionBoxActive &&
+        !isDragging &&
+        isDragUiSettled &&
+        selectedNodesCount <= 1 &&
+        !isAnnotationMode,
+      [
+        selected,
+        isSelectionBoxActive,
+        isDragging,
+        isDragUiSettled,
+        isAnnotationMode,
+        selectedNodesCount,
+      ],
     );
 
     const isSourceHighlighted = useMemo(() => {
@@ -101,9 +156,36 @@ export const ImageNode = memo(
       updateNodeInternals(id);
     }, [nodeSize.width, nodeSize.height, id, updateNodeInternals]);
 
+    useEffect(() => {
+      updateNodeDimensions(id, nodeSize.width, nodeSize.height);
+    }, [id, nodeSize.height, nodeSize.width, updateNodeDimensions]);
+
+    const isGenerating = useMemo(() => {
+      const status = data.status ?? GenerationStatus.COMPLETED;
+      return (
+        status === GenerationStatus.IN_PROGRESS ||
+        status === GenerationStatus.QUEUED
+      );
+    }, [data.status]);
+
+    const confirmDeleteIfNeeded = useCallback(() => {
+      if (!isGenerating) {
+        return true;
+      }
+
+      requestCanvasDeleteConfirm({
+        message: "当前图片节点还在生成中，确定要删除吗？",
+        onConfirm: () => deleteNode(id),
+      });
+      return false;
+    }, [deleteNode, id, isGenerating]);
+
     const handleDelete = useCallback(() => {
+      if (!confirmDeleteIfNeeded()) {
+        return;
+      }
       deleteNode(id);
-    }, [deleteNode, id]);
+    }, [confirmDeleteIfNeeded, deleteNode, id]);
 
     // 缓存传递给 NodeContextMenu 的回调函数
     const handleContextMenuDuplicate = useCallback(() => {
@@ -111,8 +193,11 @@ export const ImageNode = memo(
     }, [duplicateNode, id]);
 
     const handleContextMenuDelete = useCallback(() => {
+      if (!confirmDeleteIfNeeded()) {
+        return;
+      }
       deleteNode(id);
-    }, [deleteNode, id]);
+    }, [confirmDeleteIfNeeded, deleteNode, id]);
 
     const handleContextMenuSplitImage = useCallback(
       (gridSize: number) => {
@@ -124,6 +209,36 @@ export const ImageNode = memo(
     const handleContextMenuSeparateToNodes = useCallback(() => {
       separateToNodes(id);
     }, [separateToNodes, id]);
+
+    const handleContextMenuSetAsCover = useCallback(async () => {
+      if (!projectId) {
+        toast.error("当前项目不存在");
+        return;
+      }
+
+      const primaryImage = data.result?.data?.[0];
+      if (!primaryImage) {
+        toast.info("当前图片节点暂无可用图片");
+        return;
+      }
+
+      try {
+        const savedCoverName = await setProjectCoverFromMediaRef(
+          projectId,
+          primaryImage,
+        );
+
+        if (!savedCoverName) {
+          toast.error("封面图设置失败");
+          return;
+        }
+
+        toast.success("已设置为项目封面图");
+      } catch (error) {
+        console.error("设置项目封面图失败:", error);
+        toast.error("封面图设置失败");
+      }
+    }, [data.result?.data, projectId]);
 
     const hasMultipleResults = (data.result?.data?.length ?? 0) > 1;
 
@@ -169,7 +284,7 @@ export const ImageNode = memo(
             image_urls: [uploadResult.url],
             result: {
               type: "image",
-              data: [{ url: uploadResult.url }],
+              data: [{ url: uploadResult.url, remoteUrl: uploadResult.url }],
             },
             status: GenerationStatus.COMPLETED,
             progress: 100,
@@ -185,17 +300,24 @@ export const ImageNode = memo(
       [addNode, id, onConnect, updateImageNodeData],
     );
 
-    // 点击图片重新排序：将指定索引的图片移到首位
+    const handleAnnotate = useCallback(() => {
+      const currentUrl = data.result?.data?.[0]?.url;
+      if (!currentUrl) {
+        toast.info("暂无可标注图片");
+        return;
+      }
+      openImageAnnotation(currentUrl, id);
+    }, [data.result?.data, id, openImageAnnotation]);
+
+    // 点击“设为主图”时交换主图与目标图，保持其余顺序不变
     const handleReorder = useCallback(
       (fromIndex: number) => {
         const resultData = data.result?.data;
         if (!resultData || fromIndex <= 0 || fromIndex >= resultData.length)
           return;
 
-        // 将被点击的图片元素移到数组首位
-        const newData = [...resultData];
-        const [movedItem] = newData.splice(fromIndex, 1);
-        newData.unshift(movedItem);
+        const newData = assignMissingMediaSequences(resultData);
+        [newData[0], newData[fromIndex]] = [newData[fromIndex], newData[0]];
 
         // 通过 store 更新节点数据
         updateImageNodeData(id, {
@@ -204,6 +326,12 @@ export const ImageNode = memo(
             data: newData,
           },
         });
+
+        const flowStore = useCanvasFlowStore.getState();
+        flowStore.requestHistorySave();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          flowStore.saveGraph();
+        }
       },
       [data.result, id, updateImageNodeData],
     );
@@ -215,10 +343,11 @@ export const ImageNode = memo(
           onDelete={handleContextMenuDelete}
           onSplitImage={handleContextMenuSplitImage}
           onSeparateToNodes={handleContextMenuSeparateToNodes}
+          onSetAsCover={handleContextMenuSetAsCover}
           hasMultipleResults={hasMultipleResults}
         >
           <div
-            className="group/node relative"
+            className={cn("group/node relative", isGalleryExpanded && "z-40")}
             style={{
               width: `${nodeSize.width}px`,
               height: `${nodeSize.height}px`,
@@ -226,24 +355,29 @@ export const ImageNode = memo(
           >
             {/* 节点内顶部工具栏：直接参与节点缩放，保证几何一致性 */}
             {shouldShowToolbar && (
-              <div className="nodrag nopan nowheel absolute -top-12 left-1/2 z-50 -translate-x-1/2">
+              <div className="selection-box-deferred-ui nodrag nopan nowheel absolute -top-12 left-1/2 z-50 -translate-x-1/2">
                 <ImageToolbar
                   nodeId={id}
                   data={data}
                   onDelete={handleDelete}
                   onCrop={handleCrop}
+                  onAnnotate={handleAnnotate}
                 />
               </div>
             )}
 
             <div
               className={cn(
-                "group/card relative flex flex-col w-full h-full rounded-xl border bg-linear-to-br from-[#141418] to-[#0d0d10]",
-                selected
-                  ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
-                  : isSourceHighlighted
-                    ? "border-[#B43FEB]/65 shadow-[0_0_18px_rgba(180,63,235,0.28),0_0_36px_rgba(180,63,235,0.12)] ring-1 ring-[#B43FEB]/20"
-                    : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
+                "group/card relative flex h-full w-full flex-col rounded-xl border",
+                hasMultipleResults &&
+                  "bg-linear-to-br from-[#141418] to-[#0d0d10]",
+                isAnnotationMode
+                  ? "border-transparent shadow-none ring-0"
+                  : selected
+                    ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
+                    : isSourceHighlighted
+                      ? "border-[#B43FEB]/65 shadow-[0_0_18px_rgba(180,63,235,0.28),0_0_36px_rgba(180,63,235,0.12)] ring-1 ring-[#B43FEB]/20"
+                      : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
               )}
             >
               {/* 左侧输入 Handle */}
@@ -252,7 +386,7 @@ export const ImageNode = memo(
                 position={Position.Left}
                 id="input"
                 visible
-                className={`transition-opacity duration-150 ${handleVisibilityClass}`}
+                className={`transition-opacity duration-150 ${isAnnotationMode ? "invisible opacity-0" : handleVisibilityClass}`}
               />
 
               {/* 右侧输出 Handle */}
@@ -261,11 +395,11 @@ export const ImageNode = memo(
                 position={Position.Right}
                 id="output"
                 visible
-                className={`transition-opacity duration-150 ${handleVisibilityClass}`}
+                className={`transition-opacity duration-150 ${isAnnotationMode ? "invisible opacity-0" : handleVisibilityClass}`}
               />
 
               {/* 选中状态角落装饰 */}
-              {selected && (
+              {selected && !isDragging && !isAnnotationMode && (
                 <>
                   <div className="absolute -top-px -left-px w-4 h-4 border-l-2 border-t-2 border-[#B43FEB] rounded-tl-xl" />
                   <div className="absolute -top-px -right-px w-4 h-4 border-r-2 border-t-2 border-[#B43FEB] rounded-tr-xl" />
@@ -275,11 +409,23 @@ export const ImageNode = memo(
               )}
 
               {/* 扫光效果 */}
-              <div className="pointer-events-none absolute inset-0 rounded-xl bg-linear-to-tr from-transparent via-white/2 to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
+              {!isAnnotationMode ? (
+                <div
+                  className={cn(
+                    "pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-500 group-hover/card:opacity-100",
+                    hasMultipleResults &&
+                      "bg-linear-to-tr from-transparent via-white/2 to-transparent",
+                  )}
+                />
+              ) : null}
 
               {/* 图片内容区 - 根据图片比例动态调整 */}
               <div
-                className="relative flex w-full h-full overflow-hidden rounded-lg bg-black/30"
+                className={cn(
+                  "relative flex h-full w-full",
+                  hasMultipleResults ? "rounded-lg bg-black/30" : "rounded-xl",
+                  isGalleryExpanded ? "overflow-visible" : "overflow-hidden",
+                )}
                 style={{ aspectRatio: nodeSize.aspectRatio }}
               >
                 <ImageContent
@@ -287,22 +433,22 @@ export const ImageNode = memo(
                   onReorder={handleReorder}
                   nodeId={id}
                   updateImageNodeData={updateImageNodeData}
+                  onGalleryExpandedChange={setIsGalleryExpanded}
+                  frameSize={{
+                    width: nodeSize.width,
+                    height: nodeSize.height,
+                  }}
                 />
               </div>
             </div>
 
             {/* 节点内底部增强输入区：与节点同一几何空间，缩放时保持一致 */}
-            {/* 使用 CSS 控制显隐，避免条件渲染导致 DOM 销毁重建，TipTap editor 状态丢失 */}
-            <div
-              className={cn(
-                "nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2 transition-opacity duration-200",
-                shouldShowToolbar
-                  ? "opacity-100 visible"
-                  : "opacity-0 invisible pointer-events-none",
-              )}
-            >
-              <ImagePromptPanel nodeId={id} />
-            </div>
+            {/* 拖动结束后再挂载，降低首次拖拽时的渲染负担 */}
+            {shouldShowToolbar && (
+              <div className="selection-box-deferred-ui nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2">
+                <ImagePromptPanel nodeId={id} />
+              </div>
+            )}
           </div>
         </NodeContextMenu>
 
@@ -316,6 +462,22 @@ export const ImageNode = memo(
                 onClose={closePanoramaViewer}
                 initialImage={panoramaViewer.imageUrl ?? undefined}
                 sourceNodeId={panoramaViewer.sourceNodeId}
+              />,
+              document.body,
+            )
+          : null}
+
+        {typeof document !== "undefined" &&
+        isAnnotationTarget &&
+        annotationWorkspace.open
+          ? createPortal(
+              <ImageAnnotationWorkspace
+                open={annotationWorkspace.open}
+                imageUrl={annotationWorkspace.imageUrl}
+                sourceNodeId={annotationWorkspace.sourceNodeId}
+                onClose={() =>
+                  useCanvasFlowStore.getState().closeImageAnnotation()
+                }
               />,
               document.body,
             )

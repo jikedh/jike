@@ -1,4 +1,5 @@
 import { Zap } from "lucide-react";
+import { POINTS_FEATURE_ENABLED } from "shared/constants/points";
 import { cn } from "shared/utils/utils";
 
 type ModelPointsBadgeProps = {
@@ -14,6 +15,10 @@ export function ModelPointsBadge({
   className,
   title,
 }: ModelPointsBadgeProps) {
+  if (!POINTS_FEATURE_ENABLED) {
+    return null;
+  }
+
   const insufficient = totalPoints < requiredPoints;
 
   return (

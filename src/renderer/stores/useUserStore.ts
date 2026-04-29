@@ -1,4 +1,5 @@
 import type { UserStoreType } from "shared/types/zustand/user";
+import { POINTS_FEATURE_ENABLED } from "shared/constants/points";
 import type { UserScoreVO } from "shared/types/jikeing";
 import {
   clearJikeingToken,
@@ -88,6 +89,11 @@ export const useUserStore = create<UserStoreType>((set, get) => ({
   },
 
   fetchBalanceInfo: async () => {
+    if (!POINTS_FEATURE_ENABLED) {
+      set({ balanceInfo: null });
+      return;
+    }
+
     const token = getJikeingToken();
     if (!token) return;
 

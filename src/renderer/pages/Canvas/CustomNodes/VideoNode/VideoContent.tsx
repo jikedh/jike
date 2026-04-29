@@ -1,5 +1,6 @@
 import { GenerationStatus } from "shared/constants/enum";
 import type { VideoGenerationNode } from "shared/types/flow";
+import { assignMissingMediaSequences } from "shared/utils/mediaSequence";
 import { CollapsibleVideoGallery } from "./CollapsibleVideoGallery";
 
 type VideoContentProps = {
@@ -7,6 +8,11 @@ type VideoContentProps = {
   onRetry?: () => void;
   nodeId?: string;
   updateVideoNodeData?: (nodeId: string, patch: any) => void;
+  onGalleryExpandedChange?: (expanded: boolean) => void;
+  frameSize?: {
+    width: number;
+    height: number;
+  };
 };
 
 export const VideoContent = ({
@@ -14,11 +20,14 @@ export const VideoContent = ({
   onRetry,
   nodeId,
   updateVideoNodeData,
+  onGalleryExpandedChange,
+  frameSize,
 }: VideoContentProps) => {
   // 结果视频列表（支持多个），保留原始对象结构用于排序
-  const videos = data.result?.data?.filter((item) => item?.url) ?? [];
+  const videos = assignMissingMediaSequences(
+    data.result?.data?.filter((item) => item?.url) ?? [],
+  );
   const status = data.status ?? GenerationStatus.COMPLETED;
-  const progress = data.progress ?? 0;
   const error = data.error;
 
   // 判断是否应该显示失败状态：
@@ -43,7 +52,7 @@ export const VideoContent = ({
       "生成失败，请稍后再试";
 
     return (
-      <div className="nopan h-full w-full flex flex-col items-center justify-center p-4 text-center bg-destructive/5">
+      <div className="nopan h-full w-full flex flex-col items-center justify-center p-4 text-center bg-[#121216]">
         <div className="text-sm font-medium text-destructive mb-2">
           生成失败
         </div>
@@ -68,7 +77,7 @@ export const VideoContent = ({
     status === GenerationStatus.QUEUED
   ) {
     return (
-      <div className="nopan h-full w-full flex flex-col items-center justify-center p-4 bg-muted/20">
+      <div className="nopan h-full w-full flex flex-col items-center justify-center p-4 bg-[#141418]">
         <div className="relative w-8 h-8 mb-3">
           <div className="absolute inset-0 border-2 border-primary/30 rounded-full"></div>
           <div className="absolute inset-0 border-2 border-transparent border-t-primary rounded-full animate-spin"></div>
@@ -85,13 +94,15 @@ export const VideoContent = ({
         videos={videos}
         nodeId={nodeId}
         updateVideoNodeData={updateVideoNodeData}
+        onExpandedChange={onGalleryExpandedChange}
+        frameSize={frameSize}
       />
     );
   }
 
   // 空状态
   return (
-    <div className="nopan h-full w-full flex items-center justify-center p-4 text-center text-muted-foreground text-sm bg-muted/10">
+    <div className="nopan h-full w-full flex items-center justify-center p-4 text-center text-muted-foreground text-sm bg-[#121216]">
       暂无视频
     </div>
   );

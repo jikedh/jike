@@ -11,7 +11,7 @@ export const PROMPT_PANEL_STYLES = {
     "relative flex flex-col gap-3",
 
   textAreaWrap:
-    "w-full bg-[#121214] border border-transparent rounded-xl overflow-hidden focus-within:border-[#B43FEB]/50 focus-within:shadow-[0_0_15px_rgba(180,63,235,0.15)] transition-all shadow-inner",
+    "w-full bg-white/[0.02] border border-white/[0.05] rounded-xl overflow-hidden focus-within:border-[#B43FEB]/50 focus-within:shadow-[0_0_15px_rgba(180,63,235,0.15)] transition-all shadow-inner",
 
   editorContent:
     "nodrag nopan nowheel w-full bg-transparent p-4 pb-8 text-sm text-white/90 outline-none cursor-text min-h-[100px] max-h-[220px] overflow-y-auto",
@@ -21,10 +21,10 @@ export const PROMPT_PANEL_STYLES = {
   controlArea: "flex items-center justify-between gap-3 flex-wrap",
 
   uploadButton:
-    "nodrag nopan nowheel flex flex-col items-center justify-center w-[60px] h-[60px] bg-[#121214] hover:bg-[#18181b] border border-transparent hover:border-[#B43FEB]/40 rounded-xl text-white/50 hover:text-[#B43FEB] transition-all cursor-pointer shadow-sm group",
+    "nodrag nopan nowheel flex flex-col items-center justify-center w-[60px] h-[60px] bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.05] hover:border-[#B43FEB]/40 rounded-xl text-white/50 hover:text-[#B43FEB] transition-all cursor-pointer shadow-sm group",
 
   referenceImageButton:
-    "group relative w-[60px] h-[60px] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#121214] shadow-sm hover:border-[#B43FEB]/40",
+    "group relative w-[60px] h-[60px] shrink-0 overflow-hidden rounded-xl border border-white/[0.05] bg-white/[0.02] shadow-sm hover:border-[#B43FEB]/40",
 
   modelSelect:
     "bg-white/5 hover:bg-white/10 border border-transparent hover:border-[#B43FEB]/30 px-4 py-2.5 rounded-xl text-xs text-white/80 font-medium flex items-center gap-2 transition-all cursor-pointer group shadow-sm h-auto w-auto",
@@ -37,7 +37,7 @@ export const PROMPT_PANEL_STYLES = {
     "text-white/80 text-xs px-3 py-2 cursor-pointer transition-colors focus:bg-[#B43FEB]/10 focus:text-white data-[state=checked]:bg-[#B43FEB]/15 data-[state=checked]:text-[#B43FEB] hover:bg-white/[0.04] hover:text-white",
 
   paramsButton:
-    "flex h-8 items-center gap-1.5 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 text-xs text-white/70 transition-colors hover:border-[#B43FEB]/30 hover:text-white/90 hover:bg-white/[0.04]",
+    "flex h-8 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 text-xs text-neutral-300 transition-colors hover:border-neutral-500 hover:text-neutral-100",
 
   paramsPopover: "border border-white/[0.06] bg-[#09090b] p-3 shadow-xl",
 

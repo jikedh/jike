@@ -2,11 +2,33 @@ import { useMemo } from "react";
 import type {
   AudioGenerationNode,
   ImageGenerationNode,
+  NewVideoGenerationNode,
   NoteNodeData,
   VideoGenerationNode,
 } from "shared/types/flow";
+import {
+  getDisplayMediaUrl,
+  getRemoteMediaUrl,
+} from "shared/utils/mediaPersistence";
 import { toChineseNumber } from "shared/utils/utils";
 import { getPrimaryVideoUrlFromNodeData } from "../utils/video-url";
+
+const getPrimaryVideoUrlFromAnyVideoNode = (
+  data?: Partial<VideoGenerationNode | NewVideoGenerationNode> | null,
+) => {
+  if (!data) {
+    return undefined;
+  }
+
+  const resultUrl = data.result?.data?.find((item) => item?.url)?.url;
+  const metadataUrl = (data.metadata as Record<string, unknown> | undefined)
+    ?.url as string | undefined;
+  const legacyUrl = (data as Record<string, unknown>)?.video_url as
+    | string
+    | undefined;
+
+  return resultUrl ?? metadataUrl ?? legacyUrl;
+};
 
 /**
  * 视频节点引用项类型。
@@ -15,6 +37,7 @@ import { getPrimaryVideoUrlFromNodeData } from "../utils/video-url";
 export interface VideoReferenceItem {
   id: string;
   url: string;
+  displayUrl?: string;
   relativePath?: string;
   fileName?: string;
 }
@@ -70,10 +93,16 @@ export const useVideoNodeReferences = ({
   const parentVideoNodes = useMemo(() => {
     return parentNodeIds
       .map((parentId) => nodes.find((node) => node.id === parentId))
-      .filter((node) => node?.type === "videoNode")
+      // 新旧视频节点都可以作为视频智能输入和参考视频来源。
+      .filter((node) => node?.type === "videoNode" || node?.type === "newVideoNode")
       .map((node) => ({
         id: node.id,
-        url: getPrimaryVideoUrlFromNodeData(node.data as VideoGenerationNode),
+        url:
+          node.type === "videoNode"
+            ? getPrimaryVideoUrlFromNodeData(node.data as VideoGenerationNode)
+            : getPrimaryVideoUrlFromAnyVideoNode(
+                node.data as NewVideoGenerationNode,
+              ),
       }))
       .filter((item) => item.url) as VideoReferenceItem[];
   }, [parentNodeIds, nodes]);
@@ -96,9 +125,12 @@ export const useVideoNodeReferences = ({
       .map((node) => {
         const nodeData = node.data as ImageGenerationNode;
         const firstItem = nodeData.result?.data?.[0];
+        const referenceUrl = getRemoteMediaUrl(firstItem) ?? firstItem?.url;
+        const displayUrl = getDisplayMediaUrl(firstItem) ?? referenceUrl;
         return {
           id: node.id,
-          url: firstItem?.url,
+          url: referenceUrl,
+          displayUrl,
           relativePath: firstItem?.relativePath,
           fileName: firstItem?.localFileName,
         };
@@ -140,32 +172,50 @@ export const useVideoNodeReferences = ({
       .filter((content) => Boolean(content)) as string[];
   }, [edges, nodes, nodeId]);
 
+  const localReferenceImageItems = useMemo(() => {
+    const parentUrlCounts = new Map<string, number>();
+    parentImageNodes.forEach((item) => {
+      parentUrlCounts.set(item.url, (parentUrlCounts.get(item.url) ?? 0) + 1);
+    });
+
+    return (referenceImageUrls ?? []).flatMap((url, index) => {
+      const count = parentUrlCounts.get(url) ?? 0;
+      if (count > 0) {
+        parentUrlCounts.set(url, count - 1);
+        return [];
+      }
+      return [{ url, index }];
+    });
+  }, [parentImageNodes, referenceImageUrls]);
+
+  const localReferenceImageUrls = useMemo(
+    () => localReferenceImageItems.map((item) => item.url),
+    [localReferenceImageItems],
+  );
+
+  const localReferenceImageIndexes = useMemo(
+    () => localReferenceImageItems.map((item) => item.index),
+    [localReferenceImageItems],
+  );
+
   const videoMentionItems = useMemo(() => {
     const items: VideoMentionCandidate[] = [];
 
     // 统一“本地上传图”和“节点继承图”的命名风格：全部使用“图片X”。
     // 同时按 URL 去重，避免同一张图在 @ 列表中出现两次。
     const mergedImageSources = [
-      ...(referenceImageUrls ?? []).map((url) => ({
+      ...localReferenceImageUrls.map((url) => ({
         id: getVideoLocalImageMentionId(url),
         url,
       })),
       ...parentImageNodes.map((item) => ({
         id: getVideoParentImageMentionId(item.id),
-        url: item.url,
+        url: item.displayUrl ?? item.url,
       })),
     ];
 
-    const seenImageUrls = new Set<string>();
-    const unifiedImageSources = mergedImageSources.filter((item) => {
-      if (seenImageUrls.has(item.url)) {
-        return false;
-      }
-      seenImageUrls.add(item.url);
-      return true;
-    });
-
-    unifiedImageSources.forEach((item, index) => {
+    // 相同 URL 可能来自不同连接，不能按 URL 去重，否则 UI 和生成参数都会少一个参考位。
+    mergedImageSources.forEach((item, index) => {
       items.push({
         id: item.id,
         label: `图片${toChineseNumber(index + 1)}`,
@@ -197,7 +247,7 @@ export const useVideoNodeReferences = ({
 
     return items;
   }, [
-    referenceImageUrls,
+    localReferenceImageUrls,
     parentImageNodes,
     parentVideoNodes,
     parentAudioNodes,
@@ -205,12 +255,10 @@ export const useVideoNodeReferences = ({
 
   const allImageUrls = useMemo(() => {
     return [
-      ...new Set([
-        ...(referenceImageUrls ?? []),
-        ...parentImageNodes.map((item) => item.url),
-      ]),
+      ...localReferenceImageUrls,
+      ...parentImageNodes.map((item) => item.url),
     ];
-  }, [referenceImageUrls, parentImageNodes]);
+  }, [localReferenceImageUrls, parentImageNodes]);
 
   const allVideoUrls = useMemo(() => {
     return parentVideoNodes.map((item) => item.url);
@@ -224,6 +272,8 @@ export const useVideoNodeReferences = ({
     parentVideoNodes,
     parentAudioNodes,
     parentImageNodes,
+    localReferenceImageUrls,
+    localReferenceImageIndexes,
     parentImageNodeUrls,
     parentImageNodeIdByUrl,
     parentNoteContents,

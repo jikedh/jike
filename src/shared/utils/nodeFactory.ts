@@ -120,15 +120,51 @@ export const createVideoNode = (
   width: 350,
   height: 250,
   data: {
-    model: "doubao-seedance-1-5-pro",
+    model: "wan2.7-r2v",
     prompt: "",
     promptDraft: "",
     promptDraftHtml: "<p></p>",
+    duration: 5,
     aspect_ratio: "16:9",
     nickname: "视频",
     status: GenerationStatus.COMPLETED,
     progress: 0,
-    metadata: { size: "1280x720" },
+    metadata: {
+      resolution: "1080P",
+      prompt_extend: false,
+    },
+    result: { type: "video", data: [] },
+    createdAt: Date.now(),
+  },
+});
+
+/**
+ * 创建新版视频节点
+ */
+export const createNewVideoNode = (
+  id: string,
+  position: NodePosition,
+  options?: AddNodeOptions,
+): AllNodeType => ({
+  id,
+  type: "newVideoNode",
+  position,
+  width: 350,
+  height: 250,
+  data: {
+    model: "seedance-2.0-pro",
+    prompt: "",
+    promptDraft: "",
+    promptDraftHtml: "<p></p>",
+    duration: 5,
+    aspect_ratio: "16:9",
+    nickname: "新版视频",
+    status: GenerationStatus.COMPLETED,
+    progress: 0,
+    metadata: {
+      // 新版视频节点默认进入全能参考模式，和老版默认体验保持一致。
+      mode: "all-reference",
+    },
     result: { type: "video", data: [] },
     createdAt: Date.now(),
   },
@@ -201,7 +237,7 @@ export const createTextAgentNode = (
   type: "textAgentNode",
   position,
   data: {
-    model: "gemini-3.1-pro",
+    model: "deepseek-v3.2",
     presetId: undefined,
     useDefaultSystemPrompt: true,
     customSystemPrompt: "",
@@ -296,7 +332,11 @@ export const nodeFactoryMap: Record<NodeType, NodeFactory> = {
   agent: createAgentNode,
   panorama: createPanoramaNode,
   video: createVideoNode,
+<<<<<<< HEAD
   videoDemo: createVideoDemoNode,
+=======
+  newVideo: createNewVideoNode,
+>>>>>>> origin/develop
   audio: createAudioNode,
   textAgent: createTextAgentNode,
   imageAgent: createImageAgentNode,

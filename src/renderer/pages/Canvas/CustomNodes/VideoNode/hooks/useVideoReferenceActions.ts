@@ -24,7 +24,7 @@ export const useVideoReferenceActions = ({
   updateVideoNodeData: (nodeId: string, patch: any) => void;
   deleteEdge: (edgeId: string) => void;
   onDisconnectedNode?: (sourceNodeId: string) => void;
-  onRemovedReferenceImage?: (url: string) => void;
+  onRemovedReferenceImage?: (url: string, index: number) => void;
 }) => {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -49,18 +49,26 @@ export const useVideoReferenceActions = ({
    * 仅从当前视频节点的 image_urls 中移除对应 URL。
    */
   const handleRemoveReferenceImage = useCallback(
-    (targetUrl: string) => {
+    (targetUrl: string, targetIndex?: number) => {
       if (!targetUrl) {
         return;
       }
 
-      const nextUrls = (currentImageUrls ?? []).filter(
-        (url) => url !== targetUrl,
-      );
+      // 相同 URL 也可能被重复作为有效参考图，删除时按下标移除单个引用实例。
+      const nextUrls = [...(currentImageUrls ?? [])];
+      const removeIndex =
+        typeof targetIndex === "number"
+          ? targetIndex
+          : nextUrls.findIndex((url) => url === targetUrl);
+      if (removeIndex < 0 || removeIndex >= nextUrls.length) {
+        return;
+      }
+
+      nextUrls.splice(removeIndex, 1);
       updateVideoNodeData(nodeId, {
         image_urls: nextUrls,
       });
-      onRemovedReferenceImage?.(targetUrl);
+      onRemovedReferenceImage?.(targetUrl, removeIndex);
     },
     [currentImageUrls, nodeId, onRemovedReferenceImage, updateVideoNodeData],
   );

@@ -9,6 +9,8 @@ import {
   SquareDashedMousePointer,
   Plus,
   Play,
+  Upload,
+  Download,
   Network,
   Clock,
   X,
@@ -20,9 +22,12 @@ import {
 import {
   getProjectListAsync,
   deleteProject,
+  exportProjectDraft,
   getCoverImageUrl,
+  importProjectDraft,
   type ProjectMeta,
 } from "service/projectStorage";
+import { toast } from "sonner";
 import ProjectDialog from "@/components/ProjectDialog";
 
 export default function CanvasPlaceholderPage() {
@@ -35,6 +40,8 @@ export default function CanvasPlaceholderPage() {
   );
   const [projectToEdit, setProjectToEdit] = useState<ProjectMeta | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [exportingProjectId, setExportingProjectId] = useState<string | null>(null);
 
   const refreshProjects = async () => {
     const list = await getProjectListAsync();
@@ -93,6 +100,57 @@ export default function CanvasPlaceholderPage() {
     }
   };
 
+  const handleImportProject = async () => {
+    setIsImporting(true);
+    try {
+      const result = await importProjectDraft();
+      if (result.canceled) {
+        return;
+      }
+
+      if (!result.success) {
+        toast.error(result.error || "导入项目失败");
+        return;
+      }
+
+      await refreshProjects();
+      toast.success("导入成功", {
+        description: result.projectName
+          ? `已导入项目「${result.projectName}」`
+          : "项目草稿已导入",
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleExportProject = async (
+    e: React.MouseEvent,
+    project: ProjectMeta,
+  ) => {
+    e.stopPropagation();
+    setExportingProjectId(project.id);
+    try {
+      const result = await exportProjectDraft(project.id);
+      if (result.canceled) {
+        return;
+      }
+
+      if (!result.success) {
+        toast.error(result.error || "导出项目失败");
+        return;
+      }
+
+      toast.success("导出成功", {
+        description: result.path
+          ? `已导出到 ${result.path}`
+          : `已导出项目「${project.name}」`,
+      });
+    } finally {
+      setExportingProjectId(null);
+    }
+  };
+
   // 格式化时间
   const formatTime = (timestamp: number) => {
     const now = Date.now();
@@ -115,13 +173,27 @@ export default function CanvasPlaceholderPage() {
           <SquareDashedMousePointer className="w-5 h-5 mr-3 text-[#B43FEB]" />
           <h1 className="text-lg font-medium">无限画布项目管理</h1>
         </div>
-        <button
-          onClick={openCreateDialog}
-          className="bg-[#B43FEB] text-white hover:bg-[#9d35ce] px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 shadow-[0_0_20px_rgba(180,63,235,0.3)] cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          新建项目
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleImportProject}
+            disabled={isImporting}
+            className="bg-black/30 border border-white/10 text-white/80 hover:bg-white/5 hover:text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isImporting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4" />
+            )}
+            {isImporting ? "导入中..." : "导入"}
+          </button>
+          <button
+            onClick={openCreateDialog}
+            className="bg-[#B43FEB] text-white hover:bg-[#9d35ce] px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 shadow-[0_0_20px_rgba(180,63,235,0.3)] cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            新建项目
+          </button>
+        </div>
       </header>
 
       {/* Content */}
@@ -220,6 +292,20 @@ export default function CanvasPlaceholderPage() {
                       {formatTime(project.updatedAt || project.createdAt)}
                     </span>
                   </div>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    onClick={(e) => handleExportProject(e, project)}
+                    disabled={exportingProjectId === project.id}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/25 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:border-[#B43FEB]/40 hover:text-[#d8b6ff] hover:bg-[#B43FEB]/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {exportingProjectId === project.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5" />
+                    )}
+                    {exportingProjectId === project.id ? "导出中..." : "导出"}
+                  </button>
                 </div>
               </div>
             </div>

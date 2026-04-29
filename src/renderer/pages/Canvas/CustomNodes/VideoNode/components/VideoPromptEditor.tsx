@@ -31,6 +31,15 @@ export interface VideoPromptEditorHandle {
       type?: "image" | "video" | "audio";
     }>,
   ) => number;
+  updateReferenceMentions: (
+    updates: Array<{
+      id: string;
+      label: string;
+      value?: string;
+      thumbnail?: string;
+      type?: "image" | "video" | "audio";
+    }>,
+  ) => number;
 }
 
 /**
@@ -183,6 +192,36 @@ export const VideoPromptEditor = forwardRef<
         allowSpaces: true,
         allowedPrefixes: null, // 允许任意字符作为前缀
         startOfLine: false, // 不限制行首
+        findSuggestionMatch: ({ $position }) => {
+          const textBeforeCursor =
+            $position.nodeBefore?.isText && $position.nodeBefore.text;
+
+          if (!textBeforeCursor || !textBeforeCursor.endsWith("@")) {
+            return null;
+          }
+
+          // 只把光标前最近的 @ 作为当前触发范围，避免“第一个 @ 到第二个 @”
+          // 被 TipTap 默认规则合并成一段，导致选择资产时误删前面的提示词。
+          return {
+            range: {
+              from: $position.pos - 1,
+              to: $position.pos,
+            },
+            query: "",
+            text: "@",
+          };
+        },
+        allow: ({ state, range }) => {
+          const { from, to } = state.selection;
+
+          // 只有光标紧跟在 @ 后面时才弹出资产表。
+          // 即使 @ 后面已经有文字，只要用户把光标点回 @ 后面，也应该重新弹出。
+          if (from !== to) {
+            return false;
+          }
+
+          return state.doc.textBetween(to - 1, to, "", "") === "@";
+        },
         items: () => {
           return mentionItemsRef.current;
         },
@@ -278,6 +317,7 @@ export const VideoPromptEditor = forwardRef<
           "leading-6",
           "focus:outline-none",
         ),
+        spellcheck: "false",
       },
       handleKeyDown: (_view, event) => {
         // 当焦点在视频提示词输入区时，空格仅用于输入，不向画布层冒泡。
@@ -287,6 +327,26 @@ export const VideoPromptEditor = forwardRef<
 
         // 返回 false 让编辑器继续执行默认输入行为（插入空格字符）。
         return false;
+      },
+      handleDOMEvents: {
+        pointerdown: (_view, event) => {
+          if (event.shiftKey && event.button === 0) {
+            event.stopPropagation();
+          }
+          return false;
+        },
+        mousedown: (_view, event) => {
+          if (event.shiftKey && event.button === 0) {
+            event.stopPropagation();
+          }
+          return false;
+        },
+        click: (_view, event) => {
+          if (event.shiftKey && event.button === 0) {
+            event.stopPropagation();
+          }
+          return false;
+        },
       },
     },
     onUpdate: ({ editor: currentEditor }) => {
@@ -375,6 +435,44 @@ export const VideoPromptEditor = forwardRef<
         editor.view.dispatch(transaction);
 
         return uniqueRanges.length;
+      },
+      updateReferenceMentions: (updates) => {
+        if (!editor || updates.length === 0) {
+          return 0;
+        }
+
+        const updateMap = new Map(updates.map((item) => [item.id, item]));
+        let transaction = editor.state.tr;
+        let updatedCount = 0;
+
+        editor.state.doc.descendants((node, pos) => {
+          if (node.type.name !== "mention") {
+            return true;
+          }
+
+          const mentionId = String(node.attrs.id ?? "");
+          const update = updateMap.get(mentionId);
+          if (!update) {
+            return true;
+          }
+
+          // 参考素材重新排序后，同步已插入提示词里的 @图片1/@图片2 标签。
+          transaction = transaction.setNodeMarkup(pos, undefined, {
+            ...node.attrs,
+            label: update.label,
+            value: update.value ?? update.label,
+            thumbnail: update.thumbnail ?? node.attrs.thumbnail,
+            type: update.type ?? node.attrs.type,
+          });
+          updatedCount += 1;
+          return true;
+        });
+
+        if (updatedCount > 0) {
+          editor.view.dispatch(transaction);
+        }
+
+        return updatedCount;
       },
     }),
     [editor],

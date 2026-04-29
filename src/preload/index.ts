@@ -1,58 +1,7 @@
-import { contextBridge, ipcRenderer } from "electron";
 import { electronAPI } from "@electron-toolkit/preload";
-
-export type FileInfo = {
-  name: string;
-  path: string;
-  isDirectory: boolean;
-  size: number;
-  modifiedAt: number;
-};
-
-export type StorageApi = {
-  selectDirectory: () => Promise<string | null>;
-  ensureProjectDir: (
-    basePath: string,
-    projectName: string,
-  ) => Promise<{ success: boolean; path?: string; error?: string }>;
-  writeJson: (
-    filePath: string,
-    data: any,
-  ) => Promise<{ success: boolean; error?: string }>;
-  readJson: (
-    filePath: string,
-  ) => Promise<{ success: boolean; data: any; error?: string }>;
-  writeFile: (
-    filePath: string,
-    buffer: ArrayBuffer,
-  ) => Promise<{ success: boolean; error?: string }>;
-  readFile: (
-    filePath: string,
-  ) => Promise<{ success: boolean; data: Buffer | null; error?: string }>;
-  deleteFile: (
-    filePath: string,
-  ) => Promise<{ success: boolean; error?: string }>;
-  deleteFolder: (
-    folderPath: string,
-  ) => Promise<{ success: boolean; error?: string }>;
-  fileExists: (filePath: string) => Promise<boolean>;
-  listFiles: (
-    dirPath: string,
-  ) => Promise<{ success: boolean; files: FileInfo[]; error?: string }>;
-  downloadFile: (
-    url: string,
-    destPath: string,
-  ) => Promise<{ success: boolean; path?: string; error?: string }>;
-  renameDirectory: (
-    oldPath: string,
-    newPath: string,
-  ) => Promise<{ success: boolean; error?: string }>;
-  migrateProjects: (
-    oldPath: string,
-    newPath: string,
-  ) => Promise<{ success: boolean; migratedCount?: number; error?: string }>;
-  getDefaultPath: () => Promise<string>;
-};
+import { contextBridge, ipcRenderer } from "electron";
+import type { Flow2ApiApi } from "shared/types/flow2api";
+import type { FileInfo, StorageApi } from "shared/types/storage";
 
 export type DebugApi = {
   toggleDevTools: () => Promise<{ success: boolean; error?: string }>;
@@ -76,26 +25,63 @@ export type DownloadApi = {
 
 const storageApi: StorageApi = {
   selectDirectory: () => ipcRenderer.invoke("storage:selectDirectory"),
-  ensureProjectDir: (basePath, projectName) =>
-    ipcRenderer.invoke("storage:ensureProjectDir", basePath, projectName),
-  writeJson: (filePath, data) =>
-    ipcRenderer.invoke("storage:writeJson", filePath, data),
-  readJson: (filePath) => ipcRenderer.invoke("storage:readJson", filePath),
-  writeFile: (filePath, buffer) =>
-    ipcRenderer.invoke("storage:writeFile", filePath, buffer),
-  readFile: (filePath) => ipcRenderer.invoke("storage:readFile", filePath),
-  deleteFile: (filePath) => ipcRenderer.invoke("storage:deleteFile", filePath),
-  deleteFolder: (folderPath) =>
-    ipcRenderer.invoke("storage:deleteFolder", folderPath),
-  fileExists: (filePath) => ipcRenderer.invoke("storage:fileExists", filePath),
-  listFiles: (dirPath) => ipcRenderer.invoke("storage:listFiles", dirPath),
-  downloadFile: (url, destPath) =>
-    ipcRenderer.invoke("storage:downloadFile", url, destPath),
-  renameDirectory: (oldPath, newPath) =>
-    ipcRenderer.invoke("storage:renameDirectory", oldPath, newPath),
-  migrateProjects: (oldPath, newPath) =>
-    ipcRenderer.invoke("storage:migrateProjects", oldPath, newPath),
+  ensureProject: (basePath, projectName) =>
+    ipcRenderer.invoke("storage:ensureProject", basePath, projectName),
+  listProjects: (basePath) =>
+    ipcRenderer.invoke("storage:listProjects", basePath),
+  saveCanvas: (basePath, projectName, data) =>
+    ipcRenderer.invoke("storage:saveCanvas", basePath, projectName, data),
+  loadCanvas: (basePath, projectName) =>
+    ipcRenderer.invoke("storage:loadCanvas", basePath, projectName),
+  saveMedia: (basePath, relativePath, buffer) =>
+    ipcRenderer.invoke("storage:saveMedia", basePath, relativePath, buffer),
+  readMedia: (basePath, relativePath) =>
+    ipcRenderer.invoke("storage:readMedia", basePath, relativePath),
+  listMedia: (basePath, projectName, mediaType) =>
+    ipcRenderer.invoke("storage:listMedia", basePath, projectName, mediaType),
+  deleteMedia: (basePath, relativePath) =>
+    ipcRenderer.invoke("storage:deleteMedia", basePath, relativePath),
+  downloadMedia: (basePath, url, relativePath) =>
+    ipcRenderer.invoke("storage:downloadMedia", basePath, url, relativePath),
+  mediaExists: (basePath, relativePath) =>
+    ipcRenderer.invoke("storage:mediaExists", basePath, relativePath),
+  renameProject: (basePath, oldProjectName, newProjectName) =>
+    ipcRenderer.invoke(
+      "storage:renameProject",
+      basePath,
+      oldProjectName,
+      newProjectName,
+    ),
+  deleteProject: (basePath, projectName) =>
+    ipcRenderer.invoke("storage:deleteProject", basePath, projectName),
+  copyProject: (basePath, srcProjectName, destProjectName) =>
+    ipcRenderer.invoke(
+      "storage:copyProject",
+      basePath,
+      srcProjectName,
+      destProjectName,
+    ),
+  exportProject: (basePath, projectName) =>
+    ipcRenderer.invoke("storage:exportProject", basePath, projectName),
+  importProject: (basePath) =>
+    ipcRenderer.invoke("storage:importProject", basePath),
   getDefaultPath: () => ipcRenderer.invoke("storage:getDefaultPath"),
+
+  // Compatibility aliases for existing renderer-side service wrappers.
+  ensureProjectDir: (basePath, projectName) =>
+    ipcRenderer.invoke("storage:ensureProject", basePath, projectName),
+  writeFile: (basePath, relativePath, buffer) =>
+    ipcRenderer.invoke("storage:saveMedia", basePath, relativePath, buffer),
+  readFile: (basePath, relativePath) =>
+    ipcRenderer.invoke("storage:readMedia", basePath, relativePath),
+  deleteFile: (basePath, relativePath) =>
+    ipcRenderer.invoke("storage:deleteMedia", basePath, relativePath),
+  listFiles: (basePath, projectName, mediaType) =>
+    ipcRenderer.invoke("storage:listMedia", basePath, projectName, mediaType),
+  downloadFile: (basePath, url, relativePath) =>
+    ipcRenderer.invoke("storage:downloadMedia", basePath, url, relativePath),
+  fileExists: (basePath, relativePath) =>
+    ipcRenderer.invoke("storage:mediaExists", basePath, relativePath),
 };
 
 const debugApi: DebugApi = {
@@ -115,12 +101,56 @@ const downloadApi: DownloadApi = {
     ipcRenderer.invoke("download:imageToFile", url, filePath),
 };
 
+const flow2ApiApi: Flow2ApiApi = {
+  getState: () => ipcRenderer.invoke("flow2api:getState"),
+  start: () => ipcRenderer.invoke("flow2api:start"),
+  stop: () => ipcRenderer.invoke("flow2api:stop"),
+  restart: () => ipcRenderer.invoke("flow2api:restart"),
+  updateSettings: (patch) =>
+    ipcRenderer.invoke("flow2api:updateSettings", patch),
+  getLogs: (limit) => ipcRenderer.invoke("flow2api:getLogs", limit),
+  selectOutputDirectory: () =>
+    ipcRenderer.invoke("flow2api:selectOutputDirectory"),
+};
+
+export type TrackingApi = {
+  send: (
+    data: AIVideoTrackData,
+  ) => Promise<{ success: boolean; error?: string }>;
+  updateStatus: (
+    taskId: string,
+    status: string,
+    errorMessage?: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+};
+
+export interface AIVideoTrackData {
+  userId: string;
+  userUuid?: string;
+  apiName: string;
+  model: string;
+  taskId: string;
+  prompt?: string;
+  provider?: string;
+  requestParams?: Record<string, unknown>;
+  status: "SUCCESS" | "FAIL" | "PENDING";
+  timestamp: number;
+}
+
+const trackingApi: TrackingApi = {
+  send: (data) => ipcRenderer.invoke("tracking:send", data),
+  updateStatus: (taskId, status, errorMessage) =>
+    ipcRenderer.invoke("tracking:updateStatus", taskId, status, errorMessage),
+};
+
 if (process.contextIsolated) {
   try {
     contextBridge.exposeInMainWorld("electron", electronAPI);
     contextBridge.exposeInMainWorld("storage", storageApi);
     contextBridge.exposeInMainWorld("debug", debugApi);
     contextBridge.exposeInMainWorld("download", downloadApi);
+    contextBridge.exposeInMainWorld("flow2api", flow2ApiApi);
+    contextBridge.exposeInMainWorld("tracking", trackingApi);
   } catch (error) {
     console.error(error);
   }
@@ -133,4 +163,8 @@ if (process.contextIsolated) {
   window.debug = debugApi;
   // @ts-ignore (define in dts)
   window.download = downloadApi;
+  // @ts-ignore (define in dts)
+  window.flow2api = flow2ApiApi;
+  // @ts-ignore (define in dts)
+  window.tracking = trackingApi;
 }

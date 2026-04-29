@@ -5,12 +5,20 @@ import StarterKit from "@tiptap/starter-kit";
 import type { ChangeEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
-import { IMAGE_MODELS } from "shared/constants/ai-models";
+import {
+  IMAGE_MODELS,
+  NANO_BANANA_LOCAL_MODEL,
+  NANO_BANANA_LOCAL_PLATFORM,
+} from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageGenerationNode, NoteNodeData } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
+import {
+  getLocalGeminiErrorText,
+  isLocalGeminiFatalBatchError,
+  normalizeLocalGeminiErrorDetail,
+} from "shared/utils/localGeminiErrors";
 import { cn } from "shared/utils/utils";
-import { getBalanceInfo } from "@/api/jikeing";
 import { PresetDropdown } from "@/components/PresetDropdown";
 import { Button } from "@/components/ui/button";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
@@ -24,9 +32,14 @@ import {
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { getImageGenerationPoints } from "shared/constants/modelPoints";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
+import { getImageGenerationPoints } from "shared/constants/model-points";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
-import { GeminiParamsPanel } from "./components/GeminiParamsPanel";
+import {
+  GeminiParamsPanel,
+  NANO_BANANA_LOCAL_SIZES,
+} from "./components/GeminiParamsPanel";
+import { GptImage2ParamsPanel } from "./components/GptImage2ParamsPanel";
 import { MidjourneyAdvancedPanel } from "./components/MidjourneyAdvancedPanel";
 import { MidjourneyParamsPanel } from "./components/MidjourneyParamsPanel";
 import { SeedreamParamsPanel } from "./components/SeedreamParamsPanel";
@@ -75,6 +88,11 @@ const ReferenceItemWrapper = ({
 // 图片生成数量选项
 const IMAGE_COUNT_OPTIONS = [1, 2, 4] as const;
 type ImageCount = (typeof IMAGE_COUNT_OPTIONS)[number];
+const DEFAULT_NANO_BANANA_SIZE = "1:1";
+const LOCAL_GEMINI_BATCH_SUBMIT_DELAY_MS = 3000;
+const NANO_BANANA_SIZE_VALUES = new Set(
+  NANO_BANANA_LOCAL_SIZES.map((item) => item.value),
+);
 
 export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   // 上传中态，避免重复上传触发
@@ -94,10 +112,13 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   // 消息提示（成功/失败/警告）
   const { success, error, warning } = useMessage();
   const {
+    pointsEnabled,
     totalPoints,
     fallbackAIGenPrice,
+    normalizeRequiredPoints,
     refreshBalanceInfo,
     ensureEnoughPoints,
+    validateBalanceBeforeGenerate,
   } = useGenerationPoints();
 
   // 画布数据：用于沿边查找父节点
@@ -114,6 +135,9 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   );
   const updateImageNodeData = useCanvasFlowStore(
     (state) => state.updateImageNodeData,
+  );
+  const setDefaultImagePreset = useChatSettingsStore(
+    (state) => state.setDefaultImagePreset,
   );
   const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge);
   const setReferenceHoverHighlight = useCanvasFlowStore(
@@ -160,6 +184,31 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const referenceImageUrls = currentImageData?.image_urls ?? [];
   const promptDraftHtml = currentImageData?.promptDraftHtml ?? "<p></p>";
 
+  const persistImageDefaultPreset = useCallback(
+    (patch: {
+      model?: string;
+      platform?: string;
+      size?: string;
+      resolution?: string;
+    }) => {
+      setDefaultImagePreset({
+        model: patch.model ?? currentImageData?.model ?? model,
+        platform: patch.platform ?? currentImageData?.platform ?? platform,
+        size: patch.size ?? size,
+        resolution: patch.resolution ?? resolution,
+      });
+    },
+    [
+      currentImageData?.model,
+      currentImageData?.platform,
+      model,
+      platform,
+      resolution,
+      setDefaultImagePreset,
+      size,
+    ],
+  );
+
   // ========== 模型专属参数 ==========
   // 判断是否为 Midjourney 系列模型
   const isMidjourneyModel =
@@ -172,21 +221,52 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     model === "gemini-3-pro-image-preview" &&
     (currentImageData?.platform === "google" ||
       currentImageData?.platform === undefined);
+  const isNanoBananaLocalModel =
+    model === NANO_BANANA_LOCAL_MODEL &&
+    currentImageData?.platform === NANO_BANANA_LOCAL_PLATFORM;
+  // 判断是否为 GPT-Image-2 模型
+  const isGptImage2Model = model === "gpt-image-2";
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
+  const isLocalGeminiDirectModel =
+    isGeminiPro2Model || isNanoBananaLocalModel;
+  const isGeminiFamilyModel =
+    isGeminiModel || isGeminiPro2Model || isNanoBananaLocalModel;
+
+  useEffect(() => {
+    if (
+      !isNanoBananaLocalModel ||
+      !size ||
+      NANO_BANANA_SIZE_VALUES.has(size)
+    ) {
+      return;
+    }
+
+    persistImageDefaultPreset({ size: DEFAULT_NANO_BANANA_SIZE });
+    updateImageNodeData(nodeId, { size: DEFAULT_NANO_BANANA_SIZE });
+  }, [
+    isNanoBananaLocalModel,
+    nodeId,
+    persistImageDefaultPreset,
+    size,
+    updateImageNodeData,
+  ]);
 
   const requiredPoints = useMemo(() => {
-    return getImageGenerationPoints({
-      model,
-      platform,
-      count: isMidjourneyModel ? 1 : imageCount,
-      fallback: fallbackAIGenPrice,
-    });
+    return normalizeRequiredPoints(
+      getImageGenerationPoints({
+        model,
+        platform,
+        count: isMidjourneyModel ? 1 : imageCount,
+        fallback: fallbackAIGenPrice,
+      }),
+    );
   }, [
     fallbackAIGenPrice,
     imageCount,
     isMidjourneyModel,
     model,
+    normalizeRequiredPoints,
     platform,
   ]);
 
@@ -344,7 +424,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     // 根据命令自动设置 resolution
     const commandResolutionMap: Record<string, string> = {
       "c-3": "1K", // 多宫格电影分镜
-      "c-4": isGeminiModel ? "4K" : "3K", // VR图：Gemini用4K，Seedream用3K
+      "c-4": isGeminiFamilyModel ? "4K" : "3K", // VR图：Gemini系用4K，Seedream用3K
     };
     const targetResolution = commandResolutionMap[selected.id];
     if (targetResolution) {
@@ -532,6 +612,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
   // 是否正在生成（用于按钮禁用态）
   const isGenerating = useMemo(() => {
+    if (generatingCount > 0) {
+      return true;
+    }
+
     if (!currentNode || currentNode.type !== "imageNode") {
       return false;
     }
@@ -541,7 +625,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       status === GenerationStatus.IN_PROGRESS ||
       status === GenerationStatus.QUEUED
     );
-  }, [currentNode]);
+  }, [currentNode, generatingCount]);
 
   // 触发上传选择
   const handleUploadClick = () => {
@@ -598,6 +682,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           "leading-6",
           "focus:outline-none",
         ),
+        spellcheck: "false",
       },
       handleKeyDown: (_view, event) => {
         // 当焦点在图片提示词输入区时，空格仅用于输入，不向画布层冒泡。
@@ -661,6 +746,26 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         }
 
         return false;
+      },
+      handleDOMEvents: {
+        pointerdown: (_view, event) => {
+          if (event.shiftKey && event.button === 0) {
+            event.stopPropagation();
+          }
+          return false;
+        },
+        mousedown: (_view, event) => {
+          if (event.shiftKey && event.button === 0) {
+            event.stopPropagation();
+          }
+          return false;
+        },
+        click: (_view, event) => {
+          if (event.shiftKey && event.button === 0) {
+            event.stopPropagation();
+          }
+          return false;
+        },
       },
     },
     onUpdate: ({ editor: currentEditor }) => {
@@ -794,15 +899,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     const totalScoreCost = requiredPoints;
 
     // 前置余额校验：避免积分不足时仍创建任务
-    try {
-      const balanceResponse = await getBalanceInfo();
-      const currentVipScore = Number(balanceResponse?.data?.vipScore ?? 0);
-      if (currentVipScore < totalScoreCost) {
-        warning(`积分不足，当前生成需 ${totalScoreCost} 积分`);
-        return;
-      }
-    } catch (_balanceError: any) {
-      warning("积分校验失败，请稍后重试");
+    if (
+      !(await validateBalanceBeforeGenerate({
+        requiredPoints: totalScoreCost,
+        warning,
+      }))
+    ) {
       return;
     }
 
@@ -831,7 +933,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         basePayload.metadata = {
           resolution,
         };
-      } else if (isGeminiModel) {
+      } else if (isGeminiModel || isNanoBananaLocalModel) {
         // Gemini 3 Pro: size 作为画面比例
         basePayload.size = size;
         basePayload.metadata = {
@@ -859,22 +961,101 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     let successCount = 0;
     let failCount = 0;
 
-    // Gemini 3 Pro 渠道二：直接调用专用接口（无需轮询）
-    if (isGeminiPro2Model) {
+    // 本地 Gemini 直连：按固定节流间隔提交，遇到风控/Token 异常时停止剩余请求
+    if (isLocalGeminiDirectModel) {
+      let completedCount = 0;
+      let submittedCount = 0;
+      let shouldStopRemainingSubmissions = false;
+      let stopReason = "";
+      const submittedTasks: Array<Promise<void>> = [];
+
       for (let i = 0; i < imageCount; i++) {
-        try {
-          const payload = buildPayload();
-          // 渠道二使用独立接口
-          await startGeminiPro2Generation(nodeId, {
-            ...payload,
-            platform: "google_pro2", // 标识渠道二
+        if (shouldStopRemainingSubmissions) {
+          break;
+        }
+
+        const payload = buildPayload();
+        submittedCount++;
+
+        const task = startGeminiPro2Generation(nodeId, {
+          ...payload,
+          platform: currentImageData?.platform,
+        })
+          .then(() => {
+            successCount++;
+          })
+          .catch((startError) => {
+            failCount++;
+
+            if (
+              !shouldStopRemainingSubmissions &&
+              isLocalGeminiFatalBatchError(startError)
+            ) {
+              shouldStopRemainingSubmissions = true;
+              stopReason = normalizeLocalGeminiErrorDetail(
+                getLocalGeminiErrorText(startError),
+              );
+            }
+          })
+          .finally(() => {
+            completedCount++;
+            setGeneratingCount((prev) => Math.max(prev - 1, 0));
           });
-          successCount++;
-        } catch {
-          failCount++;
+        submittedTasks.push(task);
+
+        // 提交节流：为 Flow2API 共享池和 Token 留恢复空间
+        if (i < imageCount - 1) {
+          let remainingDelay = LOCAL_GEMINI_BATCH_SUBMIT_DELAY_MS;
+          while (remainingDelay > 0) {
+            if (shouldStopRemainingSubmissions) {
+              break;
+            }
+
+            const chunkDelay = Math.min(remainingDelay, 200);
+            await new Promise((resolve) => window.setTimeout(resolve, chunkDelay));
+            remainingDelay -= chunkDelay;
+          }
         }
       }
-    } else {
+
+      const skippedCount = Math.max(imageCount - submittedCount, 0);
+      if (skippedCount > 0) {
+        setGeneratingCount((prev) => Math.max(prev - skippedCount, 0));
+        warning(
+          stopReason
+            ? `${stopReason} 已停止剩余 ${skippedCount} 次提交。`
+            : `检测到本地 Gemini 异常，已停止剩余 ${skippedCount} 次提交。`,
+        );
+      } else {
+        success(`已按 3 秒间隔提交 ${submittedCount} 次生成请求`);
+      }
+
+      await Promise.allSettled(submittedTasks);
+
+      if (submittedCount === 0) {
+        setGeneratingCount(0);
+        error(stopReason || "创建任务失败，请稍后再试");
+        return;
+      }
+
+      const finalStoppedSuffix =
+        skippedCount > 0 ? `，已停止剩余 ${skippedCount} 次提交` : "";
+      if (failCount === 0) {
+        success(`已生成 ${successCount} 张图片${finalStoppedSuffix}`);
+        void refreshBalanceInfo();
+      } else if (successCount > 0) {
+        warning(
+          `已生成 ${successCount} 张图片，${failCount} 张失败${finalStoppedSuffix}`,
+        );
+        void refreshBalanceInfo();
+      } else {
+        error(stopReason || "创建任务失败，请稍后再试");
+      }
+
+      return;
+    }
+
+    {
       // 多次调用接口，每次只生成 1 张图片
       for (let i = 0; i < imageCount; i++) {
         try {
@@ -1058,9 +1239,23 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               const selectedModel = IMAGE_MODELS.find(
                 (item) => item.id === Number(value),
               );
+              const shouldResetNanoBananaSize =
+                selectedModel?.model === NANO_BANANA_LOCAL_MODEL &&
+                selectedModel?.platform === NANO_BANANA_LOCAL_PLATFORM &&
+                !NANO_BANANA_SIZE_VALUES.has(size);
+              persistImageDefaultPreset({
+                model: selectedModel?.model ?? value,
+                platform: selectedModel?.platform,
+                size: shouldResetNanoBananaSize
+                  ? DEFAULT_NANO_BANANA_SIZE
+                  : undefined,
+              });
               updateImageNodeData(nodeId, {
                 model: selectedModel?.model ?? value,
                 platform: selectedModel?.platform,
+                ...(shouldResetNanoBananaSize
+                  ? { size: DEFAULT_NANO_BANANA_SIZE }
+                  : {}),
               });
             }}
           >
@@ -1086,12 +1281,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             <SeedreamParamsPanel
               size={size}
               resolution={resolution}
-              onSizeChange={(value) =>
-                updateImageNodeData(nodeId, { size: value })
-              }
-              onResolutionChange={(value) =>
-                updateImageNodeData(nodeId, { resolution: value })
-              }
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
             />
           )}
           {isGeminiModel && (
@@ -1099,12 +1296,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             <GeminiParamsPanel
               size={size}
               resolution={resolution}
-              onSizeChange={(value) =>
-                updateImageNodeData(nodeId, { size: value })
-              }
-              onResolutionChange={(value) =>
-                updateImageNodeData(nodeId, { resolution: value })
-              }
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
             />
           )}
           {isGeminiPro2Model && (
@@ -1112,12 +1311,44 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             <GeminiParamsPanel
               size={size}
               resolution={resolution}
-              onSizeChange={(value) =>
-                updateImageNodeData(nodeId, { size: value })
-              }
-              onResolutionChange={(value) =>
-                updateImageNodeData(nodeId, { resolution: value })
-              }
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
+            />
+          )}
+          {isNanoBananaLocalModel && (
+            <GeminiParamsPanel
+              size={size}
+              resolution={resolution}
+              sizeOptions={NANO_BANANA_LOCAL_SIZES}
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
+            />
+          )}
+
+          {isGptImage2Model && (
+            // GPT-Image-2 整合参数面板
+            <GptImage2ParamsPanel
+              size={size}
+              resolution={resolution}
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
             />
           )}
 
@@ -1125,9 +1356,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           {isMidjourneyModel && (
             <MidjourneyParamsPanel
               size={size}
-              onSizeChange={(value) =>
-                updateImageNodeData(nodeId, { size: value })
-              }
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
             />
           )}
 
@@ -1154,7 +1386,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             {/* 预设提示词下拉 */}
             <PresetDropdown
               presetType="image"
-              disabled={isGenerating}
+              disabled={false}
               onSelect={(content) => {
                 editor?.commands.insertContent(content);
               }}
@@ -1182,11 +1414,13 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               </button>
             )}
 
-            <ModelPointsBadge
-              totalPoints={totalPoints}
-              requiredPoints={requiredPoints}
-              title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
-            />
+            {pointsEnabled ? (
+              <ModelPointsBadge
+                totalPoints={totalPoints}
+                requiredPoints={requiredPoints}
+                title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
+              />
+            ) : null}
 
             {/* 生成/停止按钮 */}
             {isGenerating ? (

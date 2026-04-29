@@ -1,10 +1,9 @@
 import {
   Icon3dRotate,
-  IconAspectRatio,
+  IconBrush,
   IconCrop,
   IconDownload,
   IconEraser,
-  IconSparkles,
   IconTrash,
   IconUpload,
   IconZoomIn,
@@ -14,6 +13,7 @@ import { memo, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import type { ImageGenerationNode } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
+import { appendMediaSequences } from "shared/utils/mediaSequence";
 import {
   getAspectRatioFromMediaFile,
 } from "./utils/aspectRatioUtils";
@@ -34,11 +34,13 @@ type ImageToolbarProps = {
   data: ImageGenerationNode;
   onDelete?: () => void;
   onCrop?: (file: File) => Promise<void>;
+  onAnnotate?: () => void;
 };
 
 type ActionKey =
   | "upload"
   | "erase"
+  | "annotate"
   | "enhance"
   | "outpaint"
   | "crop"
@@ -50,7 +52,7 @@ type ActionKey =
  * 图片节点工具栏组件
  */
 export const ImageToolbar = memo(
-  ({ nodeId, data, onDelete, onCrop }: ImageToolbarProps) => {
+  ({ nodeId, data, onDelete, onCrop, onAnnotate }: ImageToolbarProps) => {
     const [isLightboxOpen, setIsLightboxOpen] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -79,8 +81,7 @@ export const ImageToolbar = memo(
       return [
         { key: "upload" as const, label: "上传", icon: IconUpload },
         { key: "erase" as const, label: "擦除", icon: IconEraser },
-        { key: "enhance" as const, label: "增强", icon: IconSparkles },
-        { key: "outpaint" as const, label: "扩图", icon: IconAspectRatio },
+        { key: "annotate" as const, label: "标注", icon: IconBrush },
         { key: "crop" as const, label: "裁剪", icon: IconCrop },
         { key: "download" as const, label: "下载", icon: IconDownload },
         { key: "preview" as const, label: "放大", icon: IconZoomIn },
@@ -120,7 +121,9 @@ export const ImageToolbar = memo(
         const updatePatch: Record<string, any> = {
           result: {
             type: "image",
-            data: [...currentData, { url: uploadedUrl }],
+            data: appendMediaSequences(currentData, [
+              { url: uploadedUrl, remoteUrl: uploadedUrl },
+            ]),
           },
         };
 
@@ -158,6 +161,16 @@ export const ImageToolbar = memo(
         }
 
         setIsInpaintDialogOpen(true);
+        return;
+      }
+
+      if (actionKey === "annotate") {
+        if (!currentImageUrl) {
+          toast.info("暂无可标注图片");
+          return;
+        }
+
+        onAnnotate?.();
         return;
       }
 

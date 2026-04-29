@@ -9,6 +9,7 @@ import {
   getYunwuToken,
   getZeakaiToken,
 } from "shared/utils/utils";
+import type { Flow2ApiState } from "shared/types/flow2api";
 
 const REQUEST_TIMEOUT = 300000;
 
@@ -27,6 +28,59 @@ type ServiceConfig = {
   authHeader?: string;
   useBearer?: boolean;
 };
+
+async function getFlow2ApiState(): Promise<Flow2ApiState | null> {
+  if (typeof window === "undefined" || !window.flow2api) {
+    return null;
+  }
+
+  try {
+    return await window.flow2api.getState();
+  } catch {
+    return null;
+  }
+}
+
+function normalizeBaseUrl(url: string | undefined): string {
+  return (url || "").replace(/\/+$/, "");
+}
+
+function toHeaderRecord(headers: AxiosRequestConfig["headers"]): Record<string, string> {
+  if (!headers) {
+    return {};
+  }
+
+  return headers as Record<string, string>;
+}
+
+async function applyFlow2ApiAuth(reqConfig: AxiosRequestConfig): Promise<void> {
+  const flow2ApiState = await getFlow2ApiState();
+  if (flow2ApiState?.status !== "running" || !flow2ApiState.baseUrl || !flow2ApiState.apiKey) {
+    return;
+  }
+
+  const requestBaseUrl = normalizeBaseUrl(reqConfig.baseURL);
+  const flow2ApiBaseUrl = normalizeBaseUrl(flow2ApiState.baseUrl);
+  if (!requestBaseUrl || requestBaseUrl !== flow2ApiBaseUrl) {
+    return;
+  }
+
+  const headerRecord = toHeaderRecord(reqConfig.headers);
+  reqConfig.headers = headerRecord;
+  const hasAuthorization =
+    Object.keys(headerRecord).some((key) => key.toLowerCase() === "authorization");
+  const hasGoogApiKey =
+    Object.keys(headerRecord).some((key) => key.toLowerCase() === "x-goog-api-key");
+
+  if (!hasAuthorization) {
+    headerRecord.Authorization = `Bearer ${flow2ApiState.apiKey}`;
+  }
+
+  // 同时补一个官方兼容头，避免本地服务在某些场景下没有正确读取 Authorization。
+  if (!hasGoogApiKey) {
+    headerRecord["x-goog-api-key"] = flow2ApiState.apiKey;
+  }
+}
 
 const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
   ai: {
@@ -65,6 +119,10 @@ const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
     authHeader: "x-token",
     useBearer: false,
   },
+  wuhen: {
+    getBaseURL: () => "https://api.wuhenai.com",
+    getToken: () => "",
+  },
 };
 
 const createService = (
@@ -77,7 +135,7 @@ const createService = (
   });
 
   service.interceptors.request.use(
-    (reqConfig) => {
+    async (reqConfig) => {
       // 请求级 baseURL 优先，未传时再使用服务默认 baseURL
       const baseURL = reqConfig.baseURL || config.getBaseURL();
       reqConfig.baseURL = baseURL;
@@ -89,6 +147,8 @@ const createService = (
           config.useBearer !== false ? `Bearer ${token}` : token;
         reqConfig.headers[headerName] = headerValue;
       }
+
+      await applyFlow2ApiAuth(reqConfig);
 
       return reqConfig;
     },
@@ -116,9 +176,34 @@ const jikeingAdminService = createService(
   "jikeingAdmin",
   SERVICE_CONFIGS.jikeingAdmin,
 );
+const wuhenService = createService("wuhen", SERVICE_CONFIGS.wuhen);
 
 const aiRequest = async <T = any>(config: AxiosRequestConfig): Promise<T> => {
   return await aiService.request(config);
+};
+
+const flow2ApiRequest = async <T = any>(
+  config: AxiosRequestConfig,
+): Promise<T> => {
+  const flow2ApiState = await getFlow2ApiState();
+  const nextConfig = { ...config };
+
+  if (flow2ApiState?.baseUrl) {
+    nextConfig.baseURL = flow2ApiState.baseUrl;
+  }
+
+  await applyFlow2ApiAuth(nextConfig);
+
+  const finalConfig: AxiosRequestConfig = {
+    ...nextConfig,
+    timeout: REQUEST_TIMEOUT,
+    headers: {
+      ...DEFAULT_HEADERS,
+      ...toHeaderRecord(nextConfig.headers),
+    },
+  };
+
+  return await axios(finalConfig).then((response) => response.data);
 };
 
 const zeakaiRequest = async <T = any>(
@@ -157,6 +242,12 @@ const jikeingAdminRequest = async <T = any>(
   return await jikeingAdminService.request(config);
 };
 
+const wuhenRequest = async <T = any>(
+  config: AxiosRequestConfig,
+): Promise<T> => {
+  return await wuhenService.request(config);
+};
+
 export {
   aiService,
   zeakaiService,
@@ -165,6 +256,9 @@ export {
   yunwuService,
   dashscopeService,
   jikeingAdminService,
+  wuhenService,
+  flow2ApiRequest,
+  getFlow2ApiState,
 };
 export default aiRequest;
 export {
@@ -174,4 +268,5 @@ export {
   yunwuRequest,
   dashscopeRequest,
   jikeingAdminRequest,
+  wuhenRequest,
 };

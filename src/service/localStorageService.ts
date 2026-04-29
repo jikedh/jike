@@ -1,5 +1,3 @@
-const CANVAS_FILE_NAME = "canvas.json";
-
 const joinPath = (...parts: string[]): string => {
   return parts.filter(Boolean).join("/").replace(/\/+/g, "/");
 };
@@ -32,7 +30,7 @@ const requireStoragePath = (): { basePath?: string; error?: string } => {
 
 export const localStorageService = {
   isAvailable: (): boolean => {
-    return typeof window !== "undefined" && !!window.electronApi?.storage;
+    return typeof window !== "undefined" && !!window.storage;
   },
 
   getStoragePath: (): string | null => {
@@ -44,11 +42,11 @@ export const localStorageService = {
     basePath: string,
     projectName: string,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
-    return window.electronApi.storage.ensureProject(basePath, projectName);
+    return window.storage.ensureProject(basePath, projectName);
   },
 
   listProjects: async (): Promise<
@@ -56,8 +54,12 @@ export const localStorageService = {
       projects?: Array<{ name: string; createdAt: number; updatedAt: number }>;
     }
   > => {
-    if (!window.electronApi?.storage) {
-      return { success: false, error: "Storage API not available", projects: [] };
+    if (!window.storage) {
+      return {
+        success: false,
+        error: "Storage API not available",
+        projects: [],
+      };
     }
 
     const { basePath, error } = requireStoragePath();
@@ -65,15 +67,15 @@ export const localStorageService = {
       return { success: false, error, projects: [] };
     }
 
-    return window.electronApi.storage.listProjects(basePath);
+    return window.storage.listProjects(basePath);
   },
 
   saveCanvasData: async (
-    projectId: string,
+    _projectId: string,
     projectName: string,
     data: any,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
@@ -88,19 +90,18 @@ export const localStorageService = {
       return ensureResult;
     }
 
-    void projectId;
-    return window.electronApi.storage.saveCanvas(basePath, projectName, data);
+    return window.storage.saveCanvas(basePath, projectName, data);
   },
 
   loadCanvasData: async (projectName: string): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
     const { basePath, error } = requireStoragePath();
     if (!basePath) return { success: false, error };
 
-    return window.electronApi.storage.loadCanvas(basePath, projectName);
+    return window.storage.loadCanvas(basePath, projectName);
   },
 
   saveImage: async (
@@ -108,7 +109,7 @@ export const localStorageService = {
     fileName: string,
     buffer: ArrayBuffer,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
@@ -116,7 +117,7 @@ export const localStorageService = {
     if (!basePath) return { success: false, error };
 
     const relativePath = joinPath(projectName, "image", fileName);
-    return window.electronApi.storage.saveMedia(basePath, relativePath, buffer);
+    return window.storage.saveMedia(basePath, relativePath, buffer);
   },
 
   saveGeneratedImage: async (
@@ -124,7 +125,7 @@ export const localStorageService = {
     fileName: string,
     buffer: ArrayBuffer,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
@@ -132,7 +133,7 @@ export const localStorageService = {
     if (!basePath) return { success: false, error };
 
     const relativePath = joinPath(projectName, "generate_image", fileName);
-    return window.electronApi.storage.saveMedia(basePath, relativePath, buffer);
+    return window.storage.saveMedia(basePath, relativePath, buffer);
   },
 
   saveVideo: async (
@@ -140,7 +141,7 @@ export const localStorageService = {
     fileName: string,
     buffer: ArrayBuffer,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
@@ -148,7 +149,7 @@ export const localStorageService = {
     if (!basePath) return { success: false, error };
 
     const relativePath = joinPath(projectName, "video", fileName);
-    return window.electronApi.storage.saveMedia(basePath, relativePath, buffer);
+    return window.storage.saveMedia(basePath, relativePath, buffer);
   },
 
   saveGeneratedVideo: async (
@@ -156,7 +157,7 @@ export const localStorageService = {
     fileName: string,
     buffer: ArrayBuffer,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
@@ -164,7 +165,7 @@ export const localStorageService = {
     if (!basePath) return { success: false, error };
 
     const relativePath = joinPath(projectName, "generate_video", fileName);
-    return window.electronApi.storage.saveMedia(basePath, relativePath, buffer);
+    return window.storage.saveMedia(basePath, relativePath, buffer);
   },
 
   saveAudio: async (
@@ -172,7 +173,7 @@ export const localStorageService = {
     fileName: string,
     buffer: ArrayBuffer,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
@@ -180,7 +181,7 @@ export const localStorageService = {
     if (!basePath) return { success: false, error };
 
     const relativePath = joinPath(projectName, "audio", fileName);
-    return window.electronApi.storage.saveMedia(basePath, relativePath, buffer);
+    return window.storage.saveMedia(basePath, relativePath, buffer);
   },
 
   downloadImage: async (
@@ -188,7 +189,7 @@ export const localStorageService = {
     fileName: string,
     url: string,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
@@ -196,7 +197,7 @@ export const localStorageService = {
     if (!basePath) return { success: false, error };
 
     const relativePath = joinPath(projectName, "image", fileName);
-    return window.electronApi.storage.downloadMedia(basePath, url, relativePath);
+    return window.storage.downloadMedia(basePath, url, relativePath);
   },
 
   downloadGeneratedImage: async (
@@ -204,7 +205,7 @@ export const localStorageService = {
     fileName: string,
     url: string,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
@@ -212,7 +213,7 @@ export const localStorageService = {
     if (!basePath) return { success: false, error };
 
     const relativePath = joinPath(projectName, "generate_image", fileName);
-    return window.electronApi.storage.downloadMedia(basePath, url, relativePath);
+    return window.storage.downloadMedia(basePath, url, relativePath);
   },
 
   downloadVideo: async (
@@ -220,7 +221,7 @@ export const localStorageService = {
     fileName: string,
     url: string,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
@@ -228,7 +229,7 @@ export const localStorageService = {
     if (!basePath) return { success: false, error };
 
     const relativePath = joinPath(projectName, "video", fileName);
-    return window.electronApi.storage.downloadMedia(basePath, url, relativePath);
+    return window.storage.downloadMedia(basePath, url, relativePath);
   },
 
   downloadGeneratedVideo: async (
@@ -236,7 +237,7 @@ export const localStorageService = {
     fileName: string,
     url: string,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
@@ -244,7 +245,7 @@ export const localStorageService = {
     if (!basePath) return { success: false, error };
 
     const relativePath = joinPath(projectName, "generate_video", fileName);
-    return window.electronApi.storage.downloadMedia(basePath, url, relativePath);
+    return window.storage.downloadMedia(basePath, url, relativePath);
   },
 
   downloadAudio: async (
@@ -252,7 +253,7 @@ export const localStorageService = {
     fileName: string,
     url: string,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
@@ -260,7 +261,7 @@ export const localStorageService = {
     if (!basePath) return { success: false, error };
 
     const relativePath = joinPath(projectName, "audio", fileName);
-    return window.electronApi.storage.downloadMedia(basePath, url, relativePath);
+    return window.storage.downloadMedia(basePath, url, relativePath);
   },
 
   saveCoverImage: async (
@@ -268,7 +269,7 @@ export const localStorageService = {
     buffer: ArrayBuffer,
     extension: string = "png",
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
@@ -276,14 +277,14 @@ export const localStorageService = {
     if (!basePath) return { success: false, error };
 
     const relativePath = joinPath(projectName, `cover.${extension}`);
-    return window.electronApi.storage.saveMedia(basePath, relativePath, buffer);
+    return window.storage.saveMedia(basePath, relativePath, buffer);
   },
 
   downloadCoverImage: async (
     projectName: string,
     url: string,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
@@ -292,100 +293,92 @@ export const localStorageService = {
 
     const ext = url.split(".").pop()?.toLowerCase() || "png";
     const relativePath = joinPath(projectName, `cover.${ext}`);
-    return window.electronApi.storage.downloadMedia(basePath, url, relativePath);
+    return window.storage.downloadMedia(basePath, url, relativePath);
   },
 
   listImages: async (projectName: string): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
     const { basePath, error } = requireStoragePath();
     if (!basePath) return { success: false, error };
 
-    return window.electronApi.storage.listMedia(basePath, projectName, "image");
+    return window.storage.listMedia(basePath, projectName, "image");
   },
 
   listGeneratedImages: async (
     projectName: string,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
     const { basePath, error } = requireStoragePath();
     if (!basePath) return { success: false, error };
 
-    return window.electronApi.storage.listMedia(
-      basePath,
-      projectName,
-      "generate_image",
-    );
+    return window.storage.listMedia(basePath, projectName, "generate_image");
   },
 
   listVideos: async (projectName: string): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
     const { basePath, error } = requireStoragePath();
     if (!basePath) return { success: false, error };
 
-    return window.electronApi.storage.listMedia(basePath, projectName, "video");
+    return window.storage.listMedia(basePath, projectName, "video");
   },
 
   listGeneratedVideos: async (
     projectName: string,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
     const { basePath, error } = requireStoragePath();
     if (!basePath) return { success: false, error };
 
-    return window.electronApi.storage.listMedia(
-      basePath,
-      projectName,
-      "generate_video",
-    );
+    return window.storage.listMedia(basePath, projectName, "generate_video");
   },
 
   listAudio: async (projectName: string): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
     const { basePath, error } = requireStoragePath();
     if (!basePath) return { success: false, error };
 
-    return window.electronApi.storage.listMedia(basePath, projectName, "audio");
+    return window.storage.listMedia(basePath, projectName, "audio");
   },
 
   readMedia: async (relativePath: string): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
     const { basePath, error } = requireStoragePath();
     if (!basePath) return { success: false, error };
 
-    return window.electronApi.storage.readMedia(basePath, relativePath);
+    return window.storage.readMedia(basePath, relativePath);
   },
 
   deleteFile: async (relativePath: string): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
     const { basePath, error } = requireStoragePath();
     if (!basePath) return { success: false, error };
 
-    return window.electronApi.storage.deleteMedia(basePath, relativePath);
+    return window.storage.deleteMedia(basePath, relativePath);
   },
 
   fileExists: async (relativePath: string): Promise<boolean> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return false;
     }
 
@@ -393,52 +386,97 @@ export const localStorageService = {
     if (!basePath) return false;
 
     const normalized = relativePath.replace(/\\/g, "/");
-    if (normalized.endsWith(`/${CANVAS_FILE_NAME}`) || normalized === CANVAS_FILE_NAME) {
+    if (normalized.endsWith("/canvas.json") || normalized === "canvas.json") {
       const projectName = normalized.split("/")[0];
-      if (!projectName || projectName === CANVAS_FILE_NAME) return false;
-      const result = await window.electronApi.storage.loadCanvas(basePath, projectName);
+      if (!projectName || projectName === "canvas.json") return false;
+      const result = await window.storage.loadCanvas(basePath, projectName);
       return !!result.success;
     }
 
-    const result = await window.electronApi.storage.readMedia(basePath, normalized);
-    return !!result.success;
+    return window.storage.mediaExists(basePath, normalized);
   },
 
   renameProject: async (
     oldName: string,
     newName: string,
   ): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
     const { basePath, error } = requireStoragePath();
     if (!basePath) return { success: false, error };
 
-    return window.electronApi.storage.renameProject(
-      basePath,
-      oldName,
-      newName,
-    );
+    return window.storage.renameProject(basePath, oldName, newName);
   },
 
   deleteProject: async (projectName: string): Promise<LocalStorageResult> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return { success: false, error: "Storage API not available" };
     }
 
     const { basePath, error } = requireStoragePath();
     if (!basePath) return { success: false, error };
 
-    return window.electronApi.storage.deleteProject(basePath, projectName);
+    return window.storage.deleteProject(basePath, projectName);
+  },
+
+  copyProject: async (
+    srcName: string,
+    destName: string,
+  ): Promise<LocalStorageResult> => {
+    if (!window.storage) {
+      return { success: false, error: "Storage API not available" };
+    }
+
+    const { basePath, error } = requireStoragePath();
+    if (!basePath) return { success: false, error };
+
+    return window.storage.copyProject(basePath, srcName, destName);
+  },
+
+  exportProject: async (
+    projectName: string,
+  ): Promise<
+    LocalStorageResult & {
+      path?: string;
+      projectName?: string;
+      canceled?: boolean;
+    }
+  > => {
+    if (!window.storage) {
+      return { success: false, error: "Storage API not available" };
+    }
+
+    const { basePath, error } = requireStoragePath();
+    if (!basePath) return { success: false, error };
+
+    return window.storage.exportProject(basePath, projectName);
+  },
+
+  importProject: async (): Promise<
+    LocalStorageResult & {
+      path?: string;
+      projectName?: string;
+      canceled?: boolean;
+    }
+  > => {
+    if (!window.storage) {
+      return { success: false, error: "Storage API not available" };
+    }
+
+    const { basePath, error } = requireStoragePath();
+    if (!basePath) return { success: false, error };
+
+    return window.storage.importProject(basePath);
   },
 
   getDefaultPath: async (): Promise<string> => {
-    if (!window.electronApi?.storage) {
+    if (!window.storage) {
       return "";
     }
 
-    return window.electronApi.storage.getDefaultPath();
+    return window.storage.getDefaultPath();
   },
 };
 
@@ -504,6 +542,7 @@ export const getCoverImagePath = (
 
 // ========== 预设提示词库 ==========
 const CANVAS_PRESETS_KEY = "canvas-presets";
+export const CANVAS_PRESETS_UPDATED_EVENT = "canvas-presets-updated";
 
 export type PresetItem = {
   id: string;
@@ -512,7 +551,6 @@ export type PresetItem = {
   enabled: boolean;
 };
 
-// 按类型分组的预设结构
 export type PresetsMap = {
   general: PresetItem[];
   image: PresetItem[];
@@ -553,6 +591,7 @@ export const presetsService = {
   save(presets: PresetsMap): void {
     try {
       localStorage.setItem(CANVAS_PRESETS_KEY, JSON.stringify(presets));
+      window.dispatchEvent(new CustomEvent(CANVAS_PRESETS_UPDATED_EVENT));
     } catch (e) {
       console.error("[presetsService] save failed:", e);
     }

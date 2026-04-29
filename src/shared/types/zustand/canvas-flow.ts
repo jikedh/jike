@@ -5,6 +5,7 @@ import type {
   AudioGenerationNode,
   EdgeType,
   ImageGenerationNode,
+  NewVideoGenerationNode,
   VideoGenerationNode,
 } from "shared/types/flow";
 
@@ -35,7 +36,11 @@ export type NodeType =
   | "note"
   | "image"
   | "video"
+<<<<<<< HEAD
   | "videoDemo"
+=======
+  | "newVideo"
+>>>>>>> origin/develop
   | "agent"
   | "panorama"
   | "audio"
@@ -93,10 +98,16 @@ export type CanvasFlowStoreType = {
     imageUrl: string | null;
     sourceNodeId: string | null;
   };
+  annotationWorkspace: {
+    open: boolean;
+    imageUrl: string | null;
+    sourceNodeId: string | null;
+  };
   historyVersion: number;
   historyResetTrigger: number;
   // 选中的节点数量（用于避免 O(n²) 遍历计算）
   selectedNodesCount: number;
+  isSelectionBoxActive: boolean;
 
   // ── 配对 setter ───────────────────────────────
   setNodes: (nodes: AllNodeType[]) => void;
@@ -120,6 +131,12 @@ export type CanvasFlowStoreType = {
     imageUrl: string | null;
     sourceNodeId: string | null;
   }) => void;
+  setAnnotationWorkspace: (workspace: {
+    open: boolean;
+    imageUrl: string | null;
+    sourceNodeId: string | null;
+  }) => void;
+  setSelectionBoxActive: (active: boolean) => void;
 
   // ── 基础流程事件 ──────────────────────────────
   onNodesChange: (changes: NodeChange<AllNodeType>[]) => void;
@@ -162,6 +179,15 @@ export type CanvasFlowStoreType = {
     nodeId: string,
     patch: Partial<VideoGenerationNode>,
   ) => void;
+  updateNewVideoNodeData: (
+    nodeId: string,
+    patch: Partial<NewVideoGenerationNode>,
+  ) => void;
+  updateNodeDimensions: (
+    nodeId: string,
+    width: number,
+    height: number,
+  ) => void;
   updateAudioNodeData: (
     nodeId: string,
     patch: Partial<AudioGenerationNode>,
@@ -194,7 +220,11 @@ export type CanvasFlowStoreType = {
 
   // ── 视频生成 ─────────────────────────────────
   startVideoGeneration: (nodeId: string, payload: any) => Promise<void>;
-  startWanI2vVideoGeneration: (nodeId: string, payload: any) => Promise<void>;
+  startNewVideoGeneration: (
+    nodeId: string,
+    payload: any,
+    count?: number,
+  ) => Promise<void>;
   stopVideoPolling: (nodeId: string) => void;
 
   // ── 任务管理 ─────────────────────────────────
@@ -207,6 +237,8 @@ export type CanvasFlowStoreType = {
   // ── 全景图查看器 ─────────────────────────────
   openPanoramaViewer: (imageUrl: string, sourceNodeId?: string) => void;
   closePanoramaViewer: () => void;
+  openImageAnnotation: (imageUrl: string, sourceNodeId: string) => void;
+  closeImageAnnotation: () => void;
 
   // ── 参考高亮 ────────────────────────────────
   setReferenceHoverHighlight: (

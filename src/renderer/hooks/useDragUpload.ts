@@ -2,6 +2,7 @@ import { useReactFlow } from "@xyflow/react";
 import { useCallback, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import {
+<<<<<<< HEAD
   CANVAS_IMAGE_DRAG_MIME,
   CANVAS_IMAGE_DRAG_TYPE,
   type CanvasImageDragPayload,
@@ -15,6 +16,18 @@ import {
   getAspectRatioFromMediaFile,
   getExactAspectRatio,
 } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
+=======
+  getLocalFilePath,
+  saveImageToLocal,
+  saveVideoToLocal,
+  saveAudioToLocal,
+} from "service/projectStorage";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { GenerationStatus } from "shared/constants/enum";
+import { getMediaType, type MediaType } from "shared/constants/mediaTypes";
+import { toast } from "sonner";
+import { getAspectRatioFromMediaFile } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
+>>>>>>> origin/develop
 
 /** 拖拽状态 */
 interface DragState {
@@ -228,24 +241,53 @@ export function useDragUpload() {
         };
 
         try {
-          // 上传文件
           const result = await uploadFile(file, updateProgress);
           const aspectRatio =
             mediaType === "image" || mediaType === "video"
               ? await getAspectRatioFromMediaFile(file, mediaType)
               : null;
 
-          // 上传完成，更新为完成状态
+          const projectId = useCanvasFlowStore.getState().projectId;
+          const ext = file.name.split(".").pop()?.toLowerCase() || (mediaType === "video" ? "mp4" : mediaType === "audio" ? "mp3" : "png");
+
+          let localName: string | null = null;
+          let localPath: string | null = null;
+
+          if (projectId) {
+            try {
+              const arrayBuffer = await file.arrayBuffer();
+              if (mediaType === "image") {
+                localName = await saveImageToLocal(projectId, arrayBuffer, ext);
+              } else if (mediaType === "video") {
+                localName = await saveVideoToLocal(projectId, arrayBuffer, ext);
+              } else {
+                localName = await saveAudioToLocal(projectId, arrayBuffer, ext);
+              }
+              if (localName) {
+                const folderType = mediaType === "image" ? "image" : mediaType === "video" ? "video" : "audio";
+                localPath = getLocalFilePath(projectId, folderType, localName);
+              }
+            } catch (saveErr) {
+              console.warn("[useDragUpload] 保存到本地失败:", saveErr);
+            }
+          }
+
           if (mediaType === "image") {
             updateImageNodeData(nodeId, {
               status: GenerationStatus.COMPLETED,
               progress: 100,
               isUpload: true,
               ...(aspectRatio ? { size: aspectRatio } : {}),
-              result: { type: "image", data: [{ url: result.url }] },
+              result: {
+                type: "image",
+                data: [{
+                  url: result.url,
+                  ...(localName ? { localName } : {}),
+                  ...(localPath ? { localPath } : {}),
+                }],
+              },
             });
           } else if (mediaType === "video") {
-            const ext = result.url.split(".").pop()?.toLowerCase() || "mp4";
             updateVideoNodeData(nodeId, {
               status: GenerationStatus.COMPLETED,
               progress: 100,
@@ -253,21 +295,32 @@ export function useDragUpload() {
               ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
               result: {
                 type: "video",
-                data: [{ url: result.url, format: ext }],
+                data: [{
+                  url: result.url,
+                  format: ext,
+                  ...(localName ? { localName } : {}),
+                  ...(localPath ? { localPath } : {}),
+                }],
               },
             });
           } else {
-            const ext = result.url.split(".").pop()?.toLowerCase() || "mp3";
             updateAudioNodeData(nodeId, {
               status: GenerationStatus.COMPLETED,
               progress: 100,
               isUpload: true,
               result: {
                 type: "audio",
-                data: [{ url: result.url, format: ext }],
+                data: [{
+                  url: result.url,
+                  format: ext,
+                  ...(localName ? { localName } : {}),
+                  ...(localPath ? { localPath } : {}),
+                }],
               },
             });
           }
+
+          useCanvasFlowStore.getState().saveGraph();
 
           toast.success(`${file.name} 上传成功`);
         } catch (error) {
@@ -290,6 +343,8 @@ export function useDragUpload() {
               error: { message: "上传失败，请重试" },
             });
           }
+
+          useCanvasFlowStore.getState().saveGraph();
 
           toast.error(`上传 ${file.name} 失败`);
         }

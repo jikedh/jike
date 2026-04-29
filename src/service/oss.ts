@@ -295,6 +295,38 @@ export async function uploadFileToOSS(file: File) {
   return { url: result.url, name: file.name };
 }
 
+/**
+ * 将远程视频 URL 转存到用户 OSS
+ * 1. 从源 URL 获取视频 blob
+ * 2. 上传到用户 OSS
+ * 3. 返回转存后的 OSS URL（失败返回 null）
+ */
+export async function copyVideoUrlToOss(videoUrl: string): Promise<string | null> {
+  try {
+    const response = await fetch(videoUrl);
+    if (!response.ok) {
+      console.error("[OSS] Failed to fetch video for copy:", response.statusText);
+      return null;
+    }
+
+    const blob = await response.blob();
+    const ext = blob.type.split("/")[1]?.toLowerCase() || "mp4";
+    const fileName = `copied-video-${Date.now()}.${ext}`;
+    const file = new File([blob], fileName, { type: blob.type });
+
+    const uploadResult = await uploadFileToOSS(file);
+    if (!uploadResult.url) {
+      console.error("[OSS] Failed to upload copied video");
+      return null;
+    }
+
+    return uploadResult.url;
+  } catch (error) {
+    console.error("[OSS] copyVideoUrlToOss error:", error);
+    return null;
+  }
+}
+
 export type OssSignedUploadTarget = {
   objectKey: string;
   uploadUrl: string;

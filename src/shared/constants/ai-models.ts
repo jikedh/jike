@@ -76,21 +76,23 @@ export const TEXT_MODELS = [
 
 /** 视频模型配置 */
 export const VIDEO_MODELS = [
-  // 字节豆包 Seedance 2.0
+  // 字节豆包 Seedance 2.0 Fast
   {
     id: 22,
-    name: "Doubao Seedance 2.0",
-    model: "doubao-seedance-2.0",
+    name: "豆包 Seedance 2.0 Fast",
+    model: "doubao-seedance-2.0-fast",
     platform: "doubao",
     platformId: 2,
+    callable: true,
   },
-  // Wan 2.7 I2V
+  // 字节豆包 Seedance 2.0 Pro
   {
     id: 23,
-    name: "Wan 2.7 I2V",
-    model: "wan2.7-i2v",
-    platform: "dashscope",
-    platformId: 0,
+    name: "豆包 Seedance 2.0 Pro",
+    model: "doubao-seedance-2.0-pro",
+    platform: "doubao",
+    platformId: 2,
+    callable: true,
   },
   // Wan 2.7 T2V
   {
@@ -130,6 +132,9 @@ export const VIDEO_ASPECT_RATIOS = [
 ];
 
 /** 图片生成模型配置 */
+export const NANO_BANANA_LOCAL_MODEL = "nano-banana-pro-local-gemini";
+export const NANO_BANANA_LOCAL_PLATFORM = "google_local_gemini";
+
 export const IMAGE_MODELS = [
   // { id: 1, name: 'doubao-seedream-4-0', model: 'doubao-seedream-4-0', platform: 'Seedream' },
   // { id: 2, name: 'doubao-seedream-4-5', model: 'doubao-seedream-4-5', platform: 'Seedream' },
@@ -138,6 +143,12 @@ export const IMAGE_MODELS = [
     name: "谷歌 Gemini 3 Pro",
     model: "gemini-3-pro-image-preview",
     platform: "google",
+  },
+  {
+    id: 8,
+    name: "Nano Banana Pro（本地gemini渠道）",
+    model: NANO_BANANA_LOCAL_MODEL,
+    platform: NANO_BANANA_LOCAL_PLATFORM,
   },
   {
     id: 4,
@@ -153,13 +164,20 @@ export const IMAGE_MODELS = [
     platform: "midjourney",
   },
   {
-    id: 10,
-    name: "谷歌 Gemini 3 Pro 渠道二",
-    model: "gemini-3-pro-image-preview",
-    platform: "google_pro2",
+    id: 7,
+    name: "GPT-Image-2",
+    model: "gpt-image-2",
+    platform: "openai",
   },
+  // {
+  //   id: 10,
+  //   name: "谷歌 Gemini 3 Pro 渠道二",
+  //   model: "gemini-3-pro-image-preview",
+  //   platform: "google_pro2",
+  // },
 ];
 
+<<<<<<< HEAD
 export const CANVAS_CHAT_IMAGE_MODEL_PREFIX = "canvas-image:";
 
 export const CANVAS_CHAT_IMAGE_MODELS = IMAGE_MODELS.map((item) => ({
@@ -206,6 +224,8 @@ export const getGenerationScoreCost = (model?: string) => {
   return GENERATION_SCORE_COST_MAP[model] ?? DEFAULT_GENERATION_SCORE_COST;
 };
 
+=======
+>>>>>>> origin/develop
 /** 图片尺寸配置 */
 export const IMAGE_SIZES = [
   { label: "256×256", value: "256x256" },

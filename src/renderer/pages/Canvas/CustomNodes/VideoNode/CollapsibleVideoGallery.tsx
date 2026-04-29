@@ -1,60 +1,174 @@
-import { IconRefresh } from "@tabler/icons-react";
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { IconChevronDown, IconRefresh, IconVideo } from "@tabler/icons-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import { readMediaFromLocal } from "service/projectStorage";
+import { getMediaSequence } from "shared/utils/mediaSequence";
+import { cn } from "shared/utils/utils";
+import { VideoPlayer } from "@/components/ui/video-player";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 
 type VideoItem = {
   url: string; // 远程 OSS URL
   format?: string; // 视频格式
   localPath?: string; // 本地相对路径
-  localName?: string; // 本地文件名
+  localName?: string; // 本地文件�?
+  remoteUrl?: string; // 远程持久�?URL
+  pending?: boolean;
 };
 
 type CollapsibleVideoGalleryProps = {
   videos: VideoItem[];
   nodeId?: string;
   updateVideoNodeData?: (nodeId: string, patch: any) => void;
+  onExpandedChange?: (expanded: boolean) => void;
+  frameSize?: {
+    width: number;
+    height: number;
+  };
+};
+
+type ExpandedCardLayout = {
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  order: number;
+};
+
+const STACK_CARD_LIMIT = 4;
+const COLLAPSED_STACK_X_RATIO = [0, 24 / 180, 44 / 180, 60 / 180];
+const COLLAPSED_STACK_SCALE = [1, 0.92, 0.84, 0.76];
+const COLLAPSED_STACK_BRIGHTNESS = [1, 0.65, 0.4, 0.2];
+const getCollapsedOffsetX = (index: number, cardWidth: number) => {
+  const base = COLLAPSED_STACK_X_RATIO[index];
+  if (typeof base === "number") {
+    return Math.round(cardWidth * base);
+  }
+  return Math.min(Math.round(cardWidth * (0.33 + (index - 3) * 0.06)), 92);
+};
+
+const getCollapsedScale = (index: number) =>
+  COLLAPSED_STACK_SCALE[index] ?? 0.72;
+const getCollapsedBrightness = (index: number) =>
+  COLLAPSED_STACK_BRIGHTNESS[index] ?? 0.18;
+
+const getExpandedSlots = (totalCount: number) => {
+  if (totalCount <= 0) {
+    return [];
+  }
+
+  return Array.from({ length: totalCount }, (_, index) => ({
+    row: totalCount === 1 ? 0 : index % 2,
+    col: totalCount === 1 ? 0 : Math.floor(index / 2),
+    order: index,
+  }));
+};
+
+const getExpandedCardLayouts = (
+  totalCount: number,
+  maxWidth: number,
+  maxHeight: number,
+  expandedGap: number,
+) => {
+  const slots = getExpandedSlots(totalCount);
+
+  return slots.map<ExpandedCardLayout>((_, index) => {
+    const slot = slots[index];
+    return {
+      width: maxWidth,
+      height: maxHeight,
+      x: (slot?.col ?? 0) * (maxWidth + expandedGap),
+      y: slot?.row === 1 ? -(maxHeight + expandedGap) : 0,
+      order: slot?.order ?? index,
+    };
+  });
+};
+
+const getStackCardStyle = (
+  index: number,
+  isExpanded: boolean,
+  cardWidth: number,
+  totalCount: number,
+  expandedLayouts: ExpandedCardLayout[],
+) => {
+  if (isExpanded) {
+    const layout = expandedLayouts[index];
+
+    if (!layout) {
+      return {
+        transform: "translate(0px, 0px) scale(1)",
+        filter: "brightness(1)",
+        opacity: 1,
+        zIndex: 1,
+      } as const;
+    }
+
+    return {
+      transform: `translate(${layout.x}px, ${layout.y}px) scale(1)`,
+      filter: "brightness(1)",
+      opacity: 1,
+      zIndex: Math.max(1, totalCount - index + 1),
+    } as const;
+  }
+
+  const collapsedIndex = Math.min(index, STACK_CARD_LIMIT - 1);
+  return {
+    transform: `translate(${getCollapsedOffsetX(collapsedIndex, cardWidth)}px, 0px) scale(${getCollapsedScale(collapsedIndex)})`,
+    filter: `brightness(${getCollapsedBrightness(collapsedIndex)})`,
+    opacity: index < STACK_CARD_LIMIT ? 1 : 0,
+    zIndex: index < STACK_CARD_LIMIT ? 10 - collapsedIndex : 1,
+  } as const;
 };
 
 /**
- * 可折叠视频集合卡片
- * - collapsed：仅展示封面视频 + 右上角数量徽标
- * - expanded：2 列网格展示全部视频
- * - 点击展开态中的视频，可将其移动到首位作为新封面
- * - 优先使用本地路径，如果不存在则使用远程 URL
+ * 可折叠视频集合卡�?
+ * - collapsed：仅展示封面视频 + 右上角数量徽�?
+ * - expanded�? 列网格展示全部视�?
+ * - 点击展开态中的视频，可将其移动到首位作为新封�?
+ * - 优先使用本地路径，如果不存在则使用远�?URL
  * - 刷新按钮：重新上传视频到 OSS
  */
 export const CollapsibleVideoGallery = memo(
-  ({ videos, nodeId, updateVideoNodeData }: CollapsibleVideoGalleryProps) => {
-    // 默认折叠，仅展示封面
+  ({
+    videos,
+    nodeId,
+    updateVideoNodeData,
+    onExpandedChange,
+    frameSize,
+  }: CollapsibleVideoGalleryProps) => {
     const [isExpanded, setIsExpanded] = useState(false);
-    // 记录加载失败索引，统一渲染占位（使用 ref 避免频繁 setState）
+    const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+    // 记录加载失败索引，统一渲染占位（使�?ref 避免频繁 setState�?
     const brokenIndexesRef = useRef<Set<number>>(new Set());
     const [, forceUpdate] = useState(0);
-    // 记录正在刷新的视频索引
+    // 记录正在刷新的视频索�?
     const refreshingIndexesRef = useRef<Set<number>>(new Set());
     const [, forceRefreshUpdate] = useState(0);
+    const containerRef = useRef<HTMLDivElement | null>(null);
 
     const totalCount = videos.length;
 
-    // 优先使用本地路径，否则使用远程 URL - 用 useMemo 缓存
     const displayUrls = useMemo(() => {
-      return videos.map((item) => {
-        return item.url ?? "";
-      });
+      return videos.map((item) => item.url ?? "");
     }, [videos]);
-
-    const coverVideo = displayUrls[0] ?? "";
     const badgeText = `${totalCount}个`;
-
-    // 当前设计要求：1/2/3/4/5+ 都使用 2 列（1 个时为单列）
-    const expandedGridColsClass = useMemo(() => {
-      if (totalCount <= 1) return "grid-cols-1";
-      return "grid-cols-2";
-    }, [totalCount]);
-
-    // 5+ 视频时适度压缩间距，提升信息密度
-    const expandedGridGapClass = totalCount > 4 ? "gap-0.5" : "gap-1";
+    const cardWidth = frameSize?.width ?? 180;
+    const cardHeight = frameSize?.height ?? 220;
+    const expandedGap = useMemo(() => {
+      return Math.max(
+        12,
+        Math.min(22, Math.round(Math.min(cardWidth, cardHeight) * 0.07)),
+      );
+    }, [cardHeight, cardWidth]);
+    const expandedLayouts = useMemo(() => {
+      return getExpandedCardLayouts(
+        videos.length,
+        cardWidth,
+        cardHeight,
+        expandedGap,
+      );
+    }, [cardHeight, cardWidth, expandedGap, videos.length]);
 
     // 切换折叠/展开
     const handleToggleExpanded = useCallback((e: any) => {
@@ -73,6 +187,41 @@ export const CollapsibleVideoGallery = memo(
     const isRefreshing = useCallback((index: number) => {
       return refreshingIndexesRef.current.has(index);
     }, []);
+
+    const isBroken = useCallback((index: number) => {
+      return brokenIndexesRef.current.has(index);
+    }, []);
+
+    useEffect(() => {
+      onExpandedChange?.(isExpanded);
+    }, [isExpanded, onExpandedChange]);
+
+    useEffect(() => {
+      return () => {
+        onExpandedChange?.(false);
+      };
+    }, [onExpandedChange]);
+
+    useEffect(() => {
+      if (!isExpanded) {
+        setHoveredIndex(null);
+        return;
+      }
+
+      const handlePointerDown = (event: PointerEvent) => {
+        if (!containerRef.current) return;
+        const target = event.target as Node | null;
+        if (target && containerRef.current.contains(target)) {
+          return;
+        }
+        setIsExpanded(false);
+      };
+
+      document.addEventListener("pointerdown", handlePointerDown);
+      return () => {
+        document.removeEventListener("pointerdown", handlePointerDown);
+      };
+    }, [isExpanded]);
 
     // 刷新视频：重新上传到 OSS
     const handleRefreshVideo = useCallback(
@@ -105,10 +254,10 @@ export const CollapsibleVideoGallery = memo(
             type: `video/${ext}`,
           });
 
-          // 上传到 OSS
+          // 上传�?OSS
           const ossResult = await uploadFileToOSS(file);
           if (!ossResult.url) {
-            throw new Error("上传到 OSS 失败");
+            throw new Error("上传�?OSS 失败");
           }
 
           // 更新节点数据
@@ -116,6 +265,7 @@ export const CollapsibleVideoGallery = memo(
           newVideos[index] = {
             ...newVideos[index],
             url: ossResult.url,
+            remoteUrl: ossResult.url,
           };
 
           updateVideoNodeData(nodeId, {
@@ -146,14 +296,22 @@ export const CollapsibleVideoGallery = memo(
         if (nodeId && updateVideoNodeData) {
           const newVideos = [...videos];
           const clickedVideo = newVideos.splice(index, 1)[0];
+          if (clickedVideo?.pending) return;
           newVideos.unshift(clickedVideo);
 
           updateVideoNodeData(nodeId, {
             result: {
               type: "video",
-              data: newVideos,
+              // 生成中的占位卡只参与 UI 展示，不写入真实视频结果。
+              data: newVideos.filter((item) => !item.pending),
             },
           });
+
+          const flowStore = useCanvasFlowStore.getState();
+          flowStore.requestHistorySave();
+          if (useChatSettingsStore.getState().autoSaveEnabled) {
+            flowStore.saveGraph();
+          }
         }
 
         setIsExpanded(false);
@@ -163,122 +321,214 @@ export const CollapsibleVideoGallery = memo(
 
     return (
       <div
-        className={`nopan h-full w-full overflow-hidden rounded-md bg-background p-1 ${isExpanded && totalCount > 4 ? "nowheel" : ""}`}
+        ref={containerRef}
+        className={cn(
+          "nopan relative h-full w-full",
+          totalCount > 1 && !isExpanded ? "p-1" : "p-0",
+          isExpanded ? "z-40 overflow-visible" : "overflow-hidden",
+        )}
       >
-        <div className="relative h-full w-full overflow-hidden rounded-lg bg-background shadow-sm group">
-          {/* 右上角视频数量徽标：用于展开/收起切换 */}
-          <button
-            type="button"
-            onClick={handleToggleExpanded}
-            onDoubleClick={(e) => e.stopPropagation()}
-            className="absolute right-2 top-2 z-20 cursor-pointer rounded-lg bg-black/60 px-3 py-2 text-[11px] font-medium text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
-            aria-label={
-              isExpanded
-                ? `收起视频集合，共${badgeText}`
-                : `展开视频集合，共${badgeText}`
-            }
-          >
-            {badgeText}
-          </button>
-
-          {/* 刷新按钮：仅在有本地文件时显示 */}
-          {nodeId && updateVideoNodeData && videos[0]?.localPath && (
-            <button
-              type="button"
-              onClick={(e) => handleRefreshVideo(e, 0)}
-              disabled={isRefreshing(0)}
-              className="absolute left-2 top-2 z-20 cursor-pointer rounded-lg bg-black/60 p-2 text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 disabled:opacity-50 disabled:cursor-not-allowed opacity-0 group-hover:opacity-100"
-              aria-label="刷新视频"
-            >
-              <IconRefresh
-                size={14}
-                className={isRefreshing(0) ? "animate-spin" : ""}
-              />
-            </button>
-          )}
-
-          {/* 折叠态：仅显示首视频封面 */}
+        <div className="relative h-full w-full overflow-visible rounded-lg">
           <div
-            className={`absolute inset-0 transition-all duration-200 ease-out ${isExpanded
-              ? "pointer-events-none translate-y-1 scale-[0.98] opacity-0"
-              : "translate-y-0 scale-100 opacity-100"
-              }`}
+            className={cn(
+              "pointer-events-none absolute left-0 top-[-26px] z-30 flex items-center gap-1.5 text-[12px] font-medium text-white/50 transition-opacity duration-300",
+              isExpanded ? "opacity-0" : "opacity-100 delay-200",
+            )}
           >
-            <div className="h-full w-full overflow-hidden rounded-lg">
-              {coverVideo ? (
-                <video
-                  src={coverVideo}
-                  controls
-                  className="block h-full w-full object-contain object-center"
-                  onError={() => handleVideoError(0)}
-                >
-                  你的浏览器不支持视频播放
-                </video>
-              ) : (
-                <div className="h-full w-full rounded-md border border-border/80 bg-muted/40 text-muted-foreground flex items-center justify-center text-[11px]">
-                  视频加载失败
-                </div>
-              )}
-            </div>
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-linear-to-t from-black/25 to-transparent" />
+            <IconVideo size={13} />
+            <span>Video</span>
           </div>
 
-          {/* 展开态：2 列网格展示全部视频 */}
-          <div
-            className={`absolute inset-0 transition-all duration-200 ease-out ${isExpanded
-              ? "translate-y-0 scale-100 opacity-100"
-              : "pointer-events-none -translate-y-1 scale-[0.98] opacity-0"
-              }`}
-          >
-            <div
-              className={`h-full w-full ${totalCount > 4 ? "overflow-y-auto pr-0.5" : ""}`}
-            >
+          {videos.map((item, index) => {
+            const isPrimary = index === 0;
+            const isSecondary = index > 0;
+            const isPending = Boolean(item.pending);
+            const isFocused = isExpanded && hoveredIndex === index;
+            const sequence = getMediaSequence(item, index);
+            const shouldUseCardChrome =
+              totalCount > 1 && (!isExpanded || isSecondary);
+            const displayUrl = displayUrls[index] ?? "";
+            const expandedLayout = expandedLayouts[index];
+            const stackStyle = getStackCardStyle(
+              index,
+              isExpanded,
+              cardWidth,
+              totalCount,
+              expandedLayouts,
+            );
+            const transitionDelay = isExpanded
+              ? `${(expandedLayout?.order ?? index) * 55}ms`
+              : `${Math.max(0, totalCount - index - 1) * 28}ms`;
+
+            return (
               <div
-                className={`grid h-full w-full p-1 ${expandedGridColsClass} ${expandedGridGapClass}`}
+                key={`${item.remoteUrl || item.localPath || item.url}-${index}`}
+                role="presentation"
+                className={cn(
+                  "group/card absolute left-0 top-0 rounded-[14px] transition-[transform,filter,opacity,box-shadow,border-color,width,height] duration-[700ms] ease-[cubic-bezier(0.2,0.85,0.15,1)] will-change-[transform,filter,opacity,width,height]",
+                  shouldUseCardChrome &&
+                  "border border-white/8 bg-[#1a1a1a] shadow-[0_10px_30px_rgba(0,0,0,0.28)]",
+                  isExpanded || isPrimary
+                    ? "pointer-events-auto"
+                    : "pointer-events-none",
+                  isExpanded &&
+                  isSecondary &&
+                  "hover:border-white/14 hover:shadow-[0_18px_36px_rgba(0,0,0,0.34)]",
+                  isSecondary &&
+                  isFocused &&
+                  "shadow-[0_24px_48px_rgba(0,0,0,0.38)]",
+                )}
+                onMouseEnter={() => {
+                  if (isExpanded) {
+                    setHoveredIndex(isSecondary ? index : null);
+                  }
+                }}
+                onMouseLeave={() => {
+                  if (hoveredIndex === index) {
+                    setHoveredIndex(null);
+                  }
+                }}
+                style={{
+                  width:
+                    isExpanded && isSecondary
+                      ? (expandedLayout?.width ?? cardWidth)
+                      : cardWidth,
+                  height:
+                    isExpanded && isSecondary
+                      ? (expandedLayout?.height ?? cardHeight)
+                      : cardHeight,
+                  ...(isExpanded && isPrimary
+                    ? {
+                      transform: "translate(0px, 0px) scale(1)",
+                      filter: "brightness(1)",
+                      opacity: 1,
+                      zIndex: totalCount + 6,
+                    }
+                    : stackStyle),
+                  transitionDelay,
+                  zIndex:
+                    isExpanded && isPrimary
+                      ? totalCount + 6
+                      : isSecondary && isFocused
+                        ? totalCount + 12
+                        : stackStyle.zIndex,
+                }}
               >
-                {videos.map((item, index) => (
-                  <div
-                    key={`${item.url}-${index}`}
-                    className={`relative ${totalCount === 1 ? "min-h-0" : "min-h-13"}`}
-                  >
-                    <div className="h-full w-full overflow-hidden rounded-md">
-                      {displayUrls[index] ? (
-                        <video
-                          src={displayUrls[index]}
-                          controls
-                          className={`block h-full w-full object-contain object-center`}
-                          onError={() => handleVideoError(index)}
-                          onClick={(e) => handleVideoClick(e, index)}
-                          style={{ cursor: "pointer" }}
-                        >
-                          你的浏览器不支持视频播放
-                        </video>
-                      ) : (
-                        <div className="h-full w-full rounded-md border border-border/80 bg-muted/40 text-muted-foreground flex items-center justify-center text-[11px]">
-                          视频加载失败
-                        </div>
-                      )}
+                <div
+                  role="presentation"
+                  className={cn(
+                    "relative flex h-full w-full items-center justify-center overflow-hidden rounded-[13px]",
+                    shouldUseCardChrome && "bg-[#111]",
+                    isExpanded && isSecondary && "cursor-pointer",
+                  )}
+                  onClick={(e) => {
+                    if (isExpanded && isSecondary) {
+                      handleVideoClick(e, index);
+                    }
+                  }}
+                >
+                  {isPending ? (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-[13px] bg-[#121216] text-[11px] text-muted-foreground">
+                      <div className="relative h-7 w-7">
+                        <div className="absolute inset-0 rounded-full border-2 border-primary/25" />
+                        <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary" />
+                      </div>
+                      <span>生成中...</span>
                     </div>
-                    {/* 展开态中的刷新按钮 */}
-                    {nodeId && updateVideoNodeData && item.localPath && (
+                  ) : displayUrl && !isBroken(index) ? (
+                    <VideoPlayer
+                      src={displayUrl}
+                      muted={!isPrimary}
+                      loop={!isPrimary}
+                      autoPlay={!isPrimary}
+                      playsInline
+                      preload="metadata"
+                      showDefaultControls={isPrimary}
+                      containerClassName="h-full w-full rounded-[13px] bg-[#111]"
+                      videoClassName={cn(
+                        "h-full w-full rounded-[13px] transition-transform duration-300 ease-out",
+                        isExpanded && isSecondary
+                          ? "object-contain"
+                          : "object-cover",
+                        isSecondary && isFocused && "scale-[1.08]",
+                      )}
+                      onError={() => handleVideoError(index)}
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center rounded-[13px] bg-[#121216] text-[11px] text-muted-foreground">
+                      视频加载失败
+                    </div>
+                  )}
+
+                  <div
+                    className={cn(
+                      "pointer-events-none absolute inset-0 rounded-[13px] ring-0 transition-all duration-200",
+                      isSecondary &&
+                      isFocused &&
+                      "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]",
+                    )}
+                  />
+
+                  <div className="absolute right-2 top-2 z-30 flex items-center gap-1.5">
+                    {totalCount > 1 && (
+                      <span className="pointer-events-none inline-flex h-8 min-w-8 items-center justify-center rounded-lg border border-white/12 bg-black/60 px-2 text-[11px] font-semibold text-white shadow-[0_6px_14px_rgba(0,0,0,0.22)] backdrop-blur-sm">
+                        #{sequence}
+                      </span>
+                    )}
+
+                    {isPrimary && totalCount > 1 && (
                       <button
                         type="button"
-                        onClick={(e) => handleRefreshVideo(e, index)}
-                        disabled={isRefreshing(index)}
-                        className="absolute left-1 top-1 z-10 cursor-pointer rounded bg-black/60 p-1 text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 disabled:opacity-50 disabled:cursor-not-allowed opacity-0 group-hover/tile:opacity-100"
-                        aria-label="刷新视频"
+                        onClick={handleToggleExpanded}
+                        onDoubleClick={(e) => e.stopPropagation()}
+                        className="nodrag inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/12 bg-black/60 px-3 py-2 text-[11px] font-medium text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+                        aria-label={
+                          isExpanded
+                            ? `收起视频集合，共${badgeText}`
+                            : `展开视频集合，共${badgeText}`
+                        }
                       >
-                        <IconRefresh
+                        <span>{badgeText}</span>
+                        <IconChevronDown
                           size={12}
-                          className={isRefreshing(index) ? "animate-spin" : ""}
+                          className={cn(
+                            "transition-transform duration-300",
+                            isExpanded && "rotate-180",
+                          )}
                         />
                       </button>
                     )}
                   </div>
-                ))}
+
+                  {nodeId && updateVideoNodeData && item.localPath && !isPending && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleRefreshVideo(e, index)}
+                      disabled={isRefreshing(index)}
+                      className={cn(
+                        "nodrag absolute left-2 top-2 z-30 cursor-pointer rounded-lg bg-black/60 p-2 text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-50",
+                        isBroken(index)
+                          ? "opacity-100"
+                          : isExpanded
+                            ? isSecondary && isFocused
+                              ? "opacity-100"
+                              : "opacity-0"
+                            : isPrimary
+                              ? "opacity-0 group-hover/card:opacity-100"
+                              : "opacity-0",
+                      )}
+                      aria-label="刷新视频"
+                    >
+                      <IconRefresh
+                        size={14}
+                        className={isRefreshing(index) ? "animate-spin" : ""}
+                      />
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          </div>
+            );
+          })}
         </div>
       </div>
     );

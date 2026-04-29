@@ -51,10 +51,13 @@ export interface ImageGenerationNode {
     type: string; // 结果类型
     data?: {
       url: string; // 远程 OSS URL（始终存储）
+      remoteUrl?: string; // 兼容新字段，明确标识持久化远程地址
+      displayUrl?: string; // 运行时展示地址，允许为 blob URL，不参与持久化
       relativePath?: string; // 本地相对路径（兼容字段，仅用于 Electron 离线环境备用访问）
       localPath?: string; // 本地相对路径（仅用于 Electron 离线环境备用访问）
       localFileName?: string; // 本地文件名（兼容字段，仅用于 Electron 离线环境备用访问）
       localName?: string; // 本地文件名（仅用于 Electron 离线环境备用访问）
+      [key: string]: any;
     }[]; // 图片数据列表（支持多张图片累积）
   }; // 生成结果
   // ---- 状态管理 ----
@@ -117,7 +120,13 @@ export interface VideoGenerationNode {
     // Seedance 2.0 专属扩展参数
     input_type?: "reference" | "first_last_frame"; // 输入类型
     generate_audio?: boolean; // 是否生成同步音频
+    audio?: boolean; // 是否生成音频（兼容旧字段与豆包 1.5 Pro）
     web_search?: boolean; // 是否启用联网搜索增强（仅 pro）
+    generation_mode?:
+    | "text-to-video"
+    | "image-to-video"
+    | "first-last-frame"
+    | "multi-image-reference"; // UI 四按钮模式
   };
   audio?: boolean; // 是否生成音频（豆包 1.5 Pro 独有功能）
   camerafixed?: boolean; // 是否固定摄像头
@@ -137,13 +146,57 @@ export interface VideoGenerationNode {
     data: {
       // 视频数据数组
       url: string; // 远程 OSS URL（始终存储）
+      remoteUrl?: string; // 兼容新字段，明确标识持久化远程地址
+      displayUrl?: string; // 运行时展示地址，允许为 blob URL，不参与持久化
       format: string; // 视频格式（如 mp4）
       localPath?: string; // 本地相对路径（仅用于 Electron 离线环境备用访问）
       localName?: string; // 本地文件名（仅用于 Electron 离线环境备用访问）
+      [key: string]: any;
     }[];
   };
   isUpload?: boolean; // 是否为上传视频（用于区分加载中/生成中）
   lastFrame?: string; // 视频尾帧图片 URL
+  [key: string]: any; // React Flow 约束兼容
+}
+
+/**
+ * 新版视频生成节点数据结构
+ * 用于 AI 视频生成任务（重构版）
+ */
+export interface NewVideoGenerationNode {
+  model: string; // 使用的模型
+  prompt: string; // 生成提示词
+  promptDraft?: string; // 输入面板草稿文本
+  duration?: number; // 视频时长（秒）
+  aspect_ratio: string; // 宽高比，如 "16:9"
+  image_urls?: string[]; // 参考图像 URL 列表
+  video_urls?: string[]; // 参考视频 URL 列表
+  audio_urls?: string[]; // 参考音频 URL 列表
+  status?: GenerationStatus; // 当前生成状态
+  progress?: number; // 进度百分比（0-100）
+  metadata: Record<string, unknown>; // 扩展元数据
+  task_id?: string; // 最近一次生成任务 ID
+  error?: {
+    code?: string;
+    message?: string;
+    detail?: string;
+    serverMessage?: string;
+    status?: number;
+  };
+  result?: {
+    type: string;
+    data: Array<{
+      url: string;
+      remoteUrl?: string;
+      displayUrl?: string;
+      format?: string;
+      localPath?: string;
+      localName?: string;
+      [key: string]: any;
+    }>;
+  };
+  createdAt?: number; // 创建时间戳
+  nickname?: string; // 节点昵称
   [key: string]: any; // React Flow 约束兼容
 }
 
@@ -281,6 +334,8 @@ export interface AudioGenerationNode {
     type: "audio"; // 结果类型
     data: {
       url: string; // 远程 OSS URL（始终存储）
+      remoteUrl?: string; // 兼容新字段，明确标识持久化远程地址
+      displayUrl?: string; // 运行时展示地址，允许为 blob URL，不参与持久化
       format?: string; // 音频格式（如 mp3, wav）
       duration?: number; // 音频时长
       localPath?: string; // 本地相对路径（仅用于 Electron 离线环境备用访问）
@@ -416,6 +471,8 @@ export type AudioNodeType = Node<AudioGenerationNode, "audioNode">;
 export type TableNodeType = Node<TableNodeData, "tableNode">;
 // React Flow 默认的节点类型
 export type DefaultNodeType = Node<any, "default">;
+// 新版视频节点
+export type NewVideoNodeType = Node<NewVideoGenerationNode, "newVideoNode">;
 
 export type AllNodeType =
   | TextNodeType
@@ -429,7 +486,8 @@ export type AllNodeType =
   | PanoramaNodeType
   | AudioNodeType
   | TableNodeType
-  | DefaultNodeType;
+  | DefaultNodeType
+  | NewVideoNodeType;
 export type EdgeType = Edge<EdgeDataType, "default">;
 
 // ==================== 流类型 ====================

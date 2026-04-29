@@ -5,25 +5,26 @@
 
 import { jikeingService } from "service/aiRequest";
 import type {
-  GetSceneQrcodeResponse,
-  QuerySceneStatusRequest,
-  QuerySceneStatusResponse,
-  StudentInfoRequest,
-  CommitAiTaskRequest,
+  AiBatTaskDetailRequest,
   AiTaskListItem,
   AiTaskListResponse,
-  AiBatTaskDetailRequest,
-  UploadSplitListItem,
-  ScoreConfigResponse,
   CommitAiHpRequest,
   CommitAiMultiSceneRequest,
+  CommitAiTaskRequest,
   CommitSoraTaskRequest,
-  SoraTaskListItem,
-  VideoHpTaskListItem,
   CommitVideoHpTaskRequest,
   CommitVideoTaskHpRequest,
+  GetSceneQrcodeResponse,
   GetSysConfigResponse,
+  QuerySceneStatusRequest,
+  QuerySceneStatusResponse,
+  ScoreConfigResponse,
+  SoraTaskListItem,
+  StudentInfoRequest,
+  UploadSplitListItem,
+  VideoHpTaskListItem,
 } from "shared/types/api/home";
+import { aiVideoTrackingService } from "@/services/aiVideoTracking";
 
 // ===================== 微信扫码登录 =====================
 
@@ -142,13 +143,35 @@ export function commitAiMultiScene(
 
 // ===================== 视频任务 =====================
 
+function extractVideoTaskId(response: any): string {
+  return (
+    response?.data?.task_id ||
+    response?.output?.task_id ||
+    response?.task_id ||
+    response?.id ||
+    ""
+  );
+}
+
 /** 提交 Sora 视频任务 */
-export function commitSoraTask(data: CommitSoraTaskRequest): Promise<any> {
-  return jikeingService({
+export async function commitSoraTask(data: CommitSoraTaskRequest): Promise<any> {
+  const response = await jikeingService({
     url: "/sorotask/v1/submit",
     method: "post",
     data,
   });
+
+  await aiVideoTrackingService.track({
+    apiName: "/sorotask/v1/submit",
+    model: data.model || "",
+    taskId: extractVideoTaskId(response),
+    prompt: data.prompt,
+    provider: "jikeing",
+    requestParams: data as unknown as Record<string, unknown>,
+    status: "PENDING",
+  });
+
+  return response;
 }
 
 /** Sora 视频任务列表 */
@@ -183,6 +206,16 @@ export function commitVideoHpTask(
     url: "/sorotask/v1/hp/submit",
     method: "post",
     data,
+  }).then(async (response) => {
+    await aiVideoTrackingService.track({
+      apiName: "/sorotask/v1/hp/submit",
+      model: "",
+      taskId: extractVideoTaskId(response),
+      provider: "jikeing",
+      requestParams: data as unknown as Record<string, unknown>,
+      status: "PENDING",
+    });
+    return response;
   });
 }
 
@@ -194,6 +227,16 @@ export function commitVideoTaskHp(
     url: "/sorotask/v1/task/hp",
     method: "post",
     data,
+  }).then(async (response) => {
+    await aiVideoTrackingService.track({
+      apiName: "/sorotask/v1/task/hp",
+      model: "",
+      taskId: extractVideoTaskId(response) || data.taskId || "",
+      provider: "jikeing",
+      requestParams: data as unknown as Record<string, unknown>,
+      status: "PENDING",
+    });
+    return response;
   });
 }
 

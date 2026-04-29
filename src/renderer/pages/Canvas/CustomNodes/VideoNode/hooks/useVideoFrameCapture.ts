@@ -2,6 +2,7 @@ import { useReactFlow } from "@xyflow/react";
 import { useCallback, useState } from "react";
 import { generateVideoSnapshotUrl, uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
+import type { VideoGenerationNode } from "shared/types/flow";
 import { getVideoDuration } from "shared/utils/getVideoDuration";
 import { toast } from "sonner";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
@@ -37,6 +38,15 @@ export const useVideoFrameCapture = () => {
       });
 
       const newNodeId = addNode("image", centerPosition);
+      const sourceVideoNode = sourceVideoNodeId
+        ? useCanvasFlowStore
+            .getState()
+            .nodes.find((node) => node.id === sourceVideoNodeId)
+        : null;
+      const sourceAspectRatio =
+        sourceVideoNode?.type === "videoNode"
+          ? (sourceVideoNode.data as VideoGenerationNode).aspect_ratio
+          : undefined;
 
       // 把截图写入新节点，并标记为已完成状态
       updateImageNodeData(newNodeId, {
@@ -45,6 +55,7 @@ export const useVideoFrameCapture = () => {
           type: "image",
           data: [{ url: snapshotUrl }],
         },
+        ...(sourceAspectRatio ? { size: sourceAspectRatio } : {}),
         status: GenerationStatus.COMPLETED,
         progress: 100,
       });

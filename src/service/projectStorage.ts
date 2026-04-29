@@ -1,13 +1,8 @@
-/**
- * 项目管理工具函数
- * 负责项目的创建、读取、更新、删除
- * 支持 localStorage 和本地文件存储
- */
-
 import {
   generateSimpleFileName,
   localStorageService,
 } from "service/localStorageService";
+import { sanitizeMediaTreeForPersistence } from "shared/utils/mediaPersistence";
 
 const PROJECT_LIST_KEY = "canvas-projects";
 const CANVAS_DATA_PREFIX = "canvas-flow-data-";
@@ -31,6 +26,31 @@ type ProjectList = {
 
 const STORAGE_VERSION = 2;
 
+export type MediaRef = {
+  url: string;
+  remoteUrl?: string;
+  displayUrl?: string;
+  localName?: string;
+  localPath?: string;
+};
+
+const inferImageExtension = (...candidates: Array<string | undefined>): string => {
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    const cleanValue = candidate.split("?")[0].split("#")[0];
+    const fileName = cleanValue.split("/").pop() || cleanValue;
+    const match = fileName.match(/\.([a-zA-Z0-9]+)$/);
+    const extension = match?.[1]?.toLowerCase();
+
+    if (extension && ["png", "jpg", "jpeg", "webp", "gif"].includes(extension)) {
+      return extension === "jpg" ? "jpeg" : extension;
+    }
+  }
+
+  return "png";
+};
+
 export const getProjectList = (): ProjectMeta[] => {
   try {
     const raw = localStorage.getItem(PROJECT_LIST_KEY);
@@ -51,6 +71,7 @@ export const getProjectList = (): ProjectMeta[] => {
 
 export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
   const localStorageProjects = getProjectList();
+  let syncedLocalStorageProjects = [...localStorageProjects];
 
   const localFileProjects: ProjectMeta[] = [];
 
@@ -58,6 +79,28 @@ export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
     try {
       const listResult = await localStorageService.listProjects();
       if (listResult.success && listResult.projects) {
+        const diskProjectNames = new Set(listResult.projects.map((item) => item.name));
+        const removedProjects = localStorageProjects.filter(
+          (project) => !diskProjectNames.has(project.name),
+        );
+
+        if (removedProjects.length > 0) {
+          syncedLocalStorageProjects = localStorageProjects.filter((project) =>
+            diskProjectNames.has(project.name),
+          );
+
+          const maxId = syncedLocalStorageProjects.reduce((max, project) => {
+            const numericId = parseInt(project.id, 10);
+            return Number.isNaN(numericId) ? max : Math.max(max, numericId);
+          }, 0);
+
+          saveProjectList(syncedLocalStorageProjects, Math.max(getNextId(), maxId + 1));
+
+          for (const removedProject of removedProjects) {
+            localStorage.removeItem(getCanvasDataKey(removedProject.id));
+          }
+        }
+
         for (const item of listResult.projects) {
           const readResult = await localStorageService.loadCanvasData(item.name);
           if (!readResult.success || !readResult.data) {
@@ -65,7 +108,7 @@ export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
           }
 
           const canvasData = readResult.data;
-          const existingProject = localStorageProjects.find(
+          const existingProject = syncedLocalStorageProjects.find(
             (p) => p.name === item.name,
           );
 
@@ -76,6 +119,7 @@ export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
               createdAt: canvasData.savedAt || item.createdAt || Date.now(),
               updatedAt: canvasData.savedAt || item.updatedAt || Date.now(),
               description: canvasData.description,
+            coverUrl: canvasData.coverUrl,
               coverLocalPath: canvasData.coverLocalPath,
               type: canvasData.type || "video",
             };
@@ -91,17 +135,17 @@ export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
 
   if (localFileProjects.length > 0) {
     const maxId = Math.max(
-      ...localStorageProjects.map((p) => parseInt(p.id) || 0),
+      ...syncedLocalStorageProjects.map((p) => parseInt(p.id) || 0),
       ...localFileProjects.map(
         (p) => parseInt(p.id.replace("local-", "")) || 0,
       ),
       0,
     );
-    const allProjects = [...localStorageProjects, ...localFileProjects];
+    const allProjects = [...syncedLocalStorageProjects, ...localFileProjects];
     saveProjectList(allProjects, maxId + 1);
   }
 
-  const allProjects = [...localStorageProjects, ...localFileProjects];
+  const allProjects = [...syncedLocalStorageProjects, ...localFileProjects];
 
   const uniqueProjects = allProjects.reduce((acc: ProjectMeta[], project) => {
     if (!acc.find((p) => p.name === project.name)) {
@@ -309,7 +353,6 @@ export const deleteProject = async (id: string): Promise<boolean> => {
     const project = data.projects[index];
     const projectName = project.name;
 
-    // 删除本地项目存储（electron-store）
     if (localStorageService.isAvailable()) {
       const deleteResult = await localStorageService.deleteProject(projectName);
       if (!deleteResult.success) {
@@ -326,6 +369,41 @@ export const deleteProject = async (id: string): Promise<boolean> => {
   } catch {
     return false;
   }
+};
+
+export const exportProjectDraft = async (
+  id: string,
+): Promise<{
+  success: boolean;
+  error?: string;
+  path?: string;
+  projectName?: string;
+  canceled?: boolean;
+}> => {
+  const project = getProjectById(id);
+  if (!project) {
+    return { success: false, error: "项目不存在" };
+  }
+
+  if (!localStorageService.isAvailable()) {
+    return { success: false, error: "Storage API not available" };
+  }
+
+  return localStorageService.exportProject(project.name);
+};
+
+export const importProjectDraft = async (): Promise<{
+  success: boolean;
+  error?: string;
+  path?: string;
+  projectName?: string;
+  canceled?: boolean;
+}> => {
+  if (!localStorageService.isAvailable()) {
+    return { success: false, error: "Storage API not available" };
+  }
+
+  return localStorageService.importProject();
 };
 
 export const getCanvasDataKey = (projectId: string): string => {
@@ -354,13 +432,15 @@ export const saveCanvasData = async (
   const project = getProjectById(projectId);
   if (!project) return false;
 
-  localStorage.setItem(getCanvasDataKey(projectId), JSON.stringify(data));
+  const sanitizedData = sanitizeMediaTreeForPersistence(data);
+
+  localStorage.setItem(getCanvasDataKey(projectId), JSON.stringify(sanitizedData));
 
   if (localStorageService.isAvailable()) {
     const result = await localStorageService.saveCanvasData(
       projectId,
       project.name,
-      data,
+      sanitizedData,
     );
     return result.success;
   }
@@ -388,6 +468,158 @@ export const loadCanvasData = async (
     } catch {
       return null;
     }
+  }
+
+  return null;
+};
+
+const extractExtFromUrl = (url: string, fallback: string = "png"): string => {
+  try {
+    const urlPath = new URL(url).pathname;
+    const ext = urlPath.split(".").pop()?.toLowerCase();
+    if (ext && ["png", "jpg", "jpeg", "webp", "gif", "bmp", "mp4", "webm", "mp3", "wav", "ogg"].includes(ext)) {
+      return ext;
+    }
+  } catch {}
+  return fallback;
+};
+
+export const saveMediaFromUrl = async (
+  projectId: string,
+  url: string,
+  mediaType: "image" | "video" | "audio" | "generate_image" | "generate_video",
+  extension?: string,
+): Promise<MediaRef> => {
+  const project = getProjectById(projectId);
+  if (!project || !localStorageService.isAvailable()) {
+    return { url };
+  }
+
+  const ext = extension || extractExtFromUrl(url, mediaType === "video" ? "mp4" : mediaType === "audio" ? "mp3" : "png");
+  const fileName = generateSimpleFileName(ext);
+
+  try {
+    const downloadFnMap: Record<string, (projectName: string, fileName: string, url: string) => Promise<any>> = {
+      image: localStorageService.downloadImage,
+      generate_image: localStorageService.downloadGeneratedImage,
+      video: localStorageService.downloadVideo,
+      generate_video: localStorageService.downloadGeneratedVideo,
+      audio: localStorageService.downloadAudio,
+    };
+
+    const downloadFn = downloadFnMap[mediaType];
+    if (!downloadFn) {
+      return { url };
+    }
+
+    const result = await downloadFn(project.name, fileName, url);
+
+    if (result.success) {
+      const relativePath = getLocalFilePath(projectId, mediaType, fileName);
+      return {
+        url,
+        remoteUrl: url,
+        localName: fileName,
+        localPath: relativePath || undefined,
+      };
+    }
+  } catch (err) {
+    console.warn(`[saveMediaFromUrl] 保存 ${mediaType} 到本地失败:`, err);
+  }
+
+  return { url };
+};
+
+export const saveMediaBuffer = async (
+  projectId: string,
+  buffer: ArrayBuffer,
+  mediaType: "image" | "video" | "audio" | "generate_image" | "generate_video",
+  extension: string = "png",
+): Promise<MediaRef> => {
+  const project = getProjectById(projectId);
+  if (!project || !localStorageService.isAvailable()) {
+    return { url: "" };
+  }
+
+  const fileName = generateSimpleFileName(extension);
+
+  try {
+    const saveFnMap: Record<string, (projectName: string, fileName: string, buffer: ArrayBuffer) => Promise<any>> = {
+      image: localStorageService.saveImage,
+      generate_image: localStorageService.saveGeneratedImage,
+      video: localStorageService.saveVideo,
+      generate_video: localStorageService.saveGeneratedVideo,
+      audio: localStorageService.saveAudio,
+    };
+
+    const saveFn = saveFnMap[mediaType];
+    if (!saveFn) {
+      return { url: "" };
+    }
+
+    const result = await saveFn(project.name, fileName, buffer);
+
+    if (result.success) {
+      const relativePath = getLocalFilePath(projectId, mediaType, fileName);
+      return {
+        url: "",
+        localName: fileName,
+        localPath: relativePath || undefined,
+      };
+    }
+  } catch (err) {
+    console.warn(`[saveMediaBuffer] 保存 ${mediaType} 到本地失败:`, err);
+  }
+
+  return { url: "" };
+};
+
+export const readLocalMediaAsBlobUrl = async (
+  relativePath: string,
+  mimeType: string = "image/png",
+): Promise<string | null> => {
+  const fileBytes = await readMediaFromLocal(relativePath);
+  if (!fileBytes) return null;
+
+  const blob = new Blob([fileBytes], { type: mimeType });
+  return URL.createObjectURL(blob);
+};
+
+export const retryMediaUrl = async (
+  url: string,
+  retries: number = 2,
+  timeoutMs: number = 5000,
+): Promise<boolean> => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const response = await fetch(url, {
+        method: "HEAD",
+        mode: "no-cors",
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      return true;
+    } catch {
+      if (i < retries - 1) {
+        await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
+      }
+    }
+  }
+  return false;
+};
+
+export const getDisplayUrl = async (
+  item: { url?: string; localPath?: string; localName?: string },
+  mimeType: string = "image/png",
+): Promise<string | null> => {
+  if (item.url) {
+    return item.url;
+  }
+
+  if (item.localPath) {
+    return readLocalMediaAsBlobUrl(item.localPath, mimeType);
   }
 
   return null;
@@ -532,6 +764,42 @@ const arrayBufferToDataUrl = (buffer: ArrayBuffer, extension: string) => {
   return `data:image/${extension};base64,${base64}`;
 };
 
+const persistProjectCoverMeta = async (
+  projectId: string,
+  coverLocalPath: string,
+  coverUrl: string,
+) => {
+  updateProject(projectId, {
+    coverLocalPath,
+    coverUrl,
+  });
+
+  const storageKey = getCanvasDataKey(projectId);
+  const cachedCanvasData = localStorage.getItem(storageKey);
+  let canvasData: any = null;
+
+  if (cachedCanvasData) {
+    try {
+      canvasData = JSON.parse(cachedCanvasData);
+    } catch (error) {
+      console.warn("Failed to parse cached canvas data while saving cover:", error);
+    }
+  }
+
+  if (!canvasData) {
+    canvasData = await loadCanvasData(projectId);
+  }
+
+  if (canvasData) {
+    await saveCanvasData(projectId, {
+      ...canvasData,
+      savedAt: Date.now(),
+      coverLocalPath,
+      coverUrl,
+    });
+  }
+};
+
 export const saveCoverImageToLocal = async (
   projectId: string,
   imageData: ArrayBuffer | string,
@@ -548,11 +816,12 @@ export const saveCoverImageToLocal = async (
       imageData,
     );
     if (result.success) {
-      const ext = imageData.split(".").pop()?.toLowerCase() || "png";
-      updateProject(projectId, {
-        coverLocalPath: `${project.name}/cover.${ext}`,
-        coverUrl: imageData,
-      });
+      const ext = inferImageExtension(imageData);
+      await persistProjectCoverMeta(
+        projectId,
+        `${project.name}/cover.${ext}`,
+        imageData,
+      );
       return `cover.${ext}`;
     }
     return null;
@@ -566,13 +835,40 @@ export const saveCoverImageToLocal = async (
       return null;
     }
 
-    updateProject(projectId, {
-      coverLocalPath: `${project.name}/cover.${extension}`,
-      coverUrl: arrayBufferToDataUrl(imageData, extension),
-    });
+    await persistProjectCoverMeta(
+      projectId,
+      `${project.name}/cover.${extension}`,
+      arrayBufferToDataUrl(imageData, extension),
+    );
 
     return `cover.${extension}`;
   }
+};
+
+export const setProjectCoverFromMediaRef = async (
+  projectId: string,
+  mediaRef: MediaRef,
+): Promise<string | null> => {
+  const extension = inferImageExtension(
+    mediaRef.localName,
+    mediaRef.localPath,
+    mediaRef.remoteUrl,
+    mediaRef.url,
+  );
+
+  if (mediaRef.localPath) {
+    const localMedia = await readMediaFromLocal(mediaRef.localPath);
+    if (localMedia) {
+      return saveCoverImageToLocal(projectId, localMedia, extension);
+    }
+  }
+
+  const remoteSource = mediaRef.remoteUrl || mediaRef.url;
+  if (!remoteSource) {
+    return null;
+  }
+
+  return saveCoverImageToLocal(projectId, remoteSource, extension);
 };
 
 export const readMediaFromLocal = async (
@@ -639,7 +935,6 @@ export const getMediaPath = (relativePath: string): string | null => {
 };
 
 export const getMediaUrl = (relativePath: string): string | null => {
-  // electron-store 方案下不再提供 file:// 物理路径，仅保留相对路径语义。
   return relativePath || null;
 };
 

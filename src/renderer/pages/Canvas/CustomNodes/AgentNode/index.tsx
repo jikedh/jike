@@ -1,11 +1,12 @@
 import { type NodeProps, Position } from "@xyflow/react";
-import { memo } from "react";
+import { memo, useCallback } from "react";
 import { getAgentPresetLabelById } from "shared/constants/agent-presets";
 import type { AgentNodeType } from "shared/types/flow";
 import { ButtonHandle } from "@/components/button-handle";
 import { Button } from "@/components/ui/button";
 import { useAgentExecution } from "@/hooks/useAgentExecution";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
+import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { cn } from "shared/utils/utils";
 
@@ -37,10 +38,22 @@ export const AgentNode = memo(
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
 
+    const handleDelete = useCallback(() => {
+      if (isGenerating) {
+        requestCanvasDeleteConfirm({
+          message: "当前智能体节点还在生成中，确定要删除吗？",
+          onConfirm: () => deleteNode(id),
+        });
+        return;
+      }
+
+      deleteNode(id);
+    }, [deleteNode, id, isGenerating]);
+
     return (
       <NodeContextMenu
         onDuplicate={() => duplicateNode(id)}
-        onDelete={() => deleteNode(id)}
+        onDelete={handleDelete}
       >
         <div className="group/node relative">
           <div

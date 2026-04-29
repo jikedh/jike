@@ -7,6 +7,7 @@ import type {
   AudioGenerationNode,
   EdgeType,
   ImageGenerationNode,
+  NewVideoGenerationNode,
   VideoGenerationNode,
 } from "shared/types/flow";
 
@@ -45,9 +46,9 @@ export const getNextNodePosition = (nodes: AllNodeType[]) => {
 
   return lastNode
     ? {
-        x: lastNode.position.x + 40,
-        y: lastNode.position.y + 40,
-      }
+      x: lastNode.position.x + 40,
+      y: lastNode.position.y + 40,
+    }
     : fallbackPosition;
 };
 
@@ -126,6 +127,23 @@ export const updateVideoNodeInList = (
     return {
       ...node,
       data: updater(node.data as VideoGenerationNode),
+    };
+  });
+};
+
+export const updateNewVideoNodeInList = (
+  nodes: AllNodeType[],
+  nodeId: string,
+  updater: (data: NewVideoGenerationNode) => NewVideoGenerationNode,
+): AllNodeType[] => {
+  return nodes.map((node) => {
+    if (node.id !== nodeId || node.type !== "newVideoNode") {
+      return node;
+    }
+
+    return {
+      ...node,
+      data: updater(node.data as NewVideoGenerationNode),
     };
   });
 };

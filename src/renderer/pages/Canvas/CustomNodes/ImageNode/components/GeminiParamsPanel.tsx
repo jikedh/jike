@@ -28,6 +28,10 @@ export const GEMINI_SIZES = [
   { label: "21:9", value: "21:9", description: "超宽屏" },
 ];
 
+export const NANO_BANANA_LOCAL_SIZES = GEMINI_SIZES.filter((item) =>
+  ["1:1", "16:9", "9:16", "4:3", "3:4"].includes(item.value),
+);
+
 // Gemini 3 Pro 分辨率选项
 export const GEMINI_RESOLUTIONS = [
   { label: "1K", value: "1K", description: "默认分辨率" },
@@ -40,6 +44,8 @@ type GeminiParamsPanelProps = {
   size: string;
   // 当前分辨率
   resolution: string;
+  // 可选尺寸列表
+  sizeOptions?: typeof GEMINI_SIZES;
   // 更新图像尺寸
   onSizeChange: (value: string) => void;
   // 更新分辨率
@@ -49,6 +55,7 @@ type GeminiParamsPanelProps = {
 export const GeminiParamsPanel = ({
   size,
   resolution,
+  sizeOptions = GEMINI_SIZES,
   onSizeChange,
   onResolutionChange,
 }: GeminiParamsPanelProps) => {
@@ -77,7 +84,7 @@ export const GeminiParamsPanel = ({
               图像尺寸
             </label>
             <div className="grid grid-cols-5 gap-2">
-              {GEMINI_SIZES.map((item) => {
+              {sizeOptions.map((item) => {
                 const isActive = size === item.value;
                 return (
                   <button

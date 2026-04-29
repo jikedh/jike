@@ -4,7 +4,7 @@
   "description": "视频工作流",
   "author": "小明",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.4.6",
   "engines": {
     "node": ">=22"
   },
@@ -16,12 +16,16 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "start:electron": "electron-vite preview",
-    "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "electron-vite build && electron-builder --win",
+    "build:flow2api:win": "powershell -ExecutionPolicy Bypass -File ..\\flow2api-main\\flow2api-main\\scripts\\build-windows.ps1",
+    "prepare:flow2api": "node ./scripts/prepare-flow2api-resources.mjs",
+    "build:unpack": "electron-vite build && npm run prepare:flow2api && electron-builder --dir",
+    "build:win": "electron-vite build && npm run prepare:flow2api && electron-builder --win",
+    "build:win:full": "npm run build:flow2api:win && npm run build:win",
     "format": "npx @biomejs/biome format --write",
     "lint": "npx @biomejs/biome lint",
     "check-format": "npx @biomejs/biome check",
-    "type-check": "tsc --noEmit --pretty --project tsconfig.app.json && vite"
+    "type-check": "tsc --noEmit --pretty --project tsconfig.app.json && vite",
+    "build:win11": "electron-vite build && electron-builder --win"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -55,6 +59,7 @@
     "qrcode": "^1.5.4",
     "radix-ui": "^1.4.3",
     "react": "^19.2.0",
+    "react-colorful": "^5.6.1",
     "react-dom": "^19.2.0",
     "react-dropzone": "^15.0.0",
     "react-easy-crop": "^5.5.7",
