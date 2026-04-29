@@ -134,7 +134,7 @@ export async function downloadImageFromUrl(
         if (basename && basename.includes(".")) {
           finalFilename = basename;
         }
-      } catch {}
+      } catch { }
 
       if (!finalFilename) {
         const ext = blob.type.split("/")[1] || "jpg";
@@ -258,6 +258,7 @@ export const getDashscopeToken = () => DEFAULT_DASHSCOPE_TOKEN;
 // ===================== Jikeing Token 管理 =====================
 const JIKEING_TOKEN_KEY = "jikeing_token";
 const JIKEING_USER_ID_KEY = "jikeing_user_id";
+const JIKEING_USER_INFO_KEY = "jikeing_user_info";
 
 export function getJikeingToken(): string {
   return localStorage.getItem(JIKEING_TOKEN_KEY) || "";
@@ -281,6 +282,37 @@ export function setJikeingUserId(userId: string | number): void {
 
 export function clearJikeingUserId(): void {
   localStorage.removeItem(JIKEING_USER_ID_KEY);
+}
+
+/**
+ * 获取完整的用户信息对象
+ */
+export function getJikeingUserInfo(): Record<string, any> | null {
+  const info = localStorage.getItem(JIKEING_USER_INFO_KEY);
+  if (!info) return null;
+  try {
+    return JSON.parse(info);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 存储完整的用户信息对象
+ */
+export function setJikeingUserInfo(userInfo: Record<string, any>): void {
+  localStorage.setItem(JIKEING_USER_INFO_KEY, JSON.stringify(userInfo));
+  // 同时存储 uuid 方便快速获取
+  if (userInfo.uuid) {
+    localStorage.setItem(JIKEING_USER_ID_KEY, userInfo.uuid);
+  }
+}
+
+/**
+ * 清除用户信息
+ */
+export function clearJikeingUserInfo(): void {
+  localStorage.removeItem(JIKEING_USER_INFO_KEY);
 }
 
 // ===================== 环境检测与基础URL配置 =====================

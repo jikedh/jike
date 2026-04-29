@@ -4,7 +4,9 @@ import type { UserScoreVO } from "shared/types/jikeing";
 import {
   clearJikeingToken,
   clearJikeingUserId,
+  clearJikeingUserInfo,
   getJikeingToken,
+  setJikeingUserInfo,
 } from "shared/utils/utils";
 import { create } from "zustand";
 import { getUserInfo } from "@/api/ai";
@@ -72,6 +74,9 @@ export const useUserStore = create<UserStoreType>((set, get) => ({
         const materialMember =
           data.is_material_member ?? data.materialMember ?? false;
 
+        // 存储完整用户信息到 localStorage
+        setJikeingUserInfo(data);
+
         set({
           userInfo: data,
           vipLevel,
@@ -114,6 +119,7 @@ export const useUserStore = create<UserStoreType>((set, get) => ({
   logout: async () => {
     clearJikeingToken();
     clearJikeingUserId();
+    clearJikeingUserInfo();
     set({
       loginStatus: 0,
       userInfo: null,
