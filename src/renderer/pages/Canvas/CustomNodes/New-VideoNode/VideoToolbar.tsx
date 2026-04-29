@@ -69,6 +69,7 @@ const FRAME_STEP_SECONDS = 1 / DEFAULT_FPS;
 const TIMELINE_STEP_MS = 100;
 const SUBTITLE_REMOVAL_POINTS_PER_SECOND = 0.5;
 const WUHEI_MAX_RECT_AREA = 480_000;
+const subtitlePollers: Record<string, number> = {};
 
 const normalizeTaskStatus = (value?: string) => {
     return String(value || "")
@@ -917,8 +918,6 @@ export const VideoToolbar = ({
     const [isSnapshotPanelOpen, setIsSnapshotPanelOpen] = useState(false);
     const [isSubtitlePanelOpen, setIsSubtitlePanelOpen] = useState(false);
     const [isSubmittingSubtitle, setIsSubmittingSubtitle] = useState(false);
-    const subtitlePollersRef = useRef<Record<string, number>>({});
-
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     const addNode = useCanvasFlowStore((state) => state.addNode);
@@ -1077,15 +1076,6 @@ export const VideoToolbar = ({
 
     const isPreviewActive = isLightboxOpen;
 
-    useEffect(() => {
-        return () => {
-            Object.values(subtitlePollersRef.current).forEach((timer) => {
-                window.clearInterval(timer);
-            });
-            subtitlePollersRef.current = {};
-        };
-    }, []);
-
     const startSubtitlePolling = useCallback(
         (
             taskId: string,
@@ -1094,13 +1084,29 @@ export const VideoToolbar = ({
             userId: string,
             pointsToDeduct: number,
         ) => {
-            const existing = subtitlePollersRef.current[targetNodeId];
+            const existing = subtitlePollers[targetNodeId];
             if (existing) {
                 window.clearInterval(existing);
             }
 
-            const timer = window.setInterval(async () => {
+            let timer = 0;
+            const clearPolling = () => {
+                if (timer) {
+                    window.clearInterval(timer);
+                }
+                delete subtitlePollers[targetNodeId];
+            };
+
+            const poll = async () => {
                 try {
+                    const targetExists = useCanvasFlowStore
+                        .getState()
+                        .nodes.some((node) => node.id === targetNodeId);
+                    if (!targetExists) {
+                        clearPolling();
+                        return;
+                    }
+
                     const response = await getVideoRemovalStatus(taskId);
                     const { taskStatus, progress } = extractTaskStatusInfo(response);
 
@@ -1124,8 +1130,7 @@ export const VideoToolbar = ({
                                 console.error("积分扣减失败:", scoreError);
                             }
                         }
-                        window.clearInterval(timer);
-                        delete subtitlePollersRef.current[targetNodeId];
+                        clearPolling();
                         return;
                     }
 
@@ -1138,8 +1143,7 @@ export const VideoToolbar = ({
                                 message: "去字幕失败",
                             },
                         } as any);
-                        window.clearInterval(timer);
-                        delete subtitlePollersRef.current[targetNodeId];
+                        clearPolling();
                         return;
                     }
 
@@ -1148,9 +1152,13 @@ export const VideoToolbar = ({
                         progress,
                     } as any);
                 } catch { }
-            }, 10000);
+            };
 
-            subtitlePollersRef.current[targetNodeId] = timer;
+            timer = window.setInterval(() => {
+                void poll();
+            }, 10000);
+            subtitlePollers[targetNodeId] = timer;
+            void poll();
         },
         [updateNewVideoNodeData],
     );
