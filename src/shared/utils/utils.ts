@@ -215,7 +215,7 @@ export const getVideoThumbnail = (videoUrl: string): Promise<string> => {
 // ===================== 写死的 API 密钥 =====================
 
 // AI 服务密钥
-const DEFAULT_AI_TOKEN = "sk-mVjdbp6YxuR1jT5YSs4DO7gPtJ7PoYJiqK9hmvt6dsfAvACa";
+const DEFAULT_AI_TOKEN = "sk-Bml1blU1ls8acOmj7kOdHIs4ZHQViS1asg1teky509zbTdrx";
 
 // ZeakAI 服务密钥
 const DEFAULT_ZEAKAI_TOKEN = "df3ddeb9-45da-4eb7-b49a-8ab32c8e4ebb";
