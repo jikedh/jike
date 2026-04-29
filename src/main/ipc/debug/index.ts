@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from "electron";
+import { ipcMain, BrowserWindow, app } from "electron";
 import { is } from "@electron-toolkit/utils";
 
 /**
@@ -20,5 +20,9 @@ export function registerDebugHandlers(): void {
   // 检查是否为开发环境
   ipcMain.handle("debug:isDev", async () => {
     return is.dev;
+  });
+
+  ipcMain.handle("debug:getAppVersion", async () => {
+    return app.getVersion();
   });
 }

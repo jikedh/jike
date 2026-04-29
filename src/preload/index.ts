@@ -6,6 +6,7 @@ import type { StorageApi } from "shared/types/storage";
 export type DebugApi = {
   toggleDevTools: () => Promise<{ success: boolean; error?: string }>;
   isDev: () => Promise<boolean>;
+  getAppVersion: () => Promise<string>;
 };
 
 export type DownloadApi = {
@@ -89,6 +90,7 @@ const debugApi: DebugApi = {
   toggleDevTools: () => ipcRenderer.invoke("debug:toggleDevTools"),
   // 检查是否为开发环境
   isDev: () => ipcRenderer.invoke("debug:isDev"),
+  getAppVersion: () => ipcRenderer.invoke("debug:getAppVersion"),
 };
 
 const downloadApi: DownloadApi = {

@@ -28,9 +28,31 @@ export const SidebarCeBianLan = () => {
   const token = getJikeingToken();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFirstLoginModalOpen, setIsFirstLoginModalOpen] = useState(false);
+  const [appVersion, setAppVersion] = useState("");
 
   const { loginStatus, fetchUserInfo, balanceInfo, fetchBalanceInfo } =
     useUserStore();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    window.debug
+      .getAppVersion()
+      .then((version) => {
+        if (isMounted) {
+          setAppVersion(version);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setAppVersion("");
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (token) {
@@ -74,6 +96,11 @@ export const SidebarCeBianLan = () => {
           <span className="text-[14px] text-white/90 leading-tight font-normal tracking-widest mt-1">
             即刻
           </span>
+          {appVersion && (
+            <span className="mt-1 text-[10px] leading-none text-white/35 tracking-normal">
+              v{appVersion}
+            </span>
+          )}
         </button>
 
         <SidebarNav classNames={{ root: "flex-1" }}>

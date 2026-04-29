@@ -911,6 +911,7 @@ export const CanvasFlow = ({
     (changes: NodeChange<AllNodeType>[]) => {
       const latestPositionChanges = new Map<string, NodeChange<AllNodeType>>();
       const latestSelectChanges = new Map<string, NodeChange<AllNodeType>>();
+      const latestDimensionChanges = new Map<string, NodeChange<AllNodeType>>();
       const otherChanges: NodeChange<AllNodeType>[] = [];
 
       changes.forEach((change) => {
@@ -924,12 +925,18 @@ export const CanvasFlow = ({
           return;
         }
 
+        if (change.type === "dimensions") {
+          latestDimensionChanges.set(change.id, change);
+          return;
+        }
+
         otherChanges.push(change);
       });
 
       return [
         ...otherChanges,
         ...latestPositionChanges.values(),
+        ...latestDimensionChanges.values(),
         ...latestSelectChanges.values(),
       ];
     },
@@ -1031,7 +1038,9 @@ export const CanvasFlow = ({
       scheduleDisplayNodeChanges(changes);
 
       // 鍙鐞嗛潪浣嶇疆鐩稿叧鐨勫彉鏇达紙閫変腑銆佸垹闄ょ瓑锛夛紝浣嶇疆鍙樻洿鍦?handleNodeDragStop 涓鐞?
-      const nonPositionChanges = changes.filter((c) => c.type !== "position");
+      const nonPositionChanges = changes.filter(
+        (c) => c.type !== "position" && c.type !== "dimensions",
+      );
       if (nonPositionChanges.length > 0) {
         const selectChanges = nonPositionChanges.filter(
           (change) => change.type === "select",

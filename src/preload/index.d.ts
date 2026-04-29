@@ -5,6 +5,7 @@ import type { StorageApi } from "shared/types/storage";
 export type DebugApi = {
   toggleDevTools: () => Promise<{ success: boolean; error?: string }>;
   isDev: () => Promise<boolean>;
+  getAppVersion: () => Promise<string>;
 };
 
 export type DownloadApi = {
