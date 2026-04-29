@@ -26,6 +26,8 @@ export type NoteGenerationImage = {
   originalUrl?: string;
   localPath?: string;
   localName?: string;
+  width?: number;
+  height?: number;
 };
 
 export type NoteGenerationMessage =

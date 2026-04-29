@@ -1,6 +1,11 @@
 import { useEffect, useState, type RefObject } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import {
+  CANVAS_IMAGE_DRAG_MIME,
+  CANVAS_IMAGE_DRAG_TYPE,
+  type CanvasImageDragPayload,
+} from "shared/constants/canvasDrag";
 import type {
   NoteGenerationImage,
   NoteGenerationMessage,
@@ -38,10 +43,15 @@ const ChatImagePreview = ({ image, imageIndex }: ChatImagePreviewProps) => {
   );
   const imageUrl = image.previewUrl ?? image.url;
   const [displayUrl, setDisplayUrl] = useState(imageUrl);
+  const [naturalSize, setNaturalSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
 
   useEffect(() => {
     setDisplayUrl(imageUrl);
     setLoadState("loading");
+    setNaturalSize(null);
   }, [imageUrl]);
 
   useEffect(() => {
@@ -78,11 +88,35 @@ const ChatImagePreview = ({ image, imageIndex }: ChatImagePreviewProps) => {
     };
   }, [displayUrl, image.url, loadState]);
 
+  const handleDragStart = (event: React.DragEvent<HTMLAnchorElement>) => {
+    const payload: CanvasImageDragPayload = {
+      type: CANVAS_IMAGE_DRAG_TYPE,
+      images: [
+        {
+          url: image.url,
+          previewUrl: image.previewUrl,
+          originalUrl: image.originalUrl,
+          localPath: image.localPath,
+          localName: image.localName,
+          width: image.width ?? naturalSize?.width,
+          height: image.height ?? naturalSize?.height,
+        },
+      ],
+    };
+
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData(CANVAS_IMAGE_DRAG_MIME, JSON.stringify(payload));
+    event.dataTransfer.setData("text/uri-list", image.url);
+    event.dataTransfer.setData("text/plain", image.url);
+  };
+
   return (
     <a
       href={image.url}
       target="_blank"
       rel="noreferrer"
+      draggable
+      onDragStart={handleDragStart}
       className="relative block min-h-[220px] overflow-hidden rounded-xl border border-white/10 bg-black/30"
       title="打开图片"
     >
@@ -113,7 +147,13 @@ const ChatImagePreview = ({ image, imageIndex }: ChatImagePreviewProps) => {
         loading={imageIndex === 0 ? "eager" : "lazy"}
         decoding="async"
         fetchPriority={imageIndex === 0 ? "high" : "auto"}
-        onLoad={() => setLoadState("loaded")}
+        onLoad={(event) => {
+          setLoadState("loaded");
+          setNaturalSize({
+            width: event.currentTarget.naturalWidth,
+            height: event.currentTarget.naturalHeight,
+          });
+        }}
         onError={() => setLoadState("error")}
       />
     </a>

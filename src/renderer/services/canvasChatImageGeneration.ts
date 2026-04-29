@@ -7,6 +7,7 @@ import {
 } from "@/api/ai";
 import { getBalanceInfo, updateVipScore } from "@/api/jikeing";
 import { buildMidjourneyPrompt } from "@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt";
+import { getImageDimensions } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { useUserStore } from "@/stores/useUserStore";
 import { generateImageUrl } from "service/oss";
 import {
@@ -162,7 +163,7 @@ const getChatImagePreviewUrl = (url: string) => {
 };
 
 const preloadImage = (url: string, signal?: AbortSignal) => {
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<{ width: number; height: number }>((resolve, reject) => {
     if (!url || signal?.aborted) {
       reject(createAbortError());
       return;
@@ -184,8 +185,12 @@ const preloadImage = (url: string, signal?: AbortSignal) => {
     const finish = () => {
       if (settled) return;
       settled = true;
+      const dimensions = {
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      };
       cleanup();
-      resolve();
+      resolve(dimensions);
     };
 
     const fail = () => {
@@ -224,14 +229,58 @@ const withPreviewImages = (images: NoteGenerationImage[]) =>
     previewUrl: image.previewUrl ?? getChatImagePreviewUrl(image.url),
   }));
 
+const getImageDisplayDimensions = async (
+  image: NoteGenerationImage,
+  signal?: AbortSignal,
+) => {
+  if (image.width && image.height) {
+    return {
+      width: image.width,
+      height: image.height,
+    };
+  }
+
+  try {
+    return await preloadImage(image.previewUrl ?? image.url, signal);
+  } catch {
+    throwIfAborted(signal);
+  }
+
+  try {
+    return await getImageDimensions(image.url);
+  } catch {
+    return null;
+  }
+};
+
 const preloadImagePreviews = async (
   images: NoteGenerationImage[],
   signal?: AbortSignal,
 ) => {
-  await Promise.allSettled(
-    images.map((image) => preloadImage(image.previewUrl ?? image.url, signal)),
+  const settled = await Promise.allSettled(
+    images.map(async (image) => {
+      const dimensions = await getImageDisplayDimensions(image, signal);
+      return { image, dimensions };
+    }),
   );
   throwIfAborted(signal);
+
+  return images.map((image, index) => {
+    const result = settled[index];
+    if (
+      result?.status === "fulfilled" &&
+      result.value.dimensions?.width &&
+      result.value.dimensions?.height
+    ) {
+      return {
+        ...image,
+        width: result.value.dimensions.width,
+        height: result.value.dimensions.height,
+      };
+    }
+
+    return image;
+  });
 };
 
 const withTimeout = async <T,>(
@@ -341,6 +390,8 @@ const extractImages = (response: any): NoteGenerationImage[] => {
         previewUrl: getChatImagePreviewUrl(url),
         localPath: item?.localPath,
         localName: item?.localName,
+        width: Number(item?.width ?? item?.naturalWidth) || undefined,
+        height: Number(item?.height ?? item?.naturalHeight) || undefined,
       } satisfies NoteGenerationImage;
     })
     .filter(Boolean) as NoteGenerationImage[];
@@ -635,11 +686,23 @@ export const generateCanvasChatImages = async ({
   onProgress?.("图片已生成，正在转存预览...");
   images = await mirrorImagesToOss(images);
   images = withPreviewImages(images);
+  try {
+    images = await preloadImagePreviews(images, signal);
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      throw error;
+    }
+
+    console.warn("[canvas-chat-image] image preview preload did not complete", error);
+  }
+
+  /* removed legacy fire-and-forget preload
   preloadImagePreviews(images, signal).catch((error) => {
     if (error?.name !== "AbortError") {
       console.warn("[canvas-chat-image] 图片预加载未完成", error);
     }
   });
+  end removed legacy fire-and-forget preload */
 
   return {
     images,

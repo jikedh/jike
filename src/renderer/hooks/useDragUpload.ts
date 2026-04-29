@@ -1,11 +1,20 @@
 import { useReactFlow } from "@xyflow/react";
 import { useCallback, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
+import {
+  CANVAS_IMAGE_DRAG_MIME,
+  CANVAS_IMAGE_DRAG_TYPE,
+  type CanvasImageDragPayload,
+} from "shared/constants/canvasDrag";
 import { GenerationStatus } from "shared/constants/enum";
 import { getMediaType, type MediaType } from "shared/constants/mediaTypes";
 import { toast } from "sonner";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { getAspectRatioFromMediaFile } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
+import {
+  getAspectRatioFromImageUrl,
+  getAspectRatioFromMediaFile,
+  getExactAspectRatio,
+} from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 
 /** 拖拽状态 */
 interface DragState {
@@ -14,6 +23,54 @@ interface DragState {
   fileCount: number;
   acceptedTypes: MediaType[];
 }
+
+const parseCanvasImageDragPayload = (
+  dataTransfer: DataTransfer,
+): CanvasImageDragPayload | null => {
+  const rawPayload = dataTransfer.getData(CANVAS_IMAGE_DRAG_MIME);
+  if (!rawPayload) {
+    return null;
+  }
+
+  try {
+    const payload = JSON.parse(rawPayload) as CanvasImageDragPayload;
+    const images = Array.isArray(payload.images)
+      ? payload.images.filter((image) => Boolean(image?.url))
+      : [];
+
+    if (payload.type !== CANVAS_IMAGE_DRAG_TYPE || images.length === 0) {
+      return null;
+    }
+
+    return {
+      type: CANVAS_IMAGE_DRAG_TYPE,
+      images,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const getImageAspectRatioFromDragItem = async (
+  image: CanvasImageDragPayload["images"][number],
+) => {
+  if (image.width && image.height) {
+    return getExactAspectRatio(image.width, image.height);
+  }
+
+  return getAspectRatioFromImageUrl(image.previewUrl ?? image.url);
+};
+
+const hasCanvasImageDragPayload = (dataTransfer: DataTransfer) => {
+  return Array.from(dataTransfer.types).includes(CANVAS_IMAGE_DRAG_MIME);
+};
+
+const getFilesFromDataTransfer = (dataTransfer: DataTransfer) => {
+  return Array.from(dataTransfer.items)
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null);
+};
 
 /**
  * 拖拽上传 Hook
@@ -250,16 +307,84 @@ export function useDragUpload() {
   );
 
   /**
+   * Create image nodes directly from images dragged out of the canvas chat.
+   */
+  const handleCanvasImages = useCallback(
+    async (
+      payload: CanvasImageDragPayload,
+      flowPosition: { x: number; y: number },
+    ): Promise<void> => {
+      const images = payload.images.filter((image) => Boolean(image.url));
+      if (images.length === 0) return;
+
+      const positions = calculateTiledPositions(flowPosition, images.length);
+
+      for (let i = 0; i < images.length; i++) {
+        const image = images[i];
+        const nodeId = addNode("image", positions[i]);
+
+        try {
+          const aspectRatio = await getImageAspectRatioFromDragItem(image);
+
+          updateImageNodeData(nodeId, {
+            status: GenerationStatus.COMPLETED,
+            progress: 100,
+            isUpload: false,
+            ...(aspectRatio ? { size: aspectRatio } : {}),
+            result: {
+              type: "image",
+              data: [
+                {
+                  url: image.url,
+                  localPath: image.localPath,
+                  localName: image.localName,
+                },
+              ],
+            },
+          });
+        } catch (error) {
+          console.error("[canvas-image-drag] create image node failed", error);
+          updateImageNodeData(nodeId, {
+            status: GenerationStatus.FAILED,
+            error: { message: "图片拖入失败，请重试" },
+          });
+        }
+      }
+
+      toast.success(
+        images.length === 1
+          ? "已创建图片节点"
+          : `已创建 ${images.length} 个图片节点`,
+      );
+    },
+    [addNode, calculateTiledPositions, updateImageNodeData],
+  );
+
+  /**
    * 处理拖拽进入
    */
   const handleDragEnter = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
       event.stopPropagation();
+      event.dataTransfer.dropEffect = "copy";
 
-      const files = Array.from(event.dataTransfer.items)
-        .map((item) => item.getAsFile())
-        .filter((file): file is File => file !== null);
+      if (hasCanvasImageDragPayload(event.dataTransfer)) {
+        const flowPosition = screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY,
+        });
+
+        setDragState({
+          isDragging: true,
+          dragPosition: flowPosition,
+          fileCount: 1,
+          acceptedTypes: ["image"],
+        });
+        return;
+      }
+
+      const files = getFilesFromDataTransfer(event.dataTransfer);
 
       if (files.length === 0) return;
 
@@ -292,6 +417,7 @@ export function useDragUpload() {
     (event: React.DragEvent) => {
       event.preventDefault();
       event.stopPropagation();
+      event.dataTransfer.dropEffect = "copy";
 
       const flowPosition = screenToFlowPosition({
         x: event.clientX,
@@ -333,9 +459,10 @@ export function useDragUpload() {
       event.preventDefault();
       event.stopPropagation();
 
-      const files = Array.from(event.dataTransfer.items)
-        .map((item) => item.getAsFile())
-        .filter((file): file is File => file !== null);
+      const flowPosition = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
 
       // 重置拖拽状态
       setDragState({
@@ -345,16 +472,20 @@ export function useDragUpload() {
         acceptedTypes: [],
       });
 
-      if (files.length === 0) return;
+      const canvasImagePayload = parseCanvasImageDragPayload(
+        event.dataTransfer,
+      );
+      if (canvasImagePayload) {
+        handleCanvasImages(canvasImagePayload, flowPosition);
+        return;
+      }
 
-      const flowPosition = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
+      const files = getFilesFromDataTransfer(event.dataTransfer);
+      if (files.length === 0) return;
 
       handleFiles(files, flowPosition);
     },
-    [screenToFlowPosition, handleFiles],
+    [screenToFlowPosition, handleFiles, handleCanvasImages],
   );
 
   return {
