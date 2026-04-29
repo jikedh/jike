@@ -8,6 +8,7 @@ import {
 import { getBalanceInfo, updateVipScore } from "@/api/jikeing";
 import { buildMidjourneyPrompt } from "@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt";
 import { useUserStore } from "@/stores/useUserStore";
+import { generateImageUrl } from "service/oss";
 import {
   getCanvasChatImageModelConfig,
   getGenerationScoreCost,
@@ -21,6 +22,8 @@ import { getJikeingUserId } from "shared/utils/utils";
 
 const CHAT_IMAGE_POLL_INTERVAL = 10000;
 const CHAT_IMAGE_TIMEOUT = 5 * 60 * 1000;
+const CHAT_IMAGE_PRELOAD_TIMEOUT = 12000;
+const CHAT_IMAGE_MIRROR_TIMEOUT = 15000;
 const DEFAULT_CHAT_IMAGE_SIZE = "1:1";
 const DEFAULT_CHAT_IMAGE_RESOLUTION = "2K";
 
@@ -129,6 +132,188 @@ const normalizeImageUrl = (value: unknown) => {
   return trimmed;
 };
 
+const canUseOssImageProcess = (url: string) => {
+  if (!/^https?:\/\//i.test(url)) {
+    return false;
+  }
+
+  try {
+    const { hostname, search } = new URL(url);
+    if (search) {
+      return false;
+    }
+
+    return hostname.includes("oss-") && hostname.includes("aliyuncs.com");
+  } catch {
+    return false;
+  }
+};
+
+const getChatImagePreviewUrl = (url: string) => {
+  if (!canUseOssImageProcess(url)) {
+    return url;
+  }
+
+  return generateImageUrl(url, [
+    { type: "resize", mode: "m_lfit", width: 960 },
+    { type: "format", format: "webp" },
+    { type: "ignore-error", value: 1 },
+  ]);
+};
+
+const preloadImage = (url: string, signal?: AbortSignal) => {
+  return new Promise<void>((resolve, reject) => {
+    if (!url || signal?.aborted) {
+      reject(createAbortError());
+      return;
+    }
+
+    const image = new Image();
+    let settled = false;
+    let timeoutId: number | undefined;
+
+    const cleanup = () => {
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      image.onload = null;
+      image.onerror = null;
+      signal?.removeEventListener("abort", handleAbort);
+    };
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve();
+    };
+
+    const fail = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error("图片预览加载失败"));
+    };
+
+    const handleAbort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(createAbortError());
+    };
+
+    image.onload = () => {
+      const decode = image.decode?.();
+      if (decode) {
+        decode.then(finish).catch(finish);
+        return;
+      }
+
+      finish();
+    };
+    image.onerror = fail;
+    timeoutId = window.setTimeout(fail, CHAT_IMAGE_PRELOAD_TIMEOUT);
+    signal?.addEventListener("abort", handleAbort, { once: true });
+    image.src = url;
+  });
+};
+
+const withPreviewImages = (images: NoteGenerationImage[]) =>
+  images.map((image) => ({
+    ...image,
+    previewUrl: image.previewUrl ?? getChatImagePreviewUrl(image.url),
+  }));
+
+const preloadImagePreviews = async (
+  images: NoteGenerationImage[],
+  signal?: AbortSignal,
+) => {
+  await Promise.allSettled(
+    images.map((image) => preloadImage(image.previewUrl ?? image.url, signal)),
+  );
+  throwIfAborted(signal);
+};
+
+const withTimeout = async <T,>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+) => {
+  let timeoutId: number | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new Error(message));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      window.clearTimeout(timeoutId);
+    }
+  }
+};
+
+const shouldMirrorImageToOss = (url: string) => {
+  if (!/^https?:\/\//i.test(url)) {
+    return false;
+  }
+
+  try {
+    const { hostname } = new URL(url);
+    return !hostname.includes("aliyuncs.com");
+  } catch {
+    return false;
+  }
+};
+
+const mirrorImageToOss = async (
+  image: NoteGenerationImage,
+  index: number,
+): Promise<NoteGenerationImage> => {
+  if (!shouldMirrorImageToOss(image.url) || !window.download?.imageAsBase64) {
+    return image;
+  }
+
+  try {
+    const downloadResult = await withTimeout(
+      window.download.imageAsBase64(image.url),
+      CHAT_IMAGE_MIRROR_TIMEOUT,
+      "图片转存下载超时",
+    );
+    if (!downloadResult.success || !downloadResult.data?.base64) {
+      throw new Error(downloadResult.error || "图片转存下载失败");
+    }
+
+    const ossResult = await withTimeout(
+      uploadBase64ToOSS(
+        downloadResult.data.base64,
+        `chat-image-${Date.now()}-${index}`,
+      ),
+      CHAT_IMAGE_MIRROR_TIMEOUT,
+      "图片转存上传超时",
+    );
+
+    return {
+      ...image,
+      originalUrl: image.originalUrl ?? image.url,
+      url: ossResult.url,
+      previewUrl: getChatImagePreviewUrl(ossResult.url),
+    };
+  } catch (error) {
+    console.warn("[canvas-chat-image] 图片转存 OSS 失败，回退原始地址", {
+      url: image.url,
+      error,
+    });
+    return image;
+  }
+};
+
+const mirrorImagesToOss = async (images: NoteGenerationImage[]) => {
+  return Promise.all(images.map((image, index) => mirrorImageToOss(image, index)));
+};
+
 const extractImages = (response: any): NoteGenerationImage[] => {
   const rawData =
     response?.result?.data ??
@@ -153,6 +338,7 @@ const extractImages = (response: any): NoteGenerationImage[] => {
 
       return {
         url,
+        previewUrl: getChatImagePreviewUrl(url),
         localPath: item?.localPath,
         localName: item?.localName,
       } satisfies NoteGenerationImage;
@@ -366,11 +552,16 @@ const generateGeminiPro2Images = async (
           base64Data,
           `chat-gemini-${Date.now()}-${index}`,
         );
-        return { url: ossResult.url };
+        return {
+          url: ossResult.url,
+          previewUrl: getChatImagePreviewUrl(ossResult.url),
+        };
       } catch (error) {
         console.error("[canvas-chat-image] 上传 Gemini 图片到 OSS 失败", error);
+        const url = `data:${mimeType};base64,${base64Data}`;
         return {
-          url: `data:${mimeType};base64,${base64Data}`,
+          url,
+          previewUrl: url,
         };
       }
     }),
@@ -439,6 +630,16 @@ export const generateCanvasChatImages = async ({
   }
 
   await deductPoints(config, requiredPoints);
+
+  images = withPreviewImages(images);
+  onProgress?.("图片已生成，正在转存预览...");
+  images = await mirrorImagesToOss(images);
+  images = withPreviewImages(images);
+  preloadImagePreviews(images, signal).catch((error) => {
+    if (error?.name !== "AbortError") {
+      console.warn("[canvas-chat-image] 图片预加载未完成", error);
+    }
+  });
 
   return {
     images,

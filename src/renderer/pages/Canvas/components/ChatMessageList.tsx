@@ -1,14 +1,123 @@
-import type { RefObject } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type {
+  NoteGenerationImage,
+  NoteGenerationMessage,
+} from "shared/types/NoteGeneration";
 import { cn } from "shared/utils/utils";
-import type { NoteGenerationMessage } from "shared/types/NoteGeneration";
 
 type ChatMessageListProps = {
   messages: NoteGenerationMessage[];
   isLoading?: boolean;
   className?: string;
   containerRef?: RefObject<HTMLDivElement | null>;
+};
+
+type ChatImagePreviewProps = {
+  image: NoteGenerationImage;
+  imageIndex: number;
+};
+
+const shouldUseIpcImageFallback = (url: string) => {
+  if (!/^https?:\/\//i.test(url)) {
+    return false;
+  }
+
+  try {
+    const { hostname } = new URL(url);
+    return !hostname.includes("aliyuncs.com");
+  } catch {
+    return false;
+  }
+};
+
+const ChatImagePreview = ({ image, imageIndex }: ChatImagePreviewProps) => {
+  const [loadState, setLoadState] = useState<"loading" | "loaded" | "error">(
+    "loading",
+  );
+  const imageUrl = image.previewUrl ?? image.url;
+  const [displayUrl, setDisplayUrl] = useState(imageUrl);
+
+  useEffect(() => {
+    setDisplayUrl(imageUrl);
+    setLoadState("loading");
+  }, [imageUrl]);
+
+  useEffect(() => {
+    if (
+      loadState === "loaded" ||
+      !shouldUseIpcImageFallback(displayUrl) ||
+      !window.download?.imageAsBase64
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await window.download.imageAsBase64(image.url);
+        if (cancelled) return;
+
+        if (result.success && result.data?.base64) {
+          setDisplayUrl(result.data.base64);
+          return;
+        }
+
+        setLoadState("error");
+      } catch {
+        if (!cancelled) {
+          setLoadState("error");
+        }
+      }
+    }, 2500);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [displayUrl, image.url, loadState]);
+
+  return (
+    <a
+      href={image.url}
+      target="_blank"
+      rel="noreferrer"
+      className="relative block min-h-[220px] overflow-hidden rounded-xl border border-white/10 bg-black/30"
+      title="打开图片"
+    >
+      {loadState !== "loaded" && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#10131b] text-xs text-white/50">
+          {loadState === "loading" ? (
+            <>
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/15 border-t-[#b43feb]" />
+              <span>正在加载预览...</span>
+            </>
+          ) : (
+            <>
+              <span>预览加载失败</span>
+              <span className="rounded-md border border-white/15 px-2 py-1 text-white/70">
+                打开原图
+              </span>
+            </>
+          )}
+        </div>
+      )}
+      <img
+        src={displayUrl}
+        alt={`生成图片 ${imageIndex + 1}`}
+        className={cn(
+          "max-h-[360px] w-full object-contain transition-opacity duration-200",
+          loadState === "loaded" ? "opacity-100" : "opacity-0",
+        )}
+        loading={imageIndex === 0 ? "eager" : "lazy"}
+        decoding="async"
+        fetchPriority={imageIndex === 0 ? "high" : "auto"}
+        onLoad={() => setLoadState("loaded")}
+        onError={() => setLoadState("error")}
+      />
+    </a>
+  );
 };
 
 export const ChatMessageList = ({
@@ -54,21 +163,11 @@ export const ChatMessageList = ({
                 {message.images && message.images.length > 0 && (
                   <div className="mt-3 grid grid-cols-1 gap-2">
                     {message.images.map((image, imageIndex) => (
-                      <a
+                      <ChatImagePreview
                         key={`${image.url}-${imageIndex}`}
-                        href={image.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block overflow-hidden rounded-xl border border-white/10 bg-black/30"
-                        title="打开图片"
-                      >
-                        <img
-                          src={image.url}
-                          alt={`生成图片 ${imageIndex + 1}`}
-                          className="max-h-[360px] w-full object-contain"
-                          loading="lazy"
-                        />
-                      </a>
+                        image={image}
+                        imageIndex={imageIndex}
+                      />
                     ))}
                   </div>
                 )}

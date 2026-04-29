@@ -48,7 +48,7 @@ const CanvasPage = () => {
           type="button"
           title="打开 AI 对话"
           className={cn(
-            "fixed right-6 bottom-6 z-50 flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-[0_10px_24px_rgba(37,99,235,0.35)] transition-colors",
+            "fixed right-6 top-6 z-50 flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-[0_10px_24px_rgba(37,99,235,0.35)] transition-colors",
             isChatOpen ? "bg-blue-500" : "bg-blue-600 hover:bg-blue-500",
           )}
           onClick={() => setIsChatOpen(true)}

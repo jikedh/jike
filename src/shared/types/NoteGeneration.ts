@@ -22,6 +22,8 @@ export type NoteGenerationRequest = {
 
 export type NoteGenerationImage = {
   url: string;
+  previewUrl?: string;
+  originalUrl?: string;
   localPath?: string;
   localName?: string;
 };
