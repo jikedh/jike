@@ -487,11 +487,7 @@ export const ChatDrawer = ({
                     <span className="max-w-[180px] truncate rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-white/70">
                       {selectedModelLabel}
                     </span>
-                    <span>
-                      {userMessageCount > 0
-                        ? `已发送 ${userMessageCount} 条消息`
-                        : "从技能卡开始，或直接输入需求"}
-                    </span>
+
                   </div>
 
                   {isLoading ? (

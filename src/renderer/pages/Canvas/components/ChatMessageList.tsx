@@ -1,4 +1,6 @@
 import type { RefObject } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { cn } from "shared/utils/utils";
 import type { NoteGenerationMessage } from "shared/types/NoteGeneration";
 
@@ -44,8 +46,10 @@ export const ChatMessageList = ({
                     : "rounded-bl-[8px] border border-white/10 bg-[#151821] text-white/88",
                 )}
               >
-                <div className="text-[14px] leading-[1.7] whitespace-pre-wrap">
-                  {message.content}
+                <div className="text-[14px] leading-[1.7] prose prose-invert max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {message.content}
+                  </ReactMarkdown>
                 </div>
               </div>
             </div>
