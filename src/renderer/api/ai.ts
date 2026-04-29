@@ -32,11 +32,97 @@ import type {
 } from "shared/types/detail/wuhen";
 import { getAiToken, getBaseURL } from "shared/utils/utils";
 import { aiVideoTrackingService } from "@/services/aiVideoTracking";
+
 /**
  *
  * 为了兼容同一个接口的不同入参，暂定接口的入参和出参都为 any
  * 不过类型定义文件是有的，位于 src/types 目录下面
  */
+
+function isHttpUrl(value: unknown): value is string {
+  return typeof value === "string" && /^https?:\/\//i.test(value);
+}
+
+function extractReferenceImageUrl(data: unknown): string | undefined {
+  if (!data || typeof data !== "object") {
+    return undefined;
+  }
+
+  const record = data as Record<string, any>;
+  const directUrl =
+    record.reference_image_url ||
+    record.referenceImageUrl ||
+    record.image_url ||
+    record.imageUrl;
+  if (isHttpUrl(directUrl)) {
+    return directUrl;
+  }
+
+  const imageUrls = record.image_urls || record.imageUrls;
+  if (Array.isArray(imageUrls)) {
+    const firstUrl = imageUrls.find(isHttpUrl);
+    if (firstUrl) {
+      return firstUrl;
+    }
+  }
+
+  const imageItems = record.images || record.input?.images;
+  if (Array.isArray(imageItems)) {
+    const firstImage = imageItems.find((item) => isHttpUrl(item?.url));
+    if (firstImage) {
+      return firstImage.url;
+    }
+  }
+
+  const mediaItems = record.media || record.input?.media;
+  if (Array.isArray(mediaItems)) {
+    const firstImageMedia = mediaItems.find(
+      (item) =>
+        isHttpUrl(item?.url) &&
+        (item?.type === "image" ||
+          item?.type === "image_url" ||
+          item?.type === "reference_image" ||
+          item?.type === "first_frame" ||
+          item?.type === "last_frame"),
+    );
+    if (firstImageMedia) {
+      return firstImageMedia.url;
+    }
+  }
+
+  return undefined;
+}
+
+function extractPrompt(data: unknown): string {
+  if (!data || typeof data !== "object") {
+    return "";
+  }
+
+  const record = data as Record<string, any>;
+  const nestedPrompt = record.input?.prompt;
+  if (nestedPrompt) {
+    return String(nestedPrompt);
+  }
+
+  return String(record.prompt || "");
+}
+
+function getSeedance20Model(data: Seedance20Request): string {
+  const record = data as unknown as Record<string, unknown>;
+  const model = String(record.model || "");
+
+  if (model === "seedance-2.0-fast" || model === "seedance-2.0-pro") {
+    return model;
+  }
+  if (model === "doubao-seedance-2.0-fast") {
+    return "seedance-2.0-fast";
+  }
+  if (model === "doubao-seedance-2.0-pro") {
+    return "seedance-2.0-pro";
+  }
+
+  return data.mode === "fast" ? "seedance-2.0-fast" : "seedance-2.0-pro";
+}
 
 // ===================== 账户余额相关 =====================
 
@@ -196,15 +282,17 @@ export async function createLzVideoTask(data: Seedance20Request) {
     method: "post",
     data,
   });
+  const taskId = response.data?.task_id || "";
 
   await aiVideoTrackingService.track({
     apiName: "/lz/video/task/create",
-    model: "seedance-2.0",
-    taskId: response.data?.task_id || "",
+    model: getSeedance20Model(data),
+    taskId,
     prompt: data.prompt,
+    referenceImageUrl: extractReferenceImageUrl(data),
     provider: "kuaizi",
     requestParams: data as unknown as Record<string, unknown>,
-    status: response.code === 200 ? "PENDING" : "FAIL",
+    status: taskId ? "PENDING" : "FAIL",
   });
 
   return response;
@@ -393,7 +481,8 @@ export async function createDashscopeVideoSynthesis(
     apiName: "/api/v1/services/aigc/video-generation/video-synthesis",
     model: String(trackData.model || ""),
     taskId: trackResponse.output?.task_id || "",
-    prompt: String(trackData.prompt || ""),
+    prompt: extractPrompt(data),
+    referenceImageUrl: extractReferenceImageUrl(data),
     provider: "dashscope",
     requestParams: trackData,
     status: trackResponse.output?.task_status === "FAILED" ? "FAIL" : "PENDING",
