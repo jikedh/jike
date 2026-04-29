@@ -10,12 +10,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createChatCompletion } from "@/api/ai";
-import { DEFAULT_CANVAS_CHAT_MODEL } from "shared/constants/ai-models";
+import {
+  DEFAULT_CANVAS_CHAT_MODEL,
+  isCanvasChatImageModel,
+} from "shared/constants/ai-models";
 import {
   CANVAS_CHAT_PERSONAS,
   NO_CHAT_PERSONA_ID,
 } from "shared/constants/chat-personas";
 import useMessage from "@/hooks/useMessage";
+import { generateCanvasChatImages } from "@/services/canvasChatImageGeneration";
 import type {
   ChatPersonaId,
   NoteGenerationMessage,
@@ -50,11 +54,16 @@ const getPersonaById = (personaId: ChatPersonaId) => {
 const buildRequestMessages = (
   personaId: ChatPersonaId,
   chatMessages: NoteGenerationMessage[],
-): NoteGenerationMessage[] => {
+): NoteGenerationRequest["messages"] => {
   const persona = getPersonaById(personaId);
+  const plainMessages = chatMessages.map(({ role, content, name }) => ({
+    role,
+    content,
+    name,
+  }));
 
   if (!persona) {
-    return chatMessages;
+    return plainMessages;
   }
 
   return [
@@ -62,7 +71,7 @@ const buildRequestMessages = (
       role: "system",
       content: persona.content,
     },
-    ...chatMessages,
+    ...plainMessages,
   ];
 };
 
@@ -147,6 +156,65 @@ export const useCanvasChat = () => {
     abortControllerRef.current = controller;
 
     try {
+      const isImageGeneration = isCanvasChatImageModel(model);
+
+      if (isImageGeneration) {
+        setMessages((prev) => {
+          const assistantMessage = prev[assistantMessageIndex];
+          if (!assistantMessage || assistantMessage.role !== "assistant") {
+            return prev;
+          }
+
+          const updatedMessages = [...prev];
+          updatedMessages[assistantMessageIndex] = {
+            ...assistantMessage,
+            content: "正在生成图片...",
+            status: "generating",
+          };
+          return updatedMessages;
+        });
+
+        const result = await generateCanvasChatImages({
+          model,
+          prompt: content,
+          signal: controller.signal,
+          onProgress: (progressMessage) => {
+            setMessages((prev) => {
+              const assistantMessage = prev[assistantMessageIndex];
+              if (!assistantMessage || assistantMessage.role !== "assistant") {
+                return prev;
+              }
+
+              const updatedMessages = [...prev];
+              updatedMessages[assistantMessageIndex] = {
+                ...assistantMessage,
+                content: progressMessage,
+                status: "generating",
+              };
+              return updatedMessages;
+            });
+          },
+        });
+
+        setMessages((prev) => {
+          const assistantMessage = prev[assistantMessageIndex];
+          if (!assistantMessage || assistantMessage.role !== "assistant") {
+            return prev;
+          }
+
+          const imageCount = result.images.length;
+          const updatedMessages = [...prev];
+          updatedMessages[assistantMessageIndex] = {
+            ...assistantMessage,
+            content: `${result.label} 已生成 ${imageCount} 张图片`,
+            images: result.images,
+            status: "completed",
+          };
+          return updatedMessages;
+        });
+        return;
+      }
+
       const requestPayload: NoteGenerationRequest = {
         model,
         messages: buildRequestMessages(payload.personaId, nextMessages),
@@ -187,6 +255,7 @@ export const useCanvasChat = () => {
         updatedMessages[assistantMessageIndex] = {
           ...assistantMessage,
           content: "生成出现了点问题，未能获取到有效内容，请稍后再试~",
+          status: "failed",
         };
         return updatedMessages;
       });
@@ -204,6 +273,7 @@ export const useCanvasChat = () => {
             content: assistantMessage.content.trim()
               ? `${assistantMessage.content}\n\n（已停止生成）`
               : "已停止生成。",
+            status: "stopped",
           };
           return updatedMessages;
         });
@@ -211,7 +281,11 @@ export const useCanvasChat = () => {
       }
 
       console.error("聊天请求失败:", chatError);
-      error("对话失败，请稍后重试");
+      error(
+        isCanvasChatImageModel(model)
+          ? "图片生成失败，请稍后重试"
+          : "对话失败，请稍后重试",
+      );
 
       setMessages((prev) => {
         const assistantMessage = prev[assistantMessageIndex];
@@ -222,7 +296,11 @@ export const useCanvasChat = () => {
         const updatedMessages = [...prev];
         updatedMessages[assistantMessageIndex] = {
           ...assistantMessage,
-          content: "生成出现了点问题，未能获取到有效内容，请稍后再试~",
+          content:
+            chatError instanceof Error
+              ? chatError.message
+              : "生成出现了点问题，未能获取到有效内容，请稍后再试~",
+          status: "failed",
         };
         return updatedMessages;
       });

@@ -93,6 +93,12 @@ const MODEL_PROVIDER_META: Record<string, ModelProviderMeta> = {
     icon: "M",
     priority: 80,
   },
+  image: {
+    id: "image",
+    label: "Image",
+    icon: "IMG",
+    priority: 90,
+  },
 };
 
 const normalize = (value?: string) => value?.toLowerCase().trim() ?? "";

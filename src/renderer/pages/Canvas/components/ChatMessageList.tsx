@@ -51,6 +51,27 @@ export const ChatMessageList = ({
                     {message.content}
                   </ReactMarkdown>
                 </div>
+                {message.images && message.images.length > 0 && (
+                  <div className="mt-3 grid grid-cols-1 gap-2">
+                    {message.images.map((image, imageIndex) => (
+                      <a
+                        key={`${image.url}-${imageIndex}`}
+                        href={image.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block overflow-hidden rounded-xl border border-white/10 bg-black/30"
+                        title="打开图片"
+                      >
+                        <img
+                          src={image.url}
+                          alt={`生成图片 ${imageIndex + 1}`}
+                          className="max-h-[360px] w-full object-contain"
+                          loading="lazy"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           );

@@ -160,6 +160,18 @@ export const IMAGE_MODELS = [
   },
 ];
 
+export const CANVAS_CHAT_IMAGE_MODEL_PREFIX = "canvas-image:";
+
+export const CANVAS_CHAT_IMAGE_MODELS = IMAGE_MODELS.map((item) => ({
+  id: 2000 + item.id,
+  name: item.name,
+  model: `${CANVAS_CHAT_IMAGE_MODEL_PREFIX}${item.id}`,
+  platform: "image",
+  platformId: 0,
+  imageModel: item.model,
+  imagePlatform: item.platform,
+}));
+
 /**
  * 生成任务默认积分消耗。
  * 说明：当前阶段所有生图/生视频模型统一消耗 30 分，后续可按模型单独调整。
@@ -512,6 +524,23 @@ export const CANVAS_CHAT_MODELS = [
     platformId: 12,
   },
 ];
+
+export const CANVAS_CHAT_SELECT_MODELS = [
+  ...CANVAS_CHAT_MODELS,
+  ...CANVAS_CHAT_IMAGE_MODELS,
+];
+
+export const getCanvasChatImageModelConfig = (model?: string) => {
+  if (!model?.startsWith(CANVAS_CHAT_IMAGE_MODEL_PREFIX)) {
+    return undefined;
+  }
+
+  return CANVAS_CHAT_IMAGE_MODELS.find((item) => item.model === model);
+};
+
+export const isCanvasChatImageModel = (model?: string) => {
+  return Boolean(getCanvasChatImageModelConfig(model));
+};
 
 /** 画布聊天默认模型 */
 export const DEFAULT_CANVAS_CHAT_MODEL = CANVAS_CHAT_MODELS[0].model;

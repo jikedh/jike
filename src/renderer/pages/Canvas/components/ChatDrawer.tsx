@@ -12,7 +12,7 @@ import {
 } from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  CANVAS_CHAT_MODELS,
+  CANVAS_CHAT_SELECT_MODELS,
   DEFAULT_CANVAS_CHAT_MODEL,
 } from "shared/constants/ai-models";
 import {
@@ -120,7 +120,7 @@ const ACTION_BUTTON_CLASSNAME =
   "flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 shadow-[0_6px_18px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-all hover:bg-white/10 hover:text-white";
 
 const resolveCanvasChatModel = (model?: string) => {
-  if (model && CANVAS_CHAT_MODELS.some((item) => item.model === model)) {
+  if (model && CANVAS_CHAT_SELECT_MODELS.some((item) => item.model === model)) {
     return model;
   }
 
@@ -290,7 +290,7 @@ export const ChatDrawer = ({
         )?.label ?? "自由对话");
 
   const selectedModelLabel =
-    CANVAS_CHAT_MODELS.find((item) => item.model === selectedModel)?.name ??
+    CANVAS_CHAT_SELECT_MODELS.find((item) => item.model === selectedModel)?.name ??
     selectedModel;
 
   const userMessageCount = messages.filter(
@@ -413,7 +413,7 @@ export const ChatDrawer = ({
                 <ModelSelector
                   value={selectedModel}
                   onChange={setSelectedModel}
-                  models={CANVAS_CHAT_MODELS}
+                  models={CANVAS_CHAT_SELECT_MODELS}
                 />
               </div>
             </header>
