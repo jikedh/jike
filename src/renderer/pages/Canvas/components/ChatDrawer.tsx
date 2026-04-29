@@ -178,7 +178,7 @@ export const ChatDrawer = ({
       setSelectedPersonaId(currentSession.personaId);
       setSelectedModel(resolveCanvasChatModel(currentSession.model));
     }
-  }, [currentSession]);
+  }, [currentSession?.id]);
 
   useEffect(() => {
     if (messages.length > 0 && !isLoading) {
@@ -290,12 +290,8 @@ export const ChatDrawer = ({
         )?.label ?? "自由对话");
 
   const selectedModelLabel =
-    CANVAS_CHAT_SELECT_MODELS.find((item) => item.model === selectedModel)?.name ??
-    selectedModel;
-
-  const userMessageCount = messages.filter(
-    (message) => message.role === "user",
-  ).length;
+    CANVAS_CHAT_SELECT_MODELS.find((item) => item.model === selectedModel)
+      ?.name ?? selectedModel;
 
   return (
     <Drawer
@@ -480,7 +476,6 @@ export const ChatDrawer = ({
                     <span className="max-w-[180px] truncate rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-white/70">
                       {selectedModelLabel}
                     </span>
-
                   </div>
 
                   {isLoading ? (

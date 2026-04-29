@@ -1,10 +1,5 @@
 import { Check, ChevronDown, Search } from "lucide-react";
-import {
-  type ReactNode,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { cn } from "shared/utils/utils";
 import {
   Popover,
@@ -93,11 +88,11 @@ const MODEL_PROVIDER_META: Record<string, ModelProviderMeta> = {
     icon: "M",
     priority: 80,
   },
-  image: {
-    id: "image",
-    label: "Image",
-    icon: "IMG",
-    priority: 90,
+  other: {
+    id: "other",
+    label: "Other",
+    icon: "OT",
+    priority: 999,
   },
 };
 
@@ -105,20 +100,9 @@ const normalize = (value?: string) => value?.toLowerCase().trim() ?? "";
 
 const getProviderMeta = (provider: string): ModelProviderMeta => {
   const key = normalize(provider);
-  const knownMeta = MODEL_PROVIDER_META[key];
+  const knownMeta = MODEL_PROVIDER_META[key] ?? MODEL_PROVIDER_META.other;
 
-  if (knownMeta) {
-    return knownMeta;
-  }
-
-  const fallbackLabel = provider || "Unknown";
-
-  return {
-    id: provider,
-    label: fallbackLabel,
-    icon: fallbackLabel.slice(0, 1).toUpperCase(),
-    priority: 999,
-  };
+  return knownMeta;
 };
 
 const ProviderIcon = ({ icon }: { icon?: ReactNode }) => (
@@ -144,22 +128,26 @@ export const ModelSelector = ({
     const groupMap = new Map<string, ProviderGroup>();
 
     for (const item of models) {
-      const provider = item.platform || "unknown";
-      const meta = getProviderMeta(provider);
+      const providerKey = normalize(item.platform);
+      const meta = getProviderMeta(item.platform);
+      const groupId =
+        providerKey && MODEL_PROVIDER_META[providerKey]
+          ? providerKey
+          : MODEL_PROVIDER_META.other.id;
       const currentGroup =
-        groupMap.get(provider) ??
+        groupMap.get(groupId) ??
         ({
           ...meta,
-          id: provider,
+          id: groupId,
           models: [],
         } satisfies ProviderGroup);
 
       currentGroup.models.push({
         value: item.model,
         label: item.name,
-        provider,
+        provider: groupId,
       });
-      groupMap.set(provider, currentGroup);
+      groupMap.set(groupId, currentGroup);
     }
 
     return Array.from(groupMap.values()).sort((a, b) => {
@@ -179,7 +167,9 @@ export const ModelSelector = ({
 
   const selectedProvider = useMemo(
     () =>
-      providerGroups.find((provider) => provider.id === selectedModel?.provider),
+      providerGroups.find(
+        (provider) => provider.id === selectedModel?.provider,
+      ),
     [providerGroups, selectedModel?.provider],
   );
 
@@ -219,12 +209,7 @@ export const ModelSelector = ({
         ? (selectedProviderId ?? "")
         : (filteredProviders[0]?.id ?? ""),
     );
-  }, [
-    activeProviderId,
-    filteredProviders,
-    open,
-    selectedProvider?.id,
-  ]);
+  }, [activeProviderId, filteredProviders, open, selectedProvider?.id]);
 
   useEffect(() => {
     if (!open) {
@@ -284,11 +269,11 @@ export const ModelSelector = ({
         align="start"
         sideOffset={8}
         className={cn(
-          "z-[90] w-[min(560px,calc(100vw-32px))] gap-0 overflow-hidden rounded-2xl border border-white/10 bg-[#101116] p-0 text-white shadow-[0_24px_70px_rgba(0,0,0,0.5)] ring-0",
+          "nodrag nopan nowheel z-[90] max-h-[var(--radix-popover-content-available-height)] w-[min(620px,calc(100vw-32px))] gap-0 overflow-hidden rounded-2xl border border-white/10 bg-[#101116] p-0 text-white shadow-[0_24px_70px_rgba(0,0,0,0.5)] ring-0",
           className,
         )}
       >
-        <div className="grid h-[390px] grid-cols-[210px_minmax(0,1fr)]">
+        <div className="grid h-[min(560px,var(--radix-popover-content-available-height))] grid-cols-[230px_minmax(0,1fr)]">
           <div className="flex min-w-0 flex-col border-r border-white/8 bg-white/[0.025]">
             <div className="p-2.5">
               <label className="flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-black/35 px-3 text-white/85 focus-within:border-[#b43feb]/50 focus-within:ring-2 focus-within:ring-[#b43feb]/15">
@@ -302,7 +287,7 @@ export const ModelSelector = ({
               </label>
             </div>
 
-            <div className="model-selector-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+            <div className="model-selector-scroll nodrag nopan nowheel min-h-0 flex-1 overflow-y-auto px-2 pb-2 [scrollbar-gutter:stable]">
               {filteredProviders.length === 0 ? (
                 <div className="px-2 py-8 text-center text-xs text-white/40">
                   未找到供应商
@@ -319,7 +304,7 @@ export const ModelSelector = ({
                         key={provider.id}
                         type="button"
                         className={cn(
-                          "flex h-11 w-full items-center gap-2 rounded-xl px-2.5 text-left text-sm transition-colors",
+                          "flex h-10 w-full items-center gap-2 rounded-xl px-2.5 text-left text-sm transition-colors",
                           isActive
                             ? "bg-white/10 text-white"
                             : "text-white/70 hover:bg-white/[0.06] hover:text-white/90",
@@ -334,7 +319,10 @@ export const ModelSelector = ({
                           {provider.label}
                         </span>
                         {hasSelectedModel && (
-                          <Check size={15} className="shrink-0 text-[#d793ff]" />
+                          <Check
+                            size={15}
+                            className="shrink-0 text-[#d793ff]"
+                          />
                         )}
                       </button>
                     );
@@ -361,7 +349,7 @@ export const ModelSelector = ({
               </label>
             </div>
 
-            <div className="model-selector-scroll min-h-0 flex-1 overflow-y-auto p-2">
+            <div className="model-selector-scroll nodrag nopan nowheel min-h-0 flex-1 overflow-y-auto p-2 [scrollbar-gutter:stable]">
               {filteredModels.length === 0 ? (
                 <div className="px-3 py-12 text-center text-sm text-white/40">
                   未找到模型
@@ -390,7 +378,10 @@ export const ModelSelector = ({
                           {model.label}
                         </span>
                         {isSelected && (
-                          <Check size={16} className="shrink-0 text-[#d793ff]" />
+                          <Check
+                            size={16}
+                            className="shrink-0 text-[#d793ff]"
+                          />
                         )}
                       </button>
                     );

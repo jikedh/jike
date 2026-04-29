@@ -2,7 +2,7 @@
  * 聊天历史管理 Hook
  * 提供会话列表加载、创建、切换、重命名、删除等功能
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatSession, ChatSessionMeta } from "service/chatHistoryStorage";
 import {
   createSession,
@@ -55,6 +55,11 @@ export const useChatHistory = (
     null,
   );
   const [isLoading, setIsLoading] = useState(false);
+  const currentSessionRef = useRef<ChatSession | null>(null);
+
+  useEffect(() => {
+    currentSessionRef.current = currentSession;
+  }, [currentSession]);
 
   // 加载会话列表
   const loadSessionList = useCallback(async () => {
@@ -116,7 +121,9 @@ export const useChatHistory = (
       personaId?: ChatPersonaId,
       model?: string,
     ) => {
-      if (!currentSession) {
+      const activeSession = currentSessionRef.current;
+
+      if (!activeSession) {
         // 如果没有当前会话，先创建一个
         const session = await createSession(
           projectId,
@@ -130,7 +137,7 @@ export const useChatHistory = (
       }
 
       const success = await updateSession(
-        currentSession.id,
+        activeSession.id,
         messages,
         personaId,
         model,
@@ -157,7 +164,7 @@ export const useChatHistory = (
       }
       return success;
     },
-    [currentSession, projectId, loadSessionList],
+    [projectId, loadSessionList],
   );
 
   // 重命名当前会话
