@@ -12,6 +12,10 @@ import {
 } from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  CANVAS_CHAT_MODELS,
+  DEFAULT_CANVAS_CHAT_MODEL,
+} from "shared/constants/ai-models";
+import {
   CANVAS_CHAT_PERSONAS,
   NO_CHAT_PERSONA_ID,
 } from "shared/constants/chat-personas";
@@ -114,6 +118,14 @@ const SKILL_SUGGESTIONS: SkillSuggestion[] = [
 const ACTION_BUTTON_CLASSNAME =
   "flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 shadow-[0_6px_18px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-all hover:bg-white/10 hover:text-white";
 
+const resolveCanvasChatModel = (model?: string) => {
+  if (model && CANVAS_CHAT_MODELS.some((item) => item.model === model)) {
+    return model;
+  }
+
+  return DEFAULT_CANVAS_CHAT_MODEL;
+};
+
 export const ChatDrawer = ({
   open,
   onClose,
@@ -128,11 +140,14 @@ export const ChatDrawer = ({
     defaultWidth: 460,
     minWidth: 380,
   });
-  const { defaultPersonaId } = useChatSettingsStore();
+  const { defaultModel, defaultPersonaId } = useChatSettingsStore();
 
   const [inputValue, setInputValue] = useState("");
   const [selectedPersonaId, setSelectedPersonaId] =
     useState<ChatPersonaId>(defaultPersonaId);
+  const [selectedModel, setSelectedModel] = useState(
+    resolveCanvasChatModel(defaultModel),
+  );
   const [showHistory, setShowHistory] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
@@ -152,16 +167,29 @@ export const ChatDrawer = ({
   }, [defaultPersonaId]);
 
   useEffect(() => {
+    if (!currentSession) {
+      setSelectedModel(resolveCanvasChatModel(defaultModel));
+    }
+  }, [currentSession, defaultModel]);
+
+  useEffect(() => {
     if (currentSession) {
       setSelectedPersonaId(currentSession.personaId);
+      setSelectedModel(resolveCanvasChatModel(currentSession.model));
     }
   }, [currentSession]);
 
   useEffect(() => {
     if (messages.length > 0 && !isLoading) {
-      saveCurrentSession(messages, selectedPersonaId);
+      saveCurrentSession(messages, selectedPersonaId, selectedModel);
     }
-  }, [messages, isLoading, saveCurrentSession, selectedPersonaId]);
+  }, [
+    messages,
+    isLoading,
+    saveCurrentSession,
+    selectedPersonaId,
+    selectedModel,
+  ]);
 
   useEffect(() => {
     const listElement = messageListRef.current;
@@ -185,9 +213,13 @@ export const ChatDrawer = ({
   const handleSend = useCallback(() => {
     const content = inputValue.trim();
     if (!content || isLoading) return;
-    sendMessage({ content, personaId: selectedPersonaId });
+    sendMessage({
+      content,
+      personaId: selectedPersonaId,
+      model: selectedModel,
+    });
     setInputValue("");
-  }, [inputValue, isLoading, sendMessage, selectedPersonaId]);
+  }, [inputValue, isLoading, sendMessage, selectedPersonaId, selectedModel]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -209,6 +241,7 @@ export const ChatDrawer = ({
       const session = await switchSession(sessionId);
       if (session) {
         setMessages(session.messages);
+        setSelectedModel(resolveCanvasChatModel(session.model));
         setShowHistory(false);
       }
     },
@@ -238,10 +271,10 @@ export const ChatDrawer = ({
   );
 
   const handleNewChat = useCallback(async () => {
-    await createNewSession(selectedPersonaId);
+    await createNewSession(selectedPersonaId, selectedModel);
     clearLocalMessages();
     setShowHistory(false);
-  }, [createNewSession, selectedPersonaId, clearLocalMessages]);
+  }, [createNewSession, selectedPersonaId, selectedModel, clearLocalMessages]);
 
   const handleSelectSkill = useCallback((prompt: string) => {
     setInputValue(prompt);
@@ -254,6 +287,10 @@ export const ChatDrawer = ({
       : (CANVAS_CHAT_PERSONAS.find(
           (persona) => persona.id === selectedPersonaId,
         )?.label ?? "自由对话");
+
+  const selectedModelLabel =
+    CANVAS_CHAT_MODELS.find((item) => item.model === selectedModel)?.name ??
+    selectedModel;
 
   const userMessageCount = messages.filter(
     (message) => message.role === "user",
@@ -292,38 +329,7 @@ export const ChatDrawer = ({
                   AI 对话
                 </DrawerTitle>
 
-                <div className="min-w-0 flex-1">
-                  <Select
-                    value={selectedPersonaId}
-                    onValueChange={(value) =>
-                      setSelectedPersonaId(value as ChatPersonaId)
-                    }
-                  >
-                    <SelectTrigger className="h-9 w-full rounded-[14px] border border-white/10 bg-white/[0.04] px-3 text-sm text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.14)]">
-                      <SelectValue placeholder="选择对话模式" />
-                    </SelectTrigger>
-                    <SelectContent
-                      align="start"
-                      className="border-white/10 bg-[#14161d] text-white shadow-[0_18px_40px_rgba(0,0,0,0.35)]"
-                    >
-                      <SelectItem
-                        value={NO_CHAT_PERSONA_ID}
-                        className="text-white/80 focus:bg-white/10 focus:text-white"
-                      >
-                        自由对话
-                      </SelectItem>
-                      {CANVAS_CHAT_PERSONAS.map((persona) => (
-                        <SelectItem
-                          key={persona.id}
-                          value={persona.id}
-                          className="text-white/80 focus:bg-white/10 focus:text-white"
-                        >
-                          {persona.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <div className="min-w-0 flex-1" />
 
                 <div className="flex shrink-0 items-center gap-1.5">
                   <button
@@ -363,6 +369,59 @@ export const ChatDrawer = ({
                     <IconX size={18} />
                   </button>
                 </div>
+              </div>
+
+              <div className="mt-2 grid grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)] gap-2">
+                <Select
+                  value={selectedPersonaId}
+                  onValueChange={(value) =>
+                    setSelectedPersonaId(value as ChatPersonaId)
+                  }
+                >
+                  <SelectTrigger className="h-9 w-full rounded-[14px] border border-white/10 bg-white/[0.04] px-3 text-sm text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.14)]">
+                    <SelectValue placeholder="选择对话模式" />
+                  </SelectTrigger>
+                  <SelectContent
+                    align="start"
+                    className="border-white/10 bg-[#14161d] text-white shadow-[0_18px_40px_rgba(0,0,0,0.35)]"
+                  >
+                    <SelectItem
+                      value={NO_CHAT_PERSONA_ID}
+                      className="text-white/80 focus:bg-white/10 focus:text-white"
+                    >
+                      自由对话
+                    </SelectItem>
+                    {CANVAS_CHAT_PERSONAS.map((persona) => (
+                      <SelectItem
+                        key={persona.id}
+                        value={persona.id}
+                        className="text-white/80 focus:bg-white/10 focus:text-white"
+                      >
+                        {persona.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={selectedModel} onValueChange={setSelectedModel}>
+                  <SelectTrigger className="h-9 w-full rounded-[14px] border border-white/10 bg-white/[0.04] px-3 text-sm text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.14)]">
+                    <SelectValue placeholder="选择模型" />
+                  </SelectTrigger>
+                  <SelectContent
+                    align="start"
+                    className="max-h-72 border-white/10 bg-[#14161d] text-white shadow-[0_18px_40px_rgba(0,0,0,0.35)]"
+                  >
+                    {CANVAS_CHAT_MODELS.map((model) => (
+                      <SelectItem
+                        key={model.model}
+                        value={model.model}
+                        className="text-white/80 focus:bg-white/10 focus:text-white"
+                      >
+                        {model.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </header>
 
@@ -424,6 +483,9 @@ export const ChatDrawer = ({
                   <div className="flex flex-wrap items-center gap-2 text-xs text-white/40">
                     <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-white/70">
                       {selectedPersonaLabel}
+                    </span>
+                    <span className="max-w-[180px] truncate rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-white/70">
+                      {selectedModelLabel}
                     </span>
                     <span>
                       {userMessageCount > 0
