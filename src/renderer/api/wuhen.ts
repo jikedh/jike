@@ -43,8 +43,9 @@ export type WuhenVideoRemovalTaskRecord = {
 };
 
 const WUHEI_SERVER_BASE_URL =
-  ((import.meta as any).env?.VITE_WUHEI_SERVER_BASE_URL as string | undefined) ||
-  "http://127.0.0.1:8787";
+  ((import.meta as any).env?.VITE_WUHEI_SERVER_BASE_URL as
+    | string
+    | undefined) || "http://127.0.0.1:8787";
 
 export async function createWuhenVideoRemovalTask(
   payload: CreateWuhenVideoRemovalTaskPayload,
@@ -77,4 +78,3 @@ export async function getWuhenVideoRemovalTaskStatus(taskId: string) {
     data: WuhenVideoRemovalTaskRecord;
   };
 }
-

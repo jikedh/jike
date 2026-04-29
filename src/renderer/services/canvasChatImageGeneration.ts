@@ -283,7 +283,7 @@ const preloadImagePreviews = async (
   });
 };
 
-const withTimeout = async <T,>(
+const withTimeout = async <T>(
   promise: Promise<T>,
   timeoutMs: number,
   message: string,
@@ -360,7 +360,9 @@ const mirrorImageToOss = async (
 };
 
 const mirrorImagesToOss = async (images: NoteGenerationImage[]) => {
-  return Promise.all(images.map((image, index) => mirrorImageToOss(image, index)));
+  return Promise.all(
+    images.map((image, index) => mirrorImageToOss(image, index)),
+  );
 };
 
 const extractImages = (response: any): NoteGenerationImage[] => {
@@ -379,7 +381,7 @@ const extractImages = (response: any): NoteGenerationImage[] => {
       const url = normalizeImageUrl(
         typeof item === "string"
           ? item
-          : item?.url ?? item?.image_url ?? item?.imageUrl ?? item?.b64_json,
+          : (item?.url ?? item?.image_url ?? item?.imageUrl ?? item?.b64_json),
       );
       if (!url) {
         return null;
@@ -596,7 +598,8 @@ const generateGeminiPro2Images = async (
     imageParts.map(async (part: any, index: number) => {
       const inlineData = part.inlineData ?? part.inline_data;
       const base64Data = inlineData.data;
-      const mimeType = inlineData.mimeType ?? inlineData.mime_type ?? "image/png";
+      const mimeType =
+        inlineData.mimeType ?? inlineData.mime_type ?? "image/png";
 
       try {
         const ossResult = await uploadBase64ToOSS(
@@ -693,7 +696,10 @@ export const generateCanvasChatImages = async ({
       throw error;
     }
 
-    console.warn("[canvas-chat-image] image preview preload did not complete", error);
+    console.warn(
+      "[canvas-chat-image] image preview preload did not complete",
+      error,
+    );
   }
 
   /* removed legacy fire-and-forget preload

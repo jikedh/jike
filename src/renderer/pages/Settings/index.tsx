@@ -123,7 +123,9 @@ export default function SettingsPage() {
   const logs = useMemo(() => state?.recentLogs ?? [], [state]);
   const meta = statusMeta[state?.status || "stopped"];
   const embeddedUrl =
-    embeddedPage === "manage" ? state?.manageUrl ?? "" : state?.testUrl ?? "";
+    embeddedPage === "manage"
+      ? (state?.manageUrl ?? "")
+      : (state?.testUrl ?? "");
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white px-6 py-6">
@@ -135,7 +137,9 @@ export default function SettingsPage() {
               Electron 负责托管本地 Flow2API 服务，并在设置页内嵌现有管理页面。
             </p>
           </div>
-          <div className={`rounded-full px-4 py-2 text-sm font-medium ${meta.className}`}>
+          <div
+            className={`rounded-full px-4 py-2 text-sm font-medium ${meta.className}`}
+          >
             {meta.label}
           </div>
         </div>
@@ -236,7 +240,9 @@ export default function SettingsPage() {
                   <div className="flex gap-2">
                     <input
                       value={outputDirInput}
-                      onChange={(event) => setOutputDirInput(event.target.value)}
+                      onChange={(event) =>
+                        setOutputDirInput(event.target.value)
+                      }
                       placeholder="选择后，测试生成结果会自动复制到该目录"
                       className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
                     />
@@ -275,7 +281,8 @@ export default function SettingsPage() {
               <div>
                 <h2 className="text-lg font-medium">内嵌管理页</h2>
                 <p className="mt-1 text-sm text-zinc-400">
-                  当前直接复用 Flow2API 现有管理/测试页面，后续再决定是否替换为原生界面。
+                  当前直接复用 Flow2API
+                  现有管理/测试页面，后续再决定是否替换为原生界面。
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -284,7 +291,9 @@ export default function SettingsPage() {
                     type="button"
                     onClick={() => setEmbeddedPage("manage")}
                     className={`rounded-lg px-3 py-2 ${
-                      embeddedPage === "manage" ? "bg-white text-black" : "text-zinc-300"
+                      embeddedPage === "manage"
+                        ? "bg-white text-black"
+                        : "text-zinc-300"
                     }`}
                   >
                     管理页
@@ -293,7 +302,9 @@ export default function SettingsPage() {
                     type="button"
                     onClick={() => setEmbeddedPage("test")}
                     className={`rounded-lg px-3 py-2 ${
-                      embeddedPage === "test" ? "bg-white text-black" : "text-zinc-300"
+                      embeddedPage === "test"
+                        ? "bg-white text-black"
+                        : "text-zinc-300"
                     }`}
                   >
                     测试页
@@ -314,7 +325,11 @@ export default function SettingsPage() {
 
             {state?.status === "running" ? (
               <iframe
-                title={embeddedPage === "manage" ? "Flow2API 管理页面" : "Flow2API 测试页面"}
+                title={
+                  embeddedPage === "manage"
+                    ? "Flow2API 管理页面"
+                    : "Flow2API 测试页面"
+                }
                 src={embeddedUrl}
                 className="h-[calc(100vh-180px)] min-h-[760px] w-full rounded-xl bg-white"
               />

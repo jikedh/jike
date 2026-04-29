@@ -202,10 +202,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         hasVideoInput: (allVideoUrls?.length ?? 0) > 0,
         hasAudio: Boolean(
           currentVideoData?.metadata?.generate_audio ??
-          currentVideoData?.metadata?.audio ??
-          (currentVideoData as any)?.generate_audio ??
-          (currentVideoData as any)?.audio ??
-          true
+            currentVideoData?.metadata?.audio ??
+            (currentVideoData as any)?.generate_audio ??
+            (currentVideoData as any)?.audio ??
+            true,
         ),
         fallback: Math.max(fallbackAIGenPrice, 1),
       }),
@@ -475,9 +475,7 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       const hasReferenceMaterial =
         imageUrls.length > 0 || allVideoUrls.length > 0;
       if (!hasReferenceMaterial) {
-        warning(
-          "Wan 2.7 R2V 模型需要连接图片节点或视频节点作为参考素材",
-        );
+        warning("Wan 2.7 R2V 模型需要连接图片节点或视频节点作为参考素材");
         return;
       }
     }

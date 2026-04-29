@@ -12,7 +12,13 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { IconGripVertical, IconMusic, IconPhoto, IconVideo, IconX } from "@tabler/icons-react";
+import {
+  IconGripVertical,
+  IconMusic,
+  IconPhoto,
+  IconVideo,
+  IconX,
+} from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn, getVideoThumbnail } from "shared/utils/utils";
 import { ThumbnailPreviewPopover } from "@/components/ThumbnailPreviewPopover";

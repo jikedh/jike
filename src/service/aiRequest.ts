@@ -45,7 +45,9 @@ function normalizeBaseUrl(url: string | undefined): string {
   return (url || "").replace(/\/+$/, "");
 }
 
-function toHeaderRecord(headers: AxiosRequestConfig["headers"]): Record<string, string> {
+function toHeaderRecord(
+  headers: AxiosRequestConfig["headers"],
+): Record<string, string> {
   if (!headers) {
     return {};
   }
@@ -55,7 +57,11 @@ function toHeaderRecord(headers: AxiosRequestConfig["headers"]): Record<string, 
 
 async function applyFlow2ApiAuth(reqConfig: AxiosRequestConfig): Promise<void> {
   const flow2ApiState = await getFlow2ApiState();
-  if (flow2ApiState?.status !== "running" || !flow2ApiState.baseUrl || !flow2ApiState.apiKey) {
+  if (
+    flow2ApiState?.status !== "running" ||
+    !flow2ApiState.baseUrl ||
+    !flow2ApiState.apiKey
+  ) {
     return;
   }
 
@@ -67,10 +73,12 @@ async function applyFlow2ApiAuth(reqConfig: AxiosRequestConfig): Promise<void> {
 
   const headerRecord = toHeaderRecord(reqConfig.headers);
   reqConfig.headers = headerRecord;
-  const hasAuthorization =
-    Object.keys(headerRecord).some((key) => key.toLowerCase() === "authorization");
-  const hasGoogApiKey =
-    Object.keys(headerRecord).some((key) => key.toLowerCase() === "x-goog-api-key");
+  const hasAuthorization = Object.keys(headerRecord).some(
+    (key) => key.toLowerCase() === "authorization",
+  );
+  const hasGoogApiKey = Object.keys(headerRecord).some(
+    (key) => key.toLowerCase() === "x-goog-api-key",
+  );
 
   if (!hasAuthorization) {
     headerRecord.Authorization = `Bearer ${flow2ApiState.apiKey}`;

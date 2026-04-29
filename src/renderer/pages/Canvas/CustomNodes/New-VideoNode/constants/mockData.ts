@@ -5,10 +5,12 @@ export interface ModelOption {
   label: string;
 }
 
-export const VIDEO_MODEL_OPTIONS: ModelOption[] = MOCK_MAIN_MODELS.map((model) => ({
-  value: model.id,
-  label: model.label,
-}));
+export const VIDEO_MODEL_OPTIONS: ModelOption[] = MOCK_MAIN_MODELS.map(
+  (model) => ({
+    value: model.id,
+    label: model.label,
+  }),
+);
 
 export const VIDU_REFERENCE_MAX_IMAGES = 7;
 

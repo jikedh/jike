@@ -20,7 +20,10 @@ export type VideoModelCapability = {
 /**
  * 模型能力（豆包 Seedance 2.0、万象、PixVerse）
  */
-const MODEL_CAPABILITY_OVERRIDES: Record<string, Partial<VideoModelCapability>> = {
+const MODEL_CAPABILITY_OVERRIDES: Record<
+  string,
+  Partial<VideoModelCapability>
+> = {
   "doubao-seedance-2.0": {
     supportedModes: [
       VideoInputMode.TextToVideo,
@@ -39,9 +42,7 @@ const MODEL_CAPABILITY_OVERRIDES: Record<string, Partial<VideoModelCapability>> 
     callable: true,
   },
   "pixverse-i2v": {
-    supportedModes: [
-      VideoInputMode.ImageToVideo,
-    ],
+    supportedModes: [VideoInputMode.ImageToVideo],
     defaultMode: VideoInputMode.ImageToVideo,
     callable: true,
   },
@@ -50,8 +51,12 @@ const MODEL_CAPABILITY_OVERRIDES: Record<string, Partial<VideoModelCapability>> 
 /**
  * 获取模型能力
  */
-export const getVideoModelCapability = (model: string): VideoModelCapability => {
-  const override = MODEL_CAPABILITY_OVERRIDES[model] ?? MODEL_CAPABILITY_OVERRIDES["doubao-seedance-2.0"];
+export const getVideoModelCapability = (
+  model: string,
+): VideoModelCapability => {
+  const override =
+    MODEL_CAPABILITY_OVERRIDES[model] ??
+    MODEL_CAPABILITY_OVERRIDES["doubao-seedance-2.0"];
   return {
     callable: override.callable ?? true,
     supportedModes: override.supportedModes ?? [
@@ -106,13 +111,19 @@ export const VIDEO_MODE_BUTTONS = [
 /**
  * 模型族标识（豆包 Seedance 2.0、万象、PixVerse）
  */
-export type VideoModelFamily = "doubao-seedance-2.0" | "wan2.7-r2v" | "pixverse-i2v";
+export type VideoModelFamily =
+  | "doubao-seedance-2.0"
+  | "wan2.7-r2v"
+  | "pixverse-i2v";
 
 /**
  * 模型族选项
  */
 export const VIDEO_MODEL_FAMILY_OPTIONS = [
-  { value: "doubao-seedance-2.0-fast" as const, label: "豆包 Seedance 2.0 Fast" },
+  {
+    value: "doubao-seedance-2.0-fast" as const,
+    label: "豆包 Seedance 2.0 Fast",
+  },
   { value: "doubao-seedance-2.0-pro" as const, label: "豆包 Seedance 2.0 Pro" },
   { value: "wan2.7-r2v" as const, label: "Wan2.7" },
   { value: "pixverse-i2v" as const, label: "PixVerse" },

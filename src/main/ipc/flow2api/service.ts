@@ -133,12 +133,18 @@ export class Flow2ApiService {
     };
 
     if (!existsSync(this.settingsPath)) {
-      writeFileSync(this.settingsPath, JSON.stringify(fallback, null, 2), "utf-8");
+      writeFileSync(
+        this.settingsPath,
+        JSON.stringify(fallback, null, 2),
+        "utf-8",
+      );
       return fallback;
     }
 
     try {
-      const raw = JSON.parse(readFileSync(this.settingsPath, "utf-8")) as Partial<PersistedConfig>;
+      const raw = JSON.parse(
+        readFileSync(this.settingsPath, "utf-8"),
+      ) as Partial<PersistedConfig>;
       return {
         host: normalizeHost(raw.host),
         port: clampPort(raw.port),
@@ -223,8 +229,15 @@ export class Flow2ApiService {
     };
   }
 
-  private setState(status: Flow2ApiStatus, overrides: Partial<Flow2ApiState> = {}): Flow2ApiState {
-    this.state = this.buildState(status, overrides.settings ?? this.state.settings, overrides);
+  private setState(
+    status: Flow2ApiStatus,
+    overrides: Partial<Flow2ApiState> = {},
+  ): Flow2ApiState {
+    this.state = this.buildState(
+      status,
+      overrides.settings ?? this.state.settings,
+      overrides,
+    );
     return this.state;
   }
 
@@ -281,7 +294,11 @@ export class Flow2ApiService {
     return join(process.cwd(), "..", "flow2api-main", "flow2api-main");
   }
 
-  private resolveEntrypoint(): { command: string; args: string[]; cwd: string } {
+  private resolveEntrypoint(): {
+    command: string;
+    args: string[];
+    cwd: string;
+  } {
     const flowRoot = this.resolveFlowRoot();
     if (app.isPackaged) {
       return {
@@ -330,12 +347,16 @@ export class Flow2ApiService {
     return this.setState(this.state.status);
   }
 
-  async updateSettings(patch: Partial<Flow2ApiSettings>): Promise<Flow2ApiState> {
+  async updateSettings(
+    patch: Partial<Flow2ApiSettings>,
+  ): Promise<Flow2ApiState> {
     const nextSettings: Flow2ApiSettings = {
       host: normalizeHost(patch.host ?? this.state.settings.host),
       port: clampPort(patch.port ?? this.state.settings.port),
       outputDir:
-        patch.outputDir === undefined ? this.state.settings.outputDir : patch.outputDir,
+        patch.outputDir === undefined
+          ? this.state.settings.outputDir
+          : patch.outputDir,
     };
     this.writeSettings(nextSettings);
     return this.setState(this.state.status, { settings: nextSettings });
@@ -395,7 +416,8 @@ export class Flow2ApiService {
       this.setState(code === 0 ? "stopped" : "error", {
         lastExitCode: code ?? null,
         pid: null,
-        lastError: code === 0 ? null : `Flow2API exited with code ${code ?? "unknown"}`,
+        lastError:
+          code === 0 ? null : `Flow2API exited with code ${code ?? "unknown"}`,
       });
     });
 
@@ -418,7 +440,9 @@ export class Flow2ApiService {
     }
 
     const target = this.child;
-    await this.appendLog(`\n[${new Date().toISOString()}] stopping flow2api...\n`);
+    await this.appendLog(
+      `\n[${new Date().toISOString()}] stopping flow2api...\n`,
+    );
     target.kill();
     this.child = null;
     return this.setState("stopped", { pid: null });

@@ -189,7 +189,10 @@ export const CollapsibleImageGallery = memo(
     const cardWidth = frameSize?.width ?? 180;
     const cardHeight = frameSize?.height ?? 220;
     const expandedGap = useMemo(() => {
-      return Math.max(12, Math.min(22, Math.round(Math.min(cardWidth, cardHeight) * 0.07)));
+      return Math.max(
+        12,
+        Math.min(22, Math.round(Math.min(cardWidth, cardHeight) * 0.07)),
+      );
     }, [cardHeight, cardWidth]);
     const expandedLayouts = useMemo(() => {
       return getExpandedCardLayouts(
@@ -392,7 +395,8 @@ export const CollapsibleImageGallery = memo(
             const isSecondary = index > 0;
             const isFocused = isExpanded && hoveredIndex === index;
             const sequence = getMediaSequence(item, index);
-            const shouldUseCardChrome = totalCount > 1 && (!isExpanded || isSecondary);
+            const shouldUseCardChrome =
+              totalCount > 1 && (!isExpanded || isSecondary);
             const cardKey =
               item.remoteUrl || item.localPath || item.url || `image-${index}`;
             const expandedLayout = expandedLayouts[index];
@@ -421,7 +425,9 @@ export const CollapsibleImageGallery = memo(
                   isExpanded &&
                     isSecondary &&
                     "hover:border-white/14 hover:shadow-[0_18px_36px_rgba(0,0,0,0.34)]",
-                  isSecondary && isFocused && "shadow-[0_24px_48px_rgba(0,0,0,0.38)]",
+                  isSecondary &&
+                    isFocused &&
+                    "shadow-[0_24px_48px_rgba(0,0,0,0.38)]",
                 )}
                 onMouseEnter={() => {
                   if (isExpanded) {
@@ -434,27 +440,29 @@ export const CollapsibleImageGallery = memo(
                   }
                 }}
                 style={{
-                  width: isExpanded && isSecondary
-                    ? expandedLayout?.width ?? cardWidth
-                    : cardWidth,
-                  height: isExpanded && isSecondary
-                    ? expandedLayout?.height ?? cardHeight
-                    : cardHeight,
+                  width:
+                    isExpanded && isSecondary
+                      ? (expandedLayout?.width ?? cardWidth)
+                      : cardWidth,
+                  height:
+                    isExpanded && isSecondary
+                      ? (expandedLayout?.height ?? cardHeight)
+                      : cardHeight,
                   ...(isExpanded && isPrimary
                     ? {
-                      transform: "translate(0px, 0px) scale(1)",
-                      filter: "brightness(1)",
-                      opacity: 1,
-                      zIndex: totalCount + 6,
-                    }
+                        transform: "translate(0px, 0px) scale(1)",
+                        filter: "brightness(1)",
+                        opacity: 1,
+                        zIndex: totalCount + 6,
+                      }
                     : stackStyle),
                   transitionDelay,
                   zIndex:
                     isExpanded && isPrimary
                       ? totalCount + 6
                       : isSecondary && isFocused
-                      ? totalCount + 12
-                      : stackStyle.zIndex,
+                        ? totalCount + 12
+                        : stackStyle.zIndex,
                 }}
               >
                 <div

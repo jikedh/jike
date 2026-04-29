@@ -10,10 +10,7 @@ import {
 } from "@/components/ui/select";
 
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
-import {
-  type MentionItem,
-  VIDEO_MODEL_OPTIONS,
-} from "../constants/mockData";
+import { type MentionItem, VIDEO_MODEL_OPTIONS } from "../constants/mockData";
 import type { VideoModeKey } from "../constants/videoModelCapabilities";
 import type { VideoParamState } from "../constants/videoParamConfigs";
 import { VideoParamsPopover } from "./VideoParamsPopover";

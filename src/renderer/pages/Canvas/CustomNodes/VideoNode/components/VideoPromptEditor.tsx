@@ -415,7 +415,9 @@ export const VideoPromptEditor = forwardRef<
             return true;
           });
 
-          rangesToDelete.push(...(idMatches.length > 0 ? idMatches : fallbackMatches));
+          rangesToDelete.push(
+            ...(idMatches.length > 0 ? idMatches : fallbackMatches),
+          );
         });
 
         const uniqueRanges = Array.from(

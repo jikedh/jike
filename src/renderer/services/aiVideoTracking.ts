@@ -101,7 +101,8 @@ class AIVideoTrackingService {
       }
       return {
         generatedVideoUrl:
-          response.data?.generated_video_url || response.data?.generatedVideoUrl,
+          response.data?.generated_video_url ||
+          response.data?.generatedVideoUrl,
       };
     } catch (error) {
       console.error("[AIVideoTracking] 状态更新失败:", error);
@@ -113,7 +114,9 @@ class AIVideoTrackingService {
    */
   private getCurrentUserId(): string {
     const userInfo = getJikeingUserInfo();
-    return String(userInfo?.userId || userInfo?.id || getJikeingUserId() || "UNKNOWN");
+    return String(
+      userInfo?.userId || userInfo?.id || getJikeingUserId() || "UNKNOWN",
+    );
   }
 
   /**

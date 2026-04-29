@@ -1,7 +1,4 @@
-import {
-  IconHelpCircle,
-  IconMap2,
-} from "@tabler/icons-react";
+import { IconHelpCircle, IconMap2 } from "@tabler/icons-react";
 import { type ReactFlowInstance, useReactFlow, useStore } from "@xyflow/react";
 import { Grid3X3, Maximize2 } from "lucide-react";
 import { type ChangeEvent, useEffect, useState } from "react";

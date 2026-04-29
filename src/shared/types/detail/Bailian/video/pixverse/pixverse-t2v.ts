@@ -9,7 +9,10 @@
  */
 export interface PixverseT2vRequest {
   /** 模型名称 */
-  model: "pixverse/pixverse-c1-t2v" | "pixverse/pixverse-v6-t2v" | "pixverse/pixverse-v5.6-t2v";
+  model:
+    | "pixverse/pixverse-c1-t2v"
+    | "pixverse/pixverse-v6-t2v"
+    | "pixverse/pixverse-v5.6-t2v";
   /** 输入的基本信息 */
   input: {
     /**
@@ -53,7 +56,13 @@ export interface PixverseT2vQueryResponse {
   request_id: string;
   output: {
     task_id: string;
-    task_status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELED" | "UNKNOWN";
+    task_status:
+      | "PENDING"
+      | "RUNNING"
+      | "SUCCEEDED"
+      | "FAILED"
+      | "CANCELED"
+      | "UNKNOWN";
     submit_time: string;
     scheduled_time?: string;
     end_time?: string;

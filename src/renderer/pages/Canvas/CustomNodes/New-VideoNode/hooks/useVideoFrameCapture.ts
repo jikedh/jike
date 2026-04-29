@@ -36,21 +36,25 @@ export const useVideoFrameCapture = () => {
 
       const sourceVideoNode = sourceVideoNodeId
         ? useCanvasFlowStore
-          .getState()
-          .nodes.find((node) => node.id === sourceVideoNodeId)
+            .getState()
+            .nodes.find((node) => node.id === sourceVideoNodeId)
         : null;
       const outputIndex = sourceVideoNodeId
         ? useCanvasFlowStore
-          .getState()
-          .edges.filter((edge) => edge.source === sourceVideoNodeId).length
+            .getState()
+            .edges.filter((edge) => edge.source === sourceVideoNodeId).length
         : 0;
       const newNodeId = addNode(
         "image",
         sourceVideoNode
           ? {
-            x: sourceVideoNode.position.x - 390,
-            y: sourceVideoNode.position.y + (sourceVideoNode.height ?? 250) + 48 + outputIndex * 298,
-          }
+              x: sourceVideoNode.position.x - 390,
+              y:
+                sourceVideoNode.position.y +
+                (sourceVideoNode.height ?? 250) +
+                48 +
+                outputIndex * 298,
+            }
           : centerPosition,
       );
       // 兼容新旧视频节点类型读取 aspect_ratio
@@ -60,9 +64,8 @@ export const useVideoFrameCapture = () => {
           return (sourceVideoNode.data as NewVideoGenerationNode).aspect_ratio;
         }
         if (sourceVideoNode.type === "videoNode") {
-          return (
-            (sourceVideoNode.data as { aspect_ratio?: string }).aspect_ratio
-          );
+          return (sourceVideoNode.data as { aspect_ratio?: string })
+            .aspect_ratio;
         }
         return undefined;
       })();
@@ -131,8 +134,7 @@ export const useVideoFrameCapture = () => {
 
         toast.success("首帧提取成功，已创建图片节点");
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "提取首帧失败";
+        const message = error instanceof Error ? error.message : "提取首帧失败";
         toast.error(message);
         console.error("[VideoFrameCapture] 提取首帧失败:", error);
       } finally {
@@ -189,8 +191,7 @@ export const useVideoFrameCapture = () => {
 
         toast.success("尾帧提取成功，已创建图片节点");
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "提取尾帧失败";
+        const message = error instanceof Error ? error.message : "提取尾帧失败";
         toast.error(message);
         console.error("[VideoFrameCapture] 提取尾帧失败:", error);
       } finally {

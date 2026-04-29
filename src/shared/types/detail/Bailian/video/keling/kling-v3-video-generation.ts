@@ -84,12 +84,12 @@ export interface KlingV3VideoGenerationQueryResponse {
   output: {
     task_id: string;
     task_status:
-    | "PENDING"
-    | "RUNNING"
-    | "SUCCEEDED"
-    | "FAILED"
-    | "CANCELED"
-    | "UNKNOWN";
+      | "PENDING"
+      | "RUNNING"
+      | "SUCCEEDED"
+      | "FAILED"
+      | "CANCELED"
+      | "UNKNOWN";
     submit_time: string;
     scheduled_time?: string;
     end_time?: string;

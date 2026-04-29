@@ -57,8 +57,8 @@ const NewVideoNode = ({
       isGalleryExpanded
         ? "invisible opacity-0"
         : selected
-        ? "visible opacity-100"
-        : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100",
+          ? "visible opacity-100"
+          : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100",
     [isGalleryExpanded, selected],
   );
 
@@ -171,18 +171,18 @@ const NewVideoNode = ({
       onSeparateToNodes={handleSeparateToNodes}
       hasMultipleResults={hasMultipleResults}
       separateToNodesLabel="独立为视频"
+    >
+      <div
+        className="group/node relative"
+        style={{
+          width: `${nodeSize.width}px`,
+          height: `${nodeSize.height}px`,
+        }}
       >
-        <div
-          className="group/node relative"
-          style={{
-            width: `${nodeSize.width}px`,
-            height: `${nodeSize.height}px`,
-          }}
-        >
-          {/* 顶部标签用于区分新版视频节点和旧版视频节点，保持常驻显示，避免用户在画布上混淆。 */}
-          <div className="pointer-events-none absolute -top-6 left-2 z-40 rounded-md border border-[#B43FEB]/35 bg-[#17131d]/95 px-2 py-0.5 text-[11px] font-medium text-[#D9A7FF] shadow-[0_4px_14px_rgba(0,0,0,0.24)]">
-            新版视频
-          </div>
+        {/* 顶部标签用于区分新版视频节点和旧版视频节点，保持常驻显示，避免用户在画布上混淆。 */}
+        <div className="pointer-events-none absolute -top-6 left-2 z-40 rounded-md border border-[#B43FEB]/35 bg-[#17131d]/95 px-2 py-0.5 text-[11px] font-medium text-[#D9A7FF] shadow-[0_4px_14px_rgba(0,0,0,0.24)]">
+          新版视频
+        </div>
 
         {shouldShowToolbar && (
           <div className="selection-box-deferred-ui nodrag nopan nowheel absolute -top-13 left-1/2 z-50 -translate-x-1/2">
@@ -201,13 +201,12 @@ const NewVideoNode = ({
         <div
           className={cn(
             "group/card relative flex h-full w-full flex-col rounded-xl border",
-            hasMultipleResults &&
-              "bg-linear-to-br from-[#141418] to-[#0d0d10]",
+            hasMultipleResults && "bg-linear-to-br from-[#141418] to-[#0d0d10]",
             selected
               ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
               : isSourceHighlighted
                 ? "border-[#B43FEB]/65 shadow-[0_0_18px_rgba(180,63,235,0.28),0_0_36px_rgba(180,63,235,0.12)] ring-1 ring-[#B43FEB]/20"
-              : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
+                : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
           )}
         >
           {selected && !isDragging && (

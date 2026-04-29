@@ -90,12 +90,21 @@ export default function VideoPage() {
 
       try {
         const statusResponse: any = await getVideoRemovalStatus(id);
-        console.log(`[${new Date().toLocaleTimeString()}] 任务状态:`, statusResponse);
+        console.log(
+          `[${new Date().toLocaleTimeString()}] 任务状态:`,
+          statusResponse,
+        );
 
-        const taskStatus = statusResponse?.data?.task_status || statusResponse?.task_status;
-        const progress = statusResponse?.data?.progress || statusResponse?.progress;
+        const taskStatus =
+          statusResponse?.data?.task_status || statusResponse?.task_status;
+        const progress =
+          statusResponse?.data?.progress || statusResponse?.progress;
 
-        if (taskStatus === "SUCCEEDED" || taskStatus === "COMPLETED" || progress === 100) {
+        if (
+          taskStatus === "SUCCEEDED" ||
+          taskStatus === "COMPLETED" ||
+          progress === 100
+        ) {
           console.log("任务完成，最终状态:", taskStatus, "进度:", progress);
           console.log("公开访问视频URL:", publicUrl);
           setResultVideoUrl(publicUrl);
@@ -125,7 +134,13 @@ export default function VideoPage() {
     const file = e.target.files?.[0];
     if (file && file.type === "video/mp4") {
       setSelectedFile(file);
-      console.log("已选择文件:", file.name, "大小:", (file.size / 1024 / 1024).toFixed(2), "MB");
+      console.log(
+        "已选择文件:",
+        file.name,
+        "大小:",
+        (file.size / 1024 / 1024).toFixed(2),
+        "MB",
+      );
     } else {
       console.warn("请选择 MP4 格式的视频文件");
     }
@@ -232,7 +247,9 @@ export default function VideoPage() {
         <h2 className="text-xl font-bold mb-4">本地视频上传 Demo</h2>
 
         <div>
-          <label className="block text-sm text-gray-400 mb-2">选择 MP4 视频文件</label>
+          <label className="block text-sm text-gray-400 mb-2">
+            选择 MP4 视频文件
+          </label>
           <input
             ref={fileInputRef}
             type="file"
@@ -244,7 +261,8 @@ export default function VideoPage() {
 
         {selectedFile && (
           <div className="text-sm text-gray-400">
-            已选择: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+            已选择: {selectedFile.name} (
+            {(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
           </div>
         )}
 
@@ -267,7 +285,9 @@ export default function VideoPage() {
 
         {uploadedVideoUrl && (
           <div className="mt-4 p-4 bg-white/5 rounded-lg">
-            <p className="text-sm text-gray-400 mb-2">上传成功，公开访问视频URL:</p>
+            <p className="text-sm text-gray-400 mb-2">
+              上传成功，公开访问视频URL:
+            </p>
             <a
               href={uploadedVideoUrl}
               target="_blank"

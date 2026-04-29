@@ -39,7 +39,9 @@ export interface AIVideoTrackData {
 }
 
 export type TrackingApi = {
-  send: (data: AIVideoTrackData) => Promise<{ success: boolean; error?: string }>;
+  send: (
+    data: AIVideoTrackData,
+  ) => Promise<{ success: boolean; error?: string }>;
   updateStatus: (
     taskId: string,
     status: string,

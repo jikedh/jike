@@ -7,8 +7,7 @@ export const PROMPT_PANEL_STYLES = {
   container:
     "nodrag nopan nowheel w-[720px] bg-[#1e1e20] border border-white/5 rounded-3xl p-5 shadow-2xl pointer-events-auto flex flex-col gap-4",
 
-  inputArea:
-    "relative flex flex-col gap-3",
+  inputArea: "relative flex flex-col gap-3",
 
   textAreaWrap:
     "w-full bg-white/[0.02] border border-white/[0.05] rounded-xl overflow-hidden focus-within:border-[#B43FEB]/50 focus-within:shadow-[0_0_15px_rgba(180,63,235,0.15)] transition-all shadow-inner",
@@ -28,7 +27,6 @@ export const PROMPT_PANEL_STYLES = {
 
   modelSelect:
     "bg-white/5 hover:bg-white/10 border border-transparent hover:border-[#B43FEB]/30 px-4 py-2.5 rounded-xl text-xs text-white/80 font-medium flex items-center gap-2 transition-all cursor-pointer group shadow-sm h-auto w-auto",
-
 
   modelSelectContent:
     "bg-[#1a1a1d] border border-white/[0.08] rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.4)] overflow-hidden",

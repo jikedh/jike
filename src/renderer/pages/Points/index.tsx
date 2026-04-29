@@ -123,7 +123,7 @@ export function PointsView() {
   const selectedPackage =
     selectedPackageId === null
       ? null
-      : packages.find((pkg) => pkg.id === selectedPackageId) ?? null;
+      : (packages.find((pkg) => pkg.id === selectedPackageId) ?? null);
 
   const buildQrcodeImageByCodeUrl = (codeUrl: string) => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(codeUrl)}`;
@@ -138,7 +138,6 @@ export function PointsView() {
       toast.error("请先登录后再充值");
       return;
     }
-
 
     setIsCreatingOrder(true);
     try {
@@ -180,7 +179,10 @@ export function PointsView() {
         // }
 
         // tradeState 为 SUCCESS 时表示支付成功，status 为 PAID 是最终状态
-        if (result?.data?.tradeState === "SUCCESS" || result?.data?.status === "PAID") {
+        if (
+          result?.data?.tradeState === "SUCCESS" ||
+          result?.data?.status === "PAID"
+        ) {
           window.clearInterval(timer);
 
           // 充值成功后调用 updateVipScore 增加积分
@@ -232,7 +234,7 @@ export function PointsView() {
 
     // 立即执行一次检查
     checkPaymentStatus();
-    
+
     // 然后开始轮询
     timer = setInterval(checkPaymentStatus, 1500);
 
@@ -398,10 +400,11 @@ export function PointsView() {
                 {packages.map((pkg) => (
                   <div
                     key={pkg.id}
-                    className={`relative p-7 rounded-[24px] border transition-all duration-500 group cursor-pointer overflow-hidden ${pkg.popular
-                      ? "bg-gradient-to-br from-[#B43FEB]/10 to-transparent border-[#B43FEB]/50 shadow-[0_20px_40px_rgba(180,63,235,0.1)]"
-                      : "bg-[#121214] border-white/5 hover:border-white/20 hover:bg-[#161618]"
-                      }`}
+                    className={`relative p-7 rounded-[24px] border transition-all duration-500 group cursor-pointer overflow-hidden ${
+                      pkg.popular
+                        ? "bg-gradient-to-br from-[#B43FEB]/10 to-transparent border-[#B43FEB]/50 shadow-[0_20px_40px_rgba(180,63,235,0.1)]"
+                        : "bg-[#121214] border-white/5 hover:border-white/20 hover:bg-[#161618]"
+                    }`}
                   >
                     {pkg.popular && (
                       <div className="absolute top-0 right-0 bg-gradient-to-l from-[#B43FEB] to-[#2b5aed] text-white text-[10px] font-black px-4 py-1.5 rounded-bl-2xl tracking-widest">
@@ -411,10 +414,11 @@ export function PointsView() {
                     <div className="flex justify-between items-start mb-6">
                       <div>
                         <div
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md mb-3 inline-block ${pkg.popular
-                            ? "bg-[#B43FEB] text-white"
-                            : "bg-white/10 text-white/60"
-                            }`}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md mb-3 inline-block ${
+                            pkg.popular
+                              ? "bg-[#B43FEB] text-white"
+                              : "bg-white/10 text-white/60"
+                          }`}
                         >
                           {pkg.tag}
                         </div>
@@ -435,10 +439,11 @@ export function PointsView() {
                       </div>
                     </div>
                     <button
-                      className={`w-full py-3.5 rounded-2xl text-sm font-bold transition-all duration-300 ${pkg.popular
-                        ? "bg-[#B43FEB] text-white shadow-xl shadow-[#B43FEB]/20 hover:scale-[1.02]"
-                        : "bg-white/5 text-white/80 group-hover:bg-white group-hover:text-black"
-                        }`}
+                      className={`w-full py-3.5 rounded-2xl text-sm font-bold transition-all duration-300 ${
+                        pkg.popular
+                          ? "bg-[#B43FEB] text-white shadow-xl shadow-[#B43FEB]/20 hover:scale-[1.02]"
+                          : "bg-white/5 text-white/80 group-hover:bg-white group-hover:text-black"
+                      }`}
                       onClick={() => {
                         setSelectedPackageId(pkg.id);
                         setNativePayOrder(null);
@@ -459,10 +464,11 @@ export function PointsView() {
                   <div className="flex gap-8">
                     <button
                       onClick={() => setActiveTab("usage")}
-                      className={`pb-4 text-sm font-bold transition-all relative ${activeTab === "usage"
-                        ? "text-white"
-                        : "text-white/30 hover:text-white/60"
-                        }`}
+                      className={`pb-4 text-sm font-bold transition-all relative ${
+                        activeTab === "usage"
+                          ? "text-white"
+                          : "text-white/30 hover:text-white/60"
+                      }`}
                     >
                       <div className="flex items-center gap-2">
                         <ReceiptText className="w-4 h-4" /> 积分消耗明细
@@ -473,10 +479,11 @@ export function PointsView() {
                     </button>
                     <button
                       onClick={() => setActiveTab("transaction")}
-                      className={`pb-4 text-sm font-bold transition-all relative ${activeTab === "transaction"
-                        ? "text-white"
-                        : "text-white/30 hover:text-white/60"
-                        }`}
+                      className={`pb-4 text-sm font-bold transition-all relative ${
+                        activeTab === "transaction"
+                          ? "text-white"
+                          : "text-white/30 hover:text-white/60"
+                      }`}
                     >
                       <div className="flex items-center gap-2">
                         <CreditCard className="w-4 h-4" /> 充值消费明细
@@ -532,10 +539,11 @@ export function PointsView() {
                         >
                           <div className="flex items-center gap-4">
                             <div
-                              className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.amount.startsWith("+")
-                                ? "bg-green-500/10 text-green-500"
-                                : "bg-blue-500/10 text-blue-500"
-                                }`}
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                item.amount.startsWith("+")
+                                  ? "bg-green-500/10 text-green-500"
+                                  : "bg-blue-500/10 text-blue-500"
+                              }`}
                             >
                               {item.amount.startsWith("+") ? (
                                 <Gift className="w-5 h-5" />
@@ -623,7 +631,9 @@ export function PointsView() {
 
               <div className="flex flex-col items-center justify-center rounded-3xl border border-white/10 bg-[#0f0f12] px-6 py-6">
                 {isCreatingOrder ? (
-                  <div className="py-16 text-sm text-white/60">正在生成支付二维码...</div>
+                  <div className="py-16 text-sm text-white/60">
+                    正在生成支付二维码...
+                  </div>
                 ) : nativePayOrder?.codeUrl ? (
                   <>
                     <div className="mb-3 text-xs font-bold text-white/70">
@@ -639,7 +649,9 @@ export function PointsView() {
                     </div>
                   </>
                 ) : (
-                  <div className="py-16 text-sm text-red-300">未获取到支付二维码，请重试</div>
+                  <div className="py-16 text-sm text-red-300">
+                    未获取到支付二维码，请重试
+                  </div>
                 )}
               </div>
             </div>

@@ -9,7 +9,8 @@ export function registerFlow2ApiHandlers(): void {
   ipcMain.handle("flow2api:restart", async () => flow2ApiService.restart());
   ipcMain.handle(
     "flow2api:updateSettings",
-    async (_, patch: Partial<Flow2ApiSettings>) => flow2ApiService.updateSettings(patch),
+    async (_, patch: Partial<Flow2ApiSettings>) =>
+      flow2ApiService.updateSettings(patch),
   );
   ipcMain.handle("flow2api:getLogs", async (_, limit?: number) =>
     flow2ApiService.getLogs(limit),

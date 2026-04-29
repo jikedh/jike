@@ -64,7 +64,9 @@ export const isLocalGeminiFallbackModeMessage = (message: string): boolean =>
 
 export const isLocalGeminiFatalBatchError = (error: unknown): boolean => {
   const message = getLocalGeminiErrorText(error);
-  return LOCAL_GEMINI_FATAL_ERROR_PATTERNS.some((pattern) => pattern.test(message));
+  return LOCAL_GEMINI_FATAL_ERROR_PATTERNS.some((pattern) =>
+    pattern.test(message),
+  );
 };
 
 export const normalizeLocalGeminiErrorDetail = (message: string): string => {

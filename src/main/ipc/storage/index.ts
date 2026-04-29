@@ -17,7 +17,13 @@ const CANVAS_FILE = "canvas.json";
 const PROJECT_META_FILE = "project.json";
 const INDEX_FILE = "index.json";
 
-const MEDIA_FOLDERS = ["image", "generate_image", "video", "generate_video", "audio"];
+const MEDIA_FOLDERS = [
+  "image",
+  "generate_image",
+  "video",
+  "generate_video",
+  "audio",
+];
 
 const safeReadJson = (filePath: string): any => {
   try {
@@ -118,7 +124,11 @@ const rewriteRelativePathRecursively = (
         continue;
       }
 
-      next[key] = rewriteRelativePathRecursively(item, oldProjectName, newProjectName);
+      next[key] = rewriteRelativePathRecursively(
+        item,
+        oldProjectName,
+        newProjectName,
+      );
     }
 
     return next;
@@ -259,12 +269,15 @@ export function registerStorageHandlers(): void {
         console.error("[storage:listProjects] scan disk error:", e);
       }
 
-      const allProjects = [...projects, ...diskProjects].reduce((acc: any[], p: any) => {
-        if (!acc.find((x) => x.name === p.name)) {
-          acc.push(p);
-        }
-        return acc;
-      }, []);
+      const allProjects = [...projects, ...diskProjects].reduce(
+        (acc: any[], p: any) => {
+          if (!acc.find((x) => x.name === p.name)) {
+            acc.push(p);
+          }
+          return acc;
+        },
+        [],
+      );
 
       return {
         success: true,
@@ -303,7 +316,11 @@ export function registerStorageHandlers(): void {
     async (_, basePath: string, projectName: string) => {
       try {
         if (!basePath || !projectName) {
-          return { success: false, error: "Missing basePath or projectName", data: null };
+          return {
+            success: false,
+            error: "Missing basePath or projectName",
+            data: null,
+          };
         }
 
         const canvasPath = join(basePath, projectName, CANVAS_FILE);
@@ -479,7 +496,12 @@ export function registerStorageHandlers(): void {
 
   ipcMain.handle(
     "storage:renameProject",
-    async (_, basePath: string, oldProjectName: string, newProjectName: string) => {
+    async (
+      _,
+      basePath: string,
+      oldProjectName: string,
+      newProjectName: string,
+    ) => {
       try {
         if (!basePath || !oldProjectName || !newProjectName) {
           return { success: false, error: "Missing params" };
@@ -501,7 +523,10 @@ export function registerStorageHandlers(): void {
         const newDir = join(basePath, newProjectName);
 
         if (!existsSync(oldDir)) {
-          return { success: false, error: "Source project directory not found" };
+          return {
+            success: false,
+            error: "Source project directory not found",
+          };
         }
 
         renameSync(oldDir, newDir);
@@ -509,12 +534,17 @@ export function registerStorageHandlers(): void {
         const canvasPath = join(newDir, CANVAS_FILE);
         const canvasData = safeReadJson(canvasPath);
         if (canvasData) {
-          const updated = rewriteRelativePathRecursively(canvasData, oldProjectName, newProjectName);
+          const updated = rewriteRelativePathRecursively(
+            canvasData,
+            oldProjectName,
+            newProjectName,
+          );
           safeWriteJson(canvasPath, updated);
         }
 
         const metaPath = join(newDir, PROJECT_META_FILE);
-        const oldMeta = safeReadJson(metaPath) || index.projects[oldProjectName];
+        const oldMeta =
+          safeReadJson(metaPath) || index.projects[oldProjectName];
         safeWriteJson(metaPath, {
           ...oldMeta,
           name: newProjectName,
@@ -570,7 +600,12 @@ export function registerStorageHandlers(): void {
 
   ipcMain.handle(
     "storage:copyProject",
-    async (_, basePath: string, srcProjectName: string, destProjectName: string) => {
+    async (
+      _,
+      basePath: string,
+      srcProjectName: string,
+      destProjectName: string,
+    ) => {
       try {
         if (!basePath || !srcProjectName || !destProjectName) {
           return { success: false, error: "Missing params" };
@@ -591,7 +626,11 @@ export function registerStorageHandlers(): void {
         const canvasPath = join(destDir, CANVAS_FILE);
         const canvasData = safeReadJson(canvasPath);
         if (canvasData) {
-          const updated = rewriteRelativePathRecursively(canvasData, srcProjectName, destProjectName);
+          const updated = rewriteRelativePathRecursively(
+            canvasData,
+            srcProjectName,
+            destProjectName,
+          );
           safeWriteJson(canvasPath, updated);
         }
 
@@ -634,7 +673,10 @@ export function registerStorageHandlers(): void {
         }
 
         const exportBasePath = result.filePaths[0];
-        const exportProjectName = getUniqueProjectName(exportBasePath, projectName);
+        const exportProjectName = getUniqueProjectName(
+          exportBasePath,
+          projectName,
+        );
         const exportProjectDir = join(exportBasePath, exportProjectName);
 
         copyDirectoryRecursive(projectDir, exportProjectDir);
@@ -677,11 +719,15 @@ export function registerStorageHandlers(): void {
       if (!existsSync(srcMetaPath) && !existsSync(srcCanvasPath)) {
         return {
           success: false,
-          error: "所选文件夹不是有效的项目目录，缺少 project.json 或 canvas.json",
+          error:
+            "所选文件夹不是有效的项目目录，缺少 project.json 或 canvas.json",
         };
       }
 
-      const importedProjectName = getUniqueProjectName(basePath, srcProjectFolderName);
+      const importedProjectName = getUniqueProjectName(
+        basePath,
+        srcProjectFolderName,
+      );
       const destDir = join(basePath, importedProjectName);
 
       copyDirectoryRecursive(srcDir, destDir);

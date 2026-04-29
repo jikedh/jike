@@ -47,7 +47,13 @@ export interface Wan27T2vQueryResponse {
   request_id: string;
   output: {
     task_id: string;
-    task_status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELED" | "UNKNOWN";
+    task_status:
+      | "PENDING"
+      | "RUNNING"
+      | "SUCCEEDED"
+      | "FAILED"
+      | "CANCELED"
+      | "UNKNOWN";
     submit_time: string;
     scheduled_time?: string;
     end_time?: string;

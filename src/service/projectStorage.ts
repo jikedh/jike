@@ -34,7 +34,9 @@ export type MediaRef = {
   localPath?: string;
 };
 
-const inferImageExtension = (...candidates: Array<string | undefined>): string => {
+const inferImageExtension = (
+  ...candidates: Array<string | undefined>
+): string => {
   for (const candidate of candidates) {
     if (!candidate) continue;
 
@@ -43,7 +45,10 @@ const inferImageExtension = (...candidates: Array<string | undefined>): string =
     const match = fileName.match(/\.([a-zA-Z0-9]+)$/);
     const extension = match?.[1]?.toLowerCase();
 
-    if (extension && ["png", "jpg", "jpeg", "webp", "gif"].includes(extension)) {
+    if (
+      extension &&
+      ["png", "jpg", "jpeg", "webp", "gif"].includes(extension)
+    ) {
       return extension === "jpg" ? "jpeg" : extension;
     }
   }
@@ -79,7 +84,9 @@ export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
     try {
       const listResult = await localStorageService.listProjects();
       if (listResult.success && listResult.projects) {
-        const diskProjectNames = new Set(listResult.projects.map((item) => item.name));
+        const diskProjectNames = new Set(
+          listResult.projects.map((item) => item.name),
+        );
         const removedProjects = localStorageProjects.filter(
           (project) => !diskProjectNames.has(project.name),
         );
@@ -94,7 +101,10 @@ export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
             return Number.isNaN(numericId) ? max : Math.max(max, numericId);
           }, 0);
 
-          saveProjectList(syncedLocalStorageProjects, Math.max(getNextId(), maxId + 1));
+          saveProjectList(
+            syncedLocalStorageProjects,
+            Math.max(getNextId(), maxId + 1),
+          );
 
           for (const removedProject of removedProjects) {
             localStorage.removeItem(getCanvasDataKey(removedProject.id));
@@ -102,7 +112,9 @@ export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
         }
 
         for (const item of listResult.projects) {
-          const readResult = await localStorageService.loadCanvasData(item.name);
+          const readResult = await localStorageService.loadCanvasData(
+            item.name,
+          );
           if (!readResult.success || !readResult.data) {
             continue;
           }
@@ -119,7 +131,7 @@ export const getProjectListAsync = async (): Promise<ProjectMeta[]> => {
               createdAt: canvasData.savedAt || item.createdAt || Date.now(),
               updatedAt: canvasData.savedAt || item.updatedAt || Date.now(),
               description: canvasData.description,
-            coverUrl: canvasData.coverUrl,
+              coverUrl: canvasData.coverUrl,
               coverLocalPath: canvasData.coverLocalPath,
               type: canvasData.type || "video",
             };
@@ -434,7 +446,10 @@ export const saveCanvasData = async (
 
   const sanitizedData = sanitizeMediaTreeForPersistence(data);
 
-  localStorage.setItem(getCanvasDataKey(projectId), JSON.stringify(sanitizedData));
+  localStorage.setItem(
+    getCanvasDataKey(projectId),
+    JSON.stringify(sanitizedData),
+  );
 
   if (localStorageService.isAvailable()) {
     const result = await localStorageService.saveCanvasData(
@@ -477,7 +492,22 @@ const extractExtFromUrl = (url: string, fallback: string = "png"): string => {
   try {
     const urlPath = new URL(url).pathname;
     const ext = urlPath.split(".").pop()?.toLowerCase();
-    if (ext && ["png", "jpg", "jpeg", "webp", "gif", "bmp", "mp4", "webm", "mp3", "wav", "ogg"].includes(ext)) {
+    if (
+      ext &&
+      [
+        "png",
+        "jpg",
+        "jpeg",
+        "webp",
+        "gif",
+        "bmp",
+        "mp4",
+        "webm",
+        "mp3",
+        "wav",
+        "ogg",
+      ].includes(ext)
+    ) {
       return ext;
     }
   } catch {}
@@ -495,11 +525,19 @@ export const saveMediaFromUrl = async (
     return { url };
   }
 
-  const ext = extension || extractExtFromUrl(url, mediaType === "video" ? "mp4" : mediaType === "audio" ? "mp3" : "png");
+  const ext =
+    extension ||
+    extractExtFromUrl(
+      url,
+      mediaType === "video" ? "mp4" : mediaType === "audio" ? "mp3" : "png",
+    );
   const fileName = generateSimpleFileName(ext);
 
   try {
-    const downloadFnMap: Record<string, (projectName: string, fileName: string, url: string) => Promise<any>> = {
+    const downloadFnMap: Record<
+      string,
+      (projectName: string, fileName: string, url: string) => Promise<any>
+    > = {
       image: localStorageService.downloadImage,
       generate_image: localStorageService.downloadGeneratedImage,
       video: localStorageService.downloadVideo,
@@ -544,7 +582,14 @@ export const saveMediaBuffer = async (
   const fileName = generateSimpleFileName(extension);
 
   try {
-    const saveFnMap: Record<string, (projectName: string, fileName: string, buffer: ArrayBuffer) => Promise<any>> = {
+    const saveFnMap: Record<
+      string,
+      (
+        projectName: string,
+        fileName: string,
+        buffer: ArrayBuffer,
+      ) => Promise<any>
+    > = {
       image: localStorageService.saveImage,
       generate_image: localStorageService.saveGeneratedImage,
       video: localStorageService.saveVideo,
@@ -782,7 +827,10 @@ const persistProjectCoverMeta = async (
     try {
       canvasData = JSON.parse(cachedCanvasData);
     } catch (error) {
-      console.warn("Failed to parse cached canvas data while saving cover:", error);
+      console.warn(
+        "Failed to parse cached canvas data while saving cover:",
+        error,
+      );
     }
   }
 

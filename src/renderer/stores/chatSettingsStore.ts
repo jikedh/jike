@@ -76,8 +76,7 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
       setDefaultImagePreset: (preset) =>
         set((state) => ({
           defaultImageModel: preset.model ?? state.defaultImageModel,
-          defaultImagePlatform:
-            preset.platform ?? state.defaultImagePlatform,
+          defaultImagePlatform: preset.platform ?? state.defaultImagePlatform,
           defaultImageSize: preset.size ?? state.defaultImageSize,
           defaultImageResolution:
             preset.resolution ?? state.defaultImageResolution,
@@ -87,8 +86,7 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
           defaultVideoModel: preset.model ?? state.defaultVideoModel,
           defaultVideoAspectRatio:
             preset.aspectRatio ?? state.defaultVideoAspectRatio,
-          defaultVideoDuration:
-            preset.duration ?? state.defaultVideoDuration,
+          defaultVideoDuration: preset.duration ?? state.defaultVideoDuration,
           defaultVideoResolution:
             preset.resolution ?? state.defaultVideoResolution,
           defaultVideoMode:
@@ -115,9 +113,7 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
           defaultNewVideoResolution:
             preset.resolution ?? state.defaultNewVideoResolution,
           defaultNewVideoMode:
-            preset.mode !== undefined
-              ? preset.mode
-              : state.defaultNewVideoMode,
+            preset.mode !== undefined ? preset.mode : state.defaultNewVideoMode,
           defaultNewVideoGenerateAudio:
             preset.generateAudio !== undefined
               ? preset.generateAudio

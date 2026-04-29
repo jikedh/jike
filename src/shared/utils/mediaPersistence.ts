@@ -17,18 +17,26 @@ export function isEphemeralMediaUrl(url?: string | null): boolean {
   return /^(blob:|data:)/i.test(url.trim());
 }
 
-export function getRemoteMediaUrl(item?: Partial<MediaLike> | null): string | undefined {
+export function getRemoteMediaUrl(
+  item?: Partial<MediaLike> | null,
+): string | undefined {
   if (!item) return undefined;
   if (typeof item.remoteUrl === "string" && item.remoteUrl.trim()) {
     return item.remoteUrl.trim();
   }
-  if (typeof item.url === "string" && item.url.trim() && !isEphemeralMediaUrl(item.url)) {
+  if (
+    typeof item.url === "string" &&
+    item.url.trim() &&
+    !isEphemeralMediaUrl(item.url)
+  ) {
     return item.url.trim();
   }
   return undefined;
 }
 
-export function getDisplayMediaUrl(item?: Partial<MediaLike> | null): string | undefined {
+export function getDisplayMediaUrl(
+  item?: Partial<MediaLike> | null,
+): string | undefined {
   if (!item) return undefined;
   if (typeof item.displayUrl === "string" && item.displayUrl.trim()) {
     return item.displayUrl.trim();

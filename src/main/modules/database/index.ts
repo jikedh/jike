@@ -1,7 +1,7 @@
-import { app } from 'electron'
-import Store from 'electron-store';
-import ElectronStore from 'electron-store'
-import { ipcMainService } from '../ipcManager';
+import { app } from "electron";
+import Store from "electron-store";
+import ElectronStore from "electron-store";
+import { ipcMainService } from "../ipcManager";
 
 /**
  * electron-store 本地数据存储
@@ -11,20 +11,20 @@ import { ipcMainService } from '../ipcManager';
 // 默认数据
 const defaultData: { [key: string]: any } = {
   userInfo: {
-    username: 'admin',
-    password: '123456'
+    username: "admin",
+    password: "123456",
   },
-  phone: '123456789'
-}
+  phone: "123456789",
+};
 
 class AppStore {
-  store: Store
+  store: Store;
 
   _initStore() {
     this.store = new ElectronStore({
-      name: 'app',
-      cwd: app.getPath('userData')
-    })
+      name: "app",
+      cwd: app.getPath("userData"),
+    });
 
     // 初始化默认值写入存储
     for (const key in defaultData) {
@@ -43,7 +43,12 @@ class AppStore {
     const originValue = this.get(key);
     let tempValue = value;
     // 合并对象
-    if (typeof originValue === 'object' && originValue !== null && typeof value === 'object' && value !== null) {
+    if (
+      typeof originValue === "object" &&
+      originValue !== null &&
+      typeof value === "object" &&
+      value !== null
+    ) {
       tempValue = Object.assign({}, originValue, value);
     }
     this.store.set(key, tempValue);
@@ -54,7 +59,7 @@ class AppStore {
    * @param key 键值
    */
   public get(key: string): any {
-    return this.store.get(key)
+    return this.store.get(key);
   }
 
   /**
@@ -69,43 +74,42 @@ class AppStore {
    * 获取全部数据
    */
   public getAll() {
-    return this.store.store
+    return this.store.store;
   }
 
   registerModule(): void {
-    this._initStore()
+    this._initStore();
 
     // 存储数据
     ipcMainService.on("app:dbStore:set", (event, { key, value }) => {
-      console.log('value: ', key, value);
-      this.set(key, value)
+      console.log("value: ", key, value);
+      this.set(key, value);
     });
 
     // 读取数据
     ipcMainService.handle("app:dbStore:get", (event, { key }) => {
-      return this.get(key)
+      return this.get(key);
     });
 
     // 读取全部数据
     ipcMainService.handle("app:dbStore:getAll", (event) => {
-      return this.getAll()
+      return this.getAll();
     });
 
     // 删除数据
     ipcMainService.handle("app:dbStore:delete", (event, { key }) => {
-      this.delete(key)
-      return { success: true }
+      this.delete(key);
+      return { success: true };
     });
 
     // 重置数据
     ipcMainService.handle("app:dbStore:reset", (event, { key }) => {
       if (key && defaultData[key]) {
-        this.set(key, defaultData[key])
+        this.set(key, defaultData[key]);
       }
-      return { success: true }
+      return { success: true };
     });
   }
-
 }
 
-export const appStore = new AppStore()
+export const appStore = new AppStore();

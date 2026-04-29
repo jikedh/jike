@@ -70,19 +70,21 @@ const LogPanel = ({ logs }: { logs: LogEntry[] }) => {
           {logs.map((log, index) => (
             <div
               key={index}
-              className={`text-xs p-2 rounded ${log.status === "success"
-                ? "bg-green-900/30 text-green-300"
-                : "bg-red-900/30 text-red-300"
-                }`}
+              className={`text-xs p-2 rounded ${
+                log.status === "success"
+                  ? "bg-green-900/30 text-green-300"
+                  : "bg-red-900/30 text-red-300"
+              }`}
             >
               <div className="flex items-center gap-2 mb-1">
                 <span className="opacity-60">{log.time}</span>
                 <span className="font-semibold">{log.api}</span>
                 <span
-                  className={`px-1.5 py-0.5 rounded text-[10px] ${log.status === "success"
-                    ? "bg-green-800/50"
-                    : "bg-red-800/50"
-                    }`}
+                  className={`px-1.5 py-0.5 rounded text-[10px] ${
+                    log.status === "success"
+                      ? "bg-green-800/50"
+                      : "bg-red-800/50"
+                  }`}
                 >
                   {log.status === "success" ? "SUCCESS" : "ERROR"}
                 </span>
@@ -235,7 +237,11 @@ export default function TestPage() {
           alert("🎉 充值成功！积分已到账");
         }
       } catch (error: any) {
-        addLog("getRechargeOrderStatus (轮询查询)", "error", error?.message || error);
+        addLog(
+          "getRechargeOrderStatus (轮询查询)",
+          "error",
+          error?.message || error,
+        );
       }
     }, 3000); // 每 3 秒轮询
 
@@ -513,7 +519,9 @@ export default function TestPage() {
                   <TestButton
                     label="查询订单状态"
                     onClick={handleGetRechargeOrderStatus}
-                    loading={loadingMap["getRechargeOrderStatus (查询订单状态)"]}
+                    loading={
+                      loadingMap["getRechargeOrderStatus (查询订单状态)"]
+                    }
                     variant="outline"
                   />
                 </div>
@@ -687,4 +695,3 @@ export default function TestPage() {
     </div>
   );
 }
-

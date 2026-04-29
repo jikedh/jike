@@ -25,7 +25,10 @@ export interface VideoPayloadStrategy {
 /**
  * 获取当前节点有效模式（非法模式会回退到模型默认模式）
  */
-const resolveGenerationMode = (nodeData: VideoGenerationNode, model: string) => {
+const resolveGenerationMode = (
+  nodeData: VideoGenerationNode,
+  model: string,
+) => {
   const mode = nodeData.metadata?.generation_mode as VideoInputMode | undefined;
   const capability = getVideoModelCapability(model);
   return pickFirstAvailableVideoMode(capability, mode);
@@ -50,19 +53,19 @@ const toFirstLastFrameMedia = (imageUrls: string[]) => {
   return [
     ...(first
       ? [
-        {
-          type: "first_frame" as const,
-          url: first,
-        },
-      ]
+          {
+            type: "first_frame" as const,
+            url: first,
+          },
+        ]
       : []),
     ...(last
       ? [
-        {
-          type: "last_frame" as const,
-          url: last,
-        },
-      ]
+          {
+            type: "last_frame" as const,
+            url: last,
+          },
+        ]
       : []),
   ];
 };
@@ -121,7 +124,10 @@ const doubaoSeedance20Strategy: VideoPayloadStrategy = {
     nodeData,
     { prompt, imageUrls, videoUrls = [], audioUrls = [] },
   ) => {
-    const generationMode = resolveGenerationMode(nodeData, "doubao-seedance-2.0");
+    const generationMode = resolveGenerationMode(
+      nodeData,
+      "doubao-seedance-2.0",
+    );
     // 根据模型名称推断 mode：fast/pro 后缀决定 mode 值，兜底走 metadata
     const modelName = nodeData.model ?? "";
     let mode: string;
@@ -180,9 +186,7 @@ const doubaoSeedance20Strategy: VideoPayloadStrategy = {
       generate_audio: nodeData.metadata?.generate_audio ?? true,
       seed: -1,
       web_search: false,
-      ...(hasReferenceContent
-        ? { input_type: videoInputType }
-        : {}),
+      ...(hasReferenceContent ? { input_type: videoInputType } : {}),
       ...(hasImages ? { images } : {}),
       ...(hasVideos ? { videos } : {}),
       ...(hasAudios ? { audios } : {}),
@@ -198,17 +202,20 @@ const doubaoSeedance20Strategy: VideoPayloadStrategy = {
  */
 const wan27R2vStrategy: VideoPayloadStrategy = {
   model: "wan2.7-r2v",
-  buildPayload: (
-    nodeData,
-    { prompt, imageUrls, videoUrls = [] },
-  ) => {
+  buildPayload: (nodeData, { prompt, imageUrls, videoUrls = [] }) => {
     const generationMode = resolveGenerationMode(nodeData, "wan2.7-r2v");
 
     // 构建 media 数组
-    const media: Array<{ type: "reference_image" | "reference_video"; url: string }> = [];
+    const media: Array<{
+      type: "reference_image" | "reference_video";
+      url: string;
+    }> = [];
 
     // 添加参考图片（图生视频或多图参考模式）
-    if (generationMode === VideoInputMode.ImageToVideo || generationMode === VideoInputMode.MultiImageReference) {
+    if (
+      generationMode === VideoInputMode.ImageToVideo ||
+      generationMode === VideoInputMode.MultiImageReference
+    ) {
       imageUrls
         .filter((url) => Boolean(url))
         .slice(0, 9)
@@ -252,10 +259,7 @@ const wan27R2vStrategy: VideoPayloadStrategy = {
  */
 const pixverseStrategy: VideoPayloadStrategy = {
   model: "pixverse-i2v",
-  buildPayload: (
-    nodeData,
-    { prompt, imageUrls },
-  ) => {
+  buildPayload: (nodeData, { prompt, imageUrls }) => {
     // 构建 media 数组
     const media: Array<{ type: "image_url"; url: string }> = [];
 
@@ -268,7 +272,8 @@ const pixverseStrategy: VideoPayloadStrategy = {
       });
 
     // 获取子模型
-    const subModel = (nodeData.metadata as any)?.subModel ?? "pixverse/pixverse-v6-it2v";
+    const subModel =
+      (nodeData.metadata as any)?.subModel ?? "pixverse/pixverse-v6-it2v";
 
     return {
       model: subModel,
@@ -294,10 +299,7 @@ const pixverseStrategy: VideoPayloadStrategy = {
  */
 const wan27T2vStrategy: VideoPayloadStrategy = {
   model: "wan2.7-t2v",
-  buildPayload: (
-    nodeData,
-    { prompt, audioUrls = [] },
-  ) => {
+  buildPayload: (nodeData, { prompt, audioUrls = [] }) => {
     const audioUrl = audioUrls.find((url) => Boolean(url));
 
     return {

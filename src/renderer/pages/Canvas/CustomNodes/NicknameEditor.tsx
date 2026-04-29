@@ -15,12 +15,7 @@ interface NicknameEditorProps {
  * - Enter 保存，Escape 取消，Blur 保存
  */
 export const NicknameEditor = memo(
-  ({
-    nickname,
-    isSelected,
-    onSave,
-    className,
-  }: NicknameEditorProps) => {
+  ({ nickname, isSelected, onSave, className }: NicknameEditorProps) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(nickname);
 

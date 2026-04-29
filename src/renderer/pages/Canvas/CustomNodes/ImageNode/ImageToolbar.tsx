@@ -14,9 +14,7 @@ import { uploadFileToOSS } from "service/oss";
 import type { ImageGenerationNode } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { appendMediaSequences } from "shared/utils/mediaSequence";
-import {
-  getAspectRatioFromMediaFile,
-} from "./utils/aspectRatioUtils";
+import { getAspectRatioFromMediaFile } from "./utils/aspectRatioUtils";
 import { cn, downloadImageFromUrl } from "shared/utils/utils";
 import { toast } from "sonner";
 import Lightbox from "yet-another-react-lightbox";

@@ -1,11 +1,23 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const jikeRoot = resolve(__dirname, "..");
-const flowProjectRoot = resolve(jikeRoot, "..", "flow2api-main", "flow2api-main");
+const flowProjectRoot = resolve(
+  jikeRoot,
+  "..",
+  "flow2api-main",
+  "flow2api-main",
+);
 const defaultDistDir = resolve(flowProjectRoot, "dist", "flow2api");
 const sourceDistDir = process.env.FLOW2API_DIST_DIR
   ? resolve(process.env.FLOW2API_DIST_DIR)
@@ -62,6 +74,9 @@ function main() {
 try {
   main();
 } catch (error) {
-  console.error("[prepare-flow2api] failed:", error instanceof Error ? error.message : error);
+  console.error(
+    "[prepare-flow2api] failed:",
+    error instanceof Error ? error.message : error,
+  );
   process.exit(1);
 }

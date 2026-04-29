@@ -50,7 +50,6 @@ export interface VideoRemovalRequest {
   custom_mask?: string;
 }
 
-
 /**
  * 视频消除接口响应体
  */
@@ -58,14 +57,12 @@ export interface VideoRemovalResponse {
   // 根据实际 API 响应补充
 }
 
-
 export interface TaskResponse {
   code: number;
   message: string;
   data: {
     task_id: string;
-    status: 'success' | 'failed' | 'processing';
+    status: "success" | "failed" | "processing";
     progress: number;
   };
-};
-
+}

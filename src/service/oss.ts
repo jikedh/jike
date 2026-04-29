@@ -301,11 +301,16 @@ export async function uploadFileToOSS(file: File) {
  * 2. 上传到用户 OSS
  * 3. 返回转存后的 OSS URL（失败返回 null）
  */
-export async function copyVideoUrlToOss(videoUrl: string): Promise<string | null> {
+export async function copyVideoUrlToOss(
+  videoUrl: string,
+): Promise<string | null> {
   try {
     const response = await fetch(videoUrl);
     if (!response.ok) {
-      console.error("[OSS] Failed to fetch video for copy:", response.statusText);
+      console.error(
+        "[OSS] Failed to fetch video for copy:",
+        response.statusText,
+      );
       return null;
     }
 
@@ -344,19 +349,18 @@ export async function createSignedUploadTargetToOSS(options?: {
   contentType?: string;
 }) {
   const directory = options?.directory ?? "video";
-  const extension = (options?.extension ?? "mp4").replace(/^\./, "").toLowerCase();
+  const extension = (options?.extension ?? "mp4")
+    .replace(/^\./, "")
+    .toLowerCase();
   const timestamp = Date.now();
   const random = Math.random().toString(36).slice(2, 8);
   const objectKey = `${directory}/${timestamp}-${random}.${extension}`;
   const uploadHeaders: Record<string, string> = {};
 
-  const uploadUrl = client.signatureUrl(
-    objectKey,
-    {
-      method: "PUT",
-      expires: 24 * 60 * 60,
-    } as any,
-  );
+  const uploadUrl = client.signatureUrl(objectKey, {
+    method: "PUT",
+    expires: 24 * 60 * 60,
+  } as any);
 
   return {
     objectKey,

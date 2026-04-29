@@ -110,15 +110,16 @@ const clamp = (value: number, min: number, max: number) => {
   return Math.min(Math.max(value, min), max);
 };
 
-const DELETE_CONFIRM_NODE_LABEL: Partial<Record<AllNodeType["type"], string>> = {
-  imageNode: "图片节点",
-  videoNode: "视频节点",
-  newVideoNode: "新版视频节点",
-  agentNode: "智能体节点",
-  textAgentNode: "文本智能体节点",
-  imageAgentNode: "图片智能体节点",
-  videoAgentNode: "视频智能体节点",
-};
+const DELETE_CONFIRM_NODE_LABEL: Partial<Record<AllNodeType["type"], string>> =
+  {
+    imageNode: "图片节点",
+    videoNode: "视频节点",
+    newVideoNode: "新版视频节点",
+    agentNode: "智能体节点",
+    textAgentNode: "文本智能体节点",
+    imageAgentNode: "图片智能体节点",
+    videoAgentNode: "视频智能体节点",
+  };
 
 const getCanvasNodeTypeFromFlowNode = (
   node: AllNodeType | undefined,
@@ -201,7 +202,7 @@ const isMacOs = () => {
 
 const scheduleIdleWork = (callback: () => void) => {
   if (typeof window === "undefined") {
-    return () => { };
+    return () => {};
   }
 
   if ("requestIdleCallback" in window) {
@@ -689,10 +690,10 @@ export const CanvasFlow = ({
         void handleFiles(
           files,
           mouseFlowPositionRef.current ??
-          screenToFlowPosition({
-            x: window.innerWidth / 2,
-            y: window.innerHeight / 2,
-          }),
+            screenToFlowPosition({
+              x: window.innerWidth / 2,
+              y: window.innerHeight / 2,
+            }),
         );
         return;
       }
@@ -828,7 +829,6 @@ export const CanvasFlow = ({
       }
     };
   }, [annotationWorkspace.open, reactFlowInstance]);
-
 
   // ==================== 鎷栧姩鎬ц兘浼樺寲锛氭湰鍦?nodes 鐘舵€侀殧绂?====================
   //
@@ -1161,7 +1161,9 @@ export const CanvasFlow = ({
 
     const displayChanges = compactNodeChanges(pendingNodeChangesRef.current);
     pendingNodeChangesRef.current = [];
-    const selectChanges = compactNodeChanges(pendingSelectStoreChangesRef.current);
+    const selectChanges = compactNodeChanges(
+      pendingSelectStoreChangesRef.current,
+    );
     pendingSelectStoreChangesRef.current = [];
     const storeChanges = compactNodeChanges(pendingStoreNodeChangesRef.current);
     pendingStoreNodeChangesRef.current = [];
@@ -2361,9 +2363,7 @@ export const CanvasFlow = ({
           </ReactFlow>
 
           {/* 鑺傜偣鎼滅储妗?*/}
-          {selectionBoundsScreen &&
-            !isSelectionBoxActive &&
-            !isSpacePressed ? (
+          {selectionBoundsScreen && !isSelectionBoxActive && !isSpacePressed ? (
             <div
               className="pointer-events-none fixed z-[11] rounded-lg border border-dashed border-[#B43FEB]/70 bg-[#B43FEB]/10 shadow-[0_0_0_1px_rgba(180,63,235,0.18),0_0_24px_rgba(180,63,235,0.18)]"
               style={{
@@ -2405,9 +2405,9 @@ export const CanvasFlow = ({
 
           {/* 澶氶€夊彸渚у揩鎹峰垱寤烘寜閽紙鎷栨嫿鏃堕殣钘忥紝鏀圭敤璺熻釜鍥炬爣锛?*/}
           {selectionRightCenterScreenPosition &&
-            !isSelectionBoxActive &&
-            !isSpacePressed &&
-            !quickAddDragPreview.active ? (
+          !isSelectionBoxActive &&
+          !isSpacePressed &&
+          !quickAddDragPreview.active ? (
             <MultiSelectQuickCreate
               visible={multiSelectedCount >= 2}
               x={selectionRightCenterScreenPosition.x}
@@ -2493,9 +2493,7 @@ export const CanvasFlow = ({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
-                  onSelect={() =>
-                    handleCreateNodeFromQuickAddMenu("newVideo")
-                  }
+                  onSelect={() => handleCreateNodeFromQuickAddMenu("newVideo")}
                 >
                   <IconVideo size={16} />
                   新建视频节点(新版)

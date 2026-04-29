@@ -32,39 +32,39 @@ export interface KlingV3OmniVideoGenerationRequest {
      */
     media?: Array<
       | {
-        /** 首帧图片。 */
-        type: "first_frame";
-        /** HTTP 或 HTTPS 图片 URL。 */
-        url: string;
-      }
+          /** 首帧图片。 */
+          type: "first_frame";
+          /** HTTP 或 HTTPS 图片 URL。 */
+          url: string;
+        }
       | {
-        /** 尾帧图片。 */
-        type: "last_frame";
-        /** HTTP 或 HTTPS 图片 URL。 */
-        url: string;
-      }
+          /** 尾帧图片。 */
+          type: "last_frame";
+          /** HTTP 或 HTTPS 图片 URL。 */
+          url: string;
+        }
       | {
-        /** 参考图片。 */
-        type: "refer";
-        /** HTTP 或 HTTPS 图片 URL。 */
-        url: string;
-      }
+          /** 参考图片。 */
+          type: "refer";
+          /** HTTP 或 HTTPS 图片 URL。 */
+          url: string;
+        }
       | {
-        /** 待编辑的源视频。 */
-        type: "base";
-        /** HTTP 或 HTTPS 视频 URL。 */
-        url: string;
-        /** 是否保留原视频声音。默认为 no。 */
-        keep_original_sound?: "yes" | "no";
-      }
+          /** 待编辑的源视频。 */
+          type: "base";
+          /** HTTP 或 HTTPS 视频 URL。 */
+          url: string;
+          /** 是否保留原视频声音。默认为 no。 */
+          keep_original_sound?: "yes" | "no";
+        }
       | {
-        /** 特征参考视频。 */
-        type: "feature";
-        /** HTTP 或 HTTPS 视频 URL。 */
-        url: string;
-        /** 是否保留原视频声音。默认为 no。 */
-        keep_original_sound?: "yes" | "no";
-      }
+          /** 特征参考视频。 */
+          type: "feature";
+          /** HTTP 或 HTTPS 视频 URL。 */
+          url: string;
+          /** 是否保留原视频声音。默认为 no。 */
+          keep_original_sound?: "yes" | "no";
+        }
     >;
     /** 是否启用多镜头生成。 */
     multi_shot?: boolean;
@@ -90,7 +90,7 @@ export interface KlingV3OmniVideoGenerationRequest {
     mode?: "pro" | "std";
     /**
      * 输出宽高比。
-     * 默认是 16:9 
+     * 默认是 16:9
      */
     aspect_ratio?: "16:9" | "9:16" | "1:1";
     /**
@@ -126,12 +126,12 @@ export interface KlingV3OmniVideoGenerationQueryResponse {
   output: {
     task_id: string;
     task_status:
-    | "PENDING"
-    | "RUNNING"
-    | "SUCCEEDED"
-    | "FAILED"
-    | "CANCELED"
-    | "UNKNOWN";
+      | "PENDING"
+      | "RUNNING"
+      | "SUCCEEDED"
+      | "FAILED"
+      | "CANCELED"
+      | "UNKNOWN";
     submit_time: string;
     scheduled_time?: string;
     end_time?: string;

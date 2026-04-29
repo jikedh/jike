@@ -46,9 +46,9 @@ export const getNextNodePosition = (nodes: AllNodeType[]) => {
 
   return lastNode
     ? {
-      x: lastNode.position.x + 40,
-      y: lastNode.position.y + 40,
-    }
+        x: lastNode.position.x + 40,
+        y: lastNode.position.y + 40,
+      }
     : fallbackPosition;
 };
 

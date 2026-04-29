@@ -159,7 +159,10 @@ const SHAPE_HANDLE_CONFIG = [
   { key: "ne", className: "-right-2 -top-2 cursor-nesw-resize" },
   { key: "e", className: "-right-2 top-1/2 -translate-y-1/2 cursor-ew-resize" },
   { key: "se", className: "-right-2 -bottom-2 cursor-nwse-resize" },
-  { key: "s", className: "left-1/2 -bottom-2 -translate-x-1/2 cursor-ns-resize" },
+  {
+    key: "s",
+    className: "left-1/2 -bottom-2 -translate-x-1/2 cursor-ns-resize",
+  },
   { key: "sw", className: "-left-2 -bottom-2 cursor-nesw-resize" },
   { key: "w", className: "-left-2 top-1/2 -translate-y-1/2 cursor-ew-resize" },
 ] as const;
@@ -193,7 +196,7 @@ const deepCloneShapeItems = (items: ShapeItem[]) => {
               stroke.map((point) => ({ ...point })),
             ),
           }
-      : { ...item },
+        : { ...item },
   );
 };
 
@@ -283,9 +286,7 @@ const getBrushPath = (points: Point[]) => {
   }
 
   return points
-    .map((point, index) =>
-      `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`,
-    )
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
     .join(" ");
 };
 
@@ -437,9 +438,8 @@ export const ImageAnnotationWorkspace = ({
   const [draftRect, setDraftRect] = useState<DraftRect | null>(null);
   const [draftBrushPoints, setDraftBrushPoints] = useState<Point[]>([]);
   const [pendingBrushStrokes, setPendingBrushStrokes] = useState<Point[][]>([]);
-  const [pendingTextDraft, setPendingTextDraft] = useState<PendingTextDraft | null>(
-    null,
-  );
+  const [pendingTextDraft, setPendingTextDraft] =
+    useState<PendingTextDraft | null>(null);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -469,11 +469,19 @@ export const ImageAnnotationWorkspace = ({
         2.5,
       ),
     );
-  }, [imageNaturalSize.height, imageNaturalSize.width, viewportSize.height, viewportSize.width]);
+  }, [
+    imageNaturalSize.height,
+    imageNaturalSize.width,
+    viewportSize.height,
+    viewportSize.width,
+  ]);
 
   const stageSize = useMemo(() => {
     return {
-      width: Math.max(320, Math.round(imageNaturalSize.width * stageScale) || 320),
+      width: Math.max(
+        320,
+        Math.round(imageNaturalSize.width * stageScale) || 320,
+      ),
       height: Math.max(
         220,
         Math.round(imageNaturalSize.height * stageScale) || 220,
@@ -481,30 +489,33 @@ export const ImageAnnotationWorkspace = ({
     };
   }, [imageNaturalSize.height, imageNaturalSize.width, stageScale]);
 
-  const getCanvasPoint = useCallback((clientX: number, clientY: number) => {
-    const stage = stageRef.current;
-    if (!stage || !imageNaturalSize.width || !imageNaturalSize.height) {
-      return null;
-    }
+  const getCanvasPoint = useCallback(
+    (clientX: number, clientY: number) => {
+      const stage = stageRef.current;
+      if (!stage || !imageNaturalSize.width || !imageNaturalSize.height) {
+        return null;
+      }
 
-    const rect = stage.getBoundingClientRect();
-    if (!rect.width || !rect.height) {
-      return null;
-    }
+      const rect = stage.getBoundingClientRect();
+      if (!rect.width || !rect.height) {
+        return null;
+      }
 
-    return {
-      x: clamp(
-        ((clientX - rect.left) / rect.width) * imageNaturalSize.width,
-        0,
-        imageNaturalSize.width,
-      ),
-      y: clamp(
-        ((clientY - rect.top) / rect.height) * imageNaturalSize.height,
-        0,
-        imageNaturalSize.height,
-      ),
-    };
-  }, [imageNaturalSize.height, imageNaturalSize.width]);
+      return {
+        x: clamp(
+          ((clientX - rect.left) / rect.width) * imageNaturalSize.width,
+          0,
+          imageNaturalSize.width,
+        ),
+        y: clamp(
+          ((clientY - rect.top) / rect.height) * imageNaturalSize.height,
+          0,
+          imageNaturalSize.height,
+        ),
+      };
+    },
+    [imageNaturalSize.height, imageNaturalSize.width],
+  );
 
   const pushHistory = useCallback(
     (nextTextItems?: TextItem[], nextShapeItems?: ShapeItem[]) => {
@@ -609,15 +620,18 @@ export const ImageAnnotationWorkspace = ({
     [currentColor, strokeWidth, tool],
   );
 
-  const commitTextItems = useCallback((updater: (items: TextItem[]) => TextItem[]) => {
-    setTextItems((prev) => {
-      const next = updater(prev);
-      queueMicrotask(() => {
-        pushHistory(next);
+  const commitTextItems = useCallback(
+    (updater: (items: TextItem[]) => TextItem[]) => {
+      setTextItems((prev) => {
+        const next = updater(prev);
+        queueMicrotask(() => {
+          pushHistory(next);
+        });
+        return next;
       });
-      return next;
-    });
-  }, [pushHistory]);
+    },
+    [pushHistory],
+  );
 
   const commitShapeItems = useCallback(
     (updater: (items: ShapeItem[]) => ShapeItem[]) => {
@@ -749,11 +763,15 @@ export const ImageAnnotationWorkspace = ({
 
         if (editTarget.type === "text") {
           const deletingId = editTarget.id;
-          commitTextItems((prev) => prev.filter((item) => item.id !== deletingId));
+          commitTextItems((prev) =>
+            prev.filter((item) => item.id !== deletingId),
+          );
           setSelectedTextId(null);
         } else {
           const deletingId = editTarget.id;
-          commitShapeItems((prev) => prev.filter((item) => item.id !== deletingId));
+          commitShapeItems((prev) =>
+            prev.filter((item) => item.id !== deletingId),
+          );
           setSelectedShapeId(null);
         }
 
@@ -764,7 +782,14 @@ export const ImageAnnotationWorkspace = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [commitShapeItems, commitTextItems, editTarget, handleRedo, handleUndo, open]);
+  }, [
+    commitShapeItems,
+    commitTextItems,
+    editTarget,
+    handleRedo,
+    handleUndo,
+    open,
+  ]);
 
   const endTextDrag = useCallback(() => {
     if (!dragTextRef.current) {
@@ -807,16 +832,8 @@ export const ImageAnnotationWorkspace = ({
           if (dragState.type === "move") {
             return {
               ...item,
-              x: clamp(
-                point.x - dragState.offsetX,
-                0,
-                imageNaturalSize.width,
-              ),
-              y: clamp(
-                point.y - dragState.offsetY,
-                0,
-                imageNaturalSize.height,
-              ),
+              x: clamp(point.x - dragState.offsetX, 0, imageNaturalSize.width),
+              y: clamp(point.y - dragState.offsetY, 0, imageNaturalSize.height),
             };
           }
 
@@ -851,7 +868,13 @@ export const ImageAnnotationWorkspace = ({
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
     };
-  }, [endTextDrag, getCanvasPoint, imageNaturalSize.height, imageNaturalSize.width, open]);
+  }, [
+    endTextDrag,
+    getCanvasPoint,
+    imageNaturalSize.height,
+    imageNaturalSize.width,
+    open,
+  ]);
 
   useEffect(() => {
     if (!open) {
@@ -923,7 +946,13 @@ export const ImageAnnotationWorkspace = ({
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
     };
-  }, [endShapeDrag, getCanvasPoint, imageNaturalSize.height, imageNaturalSize.width, open]);
+  }, [
+    endShapeDrag,
+    getCanvasPoint,
+    imageNaturalSize.height,
+    imageNaturalSize.width,
+    open,
+  ]);
 
   const handleStagePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1157,7 +1186,10 @@ export const ImageAnnotationWorkspace = ({
         id: item.id,
         centerX,
         centerY,
-        startDistance: Math.max(1, getDistance(point, { x: centerX, y: centerY })),
+        startDistance: Math.max(
+          1,
+          getDistance(point, { x: centerX, y: centerY }),
+        ),
         startScale: item.scale,
       };
     },
@@ -1210,7 +1242,13 @@ export const ImageAnnotationWorkspace = ({
         throw new Error("无法创建导出画布");
       }
 
-      outputCtx.drawImage(loadedImage, 0, 0, outputCanvas.width, outputCanvas.height);
+      outputCtx.drawImage(
+        loadedImage,
+        0,
+        0,
+        outputCanvas.width,
+        outputCanvas.height,
+      );
 
       const drawingCanvas = drawingCanvasRef.current;
       if (drawingCanvas) {
@@ -1380,12 +1418,14 @@ export const ImageAnnotationWorkspace = ({
             </div>
 
             <div className="relative flex items-center gap-2 rounded-2xl border border-white/8 bg-black/15 px-3 py-2">
-              {([
-                { key: "brush", label: "画笔", icon: IconBrush },
-                { key: "rect", label: "矩形", icon: IconSquare },
-                { key: "text", label: "文字", icon: null },
-                { key: "eraser", label: "橡皮擦", icon: IconEraser },
-              ] as const).map((item) => {
+              {(
+                [
+                  { key: "brush", label: "画笔", icon: IconBrush },
+                  { key: "rect", label: "矩形", icon: IconSquare },
+                  { key: "text", label: "文字", icon: null },
+                  { key: "eraser", label: "橡皮擦", icon: IconEraser },
+                ] as const
+              ).map((item) => {
                 const Icon = item.icon;
                 const active = tool === item.key;
                 return (
@@ -1403,7 +1443,9 @@ export const ImageAnnotationWorkspace = ({
                     aria-label={item.label}
                   >
                     {item.key === "text" ? (
-                      <span className="text-[18px] font-semibold leading-none">T</span>
+                      <span className="text-[18px] font-semibold leading-none">
+                        T
+                      </span>
                     ) : (
                       <Icon size={18} />
                     )}
@@ -1460,7 +1502,9 @@ export const ImageAnnotationWorkspace = ({
                   step={1}
                   value={strokeWidth}
                   className="h-8 w-28 border-none bg-transparent px-0"
-                  onChange={(event) => setStrokeWidth(Number(event.target.value) || 10)}
+                  onChange={(event) =>
+                    setStrokeWidth(Number(event.target.value) || 10)
+                  }
                 />
               </div>
 
@@ -1567,36 +1611,42 @@ export const ImageAnnotationWorkspace = ({
                   }}
                 />
 
-                {draftRect ? (
-                  (() => {
-                    const rect = normalizeRect(draftRect.start, draftRect.current);
-                    return (
-                      <div
-                        className="pointer-events-none absolute"
-                        style={{
-                          left: rect.x * stageScale,
-                          top: rect.y * stageScale,
-                          width: rect.width * stageScale,
-                          height: rect.height * stageScale,
-                        }}
-                      >
+                {draftRect
+                  ? (() => {
+                      const rect = normalizeRect(
+                        draftRect.start,
+                        draftRect.current,
+                      );
+                      return (
                         <div
-                          className="absolute inset-0 rounded-[10px] border"
+                          className="pointer-events-none absolute"
                           style={{
-                            borderColor: currentColor,
-                            borderWidth: Math.max(1.5, strokeWidth * stageScale * 0.3),
+                            left: rect.x * stageScale,
+                            top: rect.y * stageScale,
+                            width: rect.width * stageScale,
+                            height: rect.height * stageScale,
                           }}
-                        />
-                        <div
-                          className="absolute inset-0 rounded-[10px]"
-                          style={{
-                            boxShadow: `0 0 0 1px ${currentColor}26, inset 0 0 0 1px ${currentColor}18`,
-                          }}
-                        />
-                      </div>
-                    );
-                  })()
-                ) : null}
+                        >
+                          <div
+                            className="absolute inset-0 rounded-[10px] border"
+                            style={{
+                              borderColor: currentColor,
+                              borderWidth: Math.max(
+                                1.5,
+                                strokeWidth * stageScale * 0.3,
+                              ),
+                            }}
+                          />
+                          <div
+                            className="absolute inset-0 rounded-[10px]"
+                            style={{
+                              boxShadow: `0 0 0 1px ${currentColor}26, inset 0 0 0 1px ${currentColor}18`,
+                            }}
+                          />
+                        </div>
+                      );
+                    })()
+                  : null}
 
                 <svg
                   className="absolute inset-0 h-full w-full"
@@ -1606,7 +1656,8 @@ export const ImageAnnotationWorkspace = ({
                     const isSelected = shape.id === selectedShapeId;
                     const canInteractWithShape =
                       !isCanvasOnlyMode ||
-                      (editTarget?.type === "shape" && editTarget.id === shape.id);
+                      (editTarget?.type === "shape" &&
+                        editTarget.id === shape.id);
                     return (
                       <g key={shape.id}>
                         {shape.type === "rect" ? (
@@ -1619,7 +1670,9 @@ export const ImageAnnotationWorkspace = ({
                               fill="transparent"
                               stroke="transparent"
                               strokeWidth={Math.max(shape.strokeWidth + 18, 20)}
-                              pointerEvents={canInteractWithShape ? "stroke" : "none"}
+                              pointerEvents={
+                                canInteractWithShape ? "stroke" : "none"
+                              }
                               onDoubleClick={
                                 canInteractWithShape
                                   ? (event) => {
@@ -1652,10 +1705,15 @@ export const ImageAnnotationWorkspace = ({
                                     d={brushPath}
                                     fill="none"
                                     stroke="transparent"
-                                    strokeWidth={Math.max(shape.strokeWidth + 18, 20)}
+                                    strokeWidth={Math.max(
+                                      shape.strokeWidth + 18,
+                                      20,
+                                    )}
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    pointerEvents={canInteractWithShape ? "stroke" : "none"}
+                                    pointerEvents={
+                                      canInteractWithShape ? "stroke" : "none"
+                                    }
                                     onDoubleClick={
                                       canInteractWithShape
                                         ? (event) => {
@@ -1688,7 +1746,9 @@ export const ImageAnnotationWorkspace = ({
                               strokeWidth={Math.max(shape.strokeWidth + 18, 20)}
                               strokeLinecap="round"
                               strokeLinejoin="round"
-                              pointerEvents={canInteractWithShape ? "stroke" : "none"}
+                              pointerEvents={
+                                canInteractWithShape ? "stroke" : "none"
+                              }
                               onDoubleClick={
                                 canInteractWithShape
                                   ? (event) => {
@@ -1711,24 +1771,24 @@ export const ImageAnnotationWorkspace = ({
                           </>
                         )}
 
-                        {isSelected ? (
-                          (() => {
-                            const bounds = getShapeBounds(shape);
-                            return (
-                              <rect
-                                x={bounds.x}
-                                y={bounds.y}
-                                width={bounds.width}
-                                height={bounds.height}
-                                fill="none"
-                                stroke="rgba(180,63,235,0.9)"
-                                strokeWidth={1.5}
-                                strokeDasharray="8 6"
-                                pointerEvents="none"
-                              />
-                            );
-                          })()
-                        ) : null}
+                        {isSelected
+                          ? (() => {
+                              const bounds = getShapeBounds(shape);
+                              return (
+                                <rect
+                                  x={bounds.x}
+                                  y={bounds.y}
+                                  width={bounds.width}
+                                  height={bounds.height}
+                                  fill="none"
+                                  stroke="rgba(180,63,235,0.9)"
+                                  strokeWidth={1.5}
+                                  strokeDasharray="8 6"
+                                  pointerEvents="none"
+                                />
+                              );
+                            })()
+                          : null}
                       </g>
                     );
                   })}
@@ -1760,80 +1820,94 @@ export const ImageAnnotationWorkspace = ({
                   ) : null}
                 </svg>
 
-                {selectedShape ? (
-                  (() => {
-                    const bounds = getShapeBounds(selectedShape);
-                    const isEditing =
-                      editTarget?.type === "shape" && editTarget.id === selectedShape.id;
-                    const canInteractWithShape =
-                      !isCanvasOnlyMode ||
-                      (editTarget?.type === "shape" && editTarget.id === selectedShape.id);
-                    return (
-                      <div
-                        className="absolute"
-                        style={{
-                          left: bounds.x * stageScale,
-                          top: bounds.y * stageScale,
-                          width: bounds.width * stageScale,
-                          height: bounds.height * stageScale,
-                          pointerEvents: canInteractWithShape ? "auto" : "none",
-                        }}
-                        onPointerDown={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                        }}
-                      >
-                        <div className="absolute inset-0 rounded-[10px] border border-[#B43FEB]/55 bg-[#B43FEB]/[0.04] shadow-[0_0_0_1px_rgba(180,63,235,0.18)]" />
-                        {isEditing
-                          ? ([
-                          {
-                            key: "n",
-                            className:
-                              "left-3 right-3 -top-2 h-4 cursor-ns-resize",
-                          },
-                          {
-                            key: "s",
-                            className:
-                              "left-3 right-3 -bottom-2 h-4 cursor-ns-resize",
-                          },
-                          {
-                            key: "w",
-                            className:
-                              "-left-2 top-3 bottom-3 w-4 cursor-ew-resize",
-                          },
-                          {
-                            key: "e",
-                            className:
-                              "-right-2 top-3 bottom-3 w-4 cursor-ew-resize",
-                          },
-                        ] as const).map((edge) => (
-                          <div
-                            key={edge.key}
-                            className={cn("absolute", edge.className)}
-                            onPointerDown={(event) =>
-                              handleStartShapeScale(selectedShape, edge.key, event)
-                            }
-                          />
-                        ))
-                          : null}
-                        {isEditing
-                          ? SHAPE_HANDLE_CONFIG.map((handle) => (
-                          <div
-                            key={handle.key}
-                            className={cn(
-                              "absolute h-4 w-4 rounded-full border border-white/70 bg-[#B43FEB] shadow-[0_4px_12px_rgba(180,63,235,0.35)]",
-                              handle.className,
-                            )}
-                            onPointerDown={(event) =>
-                              handleStartShapeScale(selectedShape, handle.key, event)
-                            }
-                          />
-                        ))
-                          : null}
-                      </div>
-                    );
-                  })()
-                ) : null}
+                {selectedShape
+                  ? (() => {
+                      const bounds = getShapeBounds(selectedShape);
+                      const isEditing =
+                        editTarget?.type === "shape" &&
+                        editTarget.id === selectedShape.id;
+                      const canInteractWithShape =
+                        !isCanvasOnlyMode ||
+                        (editTarget?.type === "shape" &&
+                          editTarget.id === selectedShape.id);
+                      return (
+                        <div
+                          className="absolute"
+                          style={{
+                            left: bounds.x * stageScale,
+                            top: bounds.y * stageScale,
+                            width: bounds.width * stageScale,
+                            height: bounds.height * stageScale,
+                            pointerEvents: canInteractWithShape
+                              ? "auto"
+                              : "none",
+                          }}
+                          onPointerDown={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                          }}
+                        >
+                          <div className="absolute inset-0 rounded-[10px] border border-[#B43FEB]/55 bg-[#B43FEB]/[0.04] shadow-[0_0_0_1px_rgba(180,63,235,0.18)]" />
+                          {isEditing
+                            ? (
+                                [
+                                  {
+                                    key: "n",
+                                    className:
+                                      "left-3 right-3 -top-2 h-4 cursor-ns-resize",
+                                  },
+                                  {
+                                    key: "s",
+                                    className:
+                                      "left-3 right-3 -bottom-2 h-4 cursor-ns-resize",
+                                  },
+                                  {
+                                    key: "w",
+                                    className:
+                                      "-left-2 top-3 bottom-3 w-4 cursor-ew-resize",
+                                  },
+                                  {
+                                    key: "e",
+                                    className:
+                                      "-right-2 top-3 bottom-3 w-4 cursor-ew-resize",
+                                  },
+                                ] as const
+                              ).map((edge) => (
+                                <div
+                                  key={edge.key}
+                                  className={cn("absolute", edge.className)}
+                                  onPointerDown={(event) =>
+                                    handleStartShapeScale(
+                                      selectedShape,
+                                      edge.key,
+                                      event,
+                                    )
+                                  }
+                                />
+                              ))
+                            : null}
+                          {isEditing
+                            ? SHAPE_HANDLE_CONFIG.map((handle) => (
+                                <div
+                                  key={handle.key}
+                                  className={cn(
+                                    "absolute h-4 w-4 rounded-full border border-white/70 bg-[#B43FEB] shadow-[0_4px_12px_rgba(180,63,235,0.35)]",
+                                    handle.className,
+                                  )}
+                                  onPointerDown={(event) =>
+                                    handleStartShapeScale(
+                                      selectedShape,
+                                      handle.key,
+                                      event,
+                                    )
+                                  }
+                                />
+                              ))
+                            : null}
+                        </div>
+                      );
+                    })()
+                  : null}
 
                 {textItems.map((item) => {
                   if (pendingTextDraft?.itemId === item.id) {
@@ -1865,7 +1939,11 @@ export const ImageAnnotationWorkspace = ({
                         pointerEvents: canInteractWithText ? "auto" : "none",
                       }}
                       onMouseEnter={() => setHoverTextId(item.id)}
-                      onMouseLeave={() => setHoverTextId((prev) => (prev === item.id ? null : prev))}
+                      onMouseLeave={() =>
+                        setHoverTextId((prev) =>
+                          prev === item.id ? null : prev,
+                        )
+                      }
                       onPointerDown={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
@@ -1947,7 +2025,9 @@ export const ImageAnnotationWorkspace = ({
                     }}
                     onPointerDown={(event) => event.stopPropagation()}
                   >
-                    <div className="mb-2 text-xs text-white/55">输入标注文字</div>
+                    <div className="mb-2 text-xs text-white/55">
+                      输入标注文字
+                    </div>
                     <textarea
                       autoFocus
                       value={pendingTextDraft.value}
@@ -1958,11 +2038,11 @@ export const ImageAnnotationWorkspace = ({
                       }
                       rows={3}
                       className="w-full resize-none rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/90 outline-none placeholder:text-white/25"
-                    placeholder={
-                      pendingTextDraft.itemId
-                        ? "编辑文字后点击确定"
-                        : "输入内容后点击确定"
-                    }
+                      placeholder={
+                        pendingTextDraft.itemId
+                          ? "编辑文字后点击确定"
+                          : "输入内容后点击确定"
+                      }
                     />
                     <div className="mt-3 flex justify-end gap-2">
                       <button
@@ -1992,11 +2072,13 @@ export const ImageAnnotationWorkspace = ({
             </div>
           ) : selectedShape ? (
             <div className="text-xs text-white/45">
-              已选中标注对象，双击边框进入编辑态；编辑态可拖拽控制点缩放，按 Backspace/Delete 删除
+              已选中标注对象，双击边框进入编辑态；编辑态可拖拽控制点缩放，按
+              Backspace/Delete 删除
             </div>
           ) : selectedText ? (
             <div className="text-xs text-white/45">
-              已选中文字，双击边框进入编辑态；编辑态可拖拽四角控制点缩放，按 Backspace/Delete 删除
+              已选中文字，双击边框进入编辑态；编辑态可拖拽四角控制点缩放，按
+              Backspace/Delete 删除
             </div>
           ) : (
             <div className="text-xs text-white/45">

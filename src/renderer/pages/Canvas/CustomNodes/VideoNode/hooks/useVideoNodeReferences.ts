@@ -91,20 +91,24 @@ export const useVideoNodeReferences = ({
   }, [edges, nodeId]);
 
   const parentVideoNodes = useMemo(() => {
-    return parentNodeIds
-      .map((parentId) => nodes.find((node) => node.id === parentId))
-      // 新旧视频节点都可以作为视频智能输入和参考视频来源。
-      .filter((node) => node?.type === "videoNode" || node?.type === "newVideoNode")
-      .map((node) => ({
-        id: node.id,
-        url:
-          node.type === "videoNode"
-            ? getPrimaryVideoUrlFromNodeData(node.data as VideoGenerationNode)
-            : getPrimaryVideoUrlFromAnyVideoNode(
-                node.data as NewVideoGenerationNode,
-              ),
-      }))
-      .filter((item) => item.url) as VideoReferenceItem[];
+    return (
+      parentNodeIds
+        .map((parentId) => nodes.find((node) => node.id === parentId))
+        // 新旧视频节点都可以作为视频智能输入和参考视频来源。
+        .filter(
+          (node) => node?.type === "videoNode" || node?.type === "newVideoNode",
+        )
+        .map((node) => ({
+          id: node.id,
+          url:
+            node.type === "videoNode"
+              ? getPrimaryVideoUrlFromNodeData(node.data as VideoGenerationNode)
+              : getPrimaryVideoUrlFromAnyVideoNode(
+                  node.data as NewVideoGenerationNode,
+                ),
+        }))
+        .filter((item) => item.url) as VideoReferenceItem[]
+    );
   }, [parentNodeIds, nodes]);
 
   const parentAudioNodes = useMemo(() => {

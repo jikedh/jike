@@ -43,12 +43,12 @@ export interface Seedance20StatusResponse {
   data?: {
     task_id: string; // 任务唯一标识符，用于查询任务状态
     status:
-    | "queued"
-    | "processing"
-    | "running"
-    | "succeeded"
-    | "failed"
-    | "canceled"; // 任务状态
+      | "queued"
+      | "processing"
+      | "running"
+      | "succeeded"
+      | "failed"
+      | "canceled"; // 任务状态
     duration?: number; // 视频时长（秒）
     error?: string; // 错误信息，成功时通常为空字符串
     tos_key?: string; // 对象存储中的资源 Key

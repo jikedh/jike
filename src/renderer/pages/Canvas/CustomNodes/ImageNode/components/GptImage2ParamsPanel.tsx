@@ -42,7 +42,8 @@ export const GptImage2ParamsPanel = ({
   onSizeChange,
   onResolutionChange,
 }: GptImage2ParamsPanelProps) => {
-  const currentSizeLabel = GPTIMAGE2_SIZES.find((item) => item.value === size)?.label ?? size;
+  const currentSizeLabel =
+    GPTIMAGE2_SIZES.find((item) => item.value === size)?.label ?? size;
 
   return (
     <Popover>
@@ -64,9 +65,11 @@ export const GptImage2ParamsPanel = ({
         <div className="space-y-3">
           {/* 分辨率档位 */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-neutral-300">分辨率档位</label>
+            <label className="text-xs font-medium text-neutral-300">
+              分辨率档位
+            </label>
             <div className="flex gap-2">
-              {['1K', '2K', '4K'].map((res) => {
+              {["1K", "2K", "4K"].map((res) => {
                 const isActive = resolution === res;
                 return (
                   <button
@@ -89,7 +92,9 @@ export const GptImage2ParamsPanel = ({
 
           {/* 图像比例 */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-neutral-300">图像比例</label>
+            <label className="text-xs font-medium text-neutral-300">
+              图像比例
+            </label>
             <div className="grid grid-cols-3 gap-2">
               {GPTIMAGE2_SIZES.map((item) => {
                 const isActive = size === item.value;

@@ -17,9 +17,7 @@ export type StorageApi = {
     basePath: string,
     projectName: string,
   ) => Promise<StorageResult<{ project?: unknown; path?: string }>>;
-  listProjects: (
-    basePath: string,
-  ) => Promise<
+  listProjects: (basePath: string) => Promise<
     StorageResult<{
       projects?: Array<{ name: string; createdAt: number; updatedAt: number }>;
     }>
@@ -74,10 +72,14 @@ export type StorageApi = {
   exportProject: (
     basePath: string,
     projectName: string,
-  ) => Promise<StorageResult<{ path?: string; projectName?: string; canceled?: boolean }>>;
+  ) => Promise<
+    StorageResult<{ path?: string; projectName?: string; canceled?: boolean }>
+  >;
   importProject: (
     basePath: string,
-  ) => Promise<StorageResult<{ path?: string; projectName?: string; canceled?: boolean }>>;
+  ) => Promise<
+    StorageResult<{ path?: string; projectName?: string; canceled?: boolean }>
+  >;
   getDefaultPath: () => Promise<string>;
 
   // Legacy aliases retained for compatibility while the renderer migrates.

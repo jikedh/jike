@@ -41,7 +41,9 @@ export default function CanvasPlaceholderPage() {
   const [projectToEdit, setProjectToEdit] = useState<ProjectMeta | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [exportingProjectId, setExportingProjectId] = useState<string | null>(null);
+  const [exportingProjectId, setExportingProjectId] = useState<string | null>(
+    null,
+  );
 
   const refreshProjects = async () => {
     const list = await getProjectListAsync();

@@ -171,7 +171,6 @@ MODEL_PARAM_CONFIGS["doubao-seedance-2.0-fast"] = {
   },
 };
 
-
 // ===================== Doubao Seedance 2.0 Pro =====================
 /** 璞嗗寘 Seedance 2.0 Pro 鍙傛暟閰嶇疆锛坢ode 鍥哄畾涓?pro锛屼笉鏆撮湶缁欑敤鎴凤級 */
 MODEL_PARAM_CONFIGS["doubao-seedance-2.0-pro"] = {

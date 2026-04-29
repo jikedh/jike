@@ -1,9 +1,10 @@
-export type SequencedMediaItem<T extends Record<string, any> = Record<string, any>> =
-  T & {
-    sequence?: number;
-    mediaIndex?: number;
-    order?: number;
-  };
+export type SequencedMediaItem<
+  T extends Record<string, any> = Record<string, any>,
+> = T & {
+  sequence?: number;
+  mediaIndex?: number;
+  order?: number;
+};
 
 const getStoredSequence = (item: SequencedMediaItem | undefined) => {
   const value = item?.sequence ?? item?.mediaIndex ?? item?.order;

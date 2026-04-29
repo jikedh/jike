@@ -22,7 +22,11 @@ declare global {
       imageToFile: (
         url: string,
         filePath: string,
-      ) => Promise<{ success: boolean; data?: { path: string }; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        data?: { path: string };
+        error?: string;
+      }>;
     };
     flow2api: Flow2ApiApi;
   }

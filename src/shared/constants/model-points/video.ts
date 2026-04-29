@@ -25,7 +25,8 @@ export const getVideoGenerationPoints = ({
   hasAudio?: boolean;
   fallback?: number;
 }) => {
-  let basePointsPerSecond = (model ? VIDEO_MODEL_POINTS[model] : undefined) ?? fallback;
+  let basePointsPerSecond =
+    (model ? VIDEO_MODEL_POINTS[model] : undefined) ?? fallback;
 
   // 特殊逻辑：Seedance 2.0 系列
   if (

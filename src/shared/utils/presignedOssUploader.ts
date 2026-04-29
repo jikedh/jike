@@ -32,7 +32,10 @@ export interface CreatePresignedTargetOptions {
  */
 export interface UploadWithPresignedUrlOptions {
   /** 预签名目标 */
-  target: Pick<PresignedOssUploadTarget, "uploadUrl" | "publicUrl" | "uploadHeaders">;
+  target: Pick<
+    PresignedOssUploadTarget,
+    "uploadUrl" | "publicUrl" | "uploadHeaders"
+  >;
   /** 上传内容 */
   data: Blob | ArrayBuffer | Uint8Array | string;
   /** 上传内容类型，可覆盖 target.uploadHeaders 中的 Content-Type */
@@ -77,7 +80,9 @@ export class PresignedOssUploader {
    */
   private static buildObjectKey(options: CreatePresignedTargetOptions) {
     const directory = options.directory ?? "video";
-    const extension = (options.extension ?? "mp4").replace(/^\./, "").toLowerCase();
+    const extension = (options.extension ?? "mp4")
+      .replace(/^\./, "")
+      .toLowerCase();
 
     if (options.fileName?.trim()) {
       const pureName = options.fileName.replace(/\.[^/.]+$/, "").trim();
@@ -102,14 +107,11 @@ export class PresignedOssUploader {
       uploadHeaders["Content-Type"] = options.contentType;
     }
 
-    const uploadUrl = client.signatureUrl(
-      objectKey,
-      {
-        method: "PUT",
-        expires: options.expiresSeconds ?? 24 * 60 * 60,
-        headers: uploadHeaders,
-      } as any,
-    );
+    const uploadUrl = client.signatureUrl(objectKey, {
+      method: "PUT",
+      expires: options.expiresSeconds ?? 24 * 60 * 60,
+      headers: uploadHeaders,
+    } as any);
 
     return {
       objectKey,
@@ -155,7 +157,9 @@ export class PresignedOssUploader {
 
       return {
         success: true,
-        publicUrl: options.target.publicUrl || this.getPublicUrl(options.target.uploadUrl),
+        publicUrl:
+          options.target.publicUrl ||
+          this.getPublicUrl(options.target.uploadUrl),
       };
     } catch (error: any) {
       if (error?.name === "AbortError") {

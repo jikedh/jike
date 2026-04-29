@@ -241,7 +241,13 @@ export function useDragUpload() {
               : null;
 
           const projectId = useCanvasFlowStore.getState().projectId;
-          const ext = file.name.split(".").pop()?.toLowerCase() || (mediaType === "video" ? "mp4" : mediaType === "audio" ? "mp3" : "png");
+          const ext =
+            file.name.split(".").pop()?.toLowerCase() ||
+            (mediaType === "video"
+              ? "mp4"
+              : mediaType === "audio"
+                ? "mp3"
+                : "png");
 
           let localName: string | null = null;
           let localPath: string | null = null;
@@ -257,7 +263,12 @@ export function useDragUpload() {
                 localName = await saveAudioToLocal(projectId, arrayBuffer, ext);
               }
               if (localName) {
-                const folderType = mediaType === "image" ? "image" : mediaType === "video" ? "video" : "audio";
+                const folderType =
+                  mediaType === "image"
+                    ? "image"
+                    : mediaType === "video"
+                      ? "video"
+                      : "audio";
                 localPath = getLocalFilePath(projectId, folderType, localName);
               }
             } catch (saveErr) {
@@ -273,11 +284,13 @@ export function useDragUpload() {
               ...(aspectRatio ? { size: aspectRatio } : {}),
               result: {
                 type: "image",
-                data: [{
-                  url: result.url,
-                  ...(localName ? { localName } : {}),
-                  ...(localPath ? { localPath } : {}),
-                }],
+                data: [
+                  {
+                    url: result.url,
+                    ...(localName ? { localName } : {}),
+                    ...(localPath ? { localPath } : {}),
+                  },
+                ],
               },
             });
           } else if (mediaType === "video") {
@@ -288,12 +301,14 @@ export function useDragUpload() {
               ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
               result: {
                 type: "video",
-                data: [{
-                  url: result.url,
-                  format: ext,
-                  ...(localName ? { localName } : {}),
-                  ...(localPath ? { localPath } : {}),
-                }],
+                data: [
+                  {
+                    url: result.url,
+                    format: ext,
+                    ...(localName ? { localName } : {}),
+                    ...(localPath ? { localPath } : {}),
+                  },
+                ],
               },
             });
           } else {
@@ -303,12 +318,14 @@ export function useDragUpload() {
               isUpload: true,
               result: {
                 type: "audio",
-                data: [{
-                  url: result.url,
-                  format: ext,
-                  ...(localName ? { localName } : {}),
-                  ...(localPath ? { localPath } : {}),
-                }],
+                data: [
+                  {
+                    url: result.url,
+                    format: ext,
+                    ...(localName ? { localName } : {}),
+                    ...(localPath ? { localPath } : {}),
+                  },
+                ],
               },
             });
           }

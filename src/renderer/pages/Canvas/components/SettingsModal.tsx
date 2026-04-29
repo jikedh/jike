@@ -221,11 +221,11 @@ export const SettingsModal = ({
         [formData.type]: prev[formData.type].map((p) =>
           p.id === editingId
             ? {
-              name: formData.name.trim(),
-              content: formData.content,
-              enabled: p.enabled,
-              id: editingId,
-            }
+                name: formData.name.trim(),
+                content: formData.content,
+                enabled: p.enabled,
+                id: editingId,
+              }
             : p,
         ),
       };
@@ -335,7 +335,7 @@ export const SettingsModal = ({
 
     return (
       sectionPlaceholderMap[
-      activeSection as keyof typeof sectionPlaceholderMap
+        activeSection as keyof typeof sectionPlaceholderMap
       ] ?? []
     );
   }, [activeSection]);
@@ -606,7 +606,10 @@ export const SettingsModal = ({
                                       onClick={() =>
                                         setFormData({
                                           ...formData,
-                                          type: t as "general" | "image" | "video",
+                                          type: t as
+                                            | "general"
+                                            | "image"
+                                            | "video",
                                         })
                                       }
                                       className={cn(

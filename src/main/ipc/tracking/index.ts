@@ -19,13 +19,20 @@ export function registerTrackingHandlers(): void {
   });
 
   // 更新埋点状态
-  ipcMain.handle("tracking:updateStatus", async (_event, taskId, status, errorMessage) => {
-    try {
-      console.log("[Tracking] 更新埋点状态:", { taskId, status, errorMessage });
-      return { success: true };
-    } catch (error) {
-      console.error("[Tracking] 状态更新失败:", error);
-      return { success: false, error: String(error) };
-    }
-  });
+  ipcMain.handle(
+    "tracking:updateStatus",
+    async (_event, taskId, status, errorMessage) => {
+      try {
+        console.log("[Tracking] 更新埋点状态:", {
+          taskId,
+          status,
+          errorMessage,
+        });
+        return { success: true };
+      } catch (error) {
+        console.error("[Tracking] 状态更新失败:", error);
+        return { success: false, error: String(error) };
+      }
+    },
+  );
 }

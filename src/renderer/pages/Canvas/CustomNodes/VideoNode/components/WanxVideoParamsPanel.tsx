@@ -118,9 +118,7 @@ export const WanxVideoParamsPanel = ({
           <span className="flex items-center gap-1.5">
             {summary.map((text, index) => (
               <span key={index} className="flex items-center gap-1.5">
-                {index > 0 && (
-                  <span className="text-neutral-500">|</span>
-                )}
+                {index > 0 && <span className="text-neutral-500">|</span>}
                 {text === "16:9" || text === "9:16" || text === "1:1" ? (
                   <>
                     <AspectRatioIcon ratio={text} size={14} active={false} />
@@ -148,7 +146,8 @@ export const WanxVideoParamsPanel = ({
           {/* 鍒嗚鲸鐜?*/}
           <div className="space-y-2">
             <label className="text-xs font-medium text-neutral-300">
-              鍒嗚鲸鐜?            </label>
+              鍒嗚鲸鐜?{" "}
+            </label>
             <div className="flex gap-2">
               {RESOLUTION_OPTIONS.map((option) => {
                 const isActive = resolution === option.value;
@@ -215,7 +214,8 @@ export const WanxVideoParamsPanel = ({
           {/* 瑙嗛鏃堕暱 */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-neutral-300">
-              瑙嗛鏃堕暱锛堢锛?            </label>
+              瑙嗛鏃堕暱锛堢锛?{" "}
+            </label>
             <div className="flex flex-wrap gap-1.5">
               {DURATION_OPTIONS.map((value) => {
                 const isActive = duration === value;
@@ -247,10 +247,10 @@ export const WanxVideoParamsPanel = ({
               </span>
             </div>
             <Switch
-            checked={promptExtend}
-            onCheckedChange={handlePromptExtendChange}
-            className="data-[state=checked]:bg-[#B43FEB]"
-          />
+              checked={promptExtend}
+              onCheckedChange={handlePromptExtendChange}
+              className="data-[state=checked]:bg-[#B43FEB]"
+            />
           </div>
         </div>
       </PopoverContent>

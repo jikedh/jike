@@ -34,7 +34,6 @@ export interface Wan27R2vRequest {
   };
 }
 
-
 /**
  * wan2.7-r2v 成功响应（创建任务）
  */
@@ -53,7 +52,13 @@ export interface Wan27R2vQueryResponse {
   request_id: string;
   output: {
     task_id: string;
-    task_status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELED" | "UNKNOWN";
+    task_status:
+      | "PENDING"
+      | "RUNNING"
+      | "SUCCEEDED"
+      | "FAILED"
+      | "CANCELED"
+      | "UNKNOWN";
     submit_time: string;
     scheduled_time?: string;
     end_time?: string;

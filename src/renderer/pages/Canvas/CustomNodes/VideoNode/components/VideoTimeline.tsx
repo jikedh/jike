@@ -36,7 +36,8 @@ export const VideoTimeline = ({
       <div className="mb-2 flex items-center justify-between text-xs text-white/60">
         <span>时间轴（{stepMs}ms）</span>
         <span>
-          {formatTimelineTime(normalizedCurrentMs)} / {formatTimelineTime(maxDurationMs)}
+          {formatTimelineTime(normalizedCurrentMs)} /{" "}
+          {formatTimelineTime(maxDurationMs)}
         </span>
       </div>
       <Slider

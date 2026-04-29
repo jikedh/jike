@@ -287,18 +287,15 @@ export const TableNode = memo(
     const handleUpdateCell = useCallback(
       (rowIndex: number, column: string, value: string) => {
         // 使用函数式更新避免依赖外部 rows，减少重渲染
-        updateTableNodeData(
-          id,
-          ((prevData: any) => {
-            const currentRows = prevData.rows || [];
-            const newRows = [...currentRows];
-            newRows[rowIndex] = {
-              ...newRows[rowIndex],
-              [column]: value,
-            };
-            return { rows: newRows };
-          }) as (prev: Record<string, unknown>) => Record<string, unknown>,
-        );
+        updateTableNodeData(id, ((prevData: any) => {
+          const currentRows = prevData.rows || [];
+          const newRows = [...currentRows];
+          newRows[rowIndex] = {
+            ...newRows[rowIndex],
+            [column]: value,
+          };
+          return { rows: newRows };
+        }) as (prev: Record<string, unknown>) => Record<string, unknown>);
       },
       [id, updateTableNodeData],
     );

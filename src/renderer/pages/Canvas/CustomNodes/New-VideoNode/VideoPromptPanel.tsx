@@ -464,6 +464,10 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     }));
   }, [generationReferenceItems]);
 
+  useEffect(() => {
+    editorRef.current?.updateReferenceMentions(editorMentionItems);
+  }, [editorMentionItems]);
+
   const referenceImages = useMemo(
     () =>
       generationReferenceItems

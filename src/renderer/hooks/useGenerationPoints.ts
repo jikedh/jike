@@ -16,7 +16,10 @@ type EnsurePointsOptions = {
 type ValidateBalanceOptions = {
   requiredPoints: number;
   warning: (message: string) => void;
-  insufficientMessage?: (requiredPoints: number, currentVipScore: number) => string;
+  insufficientMessage?: (
+    requiredPoints: number,
+    currentVipScore: number,
+  ) => string;
   failureMessage?: string;
 };
 
@@ -24,7 +27,9 @@ export function useGenerationPoints() {
   const loginStatus = useUserStore((state) => state.loginStatus);
   const balanceInfo = useUserStore((state) => state.balanceInfo);
   const fetchBalanceInfo = useUserStore((state) => state.fetchBalanceInfo);
-  const setDialogLoginStatus = useUserStore((state) => state.setDialogLoginStatus);
+  const setDialogLoginStatus = useUserStore(
+    (state) => state.setDialogLoginStatus,
+  );
 
   const [fallbackAIGenPrice, setFallbackAIGenPrice] = useState<number>(12);
 

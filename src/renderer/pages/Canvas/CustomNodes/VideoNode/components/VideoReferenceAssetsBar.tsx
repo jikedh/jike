@@ -15,7 +15,7 @@ const VideoThumbnailButton = ({ videoUrl }: { videoUrl: string }) => {
   useEffect(() => {
     getVideoThumbnail(videoUrl)
       .then(setThumbnail)
-      .catch(() => { });
+      .catch(() => {});
   }, [videoUrl]);
 
   if (thumbnail) {
@@ -150,85 +150,87 @@ export const VideoReferenceAssetsBar = ({
         onChange={onFileChange}
       />
 
-      {referenceContent ? referenceContent : (
+      {referenceContent ? (
+        referenceContent
+      ) : (
         <>
-      {referenceImageUrls.map((url, index) => {
-        return (
-          <ReferenceItemWrapper
-            key={`${url}-${index}`}
-            onDisconnect={() =>
-              onRemoveReferenceImage(
-                url,
-                referenceImageIndexes?.[index] ?? index,
-              )
-            }
-          >
-            <img
-              src={url}
-              alt="参考图"
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
-              loading="lazy"
-            />
-          </ReferenceItemWrapper>
-        );
-      })}
+          {referenceImageUrls.map((url, index) => {
+            return (
+              <ReferenceItemWrapper
+                key={`${url}-${index}`}
+                onDisconnect={() =>
+                  onRemoveReferenceImage(
+                    url,
+                    referenceImageIndexes?.[index] ?? index,
+                  )
+                }
+              >
+                <img
+                  src={url}
+                  alt="参考图"
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+                  loading="lazy"
+                />
+              </ReferenceItemWrapper>
+            );
+          })}
 
-      {parentImageNodes.map((item, index) => (
-        <ReferenceItemWrapper
-          key={`parent-image-${item.id}-${index}`}
-          onDisconnect={() => onDisconnectNode(item.id)}
-          onMouseEnter={() => onReferenceHoverChange(item.id, true)}
-          onMouseLeave={() => onReferenceHoverChange(item.id, false)}
-        >
-          <img
-            src={item.displayUrl ?? item.url}
-            alt="鍙傝€冨浘"
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
-            loading="lazy"
-          />
-        </ReferenceItemWrapper>
-      ))}
-
-      {parentAudioNodes.map((item, index) => (
-        <ReferenceItemWrapper
-          key={`audio-${item.id}-${index}`}
-          className="border-[#B43FEB]/40 bg-[#B43FEB]/20"
-          onDisconnect={() => onDisconnectNode(item.id)}
-          onMouseEnter={() => onReferenceHoverChange(item.id, true)}
-          onMouseLeave={() => onReferenceHoverChange(item.id, false)}
-        >
-          <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] text-[#B43FEB]">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          {parentImageNodes.map((item, index) => (
+            <ReferenceItemWrapper
+              key={`parent-image-${item.id}-${index}`}
+              onDisconnect={() => onDisconnectNode(item.id)}
+              onMouseEnter={() => onReferenceHoverChange(item.id, true)}
+              onMouseLeave={() => onReferenceHoverChange(item.id, false)}
             >
-              <path d="M9 18V5l12-2v13" />
-              <circle cx="6" cy="18" r="3" />
-              <circle cx="18" cy="16" r="3" />
-            </svg>
-            <span>音频</span>
-          </div>
-        </ReferenceItemWrapper>
-      ))}
+              <img
+                src={item.displayUrl ?? item.url}
+                alt="鍙傝€冨浘"
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+                loading="lazy"
+              />
+            </ReferenceItemWrapper>
+          ))}
 
-      {parentVideoNodes.map((item, index) => (
-        <ReferenceItemWrapper
-          key={`video-${item.id}-${index}`}
-          className="overflow-hidden"
-          onDisconnect={() => onDisconnectNode(item.id)}
-          onMouseEnter={() => onReferenceHoverChange(item.id, true)}
-          onMouseLeave={() => onReferenceHoverChange(item.id, false)}
-        >
-          <VideoThumbnailButton videoUrl={item.url} />
-        </ReferenceItemWrapper>
-      ))}
+          {parentAudioNodes.map((item, index) => (
+            <ReferenceItemWrapper
+              key={`audio-${item.id}-${index}`}
+              className="border-[#B43FEB]/40 bg-[#B43FEB]/20"
+              onDisconnect={() => onDisconnectNode(item.id)}
+              onMouseEnter={() => onReferenceHoverChange(item.id, true)}
+              onMouseLeave={() => onReferenceHoverChange(item.id, false)}
+            >
+              <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] text-[#B43FEB]">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M9 18V5l12-2v13" />
+                  <circle cx="6" cy="18" r="3" />
+                  <circle cx="18" cy="16" r="3" />
+                </svg>
+                <span>音频</span>
+              </div>
+            </ReferenceItemWrapper>
+          ))}
+
+          {parentVideoNodes.map((item, index) => (
+            <ReferenceItemWrapper
+              key={`video-${item.id}-${index}`}
+              className="overflow-hidden"
+              onDisconnect={() => onDisconnectNode(item.id)}
+              onMouseEnter={() => onReferenceHoverChange(item.id, true)}
+              onMouseLeave={() => onReferenceHoverChange(item.id, false)}
+            >
+              <VideoThumbnailButton videoUrl={item.url} />
+            </ReferenceItemWrapper>
+          ))}
         </>
       )}
     </div>

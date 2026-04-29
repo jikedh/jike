@@ -228,17 +228,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const isGptImage2Model = model === "gpt-image-2";
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
-  const isLocalGeminiDirectModel =
-    isGeminiPro2Model || isNanoBananaLocalModel;
+  const isLocalGeminiDirectModel = isGeminiPro2Model || isNanoBananaLocalModel;
   const isGeminiFamilyModel =
     isGeminiModel || isGeminiPro2Model || isNanoBananaLocalModel;
 
   useEffect(() => {
-    if (
-      !isNanoBananaLocalModel ||
-      !size ||
-      NANO_BANANA_SIZE_VALUES.has(size)
-    ) {
+    if (!isNanoBananaLocalModel || !size || NANO_BANANA_SIZE_VALUES.has(size)) {
       return;
     }
 
@@ -297,10 +292,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const disableBuiltInSuggestion = {
     items: () => [],
     render: () => ({
-      onStart: () => { },
-      onUpdate: () => { },
+      onStart: () => {},
+      onUpdate: () => {},
       onKeyDown: () => false,
-      onExit: () => { },
+      onExit: () => {},
     }),
   };
 
@@ -1012,7 +1007,9 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             }
 
             const chunkDelay = Math.min(remainingDelay, 200);
-            await new Promise((resolve) => window.setTimeout(resolve, chunkDelay));
+            await new Promise((resolve) =>
+              window.setTimeout(resolve, chunkDelay),
+            );
             remainingDelay -= chunkDelay;
           }
         }
