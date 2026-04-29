@@ -77,3 +77,4 @@ export async function getWuhenVideoRemovalTaskStatus(taskId: string) {
     data: WuhenVideoRemovalTaskRecord;
   };
 }
+
