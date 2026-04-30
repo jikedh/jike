@@ -12,6 +12,7 @@ import { getNodeSizeByAspectRatio } from "@/pages/Canvas/CustomNodes/ImageNode/u
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { NodeNameBadge } from "../shared/NodeNameBadge";
 import { VideoContent } from "./VideoContent";
 import { VideoPromptPanel } from "./VideoPromptPanel";
 import { VideoToolbar } from "./VideoToolbar";
@@ -129,6 +130,7 @@ export const VideoNode = memo(
         status === GenerationStatus.QUEUED
       );
     }, [data.status]);
+    const isUploadVideo = data.isUpload ?? false;
 
     const confirmDeleteIfNeeded = useCallback(() => {
       if (!isGenerating) {
@@ -197,6 +199,8 @@ export const VideoNode = memo(
                   : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
             )}
           >
+            <NodeNameBadge>{isUploadVideo ? "上传视频" : "生成视频"}</NodeNameBadge>
+
             {/* 左侧输入 Handle */}
             <ButtonHandle
               type="target"
@@ -256,7 +260,7 @@ export const VideoNode = memo(
 
           {/* 底部增强输入区：放在节点几何空间内，缩放时自动保持一致 */}
           {/* 拖动结束后再挂载，降低首次拖拽时的渲染负担 */}
-          {shouldShowToolbar && (
+          {shouldShowToolbar && !isUploadVideo && (
             <div className="selection-box-deferred-ui nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2">
               <VideoPromptPanel nodeId={id} />
             </div>

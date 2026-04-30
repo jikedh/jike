@@ -19,6 +19,7 @@ import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
+import { NodeNameBadge } from "../shared/NodeNameBadge";
 import { ImageAnnotationWorkspace } from "./ImageAnnotationWorkspace";
 import { ImageContent } from "./ImageContent";
 import { ImagePromptPanel } from "./ImagePromptPanel";
@@ -167,6 +168,7 @@ export const ImageNode = memo(
         status === GenerationStatus.QUEUED
       );
     }, [data.status]);
+    const isUploadImage = data.isUpload ?? false;
 
     const confirmDeleteIfNeeded = useCallback(() => {
       if (!isGenerating) {
@@ -380,6 +382,8 @@ export const ImageNode = memo(
                       : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
               )}
             >
+              <NodeNameBadge>{isUploadImage ? "上传图片" : "生成图片"}</NodeNameBadge>
+
               {/* 左侧输入 Handle */}
               <ButtonHandle
                 type="target"
@@ -444,7 +448,7 @@ export const ImageNode = memo(
 
             {/* 节点内底部增强输入区：与节点同一几何空间，缩放时保持一致 */}
             {/* 拖动结束后再挂载，降低首次拖拽时的渲染负担 */}
-            {shouldShowToolbar && (
+            {shouldShowToolbar && !isUploadImage && (
               <div className="selection-box-deferred-ui nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2">
                 <ImagePromptPanel nodeId={id} />
               </div>

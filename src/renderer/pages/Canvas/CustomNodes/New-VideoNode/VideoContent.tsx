@@ -42,6 +42,7 @@ export const VideoContent = memo(
     const isGenerating =
       status === GenerationStatus.IN_PROGRESS ||
       status === GenerationStatus.QUEUED;
+    const isUpload = data.isUpload ?? false;
 
     const displayVideos = useMemo(() => {
       if (!isGenerating || videos.length === 0) {
@@ -117,7 +118,9 @@ export const VideoContent = memo(
             <div className="absolute inset-0 rounded-full border-2 border-primary/30" />
             <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary" />
           </div>
-          <div className="text-xs text-muted-foreground">生成中...</div>
+          <div className="text-xs text-muted-foreground">
+            {isUpload ? "上传中..." : "生成中..."}
+          </div>
         </div>
       );
     }

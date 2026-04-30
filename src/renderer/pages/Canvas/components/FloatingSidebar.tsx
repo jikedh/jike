@@ -155,7 +155,7 @@ export const FloatingSidebar = ({
           event.clientY || Math.round(rect.top + Math.max(0, rect.height) / 2);
         window.dispatchEvent(
           new CustomEvent("jike:open-canvas-context-menu", {
-            detail: { x, y },
+            detail: { x, y, mode: "create" },
           }),
         );
         return;

@@ -28,3 +28,4 @@ out
 *.log*
 release
 resources/flow2api-main
+agent.md

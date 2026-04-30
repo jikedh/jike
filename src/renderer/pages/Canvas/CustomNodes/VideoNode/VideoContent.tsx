@@ -29,6 +29,7 @@ export const VideoContent = ({
   );
   const status = data.status ?? GenerationStatus.COMPLETED;
   const error = data.error;
+  const isUpload = data.isUpload ?? false;
 
   // 判断是否应该显示失败状态：
   // 1. 状态明确为 failed（API 返回失败）
@@ -82,7 +83,9 @@ export const VideoContent = ({
           <div className="absolute inset-0 border-2 border-primary/30 rounded-full"></div>
           <div className="absolute inset-0 border-2 border-transparent border-t-primary rounded-full animate-spin"></div>
         </div>
-        <div className="text-xs text-muted-foreground">生成中...</div>
+        <div className="text-xs text-muted-foreground">
+          {isUpload ? "上传中..." : "生成中..."}
+        </div>
       </div>
     );
   }
