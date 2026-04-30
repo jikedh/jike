@@ -8,6 +8,9 @@ import { PresetDropdown } from "@/components/PresetDropdown";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
+import type { VideoPromptEditorHandle } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoPromptEditor";
+import { VideoPromptEditor } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoPromptEditor";
+import { VideoReferenceAssetsBar } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoReferenceAssetsBar";
 import {
   getVideoLocalImageMentionId,
   getVideoParentAudioMentionId,
@@ -16,9 +19,6 @@ import {
   useVideoNodeReferences,
 } from "@/pages/Canvas/CustomNodes/VideoNode/hooks/useVideoNodeReferences";
 import { useVideoReferenceActions } from "@/pages/Canvas/CustomNodes/VideoNode/hooks/useVideoReferenceActions";
-import type { VideoPromptEditorHandle } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoPromptEditor";
-import { VideoPromptEditor } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoPromptEditor";
-import { VideoReferenceAssetsBar } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoReferenceAssetsBar";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
@@ -97,37 +97,37 @@ const buildReferenceItems = (
   videoUrls: string[] = [],
   audioUrls: string[] = [],
 ): MentionItem[] => [
-  ...imageUrls.map((url, index) => ({
-    id: `image-${index}-${url}`,
-    label: `图片${index + 1}`,
-    value: url,
-    thumbnail: url,
-    type: "image" as const,
-  })),
-  ...videoUrls.map((url, index) => ({
-    id: `video-${index}-${url}`,
-    label: `视频${index + 1}`,
-    value: url,
-    thumbnail: url,
-    type: "video" as const,
-  })),
-  ...audioUrls.map((url, index) => ({
-    id: `audio-${index}-${url}`,
-    label: `音频${index + 1}`,
-    value: url,
-    thumbnail: url,
-    type: "audio" as const,
-  })),
-];
+    ...imageUrls.map((url, index) => ({
+      id: `image-${index}-${url}`,
+      label: `图片${index + 1}`,
+      value: url,
+      thumbnail: url,
+      type: "image" as const,
+    })),
+    ...videoUrls.map((url, index) => ({
+      id: `video-${index}-${url}`,
+      label: `视频${index + 1}`,
+      value: url,
+      thumbnail: url,
+      type: "video" as const,
+    })),
+    ...audioUrls.map((url, index) => ({
+      id: `audio-${index}-${url}`,
+      label: `音频${index + 1}`,
+      value: url,
+      thumbnail: url,
+      type: "audio" as const,
+    })),
+  ];
 
 type ReferenceSource =
   | string
   | {
-      id?: string;
-      mentionId?: string;
-      url: string;
-      thumbnail?: string;
-    };
+    id?: string;
+    mentionId?: string;
+    url: string;
+    thumbnail?: string;
+  };
 
 const normalizeReferenceSource = (
   item: ReferenceSource,
@@ -155,52 +155,52 @@ const buildOrderedReferenceItems = (
   videoUrls: ReferenceSource[] = [],
   audioUrls: ReferenceSource[] = [],
 ): MentionItem[] => [
-  ...imageUrls.map((item, index) => {
-    const source = normalizeReferenceSource(
-      item,
-      `image-${index}-${typeof item === "string" ? item : item.url}`,
-    );
-    return {
-      id: source.id,
-      label: `图片${index + 1}`,
-      value: source.url,
-      thumbnail: source.thumbnail,
-      url: source.url,
-      mentionId: source.mentionId,
-      type: "image" as const,
-    };
-  }),
-  ...videoUrls.map((item, index) => {
-    const source = normalizeReferenceSource(
-      item,
-      `video-${index}-${typeof item === "string" ? item : item.url}`,
-    );
-    return {
-      id: source.id,
-      label: `视频${index + 1}`,
-      value: source.url,
-      thumbnail: source.thumbnail,
-      url: source.url,
-      mentionId: source.mentionId,
-      type: "video" as const,
-    };
-  }),
-  ...audioUrls.map((item, index) => {
-    const source = normalizeReferenceSource(
-      item,
-      `audio-${index}-${typeof item === "string" ? item : item.url}`,
-    );
-    return {
-      id: source.id,
-      label: `音频${index + 1}`,
-      value: source.url,
-      thumbnail: source.thumbnail,
-      url: source.url,
-      mentionId: source.mentionId,
-      type: "audio" as const,
-    };
-  }),
-];
+    ...imageUrls.map((item, index) => {
+      const source = normalizeReferenceSource(
+        item,
+        `image-${index}-${typeof item === "string" ? item : item.url}`,
+      );
+      return {
+        id: source.id,
+        label: `图片${index + 1}`,
+        value: source.url,
+        thumbnail: source.thumbnail,
+        url: source.url,
+        mentionId: source.mentionId,
+        type: "image" as const,
+      };
+    }),
+    ...videoUrls.map((item, index) => {
+      const source = normalizeReferenceSource(
+        item,
+        `video-${index}-${typeof item === "string" ? item : item.url}`,
+      );
+      return {
+        id: source.id,
+        label: `视频${index + 1}`,
+        value: source.url,
+        thumbnail: source.thumbnail,
+        url: source.url,
+        mentionId: source.mentionId,
+        type: "video" as const,
+      };
+    }),
+    ...audioUrls.map((item, index) => {
+      const source = normalizeReferenceSource(
+        item,
+        `audio-${index}-${typeof item === "string" ? item : item.url}`,
+      );
+      return {
+        id: source.id,
+        label: `音频${index + 1}`,
+        value: source.url,
+        thumbnail: source.thumbnail,
+        url: source.url,
+        mentionId: source.mentionId,
+        type: "audio" as const,
+      };
+    }),
+  ];
 
 const relabelReferenceItemsByOrder = (items: MentionItem[]) => {
   const counters: Record<MentionItem["type"], number> = {
@@ -257,7 +257,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     fallbackAIGenPrice,
     normalizeRequiredPoints,
     refreshBalanceInfo,
-    ensureEnoughPoints,
     validateBalanceBeforeGenerate,
   } = useGenerationPoints();
 
@@ -978,16 +977,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       }
 
       if (
-        !ensureEnoughPoints({
-          requiredPoints,
-          actionLabel: "生成视频",
-          warning,
-        })
-      ) {
-        return;
-      }
-
-      if (
         !(await validateBalanceBeforeGenerate({
           requiredPoints,
           warning,
@@ -1016,7 +1005,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       void refreshBalanceInfo();
     },
     [
-      ensureEnoughPoints,
       generationReferenceItems,
       isGenerating,
       nodeId,
