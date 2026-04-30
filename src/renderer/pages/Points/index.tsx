@@ -1,31 +1,30 @@
 import {
-  Zap,
   ArrowUpRight,
-  History,
-  Gift,
   CheckCircle2,
   ChevronRight,
-  Wallet,
   CreditCard,
+  Gift,
+  History,
   ReceiptText,
-  User,
   Star,
+  User,
+  Wallet,
+  Zap,
 } from "lucide-react";
-import { useState, useEffect } from "react";
-import { getJikeingToken, getJikeingUserId } from "shared/utils/utils";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { cn } from "shared/utils/utils";
+import { useEffect, useState } from "react";
+import { cn, getJikeingToken, getJikeingUserId } from "shared/utils/utils";
 import { toast } from "sonner";
 import {
   createRechargeOrder,
   getRechargeOrderStatus,
   updateVipScore,
 } from "@/api/jikeing";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useUserStore } from "@/stores/useUserStore";
 
 const AVATAR_STYLES = [
@@ -87,35 +86,35 @@ export function PointsView() {
   const packages = [
     {
       id: 1,
-      packageId: "pkg_500",
-      points: 500,
-      price: 0.01,
-      originalPrice: 15,
+      packageId: "pkg_600",
+      points: 600,
+      price: 10,
+      originalPrice: 18,
       tag: "入门首选",
     },
     {
       id: 2,
-      packageId: "pkg_2000",
-      points: 2000,
-      price: 29.9,
-      originalPrice: 60,
+      packageId: "pkg_6000",
+      points: 6000,
+      price: 100,
+      originalPrice: 180,
       tag: "超值特惠",
       popular: true,
     },
     {
       id: 3,
-      packageId: "pkg_5000",
-      points: 5000,
-      price: 69.9,
-      originalPrice: 150,
+      packageId: "pkg_18000",
+      points: 18000,
+      price: 300,
+      originalPrice: 540,
       tag: "创作达人",
     },
     {
       id: 4,
-      packageId: "pkg_12000",
-      points: 12000,
-      price: 159.9,
-      originalPrice: 360,
+      packageId: "pkg_60000",
+      points: 60000,
+      price: 1000,
+      originalPrice: 1800,
       tag: "专业工作室",
     },
   ];
