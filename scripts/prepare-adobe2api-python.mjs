@@ -163,7 +163,17 @@ function copyHostDistributions(info) {
     : join(pythonRoot, "lib", `python${info.major}.${info.minor}`, "site-packages");
   mkdirSync(sitePackagesRoot, { recursive: true });
 
-  const distributions = hostDistributionFiles(requirements);
+  let distributions = [];
+  try {
+    distributions = hostDistributionFiles(requirements);
+  } catch (error) {
+    console.warn(
+      `[prepare-adobe2api-python] host packages are incomplete, falling back to pip install: ${
+        error instanceof Error ? error.message : error
+      }`,
+    );
+    return false;
+  }
   for (const distribution of distributions) {
     for (const file of distribution.files) {
       const source = file.src;
@@ -180,6 +190,7 @@ function copyHostDistributions(info) {
   console.log(
     `[prepare-adobe2api-python] copied ${distributions.length} Python distributions from host site-packages`,
   );
+  return true;
 }
 
 function prepareRuntime(info) {
@@ -199,12 +210,28 @@ if (!existsSync(requirements)) {
 
 const info = hostPythonInfo();
 prepareRuntime(info);
-copyHostDistributions(info);
+const copiedFromHost = copyHostDistributions(info);
 
-run(embeddedPython, [
-  "-c",
-  "import fastapi, uvicorn, pydantic, requests, curl_cffi, itsdangerous, PIL",
-]);
+try {
+  run(embeddedPython, [
+    "-c",
+    "import fastapi, uvicorn, pydantic, requests, curl_cffi, itsdangerous, PIL",
+  ]);
+} catch (error) {
+  if (copiedFromHost) {
+    console.warn(
+      `[prepare-adobe2api-python] copied packages failed validation, falling back to pip install: ${
+        error instanceof Error ? error.message : error
+      }`,
+    );
+  }
+  run(embeddedPython, ["-m", "ensurepip", "--upgrade"]);
+  run(embeddedPython, ["-m", "pip", "install", "-r", requirements]);
+  run(embeddedPython, [
+    "-c",
+    "import fastapi, uvicorn, pydantic, requests, curl_cffi, itsdangerous, PIL",
+  ]);
+}
 
 writeFileSync(
   readyMarker,

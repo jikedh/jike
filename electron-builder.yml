@@ -10,17 +10,8 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-  - '!resources/adobe2api-master/data/**'
-  - '!resources/adobe2api-master/__pycache__/**'
-  - '!resources/adobe2api-master/**/__pycache__/**'
-  - '!resources/adobe2api-master/config/config.json'
-  - '!resources/adobe2api-master/config/tokens.json'
-  - '!resources/adobe2api-master/config/refresh_profile.json'
-  - '!resources/adobe2api-master/tokens.json'
-  - '!resources/python/**/__pycache__/**'
-  - '!resources/python/**/*.pyc'
-asarUnpack:
-  - resources/**
+  - '!resources/adobe2api-master/**'
+  - '!resources/python/**'
 extraResources:
   - from: resources/adobe2api-master
     to: adobe2api-master

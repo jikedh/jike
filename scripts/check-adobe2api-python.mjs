@@ -5,13 +5,18 @@ import { spawnSync } from "node:child_process";
 const root = resolve(import.meta.dirname, "..");
 const pythonRoot = join(root, "resources", "python");
 const isWin = process.platform === "win32";
-const embeddedPython = isWin
-  ? join(pythonRoot, "Scripts", "python.exe")
-  : join(pythonRoot, "bin", "python3");
+const embeddedPythonCandidates = isWin
+  ? [join(pythonRoot, "python.exe"), join(pythonRoot, "Scripts", "python.exe")]
+  : [join(pythonRoot, "bin", "python3"), join(pythonRoot, "bin", "python")];
+const embeddedPython = embeddedPythonCandidates.find((candidate) =>
+  existsSync(candidate),
+);
 const readyMarker = join(pythonRoot, ".jike-adobe2api-python-ready");
 
-if (!existsSync(embeddedPython)) {
-  console.error(`[check-adobe2api-python] missing embedded Python: ${embeddedPython}`);
+if (!embeddedPython) {
+  console.error(
+    `[check-adobe2api-python] missing embedded Python in: ${pythonRoot}`,
+  );
   console.error("Run npm run prepare:adobe2api-python first.");
   process.exit(1);
 }
