@@ -1,4 +1,4 @@
-export const POINTS_FEATURE_ENABLED = false;
+export const POINTS_FEATURE_ENABLED = true;
 
 export const POINTS_DISABLED_BALANCE = Number.MAX_SAFE_INTEGER;
 
