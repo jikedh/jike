@@ -510,7 +510,7 @@ const extractExtFromUrl = (url: string, fallback: string = "png"): string => {
     ) {
       return ext;
     }
-  } catch {}
+  } catch { }
   return fallback;
 };
 
@@ -619,17 +619,6 @@ export const saveMediaBuffer = async (
   return { url: "" };
 };
 
-export const readLocalMediaAsBlobUrl = async (
-  relativePath: string,
-  mimeType: string = "image/png",
-): Promise<string | null> => {
-  const fileBytes = await readMediaFromLocal(relativePath);
-  if (!fileBytes) return null;
-
-  const blob = new Blob([fileBytes], { type: mimeType });
-  return URL.createObjectURL(blob);
-};
-
 export const retryMediaUrl = async (
   url: string,
   retries: number = 2,
@@ -657,14 +646,9 @@ export const retryMediaUrl = async (
 
 export const getDisplayUrl = async (
   item: { url?: string; localPath?: string; localName?: string },
-  mimeType: string = "image/png",
 ): Promise<string | null> => {
   if (item.url) {
     return item.url;
-  }
-
-  if (item.localPath) {
-    return readLocalMediaAsBlobUrl(item.localPath, mimeType);
   }
 
   return null;
