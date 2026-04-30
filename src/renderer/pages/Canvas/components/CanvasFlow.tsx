@@ -2482,28 +2482,28 @@ export const CanvasFlow = ({
                   onSelect={() => handleCreateNodeFromQuickAddMenu("image")}
                 >
                   <IconPhoto size={16} />
-                  新建图片节点
+                  新建生成图片节点
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
                   onSelect={() => handleCreateNodeFromQuickAddMenu("video")}
                 >
                   <IconVideo size={16} />
-                  新建视频节点
+                  新建生成视频节点
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
                   onSelect={() => handleCreateNodeFromQuickAddMenu("newVideo")}
                 >
                   <IconVideo size={16} />
-                  新建视频节点(新版)
+                  新建生成视频节点(新版)
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
                   onSelect={() => handleCreateNodeFromQuickAddMenu("audio")}
                 >
                   <IconMusic size={16} />
-                  新建音频节点
+                  新建生成音频节点
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"

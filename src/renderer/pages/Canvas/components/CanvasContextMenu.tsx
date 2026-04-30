@@ -45,7 +45,7 @@ export const CanvasContextMenu = ({
   return (
     <ContextMenu onOpenChange={onOpenChange}>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="w-52 bg-[#121214] border border-white/10 rounded-xl shadow-2xl overflow-hidden p-1">
+      <ContextMenuContent className="w-54 bg-[#121214] border border-white/10 rounded-xl shadow-2xl overflow-hidden p-1">
         <ContextMenuLabel className="text-white/70 text-xs font-medium px-3 py-2">
           创建节点
         </ContextMenuLabel>
@@ -62,14 +62,14 @@ export const CanvasContextMenu = ({
           onSelect={() => onCreateNode("image")}
         >
           <IconPhoto size={16} />
-          新建图片节点
+          新建生成图片节点
         </ContextMenuItem>
         <ContextMenuItem
           className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
           onSelect={() => onCreateNode("video")}
         >
           <IconVideo size={16} />
-          新建视频节点
+          新建生成视频节点
         </ContextMenuItem>
 
         <ContextMenuItem
@@ -77,14 +77,14 @@ export const CanvasContextMenu = ({
           onSelect={() => onCreateNode("newVideo")}
         >
           <IconVideo size={16} />
-          新建视频节点(新版)
+          新建生成视频节点(新版)
         </ContextMenuItem>
         <ContextMenuItem
           className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
           onSelect={() => onCreateNode("audio")}
         >
           <IconMusic size={16} />
-          新建音频节点
+          新建生成音频节点
         </ContextMenuItem>
         <ContextMenuSub>
           <ContextMenuSubTrigger className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors">

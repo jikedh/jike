@@ -19,6 +19,7 @@ import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
+import { NodeNameBadge } from "../shared/NodeNameBadge";
 import { ImageAnnotationWorkspace } from "./ImageAnnotationWorkspace";
 import { ImageContent } from "./ImageContent";
 import { ImagePromptPanel } from "./ImagePromptPanel";
@@ -380,6 +381,8 @@ export const ImageNode = memo(
                       : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
               )}
             >
+              <NodeNameBadge>生成图片</NodeNameBadge>
+
               {/* 左侧输入 Handle */}
               <ButtonHandle
                 type="target"

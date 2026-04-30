@@ -12,6 +12,7 @@ import { getNodeSizeByAspectRatio } from "@/pages/Canvas/CustomNodes/ImageNode/u
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { NodeNameBadge } from "../shared/NodeNameBadge";
 import { VideoContent } from "./VideoContent";
 import { VideoPromptPanel } from "./VideoPromptPanel";
 import { VideoToolbar } from "./VideoToolbar";
@@ -197,6 +198,8 @@ export const VideoNode = memo(
                   : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
             )}
           >
+            <NodeNameBadge>生成视频</NodeNameBadge>
+
             {/* 左侧输入 Handle */}
             <ButtonHandle
               type="target"

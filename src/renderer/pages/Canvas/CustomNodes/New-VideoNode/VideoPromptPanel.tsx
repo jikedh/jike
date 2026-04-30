@@ -550,7 +550,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       videoParams?: VideoParamState;
     }) => {
       const nextParams = params.videoParams ?? selectedParams;
-      // 与老版保持一致：用户调整模型/参数后立即记忆，下次新建视频节点沿用这组常用配置。
+      // 与老版保持一致：用户调整模型/参数后立即记忆，下次新建生成视频节点沿用这组常用配置。
       // 新版视频节点使用独立记忆，避免和老版视频节点的模型/模式/参数互相覆盖。
       setDefaultNewVideoPreset({
         model: params.model ?? selectedModel,
