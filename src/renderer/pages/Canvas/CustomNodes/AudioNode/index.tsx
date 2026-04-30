@@ -932,6 +932,7 @@ export const AudioNode = memo(
       const trimDuration = trimEnd - trimStart;
       return trimDuration > 0 && trimDuration <= 15;
     }, [trimStart, trimEnd]);
+    const isUploadAudio = data.isUpload ?? false;
 
     return (
       <NodeContextMenu onDuplicate={handleDuplicate} onDelete={handleDelete}>
@@ -975,7 +976,7 @@ export const AudioNode = memo(
             )}
             style={{ pointerEvents: "auto" }}
           >
-            <NodeNameBadge>生成音频</NodeNameBadge>
+            <NodeNameBadge>{isUploadAudio ? "上传音频" : "生成音频"}</NodeNameBadge>
 
             {/* 左侧输入 Handle */}
             <ButtonHandle
