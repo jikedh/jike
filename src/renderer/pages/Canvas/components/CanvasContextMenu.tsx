@@ -106,6 +106,13 @@ export const CanvasContextMenu = ({
               <IconMusic size={16} />
               新建生成音频节点
             </ContextMenuItem>
+            <ContextMenuItem
+              className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-white/80 transition-colors hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB]"
+              onSelect={onUploadMedia}
+            >
+              <IconUpload size={16} />
+              新建上传媒体节点
+            </ContextMenuItem>
             <ContextMenuSub>
               <ContextMenuSubTrigger className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-white/80 transition-colors hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB]">
                 <IconSparkles size={16} />

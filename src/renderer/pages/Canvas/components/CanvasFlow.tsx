@@ -1624,12 +1624,8 @@ export const CanvasFlow = ({
       }
 
       event.preventDefault();
-      event.stopPropagation();
-      pendingConnectRef.current = null;
-      setConnectionGhost(null);
-      openContextMenuAt(event.clientX, event.clientY, "upload");
     },
-    [annotationWorkspace.open, openContextMenuAt],
+    [annotationWorkspace.open],
   );
 
   // 鑿滃崟鍏抽棴鏃讹紝缁熶竴娓呯悊鎷栫嚎鐘舵€侊紝閬垮厤棰勮绾挎畫鐣欍€?
