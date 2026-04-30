@@ -28,6 +28,10 @@ These are ignored by `resources/adobe2api-master/.gitignore` and excluded from E
 
 The package filters also exclude runtime logs, tokens, refresh profiles, local config and Python cache files. Keep those filters in sync with `resources/adobe2api-master/.gitignore`.
 
+Jike can also package a project-local Python runtime from `resources/python`. The main process prefers that runtime and falls back to system `python` only when the embedded runtime is absent.
+
+`resources/python` is intentionally ignored by Git because it is a generated binary environment, but it is copied into the installer by `electron-builder.yml`.
+
 ## Maintenance Commands
 
 Check that project-local resources are complete:
@@ -40,6 +44,18 @@ Apply Electron embedding patches to the project-local resource copy:
 
 ```bash
 npm run prepare:adobe2api
+```
+
+Create or refresh the embedded Python environment:
+
+```bash
+npm run prepare:adobe2api-python
+```
+
+Check the embedded Python environment:
+
+```bash
+npm run check:adobe2api-python
 ```
 
 Sync from an external Adobe2API source only when explicitly needed:

@@ -17,6 +17,8 @@ files:
   - '!resources/adobe2api-master/config/tokens.json'
   - '!resources/adobe2api-master/config/refresh_profile.json'
   - '!resources/adobe2api-master/tokens.json'
+  - '!resources/python/**/__pycache__/**'
+  - '!resources/python/**/*.pyc'
 asarUnpack:
   - resources/**
 extraResources:
@@ -31,6 +33,12 @@ extraResources:
       - '!config/tokens.json'
       - '!config/refresh_profile.json'
       - '!tokens.json'
+  - from: resources/python
+    to: python
+    filter:
+      - '**/*'
+      - '!**/__pycache__/**'
+      - '!**/*.pyc'
 win:
   executableName: 即刻
   icon: resources/icons/icon.png

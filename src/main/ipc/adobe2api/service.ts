@@ -254,6 +254,28 @@ export class Adobe2ApiService {
     return join(process.cwd(), "resources", "adobe2api-master");
   }
 
+  private resolvePythonCommand(): string {
+    const pythonRoot = app.isPackaged
+      ? join(process.resourcesPath, "python")
+      : join(process.cwd(), "resources", "python");
+    const embeddedPythonCandidates =
+      process.platform === "win32"
+        ? [join(pythonRoot, "python.exe"), join(pythonRoot, "Scripts", "python.exe")]
+        : [join(pythonRoot, "bin", "python3"), join(pythonRoot, "bin", "python")];
+    const readyMarker = join(pythonRoot, ".jike-adobe2api-python-ready");
+
+    if (existsSync(readyMarker)) {
+      const embeddedPython = embeddedPythonCandidates.find((candidate) =>
+        existsSync(candidate),
+      );
+      if (embeddedPython) {
+        return embeddedPython;
+      }
+    }
+
+    return "python";
+  }
+
   private resolveEntrypoint(): {
     command: string;
     args: string[];
@@ -261,7 +283,7 @@ export class Adobe2ApiService {
   } {
     const adobeRoot = this.resolveAdobeRoot();
     return {
-      command: "python",
+      command: this.resolvePythonCommand(),
       args: ["-X", "utf8", "app.py"],
       cwd: adobeRoot,
     };
