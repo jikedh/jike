@@ -10,7 +10,7 @@ import {
   UpdateVipScoreRequest,
   UpdateVipScoreResponse,
 } from "shared/types/api/score";
-import { getJikeingUserId } from "shared/utils/utils";
+import { getJikeingUserInfo } from "shared/utils/utils";
 
 // ===================== 用户侧 API（jike-web-api）/userscore/v1 =====================
 
@@ -43,18 +43,18 @@ export function getBalanceInfo(): Promise<GetScoreBalanceResponse> {
 export function updateVipScore(
   data: UpdateVipScoreRequest,
 ): Promise<UpdateVipScoreResponse> {
-  const loginUserId = getJikeingUserId();
+  const userInfo = getJikeingUserInfo();
+  const loginUserId = userInfo?.id;
 
-  // 前置校验：body.userId 必须与登录用户一致
-  if (!loginUserId || String(data.userId) !== String(loginUserId)) {
-    return Promise.reject(new Error("请求用户与登录用户不一致"));
+  if (!loginUserId) {
+    return Promise.reject(new Error("请先登录并确保存在用户 ID"));
   }
 
   return jikeingService({
     url: "/userscore/v1/update-vip-score",
     method: "post",
     data: {
-      userId: data.userId,
+      userId: loginUserId,
       vipScoreDelta: data.vipScoreDelta,
     },
     headers: {

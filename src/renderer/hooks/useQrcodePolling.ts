@@ -1,13 +1,13 @@
-import { useRef, useCallback, useEffect } from "react";
-import { querySceneStatus } from "@/api/ai";
+import { useCallback, useEffect, useRef } from "react";
 import { type LoginResponse } from "shared/types/jikeing";
 import { setJikeingToken, setJikeingUserId } from "shared/utils/utils";
+import { querySceneStatus } from "@/api/ai";
 
 // 轮询配置常量
 const POLLING_INTERVAL = 2000;
 
 interface UseQrcodePollingOptions {
-  onSuccess: (token: string, userId?: string) => void;
+  onSuccess: (token: string, userId?: string) => void | Promise<void>;
 }
 
 export const useQrcodePolling = ({ onSuccess }: UseQrcodePollingOptions) => {
@@ -36,7 +36,7 @@ export const useQrcodePolling = ({ onSuccess }: UseQrcodePollingOptions) => {
             if (res.data.id) {
               setJikeingUserId(res.data.id);
             }
-            onSuccess(res.data.token, res.data.id?.toString());
+            await onSuccess(res.data.token, res.data.id?.toString());
           }
         } catch (error) {
           console.error("[登录] 查询状态失败:", error);

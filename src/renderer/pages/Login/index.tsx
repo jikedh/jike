@@ -23,16 +23,6 @@ type LoginStatus =
   | "expired"
   | "error";
 
-// 状态文本映射（替代 switch-case）
-const STATUS_TEXT: Record<LoginStatus, string> = {
-  loading: "正在加载二维码...",
-  waiting: "请使用微信扫一扫登录",
-  scanned: "请使用微信扫一扫登录",
-  expired: "二维码已过期，请刷新",
-  error: "加载失败，请重试",
-  success: "登录成功，正在跳转...",
-};
-
 // ===================== 重复样式抽取 =====================
 const cardStyle: React.CSSProperties = {
   background:
@@ -60,9 +50,9 @@ const LoginPage = () => {
 
   // 轮询成功回调
   const handlePollingSuccess = useCallback(
-    (token: string, userId?: string) => {
+    async () => {
       setStatus("success");
-      useUserStore.getState().fetchUserInfo();
+      await useUserStore.getState().fetchUserInfo();
       setTimeout(() => {
         navigate("/home");
       }, REDIRECT_DELAY);
@@ -169,9 +159,8 @@ const LoginPage = () => {
 
             {/* 登录卡片 */}
             <div
-              className={`w-[330px] rounded-2xl flex flex-col items-center py-[35px] pb-[45px] relative z-10 ${
-                isErrorState ? "py-[50px]" : ""
-              }`}
+              className={`w-[330px] rounded-2xl flex flex-col items-center py-[35px] pb-[45px] relative z-10 ${isErrorState ? "py-[50px]" : ""
+                }`}
               style={cardStyle}
             >
               {/* 标题 */}
