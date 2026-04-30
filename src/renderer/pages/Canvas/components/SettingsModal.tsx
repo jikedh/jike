@@ -3,12 +3,14 @@ import {
   IconBook,
   IconDownload,
   IconFolder,
+  IconPlayerPlay,
   IconRestore,
+  IconRotateClockwise,
+  IconExternalLink,
   IconUpload,
   IconX,
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   defaultPresets,
   type PresetItem,
@@ -21,6 +23,7 @@ import {
   CANVAS_CHAT_PERSONAS,
   NO_CHAT_PERSONA_ID,
 } from "shared/constants/chat-personas";
+import type { Adobe2ApiState } from "shared/types/adobe2api";
 import { cn } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -100,7 +103,6 @@ export const SettingsModal = ({
   onClose,
   isFirstLogin = false,
 }: SettingsModalProps) => {
-  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState(
     isFirstLogin ? "data" : settingSections[0].id,
   );
@@ -149,6 +151,11 @@ export const SettingsModal = ({
     content: "",
     type: "general" as "general" | "image" | "video",
   });
+  const [adobeState, setAdobeState] = useState<Adobe2ApiState | null>(null);
+  const [adobeBusyAction, setAdobeBusyAction] = useState<
+    "start" | "stop" | "restart" | null
+  >(null);
+  const [adobeError, setAdobeError] = useState<string | null>(null);
 
   // 弹窗打开时从 localStorage 加载预设，首次无数据则写入默认预设
   useEffect(() => {
@@ -163,6 +170,69 @@ export const SettingsModal = ({
     if (!open) return;
     presetsService.save(presets);
   }, [open, presets]);
+
+  useEffect(() => {
+    if (!open || activeSection !== "local-gemini") return;
+
+    let cancelled = false;
+    const refreshAdobeState = async () => {
+      try {
+        const next = await window.adobe2api.getState();
+        if (!cancelled) {
+          setAdobeState(next);
+          setAdobeError(null);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setAdobeError(err?.message || "读取 Adobe2API 状态失败");
+        }
+      }
+    };
+
+    void refreshAdobeState();
+    const timer = window.setInterval(() => {
+      void refreshAdobeState();
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeSection, open]);
+
+  const runAdobeAction = async (action: "start" | "stop" | "restart") => {
+    try {
+      setAdobeBusyAction(action);
+      setAdobeError(null);
+      const next =
+        action === "start"
+          ? await window.adobe2api.start()
+          : action === "stop"
+            ? await window.adobe2api.stop()
+            : await window.adobe2api.restart();
+      setAdobeState(next);
+    } catch (err: any) {
+      setAdobeError(err?.message || "Adobe2API 操作失败");
+      try {
+        setAdobeState(await window.adobe2api.getState());
+      } catch {}
+    } finally {
+      setAdobeBusyAction(null);
+    }
+  };
+
+  const openAdobeAdminWindow = async () => {
+    try {
+      setAdobeBusyAction("start");
+      setAdobeError(null);
+      const next = await window.adobe2api.openAdminWindow();
+      setAdobeState(next);
+    } catch (err: any) {
+      setAdobeError(err?.message || "打开 Adobe2API 管理后台失败");
+    } finally {
+      setAdobeBusyAction(null);
+    }
+  };
 
   // 确认对话框状态
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
@@ -412,8 +482,22 @@ export const SettingsModal = ({
         open={open}
         onOpenChange={(nextOpen) => !nextOpen && !isFirstLogin && onClose()}
       >
-        <ModalContent aria-label="设置弹窗">
-          <div className="flex h-[min(76vh,720px)] flex-col">
+        <ModalContent
+          aria-label="设置弹窗"
+          className={
+            activeSection === "local-gemini"
+              ? "w-[min(1280px,96vw)]"
+              : undefined
+          }
+        >
+          <div
+            className={cn(
+              "flex flex-col",
+              activeSection === "local-gemini"
+                ? "h-[min(86vh,900px)]"
+                : "h-[min(76vh,720px)]",
+            )}
+          >
             <header className="flex items-start justify-between border-b border-white/5 px-6 py-5">
               <div>
                 <ModalTitle>
@@ -524,23 +608,111 @@ export const SettingsModal = ({
                   )}
 
                   {activeSection === "local-gemini" && (
-                    <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
-                      <div className="text-sm font-medium text-white/80">
-                        本地 Gemini / Flow2API
+                    <section className="space-y-4">
+                      <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-medium text-white/80">
+                              本地 Adobe2API 管理
+                            </div>
+                            <div className="mt-1 text-xs text-white/45">
+                              {adobeState?.baseUrl ||
+                                "启动后会在这里加载 Adobe2API 后台"}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={cn(
+                                "rounded-full px-3 py-1 text-xs",
+                                adobeState?.status === "running" &&
+                                  "bg-emerald-500/15 text-emerald-200",
+                                adobeState?.status === "starting" &&
+                                  "bg-amber-500/15 text-amber-200",
+                                adobeState?.status === "error" &&
+                                  "bg-red-500/15 text-red-200",
+                                (!adobeState ||
+                                  adobeState.status === "stopped") &&
+                                  "bg-white/10 text-white/55",
+                              )}
+                            >
+                              {adobeState?.status === "running"
+                                ? "运行中"
+                                : adobeState?.status === "starting"
+                                  ? "启动中"
+                                  : adobeState?.status === "error"
+                                    ? "异常"
+                                    : "未启动"}
+                            </span>
+
+                            <Button
+                              size="sm"
+                              variant="blue"
+                              loading={adobeBusyAction === "start"}
+                              disabled={
+                                adobeBusyAction !== null ||
+                                adobeState?.status === "running"
+                              }
+                              onClick={() => void runAdobeAction("start")}
+                              ignoreTitleCase
+                            >
+                              <IconPlayerPlay size={14} />
+                              启动服务
+                            </Button>
+                            <Button
+                              size="sm"
+                              loading={adobeBusyAction === "restart"}
+                              disabled={adobeBusyAction !== null}
+                              onClick={() => void runAdobeAction("restart")}
+                              ignoreTitleCase
+                            >
+                              <IconRotateClockwise size={14} />
+                              重启
+                            </Button>
+                            <Button
+                              size="sm"
+                              disabled={
+                                adobeBusyAction !== null ||
+                                adobeState?.status === "stopped"
+                              }
+                              onClick={() => void runAdobeAction("stop")}
+                              ignoreTitleCase
+                            >
+                              停止
+                            </Button>
+                            {adobeState?.status === "running" ? (
+                              <Button
+                                size="sm"
+                                onClick={() => void openAdobeAdminWindow()}
+                                ignoreTitleCase
+                              >
+                                <IconExternalLink size={14} />
+                                应用内打开
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {adobeError || adobeState?.lastError ? (
+                          <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+                            {adobeError || adobeState?.lastError}
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="mt-2 text-sm leading-6 text-white/55">
-                        本地模型管理已经迁移到独立页面，这里可以进入服务控制、日志查看、结果目录配置，以及内嵌的管理页和测试页。
-                      </div>
-                      <div className="mt-4 flex gap-3">
-                        <Button
-                          variant="blue"
-                          onClick={() => {
-                            onClose();
-                            navigate("/settings");
-                          }}
-                        >
-                          打开模型管理
-                        </Button>
+
+                      <div className="overflow-hidden rounded-xl border border-white/5 bg-white">
+                        {adobeState?.status === "running" ? (
+                          <iframe
+                            key={adobeState.loginUrl}
+                            title="Adobe2API 管理后台"
+                            src={adobeState.loginUrl}
+                            className="h-[min(58vh,620px)] w-full bg-white"
+                          />
+                        ) : (
+                          <div className="flex h-[420px] items-center justify-center bg-black/30 text-sm text-white/45">
+                            启动本地服务后，这里会显示 Adobe2API 登录和管理后台。
+                          </div>
+                        )}
                       </div>
                     </section>
                   )}

@@ -953,6 +953,69 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         return;
       }
 
+      if (request.model === "adobe-sora2-pro") {
+        const imageCount = generationReferenceItems.filter(
+          (item) => item.type === "image",
+        ).length;
+        const allImages =
+          generationReferenceItems.length === 0 ||
+          generationReferenceItems.every((item) => item.type === "image");
+        if (!allImages) {
+          warning("Sora2Pro（Adobe版本）仅支持图片参考素材");
+          return;
+        }
+        if (request.mode === "text-to-video" && imageCount > 0) {
+          warning("Sora2Pro（Adobe版本）文生视频请不要传参考图");
+          return;
+        }
+        if (request.mode !== "text-to-video" && imageCount < 1) {
+          warning("Sora2Pro（Adobe版本）图生视频请上传或连接 1 张参考图");
+          return;
+        }
+      }
+
+      if (
+        request.model === "adobe-veo31" ||
+        request.model === "adobe-veo31-fast"
+      ) {
+        const imageCount = generationReferenceItems.filter(
+          (item) => item.type === "image",
+        ).length;
+        const allImages =
+          generationReferenceItems.length === 0 ||
+          generationReferenceItems.every((item) => item.type === "image");
+
+        if (request.mode === "text-to-video" && generationReferenceItems.length > 0) {
+          warning("Veo3.1 文生视频请不要传参考图");
+          return;
+        }
+
+        if (request.mode === "image-to-video" && (imageCount !== 1 || !allImages)) {
+          warning("Veo3.1 图生视频需要且仅支持 1 张参考图");
+          return;
+        }
+
+        if (
+          request.mode === "first-last-frame" &&
+          (imageCount !== 2 || !allImages)
+        ) {
+          warning("Veo3.1 首尾帧需要且仅支持 2 张参考图");
+          return;
+        }
+
+        if (request.mode === "all-reference") {
+          if (request.model === "adobe-veo31-fast") {
+            warning("Veo3.1 Fast 不支持全能参考");
+            return;
+          }
+
+          if (imageCount < 1 || imageCount > 3 || !allImages) {
+            warning("该模型只支持1~3图片做为参考图");
+            return;
+          }
+        }
+      }
+
       if (request.model === "happyhorse") {
         const imageCount = generationReferenceItems.filter(
           (item) => item.type === "image",

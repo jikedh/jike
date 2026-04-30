@@ -1,44 +1,28 @@
-import { app, dialog } from "electron";
+import { app, BrowserWindow, dialog, shell } from "electron";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { appendFile, mkdir, readFile } from "fs/promises";
-import { DatabaseSync } from "node:sqlite";
 import { join } from "path";
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
+import { randomUUID } from "crypto";
 import type {
-  Flow2ApiSettings,
-  Flow2ApiState,
-  Flow2ApiStatus,
-} from "shared/types/flow2api";
+  Adobe2ApiSettings,
+  Adobe2ApiState,
+  Adobe2ApiStatus,
+} from "shared/types/adobe2api";
 
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_PORT = 18000;
+const DEFAULT_PORT = 6001;
 const SETTINGS_FILE = "settings.json";
-const LOG_FILE = "flow2api.log";
-const DEFAULT_SETTING_TOML = `[global]
-api_key = "han1234"
-admin_username = "admin"
-admin_password = "admin"
-
-[flow]
-labs_base_url = "https://labs.google/fx/api"
-api_base_url = "https://aisandbox-pa.googleapis.com/v1"
-timeout = 120
-max_retries = 3
-
-[server]
-host = "127.0.0.1"
-port = 18000
-
-[debug]
-enabled = true
-log_requests = true
-log_responses = true
-mask_token = false
-`;
-const HEALTH_PATH = "/health";
-const MANAGE_PATH = "/manage";
+const LOG_FILE = "adobe2api.log";
+const HEALTH_PATH = "/api/v1/health";
+const MANAGE_PATH = "/";
 const LOGIN_PATH = "/login";
-const TEST_PATH = "/test";
+const TEST_PATH = "/";
+const DEFAULT_CONFIG = {
+  api_key: "adobe1234",
+  admin_username: "admin",
+  admin_password: "admin",
+};
 
 type PersistedConfig = {
   host: string;
@@ -70,10 +54,10 @@ async function fetchJson(url: string): Promise<any> {
   return response.json();
 }
 
-export class Flow2ApiService {
+export class Adobe2ApiService {
   private child: ChildProcessWithoutNullStreams | null = null;
 
-  private state: Flow2ApiState;
+  private state: Adobe2ApiState;
 
   private readonly rootDir: string;
 
@@ -83,9 +67,7 @@ export class Flow2ApiService {
 
   private readonly dataDir: string;
 
-  private readonly tmpDir: string;
-
-  private readonly browserDir: string;
+  private readonly generatedDir: string;
 
   private readonly settingsPath: string;
 
@@ -93,16 +75,20 @@ export class Flow2ApiService {
 
   private readonly configPath: string;
 
+  private readonly embedAdminToken: string;
+
+  private adminWindow: BrowserWindow | null = null;
+
   constructor() {
     this.rootDir = app.getPath("userData");
-    this.runtimeDir = join(this.rootDir, "flow2api");
+    this.runtimeDir = join(this.rootDir, "adobe2api");
     this.configDir = join(this.runtimeDir, "config");
     this.dataDir = join(this.runtimeDir, "data");
-    this.tmpDir = join(this.runtimeDir, "tmp");
-    this.browserDir = join(this.runtimeDir, "browser_data_rt");
+    this.generatedDir = join(this.dataDir, "generated");
     this.settingsPath = join(this.runtimeDir, SETTINGS_FILE);
     this.logPath = join(this.runtimeDir, LOG_FILE);
-    this.configPath = join(this.configDir, "setting.toml");
+    this.configPath = join(this.configDir, "config.json");
+    this.embedAdminToken = randomUUID();
 
     this.ensureDirs();
 
@@ -115,17 +101,20 @@ export class Flow2ApiService {
       this.runtimeDir,
       this.configDir,
       this.dataDir,
-      this.tmpDir,
-      this.browserDir,
+      this.generatedDir,
     ]) {
       mkdirSync(dir, { recursive: true });
     }
     if (!existsSync(this.configPath)) {
-      writeFileSync(this.configPath, DEFAULT_SETTING_TOML, "utf-8");
+      writeFileSync(
+        this.configPath,
+        JSON.stringify(DEFAULT_CONFIG, null, 2),
+        "utf-8",
+      );
     }
   }
 
-  private readSettings(): Flow2ApiSettings {
+  private readSettings(): Adobe2ApiSettings {
     const fallback: PersistedConfig = {
       host: DEFAULT_HOST,
       port: DEFAULT_PORT,
@@ -155,7 +144,7 @@ export class Flow2ApiService {
     }
   }
 
-  private writeSettings(settings: Flow2ApiSettings): void {
+  private writeSettings(settings: Adobe2ApiSettings): void {
     const payload: PersistedConfig = {
       host: normalizeHost(settings.host),
       port: clampPort(settings.port),
@@ -164,58 +153,37 @@ export class Flow2ApiService {
     writeFileSync(this.settingsPath, JSON.stringify(payload, null, 2), "utf-8");
   }
 
-  private buildBaseUrl(settings: Flow2ApiSettings): string {
+  private buildBaseUrl(settings: Adobe2ApiSettings): string {
     return `http://${settings.host}:${settings.port}`;
   }
 
-  private readApiKeyFromConfig(): string | null {
-    try {
-      const raw = readFileSync(this.configPath, "utf-8");
-      const match = raw.match(/^\s*api_key\s*=\s*"([^"]+)"/m);
-      return match?.[1]?.trim() || null;
-    } catch {
-      return null;
-    }
-  }
-
   private readCurrentApiKey(): string | null {
-    const dbPath = join(this.dataDir, "flow.db");
-
-    if (existsSync(dbPath)) {
-      try {
-        const db = new DatabaseSync(dbPath, { readOnly: true });
-        try {
-          const row = db
-            .prepare("SELECT api_key FROM admin_config WHERE id = 1")
-            .get() as { api_key?: string } | undefined;
-          const apiKey = row?.api_key?.trim();
-          if (apiKey) {
-            return apiKey;
-          }
-        } finally {
-          db.close();
-        }
-      } catch {
-        // Fall back to the bootstrap setting.toml when the runtime DB is unavailable.
-      }
+    try {
+      const raw = JSON.parse(readFileSync(this.configPath, "utf-8")) as {
+        api_key?: string;
+      };
+      return raw.api_key?.trim() || null;
+    } catch {
+      return DEFAULT_CONFIG.api_key;
     }
-
-    return this.readApiKeyFromConfig();
   }
 
   private buildState(
-    status: Flow2ApiStatus,
-    settings: Flow2ApiSettings,
-    overrides: Partial<Flow2ApiState> = {},
-  ): Flow2ApiState {
+    status: Adobe2ApiStatus,
+    settings: Adobe2ApiSettings,
+    overrides: Partial<Adobe2ApiState> = {},
+  ): Adobe2ApiState {
     const baseUrl = this.buildBaseUrl(settings);
+    const embeddedAdminUrl = `${baseUrl}${MANAGE_PATH}?electron_admin_token=${encodeURIComponent(
+      this.embedAdminToken,
+    )}`;
     return {
       status,
       settings,
       baseUrl,
       apiKey: overrides.apiKey ?? this.readCurrentApiKey(),
-      manageUrl: `${baseUrl}${MANAGE_PATH}`,
-      loginUrl: `${baseUrl}${LOGIN_PATH}`,
+      manageUrl: embeddedAdminUrl,
+      loginUrl: embeddedAdminUrl,
       testUrl: `${baseUrl}${TEST_PATH}`,
       healthUrl: `${baseUrl}${HEALTH_PATH}`,
       dataDir: this.runtimeDir,
@@ -230,9 +198,9 @@ export class Flow2ApiService {
   }
 
   private setState(
-    status: Flow2ApiStatus,
-    overrides: Partial<Flow2ApiState> = {},
-  ): Flow2ApiState {
+    status: Adobe2ApiStatus,
+    overrides: Partial<Adobe2ApiState> = {},
+  ): Adobe2ApiState {
     this.state = this.buildState(
       status,
       overrides.settings ?? this.state.settings,
@@ -264,34 +232,26 @@ export class Flow2ApiService {
     }
   }
 
-  private buildEnv(settings: Flow2ApiSettings): NodeJS.ProcessEnv {
+  private buildEnv(settings: Adobe2ApiSettings): NodeJS.ProcessEnv {
     return {
       ...process.env,
-      FLOW2API_RUNTIME_DIR: this.runtimeDir,
-      FLOW2API_CONFIG_PATH: this.configPath,
-      FLOW2API_DATA_DIR: this.dataDir,
-      FLOW2API_DB_PATH: join(this.dataDir, "flow.db"),
-      FLOW2API_TMP_DIR: this.tmpDir,
-      FLOW2API_STATIC_DIR: this.resolveStaticDir(),
-      FLOW2API_BROWSER_DATA_DIR: this.browserDir,
-      FLOW2API_BROWSER_PID_DIR: join(this.tmpDir, "browser_pids"),
-      FLOW2API_SERVER_HOST: settings.host,
-      FLOW2API_SERVER_PORT: String(settings.port),
-      FLOW2API_OUTPUT_DIR: settings.outputDir || "",
+      PORT: String(settings.port),
+      ADOBE2API_RUNTIME_DIR: this.runtimeDir,
+      ADOBE_CONFIG_DIR: this.configDir,
+      ADOBE_DATA_DIR: this.dataDir,
+      ADOBE_PUBLIC_BASE_URL: this.buildBaseUrl(settings),
+      ADOBE_OUTPUT_DIR: settings.outputDir || "",
+      ADOBE_EMBED_ADMIN_TOKEN: this.embedAdminToken,
       PYTHONIOENCODING: "utf-8",
       PYTHONUTF8: "1",
     };
   }
 
-  private resolveStaticDir(): string {
-    return join(this.resolveFlowRoot(), "static");
-  }
-
-  private resolveFlowRoot(): string {
+  private resolveAdobeRoot(): string {
     if (app.isPackaged) {
-      return join(process.resourcesPath, "flow2api-main");
+      return join(process.resourcesPath, "adobe2api-master");
     }
-    return join(process.cwd(), "..", "flow2api-main", "flow2api-main");
+    return join(process.cwd(), "resources", "adobe2api-master");
   }
 
   private resolveEntrypoint(): {
@@ -299,26 +259,19 @@ export class Flow2ApiService {
     args: string[];
     cwd: string;
   } {
-    const flowRoot = this.resolveFlowRoot();
-    if (app.isPackaged) {
-      return {
-        command: join(flowRoot, "flow2api.exe"),
-        args: [],
-        cwd: flowRoot,
-      };
-    }
+    const adobeRoot = this.resolveAdobeRoot();
     return {
       command: "python",
-      args: ["-X", "utf8", "main.py"],
-      cwd: flowRoot,
+      args: ["-X", "utf8", "app.py"],
+      cwd: adobeRoot,
     };
   }
 
-  private async waitForHealthy(timeoutMs = 20000): Promise<void> {
+  private async waitForHealthy(timeoutMs = 30000): Promise<void> {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeoutMs) {
       if (this.state.status === "error") {
-        throw new Error(this.state.lastError || "Flow2API start failed");
+        throw new Error(this.state.lastError || "Adobe2API start failed");
       }
 
       try {
@@ -329,10 +282,10 @@ export class Flow2ApiService {
       }
     }
 
-    throw new Error("Flow2API health check timed out");
+    throw new Error("Adobe2API health check timed out");
   }
 
-  async getState(): Promise<Flow2ApiState> {
+  async getState(): Promise<Adobe2ApiState> {
     await this.refreshRecentLogs();
     if (this.child && this.state.status !== "starting") {
       try {
@@ -340,17 +293,23 @@ export class Flow2ApiService {
         return this.setState("running");
       } catch (error: any) {
         return this.setState("error", {
-          lastError: error?.message || "Flow2API unavailable",
+          lastError: error?.message || "Adobe2API unavailable",
         });
       }
+    }
+    try {
+      await fetchJson(this.state.healthUrl);
+      return this.setState("running", { pid: null });
+    } catch {
+      // 没有 Electron 托管的子进程，也没有可用的外部服务时，保留当前状态。
     }
     return this.setState(this.state.status);
   }
 
   async updateSettings(
-    patch: Partial<Flow2ApiSettings>,
-  ): Promise<Flow2ApiState> {
-    const nextSettings: Flow2ApiSettings = {
+    patch: Partial<Adobe2ApiSettings>,
+  ): Promise<Adobe2ApiState> {
+    const nextSettings: Adobe2ApiSettings = {
       host: normalizeHost(patch.host ?? this.state.settings.host),
       port: clampPort(patch.port ?? this.state.settings.port),
       outputDir:
@@ -365,7 +324,7 @@ export class Flow2ApiService {
   async pickOutputDirectory(): Promise<string | null> {
     const result = await dialog.showOpenDialog({
       properties: ["openDirectory", "createDirectory"],
-      title: "选择本地 Gemini 结果目录",
+      title: "选择 Adobe2API 结果目录",
     });
     if (result.canceled || result.filePaths.length === 0) {
       return null;
@@ -373,13 +332,25 @@ export class Flow2ApiService {
     return result.filePaths[0];
   }
 
-  async start(): Promise<Flow2ApiState> {
+  async start(): Promise<Adobe2ApiState> {
     if (this.child && this.state.status === "running") {
       return this.getState();
     }
 
     this.ensureDirs();
     await mkdir(this.configDir, { recursive: true });
+
+    try {
+      await fetchJson(this.buildBaseUrl(this.state.settings) + HEALTH_PATH);
+      return this.setState("running", {
+        pid: null,
+        lastError: null,
+        lastExitCode: null,
+      });
+    } catch {
+      // 端口上没有已启动的 Adobe2API，继续拉起本地服务。
+    }
+
     this.setState("starting", {
       lastError: null,
       lastExitCode: null,
@@ -387,7 +358,7 @@ export class Flow2ApiService {
     });
     await appendFile(
       this.logPath,
-      `\n[${new Date().toISOString()}] starting flow2api...\n`,
+      `\n[${new Date().toISOString()}] starting adobe2api...\n`,
       "utf-8",
     );
 
@@ -417,7 +388,7 @@ export class Flow2ApiService {
         lastExitCode: code ?? null,
         pid: null,
         lastError:
-          code === 0 ? null : `Flow2API exited with code ${code ?? "unknown"}`,
+          code === 0 ? null : `Adobe2API exited with code ${code ?? "unknown"}`,
       });
     });
 
@@ -428,29 +399,64 @@ export class Flow2ApiService {
       return this.setState("running");
     } catch (error: any) {
       this.setState("error", {
-        lastError: error?.message || "Flow2API start failed",
+        lastError: error?.message || "Adobe2API start failed",
       });
       throw error;
     }
   }
 
-  async stop(): Promise<Flow2ApiState> {
+  async stop(): Promise<Adobe2ApiState> {
     if (!this.child) {
       return this.setState("stopped", { pid: null });
     }
 
     const target = this.child;
     await this.appendLog(
-      `\n[${new Date().toISOString()}] stopping flow2api...\n`,
+      `\n[${new Date().toISOString()}] stopping adobe2api...\n`,
     );
     target.kill();
     this.child = null;
     return this.setState("stopped", { pid: null });
   }
 
-  async restart(): Promise<Flow2ApiState> {
+  async restart(): Promise<Adobe2ApiState> {
     await this.stop();
     return this.start();
+  }
+
+  async openAdminWindow(): Promise<Adobe2ApiState> {
+    const state =
+      this.state.status === "running" ? await this.getState() : await this.start();
+
+    if (this.adminWindow && !this.adminWindow.isDestroyed()) {
+      this.adminWindow.show();
+      this.adminWindow.focus();
+      await this.adminWindow.loadURL(state.manageUrl);
+      return state;
+    }
+
+    this.adminWindow = new BrowserWindow({
+      title: "Adobe2API 管理后台",
+      width: 1280,
+      height: 860,
+      minWidth: 980,
+      minHeight: 680,
+      autoHideMenuBar: true,
+      webPreferences: {
+        sandbox: false,
+        webSecurity: false,
+      },
+    });
+
+    this.adminWindow.on("closed", () => {
+      this.adminWindow = null;
+    });
+    this.adminWindow.webContents.setWindowOpenHandler((details) => {
+      shell.openExternal(details.url);
+      return { action: "deny" };
+    });
+    await this.adminWindow.loadURL(state.manageUrl);
+    return state;
   }
 
   async getLogs(limit = 200): Promise<string[]> {
@@ -459,4 +465,4 @@ export class Flow2ApiService {
   }
 }
 
-export const flow2ApiService = new Flow2ApiService();
+export const adobe2ApiService = new Adobe2ApiService();

@@ -3,8 +3,8 @@ import { EventSourceParserStream } from "eventsource-parser/stream";
 import {
   aiService,
   dashscopeRequest,
-  flow2ApiRequest,
-  getFlow2ApiState,
+  adobe2ApiRequest,
+  getAdobe2ApiState,
   jikeingService,
   kuaiziRequest,
   wuhenRequest,
@@ -21,6 +21,15 @@ import {
   Seedance20Response,
   Seedance20StatusResponse,
 } from "shared/types/detail/kuaizhi/Seedance-2.0";
+import type {
+  Adobe2ApiVideoGenerationRequest,
+  Adobe2ApiImageGenerationRequest,
+  Adobe2ApiImageGenerationResponse,
+  Adobe2ApiImage2ImageRequest,
+  Adobe2ApiVideoGenerationResponse,
+  FireflyGptImageToImageRequest,
+  FireflyGptImageToImageResponse,
+} from "shared/types/detail/Adobe2API";
 import type {
   ToApiImageGenerationRequest,
   ToApiImageGenerationResponse,
@@ -152,6 +161,46 @@ function getSeedance20Model(data: Seedance20Request): string {
 export function createImageGeneration(data: ToApiImageGenerationRequest) {
   return aiService<ToApiImageGenerationResponse>({
     url: "/v1/images/generations",
+    method: "post",
+    data,
+  });
+}
+
+export function createAdobe2ApiImageGeneration(
+  data: Adobe2ApiImageGenerationRequest,
+) {
+  return adobe2ApiRequest<Adobe2ApiImageGenerationResponse>({
+    url: "/v1/images/generations",
+    method: "post",
+    data,
+  });
+}
+
+export function createAdobe2ApiChatImageGeneration(
+  data: Adobe2ApiImage2ImageRequest,
+) {
+  return adobe2ApiRequest<Adobe2ApiImageGenerationResponse>({
+    url: "/v1/chat/completions",
+    method: "post",
+    data,
+  });
+}
+
+export function createAdobe2ApiGptImageToImageGeneration(
+  data: FireflyGptImageToImageRequest,
+) {
+  return adobe2ApiRequest<FireflyGptImageToImageResponse>({
+    url: "/v1/chat/completions",
+    method: "post",
+    data,
+  });
+}
+
+export function createAdobe2ApiVideoGeneration(
+  data: Adobe2ApiVideoGenerationRequest,
+) {
+  return adobe2ApiRequest<Adobe2ApiVideoGenerationResponse>({
+    url: "/v1/chat/completions",
     method: "post",
     data,
   });
@@ -328,12 +377,15 @@ export async function generateGeminiContent(
   data: any,
   signal?: AbortSignal,
 ) {
-  const flow2ApiState = await getFlow2ApiState();
-  if (flow2ApiState?.status === "running" && flow2ApiState.baseUrl) {
-    return flow2ApiRequest({
-      url: `/v1beta/models/${modeName}:generateContent`,
+  const adobe2ApiState = await getAdobe2ApiState();
+  if (adobe2ApiState?.status === "running" && adobe2ApiState.baseUrl) {
+    return adobe2ApiRequest({
+      url: "/v1/images/generations",
       method: "post",
-      data,
+      data: {
+        model: modeName,
+        ...data,
+      },
       signal,
     });
   }

@@ -10,6 +10,8 @@ import {
   saveGeneratedVideoToLocal,
 } from "service/projectStorage";
 import {
+  ADOBE_GPT_IMAGE2_MODEL,
+  ADOBE_NANO_BANANA_PRO_MODEL,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
 } from "shared/constants/ai-models";
@@ -20,6 +22,11 @@ import {
   POINTS_FEATURE_ENABLED,
 } from "shared/constants/points";
 import type { GeminiYwResponseBody } from "shared/types/detail/Yunwu/gemini-yw";
+import {
+  buildFireflyGptImageToImageRequest,
+  buildFireflyGptText2ImageRequest,
+  normalizeFireflyGptImageInputUrls,
+} from "shared/types/detail/Adobe2API/images/gpt-image";
 import type {
   AllNodeType,
   AudioGenerationNode,
@@ -79,6 +86,10 @@ import { getJikeingUserId, toChineseNumber } from "shared/utils/utils";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
 import { create } from "zustand";
 import {
+  createAdobe2ApiChatImageGeneration,
+  createAdobe2ApiGptImageToImageGeneration,
+  createAdobe2ApiImageGeneration,
+  createAdobe2ApiVideoGeneration,
   createDashscopeVideoSynthesis,
   createImageGeneration,
   createLzVideoTask,
@@ -176,6 +187,98 @@ const resolveLocalGeminiImageModel = ({
     `Nano Banana Pro 暂不支持 ${size ?? "未知比例"} / ${resolution ?? "未知分辨率"}，请使用 1:1、16:9、9:16、4:3、3:4，并选择 1K/2K/4K`,
   );
 };
+
+const ADOBE_IMAGE_RATIO_VALUES = new Set([
+  "1:1",
+  "5:4",
+  "9:16",
+  "21:9",
+  "16:9",
+  "3:2",
+  "4:3",
+  "4:5",
+  "3:4",
+  "2:3",
+]);
+
+const ADOBE_NANO_BANANA_PRO_RATIO_VALUES = new Set([
+  "1:1",
+  "16:9",
+  "9:16",
+  "4:3",
+  "3:4",
+]);
+
+const toAdobeRatioSuffix = (ratio?: string) =>
+  (ratio || "1:1").replace(":", "x");
+
+const toAdobeResolutionSuffix = (resolution?: string) =>
+  (resolution || "2K").toLowerCase();
+
+const resolveAdobeImageModel = ({
+  model,
+  size,
+  resolution,
+}: {
+  model?: string;
+  size?: string;
+  resolution?: string;
+}) => {
+  const ratio = size || "1:1";
+  const resolutionSuffix = toAdobeResolutionSuffix(resolution);
+  const ratioSuffix = toAdobeRatioSuffix(ratio);
+
+  if (model === ADOBE_GPT_IMAGE2_MODEL) {
+    if (!ADOBE_IMAGE_RATIO_VALUES.has(ratio)) {
+      throw new Error(`GPT-Image-2 Adobe 暂不支持 ${ratio} 比例`);
+    }
+    return `firefly-gpt-image-${resolutionSuffix}-${ratioSuffix}`;
+  }
+
+  if (model === ADOBE_NANO_BANANA_PRO_MODEL) {
+    if (!ADOBE_NANO_BANANA_PRO_RATIO_VALUES.has(ratio)) {
+      throw new Error(`Nano Banana Pro Adobe 暂不支持 ${ratio} 比例`);
+    }
+    return `firefly-nano-banana-pro-${resolutionSuffix}-${ratioSuffix}`;
+  }
+
+  return undefined;
+};
+
+const extractMarkdownMediaUrl = (content: unknown, kind: "image" | "video") => {
+  const text = Array.isArray(content)
+    ? content
+        .map((part) =>
+          typeof part === "string"
+            ? part
+            : typeof part?.text === "string"
+              ? part.text
+              : "",
+        )
+        .join("\n")
+    : String(content || "");
+  const htmlPattern =
+    kind === "video"
+      ? /<video[^>]+src=["']([^"']+)["']/i
+      : /<img[^>]+src=["']([^"']+)["']/i;
+  const htmlMatch = text.match(htmlPattern);
+  if (htmlMatch?.[1]) {
+    return htmlMatch[1];
+  }
+
+  const markdownPattern =
+    kind === "video"
+      ? /\[.*?\]\((https?:\/\/[^)\s]+?\.(?:mp4|webm|mov)(?:\?[^)]*)?)\)/i
+      : /!\[.*?\]\((https?:\/\/[^)\s]+)\)/i;
+  return text.match(markdownPattern)?.[1];
+};
+
+const isAdobeVideoRequest = (payload: Record<string, unknown>) =>
+  typeof payload.model === "string" &&
+  (payload.model.startsWith("firefly-sora2-pro-") ||
+    payload.model.startsWith("firefly-veo31-") ||
+    payload.model.startsWith("firefly-veo31-fast-")) &&
+  Array.isArray(payload.messages);
 
 const inferImageMimeTypeFromUri = (uri: string): string | undefined => {
   const dataUriMatch = uri.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
@@ -2611,6 +2714,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         resolution,
       });
       const originalModel = payload.originalModel ?? payload.model;
+      const adobeImageModel = resolveAdobeImageModel({
+        model: originalModel,
+        size,
+        resolution,
+      });
 
       // 更新节点状态为排队中
       set((state) => ({
@@ -2636,9 +2744,103 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }));
 
       try {
+        if (adobeImageModel) {
+          set((state) => ({
+            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+              ...data,
+              status: GenerationStatus.IN_PROGRESS,
+              progress: 0,
+            })),
+          }));
+
+          const gptImageUrls =
+            originalModel === ADOBE_GPT_IMAGE2_MODEL
+              ? normalizeFireflyGptImageInputUrls(imageUrls)
+              : imageUrls;
+
+          const response =
+            gptImageUrls.length > 0
+              ? originalModel === ADOBE_GPT_IMAGE2_MODEL
+                ? await createAdobe2ApiGptImageToImageGeneration(
+                    buildFireflyGptImageToImageRequest({
+                      model: adobeImageModel as any,
+                      prompt,
+                      imageUrls: gptImageUrls,
+                    }),
+                  )
+                : await createAdobe2ApiChatImageGeneration({
+                    model: adobeImageModel as any,
+                    messages: [
+                      {
+                        role: "user" as const,
+                        content: [
+                          { type: "text" as const, text: prompt || "" },
+                          ...imageUrls.map((url: string) => ({
+                            type: "image_url" as const,
+                            image_url: { url },
+                          })),
+                        ],
+                      },
+                    ],
+                  })
+              : await createAdobe2ApiImageGeneration(
+                  originalModel === ADOBE_GPT_IMAGE2_MODEL
+                    ? buildFireflyGptText2ImageRequest({
+                        model: adobeImageModel as any,
+                        prompt,
+                      })
+                    : {
+                        model: adobeImageModel as any,
+                        prompt: prompt || "",
+                        response_format: "url",
+                      },
+                );
+
+          const responseAny = response as any;
+          const responseUrl =
+            responseAny?.data?.[0]?.url ??
+            extractMarkdownMediaUrl(
+              responseAny?.choices?.[0]?.message?.content,
+              "image",
+            );
+          if (!responseUrl) {
+            throw new Error("Adobe2API 未返回图片地址");
+          }
+
+          set((state) => ({
+            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+              const existingData = data.result?.data ?? [];
+              const mergedData = appendMediaSequences(existingData, [
+                { url: responseUrl },
+              ]);
+              return {
+                ...data,
+                status: GenerationStatus.COMPLETED,
+                progress: 100,
+                result: {
+                  type: "image",
+                  data: mergedData,
+                },
+                error: undefined,
+              };
+            }),
+          }));
+          saveCurrentCanvasToHistory();
+          if (useChatSettingsStore.getState().autoSaveEnabled) {
+            get().saveGraph();
+          }
+          await deductVipScoreAfterGeneration({
+            scene: "image",
+            nodeId,
+            model: originalModel,
+            requiredPoints: payload.requiredPoints,
+          });
+          return;
+        }
+
         // 1. 构造请求体
         // 注意：text 和 fileData 不能同时存在于同一个 part，必须拆成独立的 part。
-        // 参考图直接把 URL 交给 flow2api，由服务端自行拉取，避免前端先转 Base64。
+        // 参考图直接把 URL 交给 adobe2api，由服务端自行拉取，避免前端先转 Base64。
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const parts: any[] = [];
 
@@ -3296,6 +3498,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const model = input?.model ?? requestPayload.model ?? "";
       const isSeedance20 =
         model === "seedance-2.0-fast" || model === "seedance-2.0-pro";
+      const isAdobeVideo = isAdobeVideoRequest(requestPayload);
 
       set((state) => ({
         nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
@@ -3327,6 +3530,80 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }));
 
       try {
+        if (isAdobeVideo) {
+          set((state) => ({
+            nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
+              ...data,
+              status: GenerationStatus.IN_PROGRESS,
+              progress: 0,
+            })),
+          }));
+
+          const response = await createAdobe2ApiVideoGeneration(
+            requestPayload as any,
+          );
+          const videoUrl = extractMarkdownMediaUrl(
+            response?.choices?.[0]?.message?.content,
+            "video",
+          );
+          if (!videoUrl) {
+            throw new Error("Adobe2API 未返回视频地址");
+          }
+
+          let resultItem: { url: string; format: string; [key: string]: any } = {
+            url: videoUrl,
+            format: "mp4",
+          };
+          try {
+            const copiedUrl = await copyVideoUrlToOss(videoUrl);
+            if (copiedUrl) {
+              resultItem.url = copiedUrl;
+            }
+          } catch (copyError) {
+            console.error(
+              "[startNewVideoGeneration] 转存 Adobe 视频到 OSS 失败:",
+              copyError,
+            );
+          }
+
+          set((state) => ({
+            nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
+              const existingData = data.result?.data ?? [];
+              const mergedData = appendMediaSequences(existingData, [
+                resultItem,
+              ]);
+              return {
+                ...data,
+                task_id: response?.id,
+                status: GenerationStatus.COMPLETED,
+                progress: 100,
+                result: {
+                  type: "video",
+                  data: mergedData,
+                },
+                error: undefined,
+                metadata: {
+                  ...data.metadata,
+                  tasks: response?.id ? [response.id] : [],
+                  failedTasks: [],
+                },
+              };
+            }),
+          }));
+          saveCurrentCanvasToHistory();
+          if (useChatSettingsStore.getState().autoSaveEnabled) {
+            get().saveGraph();
+          }
+          await deductVipScoreAfterGeneration({
+            scene: "video",
+            nodeId,
+            taskId: response?.id,
+            model,
+            requiredPoints,
+          });
+          return;
+        }
+
         const createTask = async () => {
           const response: any = isSeedance20
             ? await createLzVideoTask(requestPayload)

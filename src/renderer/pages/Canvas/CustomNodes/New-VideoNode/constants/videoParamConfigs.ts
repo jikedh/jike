@@ -71,6 +71,7 @@ const seedanceRatios = [
 ];
 
 const squareRatios = [RATIO.wide, RATIO.vertical, RATIO.square];
+const adobeVideoRatios = [RATIO.wide, RATIO.vertical];
 const happyHorseRatios = [
   RATIO.wide,
   RATIO.vertical,
@@ -126,6 +127,58 @@ const duration4_5_10 = {
     { label: "10s", value: 10 },
   ],
 };
+
+const adobeSora2ProConfig = (mode: VideoModeKey): VideoParamConfig => ({
+  modelId: "adobe-sora2-pro",
+  mode,
+  aspectRatios: adobeVideoRatios,
+  duration: {
+    type: "buttons",
+    options: [
+      { label: "4s", value: 4 },
+      { label: "8s", value: 8 },
+      { label: "12s", value: 12 },
+    ],
+  },
+  audio,
+  defaults: {
+    aspectRatio: "16:9",
+    duration: 4,
+    generateAudio: true,
+  },
+});
+
+const adobeVeo31Config = (
+  modelId: "adobe-veo31" | "adobe-veo31-fast",
+  mode: VideoModeKey,
+): VideoParamConfig => ({
+  modelId,
+  mode,
+  aspectRatios: adobeVideoRatios,
+  qualityGroup: {
+    key: "resolution",
+    label: "分辨率",
+    options: [
+      { label: "720p", value: "720p" },
+      { label: "1080p", value: "1080p" },
+    ],
+  },
+  duration: {
+    type: "buttons",
+    options: [
+      { label: "4s", value: 4 },
+      { label: "6s", value: 6 },
+      { label: "8s", value: 8 },
+    ],
+  },
+  audio,
+  defaults: {
+    aspectRatio: "16:9",
+    resolution: "720p",
+    duration: 4,
+    generateAudio: true,
+  },
+});
 
 const byModeKey = (modelId: string, mode: VideoModeKey) => `${modelId}:${mode}`;
 
@@ -427,6 +480,38 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
       generateAudio: false,
     },
   },
+  [byModeKey("adobe-veo31", "text-to-video")]: adobeVeo31Config(
+    "adobe-veo31",
+    "text-to-video",
+  ),
+  [byModeKey("adobe-veo31", "image-to-video")]: adobeVeo31Config(
+    "adobe-veo31",
+    "image-to-video",
+  ),
+  [byModeKey("adobe-veo31", "first-last-frame")]: adobeVeo31Config(
+    "adobe-veo31",
+    "first-last-frame",
+  ),
+  [byModeKey("adobe-veo31", "all-reference")]: adobeVeo31Config(
+    "adobe-veo31",
+    "all-reference",
+  ),
+  [byModeKey("adobe-veo31-fast", "text-to-video")]: adobeVeo31Config(
+    "adobe-veo31-fast",
+    "text-to-video",
+  ),
+  [byModeKey("adobe-veo31-fast", "image-to-video")]: adobeVeo31Config(
+    "adobe-veo31-fast",
+    "image-to-video",
+  ),
+  [byModeKey("adobe-veo31-fast", "first-last-frame")]: adobeVeo31Config(
+    "adobe-veo31-fast",
+    "first-last-frame",
+  ),
+  [byModeKey("adobe-sora2-pro", "text-to-video")]:
+    adobeSora2ProConfig("text-to-video"),
+  [byModeKey("adobe-sora2-pro", "image-to-video")]:
+    adobeSora2ProConfig("image-to-video"),
   keling: {
     modelId: "keling",
     aspectRatios: [RATIO.wide, RATIO.vertical, RATIO.square],

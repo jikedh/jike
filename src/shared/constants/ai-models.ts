@@ -134,6 +134,9 @@ export const VIDEO_ASPECT_RATIOS = [
 /** 图片生成模型配置 */
 export const NANO_BANANA_LOCAL_MODEL = "nano-banana-pro-local-gemini";
 export const NANO_BANANA_LOCAL_PLATFORM = "google_local_gemini";
+export const ADOBE2API_PLATFORM = "adobe2api";
+export const ADOBE_GPT_IMAGE2_MODEL = "gpt-image-2-adobe";
+export const ADOBE_NANO_BANANA_PRO_MODEL = "nano-banana-pro-adobe";
 
 export const IMAGE_MODELS = [
   // { id: 1, name: 'doubao-seedream-4-0', model: 'doubao-seedream-4-0', platform: 'Seedream' },
@@ -155,6 +158,18 @@ export const IMAGE_MODELS = [
     name: "豆包 Seedream 5.0",
     model: "doubao-seedream-5-0",
     platform: "Seedream",
+  },
+  {
+    id: 9,
+    name: "GPT-Image-2（Adobe版本）",
+    model: ADOBE_GPT_IMAGE2_MODEL,
+    platform: ADOBE2API_PLATFORM,
+  },
+  {
+    id: 10,
+    name: "Nano Banana Pro（Adobe版本）",
+    model: ADOBE_NANO_BANANA_PRO_MODEL,
+    platform: ADOBE2API_PLATFORM,
   },
   { id: 5, name: "Midjourney", model: "midjourney", platform: "midjourney" },
   {
@@ -205,6 +220,8 @@ export const GENERATION_SCORE_COST_MAP: Record<string, number> = {
   "doubao-seedream-5-0": 30,
   midjourney: 30,
   "midjourney-niji7": 30,
+  [ADOBE_GPT_IMAGE2_MODEL]: 0,
+  [ADOBE_NANO_BANANA_PRO_MODEL]: 0,
   // 视频模型
   "doubao-seedance-2.0": 30,
   "wan2.7-i2v": 30,

@@ -9,7 +9,7 @@ import {
   getYunwuToken,
   getZeakaiToken,
 } from "shared/utils/utils";
-import type { Flow2ApiState } from "shared/types/flow2api";
+import type { Adobe2ApiState } from "shared/types/adobe2api";
 
 const REQUEST_TIMEOUT = 300000;
 
@@ -17,6 +17,7 @@ const DEFAULT_HEADERS = {
   Accept: "application/json",
   "Content-Type": "application/json",
 };
+const UPSTREAM_DEFAULT_ADOBE_API_KEY = "clio-playground-web";
 
 // Jikeing 服务默认地址：优先使用环境变量，方便本地开发切换到本地后端
 const JIKEING_BASE_URL =
@@ -29,13 +30,13 @@ type ServiceConfig = {
   useBearer?: boolean;
 };
 
-async function getFlow2ApiState(): Promise<Flow2ApiState | null> {
-  if (typeof window === "undefined" || !window.flow2api) {
+async function getAdobe2ApiState(): Promise<Adobe2ApiState | null> {
+  if (typeof window === "undefined" || !window.adobe2api) {
     return null;
   }
 
   try {
-    return await window.flow2api.getState();
+    return await window.adobe2api.getState();
   } catch {
     return null;
   }
@@ -55,39 +56,32 @@ function toHeaderRecord(
   return headers as Record<string, string>;
 }
 
-async function applyFlow2ApiAuth(reqConfig: AxiosRequestConfig): Promise<void> {
-  const flow2ApiState = await getFlow2ApiState();
+function applyAdobe2ApiHeaders(
+  reqConfig: AxiosRequestConfig,
+  apiKey: string,
+): void {
+  const headerRecord = toHeaderRecord(reqConfig.headers);
+  reqConfig.headers = headerRecord;
+  headerRecord.Authorization = `Bearer ${apiKey}`;
+  headerRecord["x-api-key"] = apiKey;
+}
+
+async function applyAdobe2ApiAuth(reqConfig: AxiosRequestConfig): Promise<void> {
+  const adobe2ApiState = await getAdobe2ApiState();
   if (
-    flow2ApiState?.status !== "running" ||
-    !flow2ApiState.baseUrl ||
-    !flow2ApiState.apiKey
+    !adobe2ApiState?.baseUrl ||
+    !adobe2ApiState.apiKey
   ) {
     return;
   }
 
   const requestBaseUrl = normalizeBaseUrl(reqConfig.baseURL);
-  const flow2ApiBaseUrl = normalizeBaseUrl(flow2ApiState.baseUrl);
-  if (!requestBaseUrl || requestBaseUrl !== flow2ApiBaseUrl) {
+  const adobe2ApiBaseUrl = normalizeBaseUrl(adobe2ApiState.baseUrl);
+  if (!requestBaseUrl || requestBaseUrl !== adobe2ApiBaseUrl) {
     return;
   }
 
-  const headerRecord = toHeaderRecord(reqConfig.headers);
-  reqConfig.headers = headerRecord;
-  const hasAuthorization = Object.keys(headerRecord).some(
-    (key) => key.toLowerCase() === "authorization",
-  );
-  const hasGoogApiKey = Object.keys(headerRecord).some(
-    (key) => key.toLowerCase() === "x-goog-api-key",
-  );
-
-  if (!hasAuthorization) {
-    headerRecord.Authorization = `Bearer ${flow2ApiState.apiKey}`;
-  }
-
-  // 同时补一个官方兼容头，避免本地服务在某些场景下没有正确读取 Authorization。
-  if (!hasGoogApiKey) {
-    headerRecord["x-goog-api-key"] = flow2ApiState.apiKey;
-  }
+  applyAdobe2ApiHeaders(reqConfig, adobe2ApiState.apiKey);
 }
 
 const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
@@ -156,7 +150,7 @@ const createService = (
         reqConfig.headers[headerName] = headerValue;
       }
 
-      await applyFlow2ApiAuth(reqConfig);
+      await applyAdobe2ApiAuth(reqConfig);
 
       return reqConfig;
     },
@@ -190,17 +184,17 @@ const aiRequest = async <T = any>(config: AxiosRequestConfig): Promise<T> => {
   return await aiService.request(config);
 };
 
-const flow2ApiRequest = async <T = any>(
+const adobe2ApiRequest = async <T = any>(
   config: AxiosRequestConfig,
 ): Promise<T> => {
-  const flow2ApiState = await getFlow2ApiState();
+  const adobe2ApiState = await getAdobe2ApiState();
   const nextConfig = { ...config };
 
-  if (flow2ApiState?.baseUrl) {
-    nextConfig.baseURL = flow2ApiState.baseUrl;
+  if (adobe2ApiState?.baseUrl) {
+    nextConfig.baseURL = adobe2ApiState.baseUrl;
   }
 
-  await applyFlow2ApiAuth(nextConfig);
+  await applyAdobe2ApiAuth(nextConfig);
 
   const finalConfig: AxiosRequestConfig = {
     ...nextConfig,
@@ -211,7 +205,31 @@ const flow2ApiRequest = async <T = any>(
     },
   };
 
-  return await axios(finalConfig).then((response) => response.data);
+  try {
+    return await axios(finalConfig).then((response) => response.data);
+  } catch (error: any) {
+    const status = error?.response?.status;
+    const detail =
+      error?.response?.data?.detail || error?.response?.data?.error?.message;
+    const shouldRetryWithUpstreamDefault =
+      status === 401 &&
+      String(detail || "").includes("Invalid API key") &&
+      adobe2ApiState?.apiKey &&
+      adobe2ApiState.apiKey !== UPSTREAM_DEFAULT_ADOBE_API_KEY;
+
+    if (!shouldRetryWithUpstreamDefault) {
+      throw error;
+    }
+
+    const retryConfig: AxiosRequestConfig = {
+      ...finalConfig,
+      headers: {
+        ...toHeaderRecord(finalConfig.headers),
+      },
+    };
+    applyAdobe2ApiHeaders(retryConfig, UPSTREAM_DEFAULT_ADOBE_API_KEY);
+    return await axios(retryConfig).then((response) => response.data);
+  }
 };
 
 const zeakaiRequest = async <T = any>(
@@ -265,8 +283,8 @@ export {
   dashscopeService,
   jikeingAdminService,
   wuhenService,
-  flow2ApiRequest,
-  getFlow2ApiState,
+  adobe2ApiRequest,
+  getAdobe2ApiState,
 };
 export default aiRequest;
 export {

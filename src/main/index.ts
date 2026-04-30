@@ -17,11 +17,11 @@ import icon from "../../resources/icon.png?asset";
 import {
   registerDebugHandlers,
   registerDownloadHandlers,
-  registerFlow2ApiHandlers,
+  registerAdobe2ApiHandlers,
   registerStorageHandlers,
   registerTrackingHandlers,
 } from "./ipc";
-import { flow2ApiService } from "./ipc/flow2api/service";
+import { adobe2ApiService } from "./ipc/adobe2api/service";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -105,7 +105,7 @@ function createWindow(): void {
   registerStorageHandlers();
   registerDebugHandlers();
   registerDownloadHandlers();
-  registerFlow2ApiHandlers();
+  registerAdobe2ApiHandlers();
   registerTrackingHandlers();
 }
 
@@ -125,6 +125,6 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  void flow2ApiService.stop();
+  void adobe2ApiService.stop();
   app.quit();
 });
