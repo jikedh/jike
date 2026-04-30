@@ -862,7 +862,7 @@ export const nodeTypes = {
 ```tsx
 <ContextMenuItem onSelect={() => onCreateNode("newVideo")}>
   <IconVideo size={16} />
-  新建视频节点(新版)
+  新建生成视频节点(新版)
 </ContextMenuItem>
 ```
 

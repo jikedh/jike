@@ -1,15 +1,15 @@
+import { Gift, LogOut, User, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, User, Gift, Zap, Coins } from "lucide-react";
 import { POINTS_FEATURE_ENABLED } from "shared/constants/points";
-import { clearJikeingToken, getJikeingToken } from "shared/utils/utils";
+import type { UserScoreVO } from "shared/types/jikeing";
+import { getJikeingToken } from "shared/utils/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { UserScoreVO } from "shared/types/jikeing";
-// import { getJikeingToken, clearJikeingToken } from '@/utils/aiRequest'
+import { useUserStore } from "@/stores/useUserStore";
 
 interface UserAvatarDropdownProps {
   userId?: string;
@@ -47,6 +47,7 @@ export const UserAvatarDropdown = ({
   const totalScore =
     (balanceInfo?.forScore ?? 0) + (balanceInfo?.vipScore ?? 0);
   const navigate = useNavigate();
+  const logout = useUserStore((state) => state.logout);
 
   // 读取登录态 token，决定是展示头像下拉还是跳转登录入口
   const token = getJikeingToken();
@@ -54,9 +55,9 @@ export const UserAvatarDropdown = ({
   const avatarStyle = getRandomStyle(userSeed);
   const avatarUrl = generateAvatarUrl(userSeed, avatarStyle);
 
-  // 退出登录：清理 token 后返回登录页
-  const handleLogout = () => {
-    clearJikeingToken();
+  // 退出登录：清理登录缓存后返回登录页
+  const handleLogout = async () => {
+    await logout();
     navigate("/login");
   };
 

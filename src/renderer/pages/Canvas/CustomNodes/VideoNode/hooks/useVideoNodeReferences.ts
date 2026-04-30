@@ -104,8 +104,8 @@ export const useVideoNodeReferences = ({
             node.type === "videoNode"
               ? getPrimaryVideoUrlFromNodeData(node.data as VideoGenerationNode)
               : getPrimaryVideoUrlFromAnyVideoNode(
-                  node.data as NewVideoGenerationNode,
-                ),
+                node.data as NewVideoGenerationNode,
+              ),
         }))
         .filter((item) => item.url) as VideoReferenceItem[]
     );
@@ -115,10 +115,13 @@ export const useVideoNodeReferences = ({
     return parentNodeIds
       .map((parentId) => nodes.find((node) => node.id === parentId))
       .filter((node) => node?.type === "audioNode")
-      .map((node) => ({
-        id: node.id,
-        url: (node.data as AudioGenerationNode).result?.data?.[0]?.url,
-      }))
+      .map((node) => {
+        const firstItem = (node.data as AudioGenerationNode).result?.data?.[0];
+        return {
+          id: node.id,
+          url: getRemoteMediaUrl(firstItem),
+        };
+      })
       .filter((item) => item.url) as VideoReferenceItem[];
   }, [parentNodeIds, nodes]);
 

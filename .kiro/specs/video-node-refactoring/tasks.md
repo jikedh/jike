@@ -16,7 +16,7 @@
 - [x] 4. 在 `src/renderer/pages/Canvas/constants/canvasConfig.ts` 的 `nodeTypes` 中注册 `newVideoNode: NewVideoNode`
   - 关联需求：US-1.2
 
-- [x] 5. 在 `src/renderer/pages/Canvas/components/CanvasContextMenu.tsx` 中新增"新建视频节点(新版)"菜单项
+- [x] 5. 在 `src/renderer/pages/Canvas/components/CanvasContextMenu.tsx` 中新增"新建生成视频节点(新版)"菜单项
   - 关联需求：US-1.1
 
 - [x] 6. 在 `src/renderer/pages/Canvas/components/CanvasFlow.tsx` 的 `handleCreateNodeFromMenu` 中处理 `"newVideo"` 映射

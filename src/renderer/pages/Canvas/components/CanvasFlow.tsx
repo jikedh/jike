@@ -1375,6 +1375,10 @@ export const CanvasFlow = ({
 
   const contextMenuTriggerRef = useRef<HTMLDivElement | null>(null);
   const [menuScreenPosition, setMenuScreenPosition] = useState({ x: 0, y: 0 });
+  const [canvasMenuMode, setCanvasMenuMode] = useState<"create" | "upload">(
+    "create",
+  );
+  const uploadMediaInputRef = useRef<HTMLInputElement | null>(null);
   const pendingConnectRef = useRef<{
     nodeId: string;
     handleId: string | null;
@@ -1571,11 +1575,12 @@ export const CanvasFlow = ({
   ]);
 
   const openContextMenuAt = useCallback(
-    (x: number, y: number) => {
+    (x: number, y: number, mode: "create" | "upload" = "create") => {
       if (annotationWorkspace.open) {
         return;
       }
 
+      setCanvasMenuMode(mode);
       setMenuScreenPosition({ x, y });
       const contextMenuEvent = new MouseEvent("contextmenu", {
         bubbles: true,
@@ -1595,11 +1600,15 @@ export const CanvasFlow = ({
         return;
       }
 
-      const detail = (event as CustomEvent<{ x: number; y: number }>).detail;
+      const detail = (event as CustomEvent<{
+        x: number;
+        y: number;
+        mode?: "create" | "upload";
+      }>).detail;
       if (!detail) {
         return;
       }
-      openContextMenuAt(detail.x, detail.y);
+      openContextMenuAt(detail.x, detail.y, detail.mode ?? "create");
     };
     window.addEventListener("jike:open-canvas-context-menu", handler);
     return () => {
@@ -1614,9 +1623,7 @@ export const CanvasFlow = ({
         return;
       }
 
-      pendingConnectRef.current = null;
-      setConnectionGhost(null);
-      setMenuScreenPosition({ x: event.clientX, y: event.clientY });
+      event.preventDefault();
     },
     [annotationWorkspace.open],
   );
@@ -1629,6 +1636,7 @@ export const CanvasFlow = ({
 
     pendingConnectRef.current = null;
     setConnectionGhost(null);
+    setCanvasMenuMode("create");
   }, []);
 
   // 閫氳繃鍘熺敓 dblclick 浜嬩欢瀹炵幇鍙屽嚮鍞ゅ嚭鑿滃崟
@@ -1654,7 +1662,7 @@ export const CanvasFlow = ({
         // 闃绘 ReactFlow 榛樿鐨勫弻鍑荤缉鏀捐涓?
         event.preventDefault();
         event.stopPropagation();
-        openContextMenuAt(event.clientX, event.clientY);
+        openContextMenuAt(event.clientX, event.clientY, "create");
       }
     },
     [annotationWorkspace.open, openContextMenuAt],
@@ -1850,6 +1858,39 @@ export const CanvasFlow = ({
       addNode,
       menuScreenPosition,
       onConnect,
+      screenToFlowPosition,
+    ],
+  );
+
+  const handleUploadMediaFromMenu = useCallback(() => {
+    if (annotationWorkspace.open) {
+      return;
+    }
+
+    const input = uploadMediaInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    input.value = "";
+    input.click();
+  }, [annotationWorkspace.open]);
+
+  const handleUploadMediaInputChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.currentTarget.files ?? []);
+      event.currentTarget.value = "";
+
+      if (annotationWorkspace.open || files.length === 0) {
+        return;
+      }
+
+      void handleFiles(files, screenToFlowPosition(menuScreenPosition));
+    },
+    [
+      annotationWorkspace.open,
+      handleFiles,
+      menuScreenPosition,
       screenToFlowPosition,
     ],
   );
@@ -2240,7 +2281,9 @@ export const CanvasFlow = ({
     <>
       <CanvasContextMenu
         onCreateNode={handleCreateNodeFromMenu}
+        onUploadMedia={handleUploadMediaFromMenu}
         onOpenChange={handleCanvasContextMenuOpenChange}
+        mode={canvasMenuMode}
       >
         <div
           ref={contextMenuTriggerRef}
@@ -2293,6 +2336,15 @@ export const CanvasFlow = ({
               />
             ))}
           </svg>
+
+          <input
+            ref={uploadMediaInputRef}
+            accept="image/*,video/*,audio/*"
+            className="hidden"
+            multiple
+            onChange={handleUploadMediaInputChange}
+            type="file"
+          />
 
           <ReactFlow<AllNodeType, EdgeType>
             nodes={displayNodes}
@@ -2490,28 +2542,28 @@ export const CanvasFlow = ({
                   onSelect={() => handleCreateNodeFromQuickAddMenu("image")}
                 >
                   <IconPhoto size={16} />
-                  新建图片节点
+                  新建生成图片节点
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
                   onSelect={() => handleCreateNodeFromQuickAddMenu("video")}
                 >
                   <IconVideo size={16} />
-                  新建视频节点
+                  新建生成视频节点
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
                   onSelect={() => handleCreateNodeFromQuickAddMenu("newVideo")}
                 >
                   <IconVideo size={16} />
-                  新建视频节点(新版)
+                  新建生成视频节点(新版)
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
                   onSelect={() => handleCreateNodeFromQuickAddMenu("audio")}
                 >
                   <IconMusic size={16} />
-                  新建音频节点
+                  新建生成音频节点
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"

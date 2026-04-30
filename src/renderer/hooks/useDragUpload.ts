@@ -213,21 +213,44 @@ export function useDragUpload() {
               ? addNode("video", position)
               : addNode("audio", position);
 
+        if (mediaType === "image") {
+          updateImageNodeData(nodeId, {
+            isUpload: true,
+            status: GenerationStatus.IN_PROGRESS,
+            progress: 0,
+          });
+        } else if (mediaType === "video") {
+          updateVideoNodeData(nodeId, {
+            isUpload: true,
+            status: GenerationStatus.IN_PROGRESS,
+            progress: 0,
+          });
+        } else {
+          updateAudioNodeData(nodeId, {
+            isUpload: true,
+            status: GenerationStatus.IN_PROGRESS,
+            progress: 0,
+          });
+        }
+
         // 更新节点状态为上传中
         const updateProgress = (progress: number) => {
           if (mediaType === "image") {
             updateImageNodeData(nodeId, {
               status: GenerationStatus.IN_PROGRESS,
+              isUpload: true,
               progress,
             });
           } else if (mediaType === "video") {
             updateVideoNodeData(nodeId, {
               status: GenerationStatus.IN_PROGRESS,
+              isUpload: true,
               progress,
             });
           } else {
             updateAudioNodeData(nodeId, {
               status: GenerationStatus.IN_PROGRESS,
+              isUpload: true,
               progress,
             });
           }
@@ -332,7 +355,8 @@ export function useDragUpload() {
 
           useCanvasFlowStore.getState().saveGraph();
 
-          toast.success(`${file.name} 上传成功`);
+          // toast.success(`${file.name} 上传成功`);
+          toast.success(`上传成功`);
         } catch (error) {
           console.error(`上传失败: ${file.name}`, error);
 

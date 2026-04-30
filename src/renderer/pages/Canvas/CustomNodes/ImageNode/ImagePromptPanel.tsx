@@ -13,6 +13,7 @@ import {
   NANO_BANANA_LOCAL_PLATFORM,
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
+import { getImageGenerationPoints } from "shared/constants/model-points";
 import type { ImageGenerationNode, NoteNodeData } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import {
@@ -22,9 +23,9 @@ import {
 } from "shared/utils/localGeminiErrors";
 import { getRemoteMediaUrl } from "shared/utils/mediaPersistence";
 import { cn } from "shared/utils/utils";
+import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { PresetDropdown } from "@/components/PresetDropdown";
 import { Button } from "@/components/ui/button";
-import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import {
   Select,
   SelectContent,
@@ -36,7 +37,6 @@ import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
-import { getImageGenerationPoints } from "shared/constants/model-points";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import {
   GeminiParamsPanel,
@@ -120,7 +120,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     fallbackAIGenPrice,
     normalizeRequiredPoints,
     refreshBalanceInfo,
-    ensureEnoughPoints,
     validateBalanceBeforeGenerate,
   } = useGenerationPoints();
 
@@ -300,10 +299,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const disableBuiltInSuggestion = {
     items: () => [],
     render: () => ({
-      onStart: () => {},
-      onUpdate: () => {},
+      onStart: () => { },
+      onUpdate: () => { },
       onKeyDown: () => false,
-      onExit: () => {},
+      onExit: () => { },
     }),
   };
 
@@ -861,16 +860,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
     if (!mergedPrompt) {
       warning("请输入提示词");
-      return;
-    }
-
-    if (
-      !ensureEnoughPoints({
-        requiredPoints,
-        actionLabel: "生成图片",
-        warning,
-      })
-    ) {
       return;
     }
 

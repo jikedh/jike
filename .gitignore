@@ -28,3 +28,5 @@ out
 *.log*
 release
 resources/adobe2api-master
+resources/flow2api-main
+agent.md

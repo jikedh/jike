@@ -16,9 +16,8 @@ import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
-
-import { getModelDefaultParams } from "./components/modelParamsConfig";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
+import { getModelDefaultParams } from "./components/modelParamsConfig";
 import { VideoModelParamsPanel } from "./components/VideoModelParamsPanel";
 import type { VideoPromptEditorHandle } from "./components/VideoPromptEditor";
 import { VideoPromptEditor } from "./components/VideoPromptEditor";
@@ -89,7 +88,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     fallbackAIGenPrice,
     normalizeRequiredPoints,
     refreshBalanceInfo,
-    ensureEnoughPoints,
     validateBalanceBeforeGenerate,
   } = useGenerationPoints();
 
@@ -202,10 +200,10 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
         hasVideoInput: (allVideoUrls?.length ?? 0) > 0,
         hasAudio: Boolean(
           currentVideoData?.metadata?.generate_audio ??
-            currentVideoData?.metadata?.audio ??
-            (currentVideoData as any)?.generate_audio ??
-            (currentVideoData as any)?.audio ??
-            true,
+          currentVideoData?.metadata?.audio ??
+          (currentVideoData as any)?.generate_audio ??
+          (currentVideoData as any)?.audio ??
+          true,
         ),
         fallback: Math.max(fallbackAIGenPrice, 1),
       }),
@@ -457,16 +455,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
       return;
     }
 
-    if (
-      !ensureEnoughPoints({
-        requiredPoints,
-        actionLabel: "生成视频",
-        warning,
-      })
-    ) {
-      return;
-    }
-
     // 所有图片在上传时已经上传到 OSS，或是在在线 URL，直接使用即可
     const imageUrls = allImageUrls;
 
@@ -551,7 +539,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     success,
     requiredPoints,
     refreshBalanceInfo,
-    ensureEnoughPoints,
   ]);
 
   return (

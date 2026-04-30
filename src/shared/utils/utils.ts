@@ -134,7 +134,7 @@ export async function downloadImageFromUrl(
         if (basename && basename.includes(".")) {
           finalFilename = basename;
         }
-      } catch {}
+      } catch { }
 
       if (!finalFilename) {
         const ext = blob.type.split("/")[1] || "jpg";
@@ -302,9 +302,10 @@ export function getJikeingUserInfo(): Record<string, any> | null {
  */
 export function setJikeingUserInfo(userInfo: Record<string, any>): void {
   localStorage.setItem(JIKEING_USER_INFO_KEY, JSON.stringify(userInfo));
-  // 同时存储 uuid 方便快速获取
-  if (userInfo.uuid) {
-    localStorage.setItem(JIKEING_USER_ID_KEY, userInfo.uuid);
+  // 同步展示用用户标识，优先使用 uuid，兼容只有 id 的登录响应
+  const userId = userInfo.uuid ?? userInfo.id;
+  if (userId) {
+    localStorage.setItem(JIKEING_USER_ID_KEY, String(userId));
   }
 }
 

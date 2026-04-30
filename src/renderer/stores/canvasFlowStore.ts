@@ -4,7 +4,6 @@ import {
   getCanvasDataKey,
   getLocalFilePath,
   loadCanvasData,
-  readMediaFromLocal,
   saveCanvasData,
   saveGeneratedImageToLocal,
   saveGeneratedVideoToLocal,
@@ -309,29 +308,8 @@ export const hydrateCanvasNodesForRuntime = async (
   return Promise.all(
     nodes.map(async (node): Promise<AllNodeType> => {
       if (node.type === "imageNode" && node.data?.result?.data) {
-        const processedData = await Promise.all(
-          node.data.result.data.map(async (item: any) => {
-            if (item.relativePath || item.localPath) {
-              try {
-                const path = item.localPath || item.relativePath;
-                const fileBytes = await readMediaFromLocal(path);
-                if (fileBytes) {
-                  const ext =
-                    (item.localFileName || item.localName || item.fileName)
-                      ?.split(".")
-                      .pop() || "png";
-                  const blob = new Blob([fileBytes], {
-                    type: `image/${ext}`,
-                  });
-                  const blobUrl = URL.createObjectURL(blob);
-                  return hydrateMediaForRuntime(item, blobUrl);
-                }
-              } catch (err) {
-                console.warn("Failed to load local image:", err);
-              }
-            }
-            return hydrateMediaForRuntime(item);
-          }),
+        const processedData = node.data.result.data.map((item: any) =>
+          hydrateMediaForRuntime(item),
         );
         return {
           ...node,
@@ -349,31 +327,8 @@ export const hydrateCanvasNodesForRuntime = async (
         (node.type === "videoNode" || node.type === "newVideoNode") &&
         node.data?.result?.data
       ) {
-        const processedData = await Promise.all(
-          node.data.result.data.map(async (item: any) => {
-            if (item.relativePath || item.localPath) {
-              try {
-                const path = item.localPath || item.relativePath;
-                const fileBytes = await readMediaFromLocal(path);
-                if (fileBytes) {
-                  const ext =
-                    item.format ||
-                    (item.localFileName || item.localName || item.fileName)
-                      ?.split(".")
-                      .pop() ||
-                    "mp4";
-                  const blob = new Blob([fileBytes], {
-                    type: `video/${ext}`,
-                  });
-                  const blobUrl = URL.createObjectURL(blob);
-                  return hydrateMediaForRuntime(item, blobUrl);
-                }
-              } catch (err) {
-                console.warn("Failed to load local video:", err);
-              }
-            }
-            return hydrateMediaForRuntime(item);
-          }),
+        const processedData = node.data.result.data.map((item: any) =>
+          hydrateMediaForRuntime(item),
         );
         return {
           ...node,
@@ -388,29 +343,8 @@ export const hydrateCanvasNodesForRuntime = async (
       }
 
       if (node.type === "audioNode" && node.data?.result?.data) {
-        const processedData = await Promise.all(
-          node.data.result.data.map(async (item: any) => {
-            if (item.relativePath || item.localPath) {
-              try {
-                const path = item.localPath || item.relativePath;
-                const fileBytes = await readMediaFromLocal(path);
-                if (fileBytes) {
-                  const ext =
-                    (item.localFileName || item.localName || item.fileName)
-                      ?.split(".")
-                      .pop() || "mp3";
-                  const blob = new Blob([fileBytes], {
-                    type: `audio/${ext}`,
-                  });
-                  const blobUrl = URL.createObjectURL(blob);
-                  return hydrateMediaForRuntime(item, blobUrl);
-                }
-              } catch (err) {
-                console.warn("Failed to load local audio:", err);
-              }
-            }
-            return hydrateMediaForRuntime(item);
-          }),
+        const processedData = node.data.result.data.map((item: any) =>
+          hydrateMediaForRuntime(item),
         );
         return {
           ...node,
@@ -507,9 +441,9 @@ const pollImageGeneration = async (
 
       const progressValue = Number(
         response?.data?.progress ??
-          response?.result?.progress ??
-          response?.progress ??
-          50,
+        response?.result?.progress ??
+        response?.progress ??
+        50,
       );
 
       // 成功状态：小写 completed 或大写 SUCCESS/SUCCEEDED/COMPLETED
@@ -1454,10 +1388,10 @@ const pollNewVideoGeneration = async ({
               error:
                 allDone && successCount === 0
                   ? {
-                      code: "VIDEO_FAILED",
-                      message:
-                        normalized.errorMessage || "生成失败，请稍后再试",
-                    }
+                    code: "VIDEO_FAILED",
+                    message:
+                      normalized.errorMessage || "生成失败，请稍后再试",
+                  }
                   : data.error,
             };
           }),
@@ -1876,108 +1810,23 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         return;
       }
 
-      // 处理节点中的本地文件，将相对路径转换为可显示的 blob URL
+      // 恢复节点运行时状态时仅使用远程媒体 URL，避免本地文件生成 blob URL。
       const hydratedNodes = await hydrateCanvasNodesForRuntime(data.nodes);
-      const processedNodes: AllNodeType[] = await Promise.all(
-        hydratedNodes.map(async (node) => {
-          const runtimeSafeData = resetNodeDataRuntimeState(
-            node.type,
-            node.data,
-          );
+      const processedNodes: AllNodeType[] = hydratedNodes.map((node) => {
+        const runtimeSafeData = resetNodeDataRuntimeState(
+          node.type,
+          node.data,
+        );
 
-          if (runtimeSafeData !== node.data) {
-            return {
-              ...node,
-              data: runtimeSafeData as AllNodeType["data"],
-            };
-          }
+        if (runtimeSafeData !== node.data) {
+          return {
+            ...node,
+            data: runtimeSafeData as AllNodeType["data"],
+          };
+        }
 
-          // Hydrate persisted local video files into blob URLs for runtime.
-          if (
-            (node.type === "videoNode" || node.type === "newVideoNode") &&
-            node.data?.result?.data
-          ) {
-            const processedData = await Promise.all(
-              node.data.result.data.map(async (item: any) => {
-                if (item.relativePath) {
-                  try {
-                    const fileBytes = await readMediaFromLocal(
-                      item.relativePath,
-                    );
-                    if (fileBytes) {
-                      const ext =
-                        item.format ||
-                        (item.localFileName || item.fileName)
-                          ?.split(".")
-                          .pop() ||
-                        "mp4";
-                      const blob = new Blob([fileBytes], {
-                        type: `video/${ext}`,
-                      });
-                      const blobUrl = URL.createObjectURL(blob);
-                      return { ...item, url: blobUrl };
-                    }
-                  } catch (err) {
-                    console.warn("Failed to load local video:", err);
-                  }
-                }
-                return item;
-              }),
-            );
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                result: {
-                  ...node.data.result,
-                  data: processedData,
-                },
-              },
-            };
-          }
-
-          // Hydrate persisted local audio files into blob URLs for runtime.
-          if (node.type === "audioNode" && node.data?.result?.data) {
-            const processedData = await Promise.all(
-              node.data.result.data.map(async (item: any) => {
-                if (item.relativePath) {
-                  try {
-                    const fileBytes = await readMediaFromLocal(
-                      item.relativePath,
-                    );
-                    if (fileBytes) {
-                      const ext =
-                        (item.localFileName || item.fileName)
-                          ?.split(".")
-                          .pop() || "mp3";
-                      const blob = new Blob([fileBytes], {
-                        type: `audio/${ext}`,
-                      });
-                      const blobUrl = URL.createObjectURL(blob);
-                      return { ...item, url: blobUrl };
-                    }
-                  } catch (err) {
-                    console.warn("Failed to load local audio:", err);
-                  }
-                }
-                return item;
-              }),
-            );
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                result: {
-                  ...node.data.result,
-                  data: processedData,
-                },
-              },
-            };
-          }
-
-          return node;
-        }),
-      );
+        return node;
+      });
 
       set({
         projectId,
@@ -2152,94 +2001,94 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const finalNode =
         newNode.type === "audioNode"
           ? {
+            ...newNode,
+            data: {
+              ...newNode.data,
+              nickname: getAudioNicknameByNodeId(nextId),
+            },
+          }
+          : newNode.type === "imageNode"
+            ? {
               ...newNode,
               data: {
                 ...newNode.data,
-                nickname: getAudioNicknameByNodeId(nextId),
+                model: defaultImageModel || newNode.data.model,
+                platform: defaultImagePlatform || newNode.data.platform,
+                size: defaultImageSize || newNode.data.size,
+                resolution: defaultImageResolution || newNode.data.resolution,
               },
             }
-          : newNode.type === "imageNode"
-            ? {
+            : newNode.type === "newVideoNode"
+              ? {
                 ...newNode,
                 data: {
                   ...newNode.data,
-                  model: defaultImageModel || newNode.data.model,
-                  platform: defaultImagePlatform || newNode.data.platform,
-                  size: defaultImageSize || newNode.data.size,
-                  resolution: defaultImageResolution || newNode.data.resolution,
+                  // 新版视频只沿用新版模型的记忆，避免老版默认模型把新版下拉框顶成空值。
+                  model: [
+                    "seedance-2.0-fast",
+                    "seedance-2.0-pro",
+                    "wanxiang",
+                    "vidu-q3-pro",
+                    "vidu",
+                    "pixverse",
+                    "happyhorse",
+                    "keling",
+                  ].includes(defaultNewVideoModel ?? "")
+                    ? defaultNewVideoModel
+                    : newNode.data.model,
+                  aspect_ratio:
+                    defaultNewVideoAspectRatio || newNode.data.aspect_ratio,
+                  duration: defaultNewVideoDuration || newNode.data.duration,
+                  metadata: {
+                    ...(newNode.data.metadata ?? {}),
+                    params: {
+                      ...(newNode.data.metadata?.params as
+                        | Record<string, unknown>
+                        | undefined),
+                      aspectRatio:
+                        defaultNewVideoAspectRatio ||
+                        newNode.data.aspect_ratio,
+                      duration:
+                        defaultNewVideoDuration || newNode.data.duration,
+                      resolution: defaultNewVideoResolution,
+                      generateAudio: defaultNewVideoGenerateAudio,
+                      promptExtend: defaultNewVideoPromptExtend,
+                    },
+                    ...(defaultNewVideoMode !== undefined
+                      ? { mode: defaultNewVideoMode }
+                      : {}),
+                  },
                 },
               }
-            : newNode.type === "newVideoNode"
-              ? {
+              : newNode.type === "videoNode"
+                ? {
                   ...newNode,
                   data: {
                     ...newNode.data,
-                    // 新版视频只沿用新版模型的记忆，避免老版默认模型把新版下拉框顶成空值。
-                    model: [
-                      "seedance-2.0-fast",
-                      "seedance-2.0-pro",
-                      "wanxiang",
-                      "vidu-q3-pro",
-                      "vidu",
-                      "pixverse",
-                      "happyhorse",
-                      "keling",
-                    ].includes(defaultNewVideoModel ?? "")
-                      ? defaultNewVideoModel
-                      : newNode.data.model,
+                    model: defaultVideoModel || newNode.data.model,
                     aspect_ratio:
-                      defaultNewVideoAspectRatio || newNode.data.aspect_ratio,
-                    duration: defaultNewVideoDuration || newNode.data.duration,
+                      defaultVideoAspectRatio || newNode.data.aspect_ratio,
+                    duration: defaultVideoDuration || newNode.data.duration,
                     metadata: {
                       ...(newNode.data.metadata ?? {}),
-                      params: {
-                        ...(newNode.data.metadata?.params as
-                          | Record<string, unknown>
-                          | undefined),
-                        aspectRatio:
-                          defaultNewVideoAspectRatio ||
-                          newNode.data.aspect_ratio,
-                        duration:
-                          defaultNewVideoDuration || newNode.data.duration,
-                        resolution: defaultNewVideoResolution,
-                        generateAudio: defaultNewVideoGenerateAudio,
-                        promptExtend: defaultNewVideoPromptExtend,
-                      },
-                      ...(defaultNewVideoMode !== undefined
-                        ? { mode: defaultNewVideoMode }
+                      resolution:
+                        defaultVideoResolution ||
+                        newNode.data.metadata?.resolution,
+                      ...(defaultVideoMode !== undefined
+                        ? { mode: defaultVideoMode }
+                        : {}),
+                      ...(defaultVideoGenerateAudio !== undefined
+                        ? { generate_audio: defaultVideoGenerateAudio }
+                        : {}),
+                      ...(defaultVideoAudio !== undefined
+                        ? { audio: defaultVideoAudio }
+                        : {}),
+                      ...(defaultVideoPromptExtend !== undefined
+                        ? { prompt_extend: defaultVideoPromptExtend }
                         : {}),
                     },
                   },
                 }
-              : newNode.type === "videoNode"
-                ? {
-                    ...newNode,
-                    data: {
-                      ...newNode.data,
-                      model: defaultVideoModel || newNode.data.model,
-                      aspect_ratio:
-                        defaultVideoAspectRatio || newNode.data.aspect_ratio,
-                      duration: defaultVideoDuration || newNode.data.duration,
-                      metadata: {
-                        ...(newNode.data.metadata ?? {}),
-                        resolution:
-                          defaultVideoResolution ||
-                          newNode.data.metadata?.resolution,
-                        ...(defaultVideoMode !== undefined
-                          ? { mode: defaultVideoMode }
-                          : {}),
-                        ...(defaultVideoGenerateAudio !== undefined
-                          ? { generate_audio: defaultVideoGenerateAudio }
-                          : {}),
-                        ...(defaultVideoAudio !== undefined
-                          ? { audio: defaultVideoAudio }
-                          : {}),
-                        ...(defaultVideoPromptExtend !== undefined
-                          ? { prompt_extend: defaultVideoPromptExtend }
-                          : {}),
-                      },
-                    },
-                  }
                 : newNode;
 
       set((state) => ({
@@ -2363,12 +2212,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const finalDuplicatedNode =
         newNode.type === "audioNode"
           ? {
-              ...newNode,
-              data: {
-                ...newNode.data,
-                nickname: getAudioNicknameByNodeId(newId),
-              },
-            }
+            ...newNode,
+            data: {
+              ...newNode.data,
+              nickname: getAudioNicknameByNodeId(newId),
+            },
+          }
           : newNode;
 
       set((state) => {
@@ -2380,19 +2229,19 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         const copiedIncomingEdges =
           node.type === "imageNode" ||
-          node.type === "videoNode" ||
-          node.type === "newVideoNode"
+            node.type === "videoNode" ||
+            node.type === "newVideoNode"
             ? state.edges
-                .filter((edge) => edge.target === node.id)
-                .map((edge, edgeIndex) => {
-                  const { id: _id, target: _target, ...edgePayload } = edge;
+              .filter((edge) => edge.target === node.id)
+              .map((edge, edgeIndex) => {
+                const { id: _id, target: _target, ...edgePayload } = edge;
 
-                  return {
-                    ...edgePayload,
-                    id: `edge-${edge.source}-${newId}-${Date.now()}-${edgeIndex}`,
-                    target: newId,
-                  } as EdgeType;
-                })
+                return {
+                  ...edgePayload,
+                  id: `edge-${edge.source}-${newId}-${Date.now()}-${edgeIndex}`,
+                  target: newId,
+                } as EdgeType;
+              })
             : [];
         const nextEdges = [...state.edges, ...copiedIncomingEdges];
         let nextNodes = [...updatedNodes, finalDuplicatedNode];
@@ -3121,14 +2970,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const sourceVisualSize =
           nodeType === "imageNode"
             ? getNodeSizeByAspectRatio(
-                (sourceData as ImageGenerationNode).size ?? "4:3",
-                250,
-              )
+              (sourceData as ImageGenerationNode).size ?? "4:3",
+              250,
+            )
             : getNodeSizeByAspectRatio(
-                (sourceData as VideoGenerationNode | NewVideoGenerationNode)
-                  .aspect_ratio ?? "16:9",
-                250,
-              );
+              (sourceData as VideoGenerationNode | NewVideoGenerationNode)
+                .aspect_ratio ?? "16:9",
+              250,
+            );
         const verticalGap = 32;
         const baseY =
           sourceNode.position.y + sourceVisualSize.height + verticalGap;
@@ -3138,59 +2987,59 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const resolvedItems =
           targetNodeType === "image"
             ? await Promise.all(
-                validItems.map(async (item) => {
-                  const imageUrl = item.remoteUrl || item.url;
-                  let aspectRatio = sourceData.size ?? "4:3";
+              validItems.map(async (item) => {
+                const imageUrl = item.remoteUrl || item.url;
+                let aspectRatio = sourceData.size ?? "4:3";
 
-                  if (imageUrl) {
-                    try {
-                      const { width, height } =
-                        await getImageDimensions(imageUrl);
-                      aspectRatio = getClosestAspectRatio(width, height);
-                    } catch (error) {
-                      console.warn(
-                        "[separateToNodes] 获取图片比例失败，使用回退比例:",
-                        error,
-                      );
-                    }
+                if (imageUrl) {
+                  try {
+                    const { width, height } =
+                      await getImageDimensions(imageUrl);
+                    aspectRatio = getClosestAspectRatio(width, height);
+                  } catch (error) {
+                    console.warn(
+                      "[separateToNodes] 获取图片比例失败，使用回退比例:",
+                      error,
+                    );
                   }
+                }
 
-                  const nodeSize = getNodeSizeByAspectRatio(aspectRatio, 250);
+                const nodeSize = getNodeSizeByAspectRatio(aspectRatio, 250);
 
-                  return {
-                    item,
-                    aspectRatio,
-                    nodeSize,
-                  };
-                }),
-              )
+                return {
+                  item,
+                  aspectRatio,
+                  nodeSize,
+                };
+              }),
+            )
             : await Promise.all(
-                validItems.map(async (item) => {
-                  const videoUrl = item.remoteUrl || item.url;
-                  let aspectRatio =
-                    (sourceData as VideoGenerationNode | NewVideoGenerationNode)
-                      .aspect_ratio ?? "16:9";
+              validItems.map(async (item) => {
+                const videoUrl = item.remoteUrl || item.url;
+                let aspectRatio =
+                  (sourceData as VideoGenerationNode | NewVideoGenerationNode)
+                    .aspect_ratio ?? "16:9";
 
-                  if (videoUrl) {
-                    try {
-                      const { width, height } =
-                        await getVideoDimensions(videoUrl);
-                      aspectRatio = getClosestAspectRatio(width, height);
-                    } catch (error) {
-                      console.warn(
-                        "[separateToNodes] 获取视频比例失败，使用回退比例:",
-                        error,
-                      );
-                    }
+                if (videoUrl) {
+                  try {
+                    const { width, height } =
+                      await getVideoDimensions(videoUrl);
+                    aspectRatio = getClosestAspectRatio(width, height);
+                  } catch (error) {
+                    console.warn(
+                      "[separateToNodes] 获取视频比例失败，使用回退比例:",
+                      error,
+                    );
                   }
+                }
 
-                  return {
-                    item,
-                    aspectRatio,
-                    nodeSize: getNodeSizeByAspectRatio(aspectRatio, 250),
-                  };
-                }),
-              );
+                return {
+                  item,
+                  aspectRatio,
+                  nodeSize: getNodeSizeByAspectRatio(aspectRatio, 250),
+                };
+              }),
+            );
 
         const latestState = get();
         const latestSourceNode = latestState.nodes.find(
@@ -3212,40 +3061,40 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             const finalNode =
               targetNodeType === "video" || targetNodeType === "newVideo"
                 ? {
-                    ...baseNode,
-                    width: nodeSize.width,
-                    height: nodeSize.height,
-                    data: {
-                      ...baseNode.data,
-                      aspect_ratio: aspectRatio,
-                      status: GenerationStatus.COMPLETED,
-                      progress: 100,
-                      result: {
-                        type: "video",
-                        data: [
-                          {
-                            ...item,
-                            format: item.format ?? "mp4",
-                          },
-                        ],
-                      },
+                  ...baseNode,
+                  width: nodeSize.width,
+                  height: nodeSize.height,
+                  data: {
+                    ...baseNode.data,
+                    aspect_ratio: aspectRatio,
+                    status: GenerationStatus.COMPLETED,
+                    progress: 100,
+                    result: {
+                      type: "video",
+                      data: [
+                        {
+                          ...item,
+                          format: item.format ?? "mp4",
+                        },
+                      ],
                     },
-                  }
+                  },
+                }
                 : {
-                    ...baseNode,
-                    width: nodeSize.width,
-                    height: nodeSize.height,
-                    data: {
-                      ...baseNode.data,
-                      status: GenerationStatus.COMPLETED,
-                      progress: 100,
-                      size: aspectRatio,
-                      result: {
-                        type: "image",
-                        data: [{ ...item }],
-                      },
+                  ...baseNode,
+                  width: nodeSize.width,
+                  height: nodeSize.height,
+                  data: {
+                    ...baseNode.data,
+                    status: GenerationStatus.COMPLETED,
+                    progress: 100,
+                    size: aspectRatio,
+                    result: {
+                      type: "image",
+                      data: [{ ...item }],
                     },
-                  };
+                  },
+                };
 
             currentX += nodeSize.width + gap;
             return finalNode as AllNodeType;
@@ -3269,11 +3118,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                     data: shouldSeparateGeneratingNewVideo
                       ? []
                       : [
-                          {
-                            ...(resultData[0] as any),
-                            format: (resultData[0] as any)?.format ?? "mp4",
-                          },
-                        ],
+                        {
+                          ...(resultData[0] as any),
+                          format: (resultData[0] as any)?.format ?? "mp4",
+                        },
+                      ],
                   },
                 },
               } as AllNodeType;
