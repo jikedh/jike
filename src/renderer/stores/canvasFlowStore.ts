@@ -3388,6 +3388,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             })),
           }));
 
+          console.info("[Adobe2API Video] request payload", requestPayload);
           const response = await createAdobe2ApiVideoGeneration(
             requestPayload as any,
           );

@@ -14,17 +14,9 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const jikeRoot = resolve(__dirname, "..");
-const defaultSourceRoot = resolve(
-  jikeRoot,
-  "..",
-  "..",
-  "ref",
-  "adobe2api-master",
-  "adobe2api-master",
-);
 const sourceRoot = process.env.ADOBE2API_SOURCE_DIR
   ? resolve(process.env.ADOBE2API_SOURCE_DIR)
-  : defaultSourceRoot;
+  : null;
 const targetRoot = resolve(jikeRoot, "resources", "adobe2api-master");
 
 const excludedNames = new Set([
@@ -36,22 +28,33 @@ const excludedNames = new Set([
   "tests",
 ]);
 
+const excludedRelativePaths = new Set([
+  "config/config.json",
+  "config/tokens.json",
+  "config/refresh_profile.json",
+  "tokens.json",
+]);
+
 function assertExists(path, message) {
   if (!existsSync(path)) {
     throw new Error(message);
   }
 }
 
-function copyDirContents(sourceDir, targetDir) {
+function copyDirContents(sourceDir, targetDir, relativeDir = "") {
   mkdirSync(targetDir, { recursive: true });
   for (const entry of readdirSync(sourceDir)) {
     if (excludedNames.has(entry)) {
       continue;
     }
+    const relativePath = relativeDir ? `${relativeDir}/${entry}` : entry;
+    if (excludedRelativePaths.has(relativePath)) {
+      continue;
+    }
     const from = join(sourceDir, entry);
     const to = join(targetDir, entry);
     if (statSync(from).isDirectory()) {
-      copyDirContents(from, to);
+      copyDirContents(from, to, relativePath);
     } else {
       cpSync(from, to);
     }
@@ -167,22 +170,37 @@ function applyElectronEmbedPatches() {
 }
 
 function main() {
-  assertExists(
-    sourceRoot,
-    `adobe2api 源码目录不存在: ${sourceRoot}\n可通过 ADOBE2API_SOURCE_DIR 指定 adobe2api-master 目录。`,
-  );
-  assertExists(join(sourceRoot, "app.py"), `未找到 app.py: ${sourceRoot}`);
-  assertExists(
-    join(sourceRoot, "requirements.txt"),
-    `未找到 requirements.txt: ${sourceRoot}`,
-  );
+  if (sourceRoot) {
+    assertExists(
+      sourceRoot,
+      `adobe2api 源码目录不存在: ${sourceRoot}\n可通过 ADOBE2API_SOURCE_DIR 指定 adobe2api-master 目录。`,
+    );
+    assertExists(join(sourceRoot, "app.py"), `未找到 app.py: ${sourceRoot}`);
+    assertExists(
+      join(sourceRoot, "requirements.txt"),
+      `未找到 requirements.txt: ${sourceRoot}`,
+    );
 
-  rmSync(targetRoot, { recursive: true, force: true });
-  mkdirSync(targetRoot, { recursive: true });
-  copyDirContents(sourceRoot, targetRoot);
+    rmSync(targetRoot, { recursive: true, force: true });
+    mkdirSync(targetRoot, { recursive: true });
+    copyDirContents(sourceRoot, targetRoot);
+    console.log(`[prepare-adobe2api] copied resources to ${targetRoot}`);
+  } else {
+    assertExists(
+      targetRoot,
+      `项目内 adobe2api 资源目录不存在: ${targetRoot}\n如需从外部源码同步，请设置 ADOBE2API_SOURCE_DIR。`,
+    );
+    assertExists(join(targetRoot, "app.py"), `未找到 app.py: ${targetRoot}`);
+    assertExists(
+      join(targetRoot, "requirements.txt"),
+      `未找到 requirements.txt: ${targetRoot}`,
+    );
+    console.log(`[prepare-adobe2api] using project resources at ${targetRoot}`);
+  }
+
   applyElectronEmbedPatches();
 
-  console.log(`[prepare-adobe2api] copied resources to ${targetRoot}`);
+  console.log("[prepare-adobe2api] resources are ready");
 }
 
 try {

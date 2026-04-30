@@ -233,38 +233,6 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
     ],
   },
   {
-    id: "adobe-veo31",
-    label: "Veo3.1（Adobe版本）",
-    variants: [
-      {
-        id: "firefly-veo31",
-        supportedModes: [
-          "text-to-video",
-          "image-to-video",
-          "first-last-frame",
-        ],
-      },
-      {
-        id: "firefly-veo31-ref",
-        supportedModes: ["all-reference"],
-      },
-    ],
-  },
-  {
-    id: "adobe-veo31-fast",
-    label: "Veo3.1 Fast（Adobe版本）",
-    variants: [
-      {
-        id: "firefly-veo31-fast",
-        supportedModes: [
-          "text-to-video",
-          "image-to-video",
-          "first-last-frame",
-        ],
-      },
-    ],
-  },
-  {
     id: "adobe-sora2-pro",
     label: "Sora2Pro（Adobe版本）",
     variants: [

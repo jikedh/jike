@@ -172,21 +172,19 @@ const buildAdobeVeo31Request = (
   if (request.model === "adobe-veo31-fast") {
     const model =
       `firefly-veo31-fast-${duration}s-${ratio}-${resolution}` as const;
+    const imageParts = buildAdobeImageContentParts(
+      request.mode === "text-to-video" ? [] : images.slice(0, 2),
+    );
     return {
       model,
       messages: [
         {
           role: "user",
-          content: [
-            promptPart,
-            ...buildAdobeImageContentParts(
-              request.mode === "text-to-video" ? [] : images.slice(0, 2),
-            ),
-          ],
+          content: [promptPart, ...imageParts],
         },
       ],
       generate_audio: request.params.generateAudio ?? true,
-      reference_mode: "frame",
+      ...(imageParts.length > 0 ? { reference_mode: "frame" as const } : {}),
     };
   }
 
@@ -214,7 +212,9 @@ const buildAdobeVeo31Request = (
       },
     ],
     generate_audio: request.params.generateAudio ?? true,
-    reference_mode: referenceMode,
+    ...(request.mode === "text-to-video"
+      ? {}
+      : { reference_mode: referenceMode }),
   } as Adobe2ApiVideoGenerationRequest;
 };
 

@@ -79,6 +79,13 @@ const normalizeNewVideoModelId = (
   value: string | undefined,
   mode?: VideoModeKey,
 ) => {
+  const availableModelIds = new Set(
+    VIDEO_MODEL_OPTIONS.map((option) => option.value),
+  );
+  const fallbackModel = availableModelIds.has("adobe-sora2-pro")
+    ? "adobe-sora2-pro"
+    : VIDEO_MODEL_OPTIONS[0].value;
+
   // Q2 模型暂时屏蔽：历史节点或上一次错误拆分的 ID 统一落到 Q3 Pro，避免下拉出现空值。
   if (
     value === "vidu-reference" ||
@@ -89,7 +96,10 @@ const normalizeNewVideoModelId = (
   ) {
     return "vidu-q3-pro";
   }
-  return value ?? VIDEO_MODEL_OPTIONS[0].value;
+  if (value === "adobe-veo31" || value === "adobe-veo31-fast") {
+    return fallbackModel;
+  }
+  return value && availableModelIds.has(value) ? value : fallbackModel;
 };
 
 const buildReferenceItems = (

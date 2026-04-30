@@ -18,6 +18,8 @@
     "start:electron": "electron-vite preview",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "electron-vite build && electron-builder --win",
+    "check:adobe2api": "node scripts/check-adobe2api-resources.mjs",
+    "prepare:adobe2api": "node scripts/prepare-adobe2api-resources.mjs",
     "format": "npx @biomejs/biome format --write",
     "lint": "npx @biomejs/biome lint",
     "check-format": "npx @biomejs/biome check",
