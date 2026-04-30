@@ -1654,6 +1654,14 @@ export const CanvasFlow = ({
 
       // 鍙搷搴旂偣鍦ㄧ敾甯冪┖鐧藉尯鍩燂紙.react-flow__pane锛変笂鐨勫弻鍑?
       const target = event.target as Element;
+      if (
+        target.closest(
+          'input, textarea, select, button, [contenteditable="true"], .ProseMirror, .nodrag, .nopan',
+        )
+      ) {
+        return;
+      }
+
       if (target.closest(".react-flow__pane")) {
         // 闃绘 ReactFlow 榛樿鐨勫弻鍑荤缉鏀捐涓?
         event.preventDefault();

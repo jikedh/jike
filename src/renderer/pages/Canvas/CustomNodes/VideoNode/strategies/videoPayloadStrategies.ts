@@ -53,19 +53,19 @@ const toFirstLastFrameMedia = (imageUrls: string[]) => {
   return [
     ...(first
       ? [
-          {
-            type: "first_frame" as const,
-            url: first,
-          },
-        ]
+        {
+          type: "first_frame" as const,
+          url: first,
+        },
+      ]
       : []),
     ...(last
       ? [
-          {
-            type: "last_frame" as const,
-            url: last,
-          },
-        ]
+        {
+          type: "last_frame" as const,
+          url: last,
+        },
+      ]
       : []),
   ];
 };
@@ -104,7 +104,7 @@ const buildSeedance20Videos = (videoUrls: string[]) => {
  */
 const buildSeedance20Audios = (audioUrls: string[]) => {
   return audioUrls
-    .filter((url) => Boolean(url))
+    .filter((url) => /^https?:\/\//.test(url))
     .slice(0, 3)
     .map((url) => ({
       url,
