@@ -1533,6 +1533,7 @@ export const ImageAnnotationWorkspace = ({
       });
 
       updateImageNodeData(childId, {
+        badgeLabel: "标注",
         image_urls: [imageUrl],
         size: sourceNode.data?.size,
         result: {

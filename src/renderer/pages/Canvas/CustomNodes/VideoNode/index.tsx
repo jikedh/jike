@@ -131,6 +131,8 @@ export const VideoNode = memo(
       );
     }, [data.status]);
     const isUploadVideo = data.isUpload ?? false;
+    const badgeLabel =
+      data.badgeLabel ?? (isUploadVideo ? "上传视频" : "生成视频");
 
     const confirmDeleteIfNeeded = useCallback(() => {
       if (!isGenerating) {
@@ -199,7 +201,7 @@ export const VideoNode = memo(
                   : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
             )}
           >
-            <NodeNameBadge>{isUploadVideo ? "上传视频" : "生成视频"}</NodeNameBadge>
+            <NodeNameBadge>{badgeLabel}</NodeNameBadge>
 
             {/* 左侧输入 Handle */}
             <ButtonHandle

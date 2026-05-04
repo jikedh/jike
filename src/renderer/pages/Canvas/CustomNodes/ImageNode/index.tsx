@@ -172,6 +172,8 @@ export const ImageNode = memo(
       );
     }, [data.status]);
     const isUploadImage = data.isUpload ?? false;
+    const badgeLabel =
+      data.badgeLabel ?? (isUploadImage ? "上传图片" : "生成图片");
 
     const confirmDeleteIfNeeded = useCallback(() => {
       if (!isGenerating) {
@@ -290,7 +292,7 @@ export const ImageNode = memo(
 
           // 再把裁剪后的图片写入子节点，让子节点本身就具备可展示的结果。
           updateImageNodeData(childId, {
-            nickname: "裁剪",
+            badgeLabel: "裁剪",
             isUpload: true,
             ...(croppedSize ? { size: croppedSize } : {}),
             image_urls: [uploadResult.url],
@@ -402,9 +404,7 @@ export const ImageNode = memo(
                       : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
               )}
             >
-              <NodeNameBadge>
-                {data.nickname ?? (isUploadImage ? "上传图片" : "生成图片")}
-              </NodeNameBadge>
+              <NodeNameBadge>{badgeLabel}</NodeNameBadge>
 
               {/* 左侧输入 Handle */}
               <ButtonHandle

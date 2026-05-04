@@ -157,6 +157,7 @@ const NewVideoNode = ({
   // 生成中的占位卡在新版节点里也算一个视频，用于支持“1 个真实视频 + 1 个生成中占位”时独立为视频。
   const hasMultipleResults =
     (data.result?.data?.length ?? 0) + (isGenerating ? 1 : 0) > 1;
+  const badgeLabel = data.badgeLabel ?? "生成视频新版";
   const contentFrameSize = useMemo(
     () => ({
       width: nodeSize.width,
@@ -205,7 +206,7 @@ const NewVideoNode = ({
                 : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
           )}
         >
-          <NodeNameBadge>生成视频新版</NodeNameBadge>
+          <NodeNameBadge>{badgeLabel}</NodeNameBadge>
 
           {selected && !isDragging && (
             <>
