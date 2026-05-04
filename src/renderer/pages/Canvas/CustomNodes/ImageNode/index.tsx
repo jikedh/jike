@@ -24,7 +24,10 @@ import { ImageAnnotationWorkspace } from "./ImageAnnotationWorkspace";
 import { ImageContent } from "./ImageContent";
 import { ImagePromptPanel } from "./ImagePromptPanel";
 import { ImageToolbar } from "./ImageToolbar";
-import { getNodeSizeByAspectRatio } from "./utils/aspectRatioUtils";
+import {
+  getAspectRatioFromMediaFile,
+  getNodeSizeByAspectRatio,
+} from "./utils/aspectRatioUtils";
 
 const DRAG_UI_RESTORE_DELAY = 140;
 
@@ -246,7 +249,7 @@ export const ImageNode = memo(
 
     // 裁剪完成后：上传裁剪文件、创建子节点，并把裁剪结果挂到新节点上
     const handleCrop = useCallback(
-      async (file: File) => {
+      async (file: File, cropRatio?: string) => {
         try {
           const sourceNode = useCanvasFlowStore
             .getState()
@@ -265,6 +268,10 @@ export const ImageNode = memo(
           if (!uploadResult.url) {
             throw new Error("裁剪图片上传失败");
           }
+          const croppedSize =
+            cropRatio && cropRatio !== "custom" && cropRatio !== "original"
+              ? cropRatio
+              : await getAspectRatioFromMediaFile(fileToUpload, "image");
 
           const childPosition = {
             x: sourceNode.position.x + (sourceNode.width ?? 350) + 80,
@@ -283,6 +290,9 @@ export const ImageNode = memo(
 
           // 再把裁剪后的图片写入子节点，让子节点本身就具备可展示的结果。
           updateImageNodeData(childId, {
+            nickname: "裁剪",
+            isUpload: true,
+            ...(croppedSize ? { size: croppedSize } : {}),
             image_urls: [uploadResult.url],
             result: {
               type: "image",
@@ -308,7 +318,16 @@ export const ImageNode = memo(
         toast.info("暂无可标注图片");
         return;
       }
-      openImageAnnotation(currentUrl, id);
+      openImageAnnotation(currentUrl, id, "annotate");
+    }, [data.result?.data, id, openImageAnnotation]);
+
+    const handleErase = useCallback(() => {
+      const currentUrl = data.result?.data?.[0]?.url;
+      if (!currentUrl) {
+        toast.info("暂无可擦除图片");
+        return;
+      }
+      openImageAnnotation(currentUrl, id, "erase");
     }, [data.result?.data, id, openImageAnnotation]);
 
     // 点击“设为主图”时交换主图与目标图，保持其余顺序不变
@@ -364,6 +383,7 @@ export const ImageNode = memo(
                   onDelete={handleDelete}
                   onCrop={handleCrop}
                   onAnnotate={handleAnnotate}
+                  onErase={handleErase}
                 />
               </div>
             )}
@@ -382,7 +402,9 @@ export const ImageNode = memo(
                       : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
               )}
             >
-              <NodeNameBadge>{isUploadImage ? "上传图片" : "生成图片"}</NodeNameBadge>
+              <NodeNameBadge>
+                {data.nickname ?? (isUploadImage ? "上传图片" : "生成图片")}
+              </NodeNameBadge>
 
               {/* 左侧输入 Handle */}
               <ButtonHandle
@@ -479,6 +501,7 @@ export const ImageNode = memo(
                 open={annotationWorkspace.open}
                 imageUrl={annotationWorkspace.imageUrl}
                 sourceNodeId={annotationWorkspace.sourceNodeId}
+                mode={annotationWorkspace.mode}
                 onClose={() =>
                   useCanvasFlowStore.getState().closeImageAnnotation()
                 }

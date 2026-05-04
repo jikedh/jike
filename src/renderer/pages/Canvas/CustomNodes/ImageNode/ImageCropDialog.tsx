@@ -1,34 +1,32 @@
-import { IconX } from "@tabler/icons-react";
+import {
+  IconAspectRatio,
+  IconCheck,
+  IconChevronDown,
+  IconPhoto,
+  IconX,
+} from "@tabler/icons-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
+import { cn } from "shared/utils/utils";
 import { createCroppedImageFile } from "./utils/cropImage";
 
-type CropRatioKey = "free" | "1:1" | "4:3" | "16:9" | "3:4" | "9:16";
+type CropRatioKey =
+  | "original"
+  | "custom"
+  | "1:1"
+  | "4:3"
+  | "16:9"
+  | "21:9"
+  | "3:4"
+  | "9:16";
 
 type ImageCropDialogProps = {
   open: boolean;
   imageUrl?: string;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (file: File) => Promise<void>;
+  onConfirm: (file: File, cropRatio: string) => Promise<void>;
 };
 
 type Rect = {
@@ -45,18 +43,39 @@ const ratioOptions: Array<{
   label: string;
   aspect?: number;
 }> = [
-  { value: "free", label: "自由裁剪" },
+  { value: "original", label: "原图比例" },
+  { value: "custom", label: "自定义" },
   { value: "1:1", label: "1:1", aspect: 1 },
   { value: "4:3", label: "4:3", aspect: 4 / 3 },
   { value: "16:9", label: "16:9", aspect: 16 / 9 },
+  { value: "21:9", label: "21:9", aspect: 21 / 9 },
   { value: "3:4", label: "3:4", aspect: 3 / 4 },
   { value: "9:16", label: "9:16", aspect: 9 / 16 },
 ];
 
-/**
- * 图片裁剪弹窗。
- * 负责展示裁剪面板、切换裁剪比例，并在确认时输出裁剪后的文件。
- */
+const HANDLE_CONFIG = [
+  { mode: "nw", className: "-left-2 -top-2 cursor-nwse-resize" },
+  {
+    mode: "n",
+    className: "left-1/2 -top-2 -translate-x-1/2 cursor-ns-resize",
+  },
+  { mode: "ne", className: "-right-2 -top-2 cursor-nesw-resize" },
+  {
+    mode: "e",
+    className: "-right-2 top-1/2 -translate-y-1/2 cursor-ew-resize",
+  },
+  { mode: "se", className: "-right-2 -bottom-2 cursor-nwse-resize" },
+  {
+    mode: "s",
+    className: "left-1/2 -bottom-2 -translate-x-1/2 cursor-ns-resize",
+  },
+  { mode: "sw", className: "-left-2 -bottom-2 cursor-nesw-resize" },
+  {
+    mode: "w",
+    className: "-left-2 top-1/2 -translate-y-1/2 cursor-ew-resize",
+  },
+] as const;
+
 export const ImageCropDialog = memo(
   ({ open, imageUrl, onOpenChange, onConfirm }: ImageCropDialogProps) => {
     const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -68,9 +87,8 @@ export const ImageCropDialog = memo(
       startRect: Rect;
     } | null>(null);
 
-    const [cropRatio, setCropRatio] = useState<CropRatioKey>("free");
-    const [freeRatioWidth, setFreeRatioWidth] = useState(1);
-    const [freeRatioHeight, setFreeRatioHeight] = useState(1);
+    const [cropRatio, setCropRatio] = useState<CropRatioKey>("original");
+    const [ratioMenuOpen, setRatioMenuOpen] = useState(false);
     const [imageBounds, setImageBounds] = useState<Rect | null>(null);
     const [cropRect, setCropRect] = useState<Rect | null>(null);
     const [naturalSize, setNaturalSize] = useState<{
@@ -81,19 +99,25 @@ export const ImageCropDialog = memo(
 
     const selectedRatio = useMemo(() => {
       return (
-        ratioOptions.find((item) => item.value === cropRatio) ?? ratioOptions[0]
+        ratioOptions.find((item) => item.value === cropRatio) ??
+        ratioOptions[0]
       );
     }, [cropRatio]);
 
     const aspect = useMemo(() => {
-      if (cropRatio === "free") {
-        const safeWidth = Math.max(1, freeRatioWidth);
-        const safeHeight = Math.max(1, freeRatioHeight);
-        return safeWidth / safeHeight;
+      if (cropRatio === "custom") {
+        return null;
+      }
+
+      if (cropRatio === "original") {
+        if (naturalSize?.width && naturalSize?.height) {
+          return naturalSize.width / naturalSize.height;
+        }
+        return 1;
       }
 
       return selectedRatio.aspect ?? 1;
-    }, [cropRatio, freeRatioHeight, freeRatioWidth, selectedRatio.aspect]);
+    }, [cropRatio, naturalSize?.height, naturalSize?.width, selectedRatio]);
 
     const clamp = useCallback(
       (value: number, minValue: number, maxValue: number) => {
@@ -102,7 +126,6 @@ export const ImageCropDialog = memo(
       [],
     );
 
-    // 判断两个裁剪矩形是否等价，避免 setState 产生无意义的新对象导致重渲染循环。
     const isRectEqual = useCallback((a: Rect, b: Rect) => {
       const epsilon = 0.01;
       return (
@@ -115,7 +138,18 @@ export const ImageCropDialog = memo(
 
     const applyAspectToRect = useCallback(
       (rect: Rect, bounds: Rect) => {
-        const minSize = 24;
+        const minSize = 36;
+        if (!aspect) {
+          const width = clamp(rect.width, minSize, bounds.width);
+          const height = clamp(rect.height, minSize, bounds.height);
+          return {
+            x: clamp(rect.x, 0, bounds.width - width),
+            y: clamp(rect.y, 0, bounds.height - height),
+            width,
+            height,
+          };
+        }
+
         const safeAspect = Math.max(0.1, aspect);
 
         let width = clamp(rect.width, minSize, bounds.width);
@@ -144,7 +178,6 @@ export const ImageCropDialog = memo(
 
       const viewportRect = viewportRef.current.getBoundingClientRect();
       const imageRect = imageRef.current.getBoundingClientRect();
-
       const nextBounds = {
         x: imageRect.left - viewportRect.left,
         y: imageRect.top - viewportRect.top,
@@ -160,18 +193,13 @@ export const ImageCropDialog = memo(
 
       setCropRect((prev) => {
         if (!prev) {
-          const initialWidth = nextBounds.width * 0.7;
-          const initialHeight = nextBounds.height * 0.7;
           const baseRect = {
-            x: nextBounds.width * 0.15,
-            y: nextBounds.height * 0.15,
-            width: initialWidth,
-            height: initialHeight,
+            x: nextBounds.width * 0.08,
+            y: nextBounds.height * 0.08,
+            width: nextBounds.width * 0.84,
+            height: nextBounds.height * 0.84,
           };
-
-          return cropRatio === "free"
-            ? baseRect
-            : applyAspectToRect(baseRect, nextBounds);
+          return applyAspectToRect(baseRect, nextBounds);
         }
 
         const scaledRect = {
@@ -189,21 +217,17 @@ export const ImageCropDialog = memo(
             nextBounds.height,
         };
 
-        return cropRatio === "free"
-          ? scaledRect
-          : applyAspectToRect(scaledRect, nextBounds);
+        return applyAspectToRect(scaledRect, nextBounds);
       });
-    }, [applyAspectToRect, cropRatio, imageBounds?.height, imageBounds?.width]);
+    }, [applyAspectToRect, imageBounds?.height, imageBounds?.width]);
 
     useEffect(() => {
       if (!open) {
         return;
       }
 
-      // 每次打开都重置状态，避免上一次操作残留。
-      setCropRatio("free");
-      setFreeRatioWidth(1);
-      setFreeRatioHeight(1);
+      setCropRatio("original");
+      setRatioMenuOpen(false);
       setImageBounds(null);
       setCropRect(null);
       setNaturalSize(null);
@@ -215,18 +239,13 @@ export const ImageCropDialog = memo(
         return;
       }
 
-      const handleResize = () => {
-        syncImageBounds();
-      };
-
+      const handleResize = () => syncImageBounds();
       window.addEventListener("resize", handleResize);
-      return () => {
-        window.removeEventListener("resize", handleResize);
-      };
+      return () => window.removeEventListener("resize", handleResize);
     }, [open, syncImageBounds]);
 
     useEffect(() => {
-      if (!imageBounds || cropRatio === "free") {
+      if (!imageBounds) {
         return;
       }
 
@@ -239,6 +258,78 @@ export const ImageCropDialog = memo(
         return isRectEqual(prev, nextRect) ? prev : nextRect;
       });
     }, [applyAspectToRect, cropRatio, imageBounds, isRectEqual]);
+
+    const handlePointerMove = useCallback(
+      (event: PointerEvent) => {
+        const drag = dragRef.current;
+        if (!drag || !imageBounds) {
+          return;
+        }
+
+        const minSize = 36;
+        const dx = event.clientX - drag.startX;
+        const dy = event.clientY - drag.startY;
+        const start = drag.startRect;
+        const mode = drag.mode;
+        let nextRect: Rect = { ...start };
+
+        if (mode === "move") {
+          nextRect.x = clamp(start.x + dx, 0, imageBounds.width - start.width);
+          nextRect.y = clamp(
+            start.y + dy,
+            0,
+            imageBounds.height - start.height,
+          );
+          setCropRect(nextRect);
+          return;
+        }
+
+        setCropRatio("custom");
+
+        if (mode.includes("e")) {
+          nextRect.width = clamp(
+            start.width + dx,
+            minSize,
+            imageBounds.width - start.x,
+          );
+        }
+        if (mode.includes("s")) {
+          nextRect.height = clamp(
+            start.height + dy,
+            minSize,
+            imageBounds.height - start.y,
+          );
+        }
+        if (mode.includes("w")) {
+          const nextX = clamp(start.x + dx, 0, start.x + start.width - minSize);
+          nextRect.width = start.width - (nextX - start.x);
+          nextRect.x = nextX;
+        }
+        if (mode.includes("n")) {
+          const nextY = clamp(
+            start.y + dy,
+            0,
+            start.y + start.height - minSize,
+          );
+          nextRect.height = start.height - (nextY - start.y);
+          nextRect.y = nextY;
+        }
+
+        setCropRect({
+          x: clamp(nextRect.x, 0, imageBounds.width - nextRect.width),
+          y: clamp(nextRect.y, 0, imageBounds.height - nextRect.height),
+          width: clamp(nextRect.width, minSize, imageBounds.width),
+          height: clamp(nextRect.height, minSize, imageBounds.height),
+        });
+      },
+      [clamp, imageBounds],
+    );
+
+    const handlePointerUp = useCallback(() => {
+      dragRef.current = null;
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    }, [handlePointerMove]);
 
     const startDrag = useCallback(
       (mode: DragMode, event: React.PointerEvent<HTMLDivElement>) => {
@@ -259,82 +350,7 @@ export const ImageCropDialog = memo(
         window.addEventListener("pointermove", handlePointerMove);
         window.addEventListener("pointerup", handlePointerUp);
       },
-      [cropRect],
-    );
-
-    const handlePointerUp = useCallback(() => {
-      dragRef.current = null;
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-    }, []);
-
-    const handlePointerMove = useCallback(
-      (event: PointerEvent) => {
-        const drag = dragRef.current;
-        if (!drag || !imageBounds) {
-          return;
-        }
-
-        const minSize = 24;
-        const dx = event.clientX - drag.startX;
-        const dy = event.clientY - drag.startY;
-        const start = drag.startRect;
-        const mode = drag.mode;
-
-        let nextRect: Rect = { ...start };
-
-        if (mode === "move") {
-          nextRect.x = clamp(start.x + dx, 0, imageBounds.width - start.width);
-          nextRect.y = clamp(
-            start.y + dy,
-            0,
-            imageBounds.height - start.height,
-          );
-          setCropRect(nextRect);
-          return;
-        }
-
-        if (mode.includes("e")) {
-          nextRect.width = clamp(
-            start.width + dx,
-            minSize,
-            imageBounds.width - start.x,
-          );
-        }
-
-        if (mode.includes("s")) {
-          nextRect.height = clamp(
-            start.height + dy,
-            minSize,
-            imageBounds.height - start.y,
-          );
-        }
-
-        if (mode.includes("w")) {
-          const nextX = clamp(start.x + dx, 0, start.x + start.width - minSize);
-          nextRect.width = start.width - (nextX - start.x);
-          nextRect.x = nextX;
-        }
-
-        if (mode.includes("n")) {
-          const nextY = clamp(
-            start.y + dy,
-            0,
-            start.y + start.height - minSize,
-          );
-          nextRect.height = start.height - (nextY - start.y);
-          nextRect.y = nextY;
-        }
-
-        // 固定比例时，统一在当前锚点基础上做比例校正。
-        if (cropRatio !== "free") {
-          const fixed = applyAspectToRect(nextRect, imageBounds);
-          nextRect = fixed;
-        }
-
-        setCropRect(nextRect);
-      },
-      [applyAspectToRect, clamp, cropRatio, imageBounds],
+      [cropRect, handlePointerMove, handlePointerUp],
     );
 
     const handleConfirm = useCallback(async () => {
@@ -347,7 +363,6 @@ export const ImageCropDialog = memo(
       try {
         const scaleX = naturalSize.width / imageBounds.width;
         const scaleY = naturalSize.height / imageBounds.height;
-
         const croppedFile = await createCroppedImageFile(
           imageUrl,
           {
@@ -359,14 +374,22 @@ export const ImageCropDialog = memo(
           `cropped-${Date.now()}.png`,
         );
 
-        await onConfirm(croppedFile);
+        await onConfirm(croppedFile, selectedRatio.value);
         onOpenChange(false);
-      } catch (error: any) {
+      } catch (error) {
         console.error("裁剪确认失败:", error);
       } finally {
         setIsSubmitting(false);
       }
-    }, [cropRect, imageBounds, imageUrl, naturalSize, onConfirm, onOpenChange]);
+    }, [
+      cropRect,
+      imageBounds,
+      imageUrl,
+      naturalSize,
+      onConfirm,
+      onOpenChange,
+      selectedRatio.value,
+    ]);
 
     useEffect(() => {
       return () => {
@@ -375,52 +398,90 @@ export const ImageCropDialog = memo(
       };
     }, [handlePointerMove, handlePointerUp]);
 
-    const handleConfig = useMemo(() => {
-      return [
-        { mode: "nw", className: "-left-2 -top-2 cursor-nwse-resize" },
-        {
-          mode: "n",
-          className: "left-1/2 -top-2 -translate-x-1/2 cursor-ns-resize",
-        },
-        { mode: "ne", className: "-right-2 -top-2 cursor-nesw-resize" },
-        {
-          mode: "e",
-          className: "-right-2 top-1/2 -translate-y-1/2 cursor-ew-resize",
-        },
-        { mode: "se", className: "-right-2 -bottom-2 cursor-nwse-resize" },
-        {
-          mode: "s",
-          className: "left-1/2 -bottom-2 -translate-x-1/2 cursor-ns-resize",
-        },
-        { mode: "sw", className: "-left-2 -bottom-2 cursor-nesw-resize" },
-        {
-          mode: "w",
-          className: "-left-2 top-1/2 -translate-y-1/2 cursor-ew-resize",
-        },
-      ] as const;
-    }, []);
+    if (!open) {
+      return null;
+    }
 
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[min(980px,96vw)] max-h-[92vh] overflow-hidden border border-white/5 bg-[#1e1e20] p-0">
-          <div className="flex items-start justify-between border-b border-white/8 px-5 py-4">
-            <DialogHeader className="space-y-1">
-              <DialogTitle>裁剪图片</DialogTitle>
-              <DialogDescription>
-                选择裁剪比例，拖动图片并调整缩放后，确认生成新的裁剪结果。
-              </DialogDescription>
-            </DialogHeader>
-
-            <DialogClose className="static rounded-md p-2 text-white/60 hover:bg-white/5 hover:text-white">
+    const content = (
+      <div className="fixed inset-0 z-[80] overflow-hidden bg-[radial-gradient(circle_at_50%_30%,rgba(92,34,163,0.08)_0%,rgba(11,11,14,0.14)_28%,rgba(6,6,8,0.66)_100%)] backdrop-blur-[3px]">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0%,rgba(255,255,255,0.01)_18%,rgba(0,0,0,0)_34%,rgba(0,0,0,0.2)_100%)]" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[linear-gradient(180deg,rgba(0,0,0,0.42)_0%,rgba(0,0,0,0)_100%)]" />
+        <div className="absolute inset-0 flex flex-col items-center justify-start gap-4 px-8 pt-6 pb-8">
+          <div className="relative z-[90] flex items-center gap-2 rounded-2xl border border-white/10 bg-[#1f1f22]/95 px-3 py-2 shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-transparent bg-white/[0.04] text-white/75 transition hover:bg-white/[0.08] hover:text-white"
+              onClick={() => onOpenChange(false)}
+              title="取消"
+              aria-label="取消"
+            >
               <IconX size={18} />
-            </DialogClose>
+            </button>
+
+            <div className="h-8 w-px bg-white/10" />
+
+            <div className="relative">
+              <button
+                type="button"
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/8 bg-white/[0.04] px-3 text-sm font-medium text-white/85 transition hover:bg-white/[0.08]"
+                onClick={() => setRatioMenuOpen((prev) => !prev)}
+              >
+                <IconAspectRatio size={17} />
+                {selectedRatio.label}
+                <IconChevronDown size={15} className="text-white/45" />
+              </button>
+
+              {ratioMenuOpen ? (
+                <div className="absolute left-0 top-[calc(100%+8px)] z-[220] w-36 rounded-2xl border border-white/10 bg-[#252528]/98 p-1.5 shadow-[0_22px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                  {ratioOptions.map((item) => {
+                    const active = item.value === cropRatio;
+                    return (
+                      <button
+                        key={item.value}
+                        type="button"
+                        className={cn(
+                          "flex h-9 w-full items-center gap-2 rounded-xl px-2.5 text-left text-sm transition",
+                          active
+                            ? "bg-white/[0.08] text-white"
+                            : "text-white/62 hover:bg-white/[0.06] hover:text-white",
+                        )}
+                        onClick={() => {
+                          setCropRatio(item.value);
+                          setRatioMenuOpen(false);
+                        }}
+                      >
+                        <IconPhoto size={15} className="text-white/45" />
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="h-8 w-px bg-white/10" />
+
+            <Button
+              type="button"
+              size="sm"
+              className="h-10 rounded-xl bg-white px-5 text-sm font-semibold text-black hover:bg-white/90"
+              loading={isSubmitting}
+              disabled={!imageUrl || !cropRect || !imageBounds || !naturalSize}
+              onClick={handleConfirm}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <IconCheck size={16} />
+                确认
+              </span>
+            </Button>
           </div>
 
-          <div className="space-y-4 px-5 py-4">
-            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+          <div className="flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden rounded-[28px]">
+            <div className="relative">
+              <div className="pointer-events-none absolute inset-[-26px] rounded-[36px] bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.12)_0%,rgba(180,63,235,0.08)_20%,rgba(180,63,235,0.03)_40%,rgba(0,0,0,0)_72%)] blur-2xl" />
               <div
                 ref={viewportRef}
-                className="relative min-h-130 overflow-hidden rounded-xl border border-white/8 bg-black/60"
+                className="relative flex h-[calc(100vh-150px)] w-[min(1180px,86vw)] items-center justify-center rounded-[24px] border border-white/10 bg-[#111113] shadow-[0_30px_100px_rgba(0,0,0,0.52),0_0_0_1px_rgba(255,255,255,0.04)]"
               >
                 {imageUrl ? (
                   <>
@@ -428,135 +489,64 @@ export const ImageCropDialog = memo(
                       ref={imageRef}
                       src={imageUrl}
                       alt="裁剪预览"
-                      className="absolute inset-0 m-auto max-h-full max-w-full select-none"
+                      className="max-h-full max-w-full select-none object-contain"
                       draggable={false}
                       onLoad={syncImageBounds}
                     />
 
                     {imageBounds && cropRect ? (
-                      <div
-                        className="absolute border border-[#B43FEB]/70 bg-[#B43FEB]/10 shadow-[0_0_0_9999px_rgba(0,0,0,0.55)]"
-                        style={{
-                          left: imageBounds.x + cropRect.x,
-                          top: imageBounds.y + cropRect.y,
-                          width: cropRect.width,
-                          height: cropRect.height,
-                        }}
-                        onPointerDown={(event) => startDrag("move", event)}
-                      >
-                        {handleConfig.map((item) => (
-                          <div
-                            key={item.mode}
-                            className={`absolute h-4 w-4 rounded-full border border-white/70 bg-[#B43FEB] ${item.className}`}
-                            onPointerDown={(event) =>
-                              startDrag(item.mode as DragMode, event)
-                            }
-                          />
-                        ))}
-                      </div>
+                      <>
+                        <div
+                          className="pointer-events-none absolute"
+                          style={{
+                            left: imageBounds.x,
+                            top: imageBounds.y,
+                            width: imageBounds.width,
+                            height: imageBounds.height,
+                            boxShadow: "0 0 0 9999px rgba(0,0,0,0.48)",
+                          }}
+                        />
+                        <div
+                          className="absolute cursor-move border-2 border-white bg-transparent shadow-[0_0_0_1px_rgba(0,0,0,0.35)]"
+                          style={{
+                            left: imageBounds.x + cropRect.x,
+                            top: imageBounds.y + cropRect.y,
+                            width: cropRect.width,
+                            height: cropRect.height,
+                          }}
+                          onPointerDown={(event) => startDrag("move", event)}
+                        >
+                          <div className="pointer-events-none absolute inset-y-0 left-1/3 w-px bg-white/35" />
+                          <div className="pointer-events-none absolute inset-y-0 left-2/3 w-px bg-white/35" />
+                          <div className="pointer-events-none absolute inset-x-0 top-1/3 h-px bg-white/35" />
+                          <div className="pointer-events-none absolute inset-x-0 top-2/3 h-px bg-white/35" />
+                          {HANDLE_CONFIG.map((item) => (
+                            <div
+                              key={item.mode}
+                              className={cn(
+                                "absolute h-4 w-4 rounded-full border border-white bg-[#B43FEB] shadow-[0_4px_14px_rgba(180,63,235,0.35)]",
+                                item.className,
+                              )}
+                              onPointerDown={(event) =>
+                                startDrag(item.mode as DragMode, event)
+                              }
+                            />
+                          ))}
+                        </div>
+                      </>
                     ) : null}
                   </>
                 ) : (
-                  <div className="flex h-full min-h-130 items-center justify-center text-sm text-white/60">
-                    暂无可裁剪图片
-                  </div>
+                  <div className="text-sm text-white/55">暂无可裁剪图片</div>
                 )}
-              </div>
-
-              <div className="space-y-4 rounded-xl border border-white/8 bg-[#121214] p-4">
-                <div className="space-y-2">
-                  <div className="text-sm font-medium text-white/85">
-                    裁剪比例
-                  </div>
-                  <Select
-                    value={cropRatio}
-                    onValueChange={(value) =>
-                      setCropRatio(value as CropRatioKey)
-                    }
-                  >
-                    <SelectTrigger className="w-full border border-white/10 bg-white/5 text-white/80">
-                      <SelectValue placeholder="选择比例" />
-                    </SelectTrigger>
-                    <SelectContent className="border border-white/10 bg-[#1a1a1d] text-white/80">
-                      {ratioOptions.map((item) => (
-                        <SelectItem
-                          key={item.value}
-                          value={item.value}
-                          className="cursor-pointer focus:bg-white/10 focus:text-white"
-                        >
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {cropRatio === "free" ? (
-                  <div className="space-y-2">
-                    <div className="text-sm font-medium text-white/85">
-                      自由比例（宽 : 高）
-                    </div>
-                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                      <Input
-                        type="number"
-                        min={1}
-                        step={1}
-                        value={freeRatioWidth}
-                        className="h-9 border-white/10 bg-white/[0.03] text-white/90"
-                        onChange={(event) => {
-                          const nextValue = Number(event.target.value);
-                          setFreeRatioWidth(
-                            Number.isFinite(nextValue) && nextValue > 0
-                              ? Math.round(nextValue)
-                              : 1,
-                          );
-                        }}
-                      />
-                      <span className="text-sm text-white/40">:</span>
-                      <Input
-                        type="number"
-                        min={1}
-                        step={1}
-                        value={freeRatioHeight}
-                        className="h-9 border-white/10 bg-white/[0.03] text-white/90"
-                        onChange={(event) => {
-                          const nextValue = Number(event.target.value);
-                          setFreeRatioHeight(
-                            Number.isFinite(nextValue) && nextValue > 0
-                              ? Math.round(nextValue)
-                              : 1,
-                          );
-                        }}
-                      />
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs leading-5 text-white/60">
-                  当前模式：{selectedRatio.label}
-                  <br />
-                  当前比例：{aspect.toFixed(2)}
-                  <br />
-                  确认后会生成裁剪文件，并交给画布节点流程创建新的子节点。
-                </div>
               </div>
             </div>
           </div>
-
-          <DialogFooter className="border-t border-white/8 bg-[#1e1e20] px-5 py-4">
-            <Button
-              variant="default"
-              size="sm"
-              loading={isSubmitting}
-              disabled={!imageUrl || !cropRect || !imageBounds || !naturalSize}
-              onClick={handleConfirm}
-            >
-              确认裁剪
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      </div>
     );
+
+    return createPortal(content, document.body);
   },
 );
 

@@ -1717,6 +1717,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       open: false,
       imageUrl: null,
       sourceNodeId: null,
+      mode: "annotate",
     },
 
     // 历史版本计数器（用于通知 useUndoRedo hook 保存快照）
@@ -2841,15 +2842,30 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       const sourceData = sourceNode.data as ImageGenerationNode;
       const sourceModel = sourceData.model || "doubao-seedream-5-0";
+      const sourcePlatform = sourceData.platform;
+      const isLocalDirectImageModel =
+        sourcePlatform === "google_pro2" ||
+        (sourceModel === NANO_BANANA_LOCAL_MODEL &&
+          sourcePlatform === NANO_BANANA_LOCAL_PLATFORM) ||
+        sourceModel === ADOBE_GPT_IMAGE2_MODEL ||
+        sourceModel === ADOBE_NANO_BANANA_PRO_MODEL;
       const sourceImageUrl = sourceData.result?.data?.[0]?.url;
 
       const totalCells = gridSize * gridSize;
-      const nodeWidth = 350;
-      const nodeHeight = 280;
-      const gap = 20;
+      const sourceAspectRatio =
+        sourceData.size?.includes(":") || sourceData.aspectRatio?.includes(":")
+          ? (sourceData.size ?? sourceData.aspectRatio)
+          : undefined;
+      const childNodeSize = sourceAspectRatio
+        ? getNodeSizeByAspectRatio(sourceAspectRatio, 250)
+        : { width: 350, height: 250 };
+      const columnGap = Math.max(48, Math.round(childNodeSize.width * 0.1));
+      const rowGap = Math.max(48, Math.round(childNodeSize.height * 0.16));
 
       const startX =
-        sourceNode.position.x + (sourceNode.width ?? nodeWidth) + gap * 3;
+        sourceNode.position.x +
+        (sourceNode.width ?? childNodeSize.width) +
+        columnGap * 2;
       const startY = sourceNode.position.y;
 
       const gridNameMap: Record<number, string> = {
@@ -2866,8 +2882,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const col = (i % gridSize) + 1;
 
         const position = {
-          x: startX + (col - 1) * (nodeWidth + gap),
-          y: startY + (row - 1) * (nodeHeight + gap),
+          x: startX + (col - 1) * (childNodeSize.width + columnGap),
+          y: startY + (row - 1) * (childNodeSize.height + rowGap),
         };
 
         const splitPrompt = `这是一张${gridName}宫格的图片，中间是用白色分割线区分的。帮我把${gridName}宫格图中的第${row}行的第${col}列图片单独提取出来，放大为独立图片。与第${row}行的第${col}列图片保持完全相同的构图、色调，去除图片四个角落文字、字幕、标注，序号，高清优化图片所有细节，8K清晰度。`;
@@ -2884,14 +2900,24 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         // 先将提示词回填到子图的文本输入区域
         get().updateImageNodeData(newId, {
+          model: sourceData.model,
+          originalModel: sourceData.originalModel,
+          platform: sourceData.platform,
+          size: sourceData.size,
+          resolution: sourceData.resolution,
+          midjourneyAdvanced: sourceData.midjourneyAdvanced,
           promptDraft: splitPrompt,
           promptDraftHtml: `<p>${splitPrompt}</p>`,
         });
 
         const payload: any = {
           model: sourceModel,
+          originalModel: sourceData.originalModel ?? sourceData.model,
+          platform: sourceData.platform,
           prompt: splitPrompt,
           n: 1,
+          promptDraft: splitPrompt,
+          promptDraftHtml: `<p>${splitPrompt}</p>`,
           metadata: {},
         };
 
@@ -2907,7 +2933,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           payload.image_urls = [sourceImageUrl];
         }
 
-        get().startImageGeneration(newId, payload);
+        if (isLocalDirectImageModel) {
+          void get().startGeminiPro2Generation(newId, payload);
+        } else {
+          void get().startImageGeneration(newId, payload);
+        }
       }
 
       // 将新边添加到画布
@@ -3862,12 +3892,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       });
     },
 
-    openImageAnnotation: (imageUrl: string, sourceNodeId: string) => {
+    openImageAnnotation: (
+      imageUrl: string,
+      sourceNodeId: string,
+      mode: "annotate" | "erase" = "annotate",
+    ) => {
       set({
         annotationWorkspace: {
           open: true,
           imageUrl,
           sourceNodeId,
+          mode,
         },
       });
     },
@@ -3878,6 +3913,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           open: false,
           imageUrl: null,
           sourceNodeId: null,
+          mode: "annotate",
         },
       });
     },

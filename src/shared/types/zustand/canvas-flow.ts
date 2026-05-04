@@ -96,6 +96,7 @@ export type CanvasFlowStoreType = {
     open: boolean;
     imageUrl: string | null;
     sourceNodeId: string | null;
+    mode?: "annotate" | "erase";
   };
   historyVersion: number;
   historyResetTrigger: number;
@@ -128,6 +129,7 @@ export type CanvasFlowStoreType = {
     open: boolean;
     imageUrl: string | null;
     sourceNodeId: string | null;
+    mode?: "annotate" | "erase";
   }) => void;
   setSelectionBoxActive: (active: boolean) => void;
 
@@ -226,7 +228,11 @@ export type CanvasFlowStoreType = {
   // ── 全景图查看器 ─────────────────────────────
   openPanoramaViewer: (imageUrl: string, sourceNodeId?: string) => void;
   closePanoramaViewer: () => void;
-  openImageAnnotation: (imageUrl: string, sourceNodeId: string) => void;
+  openImageAnnotation: (
+    imageUrl: string,
+    sourceNodeId: string,
+    mode?: "annotate" | "erase",
+  ) => void;
   closeImageAnnotation: () => void;
 
   // ── 参考高亮 ────────────────────────────────
