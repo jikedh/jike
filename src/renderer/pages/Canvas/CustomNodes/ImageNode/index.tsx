@@ -22,6 +22,7 @@ import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { NodeNameBadge } from "../shared/NodeNameBadge";
 import { ImageAnnotationWorkspace } from "./ImageAnnotationWorkspace";
 import { ImageContent } from "./ImageContent";
+import { ImageGridCropDialog } from "./ImageGridCropDialog";
 import { ImagePromptPanel } from "./ImagePromptPanel";
 import { ImageToolbar } from "./ImageToolbar";
 import {
@@ -46,6 +47,7 @@ export const ImageNode = memo(
     const isDragging = Boolean(dragging);
     const [isDragUiSettled, setIsDragUiSettled] = useState(!isDragging);
     const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
+    const [isGridCropOpen, setIsGridCropOpen] = useState(false);
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
     const addNode = useCanvasFlowStore((state) => state.addNode);
@@ -213,6 +215,15 @@ export const ImageNode = memo(
       [splitImage, id],
     );
 
+    const handleContextMenuGridCrop = useCallback(() => {
+      const currentUrl = data.result?.data?.[0]?.url;
+      if (!currentUrl) {
+        toast.info("暂无可宫格裁剪图片");
+        return;
+      }
+      setIsGridCropOpen(true);
+    }, [data.result?.data]);
+
     const handleContextMenuSeparateToNodes = useCallback(() => {
       separateToNodes(id);
     }, [separateToNodes, id]);
@@ -304,10 +315,101 @@ export const ImageNode = memo(
             progress: 100,
           });
 
+          const flowStore = useCanvasFlowStore.getState();
+          flowStore.requestHistorySave();
+          flowStore.saveGraph();
+
           toast.success("裁剪成功");
         } catch (error: any) {
           console.error("裁剪图片失败:", error);
           toast.error(error?.message || "裁剪失败，请重试");
+          throw error;
+        }
+      },
+      [addNode, id, onConnect, updateImageNodeData],
+    );
+
+    const handleGridCrop = useCallback(
+      async (files: File[]) => {
+        try {
+          const sourceNode = useCanvasFlowStore
+            .getState()
+            .nodes.find((node) => node.id === id);
+          if (!sourceNode || sourceNode.type !== "imageNode") {
+            throw new Error("当前图片节点不存在");
+          }
+
+          const uploadedItems = [];
+          for (const file of files) {
+            let fileToUpload = file;
+            if (file.size > MAX_IMAGE_SIZE_MB) {
+              fileToUpload = await compressImage(file);
+            }
+
+            const uploadResult = await uploadFileToOSS(fileToUpload);
+            if (!uploadResult.url) {
+              throw new Error("宫格裁剪图片上传失败");
+            }
+
+            const croppedSize = await getAspectRatioFromMediaFile(
+              fileToUpload,
+              "image",
+            );
+            uploadedItems.push({
+              url: uploadResult.url,
+              size: croppedSize,
+            });
+          }
+
+          const layoutCols = Math.max(
+            1,
+            Math.ceil(Math.sqrt(uploadedItems.length)),
+          );
+          const baseX = sourceNode.position.x + (sourceNode.width ?? 350) + 80;
+          const baseY = sourceNode.position.y;
+          const gap = 56;
+
+          uploadedItems.forEach((item, index) => {
+            const row = Math.floor(index / layoutCols);
+            const col = index % layoutCols;
+            const childSize = item.size
+              ? getNodeSizeByAspectRatio(item.size, 250)
+              : { width: 350, height: 250 };
+            const childPosition = {
+              x: baseX + col * (childSize.width + gap),
+              y: baseY + row * (childSize.height + gap),
+            };
+            const childId = addNode("image", childPosition);
+
+            onConnect({
+              source: id,
+              target: childId,
+              sourceHandle: "output",
+              targetHandle: "input",
+            });
+
+            updateImageNodeData(childId, {
+              badgeLabel: "宫格裁剪",
+              isUpload: true,
+              ...(item.size ? { size: item.size } : {}),
+              image_urls: [item.url],
+              result: {
+                type: "image",
+                data: [{ url: item.url, remoteUrl: item.url }],
+              },
+              status: GenerationStatus.COMPLETED,
+              progress: 100,
+            });
+          });
+
+          const flowStore = useCanvasFlowStore.getState();
+          flowStore.requestHistorySave();
+          flowStore.saveGraph();
+
+          toast.success(`已裁剪 ${uploadedItems.length} 张宫格图片`);
+        } catch (error: any) {
+          console.error("宫格裁剪失败:", error);
+          toast.error(error?.message || "宫格裁剪失败，请重试");
           throw error;
         }
       },
@@ -365,6 +467,7 @@ export const ImageNode = memo(
           onDuplicate={handleContextMenuDuplicate}
           onDelete={handleContextMenuDelete}
           onSplitImage={handleContextMenuSplitImage}
+          onGridCrop={handleContextMenuGridCrop}
           onSeparateToNodes={handleContextMenuSeparateToNodes}
           onSetAsCover={handleContextMenuSetAsCover}
           hasMultipleResults={hasMultipleResults}
@@ -509,6 +612,13 @@ export const ImageNode = memo(
               document.body,
             )
           : null}
+
+        <ImageGridCropDialog
+          open={isGridCropOpen}
+          imageUrl={data.result?.data?.[0]?.url}
+          onOpenChange={setIsGridCropOpen}
+          onConfirm={handleGridCrop}
+        />
       </>
     );
   },

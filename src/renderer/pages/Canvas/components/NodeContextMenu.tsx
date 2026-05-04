@@ -22,6 +22,7 @@ type NodeContextMenuProps = PropsWithChildren<{
   onDuplicate: () => void;
   onDelete: () => void;
   onSplitImage?: (gridSize: 2 | 3 | 4) => void;
+  onGridCrop?: () => void;
   onSeparateToNodes?: () => void;
   onSetAsCover?: () => void;
   hasMultipleResults?: boolean;
@@ -33,6 +34,7 @@ export const NodeContextMenu = ({
   onDuplicate,
   onDelete,
   onSplitImage,
+  onGridCrop,
   onSeparateToNodes,
   onSetAsCover,
   hasMultipleResults,
@@ -77,6 +79,16 @@ export const NodeContextMenu = ({
               </ContextMenuItem>
             </ContextMenuSubContent>
           </ContextMenuSub>
+        )}
+
+        {onGridCrop && (
+          <ContextMenuItem
+            className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
+            onSelect={onGridCrop}
+          >
+            <IconLayoutGrid size={15} />
+            宫格裁剪
+          </ContextMenuItem>
         )}
 
         {onSeparateToNodes && hasMultipleResults && (
