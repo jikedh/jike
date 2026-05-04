@@ -148,12 +148,6 @@ export const IMAGE_MODELS = [
     platform: "google",
   },
   {
-    id: 8,
-    name: "Nano Banana Pro（本地gemini渠道）",
-    model: NANO_BANANA_LOCAL_MODEL,
-    platform: NANO_BANANA_LOCAL_PLATFORM,
-  },
-  {
     id: 4,
     name: "豆包 Seedream 5.0",
     model: "doubao-seedream-5-0",

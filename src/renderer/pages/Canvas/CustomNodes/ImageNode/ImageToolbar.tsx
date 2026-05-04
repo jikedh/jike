@@ -31,8 +31,9 @@ type ImageToolbarProps = {
   nodeId: string;
   data: ImageGenerationNode;
   onDelete?: () => void;
-  onCrop?: (file: File) => Promise<void>;
+  onCrop?: (file: File, cropRatio: string) => Promise<void>;
   onAnnotate?: () => void;
+  onErase?: () => void;
 };
 
 type ActionKey =
@@ -50,7 +51,14 @@ type ActionKey =
  * 图片节点工具栏组件
  */
 export const ImageToolbar = memo(
-  ({ nodeId, data, onDelete, onCrop, onAnnotate }: ImageToolbarProps) => {
+  ({
+    nodeId,
+    data,
+    onDelete,
+    onCrop,
+    onAnnotate,
+    onErase,
+  }: ImageToolbarProps) => {
     const [isLightboxOpen, setIsLightboxOpen] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -158,7 +166,7 @@ export const ImageToolbar = memo(
           return;
         }
 
-        setIsInpaintDialogOpen(true);
+        onErase?.();
         return;
       }
 
@@ -379,13 +387,13 @@ export const ImageToolbar = memo(
           open={isCropDialogOpen}
           imageUrl={currentImageUrl}
           onOpenChange={setIsCropDialogOpen}
-          onConfirm={async (file) => {
+          onConfirm={async (file, cropRatio) => {
             if (!onCrop) {
               toast.info("裁剪功能暂不可用");
               return;
             }
 
-            await onCrop(file);
+            await onCrop(file, cropRatio);
           }}
         />
 

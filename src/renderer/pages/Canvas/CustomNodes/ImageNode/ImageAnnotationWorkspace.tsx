@@ -4,19 +4,50 @@ import {
   IconBrush,
   IconEraser,
   IconPencil,
+  IconSparkles,
   IconSquare,
 } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
+import {
+  ADOBE_GPT_IMAGE2_MODEL,
+  ADOBE_NANO_BANANA_PRO_MODEL,
+  IMAGE_MODELS,
+  NANO_BANANA_LOCAL_MODEL,
+  NANO_BANANA_LOCAL_PLATFORM,
+} from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
+import type { ImageGenerationNode } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
+import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
+import {
+  GeminiParamsPanel,
+  NANO_BANANA_LOCAL_SIZES,
+} from "./components/GeminiParamsPanel";
+import { GptImage2ParamsPanel } from "./components/GptImage2ParamsPanel";
+import { MidjourneyParamsPanel } from "./components/MidjourneyParamsPanel";
+import { SeedreamParamsPanel } from "./components/SeedreamParamsPanel";
 
-type AnnotationTool = "idle" | "brush" | "rect" | "text" | "eraser";
+type AnnotationTool =
+  | "idle"
+  | "brush"
+  | "rect"
+  | "text"
+  | "eraser"
+  | "eraseRect";
 
 type Point = {
   x: number;
@@ -128,6 +159,7 @@ type ImageAnnotationWorkspaceProps = {
   open: boolean;
   imageUrl: string | null;
   sourceNodeId: string | null;
+  mode?: "annotate" | "erase";
   onClose: () => void;
 };
 
@@ -136,7 +168,15 @@ const BASE_TEXT_FONT_SIZE = 28;
 const MIN_TEXT_SCALE = 0.5;
 const MAX_TEXT_SCALE = 8;
 const MIN_STROKE_WIDTH = 4;
-const MAX_STROKE_WIDTH = 40;
+const MAX_STROKE_WIDTH = 160;
+const DEFAULT_STROKE_WIDTH = 10;
+const DEFAULT_ERASER_STROKE_WIDTH = 56;
+const ERASE_IMAGE_COUNT_OPTIONS = [1, 2, 4] as const;
+type EraseImageCount = (typeof ERASE_IMAGE_COUNT_OPTIONS)[number];
+const DEFAULT_NANO_BANANA_SIZE = "1:1";
+const NANO_BANANA_SIZE_VALUES = new Set(
+  NANO_BANANA_LOCAL_SIZES.map((item) => item.value),
+);
 const COLOR_OPTIONS = [
   "#ff3b30",
   "#ff9500",
@@ -401,10 +441,39 @@ const drawRectOnCanvas = (
   ctx.restore();
 };
 
+const eraseRectOnCanvas = (
+  canvas: HTMLCanvasElement | null,
+  rect: { x: number; y: number; width: number; height: number },
+) => {
+  if (!canvas || rect.width <= 0 || rect.height <= 0) {
+    return;
+  }
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return;
+  }
+
+  ctx.clearRect(rect.x, rect.y, rect.width, rect.height);
+};
+
+const getCanvasPngFile = (canvas: HTMLCanvasElement, fileName: string) =>
+  new Promise<File>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error("导出擦除图片失败"));
+        return;
+      }
+
+      resolve(new File([blob], fileName, { type: "image/png" }));
+    }, "image/png");
+  });
+
 export const ImageAnnotationWorkspace = ({
   open,
   imageUrl,
   sourceNodeId,
+  mode = "annotate",
   onClose,
 }: ImageAnnotationWorkspaceProps) => {
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -426,7 +495,7 @@ export const ImageAnnotationWorkspace = ({
   });
   const [tool, setTool] = useState<AnnotationTool>("idle");
   const [currentColor, setCurrentColor] = useState<string>(COLOR_OPTIONS[0]);
-  const [strokeWidth, setStrokeWidth] = useState(10);
+  const [strokeWidth, setStrokeWidth] = useState(DEFAULT_STROKE_WIDTH);
   const [history, setHistory] = useState<AnnotationSnapshot[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [shapeItems, setShapeItems] = useState<ShapeItem[]>([]);
@@ -442,25 +511,85 @@ export const ImageAnnotationWorkspace = ({
     useState<PendingTextDraft | null>(null);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [erasePrompt, setErasePrompt] = useState("");
+  const [eraseImageCount, setEraseImageCount] = useState<EraseImageCount>(1);
+  const [isEraseGenerating, setIsEraseGenerating] = useState(false);
 
+  const nodes = useCanvasFlowStore((state) => state.nodes);
   const addNode = useCanvasFlowStore((state) => state.addNode);
   const updateImageNodeData = useCanvasFlowStore(
     (state) => state.updateImageNodeData,
   );
   const onConnect = useCanvasFlowStore((state) => state.onConnect);
+  const startImageGeneration = useCanvasFlowStore(
+    (state) => state.startImageGeneration,
+  );
+  const startGeminiPro2Generation = useCanvasFlowStore(
+    (state) => state.startGeminiPro2Generation,
+  );
+  const setDefaultImagePreset = useChatSettingsStore(
+    (state) => state.setDefaultImagePreset,
+  );
 
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex >= 0 && historyIndex < history.length - 1;
+  const isEraseMode = mode === "erase";
   const isBrushCanvasMode = tool === "brush";
-  const isCanvasOnlyMode = tool === "brush" || tool === "eraser";
+  const isCanvasOnlyMode =
+    tool === "brush" || tool === "eraser" || tool === "eraseRect";
+  const sourceImageNode = useMemo(() => {
+    const node = nodes.find((item) => item.id === sourceNodeId);
+    return node?.type === "imageNode" ? node : null;
+  }, [nodes, sourceNodeId]);
+  const sourceImageData = sourceImageNode?.data as
+    | ImageGenerationNode
+    | undefined;
+  const eraseModel = sourceImageData?.model ?? "gemini-3-pro-image-preview";
+  const erasePlatform = sourceImageData?.platform;
+  const eraseSize = sourceImageData?.size ?? "1:1";
+  const eraseResolution = sourceImageData?.resolution ?? "2K";
+  const eraseCurrentModelId = useMemo(() => {
+    const matched = IMAGE_MODELS.find(
+      (item) => item.model === eraseModel && item.platform === erasePlatform,
+    );
+    if (matched) {
+      return matched.id;
+    }
+
+    return (
+      IMAGE_MODELS.find((item) => item.model === eraseModel)?.id ??
+      IMAGE_MODELS[0]?.id ??
+      3
+    );
+  }, [eraseModel, erasePlatform]);
+  const isEraseMidjourneyModel =
+    eraseModel === "midjourney" || eraseModel === "midjourney-niji7";
+  const isEraseSeedreamModel = eraseModel === "doubao-seedream-5-0";
+  const isEraseGeminiModel =
+    eraseModel === "gemini-3-pro-image-preview" &&
+    (erasePlatform === "google" || erasePlatform === undefined);
+  const isEraseNanoBananaLocalModel =
+    eraseModel === NANO_BANANA_LOCAL_MODEL &&
+    erasePlatform === NANO_BANANA_LOCAL_PLATFORM;
+  const isEraseAdobeGptImage2Model = eraseModel === ADOBE_GPT_IMAGE2_MODEL;
+  const isEraseAdobeNanoBananaProModel =
+    eraseModel === ADOBE_NANO_BANANA_PRO_MODEL;
+  const isEraseAdobeImageModel =
+    isEraseAdobeGptImage2Model || isEraseAdobeNanoBananaProModel;
+  const isEraseGptImage2Model = eraseModel === "gpt-image-2";
+  const isEraseGeminiPro2Model = erasePlatform === "google_pro2";
+  const isEraseLocalGeminiDirectModel =
+    isEraseGeminiPro2Model ||
+    isEraseNanoBananaLocalModel ||
+    isEraseAdobeImageModel;
 
   const stageScale = useMemo(() => {
     if (!imageNaturalSize.width || !imageNaturalSize.height) {
       return 1;
     }
 
-    const maxWidth = viewportSize.width * 0.72;
-    const maxHeight = viewportSize.height * 0.7;
+    const maxWidth = viewportSize.width * (isEraseMode ? 0.64 : 0.72);
+    const maxHeight = viewportSize.height * (isEraseMode ? 0.52 : 0.7);
     return Math.max(
       0.2,
       Math.min(
@@ -472,6 +601,7 @@ export const ImageAnnotationWorkspace = ({
   }, [
     imageNaturalSize.height,
     imageNaturalSize.width,
+    isEraseMode,
     viewportSize.height,
     viewportSize.width,
   ]);
@@ -488,6 +618,40 @@ export const ImageAnnotationWorkspace = ({
       ),
     };
   }, [imageNaturalSize.height, imageNaturalSize.width, stageScale]);
+
+  const persistEraseImageDefaultPreset = useCallback(
+    (patch: {
+      model?: string;
+      platform?: string;
+      size?: string;
+      resolution?: string;
+    }) => {
+      setDefaultImagePreset({
+        model: patch.model ?? eraseModel,
+        platform: patch.platform ?? erasePlatform,
+        size: patch.size ?? eraseSize,
+        resolution: patch.resolution ?? eraseResolution,
+      });
+    },
+    [
+      eraseModel,
+      erasePlatform,
+      eraseResolution,
+      eraseSize,
+      setDefaultImagePreset,
+    ],
+  );
+
+  const updateEraseImageParams = useCallback(
+    (patch: Partial<ImageGenerationNode>) => {
+      if (!sourceNodeId) {
+        return;
+      }
+
+      updateImageNodeData(sourceNodeId, patch);
+    },
+    [sourceNodeId, updateImageNodeData],
+  );
 
   const getCanvasPoint = useCallback(
     (clientX: number, clientY: number) => {
@@ -682,15 +846,20 @@ export const ImageAnnotationWorkspace = ({
     }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (isEraseMode) {
+      ctx.drawImage(loadedImage, 0, 0, canvas.width, canvas.height);
+    }
     setTextItems([]);
     setSelectedTextId(null);
     setEditTarget(null);
     setHoverTextId(null);
     setPendingTextDraft(null);
     setDraftRect(null);
-    setTool("idle");
+    setTool(isEraseMode ? "eraser" : "idle");
     setCurrentColor(COLOR_OPTIONS[0]);
-    setStrokeWidth(10);
+    setStrokeWidth(
+      isEraseMode ? DEFAULT_ERASER_STROKE_WIDTH : DEFAULT_STROKE_WIDTH,
+    );
     const initialSnapshot: AnnotationSnapshot = {
       imageData: ctx.getImageData(0, 0, canvas.width, canvas.height),
       textItems: [],
@@ -702,7 +871,7 @@ export const ImageAnnotationWorkspace = ({
     setSelectedShapeId(null);
     setDraftBrushPoints([]);
     setPendingBrushStrokes([]);
-  }, [loadedImage, open]);
+  }, [isEraseMode, loadedImage, open]);
 
   useEffect(() => {
     if (!open) {
@@ -976,7 +1145,7 @@ export const ImageAnnotationWorkspace = ({
         return;
       }
 
-      if (tool === "rect") {
+      if (tool === "rect" || tool === "eraseRect") {
         setDraftRect({ start: point, current: point });
         return;
       }
@@ -1004,7 +1173,7 @@ export const ImageAnnotationWorkspace = ({
         return;
       }
 
-      if (tool === "rect" && draftRect) {
+      if ((tool === "rect" || tool === "eraseRect") && draftRect) {
         setDraftRect((prev) => (prev ? { ...prev, current: point } : prev));
         return;
       }
@@ -1026,22 +1195,27 @@ export const ImageAnnotationWorkspace = ({
   );
 
   const handleStagePointerUp = useCallback(() => {
-    if (tool === "rect" && draftRect) {
+    if ((tool === "rect" || tool === "eraseRect") && draftRect) {
       const rect = normalizeRect(draftRect.start, draftRect.current);
       if (rect.width > 0 && rect.height > 0) {
-        const nextShape: RectShapeItem = {
-          id: `annotation-rect-${Date.now()}`,
-          type: "rect",
-          x: rect.x,
-          y: rect.y,
-          width: rect.width,
-          height: rect.height,
-          color: currentColor,
-          strokeWidth,
-        };
-        commitShapeItems((prev) => [...prev, nextShape]);
-        setSelectedShapeId(null);
-        setEditTarget(null);
+        if (tool === "eraseRect") {
+          eraseRectOnCanvas(drawingCanvasRef.current, rect);
+          pushHistory();
+        } else {
+          const nextShape: RectShapeItem = {
+            id: `annotation-rect-${Date.now()}`,
+            type: "rect",
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+            color: currentColor,
+            strokeWidth,
+          };
+          commitShapeItems((prev) => [...prev, nextShape]);
+          setSelectedShapeId(null);
+          setEditTarget(null);
+        }
       }
       setDraftRect(null);
       return;
@@ -1242,16 +1416,21 @@ export const ImageAnnotationWorkspace = ({
         throw new Error("无法创建导出画布");
       }
 
-      outputCtx.drawImage(
-        loadedImage,
-        0,
-        0,
-        outputCanvas.width,
-        outputCanvas.height,
-      );
-
       const drawingCanvas = drawingCanvasRef.current;
-      if (drawingCanvas) {
+
+      if (isEraseMode && drawingCanvas) {
+        outputCtx.drawImage(drawingCanvas, 0, 0);
+      } else {
+        outputCtx.drawImage(
+          loadedImage,
+          0,
+          0,
+          outputCanvas.width,
+          outputCanvas.height,
+        );
+      }
+
+      if (!isEraseMode && drawingCanvas) {
         outputCtx.drawImage(drawingCanvas, 0, 0);
       }
 
@@ -1320,7 +1499,7 @@ export const ImageAnnotationWorkspace = ({
         throw new Error("导出标注图片失败");
       }
 
-      let file = new File([blob], `annotation-${Date.now()}.png`, {
+      let file = new File([blob], `${isEraseMode ? "erase" : "annotation"}-${Date.now()}.png`, {
         type: "image/png",
       });
 
@@ -1365,11 +1544,14 @@ export const ImageAnnotationWorkspace = ({
         progress: 100,
       });
 
-      toast.success("标注已保存");
+      toast.success(isEraseMode ? "擦除已保存" : "标注已保存");
       onClose();
     } catch (error: any) {
-      console.error("保存标注失败:", error);
-      toast.error(error?.message || "保存标注失败，请重试");
+      console.error(isEraseMode ? "保存擦除失败:" : "保存标注失败:", error);
+      toast.error(
+        error?.message ||
+          (isEraseMode ? "保存擦除失败，请重试" : "保存标注失败，请重试"),
+      );
     } finally {
       setIsSaving(false);
     }
@@ -1378,6 +1560,7 @@ export const ImageAnnotationWorkspace = ({
     imageNaturalSize.height,
     imageNaturalSize.width,
     imageUrl,
+    isEraseMode,
     loadedImage,
     onClose,
     onConnect,
@@ -1385,6 +1568,172 @@ export const ImageAnnotationWorkspace = ({
     shapeItems,
     textItems,
     updateImageNodeData,
+  ]);
+
+  const handleEraseGenerate = useCallback(async () => {
+    const prompt = erasePrompt.trim();
+    if (!prompt) {
+      toast.warning("请输入提示词");
+      return;
+    }
+
+    const drawingCanvas = drawingCanvasRef.current;
+    if (!drawingCanvas || !sourceImageNode || !sourceNodeId) {
+      toast.error("当前图片节点不存在");
+      return;
+    }
+
+    setIsEraseGenerating(true);
+
+    try {
+      let file = await getCanvasPngFile(
+        drawingCanvas,
+        `erase-reference-${Date.now()}.png`,
+      );
+      if (file.size > MAX_IMAGE_SIZE_MB) {
+        file = await compressImage(file);
+      }
+
+      const uploadResult = await uploadFileToOSS(file);
+      if (!uploadResult.url) {
+        throw new Error("擦除参考图上传失败");
+      }
+
+      const childPosition = {
+        x: sourceImageNode.position.x + (sourceImageNode.width ?? 350) + 80,
+        y: sourceImageNode.position.y,
+      };
+      const childId = addNode("image", childPosition);
+
+      onConnect({
+        source: sourceNodeId,
+        target: childId,
+        sourceHandle: "output",
+        targetHandle: "input",
+      });
+
+      const isNiji7Model = eraseModel === "midjourney-niji7";
+      const backendModel = isNiji7Model ? "midjourney" : eraseModel;
+      const count = isEraseMidjourneyModel ? 1 : eraseImageCount;
+      const basePrompt =
+        isEraseMidjourneyModel && !prompt.includes("--ar")
+          ? `${prompt} --ar ${eraseSize}${isNiji7Model ? " --niji 7" : ""}`
+          : prompt;
+      const finalPrompt = isEraseGeminiPro2Model
+        ? `${basePrompt} [尺寸:${eraseSize}] [分辨率:${eraseResolution}]`
+        : basePrompt;
+
+      const buildPayload = () => {
+        const payload: any = {
+          model: backendModel,
+          originalModel: eraseModel,
+          platform: erasePlatform,
+          prompt: finalPrompt,
+          resolution: eraseResolution,
+          n: 1,
+          image_urls: [uploadResult.url],
+          promptDraft: prompt,
+          promptDraftHtml: `<p>${prompt}</p>`,
+          size: eraseSize,
+          metadata: { resolution: eraseResolution },
+        };
+
+        if (isEraseMidjourneyModel) {
+          payload.aspectRatio = sourceImageData?.aspectRatio ?? "1:1";
+          payload.midjourneyAdvanced = sourceImageData?.midjourneyAdvanced;
+        }
+
+        return payload;
+      };
+
+      updateImageNodeData(childId, {
+        model: eraseModel,
+        originalModel: eraseModel,
+        platform: erasePlatform,
+        prompt: finalPrompt,
+        promptDraft: prompt,
+        promptDraftHtml: `<p>${prompt}</p>`,
+        image_urls: [uploadResult.url],
+        size: eraseSize,
+        resolution: eraseResolution,
+        status: GenerationStatus.QUEUED,
+        progress: 0,
+        result: {
+          type: "image",
+          data: [],
+        },
+      });
+
+      const runDirectGenerationInBackground = async () => {
+        let successCount = 0;
+        let failCount = 0;
+        for (let i = 0; i < count; i++) {
+          try {
+            await startGeminiPro2Generation(childId, buildPayload());
+            successCount++;
+          } catch (error) {
+            console.error("擦除生成失败:", error);
+            failCount++;
+          }
+        }
+
+        if (successCount > 0 && failCount > 0) {
+          toast.warning(`已生成 ${successCount} 张图片，${failCount} 张失败`);
+        } else if (successCount === 0 && failCount > 0) {
+          toast.error("擦除生成失败，请重试");
+        }
+      };
+
+      if (isEraseLocalGeminiDirectModel) {
+        toast.success(`已开始生成 ${count} 张图片`);
+        onClose();
+        void runDirectGenerationInBackground();
+        return;
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+      for (let i = 0; i < count; i++) {
+        try {
+          await startImageGeneration(childId, buildPayload());
+          successCount++;
+        } catch (error) {
+          console.error("擦除生成失败:", error);
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`已开始生成 ${successCount} 张图片`);
+        onClose();
+      } else {
+        throw new Error(failCount > 0 ? "创建生成任务失败" : "未提交生成任务");
+      }
+    } catch (error: any) {
+      console.error("擦除生成失败:", error);
+      toast.error(error?.message || "擦除生成失败，请重试");
+    } finally {
+      setIsEraseGenerating(false);
+    }
+  }, [
+    addNode,
+    eraseImageCount,
+    eraseModel,
+    erasePlatform,
+    erasePrompt,
+    eraseResolution,
+    eraseSize,
+    isEraseGeminiPro2Model,
+    isEraseLocalGeminiDirectModel,
+    isEraseMidjourneyModel,
+    onClose,
+    onConnect,
+    sourceImageData?.aspectRatio,
+    sourceImageData?.midjourneyAdvanced,
+    sourceImageNode,
+    sourceNodeId,
+    startGeminiPro2Generation,
+    startImageGeneration,
   ]);
 
   const selectedText = useMemo(() => {
@@ -1400,12 +1749,17 @@ export const ImageAnnotationWorkspace = ({
   }
 
   return (
-    <div className="fixed inset-0 z-[80] overflow-hidden bg-[radial-gradient(circle_at_50%_30%,rgba(92,34,163,0.08)_0%,rgba(11,11,14,0.14)_28%,rgba(6,6,8,0.64)_100%)] backdrop-blur-[3px]">
+    <div className="fixed inset-0 z-[80] overflow-y-auto overflow-x-hidden bg-[radial-gradient(circle_at_50%_30%,rgba(92,34,163,0.08)_0%,rgba(11,11,14,0.14)_28%,rgba(6,6,8,0.64)_100%)] backdrop-blur-[3px]">
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0%,rgba(255,255,255,0.01)_18%,rgba(0,0,0,0)_34%,rgba(0,0,0,0.18)_100%)]" />
       <div className="pointer-events-none absolute left-1/2 top-[18%] h-[42vh] w-[42vw] -translate-x-1/2 rounded-full bg-[#B43FEB]/[0.07] blur-[120px]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[linear-gradient(180deg,rgba(0,0,0,0.42)_0%,rgba(0,0,0,0)_100%)]" />
-      <div className="absolute inset-0 flex items-start justify-center px-8 pt-6 pb-8">
-        <div className="flex w-full max-w-[1400px] flex-col items-center gap-4">
+      <div className="min-h-full flex items-start justify-center px-8 pt-6 pb-8">
+        <div
+          className={cn(
+            "flex w-full max-w-[1400px] flex-col items-center",
+            isEraseMode ? "gap-3 pb-4" : "gap-4",
+          )}
+        >
           <div className="flex w-full max-w-[1100px] items-center justify-between rounded-2xl border border-white/10 bg-[#1f1f22]/95 px-4 py-3 shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
             <div className="flex items-center gap-3">
               <button
@@ -1420,12 +1774,17 @@ export const ImageAnnotationWorkspace = ({
 
             <div className="relative flex items-center gap-2 rounded-2xl border border-white/8 bg-black/15 px-3 py-2">
               {(
-                [
-                  { key: "brush", label: "画笔", icon: IconBrush },
-                  { key: "rect", label: "矩形", icon: IconSquare },
-                  { key: "text", label: "文字", icon: null },
-                  { key: "eraser", label: "橡皮擦", icon: IconEraser },
-                ] as const
+                isEraseMode
+                  ? ([
+                      { key: "eraser", label: "橡皮擦", icon: IconEraser },
+                      { key: "eraseRect", label: "框选擦除", icon: IconSquare },
+                    ] as const)
+                  : ([
+                      { key: "brush", label: "画笔", icon: IconBrush },
+                      { key: "rect", label: "矩形", icon: IconSquare },
+                      { key: "text", label: "文字", icon: null },
+                      { key: "eraser", label: "橡皮擦", icon: IconEraser },
+                    ] as const)
               ).map((item) => {
                 const Icon = item.icon;
                 const active = tool === item.key;
@@ -1434,9 +1793,12 @@ export const ImageAnnotationWorkspace = ({
                     key={item.key}
                     type="button"
                     className={cn(
-                      "inline-flex h-10 w-10 items-center justify-center rounded-xl border transition",
+                      "inline-flex h-10 items-center justify-center rounded-xl border transition",
+                      isEraseMode ? "w-auto gap-2 px-3" : "w-10",
                       active
-                        ? "border-[#B43FEB]/60 bg-[#B43FEB]/18 text-white"
+                        ? isEraseMode && item.key === "eraser"
+                          ? "border-[#c246ff]/75 bg-[#c246ff]/24 text-white shadow-[0_0_18px_rgba(194,70,255,0.24)]"
+                          : "border-[#B43FEB]/60 bg-[#B43FEB]/18 text-white"
                         : "border-transparent bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white",
                     )}
                     onClick={() => setTool(item.key)}
@@ -1448,15 +1810,22 @@ export const ImageAnnotationWorkspace = ({
                         T
                       </span>
                     ) : (
-                      <Icon size={18} />
+                      <>
+                        <Icon size={isEraseMode ? 19 : 18} />
+                        {isEraseMode ? (
+                          <span className="text-xs font-medium">
+                            {item.label}
+                          </span>
+                        ) : null}
+                      </>
                     )}
                   </button>
                 );
               })}
 
-              <div className="mx-1 h-8 w-px bg-white/10" />
+              {!isEraseMode ? <div className="mx-1 h-8 w-px bg-white/10" /> : null}
 
-              <div className="relative">
+              {!isEraseMode ? <div className="relative">
                 <button
                   type="button"
                   className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-transparent bg-white/[0.04] text-white/85 transition hover:bg-white/[0.08]"
@@ -1492,22 +1861,48 @@ export const ImageAnnotationWorkspace = ({
                     ))}
                   </div>
                 ) : null}
-              </div>
+              </div> : null}
 
-              <div className="flex items-center gap-2 px-1">
-                <IconPencil size={16} className="text-white/55" />
-                <Input
-                  type="range"
-                  min={MIN_STROKE_WIDTH}
-                  max={MAX_STROKE_WIDTH}
-                  step={1}
-                  value={strokeWidth}
-                  className="h-8 w-28 border-none bg-transparent px-0"
-                  onChange={(event) =>
-                    setStrokeWidth(Number(event.target.value) || 10)
-                  }
-                />
-              </div>
+              {tool === "eraser" || !isEraseMode ? (
+                <div
+                  className={cn(
+                    "flex items-center gap-2 px-1",
+                    isEraseMode
+                      ? "rounded-xl border border-white/8 bg-white/[0.035] px-3"
+                      : "",
+                  )}
+                >
+                  {isEraseMode ? (
+                    <IconEraser size={17} className="text-white/70" />
+                  ) : (
+                    <IconPencil size={16} className="text-white/55" />
+                  )}
+                  <Input
+                    type="range"
+                    min={MIN_STROKE_WIDTH}
+                    max={MAX_STROKE_WIDTH}
+                    step={1}
+                    value={strokeWidth}
+                    className={cn(
+                      "border-none bg-transparent px-0 accent-[#c246ff]",
+                      isEraseMode ? "h-9 w-44" : "h-8 w-28",
+                    )}
+                    onChange={(event) =>
+                      setStrokeWidth(
+                        Number(event.target.value) ||
+                          (isEraseMode
+                            ? DEFAULT_ERASER_STROKE_WIDTH
+                        : DEFAULT_STROKE_WIDTH),
+                      )
+                    }
+                  />
+                  {isEraseMode ? (
+                    <span className="min-w-10 text-right text-xs font-medium text-white/60">
+                      {strokeWidth}px
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div className="mx-1 h-8 w-px bg-white/10" />
 
@@ -1557,7 +1952,8 @@ export const ImageAnnotationWorkspace = ({
                 </>
               ) : null}
 
-              <Button
+              {!isEraseMode ? (
+                <Button
                 type="button"
                 size="sm"
                 className="h-10 rounded-xl bg-white px-5 text-sm font-semibold text-black hover:bg-white/90"
@@ -1565,7 +1961,8 @@ export const ImageAnnotationWorkspace = ({
                 onClick={handleSave}
               >
                 保存
-              </Button>
+                </Button>
+              ) : null}
             </div>
           </div>
 
@@ -1584,12 +1981,25 @@ export const ImageAnnotationWorkspace = ({
                 onPointerUp={handleStagePointerUp}
                 onPointerLeave={handleStagePointerUp}
               >
-                {loadedImage ? (
+                {loadedImage && !isEraseMode ? (
                   <img
                     src={loadedImage.src}
                     alt="标注编辑"
                     className="pointer-events-none absolute inset-0 h-full w-full rounded-[24px] object-cover select-none"
                     draggable={false}
+                  />
+                ) : null}
+
+                {isEraseMode ? (
+                  <div
+                    className="pointer-events-none absolute inset-0 rounded-[24px]"
+                    style={{
+                      backgroundColor: "#d8d8dc",
+                      backgroundImage:
+                        "linear-gradient(45deg, rgba(120,120,130,0.28) 25%, transparent 25%), linear-gradient(-45deg, rgba(120,120,130,0.28) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(120,120,130,0.28) 75%), linear-gradient(-45deg, transparent 75%, rgba(120,120,130,0.28) 75%)",
+                      backgroundPosition: "0 0, 0 12px, 12px -12px, -12px 0",
+                      backgroundSize: "24px 24px",
+                    }}
                   />
                 ) : null}
 
@@ -1618,6 +2028,7 @@ export const ImageAnnotationWorkspace = ({
                         draftRect.start,
                         draftRect.current,
                       );
+                      const isEraseRect = tool === "eraseRect";
                       return (
                         <div
                           className="pointer-events-none absolute"
@@ -1629,19 +2040,31 @@ export const ImageAnnotationWorkspace = ({
                           }}
                         >
                           <div
-                            className="absolute inset-0 rounded-[10px] border"
+                            className={cn(
+                              "absolute inset-0 rounded-[10px] border",
+                              isEraseRect ? "border-dashed" : "",
+                            )}
                             style={{
-                              borderColor: currentColor,
-                              borderWidth: Math.max(
-                                1.5,
-                                strokeWidth * stageScale * 0.3,
-                              ),
+                              backgroundColor: isEraseRect
+                                ? "rgba(255,255,255,0.22)"
+                                : "transparent",
+                              borderColor: isEraseRect
+                                ? "rgba(255,255,255,0.92)"
+                                : currentColor,
+                              borderWidth: isEraseRect
+                                ? 2
+                                : Math.max(
+                                    1.5,
+                                    strokeWidth * stageScale * 0.3,
+                                  ),
                             }}
                           />
                           <div
                             className="absolute inset-0 rounded-[10px]"
                             style={{
-                              boxShadow: `0 0 0 1px ${currentColor}26, inset 0 0 0 1px ${currentColor}18`,
+                              boxShadow: isEraseRect
+                                ? "0 0 0 1px rgba(0,0,0,0.32), inset 0 0 0 1px rgba(0,0,0,0.18)"
+                                : `0 0 0 1px ${currentColor}26, inset 0 0 0 1px ${currentColor}18`,
                             }}
                           />
                         </div>
@@ -2066,6 +2489,179 @@ export const ImageAnnotationWorkspace = ({
               </div>
             </div>
           </div>
+
+          {isEraseMode ? (
+            <div className="nodrag nopan nowheel flex w-full max-w-[720px] flex-col gap-3 rounded-3xl border border-white/5 bg-[#1e1e20]/95 p-4 shadow-2xl pointer-events-auto">
+              <div className="w-full rounded-xl border border-white/[0.05] bg-white/[0.02] shadow-inner transition-all focus-within:border-[#B43FEB]/50 focus-within:shadow-[0_0_15px_rgba(180,63,235,0.15)]">
+                <textarea
+                  value={erasePrompt}
+                  onChange={(event) => setErasePrompt(event.target.value)}
+                  rows={3}
+                  className="nodrag nopan nowheel min-h-[92px] w-full resize-none bg-transparent p-4 text-sm text-white/90 outline-none placeholder:text-white/28"
+                  placeholder="输入擦除后重新生成的提示词"
+                />
+              </div>
+
+              <div className={PROMPT_PANEL_STYLES.divider} />
+
+              <div className="flex w-full flex-wrap items-center gap-3">
+                <Select
+                  value={String(eraseCurrentModelId)}
+                  onValueChange={(value) => {
+                    const selectedModel = IMAGE_MODELS.find(
+                      (item) => item.id === Number(value),
+                    );
+                    const shouldResetNanoBananaSize =
+                      selectedModel?.model === NANO_BANANA_LOCAL_MODEL &&
+                      selectedModel?.platform === NANO_BANANA_LOCAL_PLATFORM &&
+                      !NANO_BANANA_SIZE_VALUES.has(eraseSize);
+
+                    persistEraseImageDefaultPreset({
+                      model: selectedModel?.model ?? value,
+                      platform: selectedModel?.platform,
+                      size: shouldResetNanoBananaSize
+                        ? DEFAULT_NANO_BANANA_SIZE
+                        : undefined,
+                    });
+                    updateEraseImageParams({
+                      model: selectedModel?.model ?? value,
+                      platform: selectedModel?.platform,
+                      ...(shouldResetNanoBananaSize
+                        ? { size: DEFAULT_NANO_BANANA_SIZE }
+                        : {}),
+                    });
+                  }}
+                >
+                  <SelectTrigger className={PROMPT_PANEL_STYLES.modelSelect}>
+                    <SelectValue placeholder="选择模型" />
+                  </SelectTrigger>
+                  <SelectContent
+                    className={PROMPT_PANEL_STYLES.modelSelectContent}
+                  >
+                    {IMAGE_MODELS.map((item) => (
+                      <SelectItem
+                        key={item.id}
+                        value={String(item.id)}
+                        className={PROMPT_PANEL_STYLES.modelSelectItem}
+                      >
+                        {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {isEraseSeedreamModel ? (
+                  <SeedreamParamsPanel
+                    size={eraseSize}
+                    resolution={eraseResolution}
+                    onSizeChange={(value) => {
+                      persistEraseImageDefaultPreset({ size: value });
+                      updateEraseImageParams({ size: value });
+                    }}
+                    onResolutionChange={(value) => {
+                      persistEraseImageDefaultPreset({ resolution: value });
+                      updateEraseImageParams({ resolution: value });
+                    }}
+                  />
+                ) : null}
+
+                {(isEraseGeminiModel || isEraseGeminiPro2Model) ? (
+                  <GeminiParamsPanel
+                    size={eraseSize}
+                    resolution={eraseResolution}
+                    onSizeChange={(value) => {
+                      persistEraseImageDefaultPreset({ size: value });
+                      updateEraseImageParams({ size: value });
+                    }}
+                    onResolutionChange={(value) => {
+                      persistEraseImageDefaultPreset({ resolution: value });
+                      updateEraseImageParams({ resolution: value });
+                    }}
+                  />
+                ) : null}
+
+                {isEraseNanoBananaLocalModel ||
+                isEraseAdobeNanoBananaProModel ? (
+                  <GeminiParamsPanel
+                    size={eraseSize}
+                    resolution={eraseResolution}
+                    sizeOptions={NANO_BANANA_LOCAL_SIZES}
+                    onSizeChange={(value) => {
+                      persistEraseImageDefaultPreset({ size: value });
+                      updateEraseImageParams({ size: value });
+                    }}
+                    onResolutionChange={(value) => {
+                      persistEraseImageDefaultPreset({ resolution: value });
+                      updateEraseImageParams({ resolution: value });
+                    }}
+                  />
+                ) : null}
+
+                {isEraseGptImage2Model || isEraseAdobeGptImage2Model ? (
+                  <GptImage2ParamsPanel
+                    size={eraseSize}
+                    resolution={eraseResolution}
+                    onSizeChange={(value) => {
+                      persistEraseImageDefaultPreset({ size: value });
+                      updateEraseImageParams({ size: value });
+                    }}
+                    onResolutionChange={(value) => {
+                      persistEraseImageDefaultPreset({ resolution: value });
+                      updateEraseImageParams({ resolution: value });
+                    }}
+                  />
+                ) : null}
+
+                {isEraseMidjourneyModel ? (
+                  <MidjourneyParamsPanel
+                    size={eraseSize}
+                    onSizeChange={(value) => {
+                      persistEraseImageDefaultPreset({ size: value });
+                      updateEraseImageParams({ size: value });
+                    }}
+                  />
+                ) : null}
+
+                <div className="ml-auto flex items-center gap-3">
+                  {!isEraseMidjourneyModel ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const currentIndex =
+                          ERASE_IMAGE_COUNT_OPTIONS.indexOf(eraseImageCount);
+                        const nextIndex =
+                          (currentIndex + 1) %
+                          ERASE_IMAGE_COUNT_OPTIONS.length;
+                        setEraseImageCount(ERASE_IMAGE_COUNT_OPTIONS[nextIndex]);
+                      }}
+                      disabled={isEraseGenerating}
+                      className={cn(
+                        PROMPT_PANEL_STYLES.countButton,
+                        isEraseGenerating && "cursor-not-allowed opacity-50",
+                      )}
+                      title={`当前生成 ${eraseImageCount} 张图片，点击切换`}
+                    >
+                      <span>x</span>
+                      <span>{eraseImageCount}</span>
+                    </button>
+                  ) : null}
+
+                  <Button
+                    type="button"
+                    unstyled
+                    className={PROMPT_PANEL_STYLES.generateButton}
+                    loading={isEraseGenerating}
+                    onClick={handleEraseGenerate}
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <IconSparkles size={16} />
+                      生成
+                    </span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {isBrushCanvasMode ? (
             <div className="text-xs text-white/45">
