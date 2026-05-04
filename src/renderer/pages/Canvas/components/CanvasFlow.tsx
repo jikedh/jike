@@ -866,6 +866,7 @@ export const CanvasFlow = ({
   const layoutGroupHorizontal = useCanvasFlowStore(
     (state) => state.layoutGroupHorizontal,
   );
+  const layoutGroupGrid = useCanvasFlowStore((state) => state.layoutGroupGrid);
   const ungroup = useCanvasFlowStore((state) => state.ungroup);
   const [viewportState, setViewportState] = useState(() =>
     reactFlowInstance.getViewport(),
@@ -2928,7 +2929,12 @@ export const CanvasFlow = ({
               }
               layoutGroupHorizontal(activeBatchGroup.id);
             }}
-            onGridLayout={() => {}}
+            onGridLayout={() => {
+              if (!activeBatchGroup) {
+                return;
+              }
+              layoutGroupGrid(activeBatchGroup.id);
+            }}
             onUngroup={() => {
               if (!activeBatchGroup) {
                 return;

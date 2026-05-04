@@ -113,6 +113,87 @@ export const normalizeGroupNodeIds = (
   );
 };
 
+const sortNodesByPosition = (a: AllNodeType, b: AllNodeType) => {
+  const dx = a.position.x - b.position.x;
+  if (dx !== 0) {
+    return dx;
+  }
+
+  const dy = a.position.y - b.position.y;
+  if (dy !== 0) {
+    return dy;
+  }
+
+  return a.id.localeCompare(b.id);
+};
+
+const collectGridOrderedNodes = (
+  groupNodes: AllNodeType[],
+  incoming: Map<string, Set<string>>,
+  outgoing: Map<string, Set<string>>,
+) => {
+  const nodeById = new Map(groupNodes.map((node) => [node.id, node]));
+  const sortedNodes = [...groupNodes].sort(sortNodesByPosition);
+  const visited = new Set<string>();
+  const orderedNodes: AllNodeType[] = [];
+
+  const walkTree = (startNode: AllNodeType) => {
+    if (visited.has(startNode.id)) {
+      return;
+    }
+
+    let currentLevel = [startNode];
+
+    while (currentLevel.length > 0) {
+      const levelNodes = Array.from(
+        new Map(
+          currentLevel.map((node) => [node.id, node] as const),
+        ).values(),
+      ).sort(sortNodesByPosition);
+
+      const nextLevelCandidates = new Set<string>();
+
+      levelNodes.forEach((node) => {
+        if (visited.has(node.id)) {
+          return;
+        }
+
+        visited.add(node.id);
+        orderedNodes.push(node);
+
+        const children = Array.from(outgoing.get(node.id) ?? [])
+          .map((childId) => nodeById.get(childId))
+          .filter(Boolean) as AllNodeType[];
+
+        children.forEach((child) => {
+          if (!visited.has(child.id)) {
+            nextLevelCandidates.add(child.id);
+          }
+        });
+      });
+
+      currentLevel = Array.from(nextLevelCandidates)
+        .map((nodeId) => nodeById.get(nodeId))
+        .filter(Boolean) as AllNodeType[];
+      currentLevel.sort(sortNodesByPosition);
+    }
+  };
+
+  const roots = sortedNodes.filter(
+    (node) => (incoming.get(node.id)?.size ?? 0) === 0,
+  );
+
+  roots.forEach(walkTree);
+
+  sortedNodes.forEach((node) => {
+    if (!visited.has(node.id)) {
+      walkTree(node);
+    }
+  });
+
+  return orderedNodes;
+};
+
 export const layoutGroupHorizontally = (
   nodes: AllNodeType[],
   edges: EdgeType[],
@@ -121,6 +202,10 @@ export const layoutGroupHorizontally = (
     columnGap?: number;
     rowGap?: number;
     padding?: number;
+    anchor?: {
+      x: number;
+      y: number;
+    };
   },
 ) => {
   const columnGap = options?.columnGap ?? 96;
@@ -248,8 +333,8 @@ export const layoutGroupHorizontally = (
   );
 
   const bounds = getGroupBounds(nodes, groupNodeIds, padding);
-  const anchorX = bounds?.x ?? 0;
-  const anchorY = bounds?.y ?? 0;
+  const anchorX = options?.anchor?.x ?? bounds?.x ?? 0;
+  const anchorY = options?.anchor?.y ?? bounds?.y ?? 0;
 
   let currentX = anchorX + padding;
   const nextNodePositions = new Map<string, NodeOffset>();
@@ -289,5 +374,179 @@ export const layoutGroupHorizontally = (
   return {
     nextNodes,
     bounds: getGroupBounds(nextNodes, groupNodeIds, padding),
+  };
+};
+
+export const layoutGroupGrid = (
+  nodes: AllNodeType[],
+  edges: EdgeType[],
+  nodeIds: string[],
+  options?: {
+    columnGap?: number;
+    rowGap?: number;
+    padding?: number;
+    preferredOrderNodeIds?: string[];
+    anchor?: {
+      x: number;
+      y: number;
+    };
+  },
+) => {
+  const columnGap = options?.columnGap ?? 72;
+  const rowGap = options?.rowGap ?? 28;
+  const padding = options?.padding ?? 24;
+
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const groupNodeIds = normalizeGroupNodeIds(nodeIds, new Set(nodeById.keys()));
+  const groupNodeSet = new Set(groupNodeIds);
+  const groupNodes = groupNodeIds
+    .map((nodeId) => nodeById.get(nodeId))
+    .filter(Boolean) as AllNodeType[];
+
+  if (groupNodes.length === 0) {
+    return {
+      nextNodes: nodes,
+      bounds: null as FlowRect | null,
+    };
+  }
+
+  const incoming = new Map<string, Set<string>>();
+  const outgoing = new Map<string, Set<string>>();
+
+  groupNodeIds.forEach((nodeId) => {
+    incoming.set(nodeId, new Set());
+    outgoing.set(nodeId, new Set());
+  });
+
+  edges.forEach((edge) => {
+    if (!groupNodeSet.has(edge.source) || !groupNodeSet.has(edge.target)) {
+      return;
+    }
+
+    incoming.get(edge.target)?.add(edge.source);
+    outgoing.get(edge.source)?.add(edge.target);
+  });
+
+  const orderedNodes = collectGridOrderedNodes(groupNodes, incoming, outgoing);
+  const preferredOrderNodeIds = normalizeGroupNodeIds(
+    options?.preferredOrderNodeIds ?? [],
+    groupNodeSet,
+  );
+  const preferredOrderSet = new Set(preferredOrderNodeIds);
+  const fallbackOrderNodeIds = orderedNodes.map((node) => node.id);
+  const mergedOrderNodeIds = [
+    ...preferredOrderNodeIds,
+    ...fallbackOrderNodeIds.filter((nodeId) => !preferredOrderSet.has(nodeId)),
+  ];
+  const finalOrderNodeIds =
+    mergedOrderNodeIds.length > 0 ? mergedOrderNodeIds : fallbackOrderNodeIds;
+  const finalOrderedNodes = finalOrderNodeIds
+    .map((nodeId) => nodeById.get(nodeId))
+    .filter(Boolean) as AllNodeType[];
+
+  if (finalOrderedNodes.length === 0) {
+    return {
+      nextNodes: nodes,
+      bounds: null as FlowRect | null,
+      orderedNodeIds: [] as string[],
+    };
+  }
+
+  const totalNodes = finalOrderedNodes.length;
+  const averageNodeWidth =
+    finalOrderedNodes.reduce((sum, node) => sum + getNodeSize(node).width, 0) /
+    totalNodes;
+  const averageNodeHeight =
+    finalOrderedNodes.reduce((sum, node) => sum + getNodeSize(node).height, 0) /
+    totalNodes;
+  const estimatedColumnCount = Math.max(
+    1,
+    Math.round(
+      Math.sqrt((totalNodes * averageNodeHeight) / averageNodeWidth),
+    ),
+  );
+  const columnCount = Math.min(totalNodes, estimatedColumnCount);
+  const rowCount = Math.max(1, Math.ceil(totalNodes / columnCount));
+
+  const rows = Array.from({ length: rowCount }, () => [] as AllNodeType[]);
+  finalOrderedNodes.forEach((node, index) => {
+    const rowIndex = Math.floor(index / columnCount);
+    rows[rowIndex]?.push(node);
+  });
+
+  const columnWidths = Array.from({ length: columnCount }, (_, columnIndex) => {
+    return rows.reduce((maxWidth, row) => {
+      const node = row[columnIndex];
+      if (!node) {
+        return maxWidth;
+      }
+
+      return Math.max(maxWidth, getNodeSize(node).width);
+    }, 0);
+  });
+
+  const rowHeights = rows.map((row) =>
+    row.reduce(
+      (maxHeight, node) => Math.max(maxHeight, getNodeSize(node).height),
+      0,
+    ),
+  );
+
+  const bounds = getGroupBounds(nodes, groupNodeIds, padding);
+  const anchorX = options?.anchor?.x ?? bounds?.x ?? 0;
+  const anchorY = options?.anchor?.y ?? bounds?.y ?? 0;
+
+  const columnStarts = columnWidths.reduce<number[]>((starts, width, index) => {
+    const previousStart = starts[index - 1];
+    const previousWidth = columnWidths[index - 1] ?? 0;
+    const nextStart =
+      index === 0
+        ? anchorX + padding
+        : previousStart + previousWidth + columnGap;
+    starts.push(nextStart);
+    return starts;
+  }, []);
+
+  const rowStarts = rowHeights.reduce<number[]>((starts, height, index) => {
+    const previousStart = starts[index - 1];
+    const previousHeight = rowHeights[index - 1] ?? 0;
+    const nextStart =
+      index === 0
+        ? anchorY + padding
+        : previousStart + previousHeight + rowGap;
+    starts.push(nextStart);
+    return starts;
+  }, []);
+
+  const nextNodePositions = new Map<string, NodeOffset>();
+
+  rows.forEach((row, rowIndex) => {
+    row.forEach((node, columnIndex) => {
+      nextNodePositions.set(node.id, {
+        x: columnStarts[columnIndex] ?? anchorX + padding,
+        y: rowStarts[rowIndex] ?? anchorY + padding,
+      });
+    });
+  });
+
+  const nextNodes = nodes.map((node) => {
+    const nextPosition = nextNodePositions.get(node.id);
+    if (!nextPosition) {
+      return node;
+    }
+
+    return {
+      ...node,
+      position: {
+        x: nextPosition.x,
+        y: nextPosition.y,
+      },
+    };
+  });
+
+  return {
+    nextNodes,
+    bounds: getGroupBounds(nextNodes, groupNodeIds, padding),
+    orderedNodeIds: finalOrderNodeIds,
   };
 };

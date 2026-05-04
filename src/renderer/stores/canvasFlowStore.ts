@@ -1,4 +1,4 @@
-import { addEdge, applyEdgeChanges, applyNodeChanges } from "@xyflow/react";
+﻿import { addEdge, applyEdgeChanges, applyNodeChanges } from "@xyflow/react";
 import { copyVideoUrlToOss } from "service/oss";
 import {
   getCanvasDataKey,
@@ -44,6 +44,7 @@ import type {
 } from "shared/types/zustand/canvas-flow";
 import {
   getGroupBounds,
+  layoutGroupGrid,
   layoutGroupHorizontally,
   normalizeGroupNodeIds,
   translateNodesByIds,
@@ -140,6 +141,10 @@ const normalizeCanvasGroups = (
     .map((group) => ({
       ...group,
       nodeIds: normalizeGroupNodeIds(group.nodeIds, existingNodeIds),
+      gridLayoutOrder: group.gridLayoutOrder
+        ? normalizeGroupNodeIds(group.gridLayoutOrder, existingNodeIds)
+        : group.gridLayoutOrder,
+      layoutOrigin: group.layoutOrigin,
     }))
     .filter((group) => group.nodeIds.length >= 2);
 };
@@ -157,8 +162,41 @@ const removeNodeIdsFromGroups = (
     .map((group) => ({
       ...group,
       nodeIds: group.nodeIds.filter((nodeId) => !removedNodeIdSet.has(nodeId)),
+      gridLayoutOrder: group.gridLayoutOrder
+        ? group.gridLayoutOrder.filter(
+            (nodeId) => !removedNodeIdSet.has(nodeId),
+          )
+        : group.gridLayoutOrder,
+      layoutOrigin: group.layoutOrigin,
     }))
     .filter((group) => group.nodeIds.length >= 2);
+};
+
+const hasNodePositionChanges = (
+  prevNodes: AllNodeType[],
+  nextNodes: AllNodeType[],
+) => {
+  if (prevNodes.length !== nextNodes.length) {
+    return true;
+  }
+
+  const nextNodeById = new Map(nextNodes.map((node) => [node.id, node]));
+
+  for (const prevNode of prevNodes) {
+    const nextNode = nextNodeById.get(prevNode.id);
+    if (!nextNode) {
+      return true;
+    }
+
+    if (
+      prevNode.position.x !== nextNode.position.x ||
+      prevNode.position.y !== nextNode.position.y
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 };
 
 const updateVideoTrackFinalStatus = async (
@@ -2446,10 +2484,18 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         return "";
       }
 
+      const layoutBounds = getGroupBounds(state.nodes, ungroupedNodeIds, 24);
+
       const group: CanvasGroup = {
         id: makeGroupId(),
         nodeIds: ungroupedNodeIds,
         createdAt: Date.now(),
+        layoutOrigin: layoutBounds
+          ? {
+              x: layoutBounds.x,
+              y: layoutBounds.y,
+            }
+          : undefined,
       };
 
       set((current) => ({
@@ -2491,10 +2537,20 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         return;
       }
 
+      const currentBounds = getGroupBounds(state.nodes, group.nodeIds, 24);
+
       const layoutResult = layoutGroupHorizontally(
         state.nodes,
         state.edges,
         group.nodeIds,
+        {
+          anchor: currentBounds
+            ? {
+                x: currentBounds.x,
+                y: currentBounds.y,
+              }
+            : group.layoutOrigin,
+        },
       );
 
       if (!layoutResult.nextNodes || layoutResult.nextNodes === state.nodes) {
@@ -2503,7 +2559,74 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       set((current) => ({
         nodes: layoutResult.nextNodes,
-        groups: normalizeCanvasGroups(current.groups, layoutResult.nextNodes),
+        groups: normalizeCanvasGroups(current.groups, layoutResult.nextNodes).map(
+          (item) =>
+            item.id === groupId
+              ? {
+                  ...item,
+                  layoutOrigin: layoutResult.bounds
+                    ? {
+                        x: layoutResult.bounds.x,
+                        y: layoutResult.bounds.y,
+                      }
+                    : item.layoutOrigin,
+                }
+              : item,
+        ),
+      }));
+
+      get().requestHistorySave();
+      get().saveGraph();
+    },
+
+    layoutGroupGrid: (groupId: string) => {
+      const state = get();
+      const group = state.groups.find((item) => item.id === groupId);
+      if (!group) {
+        return;
+      }
+
+      const currentBounds = getGroupBounds(state.nodes, group.nodeIds, 24);
+
+      const layoutResult = layoutGroupGrid(
+        state.nodes,
+        state.edges,
+        group.nodeIds,
+        {
+          preferredOrderNodeIds: group.gridLayoutOrder,
+          anchor: currentBounds
+            ? {
+                x: currentBounds.x,
+                y: currentBounds.y,
+              }
+            : group.layoutOrigin,
+        },
+      );
+
+      if (
+        !layoutResult.nextNodes ||
+        !hasNodePositionChanges(state.nodes, layoutResult.nextNodes)
+      ) {
+        return;
+      }
+
+      set((current) => ({
+        nodes: layoutResult.nextNodes,
+        groups: normalizeCanvasGroups(current.groups, layoutResult.nextNodes).map(
+          (item) =>
+            item.id === groupId
+              ? {
+                  ...item,
+                  gridLayoutOrder: layoutResult.orderedNodeIds,
+                  layoutOrigin: layoutResult.bounds
+                    ? {
+                        x: layoutResult.bounds.x,
+                        y: layoutResult.bounds.y,
+                      }
+                    : item.layoutOrigin,
+                }
+              : item,
+        ),
       }));
 
       get().requestHistorySave();
@@ -2519,6 +2642,23 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       set((current) => ({
         nodes: translateNodesByIds(current.nodes, group.nodeIds, offset),
+        groups: current.groups.map((item) =>
+          item.id !== groupId
+            ? item
+            : {
+                ...item,
+                layoutOrigin: {
+                  x:
+                    (item.layoutOrigin?.x ??
+                      getGroupBounds(current.nodes, item.nodeIds, 24)?.x ??
+                      0) + offset.x,
+                  y:
+                    (item.layoutOrigin?.y ??
+                      getGroupBounds(current.nodes, item.nodeIds, 24)?.y ??
+                      0) + offset.y,
+                },
+              },
+        ),
       }));
     },
 
@@ -3031,6 +3171,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         (sourceNode.width ?? childNodeSize.width) +
         columnGap * 2;
       const startY = sourceNode.position.y;
+      const createdNodeIds: string[] = [];
 
       const gridNameMap: Record<number, string> = {
         2: "四",
@@ -3049,10 +3190,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           x: startX + (col - 1) * (childNodeSize.width + columnGap),
           y: startY + (row - 1) * (childNodeSize.height + rowGap),
         };
-
-        const splitPrompt = `这是一张${gridName}宫格的图片，中间是用白色分割线区分的。帮我把${gridName}宫格图中的第${row}行的第${col}列图片单独提取出来，放大为独立图片。与第${row}行的第${col}列图片保持完全相同的构图、色调，去除图片四个角落文字、字幕、标注，序号，高清优化图片所有细节，8K清晰度。`;
+        const splitPrompt = `这是${gridName}宫格图片，请提取第${row}行第${col}列，保持原构图和色调，去除边角文字、字幕和标注，高清优化。`;
 
         const newId = get().addNode("image", position);
+        if (newId) {
+          createdNodeIds.push(newId);
+        }
 
         newEdges.push({
           id: `edge-${nodeId}-${newId}`,
@@ -3110,6 +3253,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }));
 
       // 自动保存
+
+      if (createdNodeIds.length > 1) {
+        get().createGroup(createdNodeIds);
+      }
+
       if (useChatSettingsStore.getState().autoSaveEnabled) {
         get().saveGraph();
       }
@@ -3863,25 +4011,40 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      */
     onNodesChange: (changes) => {
       const hasSelectChange = changes.some((change) => change.type === "select");
+      const hasPositionChange = changes.some(
+        (change) => change.type === "position" && !change.dragging,
+      );
+      const hasAddOrRemove = changes.some(
+        (change) => change.type === "add" || change.type === "remove",
+      );
       set((state) => {
         const nextNodes = applyNodeChanges(changes, state.nodes);
+        const nextGroups =
+          hasPositionChange || hasAddOrRemove
+            ? normalizeCanvasGroups(state.groups, nextNodes).map((group) => {
+                const bounds = getGroupBounds(nextNodes, group.nodeIds, 24);
+                return {
+                  ...group,
+                  layoutOrigin: bounds
+                    ? {
+                        x: bounds.x,
+                        y: bounds.y,
+                      }
+                    : group.layoutOrigin,
+                };
+              })
+            : state.groups;
         // 计算选中节点数量，避免在 ImageNode 等组件中 O(n²) 遍历
         const selectedCount = nextNodes.filter((n) => n.selected).length;
         return {
           nodes: nextNodes,
           selectedNodesCount: selectedCount,
           selectedGroupId: hasSelectChange ? null : state.selectedGroupId,
+          groups: nextGroups,
         };
       });
 
       // 在节点变化后保存历史记录（排除拖动中的变化）
-      const hasPositionChange = changes.some(
-        (c) => c.type === "position" && !c.dragging,
-      );
-      const hasAddOrRemove = changes.some(
-        (c) => c.type === "add" || c.type === "remove",
-      );
-
       if (hasPositionChange || hasAddOrRemove) {
         get().requestHistorySave();
       }

@@ -1,4 +1,4 @@
-import {
+﻿import {
   type NodeProps,
   Position,
   useUpdateNodeInternals,
@@ -52,6 +52,7 @@ export const ImageNode = memo(
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
     const addNode = useCanvasFlowStore((state) => state.addNode);
     const splitImage = useCanvasFlowStore((state) => state.splitImage);
+    const createGroup = useCanvasFlowStore((state) => state.createGroup);
     const separateToNodes = useCanvasFlowStore(
       (state) => state.separateToNodes,
     );
@@ -339,26 +340,37 @@ export const ImageNode = memo(
             throw new Error("当前图片节点不存在");
           }
 
-          const uploadedItems = [];
+          const uploadedItems: Array<{ url: string; size?: string }> = [];
+          let failedCount = 0;
+
           for (const file of files) {
-            let fileToUpload = file;
-            if (file.size > MAX_IMAGE_SIZE_MB) {
-              fileToUpload = await compressImage(file);
-            }
+            try {
+              let fileToUpload = file;
+              if (file.size > MAX_IMAGE_SIZE_MB) {
+                fileToUpload = await compressImage(file);
+              }
 
-            const uploadResult = await uploadFileToOSS(fileToUpload);
-            if (!uploadResult.url) {
-              throw new Error("宫格裁剪图片上传失败");
-            }
+              const uploadResult = await uploadFileToOSS(fileToUpload);
+              if (!uploadResult.url) {
+                throw new Error("宫格裁剪图片上传失败");
+              }
 
-            const croppedSize = await getAspectRatioFromMediaFile(
-              fileToUpload,
-              "image",
-            );
-            uploadedItems.push({
-              url: uploadResult.url,
-              size: croppedSize,
-            });
+              const croppedSize = await getAspectRatioFromMediaFile(
+                fileToUpload,
+                "image",
+              );
+              uploadedItems.push({
+                url: uploadResult.url,
+                size: croppedSize,
+              });
+            } catch (error) {
+              failedCount += 1;
+              console.error("宫格裁剪图片失败:", error);
+            }
+          }
+
+          if (uploadedItems.length === 0) {
+            throw new Error("宫格裁剪图片上传失败");
           }
 
           const layoutCols = Math.max(
@@ -368,6 +380,8 @@ export const ImageNode = memo(
           const baseX = sourceNode.position.x + (sourceNode.width ?? 350) + 80;
           const baseY = sourceNode.position.y;
           const gap = 56;
+
+          const createdNodeIds: string[] = [];
 
           uploadedItems.forEach((item, index) => {
             const row = Math.floor(index / layoutCols);
@@ -380,6 +394,9 @@ export const ImageNode = memo(
               y: baseY + row * (childSize.height + gap),
             };
             const childId = addNode("image", childPosition);
+            if (childId) {
+              createdNodeIds.push(childId);
+            }
 
             onConnect({
               source: id,
@@ -402,18 +419,25 @@ export const ImageNode = memo(
             });
           });
 
+          if (createdNodeIds.length > 1) {
+            createGroup(createdNodeIds);
+          }
+
           const flowStore = useCanvasFlowStore.getState();
           flowStore.requestHistorySave();
           flowStore.saveGraph();
 
-          toast.success(`已裁剪 ${uploadedItems.length} 张宫格图片`);
+          toast.success(
+            `已裁剪 ${uploadedItems.length} 张宫格图片` +
+              (failedCount > 0 ? `，${failedCount} 张失败` : ""),
+          );
         } catch (error: any) {
           console.error("宫格裁剪失败:", error);
           toast.error(error?.message || "宫格裁剪失败，请重试");
           throw error;
         }
       },
-      [addNode, id, onConnect, updateImageNodeData],
+      [addNode, createGroup, id, onConnect, updateImageNodeData],
     );
 
     const handleAnnotate = useCallback(() => {

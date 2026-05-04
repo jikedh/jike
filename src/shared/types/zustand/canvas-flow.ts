@@ -36,6 +36,11 @@ export type CanvasGroup = {
   id: string;
   nodeIds: string[];
   createdAt: number;
+  gridLayoutOrder?: string[];
+  layoutOrigin?: {
+    x: number;
+    y: number;
+  };
 };
 
 /**
@@ -176,6 +181,7 @@ export type CanvasFlowStoreType = {
   createGroup: (nodeIds: string[]) => string;
   ungroup: (groupId: string) => void;
   layoutGroupHorizontal: (groupId: string) => void;
+  layoutGroupGrid: (groupId: string) => void;
   moveGroupNodes: (groupId: string, offset: { x: number; y: number }) => void;
 
   // ── 便签节点 ─────────────────────────────────
