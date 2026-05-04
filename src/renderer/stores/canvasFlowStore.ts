@@ -293,14 +293,14 @@ const resolveAdobeImageModel = ({
 const extractMarkdownMediaUrl = (content: unknown, kind: "image" | "video") => {
   const text = Array.isArray(content)
     ? content
-        .map((part) =>
-          typeof part === "string"
-            ? part
-            : typeof part?.text === "string"
-              ? part.text
-              : "",
-        )
-        .join("\n")
+      .map((part) =>
+        typeof part === "string"
+          ? part
+          : typeof part?.text === "string"
+            ? part.text
+            : "",
+      )
+      .join("\n")
     : String(content || "");
   const htmlPattern =
     kind === "video"
@@ -1418,27 +1418,19 @@ const pollNewVideoGeneration = async ({
 
             return {
               ...data,
-              status:
-                allDone && successCount === 0
-                  ? GenerationStatus.FAILED
-                  : allDone
-                    ? GenerationStatus.COMPLETED
-                    : GenerationStatus.IN_PROGRESS,
-              progress: allDone
-                ? 100
-                : Math.round((completedCount / totalTasks) * 100),
+              // 失败时无论之前是否有成功视频，都应显示失败状态
+              status: GenerationStatus.FAILED,
+              progress: allDone ? 100 : Math.round((completedCount / totalTasks) * 100),
               metadata: {
                 ...data.metadata,
                 failedTasks,
               },
-              error:
-                allDone && successCount === 0
-                  ? {
-                    code: "VIDEO_FAILED",
-                    message:
-                      normalized.errorMessage || "生成失败，请稍后再试",
-                  }
-                  : data.error,
+              // 失败时无论之前是否有成功视频，都应设置错误信息
+              error: {
+                code: "VIDEO_FAILED",
+                message:
+                  normalized.errorMessage || "生成失败，请稍后再试",
+              },
             };
           }),
         }));
@@ -2776,39 +2768,39 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             gptImageUrls.length > 0
               ? originalModel === ADOBE_GPT_IMAGE2_MODEL
                 ? await createAdobe2ApiGptImageToImageGeneration(
-                    buildFireflyGptImageToImageRequest({
-                      model: adobeImageModel as any,
-                      prompt,
-                      imageUrls: gptImageUrls,
-                    }),
-                  )
-                : await createAdobe2ApiChatImageGeneration({
+                  buildFireflyGptImageToImageRequest({
                     model: adobeImageModel as any,
-                    messages: [
-                      {
-                        role: "user" as const,
-                        content: [
-                          { type: "text" as const, text: prompt || "" },
-                          ...imageUrls.map((url: string) => ({
-                            type: "image_url" as const,
-                            image_url: { url },
-                          })),
-                        ],
-                      },
-                    ],
-                  })
+                    prompt,
+                    imageUrls: gptImageUrls,
+                  }),
+                )
+                : await createAdobe2ApiChatImageGeneration({
+                  model: adobeImageModel as any,
+                  messages: [
+                    {
+                      role: "user" as const,
+                      content: [
+                        { type: "text" as const, text: prompt || "" },
+                        ...imageUrls.map((url: string) => ({
+                          type: "image_url" as const,
+                          image_url: { url },
+                        })),
+                      ],
+                    },
+                  ],
+                })
               : await createAdobe2ApiImageGeneration(
-                  originalModel === ADOBE_GPT_IMAGE2_MODEL
-                    ? buildFireflyGptText2ImageRequest({
-                        model: adobeImageModel as any,
-                        prompt,
-                      })
-                    : {
-                        model: adobeImageModel as any,
-                        prompt: prompt || "",
-                        response_format: "url",
-                      },
-                );
+                originalModel === ADOBE_GPT_IMAGE2_MODEL
+                  ? buildFireflyGptText2ImageRequest({
+                    model: adobeImageModel as any,
+                    prompt,
+                  })
+                  : {
+                    model: adobeImageModel as any,
+                    prompt: prompt || "",
+                    response_format: "url",
+                  },
+              );
 
           const responseAny = response as any;
           const responseUrl =
@@ -3594,7 +3586,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             throw new Error("Adobe2API 未返回视频地址");
           }
 
-          let resultItem: { url: string; format: string; [key: string]: any } = {
+          let resultItem: { url: string; format: string;[key: string]: any } = {
             url: videoUrl,
             format: "mp4",
           };
