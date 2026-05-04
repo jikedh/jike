@@ -270,8 +270,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     validateBalanceBeforeGenerate,
   } = useGenerationPoints();
 
-  const nodes = useCanvasFlowStore((state) => state.nodes);
-  const edges = useCanvasFlowStore((state) => state.edges);
   const startNewVideoGeneration = useCanvasFlowStore(
     (state) => state.startNewVideoGeneration,
   );
@@ -290,12 +288,12 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     (state) => state.setDefaultNewVideoPreset,
   );
 
-  const currentNode = useMemo(
-    () =>
-      nodes.find((node) => node.id === nodeId && node.type === "newVideoNode"),
-    [nodes, nodeId],
-  );
-  const currentData = currentNode?.data as NewVideoGenerationNode | undefined;
+  const currentData = useCanvasFlowStore((state) => {
+    const node = state.nodes.find(
+      (item) => item.id === nodeId && item.type === "newVideoNode",
+    );
+    return node?.data as NewVideoGenerationNode | undefined;
+  });
 
   const metadataParams = currentData?.metadata?.params as
     | VideoParamState
@@ -348,8 +346,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     allAudioUrls,
   } = useVideoNodeReferences({
     nodeId,
-    nodes,
-    edges,
     referenceImageUrls: currentData?.image_urls ?? [],
   });
 
@@ -776,7 +772,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     handleFileChange,
   } = useVideoReferenceActions({
     nodeId,
-    edges,
     currentImageUrls: currentData?.image_urls ?? [],
     updateVideoNodeData: updateNewVideoNodeData,
     deleteEdge,

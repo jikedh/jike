@@ -9,7 +9,6 @@ import {
   getTextAgentPresetLabelById,
 } from "shared/constants/text-agent-presets";
 import type { TextAgentNodeType, TextAgentPresetId } from "shared/types/flow";
-import { useMessage } from "@/hooks/useMessage";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { ConfigPanel } from "./components/ConfigPanel";
@@ -45,7 +44,6 @@ export const TextAgentNode = memo(
     const [editableSystemPrompt, setEditableSystemPrompt] = useState("");
 
     // Store 状态和方法
-    const { warning } = useMessage();
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
     const addNode = useCanvasFlowStore((state) => state.addNode);
@@ -56,8 +54,6 @@ export const TextAgentNode = memo(
     const updateTextAgentNodeData = useCanvasFlowStore(
       (state) => state.updateTextAgentNodeData,
     );
-    const nodes = useCanvasFlowStore((state) => state.nodes);
-
     // 当前预设信息
     const presetId = data.presetId;
     const preset = presetId ? getTextAgentPresetById(presetId) : null;
@@ -91,7 +87,7 @@ export const TextAgentNode = memo(
 
     // 检查是否已连接便签节点
     const hasConnectedNote = useCallback(() => {
-      const edges = useCanvasFlowStore.getState().edges;
+      const { edges, nodes } = useCanvasFlowStore.getState();
       const incomingEdges = edges.filter((edge) => edge.target === id);
       if (!incomingEdges.length) return false;
 
@@ -100,7 +96,7 @@ export const TextAgentNode = memo(
         .find((node) => node?.type === "noteNode");
 
       return !!parentNoteNode;
-    }, [id, nodes]);
+    }, [id]);
 
     // 选择预设
     const handleSelectPreset = useCallback(
@@ -113,7 +109,9 @@ export const TextAgentNode = memo(
           return;
         }
 
-        const currentNode = nodes.find((n) => n.id === id);
+        const currentNode = useCanvasFlowStore
+          .getState()
+          .nodes.find((n) => n.id === id);
         if (!currentNode) return;
 
         // 自动创建输入便签节点
@@ -135,7 +133,6 @@ export const TextAgentNode = memo(
       },
       [
         id,
-        nodes,
         addNode,
         setNoteNodeEditing,
         onConnect,

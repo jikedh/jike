@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 
 import useMessage from "@/hooks/useMessage";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { uploadFileToOSS } from "service/oss";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 
@@ -11,7 +12,6 @@ import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
  */
 export const useVideoReferenceActions = ({
   nodeId,
-  edges,
   currentImageUrls,
   updateVideoNodeData,
   deleteEdge,
@@ -19,7 +19,6 @@ export const useVideoReferenceActions = ({
   onRemovedReferenceImage,
 }: {
   nodeId: string;
-  edges: any[];
   currentImageUrls: string[];
   updateVideoNodeData: (nodeId: string, patch: any) => void;
   deleteEdge: (edgeId: string) => void;
@@ -33,6 +32,7 @@ export const useVideoReferenceActions = ({
 
   const handleDisconnectNode = useCallback(
     (sourceNodeId: string) => {
+      const edges = useCanvasFlowStore.getState().edges;
       const edgeToDelete = edges.find(
         (edge) => edge.source === sourceNodeId && edge.target === nodeId,
       );
@@ -41,7 +41,7 @@ export const useVideoReferenceActions = ({
         onDisconnectedNode?.(sourceNodeId);
       }
     },
-    [edges, nodeId, deleteEdge, onDisconnectedNode],
+    [nodeId, deleteEdge, onDisconnectedNode],
   );
 
   /**

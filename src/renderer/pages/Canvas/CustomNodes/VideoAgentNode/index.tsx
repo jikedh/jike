@@ -9,7 +9,6 @@ import {
   getVideoAgentPresetLabelById,
 } from "shared/constants/video-agent-presets";
 import type { VideoAgentNodeType, VideoAgentPresetId } from "shared/types/flow";
-import { useMessage } from "@/hooks/useMessage";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
@@ -43,18 +42,11 @@ export const VideoAgentNode = memo(
     );
     const [editableSystemPrompt, setEditableSystemPrompt] = useState("");
 
-    const { warning } = useMessage();
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
-    const addNode = useCanvasFlowStore((state) => state.addNode);
-    const onConnect = useCanvasFlowStore((state) => state.onConnect);
-    const setNoteNodeEditing = useCanvasFlowStore(
-      (state) => state.setNoteNodeEditing,
-    );
     const updateVideoAgentNodeData = useCanvasFlowStore(
       (state) => state.updateVideoAgentNodeData,
     );
-    const nodes = useCanvasFlowStore((state) => state.nodes);
 
     const presetId = data.presetId;
     const preset = presetId ? getVideoAgentPresetById(presetId) : null;
@@ -83,8 +75,8 @@ export const VideoAgentNode = memo(
       [id, updateVideoAgentNodeData],
     );
 
-    const hasConnectedVideoNode = useCallback(() => {
-      const edges = useCanvasFlowStore.getState().edges;
+    const _hasConnectedVideoNode = useCallback(() => {
+      const { edges, nodes } = useCanvasFlowStore.getState();
       const incomingEdges = edges.filter((edge) => edge.target === id);
       if (!incomingEdges.length) return false;
 
@@ -96,7 +88,7 @@ export const VideoAgentNode = memo(
         );
 
       return !!parentVideoNode;
-    }, [id, nodes]);
+    }, [id]);
 
     const handleSelectPreset = useCallback(
       (newPresetId: VideoAgentPresetId) => {

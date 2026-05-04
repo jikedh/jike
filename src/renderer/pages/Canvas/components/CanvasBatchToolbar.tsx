@@ -50,9 +50,9 @@ export const CanvasBatchToolbar = memo(
         style={
           position
             ? {
-                left: `${position.x}px`,
-                top: `${position.y}px`,
-                transform: "translate(-50%, -100%)",
+                left: 0,
+                top: 0,
+                transform: `translate3d(${position.x}px, ${position.y}px, 0) translate(-50%, -100%)`,
               }
             : undefined
         }

@@ -19,13 +19,17 @@ import {
   ReactFlow,
   SelectionMode,
   useReactFlow,
+  ViewportPortal,
 } from "@xyflow/react";
 import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GenerationStatus } from "shared/constants/enum";
 import type { AllNodeType, EdgeType } from "shared/types/flow";
-import { getGroupBounds } from "shared/utils/canvasGroups";
+import {
+  getGroupBounds,
+  getGroupBoundsFromNodeMap,
+} from "shared/utils/canvasGroups";
 import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
 import { NodeSearch } from "@/components/node-search";
@@ -66,7 +70,7 @@ import { MultiSelectQuickCreate } from "./MultiSelectQuickCreate";
 const FALLBACK_NODE_WIDTH = 175;
 const FALLBACK_NODE_HEIGHT = 175;
 const DEFAULT_OPEN_ZOOM = 0.67;
-const SELECTION_STORE_SYNC_DELAY = 90;
+const STORE_NODE_CHANGE_THROTTLE_MS = 70;
 
 /**
  * 鏍规嵁璧风偣鍜岀粓鐐圭粯鍒朵竴鏉℃煍鍜岀殑璐濆灏旀洸绾裤€?
@@ -881,9 +885,8 @@ export const CanvasFlow = ({
   const pendingNodeChangesRef = useRef<NodeChange<AllNodeType>[]>([]);
   const nodeChangeRafRef = useRef<number | null>(null);
   const pendingStoreNodeChangesRef = useRef<NodeChange<AllNodeType>[]>([]);
-  const storeNodeChangeRafRef = useRef<number | null>(null);
-  const pendingSelectStoreChangesRef = useRef<NodeChange<AllNodeType>[]>([]);
-  const selectStoreChangeTimerRef = useRef<number | null>(null);
+  const storeNodeChangeTimerRef = useRef<number | null>(null);
+  const lastStoreNodeChangeFlushRef = useRef(0);
 
   // 绋冲畾 ReactFlow 瀵硅薄鍨?props 鐨勫紩鐢紝閬垮厤姣忔 render 鐢熸垚鏂板璞″鑷村瓙鏍戞棤鏁堟洿鏂?
   const connectionLineStyle = useMemo(
@@ -982,54 +985,41 @@ export const CanvasFlow = ({
     [compactNodeChanges],
   );
 
+  const flushStoreNodeChanges = useCallback(() => {
+    storeNodeChangeTimerRef.current = null;
+    const pendingChanges = compactNodeChanges(
+      pendingStoreNodeChangesRef.current,
+    );
+    pendingStoreNodeChangesRef.current = [];
+
+    if (pendingChanges.length === 0) {
+      return;
+    }
+
+    lastStoreNodeChangeFlushRef.current = Date.now();
+    storeOnNodesChange(pendingChanges);
+  }, [compactNodeChanges, storeOnNodesChange]);
+
   const scheduleStoreNodeChanges = useCallback(
     (changes: NodeChange<AllNodeType>[]) => {
       pendingStoreNodeChangesRef.current.push(...changes);
 
-      if (storeNodeChangeRafRef.current !== null) {
+      if (storeNodeChangeTimerRef.current !== null) {
         return;
       }
 
-      storeNodeChangeRafRef.current = window.requestAnimationFrame(() => {
-        storeNodeChangeRafRef.current = null;
-        const pendingChanges = compactNodeChanges(
-          pendingStoreNodeChangesRef.current,
-        );
-        pendingStoreNodeChangesRef.current = [];
-
-        if (pendingChanges.length === 0) {
-          return;
-        }
-
-        storeOnNodesChange(pendingChanges);
-      });
-    },
-    [compactNodeChanges, storeOnNodesChange],
-  );
-
-  const scheduleSelectStoreNodeChanges = useCallback(
-    (changes: NodeChange<AllNodeType>[]) => {
-      pendingSelectStoreChangesRef.current.push(...changes);
-
-      if (selectStoreChangeTimerRef.current !== null) {
-        window.clearTimeout(selectStoreChangeTimerRef.current);
+      const elapsed = Date.now() - lastStoreNodeChangeFlushRef.current;
+      if (elapsed >= STORE_NODE_CHANGE_THROTTLE_MS) {
+        flushStoreNodeChanges();
+        return;
       }
 
-      selectStoreChangeTimerRef.current = window.setTimeout(() => {
-        selectStoreChangeTimerRef.current = null;
-        const pendingChanges = compactNodeChanges(
-          pendingSelectStoreChangesRef.current,
-        );
-        pendingSelectStoreChangesRef.current = [];
-
-        if (pendingChanges.length === 0) {
-          return;
-        }
-
-        scheduleStoreNodeChanges(pendingChanges);
-      }, SELECTION_STORE_SYNC_DELAY);
+      storeNodeChangeTimerRef.current = window.setTimeout(
+        flushStoreNodeChanges,
+        STORE_NODE_CHANGE_THROTTLE_MS - elapsed,
+      );
     },
-    [compactNodeChanges, scheduleStoreNodeChanges],
+    [flushStoreNodeChanges],
   );
 
   useEffect(() => {
@@ -1037,11 +1027,8 @@ export const CanvasFlow = ({
       if (nodeChangeRafRef.current !== null) {
         window.cancelAnimationFrame(nodeChangeRafRef.current);
       }
-      if (storeNodeChangeRafRef.current !== null) {
-        window.cancelAnimationFrame(storeNodeChangeRafRef.current);
-      }
-      if (selectStoreChangeTimerRef.current !== null) {
-        window.clearTimeout(selectStoreChangeTimerRef.current);
+      if (storeNodeChangeTimerRef.current !== null) {
+        window.clearTimeout(storeNodeChangeTimerRef.current);
       }
     };
   }, []);
@@ -1051,32 +1038,13 @@ export const CanvasFlow = ({
       // 濮嬬粓鏇存柊鏈湴鏄剧ず鐘舵€侊紝淇濊瘉鎷栧姩瑙嗚娴佺晠
       scheduleDisplayNodeChanges(changes);
 
-      // 鍙鐞嗛潪浣嶇疆鐩稿叧鐨勫彉鏇达紙閫変腑銆佸垹闄ょ瓑锛夛紝浣嶇疆鍙樻洿鍦?handleNodeDragStop 涓鐞?
-      const nonPositionChanges = changes.filter(
-        (c) => c.type !== "position" && c.type !== "dimensions",
-      );
-      if (nonPositionChanges.length > 0) {
-        const selectChanges = nonPositionChanges.filter(
-          (change) => change.type === "select",
-        );
-        const otherChanges = nonPositionChanges.filter(
-          (change) => change.type !== "select",
-        );
-
-        if (selectChanges.length > 0) {
-          scheduleSelectStoreNodeChanges(selectChanges);
-        }
-
-        if (otherChanges.length > 0) {
-          scheduleStoreNodeChanges(otherChanges);
-        }
+      // 高频变更按 70ms 节流写入 store；尺寸变更仍由拖拽结束/外部流程处理。
+      const storeChanges = changes.filter((c) => c.type !== "dimensions");
+      if (storeChanges.length > 0) {
+        scheduleStoreNodeChanges(storeChanges);
       }
     },
-    [
-      scheduleDisplayNodeChanges,
-      scheduleSelectStoreNodeChanges,
-      scheduleStoreNodeChanges,
-    ],
+    [scheduleDisplayNodeChanges, scheduleStoreNodeChanges],
   );
 
   const alignPositionToGrid = useCallback(
@@ -1114,6 +1082,12 @@ export const CanvasFlow = ({
 
     const pendingChanges = compactNodeChanges(pendingNodeChangesRef.current);
     pendingNodeChangesRef.current = [];
+
+    if (storeNodeChangeTimerRef.current !== null) {
+      window.clearTimeout(storeNodeChangeTimerRef.current);
+      storeNodeChangeTimerRef.current = null;
+    }
+    flushStoreNodeChanges();
 
     isDraggingRef.current = false;
 
@@ -1157,6 +1131,7 @@ export const CanvasFlow = ({
     compactNodeChanges,
     reactFlowInstance,
     alignPositionToGrid,
+    flushStoreNodeChanges,
     storeOnNodesChange,
   ]);
 
@@ -1166,27 +1141,17 @@ export const CanvasFlow = ({
       nodeChangeRafRef.current = null;
     }
 
-    if (storeNodeChangeRafRef.current !== null) {
-      window.cancelAnimationFrame(storeNodeChangeRafRef.current);
-      storeNodeChangeRafRef.current = null;
-    }
-
-    if (selectStoreChangeTimerRef.current !== null) {
-      window.clearTimeout(selectStoreChangeTimerRef.current);
-      selectStoreChangeTimerRef.current = null;
+    if (storeNodeChangeTimerRef.current !== null) {
+      window.clearTimeout(storeNodeChangeTimerRef.current);
+      storeNodeChangeTimerRef.current = null;
     }
 
     const displayChanges = compactNodeChanges(pendingNodeChangesRef.current);
     pendingNodeChangesRef.current = [];
-    const selectChanges = compactNodeChanges(
-      pendingSelectStoreChangesRef.current,
-    );
-    pendingSelectStoreChangesRef.current = [];
     const storeChanges = compactNodeChanges(pendingStoreNodeChangesRef.current);
     pendingStoreNodeChangesRef.current = [];
     const pendingChanges = compactNodeChanges([
       ...displayChanges,
-      ...selectChanges,
       ...storeChanges,
     ]);
 
@@ -1654,21 +1619,6 @@ export const CanvasFlow = ({
   );
 
   // 灏嗘祦鍧愭爣杞崲涓哄睆骞曞潗鏍囷紝鐢ㄤ簬缁濆瀹氫綅娴姩鎸夐挳銆?
-  const selectionRightCenterScreenPosition = useMemo(() => {
-    if (!selectionRightCenterFlowPosition) {
-      return null;
-    }
-
-    return {
-      x:
-        selectionRightCenterFlowPosition.x * viewportState.zoom +
-        viewportState.x,
-      y:
-        selectionRightCenterFlowPosition.y * viewportState.zoom +
-        viewportState.y,
-    };
-  }, [selectionRightCenterFlowPosition, viewportState]);
-
   const selectionBoundsScreen = useMemo(() => {
     if (!selectionBoundsFlow) {
       return null;
@@ -1703,7 +1653,11 @@ export const CanvasFlow = ({
   const groupFrames = useMemo(() => {
     return groups
       .map((group) => {
-        const bounds = getGroupBounds(displayNodes, group.nodeIds, 18);
+        const bounds = getGroupBoundsFromNodeMap(
+          displayNodeById,
+          group.nodeIds,
+          18,
+        );
         if (!bounds) {
           return null;
         }
@@ -1726,7 +1680,7 @@ export const CanvasFlow = ({
         };
       }
     >;
-  }, [displayNodes, groups]);
+  }, [displayNodeById, groups]);
 
   const selectedGroup = useMemo(() => {
     if (!selectedGroupId) {
@@ -1854,11 +1808,10 @@ export const CanvasFlow = ({
   // 浠呭湪鍙犲姞灞傞渶瑕佽窡闅忕缉鏀?骞崇Щ鏃讹紝鎵嶈拷韪?viewport锛岄伩鍏?onMove 楂橀瑙﹀彂鏁存爲閲嶆覆鏌撱€?
   const shouldTrackViewport =
     Boolean(selectionRightCenterFlowPosition) ||
+    Boolean(activeBatchGroup) ||
     Boolean(connectionGhost) ||
     quickAddDragPreview.active ||
-    Boolean(quickAddMenuOpen && quickAddMenuScreenPosition) ||
-    groups.length > 0 ||
-    Boolean(selectedGroupId);
+    Boolean(quickAddMenuOpen && quickAddMenuScreenPosition);
 
   // 浣跨敤 rAF 鍚堝抚鏇存柊 viewport 鐘舵€侊紝閬垮厤姣忔 onMove 閮?setState銆?
   const flushViewportState = useCallback(() => {
@@ -2508,7 +2461,7 @@ export const CanvasFlow = ({
         return;
       }
 
-      if (!selectionRightCenterScreenPosition || multiSelectedCount < 2) {
+      if (!selectionRightCenterFlowPosition || multiSelectedCount < 2) {
         return;
       }
 
@@ -2517,13 +2470,10 @@ export const CanvasFlow = ({
 
       quickAddSelectionSnapshotRef.current = [...multiSelectedNodeIds];
 
-      const startX = selectionRightCenterScreenPosition.x;
-      const startY = selectionRightCenterScreenPosition.y;
-
       setQuickAddDragPreview({
         active: true,
-        startX,
-        startY,
+        startX: event.clientX,
+        startY: event.clientY,
         endX: event.clientX,
         endY: event.clientY,
       });
@@ -2655,7 +2605,7 @@ export const CanvasFlow = ({
       multiSelectedNodeIds,
       onConnect,
       screenToFlowPosition,
-      selectionRightCenterScreenPosition,
+      selectionRightCenterFlowPosition,
     ],
   );
 
@@ -2857,6 +2807,63 @@ export const CanvasFlow = ({
             connectionRadius={50}
             defaultEdgeOptions={defaultEdgeOptions}
           >
+            <ViewportPortal>
+              <div className="pointer-events-none absolute left-0 top-0 z-[12]">
+                {groupFrames.map((group) => {
+                  const isSelected = group.id === selectedGroupId;
+
+                  return (
+                    <div
+                      key={group.id}
+                      className={cn(
+                        "absolute left-0 top-0 rounded-[14px] border bg-transparent transition-colors",
+                        isSelected
+                          ? "border-[#B43FEB]/70 shadow-[0_0_0_1px_rgba(180,63,235,0.18),0_0_32px_rgba(180,63,235,0.1)]"
+                          : "border-dashed border-white/14",
+                      )}
+                      style={{
+                        transform: `translate3d(${group.bounds.x}px, ${group.bounds.y}px, 0)`,
+                        width: `${group.bounds.width}px`,
+                        height: `${group.bounds.height}px`,
+                      }}
+                    >
+                      <div
+                        className={cn(
+                          "absolute inset-0 rounded-[14px] bg-white/[0.01]",
+                          isSelected ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              {selectionBoundsFlow &&
+              !isSelectionBoxActive &&
+              !isSpacePressed ? (
+                <div
+                  className="pointer-events-none absolute left-0 top-0 z-[11] rounded-lg border border-dashed border-[#B43FEB]/70 bg-[#B43FEB]/10 shadow-[0_0_0_1px_rgba(180,63,235,0.18),0_0_24px_rgba(180,63,235,0.18)]"
+                  style={{
+                    transform: `translate3d(${selectionBoundsFlow.x - 8}px, ${selectionBoundsFlow.y - 8}px, 0)`,
+                    width: `${selectionBoundsFlow.width + 16}px`,
+                    height: `${selectionBoundsFlow.height + 16}px`,
+                  }}
+                />
+              ) : null}
+
+              {selectionRightCenterFlowPosition &&
+              multiSelectedCount >= 2 &&
+              !isSelectionBoxActive &&
+              !quickAddDragPreview.active ? (
+                <MultiSelectQuickCreate
+                  visible
+                  x={selectionRightCenterFlowPosition.x}
+                  y={selectionRightCenterFlowPosition.y}
+                  onPointerDown={handleQuickAddPointerDown}
+                />
+              ) : null}
+            </ViewportPortal>
+
             {gridVisible && (
               <Background
                 id="canvas-grid-dots"
@@ -2877,43 +2884,6 @@ export const CanvasFlow = ({
               />
             ) : null}
           </ReactFlow>
-
-          <div className="pointer-events-none fixed inset-0 z-[12]">
-            {groupFrames.map((group) => {
-              const isSelected = group.id === selectedGroupId;
-              const screenRect = {
-                left: group.bounds.x * viewportState.zoom + viewportState.x,
-                top: group.bounds.y * viewportState.zoom + viewportState.y,
-                width: group.bounds.width * viewportState.zoom,
-                height: group.bounds.height * viewportState.zoom,
-              };
-
-              return (
-                <div
-                  key={group.id}
-                  className={cn(
-                    "absolute rounded-[14px] border bg-transparent transition-colors",
-                    isSelected
-                      ? "border-[#B43FEB]/70 shadow-[0_0_0_1px_rgba(180,63,235,0.18),0_0_32px_rgba(180,63,235,0.1)]"
-                      : "border-dashed border-white/14",
-                  )}
-                  style={{
-                    left: `${screenRect.left}px`,
-                    top: `${screenRect.top}px`,
-                    width: `${screenRect.width}px`,
-                    height: `${screenRect.height}px`,
-                  }}
-                >
-                  <div
-                    className={cn(
-                      "absolute inset-0 rounded-[14px] bg-white/[0.01]",
-                      isSelected ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                </div>
-              );
-            })}
-          </div>
 
           <CanvasBatchToolbar
             mode={batchToolbarMode}
@@ -2943,19 +2913,6 @@ export const CanvasFlow = ({
             }}
           />
 
-          {/* 鑺傜偣鎼滅储妗?*/}
-          {selectionBoundsScreen && !isSelectionBoxActive && !isSpacePressed ? (
-            <div
-              className="pointer-events-none fixed z-[11] rounded-lg border border-dashed border-[#B43FEB]/70 bg-[#B43FEB]/10 shadow-[0_0_0_1px_rgba(180,63,235,0.18),0_0_24px_rgba(180,63,235,0.18)]"
-              style={{
-                left: `${selectionBoundsScreen.x}px`,
-                top: `${selectionBoundsScreen.y}px`,
-                width: `${selectionBoundsScreen.width}px`,
-                height: `${selectionBoundsScreen.height}px`,
-              }}
-            />
-          ) : null}
-
           {nodeSearchVisible && (
             <div className="absolute top-4 right-4 z-10">
               <NodeSearch
@@ -2984,29 +2941,14 @@ export const CanvasFlow = ({
             </Button>
           </div>
 
-          {/* 澶氶€夊彸渚у揩鎹峰垱寤烘寜閽紙鎷栨嫿鏃堕殣钘忥紝鏀圭敤璺熻釜鍥炬爣锛?*/}
-          {selectionRightCenterScreenPosition &&
-          !isSelectionBoxActive &&
-          !isSpacePressed &&
-          !quickAddDragPreview.active ? (
-            <MultiSelectQuickCreate
-              visible={multiSelectedCount >= 2}
-              x={selectionRightCenterScreenPosition.x}
-              y={selectionRightCenterScreenPosition.y}
-              onPointerDown={handleQuickAddPointerDown}
-            />
-          ) : null}
-
           {/* 鎷栨嫿鏃惰窡韪厜鏍囩殑 + 绗﹀彿 */}
           {quickAddDragPreview.active ? (
             <div
-              className="fixed z-20 pointer-events-none"
+              className="fixed left-0 top-0 z-20 pointer-events-none"
               style={{
                 width: "34px",
                 height: "34px",
-                left: `${quickAddDragPreview.endX}px`,
-                top: `${quickAddDragPreview.endY}px`,
-                transform: "translate(-50%, -50%)",
+                transform: `translate3d(${quickAddDragPreview.endX}px, ${quickAddDragPreview.endY}px, 0) translate(-50%, -50%)`,
               }}
             >
               <div className="w-full h-full rounded-full bg-[#B43FEB] shadow-[0_0_20px_rgba(180,63,235,0.3)] border border-[#B43FEB]/60 flex items-center justify-center">
@@ -3033,11 +2975,9 @@ export const CanvasFlow = ({
             >
               <DropdownMenuTrigger asChild>
                 <div
-                  className="absolute size-2"
+                  className="absolute left-0 top-0 size-2"
                   style={{
-                    left: `${quickAddMenuScreenPosition.x}px`,
-                    top: `${quickAddMenuScreenPosition.y}px`,
-                    transform: "translate(-50%, -50%)",
+                    transform: `translate3d(${quickAddMenuScreenPosition.x}px, ${quickAddMenuScreenPosition.y}px, 0) translate(-50%, -50%)`,
                   }}
                 />
               </DropdownMenuTrigger>

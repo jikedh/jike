@@ -23,6 +23,7 @@ import {
 } from "shared/utils/localGeminiErrors";
 import { getRemoteMediaUrl } from "shared/utils/mediaPersistence";
 import { cn } from "shared/utils/utils";
+import { useShallow } from "zustand/react/shallow";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { PresetDropdown } from "@/components/PresetDropdown";
 import { Button } from "@/components/ui/button";
@@ -124,8 +125,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   } = useGenerationPoints();
 
   // 画布数据：用于沿边查找父节点
-  const nodes = useCanvasFlowStore((state) => state.nodes);
-  const edges = useCanvasFlowStore((state) => state.edges);
   const startImageGeneration = useCanvasFlowStore(
     (state) => state.startImageGeneration,
   );
@@ -147,17 +146,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   );
 
   // 当前节点状态（用于禁用生成按钮）
-  const currentNode = useMemo(() => {
-    return nodes.find((node) => node.id === nodeId);
-  }, [nodes, nodeId]);
-
-  const currentImageData = useMemo(() => {
-    if (!currentNode || currentNode.type !== "imageNode") {
+  const currentImageData = useCanvasFlowStore((state) => {
+    const node = state.nodes.find((item) => item.id === nodeId);
+    if (!node || node.type !== "imageNode") {
       return null;
     }
 
-    return currentNode.data as ImageGenerationNode;
-  }, [currentNode]);
+    return node.data as ImageGenerationNode;
+  });
 
   // 从 currentImageData 获取基础字段
   const model = currentImageData?.model ?? "gemini-3-pro-image-preview";
@@ -477,12 +473,36 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   }, [commandQuery]);
 
   // 沿着边找所有父节点，并合并其第一张图片作为参考图来源
-  const parentImageNodes = useMemo(() => {
-    const parentIds = edges
-      .filter((edge) => edge.target === nodeId)
-      .map((edge) => edge.source);
+  const parentImageEntryValues = useCanvasFlowStore(
+    useShallow((state) => {
+      return state.edges.flatMap((edge) => {
+        if (edge.target !== nodeId) {
+          return [];
+        }
 
-    if (parentIds.length === 0) {
+        const parentNode = state.nodes.find((node) => node.id === edge.source);
+        if (!parentNode || parentNode.type !== "imageNode") {
+          return [];
+        }
+
+        const parentData = parentNode.data as ImageGenerationNode;
+        const firstItem = parentData.result?.data?.[0];
+        if (!firstItem?.url) {
+          return [];
+        }
+
+        return [
+          edge.source,
+          firstItem.url,
+          firstItem.relativePath ?? "",
+          firstItem.localFileName ?? "",
+        ];
+      });
+    }),
+  );
+
+  const parentImageNodes = useMemo(() => {
+    if (parentImageEntryValues.length === 0) {
       return [] as {
         id: string;
         url: string;
@@ -498,26 +518,17 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       fileName?: string;
     }[] = [];
 
-    parentIds.forEach((parentId) => {
-      const parentNode = nodes.find((node) => node.id === parentId);
-      if (!parentNode || parentNode.type !== "imageNode") {
-        return;
-      }
-
-      const parentData = parentNode.data as ImageGenerationNode;
-      const firstItem = parentData.result?.data?.[0];
-      if (firstItem?.url) {
-        result.push({
-          id: parentId,
-          url: firstItem.url,
-          relativePath: firstItem.relativePath,
-          fileName: firstItem.localFileName,
-        });
-      }
-    });
+    for (let i = 0; i < parentImageEntryValues.length; i += 4) {
+      result.push({
+        id: String(parentImageEntryValues[i] ?? ""),
+        url: String(parentImageEntryValues[i + 1] ?? ""),
+        relativePath: String(parentImageEntryValues[i + 2] ?? "") || undefined,
+        fileName: String(parentImageEntryValues[i + 3] ?? "") || undefined,
+      });
+    }
 
     return result;
-  }, [edges, nodes, nodeId]);
+  }, [parentImageEntryValues]);
 
   const parentImageUrls = useMemo(
     () => parentImageNodes.map((item) => item.url),
@@ -527,6 +538,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   // 断开连接时，同步清理 midjourneyAdvanced 中的 URL
   const handleDisconnectNode = useCallback(
     (sourceNodeId: string) => {
+      const { edges, nodes } = useCanvasFlowStore.getState();
       const edgeToDelete = edges.find(
         (edge) => edge.source === sourceNodeId && edge.target === nodeId,
       );
@@ -564,29 +576,29 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         }
       }
     },
-    [edges, nodeId, deleteEdge, nodes, updateImageNodeData],
+    [nodeId, deleteEdge, updateImageNodeData],
   );
 
   // 收集父级便签内容：按入边顺序去重后提取 content
-  const parentNoteContents = useMemo(() => {
-    const orderedParentIds: string[] = [];
-    const seenParentIds = new Set<string>();
+  const parentNoteContents = useCanvasFlowStore(
+    useShallow((state) => {
+      const seenParentIds = new Set<string>();
 
-    edges.forEach((edge) => {
-      if (edge.target !== nodeId || seenParentIds.has(edge.source)) {
-        return;
-      }
+      return state.edges
+        .filter((edge) => {
+          if (edge.target !== nodeId || seenParentIds.has(edge.source)) {
+            return false;
+          }
 
-      seenParentIds.add(edge.source);
-      orderedParentIds.push(edge.source);
-    });
-
-    return orderedParentIds
-      .map((parentId) => nodes.find((node) => node.id === parentId))
-      .filter((node) => node?.type === "noteNode")
-      .map((node) => (node?.data as NoteNodeData).content?.trim())
-      .filter((content) => Boolean(content)) as string[];
-  }, [edges, nodes, nodeId]);
+          seenParentIds.add(edge.source);
+          return true;
+        })
+        .map((edge) => state.nodes.find((node) => node.id === edge.source))
+        .filter((node) => node?.type === "noteNode")
+        .map((node) => (node?.data as NoteNodeData).content?.trim())
+        .filter((content): content is string => Boolean(content));
+    }),
+  );
 
   useEffect(() => {
     if (parentImageUrls.length === 0) {
@@ -618,16 +630,16 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       return true;
     }
 
-    if (!currentNode || currentNode.type !== "imageNode") {
+    if (!currentImageData) {
       return false;
     }
 
-    const status = currentNode.data.status;
+    const status = currentImageData.status;
     return (
       status === GenerationStatus.IN_PROGRESS ||
       status === GenerationStatus.QUEUED
     );
-  }, [currentNode, generatingCount]);
+  }, [currentImageData, generatingCount]);
 
   // 触发上传选择
   const handleUploadClick = () => {

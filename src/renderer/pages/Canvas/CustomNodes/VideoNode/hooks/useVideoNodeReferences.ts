@@ -11,6 +11,8 @@ import {
   getRemoteMediaUrl,
 } from "shared/utils/mediaPersistence";
 import { toChineseNumber } from "shared/utils/utils";
+import { useShallow } from "zustand/react/shallow";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { getPrimaryVideoUrlFromNodeData } from "../utils/video-url";
 
 const getPrimaryVideoUrlFromAnyVideoNode = (
@@ -75,67 +77,88 @@ export const getVideoParentAudioMentionId = (nodeId: string) => {
  */
 export const useVideoNodeReferences = ({
   nodeId,
-  nodes,
-  edges,
   referenceImageUrls,
 }: {
   nodeId: string;
-  nodes: any[];
-  edges: any[];
   referenceImageUrls: string[];
 }) => {
-  const parentNodeIds = useMemo(() => {
-    return edges
-      .filter((edge) => edge.target === nodeId)
-      .map((edge) => edge.source);
-  }, [edges, nodeId]);
+  const parentNodeEntryValues = useCanvasFlowStore(
+    useShallow((state) => {
+      return state.edges.flatMap((edge) => {
+        if (edge.target !== nodeId) {
+          return [];
+        }
+
+        const sourceNode = state.nodes.find((node) => node.id === edge.source);
+        return [edge.source, sourceNode?.type ?? "", sourceNode?.data ?? null];
+      });
+    }),
+  );
+
+  const parentNodeEntries = useMemo(() => {
+    const entries: Array<{
+      id: string;
+      type: string;
+      data: unknown;
+    }> = [];
+
+    for (let i = 0; i < parentNodeEntryValues.length; i += 3) {
+      entries.push({
+        id: String(parentNodeEntryValues[i] ?? ""),
+        type: String(parentNodeEntryValues[i + 1] ?? ""),
+        data: parentNodeEntryValues[i + 2],
+      });
+    }
+
+    return entries.filter((entry) => entry.id);
+  }, [parentNodeEntryValues]);
 
   const parentVideoNodes = useMemo(() => {
     return (
-      parentNodeIds
-        .map((parentId) => nodes.find((node) => node.id === parentId))
+      parentNodeEntries
         // 新旧视频节点都可以作为视频智能输入和参考视频来源。
         .filter(
-          (node) => node?.type === "videoNode" || node?.type === "newVideoNode",
+          (entry) =>
+            entry.type === "videoNode" || entry.type === "newVideoNode",
         )
-        .map((node) => ({
-          id: node.id,
+        .map((entry) => ({
+          id: entry.id,
           url:
-            node.type === "videoNode"
-              ? getPrimaryVideoUrlFromNodeData(node.data as VideoGenerationNode)
+            entry.type === "videoNode"
+              ? getPrimaryVideoUrlFromNodeData(
+                entry.data as VideoGenerationNode,
+              )
               : getPrimaryVideoUrlFromAnyVideoNode(
-                node.data as NewVideoGenerationNode,
+                entry.data as NewVideoGenerationNode,
               ),
         }))
         .filter((item) => item.url) as VideoReferenceItem[]
     );
-  }, [parentNodeIds, nodes]);
+  }, [parentNodeEntries]);
 
   const parentAudioNodes = useMemo(() => {
-    return parentNodeIds
-      .map((parentId) => nodes.find((node) => node.id === parentId))
-      .filter((node) => node?.type === "audioNode")
-      .map((node) => {
-        const firstItem = (node.data as AudioGenerationNode).result?.data?.[0];
+    return parentNodeEntries
+      .filter((entry) => entry.type === "audioNode")
+      .map((entry) => {
+        const firstItem = (entry.data as AudioGenerationNode).result?.data?.[0];
         return {
-          id: node.id,
+          id: entry.id,
           url: getRemoteMediaUrl(firstItem),
         };
       })
       .filter((item) => item.url) as VideoReferenceItem[];
-  }, [parentNodeIds, nodes]);
+  }, [parentNodeEntries]);
 
   const parentImageNodes = useMemo(() => {
-    return parentNodeIds
-      .map((parentId) => nodes.find((node) => node.id === parentId))
-      .filter((node) => node?.type === "imageNode")
-      .map((node) => {
-        const nodeData = node.data as ImageGenerationNode;
+    return parentNodeEntries
+      .filter((entry) => entry.type === "imageNode")
+      .map((entry) => {
+        const nodeData = entry.data as ImageGenerationNode;
         const firstItem = nodeData.result?.data?.[0];
         const referenceUrl = getRemoteMediaUrl(firstItem) ?? firstItem?.url;
         const displayUrl = getDisplayMediaUrl(firstItem) ?? referenceUrl;
         return {
-          id: node.id,
+          id: entry.id,
           url: referenceUrl,
           displayUrl,
           relativePath: firstItem?.relativePath,
@@ -143,7 +166,7 @@ export const useVideoNodeReferences = ({
         };
       })
       .filter((item) => item.url) as VideoReferenceItem[];
-  }, [parentNodeIds, nodes]);
+  }, [parentNodeEntries]);
 
   const parentImageNodeUrls = useMemo(() => {
     return new Set(parentImageNodes.map((item) => item.url));
@@ -160,24 +183,20 @@ export const useVideoNodeReferences = ({
   }, [parentImageNodes]);
 
   const parentNoteContents = useMemo(() => {
-    const orderedParentIds: string[] = [];
     const seenParentIds = new Set<string>();
 
-    edges.forEach((edge) => {
-      if (edge.target !== nodeId || seenParentIds.has(edge.source)) {
-        return;
-      }
+    return parentNodeEntries
+      .filter((entry) => {
+        if (seenParentIds.has(entry.id)) {
+          return false;
+        }
 
-      seenParentIds.add(edge.source);
-      orderedParentIds.push(edge.source);
-    });
-
-    return orderedParentIds
-      .map((parentId) => nodes.find((node) => node.id === parentId))
-      .filter((node) => node?.type === "noteNode")
-      .map((node) => (node?.data as NoteNodeData).content?.trim())
+        seenParentIds.add(entry.id);
+        return entry.type === "noteNode";
+      })
+      .map((entry) => (entry.data as NoteNodeData).content?.trim())
       .filter((content) => Boolean(content)) as string[];
-  }, [edges, nodes, nodeId]);
+  }, [parentNodeEntries]);
 
   const localReferenceImageItems = useMemo(() => {
     const parentUrlCounts = new Map<string, number>();

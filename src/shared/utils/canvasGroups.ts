@@ -55,9 +55,18 @@ export const getGroupBounds = (
   nodeIds: string[],
   padding = 24,
 ): FlowRect | null => {
-  const selectedNodes = nodes.filter((node) => nodeIds.includes(node.id));
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  return getGroupBoundsFromNodeMap(nodeById, nodeIds, padding);
+};
 
-  if (selectedNodes.length === 0) {
+export const getGroupBoundsFromNodeMap = (
+  nodeById: ReadonlyMap<string, AllNodeType>,
+  nodeIds: string[],
+  padding = 24,
+): FlowRect | null => {
+  const groupNodeIds = Array.from(new Set(nodeIds)).filter(Boolean);
+
+  if (groupNodeIds.length === 0) {
     return null;
   }
 
@@ -65,14 +74,25 @@ export const getGroupBounds = (
   let minTop = Number.POSITIVE_INFINITY;
   let maxRight = Number.NEGATIVE_INFINITY;
   let maxBottom = Number.NEGATIVE_INFINITY;
+  let foundNode = false;
 
-  selectedNodes.forEach((node) => {
+  groupNodeIds.forEach((nodeId) => {
+    const node = nodeById.get(nodeId);
+    if (!node) {
+      return;
+    }
+
+    foundNode = true;
     const rect = getNodeRect(node);
     minLeft = Math.min(minLeft, rect.x);
     minTop = Math.min(minTop, rect.y);
     maxRight = Math.max(maxRight, rect.x + rect.width);
     maxBottom = Math.max(maxBottom, rect.y + rect.height);
   });
+
+  if (!foundNode) {
+    return null;
+  }
 
   return {
     x: minLeft - padding,

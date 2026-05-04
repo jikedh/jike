@@ -4011,7 +4011,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      */
     onNodesChange: (changes) => {
       const hasSelectChange = changes.some((change) => change.type === "select");
-      const hasPositionChange = changes.some(
+      const hasFinalPositionChange = changes.some(
         (change) => change.type === "position" && !change.dragging,
       );
       const hasAddOrRemove = changes.some(
@@ -4020,7 +4020,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       set((state) => {
         const nextNodes = applyNodeChanges(changes, state.nodes);
         const nextGroups =
-          hasPositionChange || hasAddOrRemove
+          hasFinalPositionChange || hasAddOrRemove
             ? normalizeCanvasGroups(state.groups, nextNodes).map((group) => {
                 const bounds = getGroupBounds(nextNodes, group.nodeIds, 24);
                 return {
@@ -4045,7 +4045,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       });
 
       // 在节点变化后保存历史记录（排除拖动中的变化）
-      if (hasPositionChange || hasAddOrRemove) {
+      if (hasFinalPositionChange || hasAddOrRemove) {
         get().requestHistorySave();
       }
     },

@@ -91,8 +91,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     validateBalanceBeforeGenerate,
   } = useGenerationPoints();
 
-  const nodes = useCanvasFlowStore((state) => state.nodes);
-  const edges = useCanvasFlowStore((state) => state.edges);
   const startVideoGeneration = useCanvasFlowStore(
     (state) => state.startVideoGeneration,
   );
@@ -110,17 +108,14 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     (state) => state.setReferenceHoverHighlight,
   );
 
-  const currentNode = useMemo(() => {
-    return nodes.find((node) => node.id === nodeId);
-  }, [nodes, nodeId]);
-
-  const currentVideoData = useMemo(() => {
-    if (!currentNode || currentNode.type !== "videoNode") {
+  const currentVideoData = useCanvasFlowStore((state) => {
+    const node = state.nodes.find((item) => item.id === nodeId);
+    if (!node || node.type !== "videoNode") {
       return null;
     }
 
-    return currentNode.data as VideoGenerationNode;
-  }, [currentNode]);
+    return node.data as VideoGenerationNode;
+  });
 
   const referenceImageUrls = useMemo(() => {
     return currentVideoData?.image_urls ?? [];
@@ -144,8 +139,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     allAudioUrls,
   } = useVideoNodeReferences({
     nodeId,
-    nodes,
-    edges,
     referenceImageUrls,
   });
 
@@ -218,16 +211,16 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
   ]);
 
   const isGenerating = useMemo(() => {
-    if (!currentNode || currentNode.type !== "videoNode") {
+    if (!currentVideoData) {
       return false;
     }
 
-    const status = currentNode.data.status;
+    const status = currentVideoData.status;
     return (
       status === GenerationStatus.IN_PROGRESS ||
       status === GenerationStatus.QUEUED
     );
-  }, [currentNode]);
+  }, [currentVideoData]);
 
   /**
    * 参考资源悬浮时，触发来源节点与连接边高亮。
@@ -400,7 +393,6 @@ export const VideoPromptPanel = ({ nodeId }: { nodeId: string }) => {
     handleFileChange,
   } = useVideoReferenceActions({
     nodeId,
-    edges,
     currentImageUrls: referenceImageUrls,
     updateVideoNodeData,
     deleteEdge,
