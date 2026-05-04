@@ -884,6 +884,7 @@ export const AudioNode = memo(
 
           // 将裁剪后的音频结果写入子节点，不改动源节点本身。
           updateAudioNodeData(childNodeId, {
+            badgeLabel: "裁剪",
             status: GenerationStatus.COMPLETED,
             progress: 100,
             isUpload: true,
@@ -933,6 +934,8 @@ export const AudioNode = memo(
       return trimDuration > 0 && trimDuration <= 15;
     }, [trimStart, trimEnd]);
     const isUploadAudio = data.isUpload ?? false;
+    const badgeLabel =
+      data.badgeLabel ?? (isUploadAudio ? "上传音频" : "生成音频");
 
     return (
       <NodeContextMenu onDuplicate={handleDuplicate} onDelete={handleDelete}>
@@ -976,7 +979,7 @@ export const AudioNode = memo(
             )}
             style={{ pointerEvents: "auto" }}
           >
-            <NodeNameBadge>{isUploadAudio ? "上传音频" : "生成音频"}</NodeNameBadge>
+            <NodeNameBadge>{badgeLabel}</NodeNameBadge>
 
             {/* 左侧输入 Handle */}
             <ButtonHandle

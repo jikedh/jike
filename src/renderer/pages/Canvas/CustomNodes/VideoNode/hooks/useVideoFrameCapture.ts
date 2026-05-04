@@ -30,7 +30,11 @@ export const useVideoFrameCapture = () => {
    * @param sourceVideoNodeId 源视频节点 ID，用于创建连接
    */
   const createImageNodeFromSnapshot = useCallback(
-    async (snapshotUrl: string, sourceVideoNodeId?: string) => {
+    async (
+      snapshotUrl: string,
+      sourceVideoNodeId?: string,
+      badgeLabel?: string,
+    ) => {
       // 将新图片节点放到画布中心
       const centerPosition = screenToFlowPosition({
         x: window.innerWidth / 2,
@@ -50,6 +54,7 @@ export const useVideoFrameCapture = () => {
 
       // 把截图写入新节点，并标记为已完成状态
       updateImageNodeData(newNodeId, {
+        ...(badgeLabel ? { badgeLabel } : {}),
         image_urls: [snapshotUrl],
         result: {
           type: "image",
@@ -182,7 +187,7 @@ export const useVideoFrameCapture = () => {
         }
 
         // 4. 创建新的图片节点并连接
-        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId);
+        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId, "尾帧");
 
         toast.success("尾帧提取成功，已创建图片节点");
       } catch (error) {
@@ -242,7 +247,7 @@ export const useVideoFrameCapture = () => {
         }
 
         // 3. 创建新的图片节点并连接
-        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId);
+        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId, "截帧");
 
         toast.success(
           `截取 ${(timeMs / 1000).toFixed(1)}s 成功，已创建图片节点`,

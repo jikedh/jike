@@ -28,7 +28,11 @@ export const useVideoFrameCapture = () => {
    * 创建图片节点（内部方法）
    */
   const createImageNodeFromSnapshot = useCallback(
-    async (snapshotUrl: string, sourceVideoNodeId?: string) => {
+    async (
+      snapshotUrl: string,
+      sourceVideoNodeId?: string,
+      badgeLabel?: string,
+    ) => {
       const centerPosition = screenToFlowPosition({
         x: window.innerWidth / 2,
         y: window.innerHeight / 2,
@@ -71,6 +75,7 @@ export const useVideoFrameCapture = () => {
       })();
 
       updateImageNodeData(newNodeId, {
+        ...(badgeLabel ? { badgeLabel } : {}),
         image_urls: [snapshotUrl],
         result: {
           type: "image",
@@ -187,7 +192,7 @@ export const useVideoFrameCapture = () => {
           throw new Error("上传尾帧图片失败");
         }
 
-        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId);
+        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId, "尾帧");
 
         toast.success("尾帧提取成功，已创建图片节点");
       } catch (error) {
@@ -241,7 +246,7 @@ export const useVideoFrameCapture = () => {
           throw new Error("上传截帧图片失败");
         }
 
-        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId);
+        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId, "截帧");
 
         toast.success(
           `截取 ${(timeMs / 1000).toFixed(1)}s 成功，已创建图片节点`,

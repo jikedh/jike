@@ -281,6 +281,10 @@ export const ImageToolbar = memo(
           targetHandle: "input",
         });
 
+        updateImageNodeData(childId, {
+          badgeLabel: "擦除",
+        });
+
         // 固定豆包 Seedream，重绘场景走 image_urls 单图输入。
         await startImageGeneration(childId, {
           model: "doubao-seedream-5-0",

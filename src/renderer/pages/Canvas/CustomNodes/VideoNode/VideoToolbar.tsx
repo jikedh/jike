@@ -1226,6 +1226,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         });
 
         updateVideoNodeData(newNodeId, {
+          badgeLabel: "去字幕",
           nickname: "去字幕",
           aspect_ratio: data.aspect_ratio,
           status: GenerationStatus.IN_PROGRESS,
