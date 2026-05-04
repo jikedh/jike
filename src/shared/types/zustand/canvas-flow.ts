@@ -17,6 +17,7 @@ export type CanvasPersistedState = {
   savedAt: number;
   nodes: AllNodeType[];
   edges: EdgeType[];
+  groups: CanvasGroup[];
   nodeIdCounters: {
     note: number;
     image: number;
@@ -26,6 +27,15 @@ export type CanvasPersistedState = {
     audio: number;
     table: number;
   };
+};
+
+/**
+ * 画布分组数据。
+ */
+export type CanvasGroup = {
+  id: string;
+  nodeIds: string[];
+  createdAt: number;
 };
 
 /**
@@ -103,6 +113,8 @@ export type CanvasFlowStoreType = {
   // 选中的节点数量（用于避免 O(n²) 遍历计算）
   selectedNodesCount: number;
   isSelectionBoxActive: boolean;
+  groups: CanvasGroup[];
+  selectedGroupId: string | null;
 
   // ── 配对 setter ───────────────────────────────
   setNodes: (nodes: AllNodeType[]) => void;
@@ -132,6 +144,8 @@ export type CanvasFlowStoreType = {
     mode?: "annotate" | "erase";
   }) => void;
   setSelectionBoxActive: (active: boolean) => void;
+  setGroups: (groups: CanvasGroup[]) => void;
+  setSelectedGroupId: (groupId: string | null) => void;
 
   // ── 基础流程事件 ──────────────────────────────
   onNodesChange: (changes: NodeChange<AllNodeType>[]) => void;
@@ -159,6 +173,10 @@ export type CanvasFlowStoreType = {
   deleteEdge: (edgeId: string) => void;
   duplicateNode: (nodeId: string) => void;
   deleteNode: (nodeId: string) => void;
+  createGroup: (nodeIds: string[]) => string;
+  ungroup: (groupId: string) => void;
+  layoutGroupHorizontal: (groupId: string) => void;
+  moveGroupNodes: (groupId: string, offset: { x: number; y: number }) => void;
 
   // ── 便签节点 ─────────────────────────────────
   setNoteNodeEditing: (nodeId: string, isEditing: boolean) => void;

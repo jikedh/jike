@@ -25,6 +25,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GenerationStatus } from "shared/constants/enum";
 import type { AllNodeType, EdgeType } from "shared/types/flow";
+import { getGroupBounds } from "shared/utils/canvasGroups";
+import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
 import { NodeSearch } from "@/components/node-search";
 import { Button } from "@/components/ui/button";
@@ -57,6 +59,7 @@ import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { edgeTypes, nodeTypes } from "../constants/canvasConfig";
 import { CanvasContextMenu, type CanvasNodeType } from "./CanvasContextMenu";
+import { CanvasBatchToolbar } from "./CanvasBatchToolbar";
 import { DragOverlay } from "./DragOverlay";
 import { MultiSelectQuickCreate } from "./MultiSelectQuickCreate";
 
@@ -854,6 +857,16 @@ export const CanvasFlow = ({
   const setSelectionBoxActive = useCanvasFlowStore(
     (state) => state.setSelectionBoxActive,
   );
+  const groups = useCanvasFlowStore((state) => state.groups);
+  const selectedGroupId = useCanvasFlowStore((state) => state.selectedGroupId);
+  const setSelectedGroupId = useCanvasFlowStore(
+    (state) => state.setSelectedGroupId,
+  );
+  const createGroup = useCanvasFlowStore((state) => state.createGroup);
+  const layoutGroupHorizontal = useCanvasFlowStore(
+    (state) => state.layoutGroupHorizontal,
+  );
+  const ungroup = useCanvasFlowStore((state) => state.ungroup);
   const [viewportState, setViewportState] = useState(() =>
     reactFlowInstance.getViewport(),
   );
@@ -1065,12 +1078,28 @@ export const CanvasFlow = ({
     ],
   );
 
+  const alignPositionToGrid = useCallback(
+    (position: { x: number; y: number }) => {
+      if (!snapToGrid) {
+        return position;
+      }
+
+      const [gridX, gridY] = snapGridSize;
+      return {
+        x: Math.round(position.x / gridX) * gridX,
+        y: Math.round(position.y / gridY) * gridY,
+      };
+    },
+    [snapGridSize, snapToGrid],
+  );
+
   const handleNodeDragStart = useCallback(() => {
     if (annotationWorkspace.open) {
       return;
     }
     isDraggingRef.current = true;
-  }, [annotationWorkspace.open]);
+    setSelectedGroupId(null);
+  }, [annotationWorkspace.open, setSelectedGroupId]);
 
   const handleNodeDragStop = useCallback(() => {
     if (annotationWorkspace.open) {
@@ -1102,18 +1131,6 @@ export const CanvasFlow = ({
     const positionChanges: NodeChange<AllNodeType>[] = [];
 
     // 灏嗚妭鐐逛綅缃榻愬埌缃戞牸鐐癸紙褰撳惛闄勫紑鍏冲紑鍚椂鐢熸晥锛?
-    const alignPositionToGrid = (position: { x: number; y: number }) => {
-      if (!snapToGrid) {
-        return position;
-      }
-
-      const [gridX, gridY] = snapGridSize;
-      return {
-        x: Math.round(position.x / gridX) * gridX,
-        y: Math.round(position.y / gridY) * gridY,
-      };
-    };
-
     currentNodes.forEach((node) => {
       const alignedPosition = alignPositionToGrid(node.position);
       const zustandNode = zustandNodeById.get(node.id);
@@ -1138,8 +1155,7 @@ export const CanvasFlow = ({
     annotationWorkspace.open,
     compactNodeChanges,
     reactFlowInstance,
-    snapToGrid,
-    snapGridSize,
+    alignPositionToGrid,
     storeOnNodesChange,
   ]);
 
@@ -1213,7 +1229,8 @@ export const CanvasFlow = ({
     }
 
     setSelectionBoxActive(true);
-  }, [annotationWorkspace.open, setSelectionBoxActive]);
+    setSelectedGroupId(null);
+  }, [annotationWorkspace.open, setSelectionBoxActive, setSelectedGroupId]);
 
   const handleSelectionEnd = useCallback(() => {
     setSelectionBoxActive(false);
@@ -1232,6 +1249,7 @@ export const CanvasFlow = ({
     }
 
     setSelectionBoxActive(false);
+    setSelectedGroupId(null);
 
     const allNodes = useCanvasFlowStore.getState().nodes;
     const selectedNodes = allNodes.filter((node) => node.selected);
@@ -1244,7 +1262,301 @@ export const CanvasFlow = ({
       }));
       storeOnNodesChange(changes);
     }
-  }, [annotationWorkspace.open, setSelectionBoxActive, storeOnNodesChange]);
+  }, [
+    annotationWorkspace.open,
+    setSelectionBoxActive,
+    setSelectedGroupId,
+    storeOnNodesChange,
+  ]);
+
+  const beginGroupDrag = useCallback(
+    (groupId: string, clientX: number, clientY: number) => {
+      const group = groups.find((item) => item.id === groupId);
+      if (!group) {
+        return;
+      }
+
+      const currentState = useCanvasFlowStore.getState();
+      const selectedNodes = currentState.nodes.filter((node) => node.selected);
+      if (selectedNodes.length > 0) {
+        storeOnNodesChange(
+          selectedNodes.map((node) => ({
+            id: node.id,
+            type: "select" as const,
+            selected: false,
+          })),
+        );
+      }
+
+      setSelectionBoxActive(false);
+      setSelectedGroupId(groupId);
+
+      const startPositions = new Map(
+        group.nodeIds.map((nodeId) => {
+          const node = displayNodes.find((item) => item.id === nodeId);
+          return [
+            nodeId,
+            {
+              x: node?.position.x ?? 0,
+              y: node?.position.y ?? 0,
+            },
+          ] as const;
+        }),
+      );
+
+      groupDragStateRef.current = {
+        groupId,
+        startClientX: clientX,
+        startClientY: clientY,
+        latestClientX: clientX,
+        latestClientY: clientY,
+        startPositions,
+        dragging: false,
+      };
+
+      const handlePointerMove = (event: PointerEvent) => {
+        const dragState = groupDragStateRef.current;
+        if (!dragState || dragState.groupId !== groupId) {
+          return;
+        }
+
+        dragState.latestClientX = event.clientX;
+        dragState.latestClientY = event.clientY;
+
+        if (!dragState.dragging) {
+          const deltaX = event.clientX - dragState.startClientX;
+          const deltaY = event.clientY - dragState.startClientY;
+          if (
+            deltaX * deltaX + deltaY * deltaY <
+            GROUP_DRAG_THRESHOLD * GROUP_DRAG_THRESHOLD
+          ) {
+            return;
+          }
+
+          dragState.dragging = true;
+          isDraggingRef.current = true;
+        }
+
+        if (groupDragRafRef.current !== null) {
+          return;
+        }
+
+        groupDragRafRef.current = window.requestAnimationFrame(() => {
+          groupDragRafRef.current = null;
+          const latestDragState = groupDragStateRef.current;
+          if (!latestDragState || latestDragState.groupId !== groupId) {
+            return;
+          }
+
+          const startFlow = screenToFlowPosition({
+            x: latestDragState.startClientX,
+            y: latestDragState.startClientY,
+          });
+          const currentFlow = screenToFlowPosition({
+            x: latestDragState.latestClientX,
+            y: latestDragState.latestClientY,
+          });
+          const delta = {
+            x: currentFlow.x - startFlow.x,
+            y: currentFlow.y - startFlow.y,
+          };
+
+          setDisplayNodes((prev) =>
+            prev.map((node) => {
+              const startPosition = latestDragState.startPositions.get(node.id);
+              if (!startPosition) {
+                return node;
+              }
+
+              return {
+                ...node,
+                position: {
+                  x: startPosition.x + delta.x,
+                  y: startPosition.y + delta.y,
+                },
+              };
+            }),
+          );
+        });
+      };
+
+      const finishGroupDrag = (event: PointerEvent) => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", finishGroupDrag);
+        window.removeEventListener("pointercancel", cancelGroupDrag);
+
+        if (groupDragRafRef.current !== null) {
+          window.cancelAnimationFrame(groupDragRafRef.current);
+          groupDragRafRef.current = null;
+        }
+
+        const dragState = groupDragStateRef.current;
+        groupDragStateRef.current = null;
+
+        if (!dragState || dragState.groupId !== groupId) {
+          isDraggingRef.current = false;
+          return;
+        }
+
+        if (!dragState.dragging) {
+          isDraggingRef.current = false;
+          return;
+        }
+
+        const startFlow = screenToFlowPosition({
+          x: dragState.startClientX,
+          y: dragState.startClientY,
+        });
+        const currentFlow = screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY,
+        });
+        const delta = {
+          x: currentFlow.x - startFlow.x,
+          y: currentFlow.y - startFlow.y,
+        };
+
+        const nextNodePositions = new Map<string, { x: number; y: number }>();
+        dragState.startPositions.forEach((position, nodeId) => {
+          nextNodePositions.set(
+            nodeId,
+            alignPositionToGrid({
+              x: position.x + delta.x,
+              y: position.y + delta.y,
+            }),
+          );
+        });
+
+        setDisplayNodes((prev) =>
+          prev.map((node) => {
+            const nextPosition = nextNodePositions.get(node.id);
+            if (!nextPosition) {
+              return node;
+            }
+
+            return {
+              ...node,
+              position: nextPosition,
+            };
+          }),
+        );
+
+        const positionChanges = Array.from(nextNodePositions.entries()).map(
+          ([nodeId, position]) => ({
+            id: nodeId,
+            type: "position" as const,
+            position,
+          }),
+        );
+
+        isDraggingRef.current = false;
+
+        if (positionChanges.length > 0) {
+          storeOnNodesChange(positionChanges);
+        }
+      };
+
+      const cancelGroupDrag = () => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", finishGroupDrag);
+        window.removeEventListener("pointercancel", cancelGroupDrag);
+
+        if (groupDragRafRef.current !== null) {
+          window.cancelAnimationFrame(groupDragRafRef.current);
+          groupDragRafRef.current = null;
+        }
+
+        groupDragStateRef.current = null;
+        isDraggingRef.current = false;
+      };
+
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", finishGroupDrag);
+      window.addEventListener("pointercancel", cancelGroupDrag);
+    },
+    [
+      alignPositionToGrid,
+      displayNodes,
+      groups,
+      screenToFlowPosition,
+      setSelectionBoxActive,
+      setSelectedGroupId,
+      setDisplayNodes,
+      storeOnNodesChange,
+    ],
+  );
+
+  const handleCanvasPointerDownCapture = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (annotationWorkspace.open || event.button !== 0) {
+        return;
+      }
+
+      const target = event.target as Element | null;
+      if (
+        target?.closest(
+          ".react-flow__node, .react-flow__edge, .react-flow__handle, .react-flow__connection",
+        )
+      ) {
+        return;
+      }
+
+      const flowPosition = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      const hitGroup = groups.find((group) => {
+        const groupBounds = getGroupBounds(displayNodes, group.nodeIds, 18);
+        if (!groupBounds) {
+          return false;
+        }
+
+        const withinGroup =
+          flowPosition.x >= groupBounds.x &&
+          flowPosition.x <= groupBounds.x + groupBounds.width &&
+          flowPosition.y >= groupBounds.y &&
+          flowPosition.y <= groupBounds.y + groupBounds.height;
+        if (!withinGroup) {
+          return false;
+        }
+
+        return !group.nodeIds.some((nodeId) => {
+          const node = displayNodes.find((item) => item.id === nodeId);
+          if (!node) {
+            return false;
+          }
+
+          const nodeWidth =
+            node.width ?? node.measured?.width ?? FALLBACK_NODE_WIDTH;
+          const nodeHeight =
+            node.height ?? node.measured?.height ?? FALLBACK_NODE_HEIGHT;
+
+          return (
+            flowPosition.x >= node.position.x &&
+            flowPosition.x <= node.position.x + nodeWidth &&
+            flowPosition.y >= node.position.y &&
+            flowPosition.y <= node.position.y + nodeHeight
+          );
+        });
+      });
+
+      if (!hitGroup) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      beginGroupDrag(hitGroup.id, event.clientX, event.clientY);
+    },
+    [
+      annotationWorkspace.open,
+      beginGroupDrag,
+      displayNodes,
+      groups,
+      screenToFlowPosition,
+    ],
+  );
 
   // 涓洪珮棰戣鍙栧満鏅缓绔嬭妭鐐圭储寮曪紝閬垮厤閲嶅绾挎€ф壂鎻忋€?
   const displayNodeById = useMemo(() => {
@@ -1335,6 +1647,10 @@ export const CanvasFlow = ({
   const selectionBoundsFlow = multiSelectedSummary.selectionBoundsFlow;
   const selectionRightCenterFlowPosition =
     multiSelectedSummary.selectionRightCenterFlowPosition;
+  const selectedNodeIdSet = useMemo(
+    () => new Set(multiSelectedNodeIds),
+    [multiSelectedNodeIds],
+  );
 
   // 灏嗘祦鍧愭爣杞崲涓哄睆骞曞潗鏍囷紝鐢ㄤ簬缁濆瀹氫綅娴姩鎸夐挳銆?
   const selectionRightCenterScreenPosition = useMemo(() => {
@@ -1365,6 +1681,120 @@ export const CanvasFlow = ({
       height: selectionBoundsFlow.height * viewportState.zoom + padding * 2,
     };
   }, [selectionBoundsFlow, viewportState]);
+
+  const selectionToolbarPosition = useMemo(() => {
+    if (!selectionBoundsScreen || multiSelectedCount < 2) {
+      return null;
+    }
+
+    const viewportWidth =
+      typeof window !== "undefined" ? window.innerWidth : 0;
+    return {
+      x: clamp(
+        selectionBoundsScreen.x + selectionBoundsScreen.width / 2,
+        24,
+        Math.max(viewportWidth - 24, 24),
+      ),
+      y: Math.max(selectionBoundsScreen.y - 12, 24),
+    };
+  }, [multiSelectedCount, selectionBoundsScreen]);
+
+  const groupFrames = useMemo(() => {
+    return groups
+      .map((group) => {
+        const bounds = getGroupBounds(displayNodes, group.nodeIds, 18);
+        if (!bounds) {
+          return null;
+        }
+
+        return {
+          ...group,
+          bounds,
+        };
+      })
+      .filter(Boolean) as Array<
+      {
+        id: string;
+        nodeIds: string[];
+        createdAt: number;
+        bounds: {
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        };
+      }
+    >;
+  }, [displayNodes, groups]);
+
+  const selectedGroup = useMemo(() => {
+    if (!selectedGroupId) {
+      return null;
+    }
+
+    return groupFrames.find((group) => group.id === selectedGroupId) ?? null;
+  }, [groupFrames, selectedGroupId]);
+
+  const selectedGroupFromSelection = useMemo(() => {
+    if (multiSelectedCount < 2 || groupFrames.length === 0) {
+      return null;
+    }
+
+    const matchedGroup = groupFrames.find((group) => {
+      if (group.nodeIds.length !== multiSelectedCount) {
+        return false;
+      }
+
+      return group.nodeIds.every((nodeId) => selectedNodeIdSet.has(nodeId));
+    });
+
+    return matchedGroup ?? null;
+  }, [groupFrames, multiSelectedCount, selectedNodeIdSet]);
+
+  const activeBatchGroup = selectedGroup ?? selectedGroupFromSelection;
+
+  const selectedUngroupedCount = useMemo(() => {
+    if (multiSelectedCount === 0) {
+      return 0;
+    }
+
+    return multiSelectedNodeIds.filter((nodeId) => {
+      return !groups.some((group) => group.nodeIds.includes(nodeId));
+    }).length;
+  }, [groups, multiSelectedCount, multiSelectedNodeIds]);
+
+  const selectedGroupToolbarPosition = useMemo(() => {
+    if (!activeBatchGroup) {
+      return null;
+    }
+
+    const screenLeft =
+      activeBatchGroup.bounds.x * viewportState.zoom + viewportState.x;
+    const screenTop =
+      activeBatchGroup.bounds.y * viewportState.zoom + viewportState.y;
+    const screenWidth = activeBatchGroup.bounds.width * viewportState.zoom;
+    const gap = 12;
+    const viewportWidth =
+      typeof window !== "undefined" ? window.innerWidth : 0;
+    const anchorX = clamp(
+      screenLeft + screenWidth / 2,
+      24,
+      Math.max(viewportWidth - 24, 24),
+    );
+    const anchorY = Math.max(screenTop - gap, 24);
+
+    return {
+      x: anchorX,
+      y: anchorY,
+    };
+  }, [activeBatchGroup, viewportState]);
+
+  const batchToolbarMode =
+    activeBatchGroup && activeBatchGroup.nodeIds.length >= 2
+      ? "group"
+      : multiSelectedCount >= 2 && selectedUngroupedCount === multiSelectedCount
+        ? "selection"
+        : null;
 
   // 褰?projectId 鍙樺寲鏃跺垏鎹㈤」鐩?
   useEffect(() => {
@@ -1408,13 +1838,26 @@ export const CanvasFlow = ({
     x: number;
     y: number;
   } | null>(null);
+  const groupDragStateRef = useRef<{
+    groupId: string;
+    startClientX: number;
+    startClientY: number;
+    startPositions: Map<string, { x: number; y: number }>;
+    latestClientX: number;
+    latestClientY: number;
+    dragging: boolean;
+  } | null>(null);
+  const groupDragRafRef = useRef<number | null>(null);
+  const GROUP_DRAG_THRESHOLD = 4;
 
   // 浠呭湪鍙犲姞灞傞渶瑕佽窡闅忕缉鏀?骞崇Щ鏃讹紝鎵嶈拷韪?viewport锛岄伩鍏?onMove 楂橀瑙﹀彂鏁存爲閲嶆覆鏌撱€?
   const shouldTrackViewport =
     Boolean(selectionRightCenterFlowPosition) ||
     Boolean(connectionGhost) ||
     quickAddDragPreview.active ||
-    Boolean(quickAddMenuOpen && quickAddMenuScreenPosition);
+    Boolean(quickAddMenuOpen && quickAddMenuScreenPosition) ||
+    groups.length > 0 ||
+    Boolean(selectedGroupId);
 
   // 浣跨敤 rAF 鍚堝抚鏇存柊 viewport 鐘舵€侊紝閬垮厤姣忔 onMove 閮?setState銆?
   const flushViewportState = useCallback(() => {
@@ -1477,6 +1920,17 @@ export const CanvasFlow = ({
       if (viewportRafRef.current !== null) {
         window.cancelAnimationFrame(viewportRafRef.current);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (groupDragRafRef.current !== null) {
+        window.cancelAnimationFrame(groupDragRafRef.current);
+        groupDragRafRef.current = null;
+      }
+      groupDragStateRef.current = null;
+      isDraggingRef.current = false;
     };
   }, []);
 
@@ -2289,6 +2743,7 @@ export const CanvasFlow = ({
           ref={contextMenuTriggerRef}
           className="h-full w-full relative"
           data-selection-box-active={isSelectionBoxActive ? "true" : undefined}
+          onPointerDownCapture={handleCanvasPointerDownCapture}
           onDoubleClick={handleNativeDblClick}
           onDragEnter={handleDragEnter}
           onDragOver={handleDragOver}
@@ -2421,6 +2876,66 @@ export const CanvasFlow = ({
               />
             ) : null}
           </ReactFlow>
+
+          <div className="pointer-events-none fixed inset-0 z-[12]">
+            {groupFrames.map((group) => {
+              const isSelected = group.id === selectedGroupId;
+              const screenRect = {
+                left: group.bounds.x * viewportState.zoom + viewportState.x,
+                top: group.bounds.y * viewportState.zoom + viewportState.y,
+                width: group.bounds.width * viewportState.zoom,
+                height: group.bounds.height * viewportState.zoom,
+              };
+
+              return (
+                <div
+                  key={group.id}
+                  className={cn(
+                    "absolute rounded-[14px] border bg-transparent transition-colors",
+                    isSelected
+                      ? "border-[#B43FEB]/70 shadow-[0_0_0_1px_rgba(180,63,235,0.18),0_0_32px_rgba(180,63,235,0.1)]"
+                      : "border-dashed border-white/14",
+                  )}
+                  style={{
+                    left: `${screenRect.left}px`,
+                    top: `${screenRect.top}px`,
+                    width: `${screenRect.width}px`,
+                    height: `${screenRect.height}px`,
+                  }}
+                >
+                  <div
+                    className={cn(
+                      "absolute inset-0 rounded-[14px] bg-white/[0.01]",
+                      isSelected ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          <CanvasBatchToolbar
+            mode={batchToolbarMode}
+            selectedCount={multiSelectedCount}
+            groupCount={activeBatchGroup?.nodeIds.length ?? 0}
+            position={selectedGroupToolbarPosition ?? selectionToolbarPosition}
+            onCreateGroup={() => {
+              createGroup(multiSelectedNodeIds);
+            }}
+            onLayoutHorizontal={() => {
+              if (!activeBatchGroup) {
+                return;
+              }
+              layoutGroupHorizontal(activeBatchGroup.id);
+            }}
+            onGridLayout={() => {}}
+            onUngroup={() => {
+              if (!activeBatchGroup) {
+                return;
+              }
+              ungroup(activeBatchGroup.id);
+            }}
+          />
 
           {/* 鑺傜偣鎼滅储妗?*/}
           {selectionBoundsScreen && !isSelectionBoxActive && !isSpacePressed ? (

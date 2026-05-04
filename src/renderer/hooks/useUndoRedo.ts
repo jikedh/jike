@@ -26,13 +26,14 @@ export function useUndoRedo() {
 
   const saveToHistory = useCallback(() => {
     const state = useCanvasFlowStore.getState();
-    const { nodes, edges, nodeIdCounters } = state;
+    const { nodes, edges, groups, nodeIdCounters } = state;
 
     const entry: CanvasPersistedState = {
-      version: 1,
+      version: 2,
       savedAt: Date.now(),
       nodes: JSON.parse(JSON.stringify(nodes)),
       edges: JSON.parse(JSON.stringify(edges)),
+      groups: JSON.parse(JSON.stringify(groups)),
       nodeIdCounters: { ...nodeIdCounters },
     };
 
@@ -80,7 +81,9 @@ export function useUndoRedo() {
     useCanvasFlowStore.setState({
       nodes: hydratedNodes,
       edges: JSON.parse(JSON.stringify(entry.edges)),
+      groups: JSON.parse(JSON.stringify(entry.groups)),
       nodeIdCounters: { ...entry.nodeIdCounters },
+      selectedGroupId: null,
       selectedNodesCount: hydratedNodes.filter((node) => node.selected).length,
     });
 
@@ -100,7 +103,9 @@ export function useUndoRedo() {
     useCanvasFlowStore.setState({
       nodes: hydratedNodes,
       edges: JSON.parse(JSON.stringify(entry.edges)),
+      groups: JSON.parse(JSON.stringify(entry.groups)),
       nodeIdCounters: { ...entry.nodeIdCounters },
+      selectedGroupId: null,
       selectedNodesCount: hydratedNodes.filter((node) => node.selected).length,
     });
 
