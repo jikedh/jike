@@ -41,3 +41,5 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 npmRebuild: false
+asarUnpack:
+  - node_modules/@ffmpeg-installer/**

@@ -41,12 +41,26 @@ import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import {
   GeminiParamsPanel,
+  GEMINI_RESOLUTIONS,
+  GEMINI_SIZES,
+  NANO_BANANA_RESOLUTIONS,
   NANO_BANANA_LOCAL_SIZES,
 } from "./components/GeminiParamsPanel";
-import { GptImage2ParamsPanel } from "./components/GptImage2ParamsPanel";
+import {
+  ADOBE_GPTIMAGE2_SIZES,
+  GPTIMAGE2_SIZES,
+  GptImage2ParamsPanel,
+} from "./components/GptImage2ParamsPanel";
 import { MidjourneyAdvancedPanel } from "./components/MidjourneyAdvancedPanel";
-import { MidjourneyParamsPanel } from "./components/MidjourneyParamsPanel";
-import { SeedreamParamsPanel } from "./components/SeedreamParamsPanel";
+import {
+  MIDJOURNEY_ASPECT_RATIOS,
+  MidjourneyParamsPanel,
+} from "./components/MidjourneyParamsPanel";
+import {
+  SEEDREAM_ASPECT_RATIOS,
+  SEEDREAM_RESOLUTIONS,
+  SeedreamParamsPanel,
+} from "./components/SeedreamParamsPanel";
 import { COMMAND_MOCK, MENTION_MOCK } from "./mock";
 
 const ReferenceItemWrapper = ({
@@ -97,6 +111,26 @@ const LOCAL_GEMINI_BATCH_SUBMIT_DELAY_MS = 3000;
 const NANO_BANANA_SIZE_VALUES = new Set(
   NANO_BANANA_LOCAL_SIZES.map((item) => item.value),
 );
+
+const toOptionValueSet = (options: Array<{ value: string }>) =>
+  new Set(options.map((item) => item.value));
+
+const GEMINI_SIZE_VALUES = toOptionValueSet(GEMINI_SIZES);
+const GEMINI_RESOLUTION_VALUES = toOptionValueSet(GEMINI_RESOLUTIONS);
+const NANO_BANANA_RESOLUTION_VALUES = toOptionValueSet(NANO_BANANA_RESOLUTIONS);
+const GPTIMAGE2_SIZE_VALUES = toOptionValueSet(GPTIMAGE2_SIZES);
+const ADOBE_GPTIMAGE2_SIZE_VALUES = toOptionValueSet(ADOBE_GPTIMAGE2_SIZES);
+const GPTIMAGE2_RESOLUTION_VALUES = new Set(["1K", "2K", "4K"]);
+const SEEDREAM_SIZE_VALUES = toOptionValueSet(SEEDREAM_ASPECT_RATIOS);
+const SEEDREAM_RESOLUTION_VALUES = toOptionValueSet(SEEDREAM_RESOLUTIONS);
+const MIDJOURNEY_SIZE_VALUES = toOptionValueSet(MIDJOURNEY_ASPECT_RATIOS);
+
+type SupportedImageParams = {
+  sizes: Set<string>;
+  resolutions?: Set<string>;
+  defaultSize: string;
+  defaultResolution?: string;
+};
 
 export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   // 上传中态，避免重复上传触发
@@ -225,28 +259,107 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   // 判断是否为 GPT-Image-2 模型
   const isAdobeGptImage2Model = model === ADOBE_GPT_IMAGE2_MODEL;
   const isAdobeNanoBananaProModel = model === ADOBE_NANO_BANANA_PRO_MODEL;
-  const isAdobeImageModel =
-    isAdobeGptImage2Model || isAdobeNanoBananaProModel;
+  const isAdobeImageModel = isAdobeGptImage2Model || isAdobeNanoBananaProModel;
   const isGptImage2Model = model === "gpt-image-2";
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
   const isLocalGeminiDirectModel =
     isGeminiPro2Model || isNanoBananaLocalModel || isAdobeImageModel;
-  const isGeminiFamilyModel =
-    isGeminiModel || isGeminiPro2Model || isNanoBananaLocalModel;
+
+  const supportedImageParams = useMemo<SupportedImageParams | null>(() => {
+    if (isSeedreamModel) {
+      return {
+        sizes: SEEDREAM_SIZE_VALUES,
+        resolutions: SEEDREAM_RESOLUTION_VALUES,
+        defaultSize: "1:1",
+        defaultResolution: "2K",
+      };
+    }
+
+    if (isGeminiModel || isGeminiPro2Model) {
+      return {
+        sizes: GEMINI_SIZE_VALUES,
+        resolutions: GEMINI_RESOLUTION_VALUES,
+        defaultSize: "1:1",
+        defaultResolution: "2K",
+      };
+    }
+
+    if (isNanoBananaLocalModel || isAdobeNanoBananaProModel) {
+      return {
+        sizes: NANO_BANANA_SIZE_VALUES,
+        resolutions: NANO_BANANA_RESOLUTION_VALUES,
+        defaultSize: DEFAULT_NANO_BANANA_SIZE,
+        defaultResolution: "2K",
+      };
+    }
+
+    if (isGptImage2Model) {
+      return {
+        sizes: GPTIMAGE2_SIZE_VALUES,
+        resolutions: GPTIMAGE2_RESOLUTION_VALUES,
+        defaultSize: "1:1",
+        defaultResolution: "2K",
+      };
+    }
+
+    if (isAdobeGptImage2Model) {
+      return {
+        sizes: ADOBE_GPTIMAGE2_SIZE_VALUES,
+        resolutions: GPTIMAGE2_RESOLUTION_VALUES,
+        defaultSize: "1:1",
+        defaultResolution: "2K",
+      };
+    }
+
+    if (isMidjourneyModel) {
+      return {
+        sizes: MIDJOURNEY_SIZE_VALUES,
+        defaultSize: "1:1",
+      };
+    }
+
+    return null;
+  }, [
+    isAdobeGptImage2Model,
+    isAdobeNanoBananaProModel,
+    isGeminiModel,
+    isGeminiPro2Model,
+    isGptImage2Model,
+    isMidjourneyModel,
+    isNanoBananaLocalModel,
+    isSeedreamModel,
+  ]);
 
   useEffect(() => {
-    if (!isNanoBananaLocalModel || !size || NANO_BANANA_SIZE_VALUES.has(size)) {
+    if (!supportedImageParams) {
       return;
     }
 
-    persistImageDefaultPreset({ size: DEFAULT_NANO_BANANA_SIZE });
-    updateImageNodeData(nodeId, { size: DEFAULT_NANO_BANANA_SIZE });
+    const patch: { size?: string; resolution?: string } = {};
+    if (size && !supportedImageParams.sizes.has(size)) {
+      patch.size = supportedImageParams.defaultSize;
+    }
+    if (
+      supportedImageParams.resolutions &&
+      resolution &&
+      !supportedImageParams.resolutions.has(resolution)
+    ) {
+      patch.resolution = supportedImageParams.defaultResolution;
+    }
+
+    if (!patch.size && !patch.resolution) {
+      return;
+    }
+
+    persistImageDefaultPreset(patch);
+    updateImageNodeData(nodeId, patch);
   }, [
-    isNanoBananaLocalModel,
     nodeId,
     persistImageDefaultPreset,
+    resolution,
     size,
+    supportedImageParams,
     updateImageNodeData,
   ]);
 
@@ -295,10 +408,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const disableBuiltInSuggestion = {
     items: () => [],
     render: () => ({
-      onStart: () => { },
-      onUpdate: () => { },
+      onStart: () => {},
+      onUpdate: () => {},
       onKeyDown: () => false,
-      onExit: () => { },
+      onExit: () => {},
     }),
   };
 
@@ -410,21 +523,41 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     // 根据命令自动设置 size
     const commandSizeMap: Record<string, string> = {
       "c-1": "4:3", // 角色参考图
-      "c-2": "21:9", // 角色三视图
+      "c-2":
+        isNanoBananaLocalModel || isAdobeNanoBananaProModel ? "16:9" : "21:9", // 角色三视图
       "c-3": "16:9", // 多宫格电影分镜
-      "c-4": "21:9", // VR图
+      "c-4":
+        isNanoBananaLocalModel || isAdobeNanoBananaProModel ? "16:9" : "21:9", // VR图
     };
-    const targetSize = commandSizeMap[selected.id];
+    const commandSize = commandSizeMap[selected.id];
+    const targetSize =
+      commandSize &&
+      supportedImageParams &&
+      !supportedImageParams.sizes.has(commandSize)
+        ? supportedImageParams.defaultSize
+        : commandSize;
     if (targetSize) {
       updateImageNodeData(nodeId, { size: targetSize });
     }
 
     // 根据命令自动设置 resolution
-    const commandResolutionMap: Record<string, string> = {
-      "c-3": "1K", // 多宫格电影分镜
-      "c-4": isGeminiFamilyModel ? "4K" : "3K", // VR图：Gemini系用4K，Seedream用3K
+    const commandResolutionMap: Record<string, string | undefined> = {
+      "c-3": isSeedreamModel ? "2K" : "1K", // 多宫格电影分镜
+      "c-4":
+        isNanoBananaLocalModel ||
+        isAdobeNanoBananaProModel ||
+        isGptImage2Model ||
+        isAdobeGptImage2Model
+          ? "4K"
+          : "3K",
     };
-    const targetResolution = commandResolutionMap[selected.id];
+    const commandResolution = commandResolutionMap[selected.id];
+    const targetResolution =
+      commandResolution &&
+      supportedImageParams?.resolutions &&
+      !supportedImageParams.resolutions.has(commandResolution)
+        ? supportedImageParams.defaultResolution
+        : commandResolution;
     if (targetResolution) {
       updateImageNodeData(nodeId, { resolution: targetResolution });
     }
@@ -921,7 +1054,11 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       });
     const imageUrls = Array.from(
       new Set(
-        [...referenceImageUrls, ...latestReferenceUrls, ...latestParentImageUrls]
+        [
+          ...referenceImageUrls,
+          ...latestReferenceUrls,
+          ...latestParentImageUrls,
+        ]
           .map((url) => String(url || "").trim())
           .filter(Boolean),
       ),
@@ -1370,6 +1507,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               size={size}
               resolution={resolution}
               sizeOptions={NANO_BANANA_LOCAL_SIZES}
+              resolutionOptions={NANO_BANANA_RESOLUTIONS}
               onSizeChange={(value) => {
                 persistImageDefaultPreset({ size: value });
                 updateImageNodeData(nodeId, { size: value });
@@ -1386,6 +1524,9 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             <GptImage2ParamsPanel
               size={size}
               resolution={resolution}
+              sizeOptions={
+                isAdobeGptImage2Model ? ADOBE_GPTIMAGE2_SIZES : undefined
+              }
               onSizeChange={(value) => {
                 persistImageDefaultPreset({ size: value });
                 updateImageNodeData(nodeId, { size: value });
@@ -1402,6 +1543,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               size={size}
               resolution={resolution}
               sizeOptions={NANO_BANANA_LOCAL_SIZES}
+              resolutionOptions={NANO_BANANA_RESOLUTIONS}
               onSizeChange={(value) => {
                 persistImageDefaultPreset({ size: value });
                 updateImageNodeData(nodeId, { size: value });

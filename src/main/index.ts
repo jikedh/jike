@@ -20,6 +20,7 @@ import {
   registerAdobe2ApiHandlers,
   registerStorageHandlers,
   registerTrackingHandlers,
+  registerVideoProcessingHandlers,
 } from "./ipc";
 import { adobe2ApiService } from "./ipc/adobe2api/service";
 
@@ -107,6 +108,7 @@ function createWindow(): void {
   registerDownloadHandlers();
   registerAdobe2ApiHandlers();
   registerTrackingHandlers();
+  registerVideoProcessingHandlers();
 }
 
 app.whenReady().then(() => {

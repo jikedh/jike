@@ -23,6 +23,24 @@ export type DownloadApi = {
   ) => Promise<{ success: boolean; data?: { path: string }; error?: string }>;
 };
 
+export type VideoProcessingApi = {
+  trim: (request: {
+    videoUrl: string;
+    start: number;
+    end: number;
+  }) => Promise<{
+    success: boolean;
+    data?: {
+      url: string;
+      format: "mp4";
+      duration: number;
+      method: "cloud" | "ffmpeg";
+      jobId?: string;
+    };
+    error?: string;
+  }>;
+};
+
 export interface AIVideoTrackData {
   userId: string;
   userUuid?: string;
@@ -57,6 +75,7 @@ declare global {
     storage: StorageApi;
     debug: DebugApi;
     download: DownloadApi;
+    videoProcessing: VideoProcessingApi;
     adobe2api: Adobe2Api;
     tracking: TrackingApi;
   }

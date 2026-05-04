@@ -24,6 +24,24 @@ export type DownloadApi = {
   ) => Promise<{ success: boolean; data?: { path: string }; error?: string }>;
 };
 
+export type VideoProcessingApi = {
+  trim: (request: {
+    videoUrl: string;
+    start: number;
+    end: number;
+  }) => Promise<{
+    success: boolean;
+    data?: {
+      url: string;
+      format: "mp4";
+      duration: number;
+      method: "cloud" | "ffmpeg";
+      jobId?: string;
+    };
+    error?: string;
+  }>;
+};
+
 const storageApi: StorageApi = {
   selectDirectory: () => ipcRenderer.invoke("storage:selectDirectory"),
   ensureProject: (basePath, projectName) =>
@@ -103,6 +121,10 @@ const downloadApi: DownloadApi = {
     ipcRenderer.invoke("download:imageToFile", url, filePath),
 };
 
+const videoProcessingApi: VideoProcessingApi = {
+  trim: (request) => ipcRenderer.invoke("video-processing:trim", request),
+};
+
 const adobe2Api: Adobe2Api = {
   getState: () => ipcRenderer.invoke("adobe2api:getState"),
   start: () => ipcRenderer.invoke("adobe2api:start"),
@@ -162,6 +184,7 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld("storage", storageApi);
     contextBridge.exposeInMainWorld("debug", debugApi);
     contextBridge.exposeInMainWorld("download", downloadApi);
+    contextBridge.exposeInMainWorld("videoProcessing", videoProcessingApi);
     contextBridge.exposeInMainWorld("adobe2api", adobe2Api);
     contextBridge.exposeInMainWorld("tracking", trackingApi);
   } catch (error) {
@@ -176,6 +199,8 @@ if (process.contextIsolated) {
   window.debug = debugApi;
   // @ts-ignore (define in dts)
   window.download = downloadApi;
+  // @ts-ignore (define in dts)
+  window.videoProcessing = videoProcessingApi;
   // @ts-ignore (define in dts)
   window.adobe2api = adobe2Api;
   // @ts-ignore (define in dts)
