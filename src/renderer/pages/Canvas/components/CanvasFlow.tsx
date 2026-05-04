@@ -1311,8 +1311,8 @@ export const CanvasFlow = ({
         latestClientX: clientX,
         latestClientY: clientY,
         startPositions,
+        dragging: false,
       };
-      isDraggingRef.current = true;
 
       const handlePointerMove = (event: PointerEvent) => {
         const dragState = groupDragStateRef.current;
@@ -1322,6 +1322,20 @@ export const CanvasFlow = ({
 
         dragState.latestClientX = event.clientX;
         dragState.latestClientY = event.clientY;
+
+        if (!dragState.dragging) {
+          const deltaX = event.clientX - dragState.startClientX;
+          const deltaY = event.clientY - dragState.startClientY;
+          if (
+            deltaX * deltaX + deltaY * deltaY <
+            GROUP_DRAG_THRESHOLD * GROUP_DRAG_THRESHOLD
+          ) {
+            return;
+          }
+
+          dragState.dragging = true;
+          isDraggingRef.current = true;
+        }
 
         if (groupDragRafRef.current !== null) {
           return;
@@ -1380,6 +1394,11 @@ export const CanvasFlow = ({
         groupDragStateRef.current = null;
 
         if (!dragState || dragState.groupId !== groupId) {
+          isDraggingRef.current = false;
+          return;
+        }
+
+        if (!dragState.dragging) {
           isDraggingRef.current = false;
           return;
         }
@@ -1826,8 +1845,10 @@ export const CanvasFlow = ({
     startPositions: Map<string, { x: number; y: number }>;
     latestClientX: number;
     latestClientY: number;
+    dragging: boolean;
   } | null>(null);
   const groupDragRafRef = useRef<number | null>(null);
+  const GROUP_DRAG_THRESHOLD = 4;
 
   // 浠呭湪鍙犲姞灞傞渶瑕佽窡闅忕缉鏀?骞崇Щ鏃讹紝鎵嶈拷韪?viewport锛岄伩鍏?onMove 楂橀瑙﹀彂鏁存爲閲嶆覆鏌撱€?
   const shouldTrackViewport =
