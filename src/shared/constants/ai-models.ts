@@ -142,6 +142,12 @@ export const IMAGE_MODELS = [
   // { id: 1, name: 'doubao-seedream-4-0', model: 'doubao-seedream-4-0', platform: 'Seedream' },
   // { id: 2, name: 'doubao-seedream-4-5', model: 'doubao-seedream-4-5', platform: 'Seedream' },
   {
+    id: 7,
+    name: "GPT-Image-2",
+    model: "gpt-image-2",
+    platform: "openai",
+  },
+  {
     id: 3,
     name: "谷歌 Gemini 3 Pro",
     model: "gemini-3-pro-image-preview",
@@ -152,6 +158,13 @@ export const IMAGE_MODELS = [
     name: "豆包 Seedream 5.0",
     model: "doubao-seedream-5-0",
     platform: "Seedream",
+  },
+  { id: 5, name: "Midjourney", model: "midjourney", platform: "midjourney" },
+  {
+    id: 6,
+    name: "Midjourney Niji7",
+    model: "midjourney-niji7",
+    platform: "midjourney",
   },
   {
     id: 9,
@@ -164,19 +177,6 @@ export const IMAGE_MODELS = [
     name: "Nano Banana Pro（Adobe版本）",
     model: ADOBE_NANO_BANANA_PRO_MODEL,
     platform: ADOBE2API_PLATFORM,
-  },
-  { id: 5, name: "Midjourney", model: "midjourney", platform: "midjourney" },
-  {
-    id: 6,
-    name: "Midjourney Niji7",
-    model: "midjourney-niji7",
-    platform: "midjourney",
-  },
-  {
-    id: 7,
-    name: "GPT-Image-2",
-    model: "gpt-image-2",
-    platform: "openai",
   },
   // {
   //   id: 10,

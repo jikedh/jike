@@ -4,15 +4,8 @@
  * 适用于 gemini-3-pro-image-preview 模型
  */
 
-import { cn } from "shared/utils/utils";
-import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-
-import { AspectRatioIcon } from "./AspectRatioIcon";
+import { ImageParamsPopover } from "./ImageParamsPopover";
+import type { ImageParamOption } from "./ImageParamsPopover";
 
 // Gemini 3 Pro 图像尺寸选项（与类型定义保持一致）
 export const GEMINI_SIZES = [
@@ -36,6 +29,12 @@ export const NANO_BANANA_LOCAL_SIZES = GEMINI_SIZES.filter((item) =>
 export const GEMINI_RESOLUTIONS = [
   { label: "1K", value: "1K", description: "默认分辨率" },
   { label: "2K", value: "2K", description: "标准分辨率" },
+  { label: "3K", value: "3K", description: "高清分辨率" },
+];
+
+export const NANO_BANANA_RESOLUTIONS = [
+  { label: "1K", value: "1K", description: "默认分辨率" },
+  { label: "2K", value: "2K", description: "标准分辨率" },
   { label: "4K", value: "4K", description: "高清分辨率" },
 ];
 
@@ -45,7 +44,8 @@ type GeminiParamsPanelProps = {
   // 当前分辨率
   resolution: string;
   // 可选尺寸列表
-  sizeOptions?: typeof GEMINI_SIZES;
+  sizeOptions?: ImageParamOption[];
+  resolutionOptions?: ImageParamOption[];
   // 更新图像尺寸
   onSizeChange: (value: string) => void;
   // 更新分辨率
@@ -56,105 +56,19 @@ export const GeminiParamsPanel = ({
   size,
   resolution,
   sizeOptions = GEMINI_SIZES,
+  resolutionOptions = GEMINI_RESOLUTIONS,
   onSizeChange,
   onResolutionChange,
 }: GeminiParamsPanelProps) => {
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          unstyled
-          className="flex h-8 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 text-xs text-neutral-300 transition-colors hover:border-neutral-500 hover:text-neutral-100"
-        >
-          <AspectRatioIcon ratio={size} size={16} />
-          <span>
-            {size} | {resolution}
-          </span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        side="top"
-        className="w-96 border border-neutral-700 bg-neutral-900 p-3 shadow-xl"
-      >
-        <div className="space-y-4">
-          {/* 图像尺寸选择 */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-neutral-300">
-              图像尺寸
-            </label>
-            <div className="grid grid-cols-5 gap-2">
-              {sizeOptions.map((item) => {
-                const isActive = size === item.value;
-                return (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => onSizeChange(item.value)}
-                    className={cn(
-                      "flex flex-col items-center gap-1 rounded-lg border p-2 transition-all",
-                      isActive
-                        ? "border-[#B43FEB] bg-[#B43FEB]/10"
-                        : "border-neutral-700 bg-neutral-800 hover:border-neutral-500 hover:bg-neutral-750",
-                    )}
-                  >
-                    <AspectRatioIcon
-                      ratio={item.value}
-                      size={24}
-                      active={isActive}
-                    />
-                    <span
-                      className={cn(
-                        "text-[10px]",
-                        isActive ? "text-[#B43FEB]" : "text-neutral-400",
-                      )}
-                    >
-                      {item.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 分辨率选择 */}
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-neutral-300">
-              分辨率
-            </label>
-            <div className="flex gap-2">
-              {GEMINI_RESOLUTIONS.map((item) => {
-                const isActive = resolution === item.value;
-                return (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => onResolutionChange(item.value)}
-                    className={cn(
-                      "flex flex-1 flex-col items-center gap-0.5 rounded-lg border px-3 py-2 transition-all",
-                      isActive
-                        ? "border-[#B43FEB] bg-[#B43FEB]/10"
-                        : "border-neutral-700 bg-neutral-800 hover:border-neutral-500",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "text-xs font-medium",
-                        isActive ? "text-[#B43FEB]" : "text-neutral-300",
-                      )}
-                    >
-                      {item.label}
-                    </span>
-                    <span className="text-[10px] text-neutral-500">
-                      {item.description}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
+    <ImageParamsPopover
+      size={size}
+      resolution={resolution}
+      sizeOptions={sizeOptions}
+      resolutionOptions={resolutionOptions}
+      sizeLabel="图像尺寸"
+      onSizeChange={onSizeChange}
+      onResolutionChange={onResolutionChange}
+    />
   );
 };
