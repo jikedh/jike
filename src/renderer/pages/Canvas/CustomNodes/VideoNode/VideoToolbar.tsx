@@ -47,6 +47,8 @@ import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { getAspectRatioFromMediaFile } from "../ImageNode/utils/aspectRatioUtils";
 import { VideoSnapshotPanel } from "./components/VideoSnapshotPanel";
 import { VideoTimeline } from "./components/VideoTimeline";
+import type { VideoTrimResult } from "./components/VideoTrimPanel";
+import { VideoTrimPanel } from "./components/VideoTrimPanel";
 import { useVideoFrameCapture } from "./hooks/useVideoFrameCapture";
 import { getVideoUrlsFromNodeData } from "./utils/video-url";
 
@@ -926,6 +928,7 @@ type ActionKey =
   | "download"
   | "preview"
   | "snapshot"
+  | "trim"
   | "removeCaptions"
   | "lastFrame";
 
@@ -941,6 +944,8 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSnapshotPanelOpen, setIsSnapshotPanelOpen] = useState(false);
+  const [isTrimPanelOpen, setIsTrimPanelOpen] = useState(false);
+  const [isTrimmingVideo, setIsTrimmingVideo] = useState(false);
   const [isSubtitlePanelOpen, setIsSubtitlePanelOpen] = useState(false);
   const [isSubmittingSubtitle, setIsSubmittingSubtitle] = useState(false);
   // 隐藏的文件输入框引用：用于点击"上传"按钮时拉起文件选择器
@@ -973,6 +978,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       { key: "upload" as const, label: "上传", icon: IconUpload },
       { key: "snapshot" as const, label: "截帧", icon: IconScissors },
       { key: "lastFrame" as const, label: "尾帧", icon: IconPlayerStop },
+      { key: "trim" as const, label: "视频裁剪", icon: IconScissors },
       { key: "removeCaptions" as const, label: "去字幕", icon: IconEraser },
       { key: "download" as const, label: "下载", icon: IconDownload },
       { key: "preview" as const, label: "放大查看", icon: IconZoomIn },
@@ -1089,6 +1095,15 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       return;
     }
 
+    if (actionKey === "trim") {
+      if (!currentVideoUrl) {
+        toast.info("暂无可裁剪视频");
+        return;
+      }
+      setIsTrimPanelOpen(true);
+      return;
+    }
+
     if (actionKey === "lastFrame") {
       if (!currentVideoUrl) {
         toast.info("暂无可用视频");
@@ -1109,6 +1124,100 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   };
 
   const isPreviewActive = isLightboxOpen;
+
+  const handleTrimVideo = useCallback(
+    async (range: { start: number; end: number }): Promise<VideoTrimResult> => {
+      setIsTrimmingVideo(true);
+
+      try {
+        if (!currentVideoUrl) {
+          throw new Error("暂无可裁剪视频");
+        }
+
+        if (!window.videoProcessing?.trim) {
+          throw new Error("视频裁剪组件未初始化，请重启应用后重试");
+        }
+
+        const response = await window.videoProcessing.trim({
+          videoUrl: currentVideoUrl,
+          start: range.start,
+          end: range.end,
+        });
+
+        if (!response.success || !response.data?.url) {
+          throw new Error(response.error || "视频裁剪失败");
+        }
+
+        const sourceNode = useCanvasFlowStore
+          .getState()
+          .nodes.find((node) => node.id === nodeId);
+        const childPosition = {
+          x: (sourceNode?.position.x ?? 0) + (sourceNode?.width ?? 350) + 80,
+          y: sourceNode?.position.y ?? 0,
+        };
+        const childId = addNode("video", childPosition);
+
+        onConnect({
+          source: nodeId,
+          target: childId,
+          sourceHandle: "output",
+          targetHandle: "input",
+        });
+
+        updateVideoNodeData(childId, {
+          badgeLabel: "视频裁剪",
+          isUpload: true,
+          aspect_ratio: data.aspect_ratio,
+          duration: response.data.duration,
+          trimInfo: {
+            sourceNodeId: nodeId,
+            sourceVideoUrl: currentVideoUrl,
+            startTime: range.start,
+            endTime: range.end,
+            method: response.data.method,
+            jobId: response.data.jobId,
+          },
+          result: {
+            type: "video",
+            data: [
+              {
+                url: response.data.url,
+                remoteUrl: response.data.url,
+                format: response.data.format,
+              },
+            ],
+          },
+          status: GenerationStatus.COMPLETED,
+          progress: 100,
+          error: undefined,
+        });
+
+        const flowStore = useCanvasFlowStore.getState();
+        flowStore.requestHistorySave();
+        flowStore.saveGraph();
+        toast.success(
+          response.data.method === "cloud"
+            ? "云端裁剪成功"
+            : "本地 ffmpeg 裁剪成功",
+        );
+        return response.data;
+      } catch (error: any) {
+        console.error("视频裁剪失败:", error);
+        toast.error(error?.message || "视频裁剪失败，请重试");
+        throw error;
+      } finally {
+        setIsTrimmingVideo(false);
+      }
+    },
+    [
+      addNode,
+      currentVideoUrl,
+      data.aspect_ratio,
+      nodeId,
+      onConnect,
+      updateVideoNodeData,
+    ],
+  );
 
   const startSubtitlePolling = useCallback(
     (
@@ -1350,6 +1459,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             (item.key === "upload" && isUploading) ||
             (item.key === "lastFrame" && isCapturingLastFrame) ||
             (item.key === "snapshot" && isCapturingSnapshot) ||
+            (item.key === "trim" && isTrimmingVideo) ||
             (item.key === "removeCaptions" && isSubmittingSubtitle);
 
           return (
@@ -1407,6 +1517,14 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         videoUrl={currentVideoUrl || ""}
         onSubmit={handleSubmitRemoveCaptions}
         isSubmitting={isSubmittingSubtitle}
+      />
+
+      <VideoTrimPanel
+        open={isTrimPanelOpen}
+        onClose={() => setIsTrimPanelOpen(false)}
+        videoUrl={currentVideoUrl || ""}
+        onTrim={handleTrimVideo}
+        isTrimming={isTrimmingVideo}
       />
 
       {isLightboxOpen ? (

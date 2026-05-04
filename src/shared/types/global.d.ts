@@ -28,6 +28,23 @@ declare global {
         error?: string;
       }>;
     };
+    videoProcessing: {
+      trim: (request: {
+        videoUrl: string;
+        start: number;
+        end: number;
+      }) => Promise<{
+        success: boolean;
+        data?: {
+          url: string;
+          format: "mp4";
+          duration: number;
+          method: "cloud" | "ffmpeg";
+          jobId?: string;
+        };
+        error?: string;
+      }>;
+    };
     adobe2api: Adobe2Api;
   }
 }
