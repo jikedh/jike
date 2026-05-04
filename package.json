@@ -25,7 +25,8 @@
     "format": "npx @biomejs/biome format --write",
     "lint": "npx @biomejs/biome lint",
     "check-format": "npx @biomejs/biome check",
-    "type-check": "tsc --noEmit --pretty --project tsconfig.app.json && vite"
+    "type-check": "tsc --noEmit --pretty --project tsconfig.app.json && vite",
+    "build:win11": "electron-vite build && electron-builder --win"
   },
   "dependencies": {
     "@alicloud/ice20201109": "^6.19.0",
