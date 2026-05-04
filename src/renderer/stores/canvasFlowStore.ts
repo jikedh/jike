@@ -37,10 +37,17 @@ import type {
 import type {
   AddNodeOptions,
   CanvasFlowStoreType,
+  CanvasGroup,
   CanvasPersistedState,
   NodePosition,
   NodeType,
 } from "shared/types/zustand/canvas-flow";
+import {
+  getGroupBounds,
+  layoutGroupHorizontally,
+  normalizeGroupNodeIds,
+  translateNodesByIds,
+} from "shared/utils/canvasGroups";
 import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
 import { normalizeLocalGeminiErrorDetail } from "shared/utils/localGeminiErrors";
 import {
@@ -113,7 +120,46 @@ import { saveCurrentCanvasToHistory } from "@/utils/canvasHistoryBridge";
 
 // ==================== 持久化配置 ====================
 
-const CANVAS_STORAGE_VERSION = 1;
+const LEGACY_CANVAS_STORAGE_VERSION = 1;
+const CANVAS_STORAGE_VERSION = 2;
+
+const makeGroupId = (): string => {
+  return `group-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+};
+
+const normalizeCanvasGroups = (
+  groups: CanvasGroup[] | undefined,
+  nodes: AllNodeType[],
+): CanvasGroup[] => {
+  if (!groups || groups.length === 0) {
+    return [];
+  }
+
+  const existingNodeIds = new Set(nodes.map((node) => node.id));
+  return groups
+    .map((group) => ({
+      ...group,
+      nodeIds: normalizeGroupNodeIds(group.nodeIds, existingNodeIds),
+    }))
+    .filter((group) => group.nodeIds.length >= 2);
+};
+
+const removeNodeIdsFromGroups = (
+  groups: CanvasGroup[],
+  nodeIds: string[],
+): CanvasGroup[] => {
+  if (groups.length === 0 || nodeIds.length === 0) {
+    return groups;
+  }
+
+  const removedNodeIdSet = new Set(nodeIds);
+  return groups
+    .map((group) => ({
+      ...group,
+      nodeIds: group.nodeIds.filter((nodeId) => !removedNodeIdSet.has(nodeId)),
+    }))
+    .filter((group) => group.nodeIds.length >= 2);
+};
 
 const updateVideoTrackFinalStatus = async (
   taskId: string | undefined,
@@ -1726,6 +1772,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     // 选中节点数量初始化（用于避免 O(n²) 遍历）
     selectedNodesCount: 0,
     isSelectionBoxActive: false,
+    groups: [],
+    selectedGroupId: null,
 
     // ── 配对 setter ───────────────────────────────
     setNodes: (nodes) => set({ nodes }),
@@ -1744,6 +1792,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         set({ isSelectionBoxActive });
       }
     },
+    setGroups: (groups) => set({ groups }),
+    setSelectedGroupId: (selectedGroupId) => set({ selectedGroupId }),
 
     // ==================== 持久化方法实现 ====================
 
@@ -1786,7 +1836,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         }
       }
 
-      if (!data || data.version !== CANVAS_STORAGE_VERSION) {
+      if (
+        !data ||
+        (data.version !== CANVAS_STORAGE_VERSION &&
+          data.version !== LEGACY_CANVAS_STORAGE_VERSION)
+      ) {
         set({
           projectId,
           nodes: [],
@@ -1805,6 +1859,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           },
           hydrated: true,
           historyResetTrigger: get().historyResetTrigger + 1,
+          groups: [],
+          selectedGroupId: null,
         });
         get().requestHistorySave();
         return;
@@ -1838,6 +1894,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         nodeIdCounters: data.nodeIdCounters,
         hydrated: true,
         historyResetTrigger: get().historyResetTrigger + 1,
+        groups: normalizeCanvasGroups(data.groups, processedNodes),
+        selectedGroupId: null,
       });
       get().requestHistorySave();
     },
@@ -1854,6 +1912,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         savedAt: Date.now(),
         nodes: state.nodes,
         edges: state.edges,
+        groups: normalizeCanvasGroups(state.groups, state.nodes),
         nodeIdCounters: state.nodeIdCounters,
       };
       const storageKey = getCanvasDataKey(state.projectId);
@@ -1884,13 +1943,16 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const storageKey = getCanvasDataKey(state.projectId);
         const raw = localStorage.getItem(storageKey);
         if (!raw) {
-          set({ nodes: [], edges: [] });
+          set({ nodes: [], edges: [], groups: [], selectedGroupId: null });
           return;
         }
 
         const data = JSON.parse(raw) as CanvasPersistedState;
-        if (data.version !== CANVAS_STORAGE_VERSION) {
-          set({ nodes: [], edges: [] });
+        if (
+          data.version !== CANVAS_STORAGE_VERSION &&
+          data.version !== LEGACY_CANVAS_STORAGE_VERSION
+        ) {
+          set({ nodes: [], edges: [], groups: [], selectedGroupId: null });
           return;
         }
 
@@ -1898,9 +1960,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           nodes: data.nodes,
           edges: data.edges,
           nodeIdCounters: data.nodeIdCounters,
+          groups: normalizeCanvasGroups(data.groups, data.nodes),
+          selectedGroupId: null,
         });
       } catch {
-        set({ nodes: [], edges: [] });
+        set({ nodes: [], edges: [], groups: [], selectedGroupId: null });
       }
     },
 
@@ -1922,6 +1986,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         highlightedEdgeIds: [],
         highlightedSourceNodeIds: [],
         referenceHoverRefCounts: {},
+        groups: [],
+        selectedGroupId: null,
         nodeIdCounters: {
           note: 1,
           image: 1,
@@ -2337,8 +2403,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             const nextEdges = state.edges.filter(
               (edge) => edge.source !== nodeId && edge.target !== nodeId,
             );
+            const nextGroups = removeNodeIdsFromGroups(state.groups, [nodeId]);
             return {
               edges: nextEdges,
+              groups: nextGroups,
+              selectedGroupId:
+                nextGroups.find(
+                  (group) => group.id === state.selectedGroupId,
+                )?.id ?? null,
               ...buildReferenceHighlightState(
                 state.referenceHoverRefCounts,
                 nextEdges,
@@ -2355,6 +2427,98 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       if (useChatSettingsStore.getState().autoSaveEnabled) {
         get().saveGraph();
       }
+    },
+
+    createGroup: (nodeIds: string[]) => {
+      const state = get();
+      const existingNodeIds = new Set(state.nodes.map((node) => node.id));
+      const normalizedNodeIds = normalizeGroupNodeIds(
+        nodeIds,
+        existingNodeIds,
+      );
+
+      const ungroupedNodeIds = normalizedNodeIds.filter((nodeId) => {
+        return !state.groups.some((group) => group.nodeIds.includes(nodeId));
+      });
+
+      if (ungroupedNodeIds.length < 2) {
+        return "";
+      }
+
+      const group: CanvasGroup = {
+        id: makeGroupId(),
+        nodeIds: ungroupedNodeIds,
+        createdAt: Date.now(),
+      };
+
+      set((current) => ({
+        nodes: current.nodes.map((node) => {
+          if (!ungroupedNodeIds.includes(node.id)) {
+            return node;
+          }
+
+          return {
+            ...node,
+            selected: false,
+          };
+        }),
+        groups: [...current.groups, group],
+        selectedGroupId: group.id,
+        selectedNodesCount: 0,
+      }));
+
+      get().requestHistorySave();
+      get().saveGraph();
+      return group.id;
+    },
+
+    ungroup: (groupId: string) => {
+      set((state) => ({
+        groups: state.groups.filter((group) => group.id !== groupId),
+        selectedGroupId:
+          state.selectedGroupId === groupId ? null : state.selectedGroupId,
+      }));
+
+      get().requestHistorySave();
+      get().saveGraph();
+    },
+
+    layoutGroupHorizontal: (groupId: string) => {
+      const state = get();
+      const group = state.groups.find((item) => item.id === groupId);
+      if (!group) {
+        return;
+      }
+
+      const layoutResult = layoutGroupHorizontally(
+        state.nodes,
+        state.edges,
+        group.nodeIds,
+      );
+
+      if (!layoutResult.nextNodes || layoutResult.nextNodes === state.nodes) {
+        return;
+      }
+
+      set((current) => ({
+        nodes: layoutResult.nextNodes,
+        groups: normalizeCanvasGroups(current.groups, layoutResult.nextNodes),
+      }));
+
+      get().requestHistorySave();
+      get().saveGraph();
+    },
+
+    moveGroupNodes: (groupId: string, offset: { x: number; y: number }) => {
+      const state = get();
+      const group = state.groups.find((item) => item.id === groupId);
+      if (!group) {
+        return;
+      }
+
+      set((current) => ({
+        nodes: translateNodesByIds(current.nodes, group.nodeIds, offset),
+      }));
     },
 
     /**
@@ -3641,6 +3805,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         savedAt: Date.now(),
         nodes: state.nodes,
         edges: state.edges,
+        groups: normalizeCanvasGroups(state.groups, state.nodes),
         nodeIdCounters: state.nodeIdCounters,
       };
     },
@@ -3653,6 +3818,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         nodes: data.nodes,
         edges: data.edges,
         nodeIdCounters: data.nodeIdCounters,
+        groups: normalizeCanvasGroups(data.groups, data.nodes),
+        selectedGroupId: null,
       });
     },
 
@@ -3665,6 +3832,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      * 拖动过程中不会调用此方法，只有拖动结束或其他变更时才调用。
      */
     onNodesChange: (changes) => {
+      const hasSelectChange = changes.some((change) => change.type === "select");
       set((state) => {
         const nextNodes = applyNodeChanges(changes, state.nodes);
         // 计算选中节点数量，避免在 ImageNode 等组件中 O(n²) 遍历
@@ -3672,6 +3840,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         return {
           nodes: nextNodes,
           selectedNodesCount: selectedCount,
+          selectedGroupId: hasSelectChange ? null : state.selectedGroupId,
         };
       });
 
