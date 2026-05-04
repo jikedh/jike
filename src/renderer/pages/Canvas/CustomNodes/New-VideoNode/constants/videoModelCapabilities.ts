@@ -233,6 +233,16 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
     ],
   },
   {
+    id: "adobe-sora2-pro",
+    label: "Sora2Pro（Adobe版本）",
+    variants: [
+      {
+        id: "firefly-sora2-pro",
+        supportedModes: ["text-to-video", "image-to-video"],
+      },
+    ],
+  },
+  {
     id: "keling",
     label: "Keling V3",
     variants: [
@@ -274,4 +284,5 @@ export interface ModeState {
   label: string;
   enabled: boolean;
   disabledReason?: string;
+  tooltip?: string;
 }

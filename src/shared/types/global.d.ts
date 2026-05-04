@@ -1,5 +1,5 @@
 import { ElectronAPI } from "@electron-toolkit/preload";
-import type { Flow2ApiApi } from "shared/types/flow2api";
+import type { Adobe2Api } from "shared/types/adobe2api";
 import type { StorageApi } from "shared/types/storage";
 
 declare global {
@@ -28,7 +28,7 @@ declare global {
         error?: string;
       }>;
     };
-    flow2api: Flow2ApiApi;
+    adobe2api: Adobe2Api;
   }
 }
 

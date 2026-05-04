@@ -10,8 +10,26 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-asarUnpack:
-  - resources/**
+  - '!resources/adobe2api-master/**'
+  - '!resources/python/**'
+extraResources:
+  - from: resources/adobe2api-master
+    to: adobe2api-master
+    filter:
+      - '**/*'
+      - '!data/**'
+      - '!__pycache__/**'
+      - '!**/__pycache__/**'
+      - '!config/config.json'
+      - '!config/tokens.json'
+      - '!config/refresh_profile.json'
+      - '!tokens.json'
+  - from: resources/python
+    to: python
+    filter:
+      - '**/*'
+      - '!**/__pycache__/**'
+      - '!**/*.pyc'
 win:
   executableName: 即刻
   icon: resources/icons/icon.png

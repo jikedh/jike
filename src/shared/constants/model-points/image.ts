@@ -1,4 +1,8 @@
-import { NANO_BANANA_LOCAL_MODEL } from "../ai-models";
+import {
+  ADOBE_GPT_IMAGE2_MODEL,
+  ADOBE_NANO_BANANA_PRO_MODEL,
+  NANO_BANANA_LOCAL_MODEL,
+} from "../ai-models";
 
 export const IMAGE_MODEL_POINTS: Record<string, number> = {
   "gemini-3-pro-image-preview": 24,
@@ -6,6 +10,8 @@ export const IMAGE_MODEL_POINTS: Record<string, number> = {
   "doubao-seedream-5-0": 15,
   midjourney: 27,
   "midjourney-niji7": 27,
+  [ADOBE_GPT_IMAGE2_MODEL]: 0,
+  [ADOBE_NANO_BANANA_PRO_MODEL]: 0,
 };
 
 export const IMAGE_PLATFORM_POINTS: Record<string, number> = {

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  normalizeRequiredPoints,
   POINTS_DISABLED_BALANCE,
   POINTS_FEATURE_ENABLED,
-  normalizeRequiredPoints,
 } from "shared/constants/points";
 import { getBalanceInfo, getScoreConfig } from "@/api/jikeing";
 import { useUserStore } from "@/stores/useUserStore";
@@ -11,6 +11,7 @@ type EnsurePointsOptions = {
   requiredPoints: number;
   actionLabel: string;
   warning: (message: string) => void;
+  skipBalanceCheck?: boolean;
 };
 
 type ValidateBalanceOptions = {
@@ -18,7 +19,7 @@ type ValidateBalanceOptions = {
   warning: (message: string) => void;
   insufficientMessage?: (
     requiredPoints: number,
-    currentVipScore: number,
+    currentTotalPoints: number,
   ) => string;
   failureMessage?: string;
 };
@@ -79,7 +80,12 @@ export function useGenerationPoints() {
   }, [balanceInfo]);
 
   const ensureEnoughPoints = useCallback(
-    ({ requiredPoints, actionLabel, warning }: EnsurePointsOptions) => {
+    ({
+      requiredPoints,
+      actionLabel,
+      warning,
+      skipBalanceCheck,
+    }: EnsurePointsOptions) => {
       const normalizedRequiredPoints = normalizeRequiredPoints(requiredPoints);
       if (!POINTS_FEATURE_ENABLED || normalizedRequiredPoints <= 0) {
         return true;
@@ -89,6 +95,10 @@ export function useGenerationPoints() {
         warning(`请先登录后再${actionLabel}`);
         setDialogLoginStatus(true);
         return false;
+      }
+
+      if (skipBalanceCheck) {
+        return true;
       }
 
       if (totalPoints < normalizedRequiredPoints) {
@@ -117,12 +127,17 @@ export function useGenerationPoints() {
 
       try {
         const balanceResponse = await getBalanceInfo();
+        const currentForScore = Number(balanceResponse?.data?.forScore ?? 0);
         const currentVipScore = Number(balanceResponse?.data?.vipScore ?? 0);
+        const currentTotalPoints = currentForScore + currentVipScore;
 
-        if (currentVipScore < normalizedRequiredPoints) {
+        if (currentTotalPoints < normalizedRequiredPoints) {
           warning(
-            insufficientMessage?.(normalizedRequiredPoints, currentVipScore) ??
-              `积分不足，当前生成需 ${normalizedRequiredPoints} 积分`,
+            insufficientMessage?.(
+              normalizedRequiredPoints,
+              currentTotalPoints,
+            ) ??
+            `积分不足，当前剩余 ${currentTotalPoints} 积分，当前生成需 ${normalizedRequiredPoints} 积分`,
           );
           return false;
         }

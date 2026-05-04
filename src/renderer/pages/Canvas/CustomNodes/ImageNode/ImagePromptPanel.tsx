@@ -6,11 +6,14 @@ import type { ChangeEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import {
+  ADOBE_GPT_IMAGE2_MODEL,
+  ADOBE_NANO_BANANA_PRO_MODEL,
   IMAGE_MODELS,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
+import { getImageGenerationPoints } from "shared/constants/model-points";
 import type { ImageGenerationNode, NoteNodeData } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import {
@@ -18,10 +21,11 @@ import {
   isLocalGeminiFatalBatchError,
   normalizeLocalGeminiErrorDetail,
 } from "shared/utils/localGeminiErrors";
+import { getRemoteMediaUrl } from "shared/utils/mediaPersistence";
 import { cn } from "shared/utils/utils";
+import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { PresetDropdown } from "@/components/PresetDropdown";
 import { Button } from "@/components/ui/button";
-import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import {
   Select,
   SelectContent,
@@ -33,7 +37,6 @@ import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
-import { getImageGenerationPoints } from "shared/constants/model-points";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import {
   GeminiParamsPanel,
@@ -117,7 +120,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     fallbackAIGenPrice,
     normalizeRequiredPoints,
     refreshBalanceInfo,
-    ensureEnoughPoints,
     validateBalanceBeforeGenerate,
   } = useGenerationPoints();
 
@@ -225,10 +227,15 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     model === NANO_BANANA_LOCAL_MODEL &&
     currentImageData?.platform === NANO_BANANA_LOCAL_PLATFORM;
   // 判断是否为 GPT-Image-2 模型
+  const isAdobeGptImage2Model = model === ADOBE_GPT_IMAGE2_MODEL;
+  const isAdobeNanoBananaProModel = model === ADOBE_NANO_BANANA_PRO_MODEL;
+  const isAdobeImageModel =
+    isAdobeGptImage2Model || isAdobeNanoBananaProModel;
   const isGptImage2Model = model === "gpt-image-2";
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
-  const isLocalGeminiDirectModel = isGeminiPro2Model || isNanoBananaLocalModel;
+  const isLocalGeminiDirectModel =
+    isGeminiPro2Model || isNanoBananaLocalModel || isAdobeImageModel;
   const isGeminiFamilyModel =
     isGeminiModel || isGeminiPro2Model || isNanoBananaLocalModel;
 
@@ -292,10 +299,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const disableBuiltInSuggestion = {
     items: () => [],
     render: () => ({
-      onStart: () => {},
-      onUpdate: () => {},
+      onStart: () => { },
+      onUpdate: () => { },
       onKeyDown: () => false,
-      onExit: () => {},
+      onExit: () => { },
     }),
   };
 
@@ -856,16 +863,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       return;
     }
 
-    if (
-      !ensureEnoughPoints({
-        requiredPoints,
-        actionLabel: "生成图片",
-        warning,
-      })
-    ) {
-      return;
-    }
-
     // 判断是否为 Midjourney Niji7 模型，如果是则在 prompt 最后拼接 --niji7 参数
     const isNiji7Model = model === "midjourney-niji7";
     // 构建 Midjourney 模型的最终 prompt：添加 --ar 参数
@@ -887,7 +884,45 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
     // image_urls 直接使用界面当前显示的参考图列表（上传 + 父节点结果）
     // 所有图片在上传时已经上传到 OSS，或是在线 URL，直接使用即可
-    const imageUrls = referenceImageUrls;
+    const latestState = useCanvasFlowStore.getState();
+    const latestNode = latestState.nodes.find((node) => node.id === nodeId);
+    const latestImageData =
+      latestNode?.type === "imageNode"
+        ? (latestNode.data as ImageGenerationNode)
+        : null;
+    const latestReferenceUrls = Array.isArray(latestImageData?.image_urls)
+      ? latestImageData.image_urls
+      : [];
+    const latestParentImageUrls = latestState.edges
+      .filter((edge) => edge.target === nodeId)
+      .flatMap((edge) => {
+        const sourceNode = latestState.nodes.find(
+          (node) => node.id === edge.source,
+        );
+        if (sourceNode?.type !== "imageNode") {
+          return [];
+        }
+        const sourceData = sourceNode.data as ImageGenerationNode;
+        return (sourceData.result?.data ?? [])
+          .map((item) => getRemoteMediaUrl(item) ?? item?.url)
+          .filter((url): url is string => Boolean(url));
+      });
+    const imageUrls = Array.from(
+      new Set(
+        [...referenceImageUrls, ...latestReferenceUrls, ...latestParentImageUrls]
+          .map((url) => String(url || "").trim())
+          .filter(Boolean),
+      ),
+    );
+
+    if (
+      imageUrls.length > 0 &&
+      imageUrls.join("\n") !== latestReferenceUrls.join("\n")
+    ) {
+      updateImageNodeData(nodeId, {
+        image_urls: imageUrls,
+      });
+    }
     const generationTaskCount = isMidjourneyModel ? 1 : imageCount;
     const perTaskRequiredPoints = requiredPoints / generationTaskCount;
 
@@ -928,7 +963,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         basePayload.metadata = {
           resolution,
         };
-      } else if (isGeminiModel || isNanoBananaLocalModel) {
+      } else if (isGeminiModel || isNanoBananaLocalModel || isAdobeImageModel) {
         // Gemini 3 Pro: size 作为画面比例
         basePayload.size = size;
         basePayload.metadata = {
@@ -998,7 +1033,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           });
         submittedTasks.push(task);
 
-        // 提交节流：为 Flow2API 共享池和 Token 留恢复空间
+        // 提交节流：为 Adobe2API 账号池和 Token 留恢复空间
         if (i < imageCount - 1) {
           let remainingDelay = LOCAL_GEMINI_BATCH_SUBMIT_DELAY_MS;
           while (remainingDelay > 0) {
@@ -1334,7 +1369,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             />
           )}
 
-          {isGptImage2Model && (
+          {(isGptImage2Model || isAdobeGptImage2Model) && (
             // GPT-Image-2 整合参数面板
             <GptImage2ParamsPanel
               size={size}
@@ -1350,6 +1385,22 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           )}
 
           {/* Midjourney 整合参数面板 - 仅在选择 Midjourney 模型时显示 */}
+          {isAdobeNanoBananaProModel && (
+            <GeminiParamsPanel
+              size={size}
+              resolution={resolution}
+              sizeOptions={NANO_BANANA_LOCAL_SIZES}
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
+            />
+          )}
+
           {isMidjourneyModel && (
             <MidjourneyParamsPanel
               size={size}

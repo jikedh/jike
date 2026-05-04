@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Flow2ApiState } from "shared/types/flow2api";
+import type { Adobe2ApiState } from "shared/types/adobe2api";
 
 const POLL_INTERVAL_MS = 3000;
 
 const statusMeta: Record<
-  Flow2ApiState["status"],
+  Adobe2ApiState["status"],
   { label: string; className: string; description: string }
 > = {
   stopped: {
@@ -15,12 +15,12 @@ const statusMeta: Record<
   starting: {
     label: "启动中",
     className: "bg-amber-500/20 text-amber-200",
-    description: "正在拉起本地 Python 服务并等待健康检查。",
+    description: "正在拉起本地 Adobe2API 服务并等待健康检查。",
   },
   running: {
     label: "运行中",
     className: "bg-emerald-500/20 text-emerald-200",
-    description: "本地 Gemini 管理页和生成接口已经可用。",
+    description: "本地 Adobe2API 管理页和生成接口已经可用。",
   },
   error: {
     label: "错误",
@@ -32,13 +32,13 @@ const statusMeta: Record<
 function EmptyState() {
   return (
     <div className="h-full min-h-[420px] rounded-2xl border border-dashed border-white/10 bg-black/20 flex items-center justify-center text-sm text-zinc-400">
-      启动本地服务后，这里会内嵌 Flow2API 管理页面。
+      启动本地服务后，这里会内嵌 Adobe2API 管理页面。
     </div>
   );
 }
 
 export default function SettingsPage() {
-  const [state, setState] = useState<Flow2ApiState | null>(null);
+  const [state, setState] = useState<Adobe2ApiState | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [hostInput, setHostInput] = useState("127.0.0.1");
   const [portInput, setPortInput] = useState("18000");
@@ -48,14 +48,14 @@ export default function SettingsPage() {
 
   const refreshState = useCallback(async () => {
     try {
-      const next = await window.flow2api.getState();
+      const next = await window.adobe2api.getState();
       setState(next);
       setHostInput(next.settings.host);
       setPortInput(String(next.settings.port));
       setOutputDirInput(next.settings.outputDir || "");
       setPageError(null);
     } catch (error: any) {
-      setPageError(error?.message || "读取本地 Gemini 状态失败");
+      setPageError(error?.message || "读取本地 Adobe2API 状态失败");
     }
   }, []);
 
@@ -74,10 +74,10 @@ export default function SettingsPage() {
         setPageError(null);
         const next =
           action === "start"
-            ? await window.flow2api.start()
+            ? await window.adobe2api.start()
             : action === "stop"
-              ? await window.flow2api.stop()
-              : await window.flow2api.restart();
+              ? await window.adobe2api.stop()
+              : await window.adobe2api.restart();
         setState(next);
       } catch (error: any) {
         setPageError(error?.message || "服务操作失败");
@@ -92,7 +92,7 @@ export default function SettingsPage() {
   const saveSettings = useCallback(async () => {
     try {
       setBusyAction("save");
-      const next = await window.flow2api.updateSettings({
+      const next = await window.adobe2api.updateSettings({
         host: hostInput.trim(),
         port: Number(portInput),
         outputDir: outputDirInput.trim() || null,
@@ -109,12 +109,25 @@ export default function SettingsPage() {
   const selectOutputDir = useCallback(async () => {
     try {
       setBusyAction("pick-output");
-      const selected = await window.flow2api.selectOutputDirectory();
+      const selected = await window.adobe2api.selectOutputDirectory();
       if (selected) {
         setOutputDirInput(selected);
       }
     } catch (error: any) {
       setPageError(error?.message || "选择结果目录失败");
+    } finally {
+      setBusyAction(null);
+    }
+  }, []);
+
+  const openAdminWindow = useCallback(async () => {
+    try {
+      setBusyAction("open-admin");
+      setPageError(null);
+      const next = await window.adobe2api.openAdminWindow();
+      setState(next);
+    } catch (error: any) {
+      setPageError(error?.message || "打开 Adobe2API 管理后台失败");
     } finally {
       setBusyAction(null);
     }
@@ -132,9 +145,9 @@ export default function SettingsPage() {
       <div className="mx-auto flex max-w-[1600px] flex-col gap-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold">本地 Gemini 渠道</h1>
+            <h1 className="text-3xl font-semibold">本地 Adobe2API 渠道</h1>
             <p className="mt-2 text-sm text-zinc-400">
-              Electron 负责托管本地 Flow2API 服务，并在设置页内嵌现有管理页面。
+              Electron 负责托管本地 Adobe2API 服务，并在设置页内嵌现有管理页面。
             </p>
           </div>
           <div
@@ -243,7 +256,7 @@ export default function SettingsPage() {
                       onChange={(event) =>
                         setOutputDirInput(event.target.value)
                       }
-                      placeholder="选择后，测试生成结果会自动复制到该目录"
+                      placeholder="选择后，生成结果会自动复制到该目录"
                       className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
                     />
                     <button
@@ -281,7 +294,7 @@ export default function SettingsPage() {
               <div>
                 <h2 className="text-lg font-medium">内嵌管理页</h2>
                 <p className="mt-1 text-sm text-zinc-400">
-                  当前直接复用 Flow2API
+                  当前直接复用 Adobe2API
                   现有管理/测试页面，后续再决定是否替换为原生界面。
                 </p>
               </div>
@@ -311,14 +324,14 @@ export default function SettingsPage() {
                   </button>
                 </div>
                 {state?.status === "running" ? (
-                  <a
-                    href={embeddedUrl}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => void openAdminWindow()}
+                    disabled={busyAction !== null}
                     className="rounded-xl bg-white/10 px-3 py-2 text-sm"
                   >
-                    外部打开
-                  </a>
+                    应用内打开
+                  </button>
                 ) : null}
               </div>
             </div>
@@ -327,8 +340,8 @@ export default function SettingsPage() {
               <iframe
                 title={
                   embeddedPage === "manage"
-                    ? "Flow2API 管理页面"
-                    : "Flow2API 测试页面"
+                    ? "Adobe2API 管理页面"
+                    : "Adobe2API 测试页面"
                 }
                 src={embeddedUrl}
                 className="h-[calc(100vh-180px)] min-h-[760px] w-full rounded-xl bg-white"

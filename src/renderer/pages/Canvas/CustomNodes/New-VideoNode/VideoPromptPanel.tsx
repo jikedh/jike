@@ -8,6 +8,9 @@ import { PresetDropdown } from "@/components/PresetDropdown";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
+import type { VideoPromptEditorHandle } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoPromptEditor";
+import { VideoPromptEditor } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoPromptEditor";
+import { VideoReferenceAssetsBar } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoReferenceAssetsBar";
 import {
   getVideoLocalImageMentionId,
   getVideoParentAudioMentionId,
@@ -16,9 +19,6 @@ import {
   useVideoNodeReferences,
 } from "@/pages/Canvas/CustomNodes/VideoNode/hooks/useVideoNodeReferences";
 import { useVideoReferenceActions } from "@/pages/Canvas/CustomNodes/VideoNode/hooks/useVideoReferenceActions";
-import type { VideoPromptEditorHandle } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoPromptEditor";
-import { VideoPromptEditor } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoPromptEditor";
-import { VideoReferenceAssetsBar } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoReferenceAssetsBar";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
@@ -79,6 +79,13 @@ const normalizeNewVideoModelId = (
   value: string | undefined,
   mode?: VideoModeKey,
 ) => {
+  const availableModelIds = new Set(
+    VIDEO_MODEL_OPTIONS.map((option) => option.value),
+  );
+  const fallbackModel = availableModelIds.has("adobe-sora2-pro")
+    ? "adobe-sora2-pro"
+    : VIDEO_MODEL_OPTIONS[0].value;
+
   // Q2 模型暂时屏蔽：历史节点或上一次错误拆分的 ID 统一落到 Q3 Pro，避免下拉出现空值。
   if (
     value === "vidu-reference" ||
@@ -89,7 +96,10 @@ const normalizeNewVideoModelId = (
   ) {
     return "vidu-q3-pro";
   }
-  return value ?? VIDEO_MODEL_OPTIONS[0].value;
+  if (value === "adobe-veo31" || value === "adobe-veo31-fast") {
+    return fallbackModel;
+  }
+  return value && availableModelIds.has(value) ? value : fallbackModel;
 };
 
 const buildReferenceItems = (
@@ -97,37 +107,37 @@ const buildReferenceItems = (
   videoUrls: string[] = [],
   audioUrls: string[] = [],
 ): MentionItem[] => [
-  ...imageUrls.map((url, index) => ({
-    id: `image-${index}-${url}`,
-    label: `图片${index + 1}`,
-    value: url,
-    thumbnail: url,
-    type: "image" as const,
-  })),
-  ...videoUrls.map((url, index) => ({
-    id: `video-${index}-${url}`,
-    label: `视频${index + 1}`,
-    value: url,
-    thumbnail: url,
-    type: "video" as const,
-  })),
-  ...audioUrls.map((url, index) => ({
-    id: `audio-${index}-${url}`,
-    label: `音频${index + 1}`,
-    value: url,
-    thumbnail: url,
-    type: "audio" as const,
-  })),
-];
+    ...imageUrls.map((url, index) => ({
+      id: `image-${index}-${url}`,
+      label: `图片${index + 1}`,
+      value: url,
+      thumbnail: url,
+      type: "image" as const,
+    })),
+    ...videoUrls.map((url, index) => ({
+      id: `video-${index}-${url}`,
+      label: `视频${index + 1}`,
+      value: url,
+      thumbnail: url,
+      type: "video" as const,
+    })),
+    ...audioUrls.map((url, index) => ({
+      id: `audio-${index}-${url}`,
+      label: `音频${index + 1}`,
+      value: url,
+      thumbnail: url,
+      type: "audio" as const,
+    })),
+  ];
 
 type ReferenceSource =
   | string
   | {
-      id?: string;
-      mentionId?: string;
-      url: string;
-      thumbnail?: string;
-    };
+    id?: string;
+    mentionId?: string;
+    url: string;
+    thumbnail?: string;
+  };
 
 const normalizeReferenceSource = (
   item: ReferenceSource,
@@ -155,52 +165,52 @@ const buildOrderedReferenceItems = (
   videoUrls: ReferenceSource[] = [],
   audioUrls: ReferenceSource[] = [],
 ): MentionItem[] => [
-  ...imageUrls.map((item, index) => {
-    const source = normalizeReferenceSource(
-      item,
-      `image-${index}-${typeof item === "string" ? item : item.url}`,
-    );
-    return {
-      id: source.id,
-      label: `图片${index + 1}`,
-      value: source.url,
-      thumbnail: source.thumbnail,
-      url: source.url,
-      mentionId: source.mentionId,
-      type: "image" as const,
-    };
-  }),
-  ...videoUrls.map((item, index) => {
-    const source = normalizeReferenceSource(
-      item,
-      `video-${index}-${typeof item === "string" ? item : item.url}`,
-    );
-    return {
-      id: source.id,
-      label: `视频${index + 1}`,
-      value: source.url,
-      thumbnail: source.thumbnail,
-      url: source.url,
-      mentionId: source.mentionId,
-      type: "video" as const,
-    };
-  }),
-  ...audioUrls.map((item, index) => {
-    const source = normalizeReferenceSource(
-      item,
-      `audio-${index}-${typeof item === "string" ? item : item.url}`,
-    );
-    return {
-      id: source.id,
-      label: `音频${index + 1}`,
-      value: source.url,
-      thumbnail: source.thumbnail,
-      url: source.url,
-      mentionId: source.mentionId,
-      type: "audio" as const,
-    };
-  }),
-];
+    ...imageUrls.map((item, index) => {
+      const source = normalizeReferenceSource(
+        item,
+        `image-${index}-${typeof item === "string" ? item : item.url}`,
+      );
+      return {
+        id: source.id,
+        label: `图片${index + 1}`,
+        value: source.url,
+        thumbnail: source.thumbnail,
+        url: source.url,
+        mentionId: source.mentionId,
+        type: "image" as const,
+      };
+    }),
+    ...videoUrls.map((item, index) => {
+      const source = normalizeReferenceSource(
+        item,
+        `video-${index}-${typeof item === "string" ? item : item.url}`,
+      );
+      return {
+        id: source.id,
+        label: `视频${index + 1}`,
+        value: source.url,
+        thumbnail: source.thumbnail,
+        url: source.url,
+        mentionId: source.mentionId,
+        type: "video" as const,
+      };
+    }),
+    ...audioUrls.map((item, index) => {
+      const source = normalizeReferenceSource(
+        item,
+        `audio-${index}-${typeof item === "string" ? item : item.url}`,
+      );
+      return {
+        id: source.id,
+        label: `音频${index + 1}`,
+        value: source.url,
+        thumbnail: source.thumbnail,
+        url: source.url,
+        mentionId: source.mentionId,
+        type: "audio" as const,
+      };
+    }),
+  ];
 
 const relabelReferenceItemsByOrder = (items: MentionItem[]) => {
   const counters: Record<MentionItem["type"], number> = {
@@ -257,7 +267,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     fallbackAIGenPrice,
     normalizeRequiredPoints,
     refreshBalanceInfo,
-    ensureEnoughPoints,
     validateBalanceBeforeGenerate,
   } = useGenerationPoints();
 
@@ -953,6 +962,69 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         return;
       }
 
+      if (request.model === "adobe-sora2-pro") {
+        const imageCount = generationReferenceItems.filter(
+          (item) => item.type === "image",
+        ).length;
+        const allImages =
+          generationReferenceItems.length === 0 ||
+          generationReferenceItems.every((item) => item.type === "image");
+        if (!allImages) {
+          warning("Sora2Pro（Adobe版本）仅支持图片参考素材");
+          return;
+        }
+        if (request.mode === "text-to-video" && imageCount > 0) {
+          warning("Sora2Pro（Adobe版本）文生视频请不要传参考图");
+          return;
+        }
+        if (request.mode !== "text-to-video" && imageCount < 1) {
+          warning("Sora2Pro（Adobe版本）图生视频请上传或连接 1 张参考图");
+          return;
+        }
+      }
+
+      if (
+        request.model === "adobe-veo31" ||
+        request.model === "adobe-veo31-fast"
+      ) {
+        const imageCount = generationReferenceItems.filter(
+          (item) => item.type === "image",
+        ).length;
+        const allImages =
+          generationReferenceItems.length === 0 ||
+          generationReferenceItems.every((item) => item.type === "image");
+
+        if (request.mode === "text-to-video" && generationReferenceItems.length > 0) {
+          warning("Veo3.1 文生视频请不要传参考图");
+          return;
+        }
+
+        if (request.mode === "image-to-video" && (imageCount !== 1 || !allImages)) {
+          warning("Veo3.1 图生视频需要且仅支持 1 张参考图");
+          return;
+        }
+
+        if (
+          request.mode === "first-last-frame" &&
+          (imageCount !== 2 || !allImages)
+        ) {
+          warning("Veo3.1 首尾帧需要且仅支持 2 张参考图");
+          return;
+        }
+
+        if (request.mode === "all-reference") {
+          if (request.model === "adobe-veo31-fast") {
+            warning("Veo3.1 Fast 不支持全能参考");
+            return;
+          }
+
+          if (imageCount < 1 || imageCount > 3 || !allImages) {
+            warning("该模型只支持1~3图片做为参考图");
+            return;
+          }
+        }
+      }
+
       if (request.model === "happyhorse") {
         const imageCount = generationReferenceItems.filter(
           (item) => item.type === "image",
@@ -975,16 +1047,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
           warning("HappyHores 视频编辑需要且仅支持 1 个视频素材");
           return;
         }
-      }
-
-      if (
-        !ensureEnoughPoints({
-          requiredPoints,
-          actionLabel: "生成视频",
-          warning,
-        })
-      ) {
-        return;
       }
 
       if (
@@ -1016,7 +1078,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       void refreshBalanceInfo();
     },
     [
-      ensureEnoughPoints,
       generationReferenceItems,
       isGenerating,
       nodeId,

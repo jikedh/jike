@@ -27,5 +27,6 @@ build
 out
 *.log*
 release
+resources/python
 resources/flow2api-main
 agent.md

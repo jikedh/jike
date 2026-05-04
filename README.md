@@ -259,6 +259,14 @@ download: { imageAsBuffer, imageAsBase64, imageToFile }
 | `npm run dev:electron` | 开发模式启动 Electron |
 | `npm run build` | 构建生产环境 |
 | `npm run build:win` | 构建 Windows 安装程序 |
+| `npm run check:adobe2api` | 检查项目内 Adobe2API 资源完整性 |
+| `npm run check:adobe2api-python` | 检查内置 Adobe2API Python 运行时 |
+| `npm run prepare:adobe2api` | 检查并应用 Adobe2API 内嵌补丁 |
+| `npm run prepare:adobe2api-python` | 生成或刷新内置 Adobe2API Python 运行时 |
 | `npm run format` | 自动修复格式（Biome） |
 | `npm run lint` | 运行代码检查（Biome） |
 | `npm run check-format` | 检查代码格式 |
+
+## Adobe2API
+
+Adobe2API 内嵌资源、打包过滤和外部源码同步说明见 `docs/adobe2api-integration.md`。
