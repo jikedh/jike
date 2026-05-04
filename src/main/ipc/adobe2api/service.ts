@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, shell } from "electron";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { appendFile, mkdir, readFile } from "fs/promises";
 import { join } from "path";
 import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
@@ -233,6 +233,8 @@ export class Adobe2ApiService {
   }
 
   private buildEnv(settings: Adobe2ApiSettings): NodeJS.ProcessEnv {
+    const pythonRoot = this.resolvePythonRoot();
+    const caBundlePath = this.resolveCaBundlePath(pythonRoot);
     return {
       ...process.env,
       PORT: String(settings.port),
@@ -244,6 +246,10 @@ export class Adobe2ApiService {
       ADOBE_EMBED_ADMIN_TOKEN: this.embedAdminToken,
       PYTHONIOENCODING: "utf-8",
       PYTHONUTF8: "1",
+      PYTHONHOME: pythonRoot,
+      SSL_CERT_FILE: caBundlePath,
+      REQUESTS_CA_BUNDLE: caBundlePath,
+      CURL_CA_BUNDLE: caBundlePath,
     };
   }
 
@@ -254,14 +260,57 @@ export class Adobe2ApiService {
     return join(process.cwd(), "resources", "adobe2api-master");
   }
 
-  private resolvePythonCommand(): string {
-    const pythonRoot = app.isPackaged
+  private resolvePythonRoot(): string {
+    return app.isPackaged
       ? join(process.resourcesPath, "python")
       : join(process.cwd(), "resources", "python");
-    const embeddedPythonCandidates =
+  }
+
+  private resolvePythonCandidates(pythonRoot: string): string[] {
+    return (
       process.platform === "win32"
         ? [join(pythonRoot, "python.exe"), join(pythonRoot, "Scripts", "python.exe")]
-        : [join(pythonRoot, "bin", "python3"), join(pythonRoot, "bin", "python")];
+        : [join(pythonRoot, "bin", "python3"), join(pythonRoot, "bin", "python")]
+    );
+  }
+
+  private resolveBundledCaBundle(pythonRoot: string): string {
+    return process.platform === "win32"
+      ? join(pythonRoot, "Lib", "site-packages", "certifi", "cacert.pem")
+      : join(
+          pythonRoot,
+          "lib",
+          "python3.12",
+          "site-packages",
+          "certifi",
+          "cacert.pem",
+        );
+  }
+
+  private resolveCaBundlePath(pythonRoot: string): string {
+    const bundledCaBundle = this.resolveBundledCaBundle(pythonRoot);
+    if (!existsSync(bundledCaBundle)) {
+      return bundledCaBundle;
+    }
+
+    const baseDir =
+      process.platform === "win32" && process.env.LOCALAPPDATA
+        ? join(process.env.LOCALAPPDATA, "Jike", "adobe2api", "certs")
+        : join(this.runtimeDir, "certs");
+    const runtimeCaBundle = join(baseDir, "cacert.pem");
+
+    try {
+      mkdirSync(baseDir, { recursive: true });
+      copyFileSync(bundledCaBundle, runtimeCaBundle);
+      return runtimeCaBundle;
+    } catch {
+      return bundledCaBundle;
+    }
+  }
+
+  private resolvePythonCommand(): string {
+    const pythonRoot = this.resolvePythonRoot();
+    const embeddedPythonCandidates = this.resolvePythonCandidates(pythonRoot);
     const readyMarker = join(pythonRoot, ".jike-adobe2api-python-ready");
 
     if (existsSync(readyMarker)) {
@@ -273,6 +322,12 @@ export class Adobe2ApiService {
       }
     }
 
+    if (app.isPackaged) {
+      throw new Error(
+        `Embedded Python runtime is missing or incomplete: ${pythonRoot}`,
+      );
+    }
+
     return "python";
   }
 
@@ -280,13 +335,46 @@ export class Adobe2ApiService {
     command: string;
     args: string[];
     cwd: string;
+    pythonRoot: string;
   } {
     const adobeRoot = this.resolveAdobeRoot();
+    const pythonRoot = this.resolvePythonRoot();
     return {
       command: this.resolvePythonCommand(),
       args: ["-X", "utf8", "app.py"],
       cwd: adobeRoot,
+      pythonRoot,
     };
+  }
+
+  private buildStartupDiagnostics(entry: {
+    command: string;
+    args: string[];
+    cwd: string;
+    pythonRoot: string;
+  }): string {
+    const readyMarker = join(entry.pythonRoot, ".jike-adobe2api-python-ready");
+    const pythonCandidates = this.resolvePythonCandidates(entry.pythonRoot);
+    const lines = [
+      `packaged=${app.isPackaged}`,
+      `resourcesPath=${app.isPackaged ? process.resourcesPath : "dev"}`,
+      `adobeRoot=${entry.cwd} exists=${existsSync(entry.cwd)}`,
+      `entrypoint=${join(entry.cwd, "app.py")} exists=${existsSync(join(entry.cwd, "app.py"))}`,
+      `pythonRoot=${entry.pythonRoot} exists=${existsSync(entry.pythonRoot)}`,
+      `pythonReadyMarker=${readyMarker} exists=${existsSync(readyMarker)}`,
+      `pythonCommand=${entry.command} exists=${existsSync(entry.command)}`,
+      `caBundle=${this.resolveCaBundlePath(entry.pythonRoot)} exists=${existsSync(
+        this.resolveCaBundlePath(entry.pythonRoot),
+      )}`,
+      `pythonCandidates=${pythonCandidates
+        .map((candidate) => `${candidate}:${existsSync(candidate)}`)
+        .join(", ")}`,
+      `runtimeDir=${this.runtimeDir}`,
+      `configDir=${this.configDir}`,
+      `dataDir=${this.dataDir}`,
+      `healthUrl=${this.state.healthUrl}`,
+    ];
+    return `[startup diagnostics]\n${lines.join("\n")}\n`;
   }
 
   private async waitForHealthy(timeoutMs = 30000): Promise<void> {
@@ -378,14 +466,14 @@ export class Adobe2ApiService {
       lastExitCode: null,
       startedAt: Date.now(),
     });
+    const entry = this.resolveEntrypoint();
+    const env = this.buildEnv(this.state.settings);
     await appendFile(
       this.logPath,
-      `\n[${new Date().toISOString()}] starting adobe2api...\n`,
+      `\n[${new Date().toISOString()}] starting adobe2api...\n${this.buildStartupDiagnostics(entry)}`,
       "utf-8",
     );
 
-    const entry = this.resolveEntrypoint();
-    const env = this.buildEnv(this.state.settings);
     this.child = spawn(entry.command, entry.args, {
       cwd: entry.cwd,
       env,
@@ -399,6 +487,7 @@ export class Adobe2ApiService {
       void this.appendLog(chunk.toString());
     });
     this.child.on("error", (error) => {
+      void this.appendLog(`[spawn error] ${error.message}\n`);
       this.setState("error", {
         lastError: error.message,
         pid: null,
@@ -406,6 +495,11 @@ export class Adobe2ApiService {
     });
     this.child.on("exit", (code) => {
       this.child = null;
+      if (code !== 0) {
+        void this.appendLog(
+          `[process exit] Adobe2API exited with code ${code ?? "unknown"}\n`,
+        );
+      }
       this.setState(code === 0 ? "stopped" : "error", {
         lastExitCode: code ?? null,
         pid: null,
