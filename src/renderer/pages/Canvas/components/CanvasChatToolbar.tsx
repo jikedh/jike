@@ -19,7 +19,7 @@ type CanvasChatToolbarProps = {
 const TOOLBAR_BUTTON_CLASSNAME =
   "flex h-9 w-9 items-center justify-center rounded-lg border text-white/70 transition-colors";
 
-const clampZoom = (zoom: number) => Math.min(2, Math.max(0.1, zoom));
+const clampZoom = (zoom: number) => Math.min(2, Math.max(0.05, zoom));
 
 const setFlowZoom = (
   reactFlowInstance: ReactFlowInstance,
@@ -110,7 +110,7 @@ export const CanvasChatToolbar = ({
         <div className="flex min-w-[156px] items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2">
           <input
             type="range"
-            min={0.1}
+            min={0.05}
             max={2}
             step={0.05}
             value={zoomLevel}

@@ -69,6 +69,8 @@ import { MultiSelectQuickCreate } from "./MultiSelectQuickCreate";
 
 const FALLBACK_NODE_WIDTH = 175;
 const FALLBACK_NODE_HEIGHT = 175;
+const MIN_CANVAS_ZOOM = 0.05;
+const MAX_CANVAS_ZOOM = 2;
 const DEFAULT_OPEN_ZOOM = 0.67;
 const STORE_NODE_CHANGE_THROTTLE_MS = 70;
 
@@ -795,8 +797,8 @@ export const CanvasFlow = ({
           deltaModeFactor *
           (event.ctrlKey && isMacOs() ? 10 : 1);
         const newZoom = Math.min(
-          2,
-          Math.max(0.2, currentZoom * 2 ** wheelDelta),
+          MAX_CANVAS_ZOOM,
+          Math.max(MIN_CANVAS_ZOOM, currentZoom * 2 ** wheelDelta),
         );
 
         const reactFlowBounds = (
@@ -2798,8 +2800,8 @@ export const CanvasFlow = ({
               minZoom: DEFAULT_OPEN_ZOOM,
               maxZoom: DEFAULT_OPEN_ZOOM,
             }}
-            minZoom={0.2}
-            maxZoom={2}
+            minZoom={MIN_CANVAS_ZOOM}
+            maxZoom={MAX_CANVAS_ZOOM}
             colorMode="dark"
             style={{ background: "#090909" }}
             deleteKeyCode={null}
