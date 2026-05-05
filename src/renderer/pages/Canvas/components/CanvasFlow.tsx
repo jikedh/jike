@@ -119,6 +119,13 @@ const clamp = (value: number, min: number, max: number) => {
   return Math.min(Math.max(value, min), max);
 };
 
+const getNodeSize = (node: AllNodeType) => {
+  return {
+    width: node.width ?? node.measured?.width ?? FALLBACK_NODE_WIDTH,
+    height: node.height ?? node.measured?.height ?? FALLBACK_NODE_HEIGHT,
+  };
+};
+
 const DELETE_CONFIRM_NODE_LABEL: Partial<Record<AllNodeType["type"], string>> =
   {
     imageNode: "图片节点",
@@ -282,7 +289,7 @@ export const CanvasFlow = ({
     (state) => state.nodeSearchVisible,
   );
   const reactFlowInstance = useReactFlow<AllNodeType, EdgeType>();
-  const { screenToFlowPosition } = reactFlowInstance;
+  const { flowToScreenPosition, screenToFlowPosition } = reactFlowInstance;
   const navigate = useNavigate();
 
   // 鎷栨嫿涓婁紶鍔熻兘
@@ -327,6 +334,15 @@ export const CanvasFlow = ({
   const mouseFlowPositionRef = useRef<{
     x: number;
     y: number;
+  } | null>(null);
+  const selectionCenterSessionRef = useRef<{
+    active: boolean;
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    additive: boolean;
+    initialSelectedNodeIds: Set<string>;
   } | null>(null);
 
   // 鑾峰彇姝ｅ湪鐢熸垚鐨勪换鍔℃暟閲忓拰鍙栨秷鏂规硶
@@ -1200,9 +1216,79 @@ export const CanvasFlow = ({
     setSelectedGroupId(null);
   }, [annotationWorkspace.open, setSelectionBoxActive, setSelectedGroupId]);
 
+  const applyCenterPointSelection = useCallback(() => {
+    const session = selectionCenterSessionRef.current;
+    selectionCenterSessionRef.current = null;
+
+    if (!session?.active) {
+      return;
+    }
+
+    const selectionRect = {
+      left: Math.min(session.startX, session.endX),
+      right: Math.max(session.startX, session.endX),
+      top: Math.min(session.startY, session.endY),
+      bottom: Math.max(session.startY, session.endY),
+    };
+
+    if (
+      selectionRect.right - selectionRect.left < GROUP_DRAG_THRESHOLD &&
+      selectionRect.bottom - selectionRect.top < GROUP_DRAG_THRESHOLD
+    ) {
+      return;
+    }
+
+    const currentSelectedById = new Map(
+      useCanvasFlowStore
+        .getState()
+        .nodes.map((node) => [node.id, Boolean(node.selected)]),
+    );
+
+    const changes = displayNodes
+      .map((node) => {
+        const { width, height } = getNodeSize(node);
+        const center = flowToScreenPosition({
+          x: node.position.x + width / 2,
+          y: node.position.y + height / 2,
+        });
+        const centerInside =
+          center.x >= selectionRect.left &&
+          center.x <= selectionRect.right &&
+          center.y >= selectionRect.top &&
+          center.y <= selectionRect.bottom;
+        const nextSelected =
+          centerInside ||
+          (session.additive && session.initialSelectedNodeIds.has(node.id));
+        const currentSelected = currentSelectedById.get(node.id) ?? false;
+
+        if (currentSelected === nextSelected && node.selected === nextSelected) {
+          return null;
+        }
+
+        return {
+          id: node.id,
+          type: "select" as const,
+          selected: nextSelected,
+        };
+      })
+      .filter(Boolean) as NodeChange<AllNodeType>[];
+
+    if (changes.length === 0) {
+      return;
+    }
+
+    setDisplayNodes((prev) => applyNodeChanges(changes, prev));
+    storeOnNodesChange(changes);
+  }, [displayNodes, flowToScreenPosition, storeOnNodesChange]);
+
   const handleSelectionEnd = useCallback(() => {
     setSelectionBoxActive(false);
-  }, [setSelectionBoxActive]);
+
+    window.requestAnimationFrame(() => {
+      flushStoreNodeChanges();
+      applyCenterPointSelection();
+    });
+  }, [applyCenterPointSelection, flushStoreNodeChanges, setSelectionBoxActive]);
 
   useEffect(() => {
     return () => {
@@ -1526,6 +1612,45 @@ export const CanvasFlow = ({
       });
 
       if (!hitGroup) {
+        const initialSelectedNodeIds = new Set(
+          useCanvasFlowStore
+            .getState()
+            .nodes.filter((node) => node.selected)
+            .map((node) => node.id),
+        );
+        const session = {
+          active: true,
+          startX: event.clientX,
+          startY: event.clientY,
+          endX: event.clientX,
+          endY: event.clientY,
+          additive: event.shiftKey,
+          initialSelectedNodeIds,
+        };
+        selectionCenterSessionRef.current = session;
+
+        function updateSessionEnd(pointerEvent: PointerEvent) {
+          session.endX = pointerEvent.clientX;
+          session.endY = pointerEvent.clientY;
+        }
+
+        function finishSession(pointerEvent: PointerEvent) {
+          updateSessionEnd(pointerEvent);
+          window.removeEventListener("pointermove", updateSessionEnd);
+          window.removeEventListener("pointerup", finishSession);
+          window.removeEventListener("pointercancel", cancelSession);
+        }
+
+        function cancelSession() {
+          session.active = false;
+          window.removeEventListener("pointermove", updateSessionEnd);
+          window.removeEventListener("pointerup", finishSession);
+          window.removeEventListener("pointercancel", cancelSession);
+        }
+
+        window.addEventListener("pointermove", updateSessionEnd);
+        window.addEventListener("pointerup", finishSession);
+        window.addEventListener("pointercancel", cancelSession);
         return;
       }
 
