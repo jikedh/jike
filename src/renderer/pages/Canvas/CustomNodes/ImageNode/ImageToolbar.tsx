@@ -24,6 +24,7 @@ import Share from "yet-another-react-lightbox/plugins/share";
 import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { saveToolMediaFileToProject } from "../utils/localMedia";
 import { ImageCropDialog } from "./ImageCropDialog";
 import { InpaintDialog } from "./InpaintDialog";
 
@@ -71,6 +72,7 @@ export const ImageToolbar = memo(
     const updateImageNodeData = useCanvasFlowStore(
       (state) => state.updateImageNodeData,
     );
+    const projectId = useCanvasFlowStore((state) => state.projectId);
     const startImageGeneration = useCanvasFlowStore(
       (state) => state.startImageGeneration,
     );
@@ -122,14 +124,19 @@ export const ImageToolbar = memo(
         }
 
         const currentData = data.result?.data ?? [];
+        const resultItem = await saveToolMediaFileToProject(
+          projectId,
+          { url: uploadedUrl, remoteUrl: uploadedUrl },
+          fileToUpload,
+          "image",
+          "png",
+        );
 
         // 检测图片尺寸并更新节点比例（仅当节点还没有图片时设置 size）
         const updatePatch: Record<string, any> = {
           result: {
             type: "image",
-            data: appendMediaSequences(currentData, [
-              { url: uploadedUrl, remoteUrl: uploadedUrl },
-            ]),
+            data: appendMediaSequences(currentData, [resultItem]),
           },
         };
 

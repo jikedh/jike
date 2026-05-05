@@ -69,6 +69,8 @@ import { MultiSelectQuickCreate } from "./MultiSelectQuickCreate";
 
 const FALLBACK_NODE_WIDTH = 175;
 const FALLBACK_NODE_HEIGHT = 175;
+const MIN_CANVAS_ZOOM = 0.05;
+const MAX_CANVAS_ZOOM = 2;
 const DEFAULT_OPEN_ZOOM = 0.67;
 const STORE_NODE_CHANGE_THROTTLE_MS = 70;
 
@@ -795,8 +797,8 @@ export const CanvasFlow = ({
           deltaModeFactor *
           (event.ctrlKey && isMacOs() ? 10 : 1);
         const newZoom = Math.min(
-          2,
-          Math.max(0.2, currentZoom * 2 ** wheelDelta),
+          MAX_CANVAS_ZOOM,
+          Math.max(MIN_CANVAS_ZOOM, currentZoom * 2 ** wheelDelta),
         );
 
         const reactFlowBounds = (
@@ -1257,9 +1259,12 @@ export const CanvasFlow = ({
       setSelectionBoxActive(false);
       setSelectedGroupId(groupId);
 
+      const nodeByIdForDrag = new Map(
+        displayNodes.map((node) => [node.id, node]),
+      );
       const startPositions = new Map(
         group.nodeIds.map((nodeId) => {
-          const node = displayNodes.find((item) => item.id === nodeId);
+          const node = nodeByIdForDrag.get(nodeId);
           return [
             nodeId,
             {
@@ -1269,14 +1274,22 @@ export const CanvasFlow = ({
           ] as const;
         }),
       );
+      const startNodeIndexes = new Map<string, number>();
+      displayNodes.forEach((node, index) => {
+        if (startPositions.has(node.id)) {
+          startNodeIndexes.set(node.id, index);
+        }
+      });
 
       groupDragStateRef.current = {
         groupId,
         startClientX: clientX,
         startClientY: clientY,
+        startZoom: viewportStateRef.current.zoom || 1,
         latestClientX: clientX,
         latestClientY: clientY,
         startPositions,
+        startNodeIndexes,
         dragging: false,
       };
 
@@ -1314,35 +1327,40 @@ export const CanvasFlow = ({
             return;
           }
 
-          const startFlow = screenToFlowPosition({
-            x: latestDragState.startClientX,
-            y: latestDragState.startClientY,
-          });
-          const currentFlow = screenToFlowPosition({
-            x: latestDragState.latestClientX,
-            y: latestDragState.latestClientY,
-          });
           const delta = {
-            x: currentFlow.x - startFlow.x,
-            y: currentFlow.y - startFlow.y,
+            x:
+              (latestDragState.latestClientX -
+                latestDragState.startClientX) /
+              latestDragState.startZoom,
+            y:
+              (latestDragState.latestClientY -
+                latestDragState.startClientY) /
+              latestDragState.startZoom,
           };
 
-          setDisplayNodes((prev) =>
-            prev.map((node) => {
-              const startPosition = latestDragState.startPositions.get(node.id);
-              if (!startPosition) {
-                return node;
+          setDisplayNodes((prev) => {
+            const next = prev.slice();
+            let hasChanged = false;
+
+            latestDragState.startPositions.forEach((startPosition, nodeId) => {
+              const index = latestDragState.startNodeIndexes.get(nodeId);
+              if (index === undefined || next[index]?.id !== nodeId) {
+                return;
               }
 
-              return {
-                ...node,
+              const prevNode = next[index];
+              next[index] = {
+                ...prevNode,
                 position: {
                   x: startPosition.x + delta.x,
                   y: startPosition.y + delta.y,
                 },
               };
-            }),
-          );
+              hasChanged = true;
+            });
+
+            return hasChanged ? next : prev;
+          });
         });
       };
 
@@ -1812,7 +1830,9 @@ export const CanvasFlow = ({
     groupId: string;
     startClientX: number;
     startClientY: number;
+    startZoom: number;
     startPositions: Map<string, { x: number; y: number }>;
+    startNodeIndexes: Map<string, number>;
     latestClientX: number;
     latestClientY: number;
     dragging: boolean;
@@ -2795,8 +2815,8 @@ export const CanvasFlow = ({
               minZoom: DEFAULT_OPEN_ZOOM,
               maxZoom: DEFAULT_OPEN_ZOOM,
             }}
-            minZoom={0.2}
-            maxZoom={2}
+            minZoom={MIN_CANVAS_ZOOM}
+            maxZoom={MAX_CANVAS_ZOOM}
             colorMode="dark"
             style={{ background: "#090909" }}
             deleteKeyCode={null}
@@ -2823,7 +2843,7 @@ export const CanvasFlow = ({
             defaultEdgeOptions={defaultEdgeOptions}
           >
             <ViewportPortal>
-              <div className="pointer-events-none absolute left-0 top-0 z-[12]">
+              <div className="pointer-events-none absolute left-0 top-0 z-[-1]">
                 {groupFrames.map((group) => {
                   const isSelected = group.id === selectedGroupId;
 
@@ -2831,10 +2851,10 @@ export const CanvasFlow = ({
                     <div
                       key={group.id}
                       className={cn(
-                        "absolute left-0 top-0 rounded-[14px] border bg-transparent transition-colors",
+                        "absolute left-0 top-0 rounded-[16px] border transition-colors duration-150 will-change-transform",
                         isSelected
-                          ? "border-[#B43FEB]/70 shadow-[0_0_0_1px_rgba(180,63,235,0.18),0_0_32px_rgba(180,63,235,0.1)]"
-                          : "border-dashed border-white/14",
+                          ? "border-[#B43FEB]/75 bg-[#272b33]/34 shadow-[0_12px_34px_rgba(0,0,0,0.26),0_0_0_1px_rgba(180,63,235,0.22),0_0_24px_rgba(180,63,235,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]"
+                          : "border-white/18 bg-[#272b33]/24 shadow-[0_8px_24px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.06)]",
                       )}
                       style={{
                         transform: `translate3d(${group.bounds.x}px, ${group.bounds.y}px, 0)`,
@@ -2844,8 +2864,8 @@ export const CanvasFlow = ({
                     >
                       <div
                         className={cn(
-                          "absolute inset-0 rounded-[14px] bg-white/[0.01]",
-                          isSelected ? "opacity-100" : "opacity-0",
+                          "absolute inset-x-0 top-0 h-8 rounded-t-[16px] bg-gradient-to-b from-white/8 to-transparent",
+                          isSelected ? "opacity-70" : "opacity-40",
                         )}
                       />
                     </div>

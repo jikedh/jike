@@ -20,6 +20,7 @@ import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { NodeNameBadge } from "../shared/NodeNameBadge";
+import { saveToolMediaFileToProject } from "../utils/localMedia";
 import { ImageAnnotationWorkspace } from "./ImageAnnotationWorkspace";
 import { ImageContent } from "./ImageContent";
 import { ImageGridCropDialog } from "./ImageGridCropDialog";
@@ -282,6 +283,13 @@ export const ImageNode = memo(
           if (!uploadResult.url) {
             throw new Error("裁剪图片上传失败");
           }
+          const resultItem = await saveToolMediaFileToProject(
+            projectId,
+            { url: uploadResult.url, remoteUrl: uploadResult.url },
+            fileToUpload,
+            "image",
+            "png",
+          );
           const croppedSize =
             cropRatio && cropRatio !== "custom" && cropRatio !== "original"
               ? cropRatio
@@ -310,7 +318,7 @@ export const ImageNode = memo(
             image_urls: [uploadResult.url],
             result: {
               type: "image",
-              data: [{ url: uploadResult.url, remoteUrl: uploadResult.url }],
+              data: [resultItem],
             },
             status: GenerationStatus.COMPLETED,
             progress: 100,
@@ -327,7 +335,7 @@ export const ImageNode = memo(
           throw error;
         }
       },
-      [addNode, id, onConnect, updateImageNodeData],
+      [addNode, id, onConnect, projectId, updateImageNodeData],
     );
 
     const handleGridCrop = useCallback(
@@ -340,7 +348,15 @@ export const ImageNode = memo(
             throw new Error("当前图片节点不存在");
           }
 
-          const uploadedItems: Array<{ url: string; size?: string }> = [];
+          const uploadedItems: Array<{
+            resultItem: {
+              url: string;
+              remoteUrl?: string;
+              localName?: string;
+              localPath?: string;
+            };
+            size?: string;
+          }> = [];
           let failedCount = 0;
 
           for (const file of files) {
@@ -359,10 +375,14 @@ export const ImageNode = memo(
                 fileToUpload,
                 "image",
               );
-              uploadedItems.push({
-                url: uploadResult.url,
-                size: croppedSize,
-              });
+              const resultItem = await saveToolMediaFileToProject(
+                projectId,
+                { url: uploadResult.url, remoteUrl: uploadResult.url },
+                fileToUpload,
+                "image",
+                "png",
+              );
+              uploadedItems.push({ resultItem, size: croppedSize });
             } catch (error) {
               failedCount += 1;
               console.error("宫格裁剪图片失败:", error);
@@ -409,10 +429,10 @@ export const ImageNode = memo(
               badgeLabel: "宫格裁剪",
               isUpload: true,
               ...(item.size ? { size: item.size } : {}),
-              image_urls: [item.url],
+              image_urls: [item.resultItem.url],
               result: {
                 type: "image",
-                data: [{ url: item.url, remoteUrl: item.url }],
+                data: [item.resultItem],
               },
               status: GenerationStatus.COMPLETED,
               progress: 100,
@@ -437,7 +457,7 @@ export const ImageNode = memo(
           throw error;
         }
       },
-      [addNode, createGroup, id, onConnect, updateImageNodeData],
+      [addNode, createGroup, id, onConnect, projectId, updateImageNodeData],
     );
 
     const handleAnnotate = useCallback(() => {

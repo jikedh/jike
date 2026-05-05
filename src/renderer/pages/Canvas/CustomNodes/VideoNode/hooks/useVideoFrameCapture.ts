@@ -6,6 +6,7 @@ import type { VideoGenerationNode } from "shared/types/flow";
 import { getVideoDuration } from "shared/utils/getVideoDuration";
 import { toast } from "sonner";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { saveToolMediaFileToProject } from "../../utils/localMedia";
 
 /**
  * 视频截帧 Hook
@@ -18,6 +19,7 @@ export const useVideoFrameCapture = () => {
 
   const { screenToFlowPosition } = useReactFlow();
   const addNode = useCanvasFlowStore((state) => state.addNode);
+  const projectId = useCanvasFlowStore((state) => state.projectId);
   const updateImageNodeData = useCanvasFlowStore(
     (state) => state.updateImageNodeData,
   );
@@ -34,6 +36,7 @@ export const useVideoFrameCapture = () => {
       snapshotUrl: string,
       sourceVideoNodeId?: string,
       badgeLabel?: string,
+      snapshotFile?: File,
     ) => {
       // 将新图片节点放到画布中心
       const centerPosition = screenToFlowPosition({
@@ -51,6 +54,15 @@ export const useVideoFrameCapture = () => {
         sourceVideoNode?.type === "videoNode"
           ? (sourceVideoNode.data as VideoGenerationNode).aspect_ratio
           : undefined;
+      const resultItem = snapshotFile
+        ? await saveToolMediaFileToProject(
+            projectId,
+            { url: snapshotUrl, remoteUrl: snapshotUrl },
+            snapshotFile,
+            "image",
+            "jpg",
+          )
+        : { url: snapshotUrl, remoteUrl: snapshotUrl };
 
       // 把截图写入新节点，并标记为已完成状态
       updateImageNodeData(newNodeId, {
@@ -58,7 +70,7 @@ export const useVideoFrameCapture = () => {
         image_urls: [snapshotUrl],
         result: {
           type: "image",
-          data: [{ url: snapshotUrl }],
+          data: [resultItem],
         },
         ...(sourceAspectRatio ? { size: sourceAspectRatio } : {}),
         status: GenerationStatus.COMPLETED,
@@ -79,7 +91,7 @@ export const useVideoFrameCapture = () => {
 
       return newNodeId;
     },
-    [addNode, updateImageNodeData, onConnect],
+    [addNode, onConnect, projectId, updateImageNodeData],
   );
 
   /**
@@ -121,7 +133,7 @@ export const useVideoFrameCapture = () => {
         }
 
         // 3. 创建新的图片节点并连接
-        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId);
+        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId, undefined, file);
 
         toast.success("首帧提取成功，已创建图片节点");
       } catch (error) {
@@ -187,7 +199,7 @@ export const useVideoFrameCapture = () => {
         }
 
         // 4. 创建新的图片节点并连接
-        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId, "尾帧");
+        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId, "尾帧", file);
 
         toast.success("尾帧提取成功，已创建图片节点");
       } catch (error) {
@@ -247,7 +259,7 @@ export const useVideoFrameCapture = () => {
         }
 
         // 3. 创建新的图片节点并连接
-        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId, "截帧");
+        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId, "截帧", file);
 
         toast.success(
           `截取 ${(timeMs / 1000).toFixed(1)}s 成功，已创建图片节点`,

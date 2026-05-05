@@ -51,6 +51,10 @@ import type { VideoTrimResult } from "./components/VideoTrimPanel";
 import { VideoTrimPanel } from "./components/VideoTrimPanel";
 import { useVideoFrameCapture } from "./hooks/useVideoFrameCapture";
 import { getVideoUrlsFromNodeData } from "./utils/video-url";
+import {
+  saveToolMediaFileToProject,
+  saveToolMediaUrlToProject,
+} from "../utils/localMedia";
 
 type WuhenRect = {
   x1: number;
@@ -952,6 +956,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const addNode = useCanvasFlowStore((state) => state.addNode);
+  const projectId = useCanvasFlowStore((state) => state.projectId);
   const onConnect = useCanvasFlowStore((state) => state.onConnect);
 
   // 更新视频节点数据：上传成功后将 URL 回填到当前节点
@@ -1014,14 +1019,19 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
       const fileExt = file.name.split(".").pop()?.toLowerCase() || "mp4";
       const currentData = data.result?.data ?? [];
+      const resultItem = await saveToolMediaFileToProject(
+        projectId,
+        { url: uploadedUrl, remoteUrl: uploadedUrl, format: fileExt },
+        file,
+        "video",
+        fileExt,
+      );
 
       // 检测视频尺寸并更新节点比例（仅当节点还没有视频时设置 aspect_ratio）
       const updatePatch: Record<string, any> = {
         result: {
           type: "video",
-          data: appendMediaSequences(currentData, [
-            { url: uploadedUrl, remoteUrl: uploadedUrl, format: fileExt },
-          ]),
+          data: appendMediaSequences(currentData, [resultItem]),
         },
         status: GenerationStatus.COMPLETED,
         progress: 100,
@@ -1164,6 +1174,17 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           targetHandle: "input",
         });
 
+        const resultItem = await saveToolMediaUrlToProject(
+          projectId,
+          {
+            url: response.data.url,
+            remoteUrl: response.data.url,
+            format: response.data.format,
+          },
+          "video",
+          response.data.format || "mp4",
+        );
+
         updateVideoNodeData(childId, {
           badgeLabel: "视频裁剪",
           isUpload: true,
@@ -1179,13 +1200,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           },
           result: {
             type: "video",
-            data: [
-              {
-                url: response.data.url,
-                remoteUrl: response.data.url,
-                format: response.data.format,
-              },
-            ],
+            data: [resultItem],
           },
           status: GenerationStatus.COMPLETED,
           progress: 100,
@@ -1215,6 +1230,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       data.aspect_ratio,
       nodeId,
       onConnect,
+      projectId,
       updateVideoNodeData,
     ],
   );
@@ -1254,12 +1270,18 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           const { taskStatus, progress } = extractTaskStatusInfo(response);
 
           if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
+            const resultItem = await saveToolMediaUrlToProject(
+              projectId,
+              { url: publicUrl, remoteUrl: publicUrl, format: "mp4" },
+              "video",
+              "mp4",
+            );
             updateVideoNodeData(targetNodeId, {
               status: GenerationStatus.COMPLETED,
               progress: 100,
               result: {
                 type: "video",
-                data: [{ url: publicUrl, format: "mp4" }],
+                data: [resultItem],
               },
               error: undefined,
             });
@@ -1303,7 +1325,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       subtitlePollers[targetNodeId] = timer;
       void poll();
     },
-    [updateVideoNodeData],
+    [projectId, updateVideoNodeData],
   );
 
   const handleSubmitRemoveCaptions = useCallback(
