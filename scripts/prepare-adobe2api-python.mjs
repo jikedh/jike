@@ -23,6 +23,8 @@ const embeddedPython = isWin
   : join(pythonRoot, "bin", "python3");
 const readyMarker = join(pythonRoot, ".jike-adobe2api-python-ready");
 
+const validationImports = "import fastapi, uvicorn, pydantic, requests, curl_cffi, itsdangerous, PIL";
+
 const excludedRuntimeEntries = new Set([
   "Doc",
   "include",
@@ -48,6 +50,19 @@ function run(command, args, options = {}) {
     throw new Error(`${command} ${args.join(" ")} failed with ${result.status}`);
   }
   return result;
+}
+
+function isEmbeddedPythonReady() {
+  if (!existsSync(readyMarker) || !existsSync(embeddedPython)) {
+    return false;
+  }
+
+  const result = spawnSync(embeddedPython, ["-c", validationImports], {
+    stdio: "ignore",
+    shell: false,
+  });
+
+  return !result.error && result.status === 0;
 }
 
 function hostPythonInfo() {
@@ -168,8 +183,7 @@ function copyHostDistributions(info) {
     distributions = hostDistributionFiles(requirements);
   } catch (error) {
     console.warn(
-      `[prepare-adobe2api-python] host packages are incomplete, falling back to pip install: ${
-        error instanceof Error ? error.message : error
+      `[prepare-adobe2api-python] host packages are incomplete, falling back to pip install: ${error instanceof Error ? error.message : error
       }`,
     );
     return false;
@@ -208,29 +222,27 @@ if (!existsSync(requirements)) {
   throw new Error(`Missing Adobe2API requirements: ${requirements}`);
 }
 
+if (isEmbeddedPythonReady()) {
+  console.log(`[prepare-adobe2api-python] existing embedded Python ready: ${embeddedPython}`);
+  process.exit(0);
+}
+
 const info = hostPythonInfo();
 prepareRuntime(info);
 const copiedFromHost = copyHostDistributions(info);
 
 try {
-  run(embeddedPython, [
-    "-c",
-    "import fastapi, uvicorn, pydantic, requests, curl_cffi, itsdangerous, PIL",
-  ]);
+  run(embeddedPython, ["-c", validationImports]);
 } catch (error) {
   if (copiedFromHost) {
     console.warn(
-      `[prepare-adobe2api-python] copied packages failed validation, falling back to pip install: ${
-        error instanceof Error ? error.message : error
+      `[prepare-adobe2api-python] copied packages failed validation, falling back to pip install: ${error instanceof Error ? error.message : error
       }`,
     );
   }
   run(embeddedPython, ["-m", "ensurepip", "--upgrade"]);
   run(embeddedPython, ["-m", "pip", "install", "-r", requirements]);
-  run(embeddedPython, [
-    "-c",
-    "import fastapi, uvicorn, pydantic, requests, curl_cffi, itsdangerous, PIL",
-  ]);
+  run(embeddedPython, ["-c", validationImports]);
 }
 
 writeFileSync(
