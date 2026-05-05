@@ -365,6 +365,39 @@ const extractExtensionFromUrl = (url: string, fallback: string) => {
   }
 };
 
+const isOssImageUrl = (url: string) => {
+  try {
+    return new URL(url).hostname.includes("aliyuncs.com");
+  } catch {
+    return false;
+  }
+};
+
+const mirrorGeneratedImageUrlToOss = async (url: string) => {
+  if (isOssImageUrl(url)) {
+    return url;
+  }
+
+  if (!window.download?.imageAsBase64) {
+    throw new Error("图片已生成，但当前环境不支持转存 OSS");
+  }
+
+  const downloadResult = await window.download.imageAsBase64(url);
+  if (!downloadResult.success || !downloadResult.data?.base64) {
+    throw new Error(downloadResult.error || "图片已生成，但下载转存素材失败");
+  }
+
+  const ossResult = await uploadBase64ToOSS(
+    downloadResult.data.base64,
+    `generated-image-${Date.now()}`,
+  );
+  if (!ossResult.url) {
+    throw new Error("图片已生成，但转存 OSS 失败，请重试");
+  }
+
+  return ossResult.url;
+};
+
 const isAdobeVideoRequest = (payload: Record<string, unknown>) =>
   typeof payload.model === "string" &&
   (payload.model.startsWith("firefly-sora2-pro-") ||
@@ -2962,15 +2995,24 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             throw new Error("Adobe2API 未返回图片地址");
           }
 
+          const ossUrl = await mirrorGeneratedImageUrlToOss(responseUrl);
           const projectId = get().projectId;
-          let resultItem: { url: string; localName?: string; localPath?: string } = {
-            url: responseUrl,
+          let resultItem: {
+            url: string;
+            remoteUrl: string;
+            originalUrl?: string;
+            localName?: string;
+            localPath?: string;
+          } = {
+            url: ossUrl,
+            remoteUrl: ossUrl,
+            ...(ossUrl === responseUrl ? {} : { originalUrl: responseUrl }),
           };
           if (projectId) {
             try {
               const fileName = await saveGeneratedImageToLocal(
                 projectId,
-                responseUrl,
+                ossUrl,
                 extractExtensionFromUrl(responseUrl, "png"),
               );
 
@@ -3093,15 +3135,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               );
               return {
                 url: ossResult.url,
+                remoteUrl: ossResult.url,
               };
             } catch (ossError) {
               console.error(
                 "[startGeminiPro2Generation] 上传图片到 OSS 失败:",
                 ossError,
               );
-              return {
-                url: `data:${part.inlineData!.mimeType};base64,${base64Data}`,
-              };
+              throw new Error("图片已生成，但转存 OSS 失败，请重试");
             }
           }),
         );
