@@ -33,6 +33,7 @@ import {
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
+import { saveToolMediaFileToProject } from "../utils/localMedia";
 import {
   GeminiParamsPanel,
   NANO_BANANA_LOCAL_SIZES,
@@ -517,6 +518,7 @@ export const ImageAnnotationWorkspace = ({
 
   const nodes = useCanvasFlowStore((state) => state.nodes);
   const addNode = useCanvasFlowStore((state) => state.addNode);
+  const projectId = useCanvasFlowStore((state) => state.projectId);
   const updateImageNodeData = useCanvasFlowStore(
     (state) => state.updateImageNodeData,
   );
@@ -1512,6 +1514,14 @@ export const ImageAnnotationWorkspace = ({
         throw new Error("标注图片上传失败");
       }
 
+      const resultItem = await saveToolMediaFileToProject(
+        projectId,
+        { url: uploadResult.url, remoteUrl: uploadResult.url },
+        file,
+        "image",
+        "png",
+      );
+
       const sourceNode = useCanvasFlowStore
         .getState()
         .nodes.find((node) => node.id === sourceNodeId);
@@ -1538,7 +1548,7 @@ export const ImageAnnotationWorkspace = ({
         size: sourceNode.data?.size,
         result: {
           type: "image",
-          data: [{ url: uploadResult.url, remoteUrl: uploadResult.url }],
+          data: [resultItem],
         },
         status: GenerationStatus.COMPLETED,
         progress: 100,
@@ -1564,6 +1574,7 @@ export const ImageAnnotationWorkspace = ({
     loadedImage,
     onClose,
     onConnect,
+    projectId,
     sourceNodeId,
     shapeItems,
     textItems,
