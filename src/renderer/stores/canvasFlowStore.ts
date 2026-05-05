@@ -164,8 +164,8 @@ const removeNodeIdsFromGroups = (
       nodeIds: group.nodeIds.filter((nodeId) => !removedNodeIdSet.has(nodeId)),
       gridLayoutOrder: group.gridLayoutOrder
         ? group.gridLayoutOrder.filter(
-          (nodeId) => !removedNodeIdSet.has(nodeId),
-        )
+            (nodeId) => !removedNodeIdSet.has(nodeId),
+          )
         : group.gridLayoutOrder,
       layoutOrigin: group.layoutOrigin,
     }))
@@ -1677,17 +1677,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
     const targetField = (() => {
       if (sourceNode.type === "imageNode") {
-        // newVideoNode 通过 edge 动态获取父节点图片，不需要冗余写入 image_urls，
-        // 避免 URL 变化后去重失败导致参考图重复展示。
         if (
           targetNode.type === "imageNode" ||
-          targetNode.type === "videoNode"
+          targetNode.type === "videoNode" ||
+          targetNode.type === "newVideoNode"
         ) {
           return "image_urls";
-        }
-
-        if (targetNode.type === "newVideoNode") {
-          return null;
         }
 
         if (targetNode.type === "panoramaNode") {
@@ -2498,9 +2493,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         createdAt: Date.now(),
         layoutOrigin: layoutBounds
           ? {
-            x: layoutBounds.x,
-            y: layoutBounds.y,
-          }
+              x: layoutBounds.x,
+              y: layoutBounds.y,
+            }
           : undefined,
       };
 
@@ -2552,9 +2547,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         {
           anchor: currentBounds
             ? {
-              x: currentBounds.x,
-              y: currentBounds.y,
-            }
+                x: currentBounds.x,
+                y: currentBounds.y,
+              }
             : group.layoutOrigin,
         },
       );
@@ -2569,14 +2564,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           (item) =>
             item.id === groupId
               ? {
-                ...item,
-                layoutOrigin: layoutResult.bounds
-                  ? {
-                    x: layoutResult.bounds.x,
-                    y: layoutResult.bounds.y,
-                  }
-                  : item.layoutOrigin,
-              }
+                  ...item,
+                  layoutOrigin: layoutResult.bounds
+                    ? {
+                        x: layoutResult.bounds.x,
+                        y: layoutResult.bounds.y,
+                      }
+                    : item.layoutOrigin,
+                }
               : item,
         ),
       }));
@@ -2602,9 +2597,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           preferredOrderNodeIds: group.gridLayoutOrder,
           anchor: currentBounds
             ? {
-              x: currentBounds.x,
-              y: currentBounds.y,
-            }
+                x: currentBounds.x,
+                y: currentBounds.y,
+              }
             : group.layoutOrigin,
         },
       );
@@ -2622,15 +2617,15 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           (item) =>
             item.id === groupId
               ? {
-                ...item,
-                gridLayoutOrder: layoutResult.orderedNodeIds,
-                layoutOrigin: layoutResult.bounds
-                  ? {
-                    x: layoutResult.bounds.x,
-                    y: layoutResult.bounds.y,
-                  }
-                  : item.layoutOrigin,
-              }
+                  ...item,
+                  gridLayoutOrder: layoutResult.orderedNodeIds,
+                  layoutOrigin: layoutResult.bounds
+                    ? {
+                        x: layoutResult.bounds.x,
+                        y: layoutResult.bounds.y,
+                      }
+                    : item.layoutOrigin,
+                }
               : item,
         ),
       }));
@@ -2652,18 +2647,18 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           item.id !== groupId
             ? item
             : {
-              ...item,
-              layoutOrigin: {
-                x:
-                  (item.layoutOrigin?.x ??
-                    getGroupBounds(current.nodes, item.nodeIds, 24)?.x ??
-                    0) + offset.x,
-                y:
-                  (item.layoutOrigin?.y ??
-                    getGroupBounds(current.nodes, item.nodeIds, 24)?.y ??
-                    0) + offset.y,
+                ...item,
+                layoutOrigin: {
+                  x:
+                    (item.layoutOrigin?.x ??
+                      getGroupBounds(current.nodes, item.nodeIds, 24)?.x ??
+                      0) + offset.x,
+                  y:
+                    (item.layoutOrigin?.y ??
+                      getGroupBounds(current.nodes, item.nodeIds, 24)?.y ??
+                      0) + offset.y,
+                },
               },
-            },
         ),
       }));
     },
@@ -2967,27 +2962,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             throw new Error("Adobe2API 未返回图片地址");
           }
 
-          // 将本地端口返回的图片转存到 OSS，避免节点存储本地 URL
-          let ossUrl = responseUrl;
-          try {
-            const downloadResult = await window.download.imageAsBase64(responseUrl);
-            if (downloadResult.success && downloadResult.data?.base64) {
-              const ossResult = await uploadBase64ToOSS(
-                downloadResult.data.base64,
-                `adobe2api-${Date.now()}`,
-              );
-              ossUrl = ossResult.url;
-            }
-          } catch (ossError) {
-            console.error(
-              "[startGeminiPro2Generation] Adobe 图片转存 OSS 失败，使用原始地址:",
-              ossError,
-            );
-          }
-
           const projectId = get().projectId;
           let resultItem: { url: string; localName?: string; localPath?: string } = {
-            url: ossUrl,
+            url: responseUrl,
           };
           if (projectId) {
             try {
@@ -4105,17 +4082,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const nextGroups =
           hasFinalPositionChange || hasAddOrRemove
             ? normalizeCanvasGroups(state.groups, nextNodes).map((group) => {
-              const bounds = getGroupBounds(nextNodes, group.nodeIds, 24);
-              return {
-                ...group,
-                layoutOrigin: bounds
-                  ? {
-                    x: bounds.x,
-                    y: bounds.y,
-                  }
-                  : group.layoutOrigin,
-              };
-            })
+                const bounds = getGroupBounds(nextNodes, group.nodeIds, 24);
+                return {
+                  ...group,
+                  layoutOrigin: bounds
+                    ? {
+                        x: bounds.x,
+                        y: bounds.y,
+                      }
+                    : group.layoutOrigin,
+                };
+              })
             : state.groups;
         // 计算选中节点数量，避免在 ImageNode 等组件中 O(n²) 遍历
         const selectedCount = nextNodes.filter((n) => n.selected).length;

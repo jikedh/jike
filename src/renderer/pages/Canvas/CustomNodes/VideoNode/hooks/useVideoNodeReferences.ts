@@ -199,21 +199,15 @@ export const useVideoNodeReferences = ({
   }, [parentNodeEntries]);
 
   const localReferenceImageItems = useMemo(() => {
-    // 去重：剔除 image_urls 中与父节点 URL 相同的条目（兼容旧数据残留）。
-    // 使用去掉查询参数后的 URL 进行匹配，避免 OSS 处理参数差异导致去重失败。
-    const normalizeUrl = (url: string) => url.split("?")[0];
-
     const parentUrlCounts = new Map<string, number>();
     parentImageNodes.forEach((item) => {
-      const key = normalizeUrl(item.url);
-      parentUrlCounts.set(key, (parentUrlCounts.get(key) ?? 0) + 1);
+      parentUrlCounts.set(item.url, (parentUrlCounts.get(item.url) ?? 0) + 1);
     });
 
     return (referenceImageUrls ?? []).flatMap((url, index) => {
-      const key = normalizeUrl(url);
-      const count = parentUrlCounts.get(key) ?? 0;
+      const count = parentUrlCounts.get(url) ?? 0;
       if (count > 0) {
-        parentUrlCounts.set(key, count - 1);
+        parentUrlCounts.set(url, count - 1);
         return [];
       }
       return [{ url, index }];
