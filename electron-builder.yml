@@ -3,6 +3,7 @@ productName: 即刻
 directories:
   buildResources: build
   output: release
+beforePack: scripts/before-pack.mjs
 files:
   - '!**/.vscode/*'
   - '!src/*'

@@ -356,6 +356,15 @@ const extractMarkdownMediaUrl = (content: unknown, kind: "image" | "video") => {
   return text.match(markdownPattern)?.[1];
 };
 
+const extractExtensionFromUrl = (url: string, fallback: string) => {
+  try {
+    const pathname = new URL(url).pathname;
+    return pathname.split(".").pop()?.toLowerCase() || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 const isAdobeVideoRequest = (payload: Record<string, unknown>) =>
   typeof payload.model === "string" &&
   (payload.model.startsWith("firefly-sora2-pro-") ||
@@ -2953,11 +2962,42 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             throw new Error("Adobe2API 未返回图片地址");
           }
 
+          const projectId = get().projectId;
+          let resultItem: { url: string; localName?: string; localPath?: string } = {
+            url: responseUrl,
+          };
+          if (projectId) {
+            try {
+              const fileName = await saveGeneratedImageToLocal(
+                projectId,
+                responseUrl,
+                extractExtensionFromUrl(responseUrl, "png"),
+              );
+
+              if (fileName) {
+                resultItem = {
+                  ...resultItem,
+                  localName: fileName,
+                  localPath: getLocalFilePath(
+                    projectId,
+                    "generate_image",
+                    fileName,
+                  ),
+                };
+              }
+            } catch (saveError) {
+              console.error(
+                "[startGeminiPro2Generation] 保存 Adobe 图片到本地失败:",
+                saveError,
+              );
+            }
+          }
+
           set((state) => ({
             nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
               const existingData = data.result?.data ?? [];
               const mergedData = appendMediaSequences(existingData, [
-                { url: responseUrl },
+                resultItem,
               ]);
               return {
                 ...data,
@@ -3738,6 +3778,34 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             url: videoUrl,
             format: "mp4",
           };
+          const projectId = get().projectId;
+          if (projectId) {
+            try {
+              const fileName = await saveGeneratedVideoToLocal(
+                projectId,
+                videoUrl,
+                extractExtensionFromUrl(videoUrl, "mp4"),
+              );
+
+              if (fileName) {
+                resultItem = {
+                  ...resultItem,
+                  localName: fileName,
+                  localPath: getLocalFilePath(
+                    projectId,
+                    "generate_video",
+                    fileName,
+                  ),
+                };
+              }
+            } catch (saveError) {
+              console.error(
+                "[startNewVideoGeneration] 保存 Adobe 视频到本地失败:",
+                saveError,
+              );
+            }
+          }
+
           try {
             const copiedUrl = await copyVideoUrlToOss(videoUrl);
             if (copiedUrl) {
