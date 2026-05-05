@@ -2808,7 +2808,7 @@ export const CanvasFlow = ({
             defaultEdgeOptions={defaultEdgeOptions}
           >
             <ViewportPortal>
-              <div className="pointer-events-none absolute left-0 top-0 z-[12]">
+              <div className="pointer-events-none absolute left-0 top-0 z-[-1]">
                 {groupFrames.map((group) => {
                   const isSelected = group.id === selectedGroupId;
 
@@ -2816,10 +2816,10 @@ export const CanvasFlow = ({
                     <div
                       key={group.id}
                       className={cn(
-                        "absolute left-0 top-0 rounded-[14px] border bg-transparent transition-colors",
+                        "absolute left-0 top-0 rounded-[16px] border transition-all duration-200",
                         isSelected
-                          ? "border-[#B43FEB]/70 shadow-[0_0_0_1px_rgba(180,63,235,0.18),0_0_32px_rgba(180,63,235,0.1)]"
-                          : "border-dashed border-white/14",
+                          ? "border-white/32 bg-[#272b33]/34 shadow-[0_12px_34px_rgba(0,0,0,0.26),0_0_0_1px_rgba(255,255,255,0.08),inset_0_1px_0_rgba(255,255,255,0.1)]"
+                          : "border-white/18 bg-[#272b33]/24 shadow-[0_8px_24px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.06)]",
                       )}
                       style={{
                         transform: `translate3d(${group.bounds.x}px, ${group.bounds.y}px, 0)`,
@@ -2829,8 +2829,8 @@ export const CanvasFlow = ({
                     >
                       <div
                         className={cn(
-                          "absolute inset-0 rounded-[14px] bg-white/[0.01]",
-                          isSelected ? "opacity-100" : "opacity-0",
+                          "absolute inset-x-0 top-0 h-8 rounded-t-[16px] bg-gradient-to-b from-white/8 to-transparent",
+                          isSelected ? "opacity-70" : "opacity-40",
                         )}
                       />
                     </div>
