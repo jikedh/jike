@@ -168,20 +168,6 @@ export const useVideoNodeReferences = ({
       .filter((item) => item.url) as VideoReferenceItem[];
   }, [parentNodeEntries]);
 
-  const parentImageNodeUrls = useMemo(() => {
-    return new Set(parentImageNodes.map((item) => item.url));
-  }, [parentImageNodes]);
-
-  const parentImageNodeIdByUrl = useMemo(() => {
-    return parentImageNodes.reduce(
-      (acc, item) => {
-        acc[item.url] = item.id;
-        return acc;
-      },
-      {} as Record<string, string>,
-    );
-  }, [parentImageNodes]);
-
   const parentNoteContents = useMemo(() => {
     const seenParentIds = new Set<string>();
 
@@ -300,8 +286,6 @@ export const useVideoNodeReferences = ({
     parentImageNodes,
     localReferenceImageUrls,
     localReferenceImageIndexes,
-    parentImageNodeUrls,
-    parentImageNodeIdByUrl,
     parentNoteContents,
     videoMentionItems,
     allImageUrls,

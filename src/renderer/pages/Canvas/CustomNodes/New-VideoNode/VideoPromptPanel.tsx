@@ -102,34 +102,6 @@ const normalizeNewVideoModelId = (
   return value && availableModelIds.has(value) ? value : fallbackModel;
 };
 
-const buildReferenceItems = (
-  imageUrls: string[] = [],
-  videoUrls: string[] = [],
-  audioUrls: string[] = [],
-): MentionItem[] => [
-    ...imageUrls.map((url, index) => ({
-      id: `image-${index}-${url}`,
-      label: `图片${index + 1}`,
-      value: url,
-      thumbnail: url,
-      type: "image" as const,
-    })),
-    ...videoUrls.map((url, index) => ({
-      id: `video-${index}-${url}`,
-      label: `视频${index + 1}`,
-      value: url,
-      thumbnail: url,
-      type: "video" as const,
-    })),
-    ...audioUrls.map((url, index) => ({
-      id: `audio-${index}-${url}`,
-      label: `音频${index + 1}`,
-      value: url,
-      thumbnail: url,
-      type: "audio" as const,
-    })),
-  ];
-
 type ReferenceSource =
   | string
   | {
@@ -258,6 +230,34 @@ const orderReferenceItems = (
   return [...orderedItems, ...items.filter((item) => !usedIds.has(item.id))];
 };
 
+const toStringRecord = (value: unknown): Record<string, string> => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.entries(value as Record<string, unknown>).reduce(
+    (acc, [key, item]) => {
+      if (typeof item === "string" && item.trim()) {
+        acc[key] = item;
+      }
+      return acc;
+    },
+    {} as Record<string, string>,
+  );
+};
+
+const areStringRecordsEqual = (
+  left: Record<string, string>,
+  right: Record<string, string>,
+) => {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every((key) => left[key] === right[key])
+  );
+};
+
 export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const editorRef = useRef<VideoPromptEditorHandle | null>(null);
   const { success, warning } = useMessage();
@@ -348,6 +348,67 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     nodeId,
     referenceImageUrls: currentData?.image_urls ?? [],
   });
+
+  const parentImageReferenceUrlsById = useMemo(() => {
+    return parentImageNodes.reduce(
+      (acc, item) => {
+        acc[item.id] = item.url;
+        return acc;
+      },
+      {} as Record<string, string>,
+    );
+  }, [parentImageNodes]);
+
+  useEffect(() => {
+    const metadata = (currentData?.metadata ?? {}) as Record<string, unknown>;
+    const previousParentImageUrlsById = toStringRecord(
+      metadata.parentImageReferenceUrls,
+    );
+    let nextImageUrls = [...(currentData?.image_urls ?? [])];
+
+    for (const [parentNodeId, previousUrl] of Object.entries(
+      previousParentImageUrlsById,
+    )) {
+      const currentParentUrl = parentImageReferenceUrlsById[parentNodeId];
+      if (currentParentUrl === previousUrl) {
+        continue;
+      }
+
+      const staleIndex = nextImageUrls.indexOf(previousUrl);
+      if (staleIndex >= 0) {
+        nextImageUrls = [
+          ...nextImageUrls.slice(0, staleIndex),
+          ...nextImageUrls.slice(staleIndex + 1),
+        ];
+      }
+    }
+
+    const imageUrlsChanged =
+      nextImageUrls.length !== (currentData?.image_urls ?? []).length ||
+      nextImageUrls.some((url, index) => url !== currentData?.image_urls?.[index]);
+    const parentMapChanged = !areStringRecordsEqual(
+      previousParentImageUrlsById,
+      parentImageReferenceUrlsById,
+    );
+
+    if (!imageUrlsChanged && !parentMapChanged) {
+      return;
+    }
+
+    updateNewVideoNodeData(nodeId, {
+      ...(imageUrlsChanged ? { image_urls: nextImageUrls } : {}),
+      metadata: {
+        ...metadata,
+        parentImageReferenceUrls: parentImageReferenceUrlsById,
+      },
+    } as Partial<NewVideoGenerationNode>);
+  }, [
+    currentData?.image_urls,
+    currentData?.metadata,
+    nodeId,
+    parentImageReferenceUrlsById,
+    updateNewVideoNodeData,
+  ]);
 
   // 兼容两种来源：连线带来的父节点引用，以及粘贴/历史数据里已经落到节点字段的媒体 URL。
   const mergedVideoUrls = useMemo(
