@@ -1,16 +1,22 @@
 import {
+  type Viewport,
+  useReactFlow,
+} from "@xyflow/react";
+import {
   Icon3dRotate,
   IconBrush,
   IconCrop,
   IconDownload,
   IconEraser,
+  IconLamp,
   IconTrash,
   IconUpload,
   IconZoomIn,
 } from "@tabler/icons-react";
 import type { ChangeEvent } from "react";
-import { memo, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
+import { GenerationStatus } from "shared/constants/enum";
 import type { ImageGenerationNode } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { appendMediaSequences } from "shared/utils/mediaSequence";
@@ -26,7 +32,12 @@ import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { saveToolMediaFileToProject } from "../utils/localMedia";
 import { ImageCropDialog } from "./ImageCropDialog";
+import { ImageLightingDialog } from "./ImageLightingDialog";
 import { InpaintDialog } from "./InpaintDialog";
+import {
+  createLightingImageFile,
+  type LightingConfig,
+} from "./utils/lighting";
 
 type ImageToolbarProps = {
   nodeId: string;
@@ -44,9 +55,16 @@ type ActionKey =
   | "enhance"
   | "outpaint"
   | "crop"
+  | "lighting"
   | "download"
   | "preview"
   | "panorama";
+
+const FALLBACK_NODE_WIDTH = 350;
+const FALLBACK_NODE_HEIGHT = 250;
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
 
 /**
  * 图片节点工具栏组件
@@ -64,10 +82,16 @@ export const ImageToolbar = memo(
     const [isUploading, setIsUploading] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [isCropDialogOpen, setIsCropDialogOpen] = useState(false);
+    const [isLightingDialogOpen, setIsLightingDialogOpen] = useState(false);
+    const [isLightingGenerating, setIsLightingGenerating] = useState(false);
     const [isInpaintDialogOpen, setIsInpaintDialogOpen] = useState(false);
     const [isInpaintGenerating, setIsInpaintGenerating] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const previousLightingViewportRef = useRef<Viewport | null>(null);
+    const reactFlowInstance = useReactFlow();
+    const reactFlowInstanceRef = useRef(reactFlowInstance);
+    reactFlowInstanceRef.current = reactFlowInstance;
 
     const updateImageNodeData = useCanvasFlowStore(
       (state) => state.updateImageNodeData,
@@ -85,12 +109,91 @@ export const ImageToolbar = memo(
     const imageUrls = data.result?.data?.map((item) => item.url) ?? [];
     const currentImageUrl = imageUrls[0];
 
+    const restoreLightingViewport = useCallback(() => {
+      const previousViewport = previousLightingViewportRef.current;
+      previousLightingViewportRef.current = null;
+
+      if (previousViewport) {
+        reactFlowInstanceRef.current.setViewport(previousViewport, {
+          duration: 260,
+        });
+      }
+    }, []);
+
+    const focusLightingSourceNode = useCallback(() => {
+      const sourceNode = useCanvasFlowStore
+        .getState()
+        .nodes.find((node) => node.id === nodeId);
+      if (!sourceNode) {
+        return;
+      }
+
+      if (!previousLightingViewportRef.current) {
+        previousLightingViewportRef.current =
+          reactFlowInstanceRef.current.getViewport();
+      }
+
+      const flowElement = document.querySelector(
+        ".react-flow",
+      ) as HTMLElement | null;
+      const bounds = flowElement?.getBoundingClientRect();
+      const viewportWidth = bounds?.width ?? window.innerWidth;
+      const viewportHeight = bounds?.height ?? window.innerHeight;
+      const nodeWidth = sourceNode.width ?? FALLBACK_NODE_WIDTH;
+      const nodeHeight = sourceNode.height ?? FALLBACK_NODE_HEIGHT;
+      const targetZoom = clamp(
+        Math.min(
+          (viewportWidth * 0.7) / nodeWidth,
+          (viewportHeight * 0.64) / nodeHeight,
+        ),
+        0.45,
+        1.85,
+      );
+      const centerX = sourceNode.position.x + nodeWidth / 2;
+      const centerY = sourceNode.position.y + nodeHeight / 2;
+      const nextViewport = {
+        x: viewportWidth / 2 - centerX * targetZoom,
+        y: viewportHeight / 2 - centerY * targetZoom + viewportHeight * 0.035,
+        zoom: targetZoom,
+      };
+
+      reactFlowInstanceRef.current.setViewport(nextViewport, { duration: 280 });
+    }, [nodeId]);
+
+    const handleLightingDialogOpenChange = useCallback(
+      (open: boolean) => {
+        if (open && isLightingGenerating) {
+          return;
+        }
+
+        if (open) {
+          focusLightingSourceNode();
+        } else {
+          restoreLightingViewport();
+        }
+
+        setIsLightingDialogOpen(open);
+      },
+      [
+        focusLightingSourceNode,
+        isLightingGenerating,
+        restoreLightingViewport,
+      ],
+    );
+
+    useEffect(() => {
+      return () => {
+        restoreLightingViewport();
+      };
+    }, [restoreLightingViewport]);
+
     const toolbarActions = useMemo(() => {
       return [
         { key: "upload" as const, label: "上传", icon: IconUpload },
         { key: "erase" as const, label: "擦除", icon: IconEraser },
         { key: "annotate" as const, label: "标注", icon: IconBrush },
         { key: "crop" as const, label: "裁剪", icon: IconCrop },
+        { key: "lighting" as const, label: "灯光", icon: IconLamp },
         { key: "download" as const, label: "下载", icon: IconDownload },
         { key: "preview" as const, label: "放大", icon: IconZoomIn },
         { key: "panorama" as const, label: "全景", icon: Icon3dRotate },
@@ -197,6 +300,16 @@ export const ImageToolbar = memo(
         return;
       }
 
+      if (actionKey === "lighting") {
+        if (!currentImageUrl) {
+          toast.info("暂无可调光图片");
+          return;
+        }
+
+        handleLightingDialogOpenChange(true);
+        return;
+      }
+
       if (actionKey === "download") {
         if (!currentImageUrl) {
           toast.info("暂无可下载图片");
@@ -238,6 +351,95 @@ export const ImageToolbar = memo(
       }
 
       toast.info("功能开发中...");
+    };
+
+    const handleLightingGenerate = async (config: LightingConfig) => {
+      if (!currentImageUrl) {
+        toast.info("暂无可调光图片");
+        throw new Error("暂无可调光图片");
+      }
+
+      setIsLightingGenerating(true);
+
+      try {
+        const sourceNode = useCanvasFlowStore
+          .getState()
+          .nodes.find((node) => node.id === nodeId);
+        if (!sourceNode || sourceNode.type !== "imageNode") {
+          throw new Error("当前图片节点不存在");
+        }
+
+        const file = await createLightingImageFile(
+          currentImageUrl,
+          config,
+          `lighting-${Date.now()}.png`,
+        );
+        let fileToUpload = file;
+        if (fileToUpload.size > MAX_IMAGE_SIZE_MB) {
+          fileToUpload = await compressImage(fileToUpload);
+        }
+
+        const uploadResult = await uploadFileToOSS(fileToUpload);
+
+        if (!uploadResult.url) {
+          throw new Error("灯光图片上传失败");
+        }
+
+        const localExtension = fileToUpload.type.includes("jpeg")
+          ? "jpg"
+          : "png";
+        const resultItem = await saveToolMediaFileToProject(
+          projectId,
+          { url: uploadResult.url, remoteUrl: uploadResult.url },
+          fileToUpload,
+          "image",
+          localExtension,
+        );
+        const aspectRatio = await getAspectRatioFromMediaFile(
+          fileToUpload,
+          "image",
+        );
+        const childPosition = {
+          x: sourceNode.position.x + (sourceNode.width ?? 350) + 80,
+          y: sourceNode.position.y,
+        };
+        const childId = addNode("image", childPosition);
+        if (!childId) {
+          throw new Error("灯光图片节点创建失败");
+        }
+
+        onConnect({
+          source: nodeId,
+          target: childId,
+          sourceHandle: "output",
+          targetHandle: "input",
+        });
+
+        updateImageNodeData(childId, {
+          badgeLabel: "灯光",
+          isUpload: true,
+          ...(aspectRatio ? { size: aspectRatio } : {}),
+          image_urls: [uploadResult.url],
+          result: {
+            type: "image",
+            data: [resultItem],
+          },
+          lighting: config,
+          status: GenerationStatus.COMPLETED,
+          progress: 100,
+        });
+
+        const flowStore = useCanvasFlowStore.getState();
+        flowStore.requestHistorySave();
+        flowStore.saveGraph();
+        toast.success("已生成灯光图片节点");
+      } catch (error: any) {
+        console.error("灯光处理失败:", error);
+        toast.error(error?.message || "灯光处理失败，请重试");
+        throw error;
+      } finally {
+        setIsLightingGenerating(false);
+      }
     };
 
     const handleInpaintGenerate = async ({
@@ -336,7 +538,13 @@ export const ImageToolbar = memo(
             const isDisabled =
               (item.key === "download" && isDownloading) ||
               (item.key === "upload" && isUploading) ||
-              (item.key === "crop" && !currentImageUrl);
+              (item.key === "lighting" && isLightingGenerating) ||
+              ((item.key === "crop" || item.key === "lighting") &&
+                !currentImageUrl);
+            const title =
+              item.key === "lighting"
+                ? "调节当前节点光影布光"
+                : item.label;
 
             return (
               <button
@@ -352,7 +560,7 @@ export const ImageToolbar = memo(
                       ? "text-[#B43FEB]"
                       : "text-white/60 hover:text-white hover:bg-white/5",
                 )}
-                title={item.label}
+                title={title}
                 aria-label={item.label}
               >
                 <Icon size={16} stroke={1.5} />
@@ -402,6 +610,13 @@ export const ImageToolbar = memo(
 
             await onCrop(file, cropRatio);
           }}
+        />
+
+        <ImageLightingDialog
+          open={isLightingDialogOpen}
+          imageUrl={currentImageUrl}
+          onOpenChange={handleLightingDialogOpenChange}
+          onConfirm={handleLightingGenerate}
         />
 
         <InpaintDialog
