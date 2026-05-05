@@ -344,6 +344,7 @@ export const CanvasFlow = ({
     additive: boolean;
     initialSelectedNodeIds: Set<string>;
   } | null>(null);
+  const suppressDefaultSelectionRef = useRef(false);
 
   // 鑾峰彇姝ｅ湪鐢熸垚鐨勪换鍔℃暟閲忓拰鍙栨秷鏂规硶
   const getGeneratingTasksCount = useCanvasFlowStore(
@@ -1053,11 +1054,19 @@ export const CanvasFlow = ({
 
   const onNodesChange = useCallback(
     (changes: NodeChange<AllNodeType>[]) => {
+      const nextChanges = suppressDefaultSelectionRef.current
+        ? changes.filter((change) => change.type !== "select")
+        : changes;
+
+      if (nextChanges.length === 0) {
+        return;
+      }
+
       // 濮嬬粓鏇存柊鏈湴鏄剧ず鐘舵€侊紝淇濊瘉鎷栧姩瑙嗚娴佺晠
-      scheduleDisplayNodeChanges(changes);
+      scheduleDisplayNodeChanges(nextChanges);
 
       // 高频变更按 70ms 节流写入 store；尺寸变更仍由拖拽结束/外部流程处理。
-      const storeChanges = changes.filter((c) => c.type !== "dimensions");
+      const storeChanges = nextChanges.filter((c) => c.type !== "dimensions");
       if (storeChanges.length > 0) {
         scheduleStoreNodeChanges(storeChanges);
       }
@@ -1212,13 +1221,102 @@ export const CanvasFlow = ({
       return;
     }
 
+    suppressDefaultSelectionRef.current = true;
     setSelectionBoxActive(true);
     setSelectedGroupId(null);
   }, [annotationWorkspace.open, setSelectionBoxActive, setSelectedGroupId]);
 
+  const getNodeScreenRect = useCallback(
+    (node: AllNodeType) => {
+      if (typeof document !== "undefined") {
+        const nodeElement = document.querySelector(
+          `.react-flow__node[data-id="${CSS.escape(node.id)}"]`,
+        ) as HTMLElement | null;
+        const cardElement = nodeElement?.querySelector(
+          ".group\\/card",
+        ) as HTMLElement | null;
+        const rect = (cardElement ?? nodeElement)?.getBoundingClientRect();
+
+        if (rect && rect.width > 0 && rect.height > 0) {
+          return {
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+            bottom: rect.bottom,
+            width: rect.width,
+            height: rect.height,
+          };
+        }
+      }
+
+      const { width, height } = getNodeSize(node);
+      const topLeft = flowToScreenPosition(node.position);
+      const bottomRight = flowToScreenPosition({
+        x: node.position.x + width,
+        y: node.position.y + height,
+      });
+
+      return {
+        left: Math.min(topLeft.x, bottomRight.x),
+        right: Math.max(topLeft.x, bottomRight.x),
+        top: Math.min(topLeft.y, bottomRight.y),
+        bottom: Math.max(topLeft.y, bottomRight.y),
+        width: Math.abs(bottomRight.x - topLeft.x),
+        height: Math.abs(bottomRight.y - topLeft.y),
+      };
+    },
+    [flowToScreenPosition],
+  );
+
+  const isNodeInsideSelectionRect = useCallback(
+    (
+      node: AllNodeType,
+      selectionRect: {
+        left: number;
+        right: number;
+        top: number;
+        bottom: number;
+      },
+    ) => {
+      const rect = getNodeScreenRect(node);
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const centerInside =
+        centerX >= selectionRect.left &&
+        centerX <= selectionRect.right &&
+        centerY >= selectionRect.top &&
+        centerY <= selectionRect.bottom;
+
+      if (centerInside) {
+        return true;
+      }
+
+      if (node.type !== "imageNode") {
+        return false;
+      }
+
+      const overlapWidth = Math.max(
+        0,
+        Math.min(rect.right, selectionRect.right) -
+          Math.max(rect.left, selectionRect.left),
+      );
+      const overlapHeight = Math.max(
+        0,
+        Math.min(rect.bottom, selectionRect.bottom) -
+          Math.max(rect.top, selectionRect.top),
+      );
+      const overlapArea = overlapWidth * overlapHeight;
+      const nodeArea = Math.max(1, rect.width * rect.height);
+
+      return overlapArea / nodeArea >= 0.18;
+    },
+    [getNodeScreenRect],
+  );
+
   const applyCenterPointSelection = useCallback(() => {
     const session = selectionCenterSessionRef.current;
     selectionCenterSessionRef.current = null;
+    suppressDefaultSelectionRef.current = false;
 
     if (!session?.active) {
       return;
@@ -1246,18 +1344,9 @@ export const CanvasFlow = ({
 
     const changes = displayNodes
       .map((node) => {
-        const { width, height } = getNodeSize(node);
-        const center = flowToScreenPosition({
-          x: node.position.x + width / 2,
-          y: node.position.y + height / 2,
-        });
-        const centerInside =
-          center.x >= selectionRect.left &&
-          center.x <= selectionRect.right &&
-          center.y >= selectionRect.top &&
-          center.y <= selectionRect.bottom;
+        const insideSelection = isNodeInsideSelectionRect(node, selectionRect);
         const nextSelected =
-          centerInside ||
+          insideSelection ||
           (session.additive && session.initialSelectedNodeIds.has(node.id));
         const currentSelected = currentSelectedById.get(node.id) ?? false;
 
@@ -1279,7 +1368,7 @@ export const CanvasFlow = ({
 
     setDisplayNodes((prev) => applyNodeChanges(changes, prev));
     storeOnNodesChange(changes);
-  }, [displayNodes, flowToScreenPosition, storeOnNodesChange]);
+  }, [displayNodes, isNodeInsideSelectionRect, storeOnNodesChange]);
 
   const handleSelectionEnd = useCallback(() => {
     setSelectionBoxActive(false);
