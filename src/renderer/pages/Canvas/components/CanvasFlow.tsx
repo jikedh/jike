@@ -127,15 +127,15 @@ const getNodeSize = (node: AllNodeType) => {
 };
 
 const DELETE_CONFIRM_NODE_LABEL: Partial<Record<AllNodeType["type"], string>> =
-  {
-    imageNode: "图片节点",
-    videoNode: "视频节点",
-    newVideoNode: "新版视频节点",
-    agentNode: "智能体节点",
-    textAgentNode: "文本智能体节点",
-    imageAgentNode: "图片智能体节点",
-    videoAgentNode: "视频智能体节点",
-  };
+{
+  imageNode: "图片节点",
+  videoNode: "视频节点",
+  newVideoNode: "新版视频节点",
+  agentNode: "智能体节点",
+  textAgentNode: "文本智能体节点",
+  imageAgentNode: "图片智能体节点",
+  videoAgentNode: "视频智能体节点",
+};
 
 const getCanvasNodeTypeFromFlowNode = (
   node: AllNodeType | undefined,
@@ -218,7 +218,7 @@ const isMacOs = () => {
 
 const scheduleIdleWork = (callback: () => void) => {
   if (typeof window === "undefined") {
-    return () => {};
+    return () => { };
   }
 
   if ("requestIdleCallback" in window) {
@@ -715,10 +715,10 @@ export const CanvasFlow = ({
         void handleFiles(
           files,
           mouseFlowPositionRef.current ??
-            screenToFlowPosition({
-              x: window.innerWidth / 2,
-              y: window.innerHeight / 2,
-            }),
+          screenToFlowPosition({
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2,
+          }),
         );
         return;
       }
@@ -1826,18 +1826,18 @@ export const CanvasFlow = ({
         };
       })
       .filter(Boolean) as Array<
-      {
-        id: string;
-        nodeIds: string[];
-        createdAt: number;
-        bounds: {
-          x: number;
-          y: number;
-          width: number;
-          height: number;
-        };
-      }
-    >;
+        {
+          id: string;
+          nodeIds: string[];
+          createdAt: number;
+          bounds: {
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+          };
+        }
+      >;
   }, [displayNodeById, groups]);
 
   const selectedGroup = useMemo(() => {
@@ -2999,8 +2999,8 @@ export const CanvasFlow = ({
               </div>
 
               {selectionBoundsFlow &&
-              !isSelectionBoxActive &&
-              !isSpacePressed ? (
+                !isSelectionBoxActive &&
+                !isSpacePressed ? (
                 <div
                   className="pointer-events-none absolute left-0 top-0 z-[11] rounded-lg border border-dashed border-[#B43FEB]/70 bg-[#B43FEB]/10 shadow-[0_0_0_1px_rgba(180,63,235,0.18),0_0_24px_rgba(180,63,235,0.18)]"
                   style={{
@@ -3008,6 +3008,18 @@ export const CanvasFlow = ({
                     width: `${selectionBoundsFlow.width + 16}px`,
                     height: `${selectionBoundsFlow.height + 16}px`,
                   }}
+                />
+              ) : null}
+
+              {selectionRightCenterFlowPosition &&
+                multiSelectedCount >= 2 &&
+                !isSelectionBoxActive &&
+                !quickAddDragPreview.active ? (
+                <MultiSelectQuickCreate
+                  visible
+                  x={selectionRightCenterFlowPosition.x}
+                  y={selectionRightCenterFlowPosition.y}
+                  onPointerDown={handleQuickAddPointerDown}
                 />
               ) : null}
             </ViewportPortal>
@@ -3167,6 +3179,7 @@ export const CanvasFlow = ({
                 <DropdownMenuItem
                   className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
                   onSelect={() => handleCreateNodeFromQuickAddMenu("video")}
+                  style={{ display: 'none' }}
                 >
                   <IconVideo size={16} />
                   新建生成视频节点
@@ -3176,7 +3189,7 @@ export const CanvasFlow = ({
                   onSelect={() => handleCreateNodeFromQuickAddMenu("newVideo")}
                 >
                   <IconVideo size={16} />
-                  新建生成视频节点(新版)
+                  新建生成视频节点
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
