@@ -18,9 +18,9 @@ export const MultiSelectQuickCreate = memo(
 
     return (
       <div
-        className="absolute left-0 top-0 z-20"
+        className="fixed left-0 top-0 z-[60]"
         style={{
-          transform: `translate3d(${x + 10}px, ${y}px, 0) translate(-50%, -50%)`,
+          transform: `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`,
         }}
       >
         <Button

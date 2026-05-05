@@ -1650,6 +1650,21 @@ export const CanvasFlow = ({
     };
   }, [multiSelectedCount, selectionBoundsScreen]);
 
+  const quickCreateScreenPosition = useMemo(() => {
+    if (!selectionRightCenterFlowPosition || multiSelectedCount < 2) {
+      return null;
+    }
+
+    return {
+      x:
+        (selectionRightCenterFlowPosition.x + 10) * viewportState.zoom +
+        viewportState.x,
+      y:
+        selectionRightCenterFlowPosition.y * viewportState.zoom +
+        viewportState.y,
+    };
+  }, [multiSelectedCount, selectionRightCenterFlowPosition, viewportState]);
+
   const groupFrames = useMemo(() => {
     return groups
       .map((group) => {
@@ -2850,18 +2865,6 @@ export const CanvasFlow = ({
                   }}
                 />
               ) : null}
-
-              {selectionRightCenterFlowPosition &&
-              multiSelectedCount >= 2 &&
-              !isSelectionBoxActive &&
-              !quickAddDragPreview.active ? (
-                <MultiSelectQuickCreate
-                  visible
-                  x={selectionRightCenterFlowPosition.x}
-                  y={selectionRightCenterFlowPosition.y}
-                  onPointerDown={handleQuickAddPointerDown}
-                />
-              ) : null}
             </ViewportPortal>
 
             {gridVisible && (
@@ -2884,6 +2887,17 @@ export const CanvasFlow = ({
               />
             ) : null}
           </ReactFlow>
+
+          {quickCreateScreenPosition &&
+          !isSelectionBoxActive &&
+          !quickAddDragPreview.active ? (
+            <MultiSelectQuickCreate
+              visible
+              x={quickCreateScreenPosition.x}
+              y={quickCreateScreenPosition.y}
+              onPointerDown={handleQuickAddPointerDown}
+            />
+          ) : null}
 
           <CanvasBatchToolbar
             mode={batchToolbarMode}
