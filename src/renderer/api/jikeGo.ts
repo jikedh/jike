@@ -9,11 +9,86 @@ const getJikeGoAuthHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
+export type DesktopProxyPlatform =
+  | "kuaizi"
+  | "dashscope"
+  | "toapi"
+  | "zeakai"
+  | "yunwu";
+
+export type DesktopProxyRequest = {
+  platform: DesktopProxyPlatform;
+  upstreamPath: string;
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  query?: Record<string, any>;
+  headers?: Record<string, string>;
+  body?: any;
+};
+
+export type DesktopChatCompletionsRequest = {
+  platform: Extract<DesktopProxyPlatform, "dashscope" | "toapi">;
+  upstreamPath?: string;
+  model: string;
+  messages: Array<{
+    role: "system" | "user" | "assistant";
+    content: string;
+  }>;
+  stream?: boolean;
+  temperature?: number;
+  top_p?: number;
+  max_tokens?: number;
+  [key: string]: any;
+};
+
 export function healthCheck(): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/health",
     method: "get",
+  });
+}
+
+// 健康检查
+export function desktopProxyHealthCheck(): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/desktop/v1/health",
+    method: "get",
+  });
+}
+
+// 创建桌面代理任务
+export function createDesktopProxyTask(data: DesktopProxyRequest): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/desktop/v1/ai/generation/proxy",
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+// 查询桌面代理任务状态
+export function queryDesktopProxyTask(data: DesktopProxyRequest): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/desktop/v1/ai/task/query",
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+// 聊天用的接口
+export function createDesktopChatCompletions(
+  data: DesktopChatCompletionsRequest,
+): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/desktop/v1/ai/chat/completions",
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
   });
 }
 

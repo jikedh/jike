@@ -5,15 +5,25 @@ import {
   setJikeingUserInfo,
 } from "shared/utils/utils";
 import {
+  createDesktopChatCompletions,
+  createDesktopProxyTask,
+  type DesktopProxyPlatform,
   getDigitalCaptcha,
   getJikeGoUserInfo,
   getSceneQrcode,
   healthCheck,
   loginByUsername,
+  queryDesktopProxyTask,
   querySceneStatus,
   registerByUsername,
   updateJikeGoUserInfo,
 } from "@/api/jikeGo";
+
+const DESKTOP_PROXY_POLL_INTERVAL = 5000;
+const DESKTOP_PROXY_MAX_POLL_COUNT = 60;
+
+const wait = (timeout: number) =>
+  new Promise((resolve) => setTimeout(resolve, timeout));
 
 interface TestButtonProps {
   label: string;
@@ -94,6 +104,56 @@ const LogPanel = ({ logs }: { logs: LogEntry[] }) => {
   );
 };
 
+const getTaskId = (response: any) =>
+  response?.data?.task_id ||
+  response?.output?.task_id ||
+  response?.result?.task_id ||
+  response?.data?.taskId ||
+  response?.output?.taskId ||
+  response?.id ||
+  response?.task_id ||
+  response?.taskId ||
+  "";
+
+const getTaskStatus = (response: any) =>
+  String(
+    response?.data?.status ||
+      response?.data?.task_status ||
+      response?.output?.task_status ||
+      response?.output?.status ||
+      response?.result?.status ||
+      response?.status ||
+      "",
+  ).toLowerCase();
+
+const isTaskCompleted = (status: string) =>
+  ["completed", "succeeded", "success", "done", "finished"].includes(status);
+
+const isTaskFailed = (status: string) =>
+  ["failed", "fail", "error", "canceled", "cancelled"].includes(status);
+
+const getMediaUrls = (response: any): string[] => {
+  const resultData =
+    response?.result?.data || response?.data?.result?.data || response?.data?.data;
+  const urls = Array.isArray(resultData)
+    ? resultData
+        .map((item: any) =>
+          typeof item === "string"
+            ? item
+            : item?.url || item?.image_url || item?.video_url || "",
+        )
+        .filter(Boolean)
+    : [];
+
+  return [
+    ...urls,
+    response?.output?.video_url,
+    response?.data?.video_url,
+    response?.output?.image_url,
+    response?.data?.image_url,
+  ].filter(Boolean);
+};
+
 export default function TestGoPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
@@ -108,6 +168,27 @@ export default function TestGoPage() {
   });
   const [captchaImage, setCaptchaImage] = useState("");
   const [sceneQrcodeImage, setSceneQrcodeImage] = useState("");
+  const [chatApiData, setChatApiData] = useState({
+    platform: "dashscope" as "dashscope" | "toapi",
+    model: "qwen-plus",
+    message: "你好，请用一句话介绍即刻桌面代理。",
+  });
+  const [imageApiData, setImageApiData] = useState({
+    model: "gpt-image-2",
+    prompt: "一张极简科技风桌面应用宣传海报，深色背景，蓝色霓虹光效",
+    size: "1024x1024",
+    taskId: "",
+    resultUrls: [] as string[],
+  });
+  const [videoApiData, setVideoApiData] = useState({
+    platform: "dashscope" as "kuaizi" | "dashscope",
+    model: "wan2.7-t2v",
+    prompt: "一段科技感产品展示视频，镜头缓慢推进，深色背景，蓝色光线",
+    duration: 5,
+    ratio: "16:9",
+    taskId: "",
+    resultUrls: [] as string[],
+  });
 
   const addLog = (api: string, status: "success" | "error", data: any) => {
     const now = new Date();
@@ -249,6 +330,198 @@ export default function TestGoPage() {
       }),
     );
 
+  const handleChatPlatformChange = (platform: "dashscope" | "toapi") => {
+    setChatApiData((prev) => ({
+      ...prev,
+      platform,
+      model: platform === "dashscope" ? "qwen-plus" : "gpt-4o-mini",
+    }));
+  };
+
+  const handleVideoPlatformChange = (platform: "kuaizi" | "dashscope") => {
+    setVideoApiData((prev) => ({
+      ...prev,
+      platform,
+      model: platform === "dashscope" ? "wan2.7-t2v" : "seedance-2.0-fast",
+    }));
+  };
+
+  const pollDesktopTask = async ({
+    apiName,
+    taskId,
+    platform,
+    buildQueryPath,
+    buildQueryBody,
+    onResultUrls,
+  }: {
+    apiName: string;
+    taskId: string;
+    platform: DesktopProxyPlatform;
+    buildQueryPath: (taskId: string) => string;
+    buildQueryBody?: (taskId: string) => any;
+    onResultUrls: (urls: string[]) => void;
+  }) => {
+    for (let count = 1; count <= DESKTOP_PROXY_MAX_POLL_COUNT; count += 1) {
+      await wait(DESKTOP_PROXY_POLL_INTERVAL);
+      const response = await queryDesktopProxyTask({
+        platform,
+        method: buildQueryBody ? "POST" : "GET",
+        upstreamPath: buildQueryPath(taskId),
+        body: buildQueryBody?.(taskId),
+      });
+      const data = getResponseData(response);
+      const status = getTaskStatus(data);
+      const resultUrls = getMediaUrls(data);
+
+      addLog(`${apiName} 第 ${count} 次轮询`, "success", response);
+      if (resultUrls.length) {
+        onResultUrls(resultUrls);
+      }
+      if (isTaskCompleted(status) || isTaskFailed(status)) {
+        return response;
+      }
+    }
+
+    throw new Error("任务轮询超时");
+  };
+
+  const handleDesktopChat = () => {
+    const message = chatApiData.message.trim();
+    if (!message) {
+      alert("请输入对话内容");
+      return;
+    }
+
+    return callApi("desktopChatCompletions (桌面代理对话)", () =>
+      createDesktopChatCompletions({
+        platform: chatApiData.platform,
+        upstreamPath:
+          chatApiData.platform === "dashscope"
+            ? "/compatible-mode/v1/chat/completions"
+            : "/v1/chat/completions",
+        model: chatApiData.model,
+        stream: false,
+        messages: [{ role: "user", content: message }],
+      }),
+    );
+  };
+
+  const handleCreateImageTask = async () => {
+    const apiName = "desktopImageGeneration (图片生成)";
+    const prompt = imageApiData.prompt.trim();
+    if (!prompt) {
+      alert("请输入图片提示词");
+      return;
+    }
+
+    setLoadingMap((prev) => ({ ...prev, [apiName]: true }));
+    setImageApiData((prev) => ({ ...prev, taskId: "", resultUrls: [] }));
+
+    try {
+      const response = await createDesktopProxyTask({
+        platform: "toapi",
+        method: "POST",
+        upstreamPath: "/v1/images/generations",
+        body: {
+          model: imageApiData.model,
+          prompt,
+          size: imageApiData.size,
+          n: 1,
+        },
+      });
+      const taskId = getTaskId(getResponseData(response));
+      addLog(`${apiName} 创建任务`, "success", response);
+
+      if (!taskId) {
+        throw new Error("未返回图片任务 ID");
+      }
+
+      setImageApiData((prev) => ({ ...prev, taskId }));
+      await pollDesktopTask({
+        apiName,
+        taskId,
+        platform: "toapi",
+        buildQueryPath: (id) => `/v1/images/generations/${id}`,
+        onResultUrls: (urls) =>
+          setImageApiData((prev) => ({ ...prev, resultUrls: urls })),
+      });
+    } catch (error: any) {
+      console.error(`[${apiName}] 错误:`, error);
+      addLog(apiName, "error", error?.response?.data || error.message || error);
+    } finally {
+      setLoadingMap((prev) => ({ ...prev, [apiName]: false }));
+    }
+  };
+
+  const handleCreateVideoTask = async () => {
+    const apiName = "desktopVideoGeneration (视频生成)";
+    const prompt = videoApiData.prompt.trim();
+    if (!prompt) {
+      alert("请输入视频提示词");
+      return;
+    }
+
+    setLoadingMap((prev) => ({ ...prev, [apiName]: true }));
+    setVideoApiData((prev) => ({ ...prev, taskId: "", resultUrls: [] }));
+
+    try {
+      const isDashscope = videoApiData.platform === "dashscope";
+      const response = await createDesktopProxyTask({
+        platform: videoApiData.platform,
+        method: "POST",
+        upstreamPath: isDashscope
+          ? "/api/v1/services/aigc/video-generation/video-synthesis"
+          : "/v1/lz/video/task/create",
+        headers: isDashscope ? { "X-DashScope-Async": "enable" } : {},
+        body: isDashscope
+          ? {
+              model: videoApiData.model,
+              input: { prompt },
+              parameters: {
+                resolution: "720P",
+                ratio: videoApiData.ratio,
+                duration: Number(videoApiData.duration),
+                prompt_extend: true,
+                watermark: false,
+              },
+            }
+          : {
+              model: videoApiData.model,
+              prompt,
+              generation_type: "video",
+              mode: videoApiData.model.includes("fast") ? "fast" : "pro",
+              resolution: "720p",
+              ratio: videoApiData.ratio,
+              duration: Number(videoApiData.duration),
+              generate_audio: false,
+            },
+      });
+      const taskId = getTaskId(getResponseData(response));
+      addLog(`${apiName} 创建任务`, "success", response);
+
+      if (!taskId) {
+        throw new Error("未返回视频任务 ID");
+      }
+
+      setVideoApiData((prev) => ({ ...prev, taskId }));
+      await pollDesktopTask({
+        apiName,
+        taskId,
+        platform: videoApiData.platform,
+        buildQueryPath: (id) =>
+          isDashscope ? `/api/v1/tasks/${id}` : "/v1/lz/video/task/status",
+        buildQueryBody: isDashscope ? undefined : (id) => ({ task_id: id }),
+        onResultUrls: (urls) =>
+          setVideoApiData((prev) => ({ ...prev, resultUrls: urls })),
+      });
+    } catch (error: any) {
+      console.error(`[${apiName}] 错误:`, error);
+      addLog(apiName, "error", error?.response?.data || error.message || error);
+    } finally {
+      setLoadingMap((prev) => ({ ...prev, [apiName]: false }));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#050508] text-white flex flex-col overflow-hidden relative">
       <div className="absolute inset-0 -z-10">
@@ -268,7 +541,8 @@ export default function TestGoPage() {
           </button>
         </div>
 
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] gap-6">
+          <div className="space-y-6">
           <section className="bg-white/5 rounded-xl p-5 border border-white/10">
             <h2 className="text-lg font-semibold text-sky-400 mb-4">
               用户基础 API（jike-go /v1/user）
@@ -464,6 +738,262 @@ export default function TestGoPage() {
               </div>
             </div>
           </section>
+
+          <section className="bg-white/5 rounded-xl p-5 border border-white/10">
+            <h2 className="text-lg font-semibold text-emerald-400 mb-4">
+              对话测试（Desktop Proxy /chat/completions）
+            </h2>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-white/50">平台</label>
+                  <select
+                    value={chatApiData.platform}
+                    onChange={(event) =>
+                      handleChatPlatformChange(
+                        event.target.value as "dashscope" | "toapi",
+                      )
+                    }
+                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-emerald-500 outline-none"
+                  >
+                    <option value="dashscope">dashscope</option>
+                    <option value="toapi">toapi</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-white/50">模型</label>
+                  <input
+                    type="text"
+                    value={chatApiData.model}
+                    onChange={(event) =>
+                      setChatApiData((prev) => ({
+                        ...prev,
+                        model: event.target.value,
+                      }))
+                    }
+                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-emerald-500 outline-none"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-white/50">对话内容</label>
+                <textarea
+                  value={chatApiData.message}
+                  onChange={(event) =>
+                    setChatApiData((prev) => ({
+                      ...prev,
+                      message: event.target.value,
+                    }))
+                  }
+                  rows={4}
+                  className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-emerald-500 outline-none resize-none"
+                />
+              </div>
+              <TestButton
+                label="发送对话请求"
+                onClick={handleDesktopChat}
+                loading={loadingMap["desktopChatCompletions (桌面代理对话)"]}
+                variant="outline"
+              />
+            </div>
+          </section>
+
+          <section className="bg-white/5 rounded-xl p-5 border border-white/10">
+            <h2 className="text-lg font-semibold text-fuchsia-400 mb-4">
+              图片生成测试（toapi，5 秒轮询）
+            </h2>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-white/50">平台</label>
+                  <select
+                    value="toapi"
+                    disabled
+                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm text-white/50 outline-none"
+                  >
+                    <option value="toapi">toapi</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-white/50">模型</label>
+                  <input
+                    type="text"
+                    value={imageApiData.model}
+                    onChange={(event) =>
+                      setImageApiData((prev) => ({
+                        ...prev,
+                        model: event.target.value,
+                      }))
+                    }
+                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-fuchsia-500 outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-white/50">尺寸</label>
+                  <input
+                    type="text"
+                    value={imageApiData.size}
+                    onChange={(event) =>
+                      setImageApiData((prev) => ({
+                        ...prev,
+                        size: event.target.value,
+                      }))
+                    }
+                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-fuchsia-500 outline-none"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-white/50">图片提示词</label>
+                <textarea
+                  value={imageApiData.prompt}
+                  onChange={(event) =>
+                    setImageApiData((prev) => ({
+                      ...prev,
+                      prompt: event.target.value,
+                    }))
+                  }
+                  rows={4}
+                  className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-fuchsia-500 outline-none resize-none"
+                />
+              </div>
+              <div className="flex flex-wrap gap-3 items-center">
+                <TestButton
+                  label="创建图片任务并轮询"
+                  onClick={handleCreateImageTask}
+                  loading={loadingMap["desktopImageGeneration (图片生成)"]}
+                  variant="outline"
+                />
+                {imageApiData.taskId && (
+                  <span className="text-xs text-white/50">
+                    task_id: {imageApiData.taskId}
+                  </span>
+                )}
+              </div>
+              {imageApiData.resultUrls.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {imageApiData.resultUrls.map((url) => (
+                    <img
+                      key={url}
+                      src={url}
+                      alt="图片生成结果"
+                      className="w-full rounded bg-black/30 border border-white/10"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="bg-white/5 rounded-xl p-5 border border-white/10">
+            <h2 className="text-lg font-semibold text-orange-400 mb-4">
+              视频生成测试（kuaizi / dashscope，5 秒轮询）
+            </h2>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-white/50">平台</label>
+                  <select
+                    value={videoApiData.platform}
+                    onChange={(event) =>
+                      handleVideoPlatformChange(
+                        event.target.value as "kuaizi" | "dashscope",
+                      )
+                    }
+                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-orange-500 outline-none"
+                  >
+                    <option value="dashscope">dashscope</option>
+                    <option value="kuaizi">kuaizi</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-white/50">模型</label>
+                  <input
+                    type="text"
+                    value={videoApiData.model}
+                    onChange={(event) =>
+                      setVideoApiData((prev) => ({
+                        ...prev,
+                        model: event.target.value,
+                      }))
+                    }
+                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-orange-500 outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-white/50">时长</label>
+                  <input
+                    type="number"
+                    value={videoApiData.duration}
+                    onChange={(event) =>
+                      setVideoApiData((prev) => ({
+                        ...prev,
+                        duration: Number(event.target.value),
+                      }))
+                    }
+                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-orange-500 outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-white/50">比例</label>
+                  <select
+                    value={videoApiData.ratio}
+                    onChange={(event) =>
+                      setVideoApiData((prev) => ({
+                        ...prev,
+                        ratio: event.target.value,
+                      }))
+                    }
+                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-orange-500 outline-none"
+                  >
+                    <option value="16:9">16:9</option>
+                    <option value="9:16">9:16</option>
+                    <option value="1:1">1:1</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-white/50">视频提示词</label>
+                <textarea
+                  value={videoApiData.prompt}
+                  onChange={(event) =>
+                    setVideoApiData((prev) => ({
+                      ...prev,
+                      prompt: event.target.value,
+                    }))
+                  }
+                  rows={4}
+                  className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-orange-500 outline-none resize-none"
+                />
+              </div>
+              <div className="flex flex-wrap gap-3 items-center">
+                <TestButton
+                  label="创建视频任务并轮询"
+                  onClick={handleCreateVideoTask}
+                  loading={loadingMap["desktopVideoGeneration (视频生成)"]}
+                  variant="outline"
+                />
+                {videoApiData.taskId && (
+                  <span className="text-xs text-white/50">
+                    task_id: {videoApiData.taskId}
+                  </span>
+                )}
+              </div>
+              {videoApiData.resultUrls.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {videoApiData.resultUrls.map((url) => (
+                    <video
+                      key={url}
+                      src={url}
+                      controls
+                      className="w-full rounded bg-black/30 border border-white/10"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+          </div>
 
           <LogPanel logs={logs} />
         </div>
