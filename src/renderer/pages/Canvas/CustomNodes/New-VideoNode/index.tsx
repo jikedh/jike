@@ -54,9 +54,6 @@ const NewVideoNode = ({
   const selectedNodesCount = useCanvasFlowStore(
     (state) => state.selectedNodesCount,
   );
-  const isSelectionBoxActive = useCanvasFlowStore(
-    (state) => state.isSelectionBoxActive,
-  );
 
   const handleVisibilityClass = useMemo(
     () =>
@@ -159,13 +156,11 @@ const NewVideoNode = ({
   const shouldShowToolbar = useMemo(
     () =>
       selected &&
-      !isSelectionBoxActive &&
       !isDragging &&
       isDragUiSettled &&
       selectedNodesCount <= 1,
     [
       selected,
-      isSelectionBoxActive,
       isDragging,
       isDragUiSettled,
       selectedNodesCount,

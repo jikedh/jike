@@ -55,9 +55,6 @@ export const VideoNode = memo(
     const selectedNodesCount = useCanvasFlowStore(
       (state) => state.selectedNodesCount,
     );
-    const isSelectionBoxActive = useCanvasFlowStore(
-      (state) => state.isSelectionBoxActive,
-    );
 
     // 使用 useMemo 缓存样式类名
     useEffect(() => {
@@ -87,13 +84,11 @@ export const VideoNode = memo(
     const shouldShowToolbar = useMemo(
       () =>
         selected &&
-        !isSelectionBoxActive &&
         !isDragging &&
         isDragUiSettled &&
         selectedNodesCount <= 1,
       [
         selected,
-        isSelectionBoxActive,
         isDragging,
         isDragUiSettled,
         selectedNodesCount,
@@ -136,8 +131,6 @@ export const VideoNode = memo(
       );
     }, [data.status]);
     const isUploadVideo = data.isUpload ?? false;
-    const badgeLabel =
-      data.badgeLabel ?? (isUploadVideo ? "上传视频" : "生成视频");
 
     const confirmDeleteIfNeeded = useCallback(() => {
       if (!isGenerating) {

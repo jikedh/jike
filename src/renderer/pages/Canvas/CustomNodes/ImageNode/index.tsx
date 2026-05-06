@@ -76,9 +76,6 @@ export const ImageNode = memo(
     const selectedNodesCount = useCanvasFlowStore(
       (state) => state.selectedNodesCount,
     );
-    const isSelectionBoxActive = useCanvasFlowStore(
-      (state) => state.isSelectionBoxActive,
-    );
     const projectId = useCanvasFlowStore((state) => state.projectId);
 
     // 全景图查看器状态
@@ -126,14 +123,12 @@ export const ImageNode = memo(
     const shouldShowToolbar = useMemo(
       () =>
         selected &&
-        !isSelectionBoxActive &&
         !isDragging &&
         isDragUiSettled &&
         selectedNodesCount <= 1 &&
         !isAnnotationMode,
       [
         selected,
-        isSelectionBoxActive,
         isDragging,
         isDragUiSettled,
         isAnnotationMode,

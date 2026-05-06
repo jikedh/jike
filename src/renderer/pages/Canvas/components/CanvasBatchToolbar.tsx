@@ -42,7 +42,7 @@ export const CanvasBatchToolbar = memo(
     return (
       <div
         className={cn(
-          "z-[40]",
+          "canvas-batch-toolbar z-[40]",
           shouldAnchorToPosition
             ? "fixed"
             : "fixed left-1/2 top-4 -translate-x-1/2",

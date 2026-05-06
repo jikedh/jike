@@ -61,9 +61,12 @@ import {
   assignMissingMediaSequences,
 } from "shared/utils/mediaSequence";
 import {
-  cloneNodeDataForCopy,
-  resetNodeDataRuntimeState,
-} from "shared/utils/nodeCopy";
+  buildPastedNodesAndEdges,
+  createCopiedEdgeTemplates,
+  createCopiedNodeTemplates,
+  syncMediaUrlsForPastedEdges,
+} from "shared/utils/canvasCopyPaste";
+import { resetNodeDataRuntimeState } from "shared/utils/nodeCopy";
 import { nodeFactoryMap } from "shared/utils/nodeFactory";
 import {
   buildReferenceHighlightState,
@@ -1642,27 +1645,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     return `音频${toChineseNumber(sequence)}`;
   };
 
-  /**
-   * 将 ReactFlow 节点 type 映射为 store 的 NodeType 计数键。
-   */
-  const resolveNodeTypeForCounter = (node: AllNodeType): NodeType => {
-    const nodeTypeMap: Record<string, NodeType> = {
-      noteNode: "note",
-      imageNode: "image",
-      videoNode: "video",
-      newVideoNode: "newVideo",
-      agentNode: "agent",
-      panoramaNode: "panorama",
-      audioNode: "audio",
-      textAgentNode: "textAgent",
-      imageAgentNode: "imageAgent",
-      videoAgentNode: "videoAgent",
-      tableNode: "table",
-    };
-
-    return nodeTypeMap[node.type] ?? "default";
-  };
-
   const getNodeResultUrls = (node: AllNodeType | undefined): string[] => {
     const nodeData = node?.data as any;
 
@@ -2315,7 +2297,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      * @param nodeId 要复制的节点 ID
      */
     duplicateNode: (nodeId: string) => {
-      // 从最新的状态中获取节点，确保使用当前位置
       const currentState = get();
       const node = currentState.nodes.find((n) => n.id === nodeId);
       if (!node) {
@@ -2323,74 +2304,27 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         return;
       }
 
-      // 统一用映射后的 NodeType 参与 ID 计数，避免出现 audioNode-0 这类异常前缀。
-      const nodeType = resolveNodeTypeForCounter(node);
-
-      const newId = currentState.getNextNodeId(nodeType);
-
-      // 固定偏移量
-      const offsetX = 350;
-      const offsetY = 300;
-
-      const cleanData = cloneNodeDataForCopy(node.type, node.data);
-      const newNode = {
-        id: newId,
-        type: node.type,
-        position: {
-          x: node.position.x + offsetX,
-          y: node.position.y + offsetY,
-        },
-        data: {
-          // 这里拷贝了原节点的 data
-          ...cleanData,
-          createdAt: Date.now(),
-        },
-        selected: true,
-        dragging: false,
-        // 保留便签节点的宽高
-        ...(node.width !== undefined && { width: node.width }),
-        ...(node.height !== undefined && { height: node.height }),
-      } as AllNodeType;
-
-      const finalDuplicatedNode =
-        newNode.type === "audioNode"
-          ? {
-            ...newNode,
-            data: {
-              ...newNode.data,
-              nickname: getAudioNicknameByNodeId(newId),
-            },
-          }
-          : newNode;
+      const copiedNodes = createCopiedNodeTemplates([node]);
+      const copiedEdges = createCopiedEdgeTemplates([node], currentState.edges);
+      const { newNodes, newEdges } = buildPastedNodesAndEdges({
+        copiedNodes,
+        copiedEdges,
+        existingNodes: currentState.nodes,
+        getNextNodeId: currentState.getNextNodeId,
+        pasteCount: 1,
+      });
 
       set((state) => {
-        // 取消所有节点的选中状态，只选中新节点
         const updatedNodes = state.nodes.map((n) => ({
           ...n,
           selected: false,
         }));
 
-        const copiedIncomingEdges =
-          node.type === "imageNode" ||
-            node.type === "videoNode" ||
-            node.type === "newVideoNode"
-            ? state.edges
-              .filter((edge) => edge.target === node.id)
-              .map((edge, edgeIndex) => {
-                const { id: _id, target: _target, ...edgePayload } = edge;
-
-                return {
-                  ...edgePayload,
-                  id: `edge-${edge.source}-${newId}-${Date.now()}-${edgeIndex}`,
-                  target: newId,
-                } as EdgeType;
-              })
-            : [];
-        const nextEdges = [...state.edges, ...copiedIncomingEdges];
-        let nextNodes = [...updatedNodes, finalDuplicatedNode];
-        copiedIncomingEdges.forEach((edge) => {
-          nextNodes = syncMediaUrlsByEdge(nextNodes, edge, "add");
-        });
+        const nextNodes = syncMediaUrlsForPastedEdges(
+          [...updatedNodes, ...newNodes],
+          newEdges,
+        );
+        const nextEdges = [...state.edges, ...newEdges];
 
         return {
           nodes: nextNodes,
