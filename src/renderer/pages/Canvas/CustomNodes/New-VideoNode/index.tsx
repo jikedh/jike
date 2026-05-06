@@ -158,7 +158,7 @@ const NewVideoNode = ({
   const hasMultipleResults =
     (data.result?.data?.length ?? 0) + (isGenerating ? 1 : 0) > 1;
   const isUploadVideo = data.isUpload ?? false;
-  const badgeLabel = data.badgeLabel ?? "生成视频新版";
+  const badgeLabel = data.badgeLabel ?? "生成视频";
   const contentFrameSize = useMemo(
     () => ({
       width: nodeSize.width,
