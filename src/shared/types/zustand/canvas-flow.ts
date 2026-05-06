@@ -35,11 +35,18 @@ export type CanvasPersistedState = {
 export type CanvasGroup = {
   id: string;
   nodeIds: string[];
+  name?: string;
   createdAt: number;
   gridLayoutOrder?: string[];
   layoutOrigin?: {
     x: number;
     y: number;
+  };
+  frame?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
   };
 };
 
@@ -180,6 +187,14 @@ export type CanvasFlowStoreType = {
   deleteNode: (nodeId: string) => void;
   createGroup: (nodeIds: string[]) => string;
   ungroup: (groupId: string) => void;
+  syncDraggedNodesWithGroups: (nodeIds: string[]) => void;
+  syncGroupsByFrame: (groupIds?: string[]) => void;
+  updateGroupName: (groupId: string, name: string) => void;
+  updateGroupFrame: (
+    groupId: string,
+    frame: { x: number; y: number; width: number; height: number },
+    options?: { syncMembers?: boolean },
+  ) => void;
   layoutGroupHorizontal: (groupId: string) => void;
   layoutGroupGrid: (groupId: string) => void;
   moveGroupNodes: (groupId: string, offset: { x: number; y: number }) => void;
