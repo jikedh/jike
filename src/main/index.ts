@@ -1,6 +1,7 @@
 import { electronApp, is, optimizer } from "@electron-toolkit/utils";
 import { app, BrowserWindow, dialog, shell } from "electron";
 import { autoUpdater } from "electron-updater";
+import { mkdirSync } from "fs";
 import { join } from "path";
 // @ts-ignore
 import icon from "../../resources/icon.png?asset";
@@ -25,6 +26,16 @@ import {
 import { adobe2ApiService } from "./ipc/adobe2api/service";
 
 let mainWindow: BrowserWindow | null = null;
+
+function configureRuntimePaths(): void {
+  const userDataPath = app.getPath("userData");
+  const sessionDataPath = join(userDataPath, "session-data");
+  const cachePath = join(sessionDataPath, "Cache");
+
+  mkdirSync(cachePath, { recursive: true });
+  app.setPath("sessionData", sessionDataPath);
+  app.commandLine.appendSwitch("disk-cache-dir", cachePath);
+}
 
 function setupAutoUpdater(): void {
   // 如果不是安装包运行或者平台不是 Windows，则不启用自动更新功能
@@ -70,6 +81,14 @@ function setupAutoUpdater(): void {
   void autoUpdater.checkForUpdates();
 }
 
+configureRuntimePaths();
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     title: "即刻",
@@ -111,20 +130,33 @@ function createWindow(): void {
   registerVideoProcessingHandlers();
 }
 
-app.whenReady().then(() => {
-  electronApp.setAppUserModelId("com.electron");
+app.on("second-instance", () => {
+  if (!mainWindow) {
+    return;
+  }
 
-  app.on("browser-window-created", (_, window) => {
-    optimizer.watchWindowShortcuts(window);
-  });
-
-  createWindow();
-  setupAutoUpdater();
-
-  app.on("activate", function () {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  mainWindow.focus();
 });
+
+if (gotSingleInstanceLock) {
+  app.whenReady().then(() => {
+    electronApp.setAppUserModelId("com.electron");
+
+    app.on("browser-window-created", (_, window) => {
+      optimizer.watchWindowShortcuts(window);
+    });
+
+    createWindow();
+    setupAutoUpdater();
+
+    app.on("activate", function () {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+}
 
 app.on("window-all-closed", () => {
   void adobe2ApiService.stop();
