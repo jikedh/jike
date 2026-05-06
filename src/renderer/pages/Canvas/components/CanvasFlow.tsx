@@ -78,6 +78,13 @@ const MAX_CANVAS_ZOOM = 2;
 const DEFAULT_OPEN_ZOOM = 0.67;
 const STORE_NODE_CHANGE_THROTTLE_MS = 70;
 const MIN_GROUP_FRAME_SIZE = 80;
+const INTERACTIVE_SELECTION_SUPPRESSION_MS = 250;
+const CANVAS_INTERACTIVE_SELECTOR =
+  '.selection-box-deferred-ui, [data-slot="select-content"], [data-slot="popover-content"], [data-slot="dropdown-menu-content"]';
+
+const isCanvasInteractiveTarget = (target: EventTarget | null) =>
+  target instanceof Element &&
+  Boolean(target.closest(CANVAS_INTERACTIVE_SELECTOR));
 
 /**
  * 鏍规嵁璧风偣鍜岀粓鐐圭粯鍒朵竴鏉℃煍鍜岀殑璐濆灏旀洸绾裤€?
@@ -599,6 +606,7 @@ export const CanvasFlow = ({
   } | null>(null);
   const suppressDefaultSelectionRef = useRef(false);
   const deferSelectionCalculationRef = useRef(false);
+  const suppressInteractiveSelectionTimerRef = useRef<number | null>(null);
   const suppressNextContextMenuRef = useRef(false);
   const suppressContextMenuTimerRef = useRef<number | null>(null);
   const viewportPanStateRef = useRef<{
@@ -1392,6 +1400,9 @@ export const CanvasFlow = ({
       if (suppressContextMenuTimerRef.current !== null) {
         window.clearTimeout(suppressContextMenuTimerRef.current);
       }
+      if (suppressInteractiveSelectionTimerRef.current !== null) {
+        window.clearTimeout(suppressInteractiveSelectionTimerRef.current);
+      }
     };
   }, []);
 
@@ -1413,6 +1424,37 @@ export const CanvasFlow = ({
       suppressContextMenuTimerRef.current = null;
     }, delay);
   }, []);
+
+  const scheduleInteractiveSelectionSuppressionRelease = useCallback(() => {
+    suppressDefaultSelectionRef.current = true;
+
+    if (suppressInteractiveSelectionTimerRef.current !== null) {
+      window.clearTimeout(suppressInteractiveSelectionTimerRef.current);
+    }
+
+    suppressInteractiveSelectionTimerRef.current = window.setTimeout(() => {
+      suppressDefaultSelectionRef.current = false;
+      suppressInteractiveSelectionTimerRef.current = null;
+    }, INTERACTIVE_SELECTION_SUPPRESSION_MS);
+  }, []);
+
+  useEffect(() => {
+    const handleInteractivePointerDown = (event: PointerEvent) => {
+      if (isCanvasInteractiveTarget(event.target)) {
+        scheduleInteractiveSelectionSuppressionRelease();
+      }
+    };
+
+    document.addEventListener("pointerdown", handleInteractivePointerDown, {
+      capture: true,
+    });
+
+    return () => {
+      document.removeEventListener("pointerdown", handleInteractivePointerDown, {
+        capture: true,
+      });
+    };
+  }, [scheduleInteractiveSelectionSuppressionRelease]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange<AllNodeType>[]) => {
@@ -1448,11 +1490,26 @@ export const CanvasFlow = ({
       const storeChanges = filteredChanges.filter(
         (c) => c.type !== "dimensions",
       );
-      if (storeChanges.length > 0) {
-        scheduleStoreNodeChanges(storeChanges);
+      if (storeChanges.length === 0) {
+        return;
+      }
+
+      const selectionChanges = storeChanges.filter(
+        (change) => change.type === "select",
+      );
+      const deferredStoreChanges = storeChanges.filter(
+        (change) => change.type !== "select",
+      );
+
+      if (selectionChanges.length > 0) {
+        storeOnNodesChange(selectionChanges);
+      }
+
+      if (deferredStoreChanges.length > 0) {
+        scheduleStoreNodeChanges(deferredStoreChanges);
       }
     },
-    [scheduleDisplayNodeChanges, scheduleStoreNodeChanges],
+    [scheduleDisplayNodeChanges, scheduleStoreNodeChanges, storeOnNodesChange],
   );
 
   const alignPositionToGrid = useCallback(
@@ -2043,6 +2100,10 @@ export const CanvasFlow = ({
   // 鐐瑰嚮鐢诲竷绌虹櫧鍖哄煙鏃跺彇娑堟墍鏈夎妭鐐圭殑閫変腑鐘舵€?
   const handlePaneClick = useCallback(() => {
     if (annotationWorkspace.open) {
+      return;
+    }
+
+    if (suppressInteractiveSelectionTimerRef.current !== null) {
       return;
     }
 
