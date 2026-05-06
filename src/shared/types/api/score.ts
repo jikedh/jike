@@ -53,7 +53,7 @@ export interface GetScoreConfigResponse {
 /** 创建充值订单请求 */
 export interface CreateRechargeOrderRequest {
   userId: string;
-  packageId: string; // pkg_500, pkg_2000, pkg_5000, pkg_12000
+  packageId: string; // pkg_600, pkg_6000, pkg_18000, pkg_60000
 }
 
 /** 创建充值订单响应 */
