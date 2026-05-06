@@ -939,13 +939,17 @@ export const CanvasFlow = ({
 
   // 绋冲畾 ReactFlow 瀵硅薄鍨?props 鐨勫紩鐢紝閬垮厤姣忔 render 鐢熸垚鏂板璞″鑷村瓙鏍戞棤鏁堟洿鏂?
   const connectionLineStyle = useMemo(
-    () => ({ stroke: "#B43FEB", strokeWidth: 2, fill: "none" }),
+    () => ({
+      stroke: "rgba(220, 178, 255, 0.5)",
+      strokeWidth: 1.5,
+      fill: "none",
+    }),
     [],
   );
   const defaultEdgeOptions = useMemo(
     () => ({
       type: "default",
-      style: { stroke: "#B43FEB", strokeWidth: 2 },
+      style: { stroke: "rgba(220, 178, 255, 0.42)", strokeWidth: 1.5 },
       animated: false,
     }),
     [],

@@ -178,6 +178,33 @@
   }
 }
 
+@keyframes selected-edge-comet-trail {
+  from {
+    stroke-dashoffset: 96;
+  }
+  to {
+    stroke-dashoffset: -4;
+  }
+}
+
+@keyframes selected-edge-comet-core {
+  from {
+    stroke-dashoffset: 90;
+  }
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+@keyframes selected-edge-comet-head {
+  from {
+    stroke-dashoffset: 81;
+  }
+  to {
+    stroke-dashoffset: -19;
+  }
+}
+
 .video-node-slash-pill {
   display: inline-flex;
   align-items: center;
