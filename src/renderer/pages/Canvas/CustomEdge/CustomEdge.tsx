@@ -3,6 +3,7 @@ import { ScissorsLineDashed } from "lucide-react";
 import { memo, useMemo } from "react";
 
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 
 const DEFAULT_EDGE_STYLE = {
   stroke: "rgba(255, 255, 255, 0.28)",
@@ -35,6 +36,9 @@ const CustomEdgeComponent = (props: EdgeProps) => {
       (node) =>
         node.selected && (node.id === props.source || node.id === props.target),
     ),
+  );
+  const edgeAnimationEnabled = useChatSettingsStore(
+    (state) => state.edgeAnimationEnabled,
   );
   const edgeStyle = useMemo(() => {
     if (!isHighlighted) {
@@ -75,16 +79,18 @@ const CustomEdgeComponent = (props: EdgeProps) => {
             strokeLinejoin="round"
             style={SELECTED_EDGE_GLASS_STYLE}
           />
-          <path
-            d={edgePath}
-            fill="none"
-            pathLength={100}
-            pointerEvents="none"
-            stroke="#D79BFF"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={SELECTED_EDGE_STREAK_STYLE}
-          />
+          {edgeAnimationEnabled ? (
+            <path
+              d={edgePath}
+              fill="none"
+              pathLength={100}
+              pointerEvents="none"
+              stroke="#D79BFF"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={SELECTED_EDGE_STREAK_STYLE}
+            />
+          ) : null}
         </>
       ) : null}
       <EdgeToolbar
