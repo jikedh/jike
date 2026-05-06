@@ -13,6 +13,14 @@ export type LightingConfig = {
   rotationY?: number;
 };
 
+export type LightingGenerationConfig = LightingConfig & {
+  aiPrompt?: string;
+  model: string;
+  platform?: string;
+  size?: string;
+  resolution?: string;
+};
+
 export type LightingPreset = LightingConfig & {
   name: string;
   description: string;
@@ -230,6 +238,72 @@ export const LIGHTING_PRESETS: LightingPreset[] = [
   },
 ];
 
+const getLightingPresetName = (presetId: string) =>
+  LIGHTING_PRESETS.find((preset) => preset.presetId === presetId)?.name ??
+  "自定义光影";
+
+const getLightDirectionText = (config: LightingConfig) => {
+  const horizontal = clamp(config.horizontalAngle, -HORIZONTAL_RANGE, HORIZONTAL_RANGE);
+  const pitch = clamp(config.pitchAngle, -PITCH_RANGE, PITCH_RANGE);
+  const horizontalText =
+    Math.abs(horizontal) < 12
+      ? "画面正前方"
+      : horizontal < 0
+        ? "画面左侧"
+        : "画面右侧";
+  const pitchText =
+    pitch > 22 ? "偏上方" : pitch < -18 ? "偏下方" : "平视高度";
+
+  return `${horizontalText}${pitchText}`;
+};
+
+const getLightIntensityText = (intensity: number) => {
+  if (intensity >= 72) {
+    return "高强度";
+  }
+  if (intensity >= 46) {
+    return "中等强度";
+  }
+  return "低强度";
+};
+
+const getColorTemperatureText = (color: string) => {
+  const normalized = color.toLowerCase();
+  if (
+    normalized.includes("ff") &&
+    (normalized.includes("b") || normalized.includes("c") || normalized.includes("d"))
+  ) {
+    return "偏暖色";
+  }
+  if (normalized.includes("8b") || normalized.includes("4c") || normalized.includes("9d")) {
+    return "偏冷色";
+  }
+  return `颜色 ${color.toUpperCase()}`;
+};
+
+export const buildLightingPrompt = (config: LightingGenerationConfig) => {
+  const presetName = getLightingPresetName(config.presetId);
+  const lightTypeText = config.lightType === "hard" ? "硬光" : "柔光";
+  const intensityText = getLightIntensityText(config.intensity);
+  const directionText = getLightDirectionText(config);
+  const colorText = getColorTemperatureText(config.color);
+  const rotationText =
+    Math.abs(config.rotationY ?? 0) > 4
+      ? `参考预览中的主体 Y 轴旋转倾向约 ${config.rotationY} 度。`
+      : "";
+  const userPrompt = config.aiPrompt?.trim();
+
+  return [
+    "基于参考图进行光影重绘。保持主体身份、构图、姿态、服装、背景和画面比例不变，只调整布光、阴影、高光、反射和整体氛围。",
+    `灯光风格：${presetName}。使用${colorText}${lightTypeText}，光源来自${directionText}，${intensityText}。`,
+    rotationText,
+    userPrompt ? `用户补充要求：${userPrompt}` : "",
+    "不要改变主体结构，不要新增物体，不要添加文字、水印或多余细节。",
+  ]
+    .filter(Boolean)
+    .join("\n");
+};
+
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
@@ -442,7 +516,7 @@ export const renderLightingToCanvas = (
   image: HTMLImageElement,
   config: LightingConfig,
   canvas: HTMLCanvasElement,
-  options: { maxSide?: number } = {},
+  options: { maxSide?: number; preserveSourceAspectRatio?: boolean } = {},
 ) => {
   const { width, height } = getOutputSize(image, options.maxSide);
   canvas.width = width;
@@ -529,7 +603,9 @@ export const renderLightingToCanvas = (
 
   context.clearRect(0, 0, width, height);
   context.drawImage(rendererEntry.canvas, 0, 0, width, height);
-  trimBackgroundMargins(canvas);
+  if (!options.preserveSourceAspectRatio) {
+    trimBackgroundMargins(canvas);
+  }
 };
 
 export const createLightingImageFile = async (

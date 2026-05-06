@@ -8,8 +8,17 @@ import {
 } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { IMAGE_MODELS } from "shared/constants/ai-models";
 import { cn } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
   DEFAULT_LIGHTING_CONFIG,
   disposeLightingRenderer,
@@ -17,6 +26,7 @@ import {
   getLightingPoint,
   LIGHTING_PRESETS,
   type LightingConfig,
+  type LightingGenerationConfig,
   loadLightingImage,
   renderLightingToCanvas,
 } from "./utils/lighting";
@@ -24,8 +34,12 @@ import {
 type ImageLightingDialogProps = {
   open: boolean;
   imageUrl?: string;
+  initialModel?: string;
+  initialPlatform?: string;
+  initialSize?: string;
+  initialResolution?: string;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (config: LightingConfig) => Promise<void>;
+  onConfirm: (config: LightingGenerationConfig) => Promise<void>;
 };
 
 type SliderControlProps = {
@@ -67,9 +81,33 @@ const SliderControl = ({
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
+const getInitialModelId = (model?: string, platform?: string) => {
+  const matched = IMAGE_MODELS.find(
+    (item) => item.model === model && item.platform === platform,
+  );
+  if (matched) {
+    return matched.id;
+  }
+
+  const modelOnly = IMAGE_MODELS.find((item) => item.model === model);
+  if (modelOnly) {
+    return modelOnly.id;
+  }
+
+  return (
+    IMAGE_MODELS.find((item) => item.model === "doubao-seedream-5-0")?.id ??
+    IMAGE_MODELS[0]?.id ??
+    0
+  );
+};
+
 export const ImageLightingDialog = ({
   open,
   imageUrl,
+  initialModel,
+  initialPlatform,
+  initialSize,
+  initialResolution,
   onOpenChange,
   onConfirm,
 }: ImageLightingDialogProps) => {
@@ -87,6 +125,10 @@ export const ImageLightingDialog = ({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
   const [isRotatingImage, setIsRotatingImage] = useState(false);
+  const [selectedModelId, setSelectedModelId] = useState(() =>
+    getInitialModelId(initialModel, initialPlatform),
+  );
+  const [aiPrompt, setAiPrompt] = useState("");
 
   useEffect(() => {
     if (!open) {
@@ -94,8 +136,10 @@ export const ImageLightingDialog = ({
     }
 
     setConfig(DEFAULT_LIGHTING_CONFIG);
+    setSelectedModelId(getInitialModelId(initialModel, initialPlatform));
+    setAiPrompt("");
     setPresetMenuOpen(false);
-  }, [open]);
+  }, [initialModel, initialPlatform, open]);
 
   useEffect(() => {
     if (!open || !imageUrl) {
@@ -147,6 +191,7 @@ export const ImageLightingDialog = ({
         renderedCanvasRef.current = canvasRef.current;
         renderLightingToCanvas(previewImage, config, canvasRef.current, {
           maxSide: 900,
+          preserveSourceAspectRatio: true,
         });
       } catch (error) {
         console.error("灯光预览渲染失败:", error);
@@ -183,6 +228,13 @@ export const ImageLightingDialog = ({
       (preset) => preset.presetId === config.presetId,
     );
   }, [config.presetId]);
+  const previewAspectRatio = useMemo(() => {
+    if (!previewImage?.naturalWidth || !previewImage?.naturalHeight) {
+      return undefined;
+    }
+
+    return `${previewImage.naturalWidth} / ${previewImage.naturalHeight}`;
+  }, [previewImage]);
 
   const updateConfig = useCallback((patch: Partial<LightingConfig>) => {
     setConfig((current) => ({
@@ -278,19 +330,36 @@ export const ImageLightingDialog = ({
 
     setIsSaving(true);
     try {
-      await onConfirm(config);
+      const selectedModel = IMAGE_MODELS.find(
+        (item) => item.id === selectedModelId,
+      );
+      const confirmPromise = onConfirm({
+        ...config,
+        aiPrompt,
+        model: selectedModel?.model ?? initialModel ?? "doubao-seedream-5-0",
+        platform: selectedModel?.platform ?? initialPlatform,
+        size: initialSize ?? "1:1",
+        resolution: initialResolution ?? "2K",
+      });
       onOpenChange(false);
+      await confirmPromise;
     } finally {
       setIsSaving(false);
     }
   }, [
+    aiPrompt,
     config,
     imageUrl,
+    initialModel,
+    initialPlatform,
+    initialResolution,
+    initialSize,
     isLoadingImage,
     isSaving,
     loadError,
     onConfirm,
     onOpenChange,
+    selectedModelId,
   ]);
 
   const canSave = Boolean(imageUrl) && !isLoadingImage && !loadError;
@@ -319,6 +388,28 @@ export const ImageLightingDialog = ({
           >
             <IconX size={18} />
           </button>
+
+          <div className="h-8 w-px bg-white/10" />
+
+          <Select
+            value={String(selectedModelId)}
+            onValueChange={(value) => setSelectedModelId(Number(value))}
+          >
+            <SelectTrigger className="h-10 w-48 rounded-xl border-white/8 bg-white/[0.04] text-sm text-white/85">
+              <SelectValue placeholder="选择模型" />
+            </SelectTrigger>
+            <SelectContent className="z-[230] border-white/10 bg-[#252528] text-white">
+              {IMAGE_MODELS.map((item) => (
+                <SelectItem
+                  key={item.id}
+                  value={String(item.id)}
+                  className="text-white focus:bg-white/[0.08] focus:text-white"
+                >
+                  {item.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <div className="h-8 w-px bg-white/10" />
 
@@ -420,7 +511,7 @@ export const ImageLightingDialog = ({
           >
             <span className="inline-flex items-center gap-1.5">
               <IconCheck size={16} />
-              确认
+              生成
             </span>
           </Button>
         </div>
@@ -445,6 +536,11 @@ export const ImageLightingDialog = ({
                       "relative inline-flex max-h-full max-w-full",
                       isRotatingImage ? "cursor-grabbing" : "cursor-grab",
                     )}
+                    style={
+                      previewAspectRatio
+                        ? { aspectRatio: previewAspectRatio }
+                        : undefined
+                    }
                     title="左右拖动图片调整 Y 轴旋转"
                     onPointerDown={handleImageRotationPointerDown}
                   >
@@ -473,39 +569,53 @@ export const ImageLightingDialog = ({
                 )}
               </div>
 
-              <div className="mt-4 grid grid-cols-4 gap-3 rounded-2xl border border-white/8 bg-white/[0.035] p-4">
-                <SliderControl
-                  label="Y轴旋转"
-                  value={config.rotationY ?? 0}
-                  min={-60}
-                  max={60}
-                  suffix="°"
-                  onChange={(value) => updateConfig({ rotationY: value })}
-                />
-                <SliderControl
-                  label="光源水平"
-                  value={config.horizontalAngle}
-                  min={-110}
-                  max={110}
-                  suffix="°"
-                  onChange={(value) => updateConfig({ horizontalAngle: value })}
-                />
-                <SliderControl
-                  label="光源俯仰"
-                  value={config.pitchAngle}
-                  min={-70}
-                  max={70}
-                  suffix="°"
-                  onChange={(value) => updateConfig({ pitchAngle: value })}
-                />
-                <SliderControl
-                  label="灯光强度"
-                  value={config.intensity}
-                  min={0}
-                  max={100}
-                  suffix="%"
-                  onChange={(value) => updateConfig({ intensity: value })}
-                />
+              <div className="mt-4 grid gap-3 rounded-2xl border border-white/8 bg-white/[0.035] p-4">
+                <div className="grid grid-cols-4 gap-3">
+                  <SliderControl
+                    label="Y轴旋转"
+                    value={config.rotationY ?? 0}
+                    min={-60}
+                    max={60}
+                    suffix="°"
+                    onChange={(value) => updateConfig({ rotationY: value })}
+                  />
+                  <SliderControl
+                    label="光源水平"
+                    value={config.horizontalAngle}
+                    min={-110}
+                    max={110}
+                    suffix="°"
+                    onChange={(value) =>
+                      updateConfig({ horizontalAngle: value })
+                    }
+                  />
+                  <SliderControl
+                    label="光源俯仰"
+                    value={config.pitchAngle}
+                    min={-70}
+                    max={70}
+                    suffix="°"
+                    onChange={(value) => updateConfig({ pitchAngle: value })}
+                  />
+                  <SliderControl
+                    label="灯光强度"
+                    value={config.intensity}
+                    min={0}
+                    max={100}
+                    suffix="%"
+                    onChange={(value) => updateConfig({ intensity: value })}
+                  />
+                </div>
+
+                <label className="grid gap-2">
+                  <span className="text-xs text-white/58">AI提示框</span>
+                  <Textarea
+                    value={aiPrompt}
+                    onChange={(event) => setAiPrompt(event.target.value)}
+                    placeholder="补充光影重绘要求，例如保持脸部不变、增强电影海报感、背景不要变化"
+                    className="min-h-20 resize-none rounded-xl border-white/10 bg-black/20 text-sm text-white placeholder:text-white/30 focus-visible:ring-[#B43FEB]/45"
+                  />
+                </label>
               </div>
             </div>
           </div>
