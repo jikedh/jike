@@ -747,8 +747,12 @@ export const AudioNode = memo(
   ({ id, data, selected, dragging }: NodeProps<AudioNodeType>) => {
     const isDragging = Boolean(dragging);
     const { zoom } = useNodeScale();
+    const [isRenaming, setIsRenaming] = useState(false);
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
+    const updateNodeNickname = useCanvasFlowStore(
+      (state) => state.updateNodeNickname,
+    );
     const addNode = useCanvasFlowStore((state) => state.addNode);
     const updateAudioNodeData = useCanvasFlowStore(
       (state) => state.updateAudioNodeData,
@@ -816,6 +820,19 @@ export const AudioNode = memo(
     const handleDelete = useCallback(() => {
       deleteNode(id);
     }, [deleteNode, id]);
+
+    const handleRenameStart = useCallback(() => {
+      if (selected) {
+        setIsRenaming(true);
+      }
+    }, [selected]);
+
+    const handleRename = useCallback(
+      (name: string) => {
+        updateNodeNickname(id, name);
+      },
+      [id, updateNodeNickname],
+    );
 
     const handleToggleTrim = useCallback(() => {
       setIsTrimming((prev) => !prev);
@@ -935,10 +952,15 @@ export const AudioNode = memo(
     }, [trimStart, trimEnd]);
     const isUploadAudio = data.isUpload ?? false;
     const badgeLabel =
-      data.badgeLabel ?? (isUploadAudio ? "上传音频" : "生成音频");
+      data.nickname ??
+      data.badgeLabel ??
+      (isUploadAudio ? "上传音频" : "生成音频");
 
     return (
-      <NodeContextMenu onDuplicate={handleDuplicate} onDelete={handleDelete}>
+      <NodeContextMenu
+        onDuplicate={handleDuplicate}
+        onDelete={handleDelete}
+      >
         <div
           className="group/node relative"
           style={{ pointerEvents: isTrimming ? "none" : "auto" }}
@@ -946,7 +968,7 @@ export const AudioNode = memo(
           <NodeToolbar
             isVisible={shouldShowToolbar}
             position={Position.Top}
-            offset={10 * zoom}
+            offset={48 * zoom}
           >
             <div
               style={{
@@ -979,7 +1001,16 @@ export const AudioNode = memo(
             )}
             style={{ pointerEvents: "auto" }}
           >
-            <NodeNameBadge>{badgeLabel}</NodeNameBadge>
+            <NodeNameBadge
+              icon={<IconMusic size={14} />}
+              selected={selected}
+              isEditing={isRenaming}
+              onEditStart={handleRenameStart}
+              onEditEnd={() => setIsRenaming(false)}
+              onRename={handleRename}
+            >
+              {badgeLabel}
+            </NodeNameBadge>
 
             {/* 左侧输入 Handle */}
             <ButtonHandle

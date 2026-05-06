@@ -2,6 +2,7 @@
  * TextAgentNode - 文本智能体节点
  * 用于 AI 文本生成的 React Flow 自定义节点
  */
+import { IconSparkles } from "@tabler/icons-react";
 import { type NodeProps } from "@xyflow/react";
 import { memo, useCallback, useEffect, useState } from "react";
 import {
@@ -11,6 +12,7 @@ import {
 import type { TextAgentNodeType, TextAgentPresetId } from "shared/types/flow";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { NodeNameBadge } from "../../shared/NodeNameBadge";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { NodeBody } from "./components/NodeBody";
 import { PresetSelector } from "./components/PresetSelector";
@@ -26,6 +28,7 @@ const areTextAgentNodePropsEqual = (
     prev.selected === next.selected &&
     prev.data.model === next.data.model &&
     prev.data.presetId === next.data.presetId &&
+    prev.data.nickname === next.data.nickname &&
     prev.data.useDefaultSystemPrompt === next.data.useDefaultSystemPrompt &&
     prev.data.customSystemPrompt === next.data.customSystemPrompt &&
     prev.data.status === next.data.status
@@ -42,6 +45,7 @@ export const TextAgentNode = memo(
       data.model || "gemini-3.1-pro",
     );
     const [editableSystemPrompt, setEditableSystemPrompt] = useState("");
+    const [isRenaming, setIsRenaming] = useState(false);
 
     // Store 状态和方法
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
@@ -54,6 +58,9 @@ export const TextAgentNode = memo(
     const updateTextAgentNodeData = useCanvasFlowStore(
       (state) => state.updateTextAgentNodeData,
     );
+    const updateNodeNickname = useCanvasFlowStore(
+      (state) => state.updateNodeNickname,
+    );
     // 当前预设信息
     const presetId = data.presetId;
     const preset = presetId ? getTextAgentPresetById(presetId) : null;
@@ -62,6 +69,8 @@ export const TextAgentNode = memo(
       : "文本智能体";
 
     // 生成逻辑 hook
+    const nodeLabel = data.nickname ?? presetLabel;
+
     const { isGenerating, handleGenerate } = useTextAgentGenerate({
       id,
       presetId,
@@ -150,12 +159,38 @@ export const TextAgentNode = memo(
       [updateNodeData],
     );
 
+    const handleRenameStart = useCallback(() => {
+      if (selected) {
+        setIsRenaming(true);
+      }
+    }, [selected]);
+
+    const handleRename = useCallback(
+      (name: string) => {
+        updateNodeNickname(id, name);
+      },
+      [id, updateNodeNickname],
+    );
+
     return (
       <NodeContextMenu
         onDuplicate={() => duplicateNode(id)}
         onDelete={() => deleteNode(id)}
       >
         <div className="group/node relative flex flex-col items-center">
+          {!showPresetSelector && (
+            <NodeNameBadge
+              icon={<IconSparkles size={14} />}
+              selected={selected}
+              isEditing={isRenaming}
+              onEditStart={handleRenameStart}
+              onEditEnd={() => setIsRenaming(false)}
+              onRename={handleRename}
+            >
+              {nodeLabel}
+            </NodeNameBadge>
+          )}
+
           {/* 预设选择器 */}
           {showPresetSelector ? (
             <PresetSelector onSelect={handleSelectPreset} />

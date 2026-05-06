@@ -1,3 +1,4 @@
+import { IconVideo } from "@tabler/icons-react";
 import {
   type NodeProps,
   Position,
@@ -32,9 +33,13 @@ const NewVideoNode = ({
   const isDragging = Boolean(dragging);
   const [isDragUiSettled, setIsDragUiSettled] = useState(!isDragging);
   const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
 
   const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
   const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
+  const updateNodeNickname = useCanvasFlowStore(
+    (state) => state.updateNodeNickname,
+  );
   const separateToNodes = useCanvasFlowStore((state) => state.separateToNodes);
   const updateNewVideoNodeData = useCanvasFlowStore(
     (state) => state.updateNewVideoNodeData,
@@ -134,6 +139,19 @@ const NewVideoNode = ({
     deleteNode(id);
   }, [confirmDeleteIfNeeded, deleteNode, id]);
 
+  const handleRenameStart = useCallback(() => {
+    if (selected) {
+      setIsRenaming(true);
+    }
+  }, [selected]);
+
+  const handleRename = useCallback(
+    (name: string) => {
+      updateNodeNickname(id, name);
+    },
+    [id, updateNodeNickname],
+  );
+
   const handleSeparateToNodes = useCallback(() => {
     separateToNodes(id);
   }, [separateToNodes, id]);
@@ -158,7 +176,10 @@ const NewVideoNode = ({
   const hasMultipleResults =
     (data.result?.data?.length ?? 0) + (isGenerating ? 1 : 0) > 1;
   const isUploadVideo = data.isUpload ?? false;
-  const badgeLabel = data.badgeLabel ?? "生成视频";
+  const badgeLabel =
+    data.nickname ??
+    data.badgeLabel ??
+    (isUploadVideo ? "上传视频" : "生成视频");
   const contentFrameSize = useMemo(
     () => ({
       width: nodeSize.width,
@@ -183,7 +204,7 @@ const NewVideoNode = ({
         }}
       >
         {shouldShowToolbar && (
-          <div className="selection-box-deferred-ui nodrag nopan nowheel absolute -top-13 left-1/2 z-50 -translate-x-1/2">
+          <div className="selection-box-deferred-ui nodrag nopan nowheel absolute -top-23 left-1/2 z-50 -translate-x-1/2">
             <VideoToolbar nodeId={id} data={data} onDelete={handleDelete} />
           </div>
         )}
@@ -207,7 +228,16 @@ const NewVideoNode = ({
                 : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
           )}
         >
-          <NodeNameBadge>{badgeLabel}</NodeNameBadge>
+          <NodeNameBadge
+            icon={<IconVideo size={14} />}
+            selected={selected}
+            isEditing={isRenaming}
+            onEditStart={handleRenameStart}
+            onEditEnd={() => setIsRenaming(false)}
+            onRename={handleRename}
+          >
+            {badgeLabel}
+          </NodeNameBadge>
 
           {selected && !isDragging && (
             <>
