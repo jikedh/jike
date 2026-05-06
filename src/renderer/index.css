@@ -178,30 +178,12 @@
   }
 }
 
-@keyframes selected-edge-comet-trail {
+@keyframes selected-edge-streak {
   from {
-    stroke-dashoffset: 96;
+    stroke-dashoffset: 100;
   }
   to {
-    stroke-dashoffset: -4;
-  }
-}
-
-@keyframes selected-edge-comet-core {
-  from {
-    stroke-dashoffset: 90;
-  }
-  to {
-    stroke-dashoffset: -10;
-  }
-}
-
-@keyframes selected-edge-comet-head {
-  from {
-    stroke-dashoffset: 81;
-  }
-  to {
-    stroke-dashoffset: -19;
+    stroke-dashoffset: 0;
   }
 }
 

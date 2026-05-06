@@ -9,30 +9,19 @@ const DEFAULT_EDGE_STYLE = {
   strokeWidth: 1.2,
 };
 
-const SELECTED_EDGE_TRAIL_STYLE = {
-  strokeWidth: 1.05,
-  strokeDasharray: "34 66",
-  animation: "selected-edge-comet-trail 3.2s linear infinite",
-  opacity: 0.3,
+const SELECTED_EDGE_STREAK_STYLE = {
+  strokeWidth: 1.8,
+  strokeDasharray: "7.5 92.5",
+  animation: "selected-edge-streak 1.45s linear infinite",
+  opacity: 0.5,
   filter:
-    "drop-shadow(0 0 3px rgba(180,63,235,0.12)) drop-shadow(0 0 7px rgba(180,63,235,0.06))",
+    "drop-shadow(0 0 2px rgba(215,155,255,0.3)) drop-shadow(0 0 5px rgba(180,63,235,0.08))",
 };
 
-const SELECTED_EDGE_CORE_STYLE = {
-  strokeWidth: 1.65,
-  strokeDasharray: "19 81",
-  animation: "selected-edge-comet-core 3.2s linear infinite",
-  filter:
-    "drop-shadow(0 0 2px rgba(215,155,255,0.26)) drop-shadow(0 0 6px rgba(180,63,235,0.1))",
-};
-
-const SELECTED_EDGE_HEAD_STYLE = {
-  strokeWidth: 2.55,
-  strokeDasharray: "4.2 95.8",
-  animation: "selected-edge-comet-head 3.2s linear infinite",
-  opacity: 0.82,
-  filter:
-    "drop-shadow(0 0 3px rgba(215,155,255,0.38)) drop-shadow(0 0 8px rgba(180,63,235,0.16))",
+const SELECTED_EDGE_GLASS_STYLE = {
+  strokeWidth: 0.55,
+  opacity: 0.42,
+  filter: "drop-shadow(0 0 3px rgba(215,155,255,0.18))",
 };
 
 const CustomEdgeComponent = (props: EdgeProps) => {
@@ -47,14 +36,16 @@ const CustomEdgeComponent = (props: EdgeProps) => {
         node.selected && (node.id === props.source || node.id === props.target),
     ),
   );
-  const flowGradientId = `selected-edge-flow-${props.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
-
   const edgeStyle = useMemo(() => {
     if (!isHighlighted) {
       return {
         ...(props.style ?? {}),
         ...DEFAULT_EDGE_STYLE,
-        opacity: isConnectedToSelectedNode ? 0.52 : undefined,
+        stroke: isConnectedToSelectedNode ? "#B43FEB" : DEFAULT_EDGE_STYLE.stroke,
+        strokeWidth: isConnectedToSelectedNode
+          ? 1.35
+          : DEFAULT_EDGE_STYLE.strokeWidth,
+        opacity: isConnectedToSelectedNode ? 0.66 : undefined,
       };
     }
 
@@ -75,43 +66,14 @@ const CustomEdgeComponent = (props: EdgeProps) => {
       <BaseEdge id={props.id} path={edgePath} style={edgeStyle} className="" />
       {isConnectedToSelectedNode && !isHighlighted ? (
         <>
-          <defs>
-            <linearGradient
-              id={flowGradientId}
-              gradientUnits="userSpaceOnUse"
-              x1={props.sourceX}
-              y1={props.sourceY}
-              x2={props.targetX}
-              y2={props.targetY}
-            >
-              <stop offset="0%" stopColor="#B43FEB" stopOpacity="0" />
-              <stop offset="18%" stopColor="#B43FEB" stopOpacity="0.34" />
-              <stop offset="48%" stopColor="#B43FEB" stopOpacity="0.74" />
-              <stop offset="72%" stopColor="#D79BFF" stopOpacity="0.58" />
-              <stop offset="86%" stopColor="#B43FEB" stopOpacity="0.26" />
-              <stop offset="100%" stopColor="#B43FEB" stopOpacity="0" />
-            </linearGradient>
-          </defs>
           <path
             d={edgePath}
             fill="none"
-            pathLength={100}
             pointerEvents="none"
-            stroke="#B43FEB"
+            stroke="#E9CCFF"
             strokeLinecap="round"
             strokeLinejoin="round"
-            style={SELECTED_EDGE_TRAIL_STYLE}
-          />
-          <path
-            className="react-flow__edge-path"
-            d={edgePath}
-            fill="none"
-            pathLength={100}
-            pointerEvents="none"
-            stroke={`url(#${flowGradientId})`}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={SELECTED_EDGE_CORE_STYLE}
+            style={SELECTED_EDGE_GLASS_STYLE}
           />
           <path
             d={edgePath}
@@ -121,7 +83,7 @@ const CustomEdgeComponent = (props: EdgeProps) => {
             stroke="#D79BFF"
             strokeLinecap="round"
             strokeLinejoin="round"
-            style={SELECTED_EDGE_HEAD_STYLE}
+            style={SELECTED_EDGE_STREAK_STYLE}
           />
         </>
       ) : null}
