@@ -26,6 +26,7 @@ import { ImageContent } from "./ImageContent";
 import { ImageGridCropDialog } from "./ImageGridCropDialog";
 import { ImagePromptPanel } from "./ImagePromptPanel";
 import { ImageToolbar } from "./ImageToolbar";
+import { IconPhoto } from "@tabler/icons-react";
 import {
   getAspectRatioFromMediaFile,
   getNodeSizeByAspectRatio,
@@ -49,8 +50,12 @@ export const ImageNode = memo(
     const [isDragUiSettled, setIsDragUiSettled] = useState(!isDragging);
     const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
     const [isGridCropOpen, setIsGridCropOpen] = useState(false);
+    const [isRenaming, setIsRenaming] = useState(false);
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
+    const updateNodeNickname = useCanvasFlowStore(
+      (state) => state.updateNodeNickname,
+    );
     const addNode = useCanvasFlowStore((state) => state.addNode);
     const splitImage = useCanvasFlowStore((state) => state.splitImage);
     const createGroup = useCanvasFlowStore((state) => state.createGroup);
@@ -70,9 +75,6 @@ export const ImageNode = memo(
     // 从 store 直接读取选中节点数量，避免 O(n²) 遍历
     const selectedNodesCount = useCanvasFlowStore(
       (state) => state.selectedNodesCount,
-    );
-    const isSelectionBoxActive = useCanvasFlowStore(
-      (state) => state.isSelectionBoxActive,
     );
     const projectId = useCanvasFlowStore((state) => state.projectId);
 
@@ -121,14 +123,12 @@ export const ImageNode = memo(
     const shouldShowToolbar = useMemo(
       () =>
         selected &&
-        !isSelectionBoxActive &&
         !isDragging &&
         isDragUiSettled &&
         selectedNodesCount <= 1 &&
         !isAnnotationMode,
       [
         selected,
-        isSelectionBoxActive,
         isDragging,
         isDragUiSettled,
         isAnnotationMode,
@@ -177,7 +177,9 @@ export const ImageNode = memo(
     }, [data.status]);
     const isUploadImage = data.isUpload ?? false;
     const badgeLabel =
-      data.badgeLabel ?? (isUploadImage ? "上传图片" : "生成图片");
+      data.nickname ??
+      data.badgeLabel ??
+      (isUploadImage ? "上传图片" : "生成图片");
 
     const confirmDeleteIfNeeded = useCallback(() => {
       if (!isGenerating) {
@@ -209,6 +211,19 @@ export const ImageNode = memo(
       }
       deleteNode(id);
     }, [confirmDeleteIfNeeded, deleteNode, id]);
+
+    const handleRenameStart = useCallback(() => {
+      if (selected) {
+        setIsRenaming(true);
+      }
+    }, [selected]);
+
+    const handleRename = useCallback(
+      (name: string) => {
+        updateNodeNickname(id, name);
+      },
+      [id, updateNodeNickname],
+    );
 
     const handleContextMenuSplitImage = useCallback(
       (gridSize: number) => {
@@ -525,7 +540,7 @@ export const ImageNode = memo(
           >
             {/* 节点内顶部工具栏：直接参与节点缩放，保证几何一致性 */}
             {shouldShowToolbar && (
-              <div className="selection-box-deferred-ui nodrag nopan nowheel absolute -top-12 left-1/2 z-50 -translate-x-1/2">
+              <div className="selection-box-deferred-ui nodrag nopan nowheel absolute -top-22 left-1/2 z-50 -translate-x-1/2">
                 <ImageToolbar
                   nodeId={id}
                   data={data}
@@ -551,7 +566,16 @@ export const ImageNode = memo(
                       : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
               )}
             >
-              <NodeNameBadge>{badgeLabel}</NodeNameBadge>
+              <NodeNameBadge
+                icon={<IconPhoto size={14} />}
+                selected={selected}
+                isEditing={isRenaming}
+                onEditStart={handleRenameStart}
+                onEditEnd={() => setIsRenaming(false)}
+                onRename={handleRename}
+              >
+                {badgeLabel}
+              </NodeNameBadge>
 
               {/* 左侧输入 Handle */}
               <ButtonHandle

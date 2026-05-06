@@ -1,3 +1,4 @@
+import { IconView360 } from "@tabler/icons-react";
 import { type NodeProps, NodeToolbar, Position } from "@xyflow/react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -12,6 +13,7 @@ import { useMessage } from "@/hooks/useMessage";
 import { useNodeScale } from "@/hooks/useNodeScale";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { NodeNameBadge } from "../shared/NodeNameBadge";
 
 export const PanoramaNode = memo(
   ({ id, data, selected, dragging }: NodeProps<PanoramaNodeType>) => {
@@ -19,6 +21,9 @@ export const PanoramaNode = memo(
     const { zoom } = useNodeScale();
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
+    const updateNodeNickname = useCanvasFlowStore(
+      (state) => state.updateNodeNickname,
+    );
     const addNode = useCanvasFlowStore((state) => state.addNode);
     const onConnect = useCanvasFlowStore((state) => state.onConnect);
     const message = useMessage();
@@ -38,6 +43,8 @@ export const PanoramaNode = memo(
     const fullscreenAnimationRef = useRef<number | undefined>(undefined);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [isRenaming, setIsRenaming] = useState(false);
+    const nodeLabel = data.nickname ?? "全景图节点";
 
     // 从 store 直接读取选中节点数量，避免 O(n²) 遍历
     const selectedNodesCount = useCanvasFlowStore(
@@ -72,6 +79,19 @@ export const PanoramaNode = memo(
     const handleContextMenuDelete = useCallback(() => {
       deleteNode(id);
     }, [deleteNode, id]);
+
+    const handleRenameStart = useCallback(() => {
+      if (selected) {
+        setIsRenaming(true);
+      }
+    }, [selected]);
+
+    const handleRename = useCallback(
+      (name: string) => {
+        updateNodeNickname(id, name);
+      },
+      [id, updateNodeNickname],
+    );
 
     const handleScreenshot = useCallback(
       async (type: "single" | "4grid" | "12grid") => {
@@ -553,7 +573,7 @@ export const PanoramaNode = memo(
             <NodeToolbar
               isVisible={shouldShowToolbar}
               position={Position.Top}
-              offset={10 * zoom}
+              offset={48 * zoom}
             >
               <div
                 style={{
@@ -610,6 +630,17 @@ export const PanoramaNode = memo(
               )}
             >
               {/* 左侧输入 Handle */}
+              <NodeNameBadge
+                icon={<IconView360 size={14} />}
+                selected={selected}
+                isEditing={isRenaming}
+                onEditStart={handleRenameStart}
+                onEditEnd={() => setIsRenaming(false)}
+                onRename={handleRename}
+              >
+                {nodeLabel}
+              </NodeNameBadge>
+
               <ButtonHandle
                 type="target"
                 position={Position.Left}

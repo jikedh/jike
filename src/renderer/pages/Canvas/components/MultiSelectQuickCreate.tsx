@@ -18,7 +18,7 @@ export const MultiSelectQuickCreate = memo(
 
     return (
       <div
-        className="fixed left-0 top-0 z-[60]"
+        className="canvas-multi-select-quick-create fixed left-0 top-0 z-[60]"
         style={{
           transform: `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`,
         }}

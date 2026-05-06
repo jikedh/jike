@@ -1,5 +1,6 @@
+import { IconRobot } from "@tabler/icons-react";
 import { type NodeProps, Position } from "@xyflow/react";
-import { memo, useCallback } from "react";
+import { memo, useCallback, useState } from "react";
 import { getAgentPresetLabelById } from "shared/constants/agent-presets";
 import type { AgentNodeType } from "shared/types/flow";
 import { ButtonHandle } from "@/components/button-handle";
@@ -9,6 +10,7 @@ import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { cn } from "shared/utils/utils";
+import { NodeNameBadge } from "../shared/NodeNameBadge";
 
 const areAgentNodePropsEqual = (
   prev: NodeProps<AgentNodeType>,
@@ -19,6 +21,7 @@ const areAgentNodePropsEqual = (
     prev.selected === next.selected &&
     prev.data.model === next.data.model &&
     prev.data.agentPresetId === next.data.agentPresetId &&
+    prev.data.nickname === next.data.nickname &&
     // 这里是应用比较哎
     prev.data.messages === next.data.messages
   );
@@ -35,8 +38,13 @@ export const AgentNode = memo(
       messages: data.messages,
     });
     const presetLabel = getAgentPresetLabelById(data.agentPresetId);
+    const nodeLabel = data.nickname ?? presetLabel;
+    const [isRenaming, setIsRenaming] = useState(false);
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
+    const updateNodeNickname = useCanvasFlowStore(
+      (state) => state.updateNodeNickname,
+    );
 
     const handleDelete = useCallback(() => {
       if (isGenerating) {
@@ -49,6 +57,19 @@ export const AgentNode = memo(
 
       deleteNode(id);
     }, [deleteNode, id, isGenerating]);
+
+    const handleRenameStart = useCallback(() => {
+      if (selected) {
+        setIsRenaming(true);
+      }
+    }, [selected]);
+
+    const handleRename = useCallback(
+      (name: string) => {
+        updateNodeNickname(id, name);
+      },
+      [id, updateNodeNickname],
+    );
 
     return (
       <NodeContextMenu
@@ -64,6 +85,17 @@ export const AgentNode = memo(
                 : "border-white/[0.06] hover:border-white/[0.12] hover:bg-gradient-to-br hover:from-[#18181c] hover:to-[#101014]",
             )}
           >
+            <NodeNameBadge
+              icon={<IconRobot size={14} />}
+              selected={selected}
+              isEditing={isRenaming}
+              onEditStart={handleRenameStart}
+              onEditEnd={() => setIsRenaming(false)}
+              onRename={handleRename}
+            >
+              {nodeLabel}
+            </NodeNameBadge>
+
             {/* 左侧输入 Handle */}
             <ButtonHandle
               type="target"

@@ -1,3 +1,4 @@
+import { IconVideo } from "@tabler/icons-react";
 import {
   type NodeProps,
   Position,
@@ -32,8 +33,12 @@ export const VideoNode = memo(
     const isDragging = Boolean(dragging);
     const [isDragUiSettled, setIsDragUiSettled] = useState(!isDragging);
     const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
+    const [isRenaming, setIsRenaming] = useState(false);
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
+    const updateNodeNickname = useCanvasFlowStore(
+      (state) => state.updateNodeNickname,
+    );
     const separateToNodes = useCanvasFlowStore(
       (state) => state.separateToNodes,
     );
@@ -49,9 +54,6 @@ export const VideoNode = memo(
     // 从 store 直接读取选中节点数量，避免 O(n²) 遍历
     const selectedNodesCount = useCanvasFlowStore(
       (state) => state.selectedNodesCount,
-    );
-    const isSelectionBoxActive = useCanvasFlowStore(
-      (state) => state.isSelectionBoxActive,
     );
 
     // 使用 useMemo 缓存样式类名
@@ -82,13 +84,11 @@ export const VideoNode = memo(
     const shouldShowToolbar = useMemo(
       () =>
         selected &&
-        !isSelectionBoxActive &&
         !isDragging &&
         isDragUiSettled &&
         selectedNodesCount <= 1,
       [
         selected,
-        isSelectionBoxActive,
         isDragging,
         isDragUiSettled,
         selectedNodesCount,
@@ -131,8 +131,6 @@ export const VideoNode = memo(
       );
     }, [data.status]);
     const isUploadVideo = data.isUpload ?? false;
-    const badgeLabel =
-      data.badgeLabel ?? (isUploadVideo ? "上传视频" : "生成视频");
 
     const confirmDeleteIfNeeded = useCallback(() => {
       if (!isGenerating) {
@@ -158,10 +156,27 @@ export const VideoNode = memo(
       deleteNode(id);
     }, [confirmDeleteIfNeeded, deleteNode, id]);
 
+    const handleRenameStart = useCallback(() => {
+      if (selected) {
+        setIsRenaming(true);
+      }
+    }, [selected]);
+
+    const handleRename = useCallback(
+      (name: string) => {
+        updateNodeNickname(id, name);
+      },
+      [id, updateNodeNickname],
+    );
+
     const handleSeparateToNodes = useCallback(() => {
       separateToNodes(id);
     }, [separateToNodes, id]);
 
+    const displayLabel =
+      data.nickname ??
+      data.badgeLabel ??
+      (isUploadVideo ? "上传视频" : "生成视频");
     const hasMultipleResults = (data.result?.data?.length ?? 0) > 1;
 
     // console.log('视频节点重新渲染', id)
@@ -184,7 +199,7 @@ export const VideoNode = memo(
           {/* 顶部工具栏：放在节点几何空间内，缩放时自动保持一致 */}
           {/* 拖动结束后再挂载，降低首次拖拽时的渲染负担 */}
           {shouldShowToolbar && (
-            <div className="selection-box-deferred-ui nodrag nopan nowheel absolute -top-13 left-1/2 z-50 -translate-x-1/2">
+            <div className="selection-box-deferred-ui nodrag nopan nowheel absolute -top-23 left-1/2 z-50 -translate-x-1/2">
               <VideoToolbar nodeId={id} data={data} onDelete={handleDelete} />
             </div>
           )}
@@ -201,7 +216,16 @@ export const VideoNode = memo(
                   : "border-white/6 hover:border-white/12 hover:bg-linear-to-br hover:from-[#18181c] hover:to-[#101014]",
             )}
           >
-            <NodeNameBadge>{badgeLabel}</NodeNameBadge>
+            <NodeNameBadge
+              icon={<IconVideo size={14} />}
+              selected={selected}
+              isEditing={isRenaming}
+              onEditStart={handleRenameStart}
+              onEditEnd={() => setIsRenaming(false)}
+              onRename={handleRename}
+            >
+              {displayLabel}
+            </NodeNameBadge>
 
             {/* 左侧输入 Handle */}
             <ButtonHandle

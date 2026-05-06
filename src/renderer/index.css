@@ -178,6 +178,15 @@
   }
 }
 
+@keyframes selected-edge-streak {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
 .video-node-slash-pill {
   display: inline-flex;
   align-items: center;

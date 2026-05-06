@@ -1,9 +1,20 @@
+import {
+  type ChildProcessWithoutNullStreams,
+  spawn,
+  spawnSync,
+} from "child_process";
+import { randomUUID } from "crypto";
 import { app, BrowserWindow, dialog, shell } from "electron";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "fs";
 import { appendFile, mkdir, readFile } from "fs/promises";
 import { join } from "path";
-import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
-import { randomUUID } from "crypto";
 import type {
   Adobe2ApiSettings,
   Adobe2ApiState,
@@ -16,8 +27,9 @@ const SETTINGS_FILE = "settings.json";
 const LOG_FILE = "adobe2api.log";
 const HEALTH_PATH = "/api/v1/health";
 const MANAGE_PATH = "/";
-const LOGIN_PATH = "/login";
 const TEST_PATH = "/";
+const REQUIRED_PYTHON_MAJOR = 3;
+const REQUIRED_PYTHON_MINOR = 13;
 const DEFAULT_CONFIG = {
   api_key: "adobe1234",
   admin_username: "admin",
@@ -232,10 +244,20 @@ export class Adobe2ApiService {
     }
   }
 
-  private buildEnv(settings: Adobe2ApiSettings): NodeJS.ProcessEnv {
-    const pythonRoot = this.resolvePythonRoot();
-    const caBundlePath = this.resolveCaBundlePath(pythonRoot);
-    return {
+  private isEmbeddedPythonCommand(
+    command: string,
+    pythonRoot: string,
+  ): boolean {
+    return this.resolvePythonCandidates(pythonRoot).some(
+      (candidate) => candidate === command,
+    );
+  }
+
+  private buildEnv(
+    settings: Adobe2ApiSettings,
+    entry: { command: string; pythonRoot: string },
+  ): NodeJS.ProcessEnv {
+    const baseEnv: NodeJS.ProcessEnv = {
       ...process.env,
       PORT: String(settings.port),
       ADOBE2API_RUNTIME_DIR: this.runtimeDir,
@@ -246,7 +268,16 @@ export class Adobe2ApiService {
       ADOBE_EMBED_ADMIN_TOKEN: this.embedAdminToken,
       PYTHONIOENCODING: "utf-8",
       PYTHONUTF8: "1",
-      PYTHONHOME: pythonRoot,
+    };
+
+    if (!this.isEmbeddedPythonCommand(entry.command, entry.pythonRoot)) {
+      return baseEnv;
+    }
+
+    const caBundlePath = this.resolveCaBundlePath(entry.pythonRoot);
+    return {
+      ...baseEnv,
+      PYTHONHOME: entry.pythonRoot,
       SSL_CERT_FILE: caBundlePath,
       REQUESTS_CA_BUNDLE: caBundlePath,
       CURL_CA_BUNDLE: caBundlePath,
@@ -267,24 +298,91 @@ export class Adobe2ApiService {
   }
 
   private resolvePythonCandidates(pythonRoot: string): string[] {
-    return (
-      process.platform === "win32"
-        ? [join(pythonRoot, "python.exe"), join(pythonRoot, "Scripts", "python.exe")]
-        : [join(pythonRoot, "bin", "python3"), join(pythonRoot, "bin", "python")]
+    return process.platform === "win32"
+      ? [
+          join(pythonRoot, "python.exe"),
+          join(pythonRoot, "Scripts", "python.exe"),
+        ]
+      : [join(pythonRoot, "bin", "python3"), join(pythonRoot, "bin", "python")];
+  }
+
+  private isEmbeddedPythonReady(command: string, pythonRoot: string): boolean {
+    const readyMarker = join(pythonRoot, ".jike-adobe2api-python-ready");
+    if (!existsSync(readyMarker) || !existsSync(command)) {
+      return false;
+    }
+
+    try {
+      const marker = JSON.parse(readFileSync(readyMarker, "utf-8")) as {
+        version?: string;
+      };
+      if (
+        typeof marker.version === "string" &&
+        !marker.version.startsWith(
+          `${REQUIRED_PYTHON_MAJOR}.${REQUIRED_PYTHON_MINOR}.`,
+        )
+      ) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+
+    const result = spawnSync(
+      command,
+      [
+        "-c",
+        [
+          "import sys",
+          `raise SystemExit(0 if sys.version_info[:2] == (${REQUIRED_PYTHON_MAJOR}, ${REQUIRED_PYTHON_MINOR}) else 1)`,
+        ].join("\n"),
+      ],
+      {
+        stdio: "ignore",
+        windowsHide: true,
+      },
     );
+    return !result.error && result.status === 0;
   }
 
   private resolveBundledCaBundle(pythonRoot: string): string {
-    return process.platform === "win32"
-      ? join(pythonRoot, "Lib", "site-packages", "certifi", "cacert.pem")
-      : join(
-          pythonRoot,
-          "lib",
-          "python3.12",
+    if (process.platform === "win32") {
+      return join(pythonRoot, "Lib", "site-packages", "certifi", "cacert.pem");
+    }
+
+    const libDir = join(pythonRoot, "lib");
+    try {
+      const pythonLib = readdirSync(libDir).find((entry) => {
+        const candidate = join(
+          libDir,
+          entry,
           "site-packages",
           "certifi",
           "cacert.pem",
         );
+        return entry.startsWith("python") && existsSync(candidate);
+      });
+      if (pythonLib) {
+        return join(
+          libDir,
+          pythonLib,
+          "site-packages",
+          "certifi",
+          "cacert.pem",
+        );
+      }
+    } catch {
+      // Fall through to the expected Python 3.13 layout for diagnostics.
+    }
+
+    return join(
+      pythonRoot,
+      "lib",
+      "python3.13",
+      "site-packages",
+      "certifi",
+      "cacert.pem",
+    );
   }
 
   private resolveCaBundlePath(pythonRoot: string): string {
@@ -311,20 +409,17 @@ export class Adobe2ApiService {
   private resolvePythonCommand(): string {
     const pythonRoot = this.resolvePythonRoot();
     const embeddedPythonCandidates = this.resolvePythonCandidates(pythonRoot);
-    const readyMarker = join(pythonRoot, ".jike-adobe2api-python-ready");
 
-    if (existsSync(readyMarker)) {
-      const embeddedPython = embeddedPythonCandidates.find((candidate) =>
-        existsSync(candidate),
-      );
-      if (embeddedPython) {
-        return embeddedPython;
-      }
+    const embeddedPython = embeddedPythonCandidates.find((candidate) =>
+      this.isEmbeddedPythonReady(candidate, pythonRoot),
+    );
+    if (embeddedPython) {
+      return embeddedPython;
     }
 
     if (app.isPackaged) {
       throw new Error(
-        `Embedded Python runtime is missing or incomplete: ${pythonRoot}`,
+        `Embedded Python ${REQUIRED_PYTHON_MAJOR}.${REQUIRED_PYTHON_MINOR} runtime is missing or incomplete: ${pythonRoot}`,
       );
     }
 
@@ -467,7 +562,7 @@ export class Adobe2ApiService {
       startedAt: Date.now(),
     });
     const entry = this.resolveEntrypoint();
-    const env = this.buildEnv(this.state.settings);
+    const env = this.buildEnv(this.state.settings, entry);
     await appendFile(
       this.logPath,
       `\n[${new Date().toISOString()}] starting adobe2api...\n${this.buildStartupDiagnostics(entry)}`,
@@ -542,7 +637,9 @@ export class Adobe2ApiService {
 
   async openAdminWindow(): Promise<Adobe2ApiState> {
     const state =
-      this.state.status === "running" ? await this.getState() : await this.start();
+      this.state.status === "running"
+        ? await this.getState()
+        : await this.start();
 
     if (this.adminWindow && !this.adminWindow.isDestroyed()) {
       this.adminWindow.show();

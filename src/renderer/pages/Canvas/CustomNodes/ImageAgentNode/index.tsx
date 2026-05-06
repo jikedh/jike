@@ -3,6 +3,7 @@
  * 用于 AI 图片反推的 React Flow 自定义节点
  * 位于文本智能体之后、视频智能体之前
  */
+import { IconPhoto } from "@tabler/icons-react";
 import { type NodeProps } from "@xyflow/react";
 import { memo, useCallback, useEffect, useState } from "react";
 import {
@@ -14,6 +15,7 @@ import { useMessage } from "@/hooks/useMessage";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { NodeNameBadge } from "../shared/NodeNameBadge";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { NodeBody } from "./components/NodeBody";
 import { PresetSelector } from "./components/PresetSelector";
@@ -28,6 +30,7 @@ const areImageAgentNodePropsEqual = (
   prev.selected === next.selected &&
   prev.data.model === next.data.model &&
   prev.data.presetId === next.data.presetId &&
+  prev.data.nickname === next.data.nickname &&
   prev.data.customSystemPrompt === next.data.customSystemPrompt &&
   prev.data.status === next.data.status;
 
@@ -41,6 +44,7 @@ export const ImageAgentNode = memo(
       data.model || "qwen3.5-flash",
     );
     const [editableSystemPrompt, setEditableSystemPrompt] = useState("");
+    const [isRenaming, setIsRenaming] = useState(false);
 
     const { warning } = useMessage();
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
@@ -48,12 +52,17 @@ export const ImageAgentNode = memo(
     const updateImageAgentNodeData = useCanvasFlowStore(
       (state) => state.updateImageAgentNodeData,
     );
+    const updateNodeNickname = useCanvasFlowStore(
+      (state) => state.updateNodeNickname,
+    );
 
     const presetId = data.presetId;
     const preset = presetId ? getImageAgentPresetById(presetId) : null;
     const presetLabel = preset
       ? getImageAgentPresetLabelById(presetId)
       : "图片智能体";
+
+    const nodeLabel = data.nickname ?? presetLabel;
 
     const { isGenerating, handleGenerate } = useImageAgentGenerate({
       id,
@@ -105,12 +114,38 @@ export const ImageAgentNode = memo(
       deleteNode(id);
     }, [deleteNode, id, isGenerating]);
 
+    const handleRenameStart = useCallback(() => {
+      if (selected) {
+        setIsRenaming(true);
+      }
+    }, [selected]);
+
+    const handleRename = useCallback(
+      (name: string) => {
+        updateNodeNickname(id, name);
+      },
+      [id, updateNodeNickname],
+    );
+
     return (
       <NodeContextMenu
         onDuplicate={() => duplicateNode(id)}
         onDelete={handleDelete}
       >
         <div className="group/node relative flex flex-col items-center">
+          {!showPresetSelector && (
+            <NodeNameBadge
+              icon={<IconPhoto size={14} />}
+              selected={selected}
+              isEditing={isRenaming}
+              onEditStart={handleRenameStart}
+              onEditEnd={() => setIsRenaming(false)}
+              onRename={handleRename}
+            >
+              {nodeLabel}
+            </NodeNameBadge>
+          )}
+
           {showPresetSelector ? (
             <PresetSelector onSelect={handleSelectPreset} />
           ) : (

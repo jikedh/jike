@@ -1,3 +1,4 @@
+import { IconTable } from "@tabler/icons-react";
 import { type NodeProps, NodeResizer, Position } from "@xyflow/react";
 import { memo, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
@@ -6,6 +7,7 @@ import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { NodeNameBadge } from "../shared/NodeNameBadge";
 
 const TABLE_COLUMNS = [
   "姓名",
@@ -246,6 +248,9 @@ export const TableNode = memo(
     const updateTableNodeData = useCanvasFlowStore(
       (state) => state.updateTableNodeData,
     );
+    const updateNodeNickname = useCanvasFlowStore(
+      (state) => state.updateNodeNickname,
+    );
     const isDragging = Boolean(dragging);
     // 优化：避免每次 .filter() 遍历全部节点，改用稳定引用
     const selectedNodesCount = useCanvasFlowStore((state) => {
@@ -260,13 +265,28 @@ export const TableNode = memo(
       selected && !isDragging && selectedNodesCount <= 1;
 
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [isRenaming, setIsRenaming] = useState(false);
 
     const handleVisibilityClass = selected
       ? "visible opacity-100"
       : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100";
 
     const { title, rows } = data;
+    const nodeLabel = data.nickname ?? title ?? "表格节点";
     const columns = data.columns || TABLE_COLUMNS;
+
+    const handleRenameStart = useCallback(() => {
+      if (selected) {
+        setIsRenaming(true);
+      }
+    }, [selected]);
+
+    const handleRename = useCallback(
+      (name: string) => {
+        updateNodeNickname(id, name);
+      },
+      [id, updateNodeNickname],
+    );
 
     const toggleFullscreen = useCallback(
       (e: React.MouseEvent) => {
@@ -380,6 +400,17 @@ export const TableNode = memo(
                   : "border-white/[0.06] hover:border-white/[0.12] hover:bg-gradient-to-br hover:from-[#18181c] hover:to-[#101014] bg-gradient-to-br from-[#141418] to-[#0d0d10]",
               )}
             >
+              <NodeNameBadge
+                icon={<IconTable size={14} />}
+                selected={selected}
+                isEditing={isRenaming}
+                onEditStart={handleRenameStart}
+                onEditEnd={() => setIsRenaming(false)}
+                onRename={handleRename}
+              >
+                {nodeLabel}
+              </NodeNameBadge>
+
               <ButtonHandle
                 type="target"
                 position={Position.Left}
