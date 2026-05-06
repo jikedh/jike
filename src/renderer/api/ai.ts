@@ -5,7 +5,6 @@ import {
   adobe2ApiRequest,
   getAdobe2ApiState,
   jikeingService,
-  kuaiziRequest,
   wuhenRequest,
   yunwuRequest,
   zeakaiRequest,
@@ -16,15 +15,9 @@ import {
   queryDesktopProxyTask,
 } from "./jikeGo";
 import {
-  BailianVideoGenerationCreateResponse,
-  BailianVideoGenerationQueryResponse,
   BailianVideoGenerationRequest,
 } from "shared/types/detail/Bailian/video";
-import {
-  Seedance20Request,
-  Seedance20Response,
-  Seedance20StatusResponse,
-} from "shared/types/detail/kuaizhi/Seedance-2.0";
+import { Seedance20Request } from "shared/types/detail/kuaizhi/Seedance-2.0";
 import type {
   Adobe2ApiVideoGenerationRequest,
   Adobe2ApiImageGenerationRequest,
@@ -308,12 +301,19 @@ export function fetchMjTask(id: string) {
 
 // 创建快手视频生成任务
 export async function createLzVideoTask(data: Seedance20Request) {
-  const response = await kuaiziRequest<Seedance20Response>({
-    url: "/lz/video/task/create",
-    method: "post",
-    data,
+  const response = await createDesktopProxyTask({
+    platform: "kuaizi",
+    upstreamPath: "/lz/video/task/create",
+    method: "POST",
+    body: data,
   });
-  const taskId = response.data?.task_id || "";
+  const responseData = unwrapDesktopProxyData(response);
+  const taskId =
+    responseData?.data?.task_id ??
+    responseData?.task_id ??
+    responseData?.data?.taskId ??
+    responseData?.taskId ??
+    "";
 
   await aiVideoTrackingService.track({
     apiName: "/lz/video/task/create",
@@ -327,17 +327,19 @@ export async function createLzVideoTask(data: Seedance20Request) {
     status: taskId ? "PENDING" : "FAIL",
   });
 
-  return response;
+  return responseData;
 }
 
 // 查询快手视频生成任务状态
-// Seedance20StatusResponse
-export function getLzVideoTaskStatus(taskId: string) {
-  return kuaiziRequest<Seedance20StatusResponse>({
-    url: "/lz/video/task/status",
-    method: "post",
-    data: { task_id: taskId },
+export async function getLzVideoTaskStatus(taskId: string) {
+  const response = await queryDesktopProxyTask({
+    platform: "kuaizi",
+    upstreamPath: "/lz/video/task/status",
+    method: "POST",
+    body: { task_id: taskId },
   });
+
+  return unwrapDesktopProxyData(response);
 }
 
 // ===================== 极景二维码登录相关 =====================
@@ -451,39 +453,50 @@ export async function createDashscopeChatCompletion(
  * API 端点: /api/v1/services/aigc/video-generation/video-synthesis
  * @param data 请求数据
  */
-// BailianVideoGenerationCreateResponse
 export async function createDashscopeVideoSynthesis(
   data: BailianVideoGenerationRequest,
 ) {
-  const response = await dashscopeRequest<BailianVideoGenerationCreateResponse>(
-    {
-      url: "/api/v1/services/aigc/video-generation/video-synthesis",
-      method: "post",
-      data,
-      headers: {
-        "X-DashScope-Async": "enable",
-      },
+  const response = await createDesktopProxyTask({
+    platform: "dashscope",
+    upstreamPath: "/api/v1/services/aigc/video-generation/video-synthesis",
+    method: "POST",
+    headers: {
+      "X-DashScope-Async": "enable",
     },
-  );
+    body: data,
+  });
+  const responseData = unwrapDesktopProxyData(response);
 
   const trackData = data as unknown as Record<string, unknown>;
-  const trackResponse = response as {
+  const trackResponse = responseData as {
+    data?: { task_id?: string; task_status?: string };
+    task_id?: string;
+    task_status?: string;
     output?: { task_id?: string; task_status?: string };
   };
+  const taskId =
+    trackResponse.output?.task_id ??
+    trackResponse.data?.task_id ??
+    trackResponse.task_id ??
+    "";
+  const taskStatus =
+    trackResponse.output?.task_status ??
+    trackResponse.data?.task_status ??
+    trackResponse.task_status;
 
   await aiVideoTrackingService.track({
     apiName: "/api/v1/services/aigc/video-generation/video-synthesis",
     model: String(trackData.model || ""),
-    taskId: trackResponse.output?.task_id || "",
+    taskId,
     prompt: extractPrompt(data),
     duration: extractDurationSeconds(data),
     referenceImageUrl: extractReferenceImageUrl(data),
     provider: "dashscope",
     requestParams: trackData,
-    status: trackResponse.output?.task_status === "FAILED" ? "FAIL" : "PENDING",
+    status: taskStatus === "FAILED" || !taskId ? "FAIL" : "PENDING",
   });
 
-  return response;
+  return responseData;
 }
 // 响应体的格式如下
 // {
@@ -500,12 +513,14 @@ export async function createDashscopeVideoSynthesis(
  * API 端点: /api/v1/tasks/{task_id}
  * @param taskId 任务 ID
  */
-// BailianVideoGenerationQueryResponse
-export function getDashscopeVideoTaskStatus(taskId: string) {
-  return dashscopeRequest<BailianVideoGenerationQueryResponse>({
-    url: `/api/v1/tasks/${taskId}`,
-    method: "get",
+export async function getDashscopeVideoTaskStatus(taskId: string) {
+  const response = await queryDesktopProxyTask({
+    platform: "dashscope",
+    upstreamPath: `/api/v1/tasks/${taskId}`,
+    method: "GET",
   });
+
+  return unwrapDesktopProxyData(response);
 }
 
 // {
