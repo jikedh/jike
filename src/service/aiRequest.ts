@@ -198,7 +198,7 @@ const adobe2ApiRequest = async <T = any>(
 
   const finalConfig: AxiosRequestConfig = {
     ...nextConfig,
-    timeout: REQUEST_TIMEOUT,
+    timeout: nextConfig.timeout ?? REQUEST_TIMEOUT,
     headers: {
       ...DEFAULT_HEADERS,
       ...toHeaderRecord(nextConfig.headers),

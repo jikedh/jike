@@ -203,6 +203,7 @@ export function createAdobe2ApiVideoGeneration(
     url: "/v1/chat/completions",
     method: "post",
     data,
+    timeout: 900000,
   });
 }
 
