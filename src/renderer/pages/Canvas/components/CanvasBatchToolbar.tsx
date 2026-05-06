@@ -47,6 +47,9 @@ export const CanvasBatchToolbar = memo(
             ? "fixed"
             : "fixed left-1/2 top-4 -translate-x-1/2",
         )}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+        }}
         style={
           position
             ? {

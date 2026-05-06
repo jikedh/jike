@@ -2743,7 +2743,7 @@ export const CanvasFlow = ({
       const target = event.target as Element | null;
       if (
         target?.closest(
-          ".react-flow__node, .react-flow__edge, .react-flow__handle, .react-flow__connection, .canvas-group-resize-handle, .canvas-group-name-badge, .canvas-multi-select-quick-create",
+          ".react-flow__node, .react-flow__edge, .react-flow__handle, .react-flow__connection, .canvas-group-resize-handle, .canvas-group-name-badge, .canvas-batch-toolbar, .canvas-multi-select-quick-create",
         )
       ) {
         return;
