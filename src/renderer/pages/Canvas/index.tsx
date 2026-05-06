@@ -56,7 +56,7 @@ const CanvasPage = () => {
           <IconMessageCircle size={18} />
         </button>
 
-        {/* 右侧抽屉聊天窗口：统一走 createChatCompletion，并使用 idb-keyval 持久化会话。 */}
+        {/* 右侧抽屉聊天窗口：统一走桌面代理聊天接口，并使用 idb-keyval 持久化会话。 */}
         <ChatDrawer
           open={isChatOpen}
           onClose={() => setIsChatOpen(false)}

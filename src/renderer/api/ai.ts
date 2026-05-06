@@ -11,6 +11,7 @@ import {
   yunwuRequest,
   zeakaiRequest,
 } from "service/aiRequest";
+import { createDesktopChatCompletions } from "./jikeGo";
 import {
   BailianVideoGenerationCreateResponse,
   BailianVideoGenerationQueryResponse,
@@ -39,7 +40,7 @@ import type {
   VideoRemovalRequest,
   WuhenAccessTokenResponse,
 } from "shared/types/detail/wuhen";
-import { getAiToken, getBaseURL } from "shared/utils/utils";
+import { getAiToken, getBaseURL, getJikeingToken } from "shared/utils/utils";
 import { aiVideoTrackingService } from "@/services/aiVideoTracking";
 
 /**
@@ -221,9 +222,19 @@ export function getImageTaskStatus(id: string) {
 // - stream: true → 返回 async generator，逐块 yield 文本内容
 
 export async function createChatCompletion(data: any, signal?: AbortSignal) {
+  const desktopData = {
+    platform: "toapi" as const,
+    upstreamPath: "/v1/chat/completions",
+    ...data,
+  };
+
   if (data.stream) {
-    // 构建请求头 - 动态从 localStorage 获取 API 密钥
-    const token = getAiToken();
+    // 获取基础 URL（Electron 环境使用完整地址，Web 环境使用相对路径）
+    const baseURL =
+      (import.meta as any).env?.VITE_JIKE_GO_BASE_URL || "http://localhost:9181";
+    const url = `${baseURL}/desktop/v1/ai/chat/completions`;
+
+    const token = getJikeingToken();
     const headers: any = {
       Accept: "text/event-stream",
       "Content-Type": "application/json",
@@ -232,18 +243,11 @@ export async function createChatCompletion(data: any, signal?: AbortSignal) {
       headers.Authorization = `Bearer ${token}`;
     }
 
-    // 获取基础 URL（Electron 环境使用完整地址，Web 环境使用相对路径）
-    const baseURL = getBaseURL("ai");
-    const url =
-      baseURL === "/"
-        ? "/v1/chat/completions"
-        : `${baseURL}/v1/chat/completions`;
-
     const response = await fetch(url, {
       method: "POST",
       signal,
       headers,
-      body: JSON.stringify(data),
+      body: JSON.stringify(desktopData),
     });
 
     if (!response.ok) {
@@ -267,12 +271,8 @@ export async function createChatCompletion(data: any, signal?: AbortSignal) {
     })();
   }
 
-  return aiService({
-    url: "/v1/chat/completions",
-    method: "post",
-    data,
-    signal,
-  });
+  const response = await createDesktopChatCompletions(desktopData, signal);
+  return response.data;
 }
 
 // ===================== Midjourney 相关 =====================

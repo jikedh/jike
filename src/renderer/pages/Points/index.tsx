@@ -86,35 +86,35 @@ export function PointsView() {
   const packages = [
     {
       id: 1,
-      packageId: "pkg_500",
-      points: 500,
-      price: 9.9,
-      originalPrice: 9.9,
+      packageId: "pkg_600",
+      points: 600,
+      price: 10,
+      originalPrice: 10,
       tag: "入门首选",
     },
     {
       id: 2,
-      packageId: "pkg_2000",
-      points: 2000,
-      price: 29.9,
-      originalPrice: 59.9,
+      packageId: "pkg_6000",
+      points: 6000,
+      price: 100,
+      originalPrice: 100,
       tag: "超值特惠",
       popular: true,
     },
     {
       id: 3,
-      packageId: "pkg_5000",
-      points: 5000,
-      price: 69.9,
-      originalPrice: 139.9,
+      packageId: "pkg_18000",
+      points: 18000,
+      price: 300,
+      originalPrice: 300,
       tag: "创作达人",
     },
     {
       id: 4,
-      packageId: "pkg_12000",
-      points: 12000,
-      price: 159.9,
-      originalPrice: 299.9,
+      packageId: "pkg_60000",
+      points: 60000,
+      price: 1000,
+      originalPrice: 1000,
       tag: "专业工作室",
     },
   ];
@@ -284,15 +284,15 @@ export function PointsView() {
   const transactionHistory = [
     {
       id: 1,
-      type: "积分充值 (2000积分)",
-      amount: "¥29.9",
+      type: "积分充值 (6000积分)",
+      amount: "¥100",
       date: "2024-04-12 18:45",
       method: "微信支付",
     },
     {
       id: 2,
-      type: "积分充值 (500积分)",
-      amount: "¥9.9",
+      type: "积分充值 (600积分)",
+      amount: "¥10",
       date: "2024-03-25 14:20",
       method: "支付宝",
     },
@@ -430,9 +430,11 @@ export function PointsView() {
                         <div className="text-2xl font-bold text-white tracking-tight">
                           ¥{pkg.price}
                         </div>
-                        <div className="text-xs text-white/20 line-through">
-                          ¥{pkg.originalPrice}
-                        </div>
+                        {pkg.originalPrice !== pkg.price && (
+                          <div className="text-xs text-white/20 line-through">
+                            ¥{pkg.originalPrice}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <button

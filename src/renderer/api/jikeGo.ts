@@ -30,8 +30,9 @@ export type DesktopChatCompletionsRequest = {
   upstreamPath?: string;
   model: string;
   messages: Array<{
-    role: "system" | "user" | "assistant";
+    role: "system" | "user" | "assistant" | "tool";
     content: string;
+    name?: string;
   }>;
   stream?: boolean;
   temperature?: number;
@@ -82,12 +83,14 @@ export function queryDesktopProxyTask(data: DesktopProxyRequest): any {
 // 聊天用的接口
 export function createDesktopChatCompletions(
   data: DesktopChatCompletionsRequest,
+  signal?: AbortSignal,
 ): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/desktop/v1/ai/chat/completions",
     method: "post",
     data,
+    signal,
     headers: getJikeGoAuthHeaders(),
   });
 }

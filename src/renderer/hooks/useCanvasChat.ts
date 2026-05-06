@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { createChatCompletion } from "@/api/ai";
+import { createDesktopChatCompletions } from "@/api/jikeGo";
 import {
   DEFAULT_CANVAS_CHAT_MODEL,
   isCanvasChatImageModel,
@@ -218,28 +218,34 @@ export const useCanvasChat = () => {
       const requestPayload: NoteGenerationRequest = {
         model,
         messages: buildRequestMessages(payload.personaId, nextMessages),
-        stream: true,
       };
 
-      const stream = (await createChatCompletion(
-        requestPayload,
+      const response = await createDesktopChatCompletions(
+        {
+          ...requestPayload,
+          platform: "toapi",
+          upstreamPath: "/v1/chat/completions",
+        },
         controller.signal,
-      )) as AsyncGenerator<string>;
-      for await (const chunk of stream) {
-        setMessages((prev) => {
-          const assistantMessage = prev[assistantMessageIndex];
-          if (!assistantMessage || assistantMessage.role !== "assistant") {
-            return prev;
-          }
+      );
+      const resp = (response as any)?.data ?? response;
+      const generatedContent =
+        resp?.choices?.[0]?.message?.content ||
+        "生成出现了点问题，未能获取到有效内容，请稍后再试~";
 
-          const updatedMessages = [...prev];
-          updatedMessages[assistantMessageIndex] = {
-            ...assistantMessage,
-            content: `${assistantMessage.content}${chunk}`,
-          };
-          return updatedMessages;
-        });
-      }
+      setMessages((prev) => {
+        const assistantMessage = prev[assistantMessageIndex];
+        if (!assistantMessage || assistantMessage.role !== "assistant") {
+          return prev;
+        }
+
+        const updatedMessages = [...prev];
+        updatedMessages[assistantMessageIndex] = {
+          ...assistantMessage,
+          content: generatedContent,
+        };
+        return updatedMessages;
+      });
 
       setMessages((prev) => {
         const assistantMessage = prev[assistantMessageIndex];
