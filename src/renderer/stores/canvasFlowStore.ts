@@ -164,8 +164,8 @@ const removeNodeIdsFromGroups = (
       nodeIds: group.nodeIds.filter((nodeId) => !removedNodeIdSet.has(nodeId)),
       gridLayoutOrder: group.gridLayoutOrder
         ? group.gridLayoutOrder.filter(
-            (nodeId) => !removedNodeIdSet.has(nodeId),
-          )
+          (nodeId) => !removedNodeIdSet.has(nodeId),
+        )
         : group.gridLayoutOrder,
       layoutOrigin: group.layoutOrigin,
     }))
@@ -542,6 +542,7 @@ const pollImageGeneration = async (
 
       // 调用轮询接口获取任务状态
       const response: any = await getImageTaskStatus(taskId);
+      const responseData = response?.data ?? response;
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
       if (!currentNode || currentNode.type !== "imageNode") {
@@ -551,11 +552,21 @@ const pollImageGeneration = async (
 
       // 解析任务状态（兼容大小写）
       const taskStatus =
-        response?.data?.status ?? response?.result?.status ?? response?.status;
+        responseData?.status ??
+        responseData?.result?.status ??
+        response?.data?.status ??
+        response?.result?.status ??
+        response?.status;
 
       // 解析图片 URL：优先从 result.data[] 提取（Gemini/Seedream 格式）
       // 兼容结构：response.result.data = [{ url: string }]
-      const resultData = response?.result?.data ?? response?.data?.data ?? [];
+      const resultData =
+        responseData?.result?.data ??
+        responseData?.data ??
+        response?.data?.result?.data ??
+        response?.result?.data ??
+        response?.data?.data ??
+        [];
       const images: string[] = (Array.isArray(resultData) ? resultData : [])
         .map((item: any) => {
           if (typeof item === "string") {
@@ -566,6 +577,8 @@ const pollImageGeneration = async (
         .filter(Boolean);
 
       const progressValue = Number(
+        responseData?.progress ??
+        responseData?.result?.progress ??
         response?.data?.progress ??
         response?.result?.progress ??
         response?.progress ??
@@ -2526,9 +2539,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         createdAt: Date.now(),
         layoutOrigin: layoutBounds
           ? {
-              x: layoutBounds.x,
-              y: layoutBounds.y,
-            }
+            x: layoutBounds.x,
+            y: layoutBounds.y,
+          }
           : undefined,
       };
 
@@ -2580,9 +2593,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         {
           anchor: currentBounds
             ? {
-                x: currentBounds.x,
-                y: currentBounds.y,
-              }
+              x: currentBounds.x,
+              y: currentBounds.y,
+            }
             : group.layoutOrigin,
         },
       );
@@ -2597,14 +2610,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           (item) =>
             item.id === groupId
               ? {
-                  ...item,
-                  layoutOrigin: layoutResult.bounds
-                    ? {
-                        x: layoutResult.bounds.x,
-                        y: layoutResult.bounds.y,
-                      }
-                    : item.layoutOrigin,
-                }
+                ...item,
+                layoutOrigin: layoutResult.bounds
+                  ? {
+                    x: layoutResult.bounds.x,
+                    y: layoutResult.bounds.y,
+                  }
+                  : item.layoutOrigin,
+              }
               : item,
         ),
       }));
@@ -2630,9 +2643,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           preferredOrderNodeIds: group.gridLayoutOrder,
           anchor: currentBounds
             ? {
-                x: currentBounds.x,
-                y: currentBounds.y,
-              }
+              x: currentBounds.x,
+              y: currentBounds.y,
+            }
             : group.layoutOrigin,
         },
       );
@@ -2650,15 +2663,15 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           (item) =>
             item.id === groupId
               ? {
-                  ...item,
-                  gridLayoutOrder: layoutResult.orderedNodeIds,
-                  layoutOrigin: layoutResult.bounds
-                    ? {
-                        x: layoutResult.bounds.x,
-                        y: layoutResult.bounds.y,
-                      }
-                    : item.layoutOrigin,
-                }
+                ...item,
+                gridLayoutOrder: layoutResult.orderedNodeIds,
+                layoutOrigin: layoutResult.bounds
+                  ? {
+                    x: layoutResult.bounds.x,
+                    y: layoutResult.bounds.y,
+                  }
+                  : item.layoutOrigin,
+              }
               : item,
         ),
       }));
@@ -2680,18 +2693,18 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           item.id !== groupId
             ? item
             : {
-                ...item,
-                layoutOrigin: {
-                  x:
-                    (item.layoutOrigin?.x ??
-                      getGroupBounds(current.nodes, item.nodeIds, 24)?.x ??
-                      0) + offset.x,
-                  y:
-                    (item.layoutOrigin?.y ??
-                      getGroupBounds(current.nodes, item.nodeIds, 24)?.y ??
-                      0) + offset.y,
-                },
+              ...item,
+              layoutOrigin: {
+                x:
+                  (item.layoutOrigin?.x ??
+                    getGroupBounds(current.nodes, item.nodeIds, 24)?.x ??
+                    0) + offset.x,
+                y:
+                  (item.layoutOrigin?.y ??
+                    getGroupBounds(current.nodes, item.nodeIds, 24)?.y ??
+                    0) + offset.y,
               },
+            },
         ),
       }));
     },
@@ -4129,17 +4142,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const nextGroups =
           hasFinalPositionChange || hasAddOrRemove
             ? normalizeCanvasGroups(state.groups, nextNodes).map((group) => {
-                const bounds = getGroupBounds(nextNodes, group.nodeIds, 24);
-                return {
-                  ...group,
-                  layoutOrigin: bounds
-                    ? {
-                        x: bounds.x,
-                        y: bounds.y,
-                      }
-                    : group.layoutOrigin,
-                };
-              })
+              const bounds = getGroupBounds(nextNodes, group.nodeIds, 24);
+              return {
+                ...group,
+                layoutOrigin: bounds
+                  ? {
+                    x: bounds.x,
+                    y: bounds.y,
+                  }
+                  : group.layoutOrigin,
+              };
+            })
             : state.groups;
         // 计算选中节点数量，避免在 ImageNode 等组件中 O(n²) 遍历
         const selectedCount = nextNodes.filter((n) => n.selected).length;

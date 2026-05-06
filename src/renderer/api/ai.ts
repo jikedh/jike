@@ -1,7 +1,6 @@
 // import aiService, { zeakaiRequest, getAiToken } from 'service/aiRequest'
 import { EventSourceParserStream } from "eventsource-parser/stream";
 import {
-  aiService,
   dashscopeRequest,
   adobe2ApiRequest,
   getAdobe2ApiState,
@@ -11,7 +10,11 @@ import {
   yunwuRequest,
   zeakaiRequest,
 } from "service/aiRequest";
-import { createDesktopChatCompletions } from "./jikeGo";
+import {
+  createDesktopChatCompletions,
+  createDesktopProxyTask,
+  queryDesktopProxyTask,
+} from "./jikeGo";
 import {
   BailianVideoGenerationCreateResponse,
   BailianVideoGenerationQueryResponse,
@@ -31,16 +34,13 @@ import type {
   FireflyGptImageToImageRequest,
   FireflyGptImageToImageResponse,
 } from "shared/types/detail/Adobe2API";
-import type {
-  ToApiImageGenerationRequest,
-  ToApiImageGenerationResponse,
-} from "shared/types/detail/ToApi/images";
+import type { ToApiImageGenerationRequest } from "shared/types/detail/ToApi/images";
 import type {
   TaskResponse,
   VideoRemovalRequest,
   WuhenAccessTokenResponse,
 } from "shared/types/detail/wuhen";
-import { getAiToken, getBaseURL, getJikeingToken } from "shared/utils/utils";
+import { getJikeingToken } from "shared/utils/utils";
 import { aiVideoTrackingService } from "@/services/aiVideoTracking";
 
 /**
@@ -156,15 +156,22 @@ function getSeedance20Model(data: Seedance20Request): string {
   return data.mode === "fast" ? "seedance-2.0-fast" : "seedance-2.0-pro";
 }
 
+function unwrapDesktopProxyData(response: any) {
+  return response?.data ?? response;
+}
+
 // ===================== 图片生成相关 =====================
 
 // 创建图片生成任务
-export function createImageGeneration(data: ToApiImageGenerationRequest) {
-  return aiService<ToApiImageGenerationResponse>({
-    url: "/v1/images/generations",
-    method: "post",
-    data,
+export async function createImageGeneration(data: ToApiImageGenerationRequest) {
+  const response = await createDesktopProxyTask({
+    platform: "toapi",
+    upstreamPath: "/v1/images/generations",
+    method: "POST",
+    body: data,
   });
+
+  return unwrapDesktopProxyData(response);
 }
 
 export function createAdobe2ApiImageGeneration(
@@ -208,11 +215,14 @@ export function createAdobe2ApiVideoGeneration(
 }
 
 // 获取图片生成任务状态
-export function getImageTaskStatus(id: string) {
-  return aiService({
-    url: `/v1/images/generations/${id}`,
-    method: "get",
+export async function getImageTaskStatus(id: string) {
+  const response = await queryDesktopProxyTask({
+    platform: "toapi",
+    upstreamPath: `/v1/images/generations/${id}`,
+    method: "GET",
   });
+
+  return unwrapDesktopProxyData(response);
 }
 
 // ===================== 聊天相关 =====================
@@ -272,7 +282,7 @@ export async function createChatCompletion(data: any, signal?: AbortSignal) {
   }
 
   const response = await createDesktopChatCompletions(desktopData, signal);
-  return response.data;
+  return unwrapDesktopProxyData(response);
 }
 
 // ===================== Midjourney 相关 =====================
