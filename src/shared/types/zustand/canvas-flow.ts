@@ -203,6 +203,7 @@ export type CanvasFlowStoreType = {
     patch: Partial<NewVideoGenerationNode>,
   ) => void;
   updateNodeDimensions: (nodeId: string, width: number, height: number) => void;
+  updateNodeNickname: (nodeId: string, nickname: string) => void;
   updateAudioNodeData: (
     nodeId: string,
     patch: Partial<AudioGenerationNode>,

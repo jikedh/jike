@@ -1,10 +1,12 @@
+import { IconFileText } from "@tabler/icons-react";
 import { type NodeProps, NodeResizer, Position } from "@xyflow/react";
-import { memo } from "react";
+import { memo, useCallback, useState } from "react";
 import type { NoteNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { NodeNameBadge } from "../shared/NodeNameBadge";
 
 import { NoteContent } from "./NoteContent";
 
@@ -27,7 +29,25 @@ export const NoteNode = memo(
     const resizeNoteNode = useCanvasFlowStore((state) => state.resizeNoteNode);
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
+    const updateNodeNickname = useCanvasFlowStore(
+      (state) => state.updateNodeNickname,
+    );
+    const [isRenaming, setIsRenaming] = useState(false);
     const isDragging = Boolean(dragging);
+    const nodeLabel = data.nickname ?? "文本节点";
+
+    const handleRenameStart = useCallback(() => {
+      if (selected) {
+        setIsRenaming(true);
+      }
+    }, [selected]);
+
+    const handleRename = useCallback(
+      (name: string) => {
+        updateNodeNickname(id, name);
+      },
+      [id, updateNodeNickname],
+    );
 
     const handleVisibilityClass = selected
       ? "visible opacity-100"
@@ -60,6 +80,17 @@ export const NoteNode = memo(
                 : "border-white/[0.06] hover:border-white/[0.12] hover:bg-gradient-to-br hover:from-[#18181c] hover:to-[#101014]",
             )}
           >
+            <NodeNameBadge
+              icon={<IconFileText size={14} />}
+              selected={selected}
+              isEditing={isRenaming}
+              onEditStart={handleRenameStart}
+              onEditEnd={() => setIsRenaming(false)}
+              onRename={handleRename}
+            >
+              {nodeLabel}
+            </NodeNameBadge>
+
             {/* 左侧输入 Handle：用于接收其他节点连接。 */}
             <ButtonHandle
               type="target"

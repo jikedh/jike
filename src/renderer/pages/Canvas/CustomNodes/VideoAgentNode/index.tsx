@@ -2,6 +2,7 @@
  * VideoAgentNode - 视频智能体节点
  * 用于 AI 视频分析的 React Flow 自定义节点
  */
+import { IconVideo } from "@tabler/icons-react";
 import { type NodeProps } from "@xyflow/react";
 import { memo, useCallback, useEffect, useState } from "react";
 import {
@@ -12,6 +13,7 @@ import type { VideoAgentNodeType, VideoAgentPresetId } from "shared/types/flow";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { NodeNameBadge } from "../shared/NodeNameBadge";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { NodeBody } from "./components/NodeBody";
 import { PresetSelector } from "./components/PresetSelector";
@@ -26,6 +28,7 @@ const areVideoAgentNodePropsEqual = (
     prev.selected === next.selected &&
     prev.data.model === next.data.model &&
     prev.data.presetId === next.data.presetId &&
+    prev.data.nickname === next.data.nickname &&
     prev.data.useDefaultSystemPrompt === next.data.useDefaultSystemPrompt &&
     prev.data.customSystemPrompt === next.data.customSystemPrompt &&
     prev.data.status === next.data.status
@@ -41,11 +44,15 @@ export const VideoAgentNode = memo(
       data.model || "qwen3.5-flash",
     );
     const [editableSystemPrompt, setEditableSystemPrompt] = useState("");
+    const [isRenaming, setIsRenaming] = useState(false);
 
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
     const updateVideoAgentNodeData = useCanvasFlowStore(
       (state) => state.updateVideoAgentNodeData,
+    );
+    const updateNodeNickname = useCanvasFlowStore(
+      (state) => state.updateNodeNickname,
     );
 
     const presetId = data.presetId;
@@ -53,6 +60,8 @@ export const VideoAgentNode = memo(
     const presetLabel = preset
       ? getVideoAgentPresetLabelById(presetId)
       : "视频智能体";
+
+    const nodeLabel = data.nickname ?? presetLabel;
 
     const { isGenerating, handleGenerate } = useVideoAgentGenerate({
       id,
@@ -118,12 +127,38 @@ export const VideoAgentNode = memo(
       deleteNode(id);
     }, [deleteNode, id, isGenerating]);
 
+    const handleRenameStart = useCallback(() => {
+      if (selected) {
+        setIsRenaming(true);
+      }
+    }, [selected]);
+
+    const handleRename = useCallback(
+      (name: string) => {
+        updateNodeNickname(id, name);
+      },
+      [id, updateNodeNickname],
+    );
+
     return (
       <NodeContextMenu
         onDuplicate={() => duplicateNode(id)}
         onDelete={handleDelete}
       >
         <div className="group/node relative flex flex-col items-center">
+          {!showPresetSelector && (
+            <NodeNameBadge
+              icon={<IconVideo size={14} />}
+              selected={selected}
+              isEditing={isRenaming}
+              onEditStart={handleRenameStart}
+              onEditEnd={() => setIsRenaming(false)}
+              onRename={handleRename}
+            >
+              {nodeLabel}
+            </NodeNameBadge>
+          )}
+
           {showPresetSelector ? (
             <PresetSelector onSelect={handleSelectPreset} />
           ) : (

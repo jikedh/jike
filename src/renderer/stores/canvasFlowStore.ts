@@ -3628,6 +3628,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           return node;
         }),
       }));
+
+      get().requestHistorySave();
+
+      if (useChatSettingsStore.getState().autoSaveEnabled) {
+        get().saveGraph();
+      }
     },
 
     updateTextAgentNodeData: (nodeId, patch) => {
