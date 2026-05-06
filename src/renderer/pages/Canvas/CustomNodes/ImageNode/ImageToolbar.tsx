@@ -16,7 +16,12 @@ import {
 import type { ChangeEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
-import { GenerationStatus } from "shared/constants/enum";
+import {
+  ADOBE_GPT_IMAGE2_MODEL,
+  ADOBE_NANO_BANANA_PRO_MODEL,
+  NANO_BANANA_LOCAL_MODEL,
+  NANO_BANANA_LOCAL_PLATFORM,
+} from "shared/constants/ai-models";
 import type { ImageGenerationNode } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { appendMediaSequences } from "shared/utils/mediaSequence";
@@ -35,9 +40,10 @@ import { ImageCropDialog } from "./ImageCropDialog";
 import { ImageLightingDialog } from "./ImageLightingDialog";
 import { InpaintDialog } from "./InpaintDialog";
 import {
-  createLightingImageFile,
-  type LightingConfig,
+  buildLightingPrompt,
+  type LightingGenerationConfig,
 } from "./utils/lighting";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 
 type ImageToolbarProps = {
   nodeId: string;
@@ -100,10 +106,16 @@ export const ImageToolbar = memo(
     const startImageGeneration = useCanvasFlowStore(
       (state) => state.startImageGeneration,
     );
+    const startGeminiPro2Generation = useCanvasFlowStore(
+      (state) => state.startGeminiPro2Generation,
+    );
     const addNode = useCanvasFlowStore((state) => state.addNode);
     const onConnect = useCanvasFlowStore((state) => state.onConnect);
     const openPanoramaViewer = useCanvasFlowStore(
       (state) => state.openPanoramaViewer,
+    );
+    const setDefaultImagePreset = useChatSettingsStore(
+      (state) => state.setDefaultImagePreset,
     );
 
     const imageUrls = data.result?.data?.map((item) => item.url) ?? [];
@@ -353,7 +365,7 @@ export const ImageToolbar = memo(
       toast.info("功能开发中...");
     };
 
-    const handleLightingGenerate = async (config: LightingConfig) => {
+    const handleLightingGenerate = async (config: LightingGenerationConfig) => {
       if (!currentImageUrl) {
         toast.info("暂无可调光图片");
         throw new Error("暂无可调光图片");
@@ -369,36 +381,6 @@ export const ImageToolbar = memo(
           throw new Error("当前图片节点不存在");
         }
 
-        const file = await createLightingImageFile(
-          currentImageUrl,
-          config,
-          `lighting-${Date.now()}.png`,
-        );
-        let fileToUpload = file;
-        if (fileToUpload.size > MAX_IMAGE_SIZE_MB) {
-          fileToUpload = await compressImage(fileToUpload);
-        }
-
-        const uploadResult = await uploadFileToOSS(fileToUpload);
-
-        if (!uploadResult.url) {
-          throw new Error("灯光图片上传失败");
-        }
-
-        const localExtension = fileToUpload.type.includes("jpeg")
-          ? "jpg"
-          : "png";
-        const resultItem = await saveToolMediaFileToProject(
-          projectId,
-          { url: uploadResult.url, remoteUrl: uploadResult.url },
-          fileToUpload,
-          "image",
-          localExtension,
-        );
-        const aspectRatio = await getAspectRatioFromMediaFile(
-          fileToUpload,
-          "image",
-        );
         const childPosition = {
           x: sourceNode.position.x + (sourceNode.width ?? 350) + 80,
           y: sourceNode.position.y,
@@ -415,24 +397,82 @@ export const ImageToolbar = memo(
           targetHandle: "input",
         });
 
+        const isNiji7Model = config.model === "midjourney-niji7";
+        const isMidjourneyModel =
+          config.model === "midjourney" || isNiji7Model;
+        const isAdobeImageModel =
+          config.model === ADOBE_GPT_IMAGE2_MODEL ||
+          config.model === ADOBE_NANO_BANANA_PRO_MODEL;
+        const isNanoBananaLocalModel =
+          config.model === NANO_BANANA_LOCAL_MODEL &&
+          config.platform === NANO_BANANA_LOCAL_PLATFORM;
+        const isLocalDirectModel = isAdobeImageModel || isNanoBananaLocalModel;
+        const backendModel = isNiji7Model ? "midjourney" : config.model;
+        const size = config.size ?? data.size ?? "1:1";
+        const resolution = config.resolution ?? data.resolution ?? "2K";
+        const prompt = buildLightingPrompt(config);
+        let finalPrompt = prompt;
+
+        if (isMidjourneyModel && !finalPrompt.includes("--ar")) {
+          finalPrompt = `${finalPrompt} --ar ${size}`;
+          if (isNiji7Model) {
+            finalPrompt = `${finalPrompt} --niji 7`;
+          }
+        }
+
+        const payload = {
+          model: backendModel,
+          originalModel: config.model,
+          platform: config.platform,
+          prompt: finalPrompt,
+          resolution,
+          n: 1,
+          image_urls: [currentImageUrl],
+          promptDraft: config.aiPrompt ?? "",
+          promptDraftHtml: `<p>${config.aiPrompt ?? ""}</p>`,
+          size,
+          metadata: { resolution },
+          lighting: config,
+          ...(isMidjourneyModel
+            ? {
+                aspectRatio: data.aspectRatio ?? "1:1",
+                midjourneyAdvanced: data.midjourneyAdvanced,
+              }
+            : {}),
+        };
+
         updateImageNodeData(childId, {
           badgeLabel: "灯光",
-          isUpload: true,
-          ...(aspectRatio ? { size: aspectRatio } : {}),
-          image_urls: [uploadResult.url],
+          model: config.model,
+          originalModel: config.model,
+          platform: config.platform,
+          prompt: finalPrompt,
+          promptDraft: config.aiPrompt ?? "",
+          promptDraftHtml: `<p>${config.aiPrompt ?? ""}</p>`,
+          image_urls: [currentImageUrl],
+          size,
+          resolution,
           result: {
             type: "image",
-            data: [resultItem],
+            data: [],
           },
           lighting: config,
-          status: GenerationStatus.COMPLETED,
-          progress: 100,
         });
 
-        const flowStore = useCanvasFlowStore.getState();
-        flowStore.requestHistorySave();
-        flowStore.saveGraph();
-        toast.success("已生成灯光图片节点");
+        setDefaultImagePreset({
+          model: config.model,
+          platform: config.platform,
+          size,
+          resolution,
+        });
+
+        if (isLocalDirectModel) {
+          await startGeminiPro2Generation(childId, payload);
+        } else {
+          await startImageGeneration(childId, payload);
+        }
+
+        toast.success("已开始灯光重绘生成");
       } catch (error: any) {
         console.error("灯光处理失败:", error);
         toast.error(error?.message || "灯光处理失败，请重试");
@@ -615,6 +655,10 @@ export const ImageToolbar = memo(
         <ImageLightingDialog
           open={isLightingDialogOpen}
           imageUrl={currentImageUrl}
+          initialModel={data.model}
+          initialPlatform={data.platform}
+          initialSize={data.size}
+          initialResolution={data.resolution}
           onOpenChange={handleLightingDialogOpenChange}
           onConfirm={handleLightingGenerate}
         />
