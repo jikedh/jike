@@ -2814,25 +2814,6 @@ export const ImageAnnotationWorkspace = ({
             </div>
           ) : null}
 
-          {isBrushCanvasMode ? (
-            <div className="text-xs text-white/45">
-              画布模式中只能绘制，完成后点击确认会把当前笔迹合并成一个整体对象
-            </div>
-          ) : selectedShape ? (
-            <div className="text-xs text-white/45">
-              已选中标注对象，双击边框进入编辑态；编辑态可拖拽控制点缩放，按
-              Backspace/Delete 删除
-            </div>
-          ) : selectedText ? (
-            <div className="text-xs text-white/45">
-              已选中文字，双击边框进入编辑态；编辑态可拖拽四角控制点缩放，按
-              Backspace/Delete 删除
-            </div>
-          ) : (
-            <div className="text-xs text-white/45">
-              点击图片即可开始标注，文字工具为点一下直接输入，Enter 或点击空白提交
-            </div>
-          )}
         </div>
       </div>
     </div>
