@@ -1,5 +1,9 @@
 appId: com.jike.app
 productName: 即刻
+publish:
+  provider: github
+  owner: '2026617199'
+  repo: jike-publish
 directories:
   buildResources: build
   output: release
