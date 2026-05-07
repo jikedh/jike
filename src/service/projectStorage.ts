@@ -14,6 +14,7 @@ export type ProjectMeta = {
   updatedAt: number;
   coverUrl?: string;
   coverLocalPath?: string;
+  coverSource?: "manual" | "auto";
   description?: string;
   type: "video" | "script";
 };
@@ -785,10 +786,12 @@ const persistProjectCoverMeta = async (
   projectId: string,
   coverLocalPath: string,
   coverUrl?: string,
+  coverSource: "manual" | "auto" = "manual",
 ) => {
   updateProject(projectId, {
     coverLocalPath,
     coverUrl,
+    coverSource,
   });
 
   const storageKey = getCanvasDataKey(projectId);
@@ -816,6 +819,7 @@ const persistProjectCoverMeta = async (
       savedAt: Date.now(),
       coverLocalPath,
       coverUrl,
+      coverSource,
     });
   }
 };
@@ -841,6 +845,7 @@ export const saveCoverImageToLocal = async (
         projectId,
         `${project.name}/cover.${ext}`,
         undefined,
+        "manual",
       );
       return `cover.${ext}`;
     }
@@ -859,10 +864,41 @@ export const saveCoverImageToLocal = async (
       projectId,
       `${project.name}/cover.${extension}`,
       undefined,
+      "manual",
     );
 
     return `cover.${extension}`;
   }
+};
+
+export const saveAutoCoverImageToLocal = async (
+  projectId: string,
+  imageData: ArrayBuffer,
+): Promise<string | null> => {
+  const project = getProjectById(projectId);
+  if (!project || project.coverSource === "manual") {
+    return null;
+  }
+
+  if (!localStorageService.isAvailable()) return null;
+
+  const result = await localStorageService.saveCoverImage(
+    project.name,
+    imageData,
+    "png",
+  );
+  if (!result.success) {
+    return null;
+  }
+
+  await persistProjectCoverMeta(
+    projectId,
+    `${project.name}/cover.png`,
+    undefined,
+    "auto",
+  );
+
+  return "cover.png";
 };
 
 export const setProjectCoverFromMediaRef = async (

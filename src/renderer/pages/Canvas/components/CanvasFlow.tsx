@@ -26,6 +26,7 @@ import {
 import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { getProjectById, saveAutoCoverImageToLocal } from "service/projectStorage";
 import { GenerationStatus } from "shared/constants/enum";
 import type { AllNodeType, EdgeType } from "shared/types/flow";
 import type { CanvasGroup } from "shared/types/zustand/canvas-flow";
@@ -1896,8 +1897,52 @@ export const CanvasFlow = ({
   }, [compactNodeChanges, storeOnNodesChange]);
 
   // 处理返回按钮点击：返回主页前强制保存当前画布项目。
-  const handleBackClick = useCallback(() => {
+  const saveAutoCoverFromCurrentViewport = useCallback(async () => {
+    if (!projectId || typeof window === "undefined" || !window.debug) {
+      return;
+    }
+
+    const project = getProjectById(projectId);
+    if (!project || project.coverSource === "manual") {
+      return;
+    }
+
+    const flowElement = document.querySelector(".react-flow");
+    if (!(flowElement instanceof HTMLElement)) {
+      return;
+    }
+
+    const rect = flowElement.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      return;
+    }
+
+    try {
+      const captureResult = await window.debug.capturePage({
+        x: rect.left,
+        y: rect.top,
+        width: rect.width,
+        height: rect.height,
+      });
+
+      if (!captureResult.success || !captureResult.data) {
+        return;
+      }
+
+      const bytes = new Uint8Array(captureResult.data);
+      const buffer = bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      );
+      await saveAutoCoverImageToLocal(projectId, buffer);
+    } catch (error) {
+      console.warn("Failed to save canvas auto cover:", error);
+    }
+  }, [projectId]);
+
+  const handleBackClick = useCallback(async () => {
     flushAndSaveCanvas();
+    await saveAutoCoverFromCurrentViewport();
     const count = getGeneratingTasksCount();
     if (count > 0) {
       setGeneratingCount(count);
@@ -1905,17 +1950,28 @@ export const CanvasFlow = ({
     } else {
       navigate("/home");
     }
-  }, [flushAndSaveCanvas, getGeneratingTasksCount, navigate]);
+  }, [
+    flushAndSaveCanvas,
+    getGeneratingTasksCount,
+    navigate,
+    saveAutoCoverFromCurrentViewport,
+  ]);
 
   // 确认退出时也再保存一次，确保取消任务后的状态被写入项目。
   const handleConfirmExit = useCallback(() => {
     cancelAllGeneratingTasks();
     setShowExitDialog(false);
-    window.setTimeout(() => {
+    window.setTimeout(async () => {
       flushAndSaveCanvas();
+      await saveAutoCoverFromCurrentViewport();
       navigate("/home");
     }, 0);
-  }, [cancelAllGeneratingTasks, flushAndSaveCanvas, navigate]);
+  }, [
+    cancelAllGeneratingTasks,
+    flushAndSaveCanvas,
+    navigate,
+    saveAutoCoverFromCurrentViewport,
+  ]);
 
   const handleCancelExit = useCallback(() => {
     setShowExitDialog(false);

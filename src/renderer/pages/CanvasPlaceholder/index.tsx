@@ -70,7 +70,7 @@ export default function CanvasPlaceholderPage() {
     const objectUrls: string[] = [];
 
     const loadCovers = async () => {
-      const entries = await Promise.all(
+      const coverEntries = await Promise.all(
         projects.map(async (project) => {
           const coverUrl = await loadProjectCoverObjectUrl(project);
           if (coverUrl?.startsWith("blob:")) {
@@ -86,7 +86,7 @@ export default function CanvasPlaceholderPage() {
       }
 
       setProjectCoverUrls(
-        Object.fromEntries(entries.filter(([, url]) => Boolean(url))),
+        Object.fromEntries(coverEntries.filter(([, url]) => Boolean(url))),
       );
     };
 
@@ -209,7 +209,7 @@ export default function CanvasPlaceholderPage() {
       <header className="h-16 border-b border-white/5 flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center">
           <SquareDashedMousePointer className="w-5 h-5 mr-3 text-[#B43FEB]" />
-          <h1 className="text-lg font-medium">无限画布项目管理</h1>
+          <h1 className="text-lg font-medium">项目管理</h1>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -237,9 +237,9 @@ export default function CanvasPlaceholderPage() {
       {/* Content */}
       <div className="flex-1 p-8 overflow-y-auto">
         <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-2">我的画布项目</h2>
+          <h2 className="text-xl font-semibold mb-2">我的项目</h2>
           <p className="text-sm text-white/50">
-            管理和编辑您的节点工作流，点击播放按钮可预览生成结果。
+            管理和编辑您的项目，点击可进入项目。
           </p>
         </div>
 
@@ -310,7 +310,7 @@ export default function CanvasPlaceholderPage() {
                 {/* Type tag */}
                 <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-[10px] font-medium text-[#B43FEB] border border-white/10 flex items-center gap-1">
                   <div className="w-1.5 h-1.5 rounded-full bg-[#B43FEB]"></div>
-                  {project.type === "video" ? "视频创作" : "剧本创作"}
+                  画布工程
                 </div>
               </div>
 

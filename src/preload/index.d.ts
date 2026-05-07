@@ -6,6 +6,12 @@ export type DebugApi = {
   toggleDevTools: () => Promise<{ success: boolean; error?: string }>;
   isDev: () => Promise<boolean>;
   getAppVersion: () => Promise<string>;
+  capturePage: (rect?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }) => Promise<{ success: boolean; data?: Uint8Array; error?: string }>;
 };
 
 export type DownloadApi = {
