@@ -5,6 +5,7 @@ import {
   Outlet,
   Navigate,
 } from "react-router-dom";
+import { CinematicProjectLoader } from "@/components/CinematicProjectLoader";
 import { SidebarCeBianLan } from "@/pages/Sidebar/SidebarCeBianLan";
 
 // 懒加载页面组件 - 按需加载，减少首屏加载量
@@ -25,9 +26,13 @@ const CanvasPage = lazy(() => import("@/pages/Canvas"));
 
 // 页面加载中 fallback
 const PageLoader = () => (
-  <div className="flex items-center justify-center h-full">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+  <div className="flex h-full items-center justify-center">
+    <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
   </div>
+);
+
+const CanvasRouteLoader = () => (
+  <CinematicProjectLoader fixed title="" subtitle="" />
 );
 
 // 带侧边栏的布局组件
@@ -105,7 +110,7 @@ const router = createHashRouter([
   {
     path: "/canvas/:projectId",
     element: (
-      <Suspense fallback={<PageLoader />}>
+      <Suspense fallback={<CanvasRouteLoader />}>
         <CanvasPage />
       </Suspense>
     ),

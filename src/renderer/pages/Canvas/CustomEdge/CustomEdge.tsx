@@ -1,6 +1,12 @@
-import { BaseEdge, EdgeProps, EdgeToolbar, getBezierPath } from "@xyflow/react";
+import {
+  BaseEdge,
+  EdgeProps,
+  EdgeToolbar,
+  getBezierPath,
+  useReactFlow,
+} from "@xyflow/react";
 import { ScissorsLineDashed } from "lucide-react";
-import { memo, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
@@ -25,8 +31,17 @@ const SELECTED_EDGE_GLASS_STYLE = {
   filter: "drop-shadow(0 0 3px rgba(215,155,255,0.18))",
 };
 
+const EDGE_CUT_BUTTON_ANIMATION_MS = 220;
+const EDGE_HOVER_GRACE_MS = 800;
+
 const CustomEdgeComponent = (props: EdgeProps) => {
-  const [edgePath, centerX, centerY] = getBezierPath(props);
+  const [edgePath] = getBezierPath(props);
+  const { screenToFlowPosition } = useReactFlow();
+  const [isHovered, setIsHovered] = useState(false);
+  const [toolbarVisible, setToolbarVisible] = useState(false);
+  const [showCutButton, setShowCutButton] = useState(false);
+  const [cutButtonPosition, setCutButtonPosition] = useState({ x: 0, y: 0 });
+  const hideTimerRef = useRef<number | null>(null);
   const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge);
   const isHighlighted = useCanvasFlowStore((state) =>
     state.highlightedEdgeIds.includes(props.id),
@@ -41,15 +56,17 @@ const CustomEdgeComponent = (props: EdgeProps) => {
     (state) => state.edgeAnimationEnabled,
   );
   const edgeStyle = useMemo(() => {
+    const isActive = isConnectedToSelectedNode || isHovered;
+
     if (!isHighlighted) {
       return {
         ...(props.style ?? {}),
         ...DEFAULT_EDGE_STYLE,
-        stroke: isConnectedToSelectedNode ? "#B43FEB" : DEFAULT_EDGE_STYLE.stroke,
-        strokeWidth: isConnectedToSelectedNode
+        stroke: isActive ? "#B43FEB" : DEFAULT_EDGE_STYLE.stroke,
+        strokeWidth: isActive
           ? 1.35
           : DEFAULT_EDGE_STYLE.strokeWidth,
-        opacity: isConnectedToSelectedNode ? 0.66 : undefined,
+        opacity: isActive ? 0.66 : undefined,
       };
     }
 
@@ -63,12 +80,72 @@ const CustomEdgeComponent = (props: EdgeProps) => {
       animation: "reference-edge-dash 1.2s linear infinite",
       filter: "drop-shadow(0 0 8px rgba(180,63,235,0.85))",
     };
-  }, [isConnectedToSelectedNode, isHighlighted, props.style]);
+  }, [isConnectedToSelectedNode, isHighlighted, isHovered, props.style]);
+
+  const handleHoverStart = useCallback((event?: React.PointerEvent) => {
+    setIsHovered(true);
+
+    if (hideTimerRef.current !== null) {
+      window.clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  }, []);
+
+  const handleEdgeClick = useCallback(
+    (event: React.PointerEvent<SVGPathElement>) => {
+      event.stopPropagation();
+
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      setCutButtonPosition(position);
+      setIsHovered(true);
+      setToolbarVisible(true);
+      setShowCutButton(true);
+    },
+    [screenToFlowPosition],
+  );
+
+  const handleHoverEnd = useCallback(() => {
+    if (hideTimerRef.current !== null) {
+      window.clearTimeout(hideTimerRef.current);
+    }
+
+    setShowCutButton(false);
+
+    hideTimerRef.current = window.setTimeout(() => {
+      setIsHovered(false);
+      setToolbarVisible(false);
+      hideTimerRef.current = null;
+    }, Math.max(EDGE_HOVER_GRACE_MS, EDGE_CUT_BUTTON_ANIMATION_MS));
+  }, []);
+
+  const handleCutButtonEnter = useCallback(() => {
+    if (hideTimerRef.current !== null) {
+      window.clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+
+    setIsHovered(true);
+    setToolbarVisible(true);
+    setShowCutButton(true);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (hideTimerRef.current !== null) {
+        window.clearTimeout(hideTimerRef.current);
+      }
+    };
+  }, []);
+
+  const isFlowing = isHighlighted || isConnectedToSelectedNode || isHovered;
 
   return (
     <>
       <BaseEdge id={props.id} path={edgePath} style={edgeStyle} className="" />
-      {isConnectedToSelectedNode && !isHighlighted ? (
+      {isFlowing && !isHighlighted ? (
         <>
           <path
             d={edgePath}
@@ -93,16 +170,47 @@ const CustomEdgeComponent = (props: EdgeProps) => {
           ) : null}
         </>
       ) : null}
+      <path
+        d={edgePath}
+        fill="none"
+        pointerEvents="stroke"
+        stroke="rgba(0,0,0,0.001)"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={22}
+        className="cursor-pointer"
+        onPointerEnter={handleHoverStart}
+        onPointerLeave={handleHoverEnd}
+        onPointerDown={handleEdgeClick}
+      />
       <EdgeToolbar
         edgeId={props.id}
-        x={centerX}
-        y={centerY}
-        className="group"
+        isVisible={toolbarVisible}
+        x={cutButtonPosition.x}
+        y={cutButtonPosition.y}
+        className={[
+          "nodrag nopan",
+          showCutButton ? "pointer-events-auto" : "pointer-events-none",
+        ].join(" ")}
       >
-        <ScissorsLineDashed
-          onClick={() => deleteEdge(props.id)}
-          className="p-1.5 w-12 h-12 rounded-md bg-accent text-destructive border border-border opacity-0 group-hover:opacity-100"
-        />
+        <button
+          type="button"
+          aria-label="断开连线"
+          onClick={(event) => {
+            event.stopPropagation();
+            deleteEdge(props.id);
+          }}
+          onPointerEnter={handleCutButtonEnter}
+          onPointerLeave={handleHoverEnd}
+          className={[
+            "flex size-11 items-center justify-center rounded-xl border border-[#B43FEB]/35 bg-[#121214]/92 text-[#F0D9FF] shadow-[0_10px_26px_rgba(0,0,0,0.32),0_0_24px_rgba(180,63,235,0.22)] backdrop-blur-md transition-[opacity,transform,box-shadow,border-color] duration-200 ease-out",
+            showCutButton
+              ? "pointer-events-auto scale-100 opacity-100"
+              : "pointer-events-none scale-50 opacity-0",
+          ].join(" ")}
+        >
+          <ScissorsLineDashed className="size-5" />
+        </button>
       </EdgeToolbar>
     </>
   );

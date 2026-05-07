@@ -99,8 +99,8 @@ export default function CanvasPlaceholderPage() {
   }, [projects]);
 
   // 处理项目卡片点击
-  const handleProjectClick = (projectId: string) => {
-    navigate(`/canvas/${projectId}`);
+  const handleProjectClick = (project: ProjectMeta) => {
+    navigate(`/canvas/${project.id}`);
   };
 
   // 打开创建项目弹窗
@@ -259,7 +259,7 @@ export default function CanvasPlaceholderPage() {
           {projects.map((project) => (
             <div
               key={project.id}
-              onClick={() => handleProjectClick(project.id)}
+              onClick={() => handleProjectClick(project)}
               className="bg-[#121214] border border-white/5 rounded-xl overflow-hidden group hover:border-[#B43FEB]/40 hover:shadow-[0_0_30px_rgba(180,63,235,0.15)] transition-all duration-300 cursor-pointer"
             >
               {/* Thumbnail */}
@@ -284,7 +284,10 @@ export default function CanvasPlaceholderPage() {
                 {/* Overlay actions */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
                   <button
-                    onClick={() => handleProjectClick(project.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleProjectClick(project);
+                    }}
                     className="w-10 h-10 rounded-full bg-[#B43FEB] text-white flex items-center justify-center hover:bg-[#9d35ce] transition-colors shadow-lg cursor-pointer"
                   >
                     <Play className="w-4 h-4 ml-0.5" fill="currentColor" />
