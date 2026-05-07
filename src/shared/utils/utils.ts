@@ -212,49 +212,6 @@ export const getVideoThumbnail = (videoUrl: string): Promise<string> => {
   });
 };
 
-// ===================== 写死的 API 密钥 =====================
-
-// AI 服务密钥
-const DEFAULT_AI_TOKEN = "sk-Bml1blU1ls8acOmj7kOdHIs4ZHQViS1asg1teky509zbTdrx";
-
-// ZeakAI 服务密钥
-const DEFAULT_ZEAKAI_TOKEN = "df3ddeb9-45da-4eb7-b49a-8ab32c8e4ebb";
-
-// 快手 AI 服务密钥
-const DEFAULT_KUAIZI_TOKEN = "kz-XyWCfLd8q784ybb6PVo6OuDb2rkRJ8ShiCZNcvnus0";
-
-// Yunwu AI 服务密钥
-const DEFAULT_YUNWU_TOKEN =
-  "sk-BNkrD8Sfje36v0dbgVQDIVmfE8F4NV9A06zG9btQx9I1fwf5";
-
-// 阿里云百炼 API 密钥
-const DEFAULT_DASHSCOPE_TOKEN = "sk-d0f8647ea2c64c789ceef1c4a50ddf95";
-
-/**
- * 获取 AI 服务密钥
- */
-export const getAiToken = () => DEFAULT_AI_TOKEN;
-
-/**
- * 获取 ZeakAI 服务密钥
- */
-export const getZeakaiToken = () => DEFAULT_ZEAKAI_TOKEN;
-
-/**
- * 获取快手 AI 服务密钥
- */
-export const getKuaiziToken = () => DEFAULT_KUAIZI_TOKEN;
-
-/**
- * 获取 Yunwu AI 服务密钥
- */
-export const getYunwuToken = () => DEFAULT_YUNWU_TOKEN;
-
-/**
- * 获取阿里云百炼服务密钥
- */
-export const getDashscopeToken = () => DEFAULT_DASHSCOPE_TOKEN;
-
 // ===================== Jikeing Token 管理 =====================
 const JIKEING_TOKEN_KEY = "jikeing_token";
 const JIKEING_USER_ID_KEY = "jikeing_user_id";
@@ -340,16 +297,7 @@ export const isElectron = (): boolean => {
  * - Web 环境：使用相对路径（由 Vite 代理或 Nginx 代理处理）
  */
 export const getBaseURL = (apiPath: string): string => {
-  const electronMode = isElectron();
-
-  if (electronMode) {
-    const apiServers: Record<string, string> = {
-      ai: "https://toapis.com",
-      zeakai: "https://zeakai-api.api4midjourney.com",
-      kuaizi: "https://aiopenapi.kuaizi.cn/ai-open-platform-api/v1",
-    };
-    return apiServers[apiPath] || "/";
-  }
+  void apiPath;
   return "/";
 };
 

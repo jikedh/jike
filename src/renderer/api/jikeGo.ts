@@ -1,4 +1,4 @@
-import { jikeingService } from "service/aiRequest";
+import { jikeingService, SKIP_AUTH_HEADER } from "service/aiRequest";
 import { getJikeingToken } from "shared/utils/utils";
 
 const JIKE_GO_BASE_URL =
@@ -8,6 +8,11 @@ const getJikeGoAuthHeaders = () => {
   const token = getJikeingToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
+
+const getJikeGoAiProxyHeaders = () => ({
+  ...getJikeGoAuthHeaders(),
+  [SKIP_AUTH_HEADER]: "true",
+});
 
 export type DesktopProxyPlatform =
   | "kuaizi"
@@ -59,13 +64,17 @@ export function desktopProxyHealthCheck(): any {
 }
 
 // 创建桌面代理任务
-export function createDesktopProxyTask(data: DesktopProxyRequest): any {
+export function createDesktopProxyTask(
+  data: DesktopProxyRequest,
+  signal?: AbortSignal,
+): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/desktop/v1/ai/generation/proxy",
     method: "post",
     data,
-    headers: getJikeGoAuthHeaders(),
+    signal,
+    headers: getJikeGoAiProxyHeaders(),
   });
 }
 
@@ -76,7 +85,7 @@ export function queryDesktopProxyTask(data: DesktopProxyRequest): any {
     url: "/desktop/v1/ai/task/query",
     method: "post",
     data,
-    headers: getJikeGoAuthHeaders(),
+    headers: getJikeGoAiProxyHeaders(),
   });
 }
 
@@ -91,7 +100,7 @@ export function createDesktopChatCompletions(
     method: "post",
     data,
     signal,
-    headers: getJikeGoAuthHeaders(),
+    headers: getJikeGoAiProxyHeaders(),
   });
 }
 
