@@ -119,7 +119,7 @@ export const SidebarCeBianLan = () => {
           <SidebarNavItem
             id="canvas"
             icon={<SquareDashedMousePointer size={24} />}
-            label="画布"
+            label="项目"
             onClick={() => handleNavClick("/canvas")}
           />
           <SidebarNavItem
@@ -151,7 +151,7 @@ export const SidebarCeBianLan = () => {
           {/* <SidebarNavItem
             id="model-settings"
             icon={<PanelRightOpen size={24} />}
-            label="模型管理"
+            label="模型管理(Test)"
             onClick={() => handleNavClick("/settings")}
           /> */}
         </SidebarNav>

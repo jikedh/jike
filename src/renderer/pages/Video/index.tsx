@@ -2,6 +2,7 @@
  * Video 页面 - 视频消除功能 Demo
  */
 import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 // import { Input } from "~/components/ui/input";
 // import { Button } from "~/components/ui/button";
 // import { videoRemoval, getVideoRemovalStatus } from "~/api/ai";
@@ -11,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { getVideoRemovalStatus, videoRemoval } from "@/api/ai";
 
 export default function VideoPage() {
+  const navigate = useNavigate();
   const [videoUrl, setVideoUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [taskId, setTaskId] = useState("");
@@ -303,6 +305,15 @@ export default function VideoPage() {
             />
           </div>
         )}
+
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={() => navigate("/test")} variant="blue">
+            跳转到测试页面
+          </Button>
+          <Button onClick={() => navigate("/test-go")} variant="blue">
+            跳转到测试-GO页面
+          </Button>
+        </div>
       </div>
     </div>
   );

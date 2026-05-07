@@ -25,4 +25,33 @@ export function registerDebugHandlers(): void {
   ipcMain.handle("debug:getAppVersion", async () => {
     return app.getVersion();
   });
+
+  ipcMain.handle(
+    "debug:capturePage",
+    async (
+      event,
+      rect?: { x: number; y: number; width: number; height: number },
+    ) => {
+      const webContents = event.sender;
+
+      if (
+        rect &&
+        rect.width > 0 &&
+        rect.height > 0 &&
+        Number.isFinite(rect.x) &&
+        Number.isFinite(rect.y)
+      ) {
+        const image = await webContents.capturePage({
+          x: Math.max(0, Math.round(rect.x)),
+          y: Math.max(0, Math.round(rect.y)),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        });
+        return { success: true, data: image.toPNG() };
+      }
+
+      const image = await webContents.capturePage();
+      return { success: true, data: image.toPNG() };
+    },
+  );
 }

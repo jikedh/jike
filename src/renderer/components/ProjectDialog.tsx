@@ -2,7 +2,7 @@ import { X as CloseIcon, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   createProject,
-  getCoverImageUrl,
+  loadProjectCoverObjectUrl,
   type ProjectMeta,
   renameProject,
   saveCoverImageToLocal,
@@ -34,20 +34,48 @@ export default function ProjectDialog({
   const [coverPreview, setCoverPreview] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const coverFileInputRef = useRef<HTMLInputElement>(null);
+  const loadedCoverObjectUrlRef = useRef<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
+    if (loadedCoverObjectUrlRef.current) {
+      URL.revokeObjectURL(loadedCoverObjectUrlRef.current);
+      loadedCoverObjectUrlRef.current = null;
+    }
+
     if (project) {
       setName(project.name);
-      const localCover = getCoverImageUrl(project.id);
-      setCoverUrl(localCover || project.coverUrl || "");
       setDescription(project.description || "");
       setType(project.type);
       setCoverPreview("");
       setCoverFile(null);
+
+      loadProjectCoverObjectUrl(project).then((localCover) => {
+        if (!isMounted) {
+          if (localCover?.startsWith("blob:")) {
+            URL.revokeObjectURL(localCover);
+          }
+          return;
+        }
+
+        if (localCover?.startsWith("blob:")) {
+          loadedCoverObjectUrlRef.current = localCover;
+        }
+        setCoverUrl(localCover || project.coverUrl || "");
+      });
     } else {
       resetFormState();
     }
+
+    return () => {
+      isMounted = false;
+      if (loadedCoverObjectUrlRef.current) {
+        URL.revokeObjectURL(loadedCoverObjectUrlRef.current);
+        loadedCoverObjectUrlRef.current = null;
+      }
+    };
   }, [project, isOpen]);
 
   const resetFormState = () => {

@@ -1,26 +1,20 @@
-// import aiService, { zeakaiRequest, getAiToken } from 'service/aiRequest'
 import { EventSourceParserStream } from "eventsource-parser/stream";
 import {
-  aiService,
-  dashscopeRequest,
   adobe2ApiRequest,
   getAdobe2ApiState,
   jikeingService,
-  kuaiziRequest,
+  ximuRequest,
   wuhenRequest,
-  yunwuRequest,
-  zeakaiRequest,
 } from "service/aiRequest";
 import {
-  BailianVideoGenerationCreateResponse,
-  BailianVideoGenerationQueryResponse,
+  createDesktopChatCompletions,
+  createDesktopProxyTask,
+  queryDesktopProxyTask,
+} from "./jikeGo";
+import {
   BailianVideoGenerationRequest,
 } from "shared/types/detail/Bailian/video";
-import {
-  Seedance20Request,
-  Seedance20Response,
-  Seedance20StatusResponse,
-} from "shared/types/detail/kuaizhi/Seedance-2.0";
+import { Seedance20Request } from "shared/types/detail/kuaizhi/Seedance-2.0";
 import type {
   Adobe2ApiVideoGenerationRequest,
   Adobe2ApiImageGenerationRequest,
@@ -31,15 +25,19 @@ import type {
   FireflyGptImageToImageResponse,
 } from "shared/types/detail/Adobe2API";
 import type {
-  ToApiImageGenerationRequest,
-  ToApiImageGenerationResponse,
-} from "shared/types/detail/ToApi/images";
+  XimuCardBalanceResponse,
+  XimuGptImageRequest,
+  XimuNanoBananaRequest,
+  XimuTaskResultResponse,
+  XimuTaskSubmitResponse,
+} from "shared/types/detail/ximu";
+import type { ToApiImageGenerationRequest } from "shared/types/detail/ToApi/images";
 import type {
   TaskResponse,
   VideoRemovalRequest,
   WuhenAccessTokenResponse,
 } from "shared/types/detail/wuhen";
-import { getAiToken, getBaseURL } from "shared/utils/utils";
+import { getJikeingToken } from "shared/utils/utils";
 import { aiVideoTrackingService } from "@/services/aiVideoTracking";
 
 /**
@@ -155,15 +153,64 @@ function getSeedance20Model(data: Seedance20Request): string {
   return data.mode === "fast" ? "seedance-2.0-fast" : "seedance-2.0-pro";
 }
 
+function unwrapDesktopProxyData(response: any) {
+  return response?.data ?? response;
+}
+
+async function createDesktopChatStream(data: any, signal?: AbortSignal) {
+  const baseURL =
+    (import.meta as any).env?.VITE_JIKE_GO_BASE_URL || "http://localhost:9181";
+  const url = `${baseURL}/desktop/v1/ai/chat/completions`;
+
+  const token = getJikeingToken();
+  const headers: Record<string, string> = {
+    Accept: "text/event-stream",
+    "Content-Type": "application/json",
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    signal,
+    headers,
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await response.text().catch(() => `请求失败：${response.status}`),
+    );
+  }
+
+  const reader = response
+    .body!.pipeThrough(new TextDecoderStream())
+    .pipeThrough(new EventSourceParserStream())
+    .getReader();
+
+  return (async function* () {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done || value?.data === "[DONE]") return;
+      const content = JSON.parse(value.data)?.choices?.[0]?.delta?.content;
+      if (content) yield content;
+    }
+  })();
+}
+
 // ===================== 图片生成相关 =====================
 
 // 创建图片生成任务
-export function createImageGeneration(data: ToApiImageGenerationRequest) {
-  return aiService<ToApiImageGenerationResponse>({
-    url: "/v1/images/generations",
-    method: "post",
-    data,
+export async function createImageGeneration(data: ToApiImageGenerationRequest) {
+  const response = await createDesktopProxyTask({
+    platform: "toapi",
+    upstreamPath: "/v1/images/generations",
+    method: "POST",
+    body: data,
   });
+
+  return unwrapDesktopProxyData(response);
 }
 
 export function createAdobe2ApiImageGeneration(
@@ -207,12 +254,52 @@ export function createAdobe2ApiVideoGeneration(
   });
 }
 
-// 获取图片生成任务状态
-export function getImageTaskStatus(id: string) {
-  return aiService({
-    url: `/v1/images/generations/${id}`,
-    method: "get",
+export function createXimuGptImageGeneration(data: XimuGptImageRequest) {
+  return ximuRequest<XimuTaskSubmitResponse>({
+    url: "/api/draw/completions",
+    method: "post",
+    data,
+    timeout: 900000,
   });
+}
+
+export function createXimuNanoBananaGeneration(
+  data: XimuNanoBananaRequest,
+) {
+  return ximuRequest<XimuTaskSubmitResponse>({
+    url: "/api/draw/nano-banana",
+    method: "post",
+    data,
+    timeout: 900000,
+  });
+}
+
+export function getXimuImageResult(id: string) {
+  return ximuRequest<XimuTaskResultResponse>({
+    url: "/api/draw/result",
+    method: "post",
+    data: { id },
+    timeout: 900000,
+  });
+}
+
+export function getXimuCardBalance(code: string) {
+  return ximuRequest<XimuCardBalanceResponse>({
+    url: "/api/credits/card",
+    method: "post",
+    data: { code },
+  });
+}
+
+// 获取图片生成任务状态
+export async function getImageTaskStatus(id: string) {
+  const response = await queryDesktopProxyTask({
+    platform: "toapi",
+    upstreamPath: `/v1/images/generations/${id}`,
+    method: "GET",
+  });
+
+  return unwrapDesktopProxyData(response);
 }
 
 // ===================== 聊天相关 =====================
@@ -222,58 +309,18 @@ export function getImageTaskStatus(id: string) {
 // - stream: true → 返回 async generator，逐块 yield 文本内容
 
 export async function createChatCompletion(data: any, signal?: AbortSignal) {
+  const desktopData = {
+    platform: "toapi" as const,
+    upstreamPath: "/v1/chat/completions",
+    ...data,
+  };
+
   if (data.stream) {
-    // 构建请求头 - 动态从 localStorage 获取 API 密钥
-    const token = getAiToken();
-    const headers: any = {
-      Accept: "text/event-stream",
-      "Content-Type": "application/json",
-    };
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-
-    // 获取基础 URL（Electron 环境使用完整地址，Web 环境使用相对路径）
-    const baseURL = getBaseURL("ai");
-    const url =
-      baseURL === "/"
-        ? "/v1/chat/completions"
-        : `${baseURL}/v1/chat/completions`;
-
-    const response = await fetch(url, {
-      method: "POST",
-      signal,
-      headers,
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        await response.text().catch(() => `请求失败：${response.status}`),
-      );
-    }
-
-    const reader = response
-      .body!.pipeThrough(new TextDecoderStream())
-      .pipeThrough(new EventSourceParserStream())
-      .getReader();
-
-    return (async function* () {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done || value?.data === "[DONE]") return;
-        const content = JSON.parse(value.data)?.choices?.[0]?.delta?.content;
-        if (content) yield content;
-      }
-    })();
+    return createDesktopChatStream(desktopData, signal);
   }
 
-  return aiService({
-    url: "/v1/chat/completions",
-    method: "post",
-    data,
-    signal,
-  });
+  const response = await createDesktopChatCompletions(desktopData, signal);
+  return unwrapDesktopProxyData(response);
 }
 
 function extractChatCompletionText(response: any): string {
@@ -349,32 +396,45 @@ export async function analyzeLightingReferenceImage(
 // ===================== Midjourney 相关 =====================
 
 // 提交 Midjourney imagine 任务
-export function submitMjImagine(data: { prompt: string }) {
-  return zeakaiRequest({
-    url: "/mj/submit/imagine",
-    method: "post",
-    data,
+export async function submitMjImagine(data: { prompt: string }) {
+  const response = await createDesktopProxyTask({
+    platform: "zeakai",
+    upstreamPath: "/mj/submit/imagine",
+    method: "POST",
+    body: data,
   });
+
+  return unwrapDesktopProxyData(response);
 }
 
 // 获取 Midjourney 任务状态
-export function fetchMjTask(id: string) {
-  return zeakaiRequest({
-    url: `/mj/task/${id}/fetch`,
-    method: "get",
+export async function fetchMjTask(id: string) {
+  const response = await queryDesktopProxyTask({
+    platform: "zeakai",
+    upstreamPath: `/mj/task/${id}/fetch`,
+    method: "GET",
   });
+
+  return unwrapDesktopProxyData(response);
 }
 
 // ===================== 快手 AI 视频相关 =====================
 
 // 创建快手视频生成任务
 export async function createLzVideoTask(data: Seedance20Request) {
-  const response = await kuaiziRequest<Seedance20Response>({
-    url: "/lz/video/task/create",
-    method: "post",
-    data,
+  const response = await createDesktopProxyTask({
+    platform: "kuaizi",
+    upstreamPath: "/lz/video/task/create",
+    method: "POST",
+    body: data,
   });
-  const taskId = response.data?.task_id || "";
+  const responseData = unwrapDesktopProxyData(response);
+  const taskId =
+    responseData?.data?.task_id ??
+    responseData?.task_id ??
+    responseData?.data?.taskId ??
+    responseData?.taskId ??
+    "";
 
   await aiVideoTrackingService.track({
     apiName: "/lz/video/task/create",
@@ -388,17 +448,19 @@ export async function createLzVideoTask(data: Seedance20Request) {
     status: taskId ? "PENDING" : "FAIL",
   });
 
-  return response;
+  return responseData;
 }
 
 // 查询快手视频生成任务状态
-// Seedance20StatusResponse
-export function getLzVideoTaskStatus(taskId: string) {
-  return kuaiziRequest<Seedance20StatusResponse>({
-    url: "/lz/video/task/status",
-    method: "post",
-    data: { task_id: taskId },
+export async function getLzVideoTaskStatus(taskId: string) {
+  const response = await queryDesktopProxyTask({
+    platform: "kuaizi",
+    upstreamPath: "/lz/video/task/status",
+    method: "POST",
+    body: { task_id: taskId },
   });
+
+  return unwrapDesktopProxyData(response);
 }
 
 // ===================== 极景二维码登录相关 =====================
@@ -461,12 +523,17 @@ export async function generateGeminiContent(
     });
   }
 
-  return yunwuRequest({
-    url: `/v1beta/models/${modeName}:generateContent`,
-    method: "post",
-    data,
+  const response = await createDesktopProxyTask(
+    {
+      platform: "yunwu",
+      upstreamPath: `/v1beta/models/${modeName}:generateContent`,
+      method: "POST",
+      body: data,
+    },
     signal,
-  });
+  );
+
+  return unwrapDesktopProxyData(response);
 }
 
 // ===================== 阿里云百炼相关 =====================
@@ -487,21 +554,32 @@ export async function createDashscopeChatCompletion(
   };
 
   if (data.stream) {
-    return dashscopeRequest({
-      url: "/compatible-mode/v1/chat/completions",
-      method: "post",
-      data: requestBody,
+    const stream = await createDesktopChatStream(
+      {
+        platform: "dashscope",
+        upstreamPath: "/compatible-mode/v1/chat/completions",
+        ...requestBody,
+      },
       signal,
-      responseType: "stream",
-    });
+    );
+
+    return (async function* () {
+      for await (const content of stream) {
+        yield { content };
+      }
+    })();
   }
 
-  return dashscopeRequest({
-    url: "/compatible-mode/v1/chat/completions",
-    method: "post",
-    data: requestBody,
+  const response = await createDesktopChatCompletions(
+    {
+      platform: "dashscope",
+      upstreamPath: "/compatible-mode/v1/chat/completions",
+      ...requestBody,
+    },
     signal,
-  });
+  );
+
+  return unwrapDesktopProxyData(response);
 }
 
 // ===================== 阿里云百炼视频生成相关 =====================
@@ -512,82 +590,66 @@ export async function createDashscopeChatCompletion(
  * API 端点: /api/v1/services/aigc/video-generation/video-synthesis
  * @param data 请求数据
  */
-// BailianVideoGenerationCreateResponse
 export async function createDashscopeVideoSynthesis(
   data: BailianVideoGenerationRequest,
 ) {
-  const response = await dashscopeRequest<BailianVideoGenerationCreateResponse>(
-    {
-      url: "/api/v1/services/aigc/video-generation/video-synthesis",
-      method: "post",
-      data,
-      headers: {
-        "X-DashScope-Async": "enable",
-      },
+  const response = await createDesktopProxyTask({
+    platform: "dashscope",
+    upstreamPath: "/api/v1/services/aigc/video-generation/video-synthesis",
+    method: "POST",
+    headers: {
+      "X-DashScope-Async": "enable",
     },
-  );
+    body: data,
+  });
+  const responseData = unwrapDesktopProxyData(response);
 
   const trackData = data as unknown as Record<string, unknown>;
-  const trackResponse = response as {
+  const trackResponse = responseData as {
+    data?: { task_id?: string; task_status?: string };
+    task_id?: string;
+    task_status?: string;
     output?: { task_id?: string; task_status?: string };
   };
+  const taskId =
+    trackResponse.output?.task_id ??
+    trackResponse.data?.task_id ??
+    trackResponse.task_id ??
+    "";
+  const taskStatus =
+    trackResponse.output?.task_status ??
+    trackResponse.data?.task_status ??
+    trackResponse.task_status;
 
   await aiVideoTrackingService.track({
     apiName: "/api/v1/services/aigc/video-generation/video-synthesis",
     model: String(trackData.model || ""),
-    taskId: trackResponse.output?.task_id || "",
+    taskId,
     prompt: extractPrompt(data),
     duration: extractDurationSeconds(data),
     referenceImageUrl: extractReferenceImageUrl(data),
     provider: "dashscope",
     requestParams: trackData,
-    status: trackResponse.output?.task_status === "FAILED" ? "FAIL" : "PENDING",
+    status: taskStatus === "FAILED" || !taskId ? "FAIL" : "PENDING",
   });
 
-  return response;
+  return responseData;
 }
-// 响应体的格式如下
-// {
-//     "request_id": "d40eb92c-179f-9e15-ae48-deddc63e1a5a",
-//     "output": {
-//         "task_id": "b2b03f03-432e-4d0f-84c7-3dd0dfbb8489",
-//         "task_status": "PENDING"
-//     }
-// }
-
 /**
  * 阿里云百炼视频生成任务状态查询接口
  * 用于轮询视频生成任务状态
  * API 端点: /api/v1/tasks/{task_id}
  * @param taskId 任务 ID
  */
-// BailianVideoGenerationQueryResponse
-export function getDashscopeVideoTaskStatus(taskId: string) {
-  return dashscopeRequest<BailianVideoGenerationQueryResponse>({
-    url: `/api/v1/tasks/${taskId}`,
-    method: "get",
+export async function getDashscopeVideoTaskStatus(taskId: string) {
+  const response = await queryDesktopProxyTask({
+    platform: "dashscope",
+    upstreamPath: `/api/v1/tasks/${taskId}`,
+    method: "GET",
   });
-}
 
-// {
-//     "request_id": "7e75c1d7-f4a7-9064-bfcf-e7bc69fa15d8",
-//     "output": {
-//         "task_id": "b2b03f03-432e-4d0f-84c7-3dd0dfbb8489",
-//         "task_status": "SUCCEEDED",
-//         "submit_time": "2026-04-21 00:09:06.534",
-//         "scheduled_time": "2026-04-21 00:09:15.225",
-//         "end_time": "2026-04-21 00:10:50.287",
-//         "orig_prompt": "一幅都市奇幻艺术的场景。一个充满动感的涂鸦艺术角色。一个由喷漆所画成的少年，正从一面混凝土墙上活过来。他一边用极快的语速演唱一首英文rap，一边摆着一个经典的、充满活力的说唱歌手姿势。场景设定在夜晚一个充满都市感的铁路桥下。灯光来自一盏孤零零的街灯，营造出电影般的氛围，充满高能量和惊人的细节。视频的音频部分完全由rap构成，没有其他对话或杂音。",
-//         "video_url": "https://dashscope-a717.oss-accelerate.aliyuncs.com/1d/02/20260421/2b319361/8947677-metadata_user_c270fb9129168390_watermark.mp4?Expires=1776787839&OSSAccessKeyId=LTAI5tPxpiCM2hjmWrFXrym1&Signature=V%2FR40Jz%2FD21KQiPEzs0kAtyRoyY%3D"
-//     },
-//     "usage": {
-//         "duration": 10,
-//         "input_video_duration": 0,
-//         "output_video_duration": 10,
-//         "video_count": 1,
-//         "SR": 720
-//     }
-// }
+  return unwrapDesktopProxyData(response);
+}
 
 // ===================== 无痕 AI 视频消除相关 =====================
 

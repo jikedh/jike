@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import type { AllNodeType, EdgeType } from "shared/types/flow";
 import type { NoteGenerationRequest } from "shared/types/NoteGeneration";
-import { createChatCompletion } from "@/api/ai";
+import { createDesktopChatCompletions } from "@/api/jikeGo";
 import { useMessage } from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
@@ -95,11 +95,16 @@ export const useAgentExecution = (options: {
     setIsGenerating(true);
 
     try {
-      const response = await createChatCompletion(payload);
+      const response = await createDesktopChatCompletions({
+        ...payload,
+        platform: "toapi",
+        upstreamPath: "/v1/chat/completions",
+      });
+      const resp = (response as any)?.data ?? response;
       // console.log('AI 响应', response)
       // 检查是否是流式响应（AsyncGenerator）或普通响应
       const generatedContent =
-        (response as any)?.choices?.[0]?.message?.content ||
+        resp?.choices?.[0]?.message?.content ||
         "生成出现了点问题，未能获取到有效内容，请稍后再试~";
 
       if (!generatedContent) {

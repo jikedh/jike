@@ -4,6 +4,7 @@ import {
   getCanvasDataKey,
   getLocalFilePath,
   loadCanvasData,
+  readMediaFromLocal,
   saveCanvasData,
   saveGeneratedImageToLocal,
   saveGeneratedVideoToLocal,
@@ -13,6 +14,8 @@ import {
   ADOBE_NANO_BANANA_PRO_MODEL,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
+  XIMU_GPT_IMAGE2_MODEL,
+  XIMU_NANO_BANANA_PRO_MODEL,
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import { getGenerationPointsByScene } from "shared/constants/model-points";
@@ -26,6 +29,19 @@ import {
   buildFireflyGptText2ImageRequest,
   normalizeFireflyGptImageInputUrls,
 } from "shared/types/detail/Adobe2API/images/gpt-image";
+import {
+  buildXimuGptImageRequest,
+  buildXimuNanoBananaRequest,
+  collectXimuImageUrls,
+  extractXimuTaskId,
+  getXimuMessage,
+  getXimuResultPayload,
+  resolveXimuGptAspectRatio,
+  resolveXimuImageSize,
+  resolveXimuNanoBananaProAspectRatio,
+  XIMU_TASK_FAILED_STATUSES,
+  XIMU_TASK_SUCCESS_STATUSES,
+} from "shared/types/detail/ximu";
 import type {
   AllNodeType,
   AudioGenerationNode,
@@ -95,6 +111,7 @@ import {
 import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
 import { getJikeingUserId, toChineseNumber } from "shared/utils/utils";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
+import { toast } from "sonner";
 import { create } from "zustand";
 import {
   createAdobe2ApiChatImageGeneration,
@@ -103,12 +120,15 @@ import {
   createAdobe2ApiVideoGeneration,
   createDashscopeVideoSynthesis,
   createImageGeneration,
+  createXimuGptImageGeneration,
+  createXimuNanoBananaGeneration,
   createLzVideoTask,
   fetchMjTask,
   generateGeminiContent,
   getDashscopeVideoTaskStatus,
   getImageTaskStatus,
   getLzVideoTaskStatus,
+  getXimuImageResult,
   submitMjImagine,
 } from "@/api/ai";
 import { updateVipScore } from "@/api/jikeing";
@@ -170,8 +190,8 @@ const removeNodeIdsFromGroups = (
       nodeIds: group.nodeIds.filter((nodeId) => !removedNodeIdSet.has(nodeId)),
       gridLayoutOrder: group.gridLayoutOrder
         ? group.gridLayoutOrder.filter(
-            (nodeId) => !removedNodeIdSet.has(nodeId),
-          )
+          (nodeId) => !removedNodeIdSet.has(nodeId),
+        )
         : group.gridLayoutOrder,
       layoutOrigin: group.layoutOrigin,
       frame: group.frame,
@@ -335,6 +355,54 @@ const resolveAdobeImageModel = ({
   return undefined;
 };
 
+const resolveXimuImageModel = (model?: string) => {
+  if (model === XIMU_GPT_IMAGE2_MODEL) {
+    return "gpt-image-2-vip" as const;
+  }
+  if (model === XIMU_NANO_BANANA_PRO_MODEL) {
+    return "nano-banana-pro" as const;
+  }
+  return undefined;
+};
+
+const waitForXimuImageResult = async (taskId: string) => {
+  const startedAt = Date.now();
+  let lastStatus = "";
+  let lastMessage = "";
+
+  while (Date.now() - startedAt < IMAGE_TIMEOUT) {
+    const response = await getXimuImageResult(taskId);
+    const payload = getXimuResultPayload(response);
+    const status = String(payload.status || response?.status || "").toLowerCase();
+    lastStatus = status || lastStatus;
+    lastMessage = getXimuMessage(response) || lastMessage;
+
+    if (XIMU_TASK_FAILED_STATUSES.includes(status as any)) {
+      throw new Error(lastMessage || "西牧生图失败");
+    }
+
+    const urls = collectXimuImageUrls(payload);
+    if (
+      urls.length > 0 &&
+      (!status || XIMU_TASK_SUCCESS_STATUSES.includes(status as any))
+    ) {
+      return urls[0];
+    }
+
+    if (XIMU_TASK_SUCCESS_STATUSES.includes(status as any)) {
+      throw new Error("西牧生图已完成，但查询结果中没有返回图片地址");
+    }
+
+    await wait(5000);
+  }
+
+  throw new Error(
+    lastStatus
+      ? `西牧生图超时，请稍后重试（最后状态：${lastStatus}${lastMessage ? `，${lastMessage}` : ""}）`
+      : "西牧生图超时，请稍后重试",
+  );
+};
+
 const extractMarkdownMediaUrl = (content: unknown, kind: "image" | "video") => {
   const text = Array.isArray(content)
     ? content
@@ -403,6 +471,72 @@ const mirrorGeneratedImageUrlToOss = async (url: string) => {
   }
 
   return ossResult.url;
+};
+
+const isXimuSupportedReferenceUrl = (url: string) =>
+  /^https?:\/\//i.test(url) || /^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(url);
+
+const getImageMimeTypeFromPath = (path: string) => {
+  const normalizedPath = path.split("?")[0].split("#")[0].toLowerCase();
+  if (normalizedPath.endsWith(".jpg") || normalizedPath.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+  if (normalizedPath.endsWith(".webp")) {
+    return "image/webp";
+  }
+  if (normalizedPath.endsWith(".gif")) {
+    return "image/gif";
+  }
+  return "image/png";
+};
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+};
+
+const normalizeXimuReferenceUrls = async (urls: string[]) => {
+  const normalizedUrls: string[] = [];
+
+  for (const rawUrl of urls) {
+    const url = String(rawUrl || "").trim();
+    if (!url) {
+      continue;
+    }
+
+    if (isXimuSupportedReferenceUrl(url)) {
+      normalizedUrls.push(url);
+      continue;
+    }
+
+    const localMedia = await readMediaFromLocal(url);
+    if (!localMedia) {
+      throw new Error("西牧图生图参考图不是公网图片，且本地素材读取失败");
+    }
+
+    normalizedUrls.push(
+      `data:${getImageMimeTypeFromPath(url)};base64,${arrayBufferToBase64(localMedia)}`,
+    );
+  }
+
+  return normalizedUrls;
+};
+
+const getXimuRequestErrorText = (error: unknown, fallback: string) => {
+  const requestMessage = getRequestErrorMessage(error);
+  const errorMessage = error instanceof Error ? error.message : "";
+  const message =
+    requestMessage && requestMessage !== "请求失败，请稍后重试"
+      ? requestMessage
+      : errorMessage;
+
+  return message ? `${fallback}：${message}` : fallback;
 };
 
 const isAdobeVideoRequest = (payload: Record<string, unknown>) =>
@@ -527,15 +661,32 @@ const pollImageGeneration = async (
         if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
           pendingTaskCounts.delete(nodeId);
         }
+        let shouldWarnPartialFailure = false;
+        let partialSuccessCount = 0;
+        let partialFailedCount = 0;
         setState((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const completedCount = (data.completedCount ?? 0) + 1;
             const allCompleted = completedCount >= totalTaskCount;
+            const successCount = data.result?.data?.filter((item) => item?.url)
+              .length ?? 0;
+            const hasSuccessfulImages = successCount > 0;
+
+            if (allCompleted && hasSuccessfulImages) {
+              shouldWarnPartialFailure = true;
+              partialSuccessCount = successCount;
+              partialFailedCount = Math.max(totalTaskCount - successCount, 1);
+            }
+
             return {
               ...data,
-              status: allCompleted
-                ? GenerationStatus.FAILED
-                : GenerationStatus.IN_PROGRESS,
+              status:
+                allCompleted && hasSuccessfulImages
+                  ? GenerationStatus.COMPLETED
+                  : allCompleted
+                    ? GenerationStatus.FAILED
+                    : GenerationStatus.IN_PROGRESS,
+              progress: allCompleted && hasSuccessfulImages ? 100 : data.progress,
               error: {
                 code: "TIMEOUT",
                 message: "图片生成超时，请稍后再试",
@@ -544,11 +695,17 @@ const pollImageGeneration = async (
             };
           }),
         }));
+        if (shouldWarnPartialFailure) {
+          toast.warning(
+            `已生成 ${partialSuccessCount} 张图片，${partialFailedCount} 张失败`,
+          );
+        }
         return;
       }
 
       // 调用轮询接口获取任务状态
       const response: any = await getImageTaskStatus(taskId);
+      const responseData = response?.data ?? response;
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
       if (!currentNode || currentNode.type !== "imageNode") {
@@ -558,11 +715,21 @@ const pollImageGeneration = async (
 
       // 解析任务状态（兼容大小写）
       const taskStatus =
-        response?.data?.status ?? response?.result?.status ?? response?.status;
+        responseData?.status ??
+        responseData?.result?.status ??
+        response?.data?.status ??
+        response?.result?.status ??
+        response?.status;
 
       // 解析图片 URL：优先从 result.data[] 提取（Gemini/Seedream 格式）
       // 兼容结构：response.result.data = [{ url: string }]
-      const resultData = response?.result?.data ?? response?.data?.data ?? [];
+      const resultData =
+        responseData?.result?.data ??
+        responseData?.data ??
+        response?.data?.result?.data ??
+        response?.result?.data ??
+        response?.data?.data ??
+        [];
       const images: string[] = (Array.isArray(resultData) ? resultData : [])
         .map((item: any) => {
           if (typeof item === "string") {
@@ -573,6 +740,8 @@ const pollImageGeneration = async (
         .filter(Boolean);
 
       const progressValue = Number(
+        responseData?.progress ??
+        responseData?.result?.progress ??
         response?.data?.progress ??
         response?.result?.progress ??
         response?.progress ??
@@ -687,28 +856,52 @@ const pollImageGeneration = async (
         taskStatus === "CANCEL" ||
         taskStatus === "CANCELED"
       ) {
+        let shouldWarnPartialFailure = false;
+        let partialSuccessCount = 0;
+        let partialFailedCount = 0;
+
         setState((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const completedCount = (data.completedCount ?? 0) + 1;
             const allCompleted = completedCount >= totalTaskCount;
+            const successCount = data.result?.data?.filter((item) => item?.url)
+              .length ?? 0;
+            const hasSuccessfulImages = successCount > 0;
+            const message =
+              response?.message ||
+              response?.data?.message ||
+              "生成失败，请稍后再试";
+
+            if (allCompleted && hasSuccessfulImages) {
+              shouldWarnPartialFailure = true;
+              partialSuccessCount = successCount;
+              partialFailedCount = Math.max(totalTaskCount - successCount, 1);
+            }
 
             return {
               ...data,
-              status: allCompleted
-                ? GenerationStatus.FAILED
-                : GenerationStatus.IN_PROGRESS,
-              progress: 0,
+              status:
+                allCompleted && hasSuccessfulImages
+                  ? GenerationStatus.COMPLETED
+                  : allCompleted
+                    ? GenerationStatus.FAILED
+                    : GenerationStatus.IN_PROGRESS,
+              progress: allCompleted && hasSuccessfulImages ? 100 : 0,
               error: {
                 code: "IMAGE_GENERATION_FAILED",
-                message:
-                  response?.message ||
-                  response?.data?.message ||
-                  "生成失败，请稍后再试",
+                message,
               },
               completedCount,
             };
           }),
         }));
+
+        if (shouldWarnPartialFailure) {
+          toast.warning(
+            `已生成 ${partialSuccessCount} 张图片，${partialFailedCount} 张失败`,
+          );
+        }
+
         saveCurrentCanvasToHistory();
         if (useChatSettingsStore.getState().autoSaveEnabled) {
           getState().saveGraph();
@@ -792,15 +985,32 @@ const pollMjImageGeneration = async (
         if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
           pendingTaskCounts.delete(nodeId);
         }
+        let shouldWarnPartialFailure = false;
+        let partialSuccessCount = 0;
+        let partialFailedCount = 0;
         setState((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const completedCount = (data.completedCount ?? 0) + 1;
             const allCompleted = completedCount >= totalTaskCount;
+            const successCount = data.result?.data?.filter((item) => item?.url)
+              .length ?? 0;
+            const hasSuccessfulImages = successCount > 0;
+
+            if (allCompleted && hasSuccessfulImages) {
+              shouldWarnPartialFailure = true;
+              partialSuccessCount = successCount;
+              partialFailedCount = Math.max(totalTaskCount - successCount, 1);
+            }
+
             return {
               ...data,
-              status: allCompleted
-                ? GenerationStatus.FAILED
-                : GenerationStatus.IN_PROGRESS,
+              status:
+                allCompleted && hasSuccessfulImages
+                  ? GenerationStatus.COMPLETED
+                  : allCompleted
+                    ? GenerationStatus.FAILED
+                    : GenerationStatus.IN_PROGRESS,
+              progress: allCompleted && hasSuccessfulImages ? 100 : data.progress,
               error: {
                 code: "TIMEOUT",
                 message: "图片生成超时，请稍后再试",
@@ -809,6 +1019,11 @@ const pollMjImageGeneration = async (
             };
           }),
         }));
+        if (shouldWarnPartialFailure) {
+          toast.warning(
+            `已生成 ${partialSuccessCount} 张图片，${partialFailedCount} 张失败`,
+          );
+        }
         return;
       }
 
@@ -927,28 +1142,52 @@ const pollMjImageGeneration = async (
 
       // FAILURE 或 CANCEL 状态表示失败
       if (response.status === "FAILURE" || response.status === "CANCEL") {
+        let shouldWarnPartialFailure = false;
+        let partialSuccessCount = 0;
+        let partialFailedCount = 0;
+
         setState((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const completedCount = (data.completedCount ?? 0) + 1;
             const allCompleted = completedCount >= totalTaskCount;
+            const successCount = data.result?.data?.filter((item) => item?.url)
+              .length ?? 0;
+            const hasSuccessfulImages = successCount > 0;
+            const message =
+              response.failReason ||
+              response.description ||
+              "生成失败，请稍后再试";
+
+            if (allCompleted && hasSuccessfulImages) {
+              shouldWarnPartialFailure = true;
+              partialSuccessCount = successCount;
+              partialFailedCount = Math.max(totalTaskCount - successCount, 1);
+            }
 
             return {
               ...data,
-              status: allCompleted
-                ? GenerationStatus.FAILED
-                : GenerationStatus.IN_PROGRESS,
-              progress: progressValue,
+              status:
+                allCompleted && hasSuccessfulImages
+                  ? GenerationStatus.COMPLETED
+                  : allCompleted
+                    ? GenerationStatus.FAILED
+                    : GenerationStatus.IN_PROGRESS,
+              progress: allCompleted && hasSuccessfulImages ? 100 : progressValue,
               error: {
                 code: "MJ_ERROR",
-                message:
-                  response.failReason ||
-                  response.description ||
-                  "生成失败，请稍后再试",
+                message,
               },
               completedCount,
             };
           }),
         }));
+
+        if (shouldWarnPartialFailure) {
+          toast.warning(
+            `已生成 ${partialSuccessCount} 张图片，${partialFailedCount} 张失败`,
+          );
+        }
+
         saveCurrentCanvasToHistory();
         if (useChatSettingsStore.getState().autoSaveEnabled) {
           getState().saveGraph();
@@ -2465,9 +2704,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         createdAt: Date.now(),
         layoutOrigin: layoutBounds
           ? {
-              x: layoutBounds.x,
-              y: layoutBounds.y,
-            }
+            x: layoutBounds.x,
+            y: layoutBounds.y,
+          }
           : undefined,
       };
 
@@ -2683,9 +2922,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         {
           anchor: currentBounds
             ? {
-                x: currentBounds.x,
-                y: currentBounds.y,
-              }
+              x: currentBounds.x,
+              y: currentBounds.y,
+            }
             : group.layoutOrigin,
         },
       );
@@ -2741,9 +2980,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           preferredOrderNodeIds: group.gridLayoutOrder,
           anchor: currentBounds
             ? {
-                x: currentBounds.x,
-                y: currentBounds.y,
-              }
+              x: currentBounds.x,
+              y: currentBounds.y,
+            }
             : group.layoutOrigin,
         },
       );
@@ -3014,7 +3253,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         model,
         platform,
         prompt,
-        image_urls: imageUrls,
+        image_urls: rawImageUrls = [],
         size,
         resolution,
         promptDraft,
@@ -3027,12 +3266,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         size,
         resolution,
       });
+      const imageUrls = Array.isArray(rawImageUrls) ? rawImageUrls : [];
       const originalModel = payload.originalModel ?? payload.model;
       const adobeImageModel = resolveAdobeImageModel({
         model: originalModel,
         size,
         resolution,
       });
+      const ximuImageModel = resolveXimuImageModel(originalModel);
 
       // 更新节点状态为排队中
       set((state) => ({
@@ -3156,6 +3397,136 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             } catch (saveError) {
               console.error(
                 "[startGeminiPro2Generation] 保存 Adobe 图片到本地失败:",
+                saveError,
+              );
+            }
+          }
+
+          set((state) => ({
+            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+              const existingData = data.result?.data ?? [];
+              const mergedData = appendMediaSequences(existingData, [
+                resultItem,
+              ]);
+              return {
+                ...data,
+                status: GenerationStatus.COMPLETED,
+                progress: 100,
+                result: {
+                  type: "image",
+                  data: mergedData,
+                },
+                error: undefined,
+              };
+            }),
+          }));
+          saveCurrentCanvasToHistory();
+          if (useChatSettingsStore.getState().autoSaveEnabled) {
+            get().saveGraph();
+          }
+          await deductVipScoreAfterGeneration({
+            scene: "image",
+            nodeId,
+            model: originalModel,
+            requiredPoints: payload.requiredPoints,
+          });
+          return;
+        }
+
+        if (ximuImageModel) {
+          const ximuCardCode = useChatSettingsStore
+            .getState()
+            .ximuCardCode.trim();
+          if (!ximuCardCode) {
+            throw new Error("请先在模型管理的西牧渠道填写卡密");
+          }
+
+          set((state) => ({
+            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+              ...data,
+              status: GenerationStatus.IN_PROGRESS,
+              progress: 0,
+            })),
+          }));
+
+          const ximuReferenceUrls = await normalizeXimuReferenceUrls(imageUrls);
+          const request =
+            originalModel === XIMU_GPT_IMAGE2_MODEL
+              ? buildXimuGptImageRequest({
+                  cardCode: ximuCardCode,
+                  prompt,
+                  aspectRatio: resolveXimuGptAspectRatio({ size, resolution }),
+                  urls: ximuReferenceUrls,
+                })
+              : buildXimuNanoBananaRequest({
+                  cardCode: ximuCardCode,
+                  prompt,
+                  aspectRatio: resolveXimuNanoBananaProAspectRatio(size),
+                  imageSize: resolveXimuImageSize(resolution),
+                  urls: ximuReferenceUrls,
+                });
+
+          let submitResponse;
+          try {
+            submitResponse =
+              originalModel === XIMU_GPT_IMAGE2_MODEL
+                ? await createXimuGptImageGeneration(request as any)
+                : await createXimuNanoBananaGeneration(request as any);
+          } catch (submitError) {
+            throw new Error(
+              getXimuRequestErrorText(submitError, "西牧提交生图失败"),
+            );
+          }
+
+          const taskId = extractXimuTaskId(submitResponse);
+          if (!taskId) {
+            throw new Error("西牧渠道未返回任务 ID");
+          }
+
+          let responseUrl: string;
+          try {
+            responseUrl = await waitForXimuImageResult(taskId);
+          } catch (pollError) {
+            throw new Error(
+              getXimuRequestErrorText(pollError, "西牧查询生图结果失败"),
+            );
+          }
+          const ossUrl = await mirrorGeneratedImageUrlToOss(responseUrl);
+          const projectId = get().projectId;
+          let resultItem: {
+            url: string;
+            remoteUrl: string;
+            originalUrl?: string;
+            localName?: string;
+            localPath?: string;
+          } = {
+            url: ossUrl,
+            remoteUrl: ossUrl,
+            ...(ossUrl === responseUrl ? {} : { originalUrl: responseUrl }),
+          };
+
+          if (projectId) {
+            try {
+              const fileName = await saveGeneratedImageToLocal(
+                projectId,
+                ossUrl,
+                extractExtensionFromUrl(responseUrl, "png"),
+              );
+
+              if (fileName) {
+                resultItem = {
+                  ...resultItem,
+                  localName: fileName,
+                  localPath: getLocalFilePath(
+                    projectId,
+                    "generate_image",
+                    fileName,
+                  ),
+                };
+              }
+            } catch (saveError) {
+              console.error(
+                "[startGeminiPro2Generation] 保存西牧图片到本地失败:",
                 saveError,
               );
             }
@@ -3351,7 +3722,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         (sourceModel === NANO_BANANA_LOCAL_MODEL &&
           sourcePlatform === NANO_BANANA_LOCAL_PLATFORM) ||
         sourceModel === ADOBE_GPT_IMAGE2_MODEL ||
-        sourceModel === ADOBE_NANO_BANANA_PRO_MODEL;
+        sourceModel === ADOBE_NANO_BANANA_PRO_MODEL ||
+        sourceModel === XIMU_GPT_IMAGE2_MODEL ||
+        sourceModel === XIMU_NANO_BANANA_PRO_MODEL;
       const sourceImageUrl = sourceData.result?.data?.[0]?.url;
 
       const totalCells = gridSize * gridSize;
@@ -4255,17 +4628,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const nextGroups =
           hasFinalPositionChange || hasAddOrRemove
             ? normalizeCanvasGroups(state.groups, nextNodes).map((group) => {
-                const bounds = getGroupBounds(nextNodes, group.nodeIds, 24);
-                return {
-                  ...group,
-                  layoutOrigin: bounds
-                    ? {
-                        x: bounds.x,
-                        y: bounds.y,
-                      }
-                    : group.layoutOrigin,
-                };
-              })
+              const bounds = getGroupBounds(nextNodes, group.nodeIds, 24);
+              return {
+                ...group,
+                layoutOrigin: bounds
+                  ? {
+                    x: bounds.x,
+                    y: bounds.y,
+                  }
+                  : group.layoutOrigin,
+              };
+            })
             : state.groups;
         // 计算选中节点数量，避免在 ImageNode 等组件中 O(n²) 遍历
         const selectedCount = nextNodes.filter((n) => n.selected).length;

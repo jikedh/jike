@@ -14,6 +14,7 @@ export type ProjectMeta = {
   updatedAt: number;
   coverUrl?: string;
   coverLocalPath?: string;
+  coverSource?: "manual" | "auto";
   description?: string;
   type: "video" | "script";
 };
@@ -781,26 +782,16 @@ export const saveGeneratedVideoToLocal = async (
   return result.success ? fileName : null;
 };
 
-const arrayBufferToDataUrl = (buffer: ArrayBuffer, extension: string) => {
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-
-  const base64 = btoa(binary);
-  return `data:image/${extension};base64,${base64}`;
-};
-
 const persistProjectCoverMeta = async (
   projectId: string,
   coverLocalPath: string,
-  coverUrl: string,
+  coverUrl?: string,
+  coverSource: "manual" | "auto" = "manual",
 ) => {
   updateProject(projectId, {
     coverLocalPath,
     coverUrl,
+    coverSource,
   });
 
   const storageKey = getCanvasDataKey(projectId);
@@ -828,6 +819,7 @@ const persistProjectCoverMeta = async (
       savedAt: Date.now(),
       coverLocalPath,
       coverUrl,
+      coverSource,
     });
   }
 };
@@ -852,7 +844,8 @@ export const saveCoverImageToLocal = async (
       await persistProjectCoverMeta(
         projectId,
         `${project.name}/cover.${ext}`,
-        imageData,
+        undefined,
+        "manual",
       );
       return `cover.${ext}`;
     }
@@ -870,11 +863,42 @@ export const saveCoverImageToLocal = async (
     await persistProjectCoverMeta(
       projectId,
       `${project.name}/cover.${extension}`,
-      arrayBufferToDataUrl(imageData, extension),
+      undefined,
+      "manual",
     );
 
     return `cover.${extension}`;
   }
+};
+
+export const saveAutoCoverImageToLocal = async (
+  projectId: string,
+  imageData: ArrayBuffer,
+): Promise<string | null> => {
+  const project = getProjectById(projectId);
+  if (!project || project.coverSource === "manual") {
+    return null;
+  }
+
+  if (!localStorageService.isAvailable()) return null;
+
+  const result = await localStorageService.saveCoverImage(
+    project.name,
+    imageData,
+    "png",
+  );
+  if (!result.success) {
+    return null;
+  }
+
+  await persistProjectCoverMeta(
+    projectId,
+    `${project.name}/cover.png`,
+    undefined,
+    "auto",
+  );
+
+  return "cover.png";
 };
 
 export const setProjectCoverFromMediaRef = async (
@@ -975,4 +999,39 @@ export const getCoverImageUrl = (projectId: string): string | null => {
   if (!project) return null;
 
   return project.coverUrl || null;
+};
+
+const getImageMimeType = (relativePath: string): string => {
+  const extension = relativePath.split(".").pop()?.toLowerCase();
+
+  switch (extension) {
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "webp":
+      return "image/webp";
+    case "gif":
+      return "image/gif";
+    case "png":
+    default:
+      return "image/png";
+  }
+};
+
+export const loadProjectCoverObjectUrl = async (
+  project: ProjectMeta,
+): Promise<string | null> => {
+  if (!project.coverLocalPath) {
+    return project.coverUrl || null;
+  }
+
+  const localCover = await readMediaFromLocal(project.coverLocalPath);
+  if (!localCover) {
+    return project.coverUrl || null;
+  }
+
+  const blob = new Blob([localCover], {
+    type: getImageMimeType(project.coverLocalPath),
+  });
+  return URL.createObjectURL(blob);
 };

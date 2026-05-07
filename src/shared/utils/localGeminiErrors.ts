@@ -7,6 +7,7 @@ const LOCAL_GEMINI_FATAL_ERROR_PATTERNS = [
   /\b503\b/i,
   /\bUNAVAILABLE\b/i,
   /Adobe2API exited with code/i,
+  /请先在模型管理的西牧渠道填写卡密/i,
 ];
 
 const LOCAL_GEMINI_FALLBACK_PATTERNS = [

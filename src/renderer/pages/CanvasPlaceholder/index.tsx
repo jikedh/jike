@@ -23,8 +23,8 @@ import {
   getProjectListAsync,
   deleteProject,
   exportProjectDraft,
-  getCoverImageUrl,
   importProjectDraft,
+  loadProjectCoverObjectUrl,
   type ProjectMeta,
 } from "service/projectStorage";
 import { toast } from "sonner";
@@ -44,6 +44,9 @@ export default function CanvasPlaceholderPage() {
   const [exportingProjectId, setExportingProjectId] = useState<string | null>(
     null,
   );
+  const [projectCoverUrls, setProjectCoverUrls] = useState<
+    Record<string, string>
+  >({});
 
   const refreshProjects = async () => {
     const list = await getProjectListAsync();
@@ -62,9 +65,42 @@ export default function CanvasPlaceholderPage() {
     refreshProjects();
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+    const objectUrls: string[] = [];
+
+    const loadCovers = async () => {
+      const coverEntries = await Promise.all(
+        projects.map(async (project) => {
+          const coverUrl = await loadProjectCoverObjectUrl(project);
+          if (coverUrl?.startsWith("blob:")) {
+            objectUrls.push(coverUrl);
+          }
+          return [project.id, coverUrl] as const;
+        }),
+      );
+
+      if (!isMounted) {
+        objectUrls.forEach((url) => URL.revokeObjectURL(url));
+        return;
+      }
+
+      setProjectCoverUrls(
+        Object.fromEntries(coverEntries.filter(([, url]) => Boolean(url))),
+      );
+    };
+
+    loadCovers();
+
+    return () => {
+      isMounted = false;
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [projects]);
+
   // 处理项目卡片点击
-  const handleProjectClick = (projectId: string) => {
-    navigate(`/canvas/${projectId}`);
+  const handleProjectClick = (project: ProjectMeta) => {
+    navigate(`/canvas/${project.id}`);
   };
 
   // 打开创建项目弹窗
@@ -173,7 +209,7 @@ export default function CanvasPlaceholderPage() {
       <header className="h-16 border-b border-white/5 flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center">
           <SquareDashedMousePointer className="w-5 h-5 mr-3 text-[#B43FEB]" />
-          <h1 className="text-lg font-medium">无限画布项目管理</h1>
+          <h1 className="text-lg font-medium">项目管理</h1>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -201,9 +237,9 @@ export default function CanvasPlaceholderPage() {
       {/* Content */}
       <div className="flex-1 p-8 overflow-y-auto">
         <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-2">我的画布项目</h2>
+          <h2 className="text-xl font-semibold mb-2">我的项目</h2>
           <p className="text-sm text-white/50">
-            管理和编辑您的节点工作流，点击播放按钮可预览生成结果。
+            管理和编辑您的项目，点击可进入项目。
           </p>
         </div>
 
@@ -223,14 +259,14 @@ export default function CanvasPlaceholderPage() {
           {projects.map((project) => (
             <div
               key={project.id}
-              onClick={() => handleProjectClick(project.id)}
+              onClick={() => handleProjectClick(project)}
               className="bg-[#121214] border border-white/5 rounded-xl overflow-hidden group hover:border-[#B43FEB]/40 hover:shadow-[0_0_30px_rgba(180,63,235,0.15)] transition-all duration-300 cursor-pointer"
             >
               {/* Thumbnail */}
               <div className="relative aspect-video overflow-hidden bg-white/5">
                 {(() => {
-                  const localCoverUrl = getCoverImageUrl(project.id);
-                  const coverSrc = localCoverUrl || project.coverUrl;
+                  const coverSrc =
+                    projectCoverUrls[project.id] || project.coverUrl;
 
                   return coverSrc ? (
                     <img
@@ -248,7 +284,10 @@ export default function CanvasPlaceholderPage() {
                 {/* Overlay actions */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
                   <button
-                    onClick={() => handleProjectClick(project.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleProjectClick(project);
+                    }}
                     className="w-10 h-10 rounded-full bg-[#B43FEB] text-white flex items-center justify-center hover:bg-[#9d35ce] transition-colors shadow-lg cursor-pointer"
                   >
                     <Play className="w-4 h-4 ml-0.5" fill="currentColor" />
@@ -274,7 +313,7 @@ export default function CanvasPlaceholderPage() {
                 {/* Type tag */}
                 <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded text-[10px] font-medium text-[#B43FEB] border border-white/10 flex items-center gap-1">
                   <div className="w-1.5 h-1.5 rounded-full bg-[#B43FEB]"></div>
-                  {project.type === "video" ? "视频创作" : "剧本创作"}
+                  画布工程
                 </div>
               </div>
 

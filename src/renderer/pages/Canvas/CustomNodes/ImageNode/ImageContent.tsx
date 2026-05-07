@@ -44,9 +44,10 @@ export const ImageContent = memo(
     const progress = data.progress ?? 0;
     const error = data.error;
     const isUpload = data.isUpload ?? false;
+    const hasImages = images.length > 0;
 
     // 错误状态
-    if (status === GenerationStatus.FAILED) {
+    if (status === GenerationStatus.FAILED && !hasImages) {
       const displayMessage =
         error?.detail ||
         error?.serverMessage ||
@@ -104,7 +105,7 @@ export const ImageContent = memo(
     }
 
     // 已完成状态
-    if (images.length > 0) {
+    if (hasImages) {
       return (
         <CollapsibleImageGallery
           images={images}

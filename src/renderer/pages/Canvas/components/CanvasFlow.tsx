@@ -26,6 +26,7 @@ import {
 import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { getProjectById, saveAutoCoverImageToLocal } from "service/projectStorage";
 import { GenerationStatus } from "shared/constants/enum";
 import type { AllNodeType, EdgeType } from "shared/types/flow";
 import type { CanvasGroup } from "shared/types/zustand/canvas-flow";
@@ -1193,6 +1194,8 @@ export const CanvasFlow = ({
   const viewportStateRef = useRef(reactFlowInstance.getViewport());
   const pendingViewportRef = useRef(reactFlowInstance.getViewport());
   const viewportRafRef = useRef<number | null>(null);
+  const [isViewportInteracting, setIsViewportInteracting] = useState(false);
+  const viewportInteractionEndTimerRef = useRef<number | null>(null);
   const latestStoreNodesRef = useRef(useCanvasFlowStore.getState().nodes);
   const latestStoreEdgesRef = useRef(useCanvasFlowStore.getState().edges);
   // 用 ref 而非 state 追踪拖动状态，避免引发额外渲染
@@ -1896,8 +1899,52 @@ export const CanvasFlow = ({
   }, [compactNodeChanges, storeOnNodesChange]);
 
   // 处理返回按钮点击：返回主页前强制保存当前画布项目。
-  const handleBackClick = useCallback(() => {
+  const saveAutoCoverFromCurrentViewport = useCallback(async () => {
+    if (!projectId || typeof window === "undefined" || !window.debug) {
+      return;
+    }
+
+    const project = getProjectById(projectId);
+    if (!project || project.coverSource === "manual") {
+      return;
+    }
+
+    const flowElement = document.querySelector(".react-flow");
+    if (!(flowElement instanceof HTMLElement)) {
+      return;
+    }
+
+    const rect = flowElement.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      return;
+    }
+
+    try {
+      const captureResult = await window.debug.capturePage({
+        x: rect.left,
+        y: rect.top,
+        width: rect.width,
+        height: rect.height,
+      });
+
+      if (!captureResult.success || !captureResult.data) {
+        return;
+      }
+
+      const bytes = new Uint8Array(captureResult.data);
+      const buffer = bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      );
+      await saveAutoCoverImageToLocal(projectId, buffer);
+    } catch (error) {
+      console.warn("Failed to save canvas auto cover:", error);
+    }
+  }, [projectId]);
+
+  const handleBackClick = useCallback(async () => {
     flushAndSaveCanvas();
+    await saveAutoCoverFromCurrentViewport();
     const count = getGeneratingTasksCount();
     if (count > 0) {
       setGeneratingCount(count);
@@ -1905,17 +1952,28 @@ export const CanvasFlow = ({
     } else {
       navigate("/home");
     }
-  }, [flushAndSaveCanvas, getGeneratingTasksCount, navigate]);
+  }, [
+    flushAndSaveCanvas,
+    getGeneratingTasksCount,
+    navigate,
+    saveAutoCoverFromCurrentViewport,
+  ]);
 
   // 确认退出时也再保存一次，确保取消任务后的状态被写入项目。
   const handleConfirmExit = useCallback(() => {
     cancelAllGeneratingTasks();
     setShowExitDialog(false);
-    window.setTimeout(() => {
+    window.setTimeout(async () => {
       flushAndSaveCanvas();
+      await saveAutoCoverFromCurrentViewport();
       navigate("/home");
     }, 0);
-  }, [cancelAllGeneratingTasks, flushAndSaveCanvas, navigate]);
+  }, [
+    cancelAllGeneratingTasks,
+    flushAndSaveCanvas,
+    navigate,
+    saveAutoCoverFromCurrentViewport,
+  ]);
 
   const handleCancelExit = useCallback(() => {
     setShowExitDialog(false);
@@ -3206,6 +3264,23 @@ export const CanvasFlow = ({
         ? "selection"
         : null;
 
+  const batchToolbarScreenPosition = useMemo(() => {
+    const flowPosition =
+      selectedGroupToolbarFlowPosition ?? selectionToolbarFlowPosition;
+    if (!flowPosition) {
+      return null;
+    }
+
+    return {
+      x: flowPosition.x * viewportState.zoom + viewportState.x,
+      y: flowPosition.y * viewportState.zoom + viewportState.y,
+    };
+  }, [
+    selectedGroupToolbarFlowPosition,
+    selectionToolbarFlowPosition,
+    viewportState,
+  ]);
+
   const handleGroupLabelPointerDown = useCallback(
     (groupId: string) => {
       if (annotationWorkspace.open) {
@@ -3348,6 +3423,31 @@ export const CanvasFlow = ({
     [flushViewportState],
   );
 
+  const clearViewportInteractionEndTimer = useCallback(() => {
+    if (viewportInteractionEndTimerRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(viewportInteractionEndTimerRef.current);
+    viewportInteractionEndTimerRef.current = null;
+  }, []);
+
+  const markViewportInteracting = useCallback(() => {
+    clearViewportInteractionEndTimer();
+    setIsViewportInteracting((current) => (current ? current : true));
+  }, [clearViewportInteractionEndTimer]);
+
+  const finishViewportInteracting = useCallback(
+    (delay = 180) => {
+      clearViewportInteractionEndTimer();
+      viewportInteractionEndTimerRef.current = window.setTimeout(() => {
+        viewportInteractionEndTimerRef.current = null;
+        setIsViewportInteracting(false);
+      }, delay);
+    },
+    [clearViewportInteractionEndTimer],
+  );
+
   const handleViewportMove = useCallback(
     (_: unknown, viewport: unknown) => {
       // 使用 unknown 避免在高频事件中引入额外类型噪音。
@@ -3356,6 +3456,8 @@ export const CanvasFlow = ({
         y: number;
         zoom: number;
       };
+      markViewportInteracting();
+      finishViewportInteracting();
 
       if (!shouldTrackViewport) {
         return;
@@ -3363,7 +3465,12 @@ export const CanvasFlow = ({
 
       scheduleViewportState(viewport as { x: number; y: number; zoom: number });
     },
-    [scheduleViewportState, shouldTrackViewport],
+    [
+      finishViewportInteracting,
+      markViewportInteracting,
+      scheduleViewportState,
+      shouldTrackViewport,
+    ],
   );
 
   const syncViewportStateNow = useCallback(() => {
@@ -3380,6 +3487,8 @@ export const CanvasFlow = ({
 
   const handleViewportMoveStart = useCallback(
     (event?: unknown) => {
+      markViewportInteracting();
+
       const nativeEvent = event as
         | MouseEvent
         | TouchEvent
@@ -3414,7 +3523,7 @@ export const CanvasFlow = ({
         startedByReactFlow: true,
       };
     },
-    [],
+    [markViewportInteracting],
   );
 
   const handleViewportMoveEnd = useCallback(
@@ -3442,8 +3551,13 @@ export const CanvasFlow = ({
 
       viewportPanStateRef.current = createIdleViewportPanState();
       syncViewportStateNow();
+      finishViewportInteracting(120);
     },
-    [scheduleContextMenuSuppressionRelease, syncViewportStateNow],
+    [
+      finishViewportInteracting,
+      scheduleContextMenuSuppressionRelease,
+      syncViewportStateNow,
+    ],
   );
 
   // 当开始需要追踪 viewport 时，先同步一次最新值，避免出现位置跳变。
@@ -3463,6 +3577,10 @@ export const CanvasFlow = ({
     return () => {
       if (viewportRafRef.current !== null) {
         window.cancelAnimationFrame(viewportRafRef.current);
+      }
+      if (viewportInteractionEndTimerRef.current !== null) {
+        window.clearTimeout(viewportInteractionEndTimerRef.current);
+        viewportInteractionEndTimerRef.current = null;
       }
     };
   }, []);
@@ -4661,38 +4779,6 @@ export const CanvasFlow = ({
                 />
               ) : null}
 
-              {batchToolbarMode ? (
-                <CanvasBatchToolbar
-                  mode={batchToolbarMode}
-                  selectedCount={multiSelectedCount}
-                  groupCount={activeBatchGroup?.nodeIds.length ?? 0}
-                  position={
-                    selectedGroupToolbarFlowPosition ??
-                    selectionToolbarFlowPosition
-                  }
-                  onCreateGroup={() => {
-                    createGroup(multiSelectedNodeIds);
-                  }}
-                  onLayoutHorizontal={() => {
-                    if (!activeBatchGroup) {
-                      return;
-                    }
-                    layoutGroupHorizontal(activeBatchGroup.id);
-                  }}
-                  onGridLayout={() => {
-                    if (!activeBatchGroup) {
-                      return;
-                    }
-                    layoutGroupGrid(activeBatchGroup.id);
-                  }}
-                  onUngroup={() => {
-                    if (!activeBatchGroup) {
-                      return;
-                    }
-                    ungroup(activeBatchGroup.id);
-                  }}
-                />
-              ) : null}
             </ViewportPortal>
 
             {gridVisible && (
@@ -4725,6 +4811,53 @@ export const CanvasFlow = ({
               x={quickCreateScreenPosition.x}
               y={quickCreateScreenPosition.y}
               onPointerDown={handleQuickAddPointerDown}
+            />
+          ) : null}
+
+          {batchToolbarMode &&
+          batchToolbarScreenPosition &&
+          !isViewportInteracting ? (
+            <CanvasBatchToolbar
+              mode={batchToolbarMode}
+              selectedCount={multiSelectedCount}
+              groupCount={activeBatchGroup?.nodeIds.length ?? 0}
+              position={batchToolbarScreenPosition}
+              onCreateGroup={() => {
+                const reactFlowSelectedNodeIds = (
+                  reactFlowInstance.getNodes() as AllNodeType[]
+                )
+                  .filter((node) => node.selected)
+                  .map((node) => node.id);
+                const storeSelectedNodeIds = useCanvasFlowStore
+                  .getState()
+                  .nodes.filter((node) => node.selected)
+                  .map((node) => node.id);
+                const selectedNodeIds =
+                  reactFlowSelectedNodeIds.length >= 2
+                    ? reactFlowSelectedNodeIds
+                    : storeSelectedNodeIds.length >= 2
+                    ? storeSelectedNodeIds
+                    : multiSelectedNodeIds;
+                createGroup(selectedNodeIds);
+              }}
+              onLayoutHorizontal={() => {
+                if (!activeBatchGroup) {
+                  return;
+                }
+                layoutGroupHorizontal(activeBatchGroup.id);
+              }}
+              onGridLayout={() => {
+                if (!activeBatchGroup) {
+                  return;
+                }
+                layoutGroupGrid(activeBatchGroup.id);
+              }}
+              onUngroup={() => {
+                if (!activeBatchGroup) {
+                  return;
+                }
+                ungroup(activeBatchGroup.id);
+              }}
             />
           ) : null}
 

@@ -137,6 +137,9 @@ export const NANO_BANANA_LOCAL_PLATFORM = "google_local_gemini";
 export const ADOBE2API_PLATFORM = "adobe2api";
 export const ADOBE_GPT_IMAGE2_MODEL = "gpt-image-2-adobe";
 export const ADOBE_NANO_BANANA_PRO_MODEL = "nano-banana-pro-adobe";
+export const XIMU_PLATFORM = "ximu";
+export const XIMU_GPT_IMAGE2_MODEL = "gpt-image-2-ximu";
+export const XIMU_NANO_BANANA_PRO_MODEL = "nano-banana-pro-ximu";
 
 export const IMAGE_MODELS = [
   // { id: 1, name: 'doubao-seedream-4-0', model: 'doubao-seedream-4-0', platform: 'Seedream' },
@@ -178,6 +181,18 @@ export const IMAGE_MODELS = [
     model: ADOBE_NANO_BANANA_PRO_MODEL,
     platform: ADOBE2API_PLATFORM,
   },
+  {
+    id: 11,
+    name: "GPT-Image-2（西牧渠道）",
+    model: XIMU_GPT_IMAGE2_MODEL,
+    platform: XIMU_PLATFORM,
+  },
+  {
+    id: 12,
+    name: "Nano Banana Pro（西牧渠道）",
+    model: XIMU_NANO_BANANA_PRO_MODEL,
+    platform: XIMU_PLATFORM,
+  },
   // {
   //   id: 10,
   //   name: "谷歌 Gemini 3 Pro 渠道二",
@@ -216,6 +231,8 @@ export const GENERATION_SCORE_COST_MAP: Record<string, number> = {
   "midjourney-niji7": 30,
   [ADOBE_GPT_IMAGE2_MODEL]: 0,
   [ADOBE_NANO_BANANA_PRO_MODEL]: 0,
+  [XIMU_GPT_IMAGE2_MODEL]: 0,
+  [XIMU_NANO_BANANA_PRO_MODEL]: 0,
   // 视频模型
   "doubao-seedance-2.0": 30,
   "wan2.7-i2v": 30,

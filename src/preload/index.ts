@@ -7,6 +7,12 @@ export type DebugApi = {
   toggleDevTools: () => Promise<{ success: boolean; error?: string }>;
   isDev: () => Promise<boolean>;
   getAppVersion: () => Promise<string>;
+  capturePage: (rect?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }) => Promise<{ success: boolean; data?: Uint8Array; error?: string }>;
 };
 
 export type DownloadApi = {
@@ -109,6 +115,7 @@ const debugApi: DebugApi = {
   // 检查是否为开发环境
   isDev: () => ipcRenderer.invoke("debug:isDev"),
   getAppVersion: () => ipcRenderer.invoke("debug:getAppVersion"),
+  capturePage: (rect) => ipcRenderer.invoke("debug:capturePage", rect),
 };
 
 const downloadApi: DownloadApi = {

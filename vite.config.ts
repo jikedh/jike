@@ -37,45 +37,11 @@ export default defineConfig({
     host: "0.0.0.0",
     // 开发环境代理配置（解决跨域问题）
     proxy: {
-      // AI 服务代理
-      "/v1": {
-        target: "https://toapis.com",
-        changeOrigin: true,
-        // 超时设置（用于长时间运行的请求）
-        timeout: 300000,
-      },
-      // ZeakAI 服务代理
-      "/mj": {
-        target: "https://zeakai-api.api4midjourney.com",
-        changeOrigin: true,
-        // 超时设置
-        timeout: 300000,
-      },
-      // 快手 AI 服务代理
-      "/lz": {
-        target: "https://aiopenapi.kuaizi.cn/ai-open-platform-api/v1",
-        changeOrigin: true,
-        // 超时设置（用于长时间运行的请求）
-        timeout: 300000,
-      },
       // Jikeing 后端服务代理 - 统一使用云端
       "/api": {
         target: "https://api.jikeing.com",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
-        timeout: 300000,
-      },
-      // Yunwu AI 服务代理
-      "/yunwu": {
-        target: "https://yunwu.ai",
-        changeOrigin: true,
-        timeout: 300000,
-      },
-      // 阿里云百炼 Dashscope API 代理（解决 CORS 问题）
-      "/dashscope-api": {
-        target: "https://dashscope.aliyuncs.com",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/dashscope-api/, ""),
         timeout: 300000,
       },
     },

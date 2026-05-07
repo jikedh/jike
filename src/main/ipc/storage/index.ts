@@ -83,6 +83,54 @@ const upsertProjectMeta = (basePath: string, projectName: string) => {
   return meta;
 };
 
+const buildCoverFallback = (
+  basePath: string,
+  projectName: string,
+  canvasData?: any,
+  metaData?: any,
+) => {
+  const projectDir = join(basePath, projectName);
+  const coverFile = ["png", "jpeg", "jpg", "webp", "gif"].find((extension) =>
+    existsSync(join(projectDir, `cover.${extension}`)),
+  );
+
+  const coverLocalPath =
+    canvasData?.coverLocalPath ||
+    metaData?.coverLocalPath ||
+    (coverFile ? `${projectName}/cover.${coverFile}` : undefined);
+
+  return {
+    coverUrl: canvasData?.coverUrl || metaData?.coverUrl,
+    coverLocalPath,
+  };
+};
+
+const mergeProjectCoverMeta = (
+  basePath: string,
+  projectName: string,
+  data: any,
+) => {
+  const canvasPath = join(basePath, projectName, CANVAS_FILE);
+  const metaPath = join(basePath, projectName, PROJECT_META_FILE);
+  const existingCanvas = safeReadJson(canvasPath);
+  const existingMeta = safeReadJson(metaPath);
+  const index = readIndex(basePath);
+  const indexedMeta = index.projects?.[projectName];
+
+  const fallback = buildCoverFallback(
+    basePath,
+    projectName,
+    existingCanvas,
+    existingMeta || indexedMeta,
+  );
+
+  return {
+    ...data,
+    coverUrl: data?.coverUrl || fallback.coverUrl,
+    coverLocalPath: data?.coverLocalPath || fallback.coverLocalPath,
+  };
+};
+
 const updateProjectUpdatedAt = (basePath: string, projectName: string) => {
   const index = readIndex(basePath);
   if (!index.projects[projectName]) {
@@ -111,7 +159,9 @@ const rewriteRelativePathRecursively = (
 
     for (const [key, item] of Object.entries(value)) {
       if (
-        (key === "relativePath" || key === "localPath") &&
+        (key === "relativePath" ||
+          key === "localPath" ||
+          key === "coverLocalPath") &&
         typeof item === "string" &&
         item.startsWith(oldPrefix)
       ) {
@@ -248,17 +298,37 @@ export function registerStorageHandlers(): void {
           if (!existsSync(metaPath) && !existsSync(canvasPath)) continue;
 
           const meta = safeReadJson(metaPath);
+          const canvas = safeReadJson(canvasPath);
           const alreadyInIndex = (index.projects || {})[entry.name];
+          const coverFallback = buildCoverFallback(
+            basePath,
+            entry.name,
+            canvas,
+            meta || alreadyInIndex,
+          );
 
           if (!alreadyInIndex) {
-            const projectMeta = meta || {
+            const projectMeta = {
+              ...(meta || {}),
               name: entry.name,
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
+              createdAt: meta?.createdAt || canvas?.savedAt || Date.now(),
+              updatedAt: meta?.updatedAt || canvas?.savedAt || Date.now(),
+              ...coverFallback,
             };
             diskProjects.push(projectMeta);
 
             index.projects[entry.name] = projectMeta;
+          } else if (
+            (!alreadyInIndex.coverUrl && coverFallback.coverUrl) ||
+            (!alreadyInIndex.coverLocalPath && coverFallback.coverLocalPath)
+          ) {
+            index.projects[entry.name] = {
+              ...alreadyInIndex,
+              coverUrl: alreadyInIndex.coverUrl || coverFallback.coverUrl,
+              coverLocalPath:
+                alreadyInIndex.coverLocalPath || coverFallback.coverLocalPath,
+            };
+            indexChanged = true;
           }
         }
 
@@ -269,7 +339,11 @@ export function registerStorageHandlers(): void {
         console.error("[storage:listProjects] scan disk error:", e);
       }
 
-      const allProjects = [...projects, ...diskProjects].reduce(
+      const latestProjects = Object.values(index.projects || {}).sort(
+        (a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0),
+      );
+
+      const allProjects = [...latestProjects, ...diskProjects].reduce(
         (acc: any[], p: any) => {
           if (!acc.find((x) => x.name === p.name)) {
             acc.push(p);
@@ -298,12 +372,40 @@ export function registerStorageHandlers(): void {
           return { success: false, error: "Missing basePath or projectName" };
         }
 
-        upsertProjectMeta(basePath, projectName);
+        const dataWithCover = mergeProjectCoverMeta(
+          basePath,
+          projectName,
+          data,
+        );
+        const metaPatch = {
+          coverUrl: dataWithCover.coverUrl,
+          coverLocalPath: dataWithCover.coverLocalPath,
+        };
 
         const canvasPath = join(basePath, projectName, CANVAS_FILE);
-        safeWriteJson(canvasPath, data);
+        safeWriteJson(canvasPath, dataWithCover);
 
         updateProjectUpdatedAt(basePath, projectName);
+        const index = readIndex(basePath);
+        if (index.projects[projectName]) {
+          index.projects[projectName] = {
+            ...index.projects[projectName],
+            ...metaPatch,
+            updatedAt: Date.now(),
+          };
+          writeIndex(basePath, index);
+        }
+
+        const metaPath = join(basePath, projectName, PROJECT_META_FILE);
+        const meta = safeReadJson(metaPath);
+        if (meta) {
+          safeWriteJson(metaPath, {
+            ...meta,
+            ...metaPatch,
+            updatedAt: Date.now(),
+          });
+        }
+
         return { success: true };
       } catch (error: any) {
         return { success: false, error: error.message };
@@ -735,24 +837,54 @@ export function registerStorageHandlers(): void {
       const now = Date.now();
       const canvasPath = join(destDir, CANVAS_FILE);
       const canvasData = safeReadJson(canvasPath);
+      const metaPath = join(destDir, PROJECT_META_FILE);
+      const sourceMeta = safeReadJson(metaPath) || {};
+
       if (canvasData) {
         const updatedCanvas = rewriteRelativePathRecursively(
           canvasData,
           srcProjectFolderName,
           importedProjectName,
         );
+        const updatedMeta = rewriteRelativePathRecursively(
+          sourceMeta,
+          srcProjectFolderName,
+          importedProjectName,
+        );
+        const coverFallback = buildCoverFallback(
+          basePath,
+          importedProjectName,
+          updatedCanvas,
+          updatedMeta,
+        );
         updatedCanvas.projectName = importedProjectName;
         updatedCanvas.savedAt = now;
+        updatedCanvas.coverUrl = updatedCanvas.coverUrl || coverFallback.coverUrl;
+        updatedCanvas.coverLocalPath =
+          updatedCanvas.coverLocalPath || coverFallback.coverLocalPath;
         safeWriteJson(canvasPath, updatedCanvas);
       }
 
-      const metaPath = join(destDir, PROJECT_META_FILE);
-      const sourceMeta = safeReadJson(metaPath) || {};
+      const updatedSourceMeta = rewriteRelativePathRecursively(
+        sourceMeta,
+        srcProjectFolderName,
+        importedProjectName,
+      );
+      const importedCanvasData = safeReadJson(canvasPath);
+      const coverFallback = buildCoverFallback(
+        basePath,
+        importedProjectName,
+        importedCanvasData,
+        updatedSourceMeta,
+      );
       const importedMeta = {
-        ...sourceMeta,
+        ...updatedSourceMeta,
         name: importedProjectName,
-        createdAt: sourceMeta.createdAt || now,
+        createdAt: updatedSourceMeta.createdAt || now,
         updatedAt: now,
+        coverUrl: updatedSourceMeta.coverUrl || coverFallback.coverUrl,
+        coverLocalPath:
+          updatedSourceMeta.coverLocalPath || coverFallback.coverLocalPath,
       };
       safeWriteJson(metaPath, importedMeta);
 
