@@ -15,6 +15,7 @@ import {
   updateSuggestionPosition,
 } from "shared/utils/utils";
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
+import { handlePromptEditorWheelCapture } from "../../shared/wheelEvents";
 import { VideoMentionList } from "../VideoMentionList";
 
 /**
@@ -543,7 +544,12 @@ export const VideoPromptEditor = forwardRef<
     };
   }, [editor]);
 
-  return <EditorContent editor={editor} />;
+  return (
+    <EditorContent
+      editor={editor}
+      onWheelCapture={handlePromptEditorWheelCapture}
+    />
+  );
 });
 
 VideoPromptEditor.displayName = "VideoPromptEditor";

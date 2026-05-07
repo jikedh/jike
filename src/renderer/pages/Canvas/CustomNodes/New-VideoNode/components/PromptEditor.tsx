@@ -15,6 +15,7 @@ import {
   updateSuggestionPosition,
 } from "shared/utils/utils";
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
+import { handlePromptEditorWheelCapture } from "../../shared/wheelEvents";
 import type { MentionItem } from "../constants/mockData";
 import { MentionList } from "./MentionList";
 
@@ -266,6 +267,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(
       <EditorContent
         editor={editor}
         className="min-h-20 max-h-40 overflow-y-auto"
+        onWheelCapture={handlePromptEditorWheelCapture}
       />
     );
   },
