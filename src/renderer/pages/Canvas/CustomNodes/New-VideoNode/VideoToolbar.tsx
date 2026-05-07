@@ -667,7 +667,7 @@ const VideoSubtitleRemovalPanel = ({
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
       <DialogContent
-        className="flex max-h-[92vh] w-auto max-w-[96vw] flex-col overflow-hidden border border-white/10 bg-[#121214] p-0 text-white"
+        className="nodrag nopan nowheel flex max-h-[92vh] w-auto max-w-[96vw] flex-col overflow-hidden border border-white/10 bg-[#121214] p-0 text-white"
         style={{ width: `${dialogWidth}px` }}
       >
         <DialogHeader className="shrink-0 border-b border-white/5 bg-[#18181b] px-5 py-4">

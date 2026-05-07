@@ -12,8 +12,8 @@ type VideoItem = {
   url: string; // 远程 OSS URL
   format?: string; // 视频格式
   localPath?: string; // 本地相对路径
-  localName?: string; // 本地文件�?
-  remoteUrl?: string; // 远程持久�?URL
+  localName?: string; // 本地文件名
+  remoteUrl?: string; // 远程持久化 URL
   pending?: boolean;
 };
 
@@ -122,11 +122,11 @@ const getStackCardStyle = (
 };
 
 /**
- * 可折叠视频集合卡�?
- * - collapsed：仅展示封面视频 + 右上角数量徽�?
- * - expanded�? 列网格展示全部视�?
- * - 点击展开态中的视频，可将其移动到首位作为新封�?
- * - 优先使用本地路径，如果不存在则使用远�?URL
+ * 可折叠视频集合卡片
+ * - collapsed：仅展示封面视频 + 右上角数量徽标
+ * - expanded：两列网格展示全部视频
+ * - 点击展开态中的视频，可将其移动到首位作为新封面
+ * - 优先使用本地路径，如果不存在则使用远程 URL
  * - 刷新按钮：重新上传视频到 OSS
  */
 export const CollapsibleVideoGallery = memo(
@@ -139,10 +139,10 @@ export const CollapsibleVideoGallery = memo(
   }: CollapsibleVideoGalleryProps) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-    // 记录加载失败索引，统一渲染占位（使�?ref 避免频繁 setState�?
+    // 记录加载失败索引，统一渲染占位（使用 ref 避免频繁 setState）
     const brokenIndexesRef = useRef<Set<number>>(new Set());
     const [, forceUpdate] = useState(0);
-    // 记录正在刷新的视频索�?
+    // 记录正在刷新的视频索引
     const refreshingIndexesRef = useRef<Set<number>>(new Set());
     const [, forceRefreshUpdate] = useState(0);
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -254,10 +254,10 @@ export const CollapsibleVideoGallery = memo(
             type: `video/${ext}`,
           });
 
-          // 上传�?OSS
+          // 上传到 OSS
           const ossResult = await uploadFileToOSS(file);
           if (!ossResult.url) {
-            throw new Error("上传�?OSS 失败");
+            throw new Error("上传到 OSS 失败");
           }
 
           // 更新节点数据

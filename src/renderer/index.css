@@ -547,11 +547,3 @@
 }
 
 /* 空格键按下时，禁用节点和 nodrag 元素的鼠标事件，允许画布平移 */
-.react-flow[data-space-pressed="true"] .react-flow__node,
-.react-flow[data-space-pressed="true"] .react-flow__selection,
-.react-flow[data-space-pressed="true"] .react-flow__nodesselection,
-.react-flow[data-space-pressed="true"] .react-flow__nodesselection-rect,
-.react-flow[data-space-pressed="true"] .nopan,
-.react-flow[data-space-pressed="true"] .nodrag {
-  pointer-events: none !important;
-}

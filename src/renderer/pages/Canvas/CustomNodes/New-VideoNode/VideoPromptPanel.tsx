@@ -22,6 +22,7 @@ import { useVideoReferenceActions } from "@/pages/Canvas/CustomNodes/VideoNode/h
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
+import { handlePromptEditorWheelCapture } from "../shared/wheelEvents";
 import {
   BottomParamsBar,
   type VideoGenerateRequest,
@@ -1184,7 +1185,10 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
             onReferenceHoverChange={handleReferenceHoverChange}
           />
 
-          <div className={PROMPT_PANEL_STYLES.textAreaWrap}>
+          <div
+            className={PROMPT_PANEL_STYLES.textAreaWrap}
+            onWheelCapture={handlePromptEditorWheelCapture}
+          >
             <VideoPromptEditor
               ref={editorRef}
               promptDraftHtml={promptDraftHtml}
