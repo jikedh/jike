@@ -21,6 +21,8 @@ import {
   ADOBE_NANO_BANANA_PRO_MODEL,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
+  XIMU_GPT_IMAGE2_MODEL,
+  XIMU_NANO_BANANA_PRO_MODEL,
 } from "shared/constants/ai-models";
 import type { ImageGenerationNode } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
@@ -403,10 +405,14 @@ export const ImageToolbar = memo(
         const isAdobeImageModel =
           config.model === ADOBE_GPT_IMAGE2_MODEL ||
           config.model === ADOBE_NANO_BANANA_PRO_MODEL;
+        const isXimuImageModel =
+          config.model === XIMU_GPT_IMAGE2_MODEL ||
+          config.model === XIMU_NANO_BANANA_PRO_MODEL;
         const isNanoBananaLocalModel =
           config.model === NANO_BANANA_LOCAL_MODEL &&
           config.platform === NANO_BANANA_LOCAL_PLATFORM;
-        const isLocalDirectModel = isAdobeImageModel || isNanoBananaLocalModel;
+        const isLocalDirectModel =
+          isAdobeImageModel || isXimuImageModel || isNanoBananaLocalModel;
         const backendModel = isNiji7Model ? "midjourney" : config.model;
         const size = config.size ?? data.size ?? "1:1";
         const resolution = config.resolution ?? data.resolution ?? "2K";

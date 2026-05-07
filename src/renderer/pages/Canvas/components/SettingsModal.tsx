@@ -10,6 +10,7 @@ import {
   IconUpload,
   IconX,
 } from "@tabler/icons-react";
+import { getXimuCardBalance } from "@/api/ai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   defaultPresets,
@@ -26,6 +27,7 @@ import {
 import type { Adobe2ApiState } from "shared/types/adobe2api";
 import { cn } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -98,6 +100,16 @@ const sectionPlaceholderMap = {
 
 const sectionIdSet = new Set(settingSections.map((item) => item.id));
 
+const normalizeXimuBalanceValue = (value: unknown): string | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  return null;
+};
+
 export const SettingsModal = ({
   open,
   onClose,
@@ -117,6 +129,7 @@ export const SettingsModal = ({
     snapToGrid,
     edgeAnimationEnabled,
     storagePath,
+    ximuCardCode,
     setDefaultModel,
     setDefaultPersonaId,
     setAutoSaveEnabled,
@@ -126,6 +139,7 @@ export const SettingsModal = ({
     setSnapToGrid,
     setEdgeAnimationEnabled,
     setStoragePath,
+    setXimuCardCode,
     resetToDefault,
   } = useChatSettingsStore();
   const { success, error } = useMessage();
@@ -158,6 +172,13 @@ export const SettingsModal = ({
     "start" | "stop" | "restart" | null
   >(null);
   const [adobeError, setAdobeError] = useState<string | null>(null);
+  const [activeModelChannel, setActiveModelChannel] = useState<
+    "adobe" | "ximu"
+  >("adobe");
+  const [ximuCardInput, setXimuCardInput] = useState(ximuCardCode);
+  const [ximuBalanceText, setXimuBalanceText] = useState<string | null>(null);
+  const [ximuBusy, setXimuBusy] = useState(false);
+  const [ximuError, setXimuError] = useState<string | null>(null);
 
   // 弹窗打开时从 localStorage 加载预设，首次无数据则写入默认预设
   useEffect(() => {
@@ -201,6 +222,45 @@ export const SettingsModal = ({
       window.clearInterval(timer);
     };
   }, [activeSection, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setXimuCardInput(ximuCardCode);
+  }, [open, ximuCardCode]);
+
+  const saveXimuCardCode = () => {
+    const nextCardCode = ximuCardInput.trim();
+    setXimuCardCode(nextCardCode);
+    setXimuError(null);
+    setXimuBalanceText(null);
+    success(nextCardCode ? "西牧卡密已保存" : "已清空西牧卡密");
+  };
+
+  const checkXimuBalance = async () => {
+    const cardCode = ximuCardInput.trim();
+    if (!cardCode) {
+      setXimuError("请先填写西牧卡密");
+      return;
+    }
+
+    try {
+      setXimuBusy(true);
+      setXimuError(null);
+      const response = await getXimuCardBalance(cardCode);
+      const payload = response?.data ?? response;
+      const balance = normalizeXimuBalanceValue(
+        (payload as any)?.balanceCredits,
+      );
+      setXimuBalanceText(
+        balance === null ? "余额读取成功，未返回余额" : `余额：${balance}元`,
+      );
+      setXimuCardCode(cardCode);
+    } catch (err: any) {
+      setXimuError(err?.message || "西牧卡密余额查询失败");
+    } finally {
+      setXimuBusy(false);
+    }
+  };
 
   const runAdobeAction = async (action: "start" | "stop" | "restart") => {
     try {
@@ -611,7 +671,84 @@ export const SettingsModal = ({
 
                   {activeSection === "local-gemini" && (
                     <section className="space-y-4">
-                      <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                      <div className="inline-flex rounded-xl border border-white/10 bg-black/30 p-1">
+                        {[
+                          { id: "adobe" as const, label: "adobe渠道" },
+                          { id: "ximu" as const, label: "西牧渠道" },
+                        ].map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className={cn(
+                              "rounded-lg px-4 py-2 text-sm transition-colors",
+                              activeModelChannel === item.id
+                                ? "bg-[#B43FEB]/20 text-[#E7B8FF]"
+                                : "text-white/55 hover:bg-white/5 hover:text-white/80",
+                            )}
+                            onClick={() => setActiveModelChannel(item.id)}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {activeModelChannel === "ximu" && (
+                        <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                          <div className="mb-3">
+                            <div className="text-sm font-medium text-white/80">
+                              西牧渠道卡密
+                            </div>
+                            <div className="mt-1 text-xs text-white/45">
+                              用于 GPT-Image-2 和 Nano Banana Pro（西牧渠道）生图。
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Input
+                              type="password"
+                              value={ximuCardInput}
+                              placeholder="XIMU-XXXXXX-XXXXXX-XXXXXX"
+                              className="h-9 min-w-[320px] flex-1 border-white/10 bg-black/40 text-white placeholder:text-white/25"
+                              onChange={(event) => {
+                                setXimuCardInput(event.target.value);
+                                setXimuError(null);
+                                setXimuBalanceText(null);
+                              }}
+                            />
+                            <Button
+                              size="sm"
+                              variant="blue"
+                              onClick={saveXimuCardCode}
+                              ignoreTitleCase
+                            >
+                              保存卡密
+                            </Button>
+                            <Button
+                              size="sm"
+                              loading={ximuBusy}
+                              onClick={() => void checkXimuBalance()}
+                              ignoreTitleCase
+                            >
+                              查询余额
+                            </Button>
+                          </div>
+
+                          {ximuBalanceText ? (
+                            <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+                              {ximuBalanceText}
+                            </div>
+                          ) : null}
+                          {ximuError ? (
+                            <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+                              {ximuError}
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+
+                      {activeModelChannel === "adobe" && (
+                        <>
+                          <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
                             <div className="text-sm font-medium text-white/80">
@@ -700,9 +837,9 @@ export const SettingsModal = ({
                             {adobeError || adobeState?.lastError}
                           </div>
                         ) : null}
-                      </div>
+                          </div>
 
-                      <div className="overflow-hidden rounded-xl border border-white/5 bg-white">
+                          <div className="overflow-hidden rounded-xl border border-white/5 bg-white">
                         {adobeState?.status === "running" ? (
                           <iframe
                             key={adobeState.loginUrl}
@@ -715,7 +852,9 @@ export const SettingsModal = ({
                             启动本地服务后，这里会显示 Adobe2API 登录和管理后台。
                           </div>
                         )}
-                      </div>
+                          </div>
+                        </>
+                      )}
                     </section>
                   )}
 

@@ -88,6 +88,10 @@ const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
     getBaseURL: () => "https://api.wuhenai.com",
     getToken: () => "",
   },
+  ximu: {
+    getBaseURL: () => "https://shengtu.ximuai.com",
+    getToken: () => "",
+  },
 };
 
 const createService = (
@@ -143,6 +147,7 @@ const createService = (
 
 const jikeingService = createService("jikeing", SERVICE_CONFIGS.jikeing);
 const wuhenService = createService("wuhen", SERVICE_CONFIGS.wuhen);
+const ximuService = createService("ximu", SERVICE_CONFIGS.ximu);
 
 const adobe2ApiRequest = async <T = any>(
   config: AxiosRequestConfig,
@@ -180,9 +185,16 @@ const wuhenRequest = async <T = any>(
   return await wuhenService.request(config);
 };
 
+const ximuRequest = async <T = any>(
+  config: AxiosRequestConfig,
+): Promise<T> => {
+  return await ximuService.request(config);
+};
+
 export {
   jikeingService,
   wuhenService,
+  ximuService,
   adobe2ApiRequest,
   getAdobe2ApiState,
   SKIP_AUTH_HEADER,
@@ -190,4 +202,5 @@ export {
 export {
   jikeingRequest,
   wuhenRequest,
+  ximuRequest,
 };

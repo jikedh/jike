@@ -15,6 +15,8 @@ import {
   IMAGE_MODELS,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
+  XIMU_GPT_IMAGE2_MODEL,
+  XIMU_NANO_BANANA_PRO_MODEL,
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageGenerationNode } from "shared/types/flow";
@@ -36,9 +38,13 @@ import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import { saveToolMediaFileToProject } from "../utils/localMedia";
 import {
   GeminiParamsPanel,
+  NANO_BANANA_RESOLUTIONS,
   NANO_BANANA_LOCAL_SIZES,
 } from "./components/GeminiParamsPanel";
-import { GptImage2ParamsPanel } from "./components/GptImage2ParamsPanel";
+import {
+  GPTIMAGE2_SIZES,
+  GptImage2ParamsPanel,
+} from "./components/GptImage2ParamsPanel";
 import { MidjourneyParamsPanel } from "./components/MidjourneyParamsPanel";
 import { SeedreamParamsPanel } from "./components/SeedreamParamsPanel";
 
@@ -182,6 +188,42 @@ const DEFAULT_NANO_BANANA_SIZE = "1:1";
 const NANO_BANANA_SIZE_VALUES = new Set(
   NANO_BANANA_LOCAL_SIZES.map((item) => item.value),
 );
+const XIMU_NANO_BANANA_PRO_SIZE_VALUES = new Set([
+  "1:1",
+  "16:9",
+  "9:16",
+  "4:3",
+  "3:4",
+  "3:2",
+  "2:3",
+  "5:4",
+  "4:5",
+  "21:9",
+]);
+const XIMU_NANO_BANANA_PRO_SIZES = GPTIMAGE2_SIZES.filter((item) =>
+  XIMU_NANO_BANANA_PRO_SIZE_VALUES.has(item.value),
+);
+const XIMU_GPTIMAGE2_SIZES = [
+  ...GPTIMAGE2_SIZES.filter((item) =>
+    [
+      "1:1",
+      "3:2",
+      "2:3",
+      "16:9",
+      "9:16",
+      "5:4",
+      "4:5",
+      "4:3",
+      "3:4",
+      "21:9",
+      "9:21",
+      "2:1",
+      "1:2",
+    ].includes(item.value),
+  ),
+  { label: "1:3", value: "1:3", description: "竖向超长图" },
+  { label: "3:1", value: "3:1", description: "横向超宽图" },
+];
 const COLOR_OPTIONS = [
   "#ff3b30",
   "#ff9500",
@@ -588,12 +630,18 @@ export const ImageAnnotationWorkspace = ({
     eraseModel === ADOBE_NANO_BANANA_PRO_MODEL;
   const isEraseAdobeImageModel =
     isEraseAdobeGptImage2Model || isEraseAdobeNanoBananaProModel;
+  const isEraseXimuGptImage2Model = eraseModel === XIMU_GPT_IMAGE2_MODEL;
+  const isEraseXimuNanoBananaProModel =
+    eraseModel === XIMU_NANO_BANANA_PRO_MODEL;
+  const isEraseXimuImageModel =
+    isEraseXimuGptImage2Model || isEraseXimuNanoBananaProModel;
   const isEraseGptImage2Model = eraseModel === "gpt-image-2";
   const isEraseGeminiPro2Model = erasePlatform === "google_pro2";
   const isEraseLocalGeminiDirectModel =
     isEraseGeminiPro2Model ||
     isEraseNanoBananaLocalModel ||
-    isEraseAdobeImageModel;
+    isEraseAdobeImageModel ||
+    isEraseXimuImageModel;
 
   const stageScale = useMemo(() => {
     if (!imageNaturalSize.width || !imageNaturalSize.height) {
@@ -2663,9 +2711,14 @@ export const ImageAnnotationWorkspace = ({
                       (item) => item.id === Number(value),
                     );
                     const shouldResetNanoBananaSize =
-                      selectedModel?.model === NANO_BANANA_LOCAL_MODEL &&
-                      selectedModel?.platform === NANO_BANANA_LOCAL_PLATFORM &&
-                      !NANO_BANANA_SIZE_VALUES.has(eraseSize);
+                      ((selectedModel?.model === NANO_BANANA_LOCAL_MODEL &&
+                        selectedModel?.platform === NANO_BANANA_LOCAL_PLATFORM) ||
+                        selectedModel?.model === XIMU_NANO_BANANA_PRO_MODEL) &&
+                      !(
+                        selectedModel?.model === XIMU_NANO_BANANA_PRO_MODEL
+                          ? XIMU_NANO_BANANA_PRO_SIZE_VALUES
+                          : NANO_BANANA_SIZE_VALUES
+                      ).has(eraseSize);
 
                     persistEraseImageDefaultPreset({
                       model: selectedModel?.model ?? value,
@@ -2732,11 +2785,17 @@ export const ImageAnnotationWorkspace = ({
                 ) : null}
 
                 {isEraseNanoBananaLocalModel ||
-                isEraseAdobeNanoBananaProModel ? (
+                isEraseAdobeNanoBananaProModel ||
+                isEraseXimuNanoBananaProModel ? (
                   <GeminiParamsPanel
                     size={eraseSize}
                     resolution={eraseResolution}
-                    sizeOptions={NANO_BANANA_LOCAL_SIZES}
+                    sizeOptions={
+                      isEraseXimuNanoBananaProModel
+                        ? XIMU_NANO_BANANA_PRO_SIZES
+                        : NANO_BANANA_LOCAL_SIZES
+                    }
+                    resolutionOptions={NANO_BANANA_RESOLUTIONS}
                     onSizeChange={(value) => {
                       persistEraseImageDefaultPreset({ size: value });
                       updateEraseImageParams({ size: value });
@@ -2748,10 +2807,17 @@ export const ImageAnnotationWorkspace = ({
                   />
                 ) : null}
 
-                {isEraseGptImage2Model || isEraseAdobeGptImage2Model ? (
+                {isEraseGptImage2Model ||
+                isEraseAdobeGptImage2Model ||
+                isEraseXimuGptImage2Model ? (
                   <GptImage2ParamsPanel
                     size={eraseSize}
                     resolution={eraseResolution}
+                    sizeOptions={
+                      isEraseXimuGptImage2Model
+                        ? XIMU_GPTIMAGE2_SIZES
+                        : undefined
+                    }
                     onSizeChange={(value) => {
                       persistEraseImageDefaultPreset({ size: value });
                       updateEraseImageParams({ size: value });

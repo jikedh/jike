@@ -35,6 +35,7 @@ const INITIAL_STATE: Pick<
   | "nodeSearchVisible"
   | "devToolsVisible"
   | "storagePath"
+  | "ximuCardCode"
 > = {
   defaultModel: DEFAULT_CANVAS_CHAT_MODEL,
   defaultImageModel: "gemini-3-pro-image-preview",
@@ -67,6 +68,7 @@ const INITIAL_STATE: Pick<
   nodeSearchVisible: false,
   devToolsVisible: false,
   storagePath: "",
+  ximuCardCode: "",
 };
 
 export const useChatSettingsStore = create<ChatSettingsStoreType>()(
@@ -137,6 +139,7 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
       setNodeSearchVisible: (visible) => set({ nodeSearchVisible: visible }),
       setDevToolsVisible: (visible) => set({ devToolsVisible: visible }),
       setStoragePath: (path) => set({ storagePath: path }),
+      setXimuCardCode: (cardCode) => set({ ximuCardCode: cardCode }),
       resetToDefault: () => set(INITIAL_STATE),
     }),
     {

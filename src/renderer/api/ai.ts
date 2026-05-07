@@ -3,6 +3,7 @@ import {
   adobe2ApiRequest,
   getAdobe2ApiState,
   jikeingService,
+  ximuRequest,
   wuhenRequest,
 } from "service/aiRequest";
 import {
@@ -23,6 +24,13 @@ import type {
   FireflyGptImageToImageRequest,
   FireflyGptImageToImageResponse,
 } from "shared/types/detail/Adobe2API";
+import type {
+  XimuCardBalanceResponse,
+  XimuGptImageRequest,
+  XimuNanoBananaRequest,
+  XimuTaskResultResponse,
+  XimuTaskSubmitResponse,
+} from "shared/types/detail/ximu";
 import type { ToApiImageGenerationRequest } from "shared/types/detail/ToApi/images";
 import type {
   TaskResponse,
@@ -243,6 +251,43 @@ export function createAdobe2ApiVideoGeneration(
     method: "post",
     data,
     timeout: 900000,
+  });
+}
+
+export function createXimuGptImageGeneration(data: XimuGptImageRequest) {
+  return ximuRequest<XimuTaskSubmitResponse>({
+    url: "/api/draw/completions",
+    method: "post",
+    data,
+    timeout: 900000,
+  });
+}
+
+export function createXimuNanoBananaGeneration(
+  data: XimuNanoBananaRequest,
+) {
+  return ximuRequest<XimuTaskSubmitResponse>({
+    url: "/api/draw/nano-banana",
+    method: "post",
+    data,
+    timeout: 900000,
+  });
+}
+
+export function getXimuImageResult(id: string) {
+  return ximuRequest<XimuTaskResultResponse>({
+    url: "/api/draw/result",
+    method: "post",
+    data: { id },
+    timeout: 900000,
+  });
+}
+
+export function getXimuCardBalance(code: string) {
+  return ximuRequest<XimuCardBalanceResponse>({
+    url: "/api/credits/card",
+    method: "post",
+    data: { code },
   });
 }
 

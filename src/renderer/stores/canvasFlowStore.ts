@@ -4,6 +4,7 @@ import {
   getCanvasDataKey,
   getLocalFilePath,
   loadCanvasData,
+  readMediaFromLocal,
   saveCanvasData,
   saveGeneratedImageToLocal,
   saveGeneratedVideoToLocal,
@@ -13,6 +14,8 @@ import {
   ADOBE_NANO_BANANA_PRO_MODEL,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
+  XIMU_GPT_IMAGE2_MODEL,
+  XIMU_NANO_BANANA_PRO_MODEL,
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import { getGenerationPointsByScene } from "shared/constants/model-points";
@@ -26,6 +29,19 @@ import {
   buildFireflyGptText2ImageRequest,
   normalizeFireflyGptImageInputUrls,
 } from "shared/types/detail/Adobe2API/images/gpt-image";
+import {
+  buildXimuGptImageRequest,
+  buildXimuNanoBananaRequest,
+  collectXimuImageUrls,
+  extractXimuTaskId,
+  getXimuMessage,
+  getXimuResultPayload,
+  resolveXimuGptAspectRatio,
+  resolveXimuImageSize,
+  resolveXimuNanoBananaProAspectRatio,
+  XIMU_TASK_FAILED_STATUSES,
+  XIMU_TASK_SUCCESS_STATUSES,
+} from "shared/types/detail/ximu";
 import type {
   AllNodeType,
   AudioGenerationNode,
@@ -104,12 +120,15 @@ import {
   createAdobe2ApiVideoGeneration,
   createDashscopeVideoSynthesis,
   createImageGeneration,
+  createXimuGptImageGeneration,
+  createXimuNanoBananaGeneration,
   createLzVideoTask,
   fetchMjTask,
   generateGeminiContent,
   getDashscopeVideoTaskStatus,
   getImageTaskStatus,
   getLzVideoTaskStatus,
+  getXimuImageResult,
   submitMjImagine,
 } from "@/api/ai";
 import { updateVipScore } from "@/api/jikeing";
@@ -336,6 +355,54 @@ const resolveAdobeImageModel = ({
   return undefined;
 };
 
+const resolveXimuImageModel = (model?: string) => {
+  if (model === XIMU_GPT_IMAGE2_MODEL) {
+    return "gpt-image-2-vip" as const;
+  }
+  if (model === XIMU_NANO_BANANA_PRO_MODEL) {
+    return "nano-banana-pro" as const;
+  }
+  return undefined;
+};
+
+const waitForXimuImageResult = async (taskId: string) => {
+  const startedAt = Date.now();
+  let lastStatus = "";
+  let lastMessage = "";
+
+  while (Date.now() - startedAt < IMAGE_TIMEOUT) {
+    const response = await getXimuImageResult(taskId);
+    const payload = getXimuResultPayload(response);
+    const status = String(payload.status || response?.status || "").toLowerCase();
+    lastStatus = status || lastStatus;
+    lastMessage = getXimuMessage(response) || lastMessage;
+
+    if (XIMU_TASK_FAILED_STATUSES.includes(status as any)) {
+      throw new Error(lastMessage || "西牧生图失败");
+    }
+
+    const urls = collectXimuImageUrls(payload);
+    if (
+      urls.length > 0 &&
+      (!status || XIMU_TASK_SUCCESS_STATUSES.includes(status as any))
+    ) {
+      return urls[0];
+    }
+
+    if (XIMU_TASK_SUCCESS_STATUSES.includes(status as any)) {
+      throw new Error("西牧生图已完成，但查询结果中没有返回图片地址");
+    }
+
+    await wait(5000);
+  }
+
+  throw new Error(
+    lastStatus
+      ? `西牧生图超时，请稍后重试（最后状态：${lastStatus}${lastMessage ? `，${lastMessage}` : ""}）`
+      : "西牧生图超时，请稍后重试",
+  );
+};
+
 const extractMarkdownMediaUrl = (content: unknown, kind: "image" | "video") => {
   const text = Array.isArray(content)
     ? content
@@ -404,6 +471,72 @@ const mirrorGeneratedImageUrlToOss = async (url: string) => {
   }
 
   return ossResult.url;
+};
+
+const isXimuSupportedReferenceUrl = (url: string) =>
+  /^https?:\/\//i.test(url) || /^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(url);
+
+const getImageMimeTypeFromPath = (path: string) => {
+  const normalizedPath = path.split("?")[0].split("#")[0].toLowerCase();
+  if (normalizedPath.endsWith(".jpg") || normalizedPath.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+  if (normalizedPath.endsWith(".webp")) {
+    return "image/webp";
+  }
+  if (normalizedPath.endsWith(".gif")) {
+    return "image/gif";
+  }
+  return "image/png";
+};
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+};
+
+const normalizeXimuReferenceUrls = async (urls: string[]) => {
+  const normalizedUrls: string[] = [];
+
+  for (const rawUrl of urls) {
+    const url = String(rawUrl || "").trim();
+    if (!url) {
+      continue;
+    }
+
+    if (isXimuSupportedReferenceUrl(url)) {
+      normalizedUrls.push(url);
+      continue;
+    }
+
+    const localMedia = await readMediaFromLocal(url);
+    if (!localMedia) {
+      throw new Error("西牧图生图参考图不是公网图片，且本地素材读取失败");
+    }
+
+    normalizedUrls.push(
+      `data:${getImageMimeTypeFromPath(url)};base64,${arrayBufferToBase64(localMedia)}`,
+    );
+  }
+
+  return normalizedUrls;
+};
+
+const getXimuRequestErrorText = (error: unknown, fallback: string) => {
+  const requestMessage = getRequestErrorMessage(error);
+  const errorMessage = error instanceof Error ? error.message : "";
+  const message =
+    requestMessage && requestMessage !== "请求失败，请稍后重试"
+      ? requestMessage
+      : errorMessage;
+
+  return message ? `${fallback}：${message}` : fallback;
 };
 
 const isAdobeVideoRequest = (payload: Record<string, unknown>) =>
@@ -3120,7 +3253,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         model,
         platform,
         prompt,
-        image_urls: imageUrls,
+        image_urls: rawImageUrls = [],
         size,
         resolution,
         promptDraft,
@@ -3133,12 +3266,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         size,
         resolution,
       });
+      const imageUrls = Array.isArray(rawImageUrls) ? rawImageUrls : [];
       const originalModel = payload.originalModel ?? payload.model;
       const adobeImageModel = resolveAdobeImageModel({
         model: originalModel,
         size,
         resolution,
       });
+      const ximuImageModel = resolveXimuImageModel(originalModel);
 
       // 更新节点状态为排队中
       set((state) => ({
@@ -3262,6 +3397,136 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             } catch (saveError) {
               console.error(
                 "[startGeminiPro2Generation] 保存 Adobe 图片到本地失败:",
+                saveError,
+              );
+            }
+          }
+
+          set((state) => ({
+            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+              const existingData = data.result?.data ?? [];
+              const mergedData = appendMediaSequences(existingData, [
+                resultItem,
+              ]);
+              return {
+                ...data,
+                status: GenerationStatus.COMPLETED,
+                progress: 100,
+                result: {
+                  type: "image",
+                  data: mergedData,
+                },
+                error: undefined,
+              };
+            }),
+          }));
+          saveCurrentCanvasToHistory();
+          if (useChatSettingsStore.getState().autoSaveEnabled) {
+            get().saveGraph();
+          }
+          await deductVipScoreAfterGeneration({
+            scene: "image",
+            nodeId,
+            model: originalModel,
+            requiredPoints: payload.requiredPoints,
+          });
+          return;
+        }
+
+        if (ximuImageModel) {
+          const ximuCardCode = useChatSettingsStore
+            .getState()
+            .ximuCardCode.trim();
+          if (!ximuCardCode) {
+            throw new Error("请先在模型管理的西牧渠道填写卡密");
+          }
+
+          set((state) => ({
+            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+              ...data,
+              status: GenerationStatus.IN_PROGRESS,
+              progress: 0,
+            })),
+          }));
+
+          const ximuReferenceUrls = await normalizeXimuReferenceUrls(imageUrls);
+          const request =
+            originalModel === XIMU_GPT_IMAGE2_MODEL
+              ? buildXimuGptImageRequest({
+                  cardCode: ximuCardCode,
+                  prompt,
+                  aspectRatio: resolveXimuGptAspectRatio({ size, resolution }),
+                  urls: ximuReferenceUrls,
+                })
+              : buildXimuNanoBananaRequest({
+                  cardCode: ximuCardCode,
+                  prompt,
+                  aspectRatio: resolveXimuNanoBananaProAspectRatio(size),
+                  imageSize: resolveXimuImageSize(resolution),
+                  urls: ximuReferenceUrls,
+                });
+
+          let submitResponse;
+          try {
+            submitResponse =
+              originalModel === XIMU_GPT_IMAGE2_MODEL
+                ? await createXimuGptImageGeneration(request as any)
+                : await createXimuNanoBananaGeneration(request as any);
+          } catch (submitError) {
+            throw new Error(
+              getXimuRequestErrorText(submitError, "西牧提交生图失败"),
+            );
+          }
+
+          const taskId = extractXimuTaskId(submitResponse);
+          if (!taskId) {
+            throw new Error("西牧渠道未返回任务 ID");
+          }
+
+          let responseUrl: string;
+          try {
+            responseUrl = await waitForXimuImageResult(taskId);
+          } catch (pollError) {
+            throw new Error(
+              getXimuRequestErrorText(pollError, "西牧查询生图结果失败"),
+            );
+          }
+          const ossUrl = await mirrorGeneratedImageUrlToOss(responseUrl);
+          const projectId = get().projectId;
+          let resultItem: {
+            url: string;
+            remoteUrl: string;
+            originalUrl?: string;
+            localName?: string;
+            localPath?: string;
+          } = {
+            url: ossUrl,
+            remoteUrl: ossUrl,
+            ...(ossUrl === responseUrl ? {} : { originalUrl: responseUrl }),
+          };
+
+          if (projectId) {
+            try {
+              const fileName = await saveGeneratedImageToLocal(
+                projectId,
+                ossUrl,
+                extractExtensionFromUrl(responseUrl, "png"),
+              );
+
+              if (fileName) {
+                resultItem = {
+                  ...resultItem,
+                  localName: fileName,
+                  localPath: getLocalFilePath(
+                    projectId,
+                    "generate_image",
+                    fileName,
+                  ),
+                };
+              }
+            } catch (saveError) {
+              console.error(
+                "[startGeminiPro2Generation] 保存西牧图片到本地失败:",
                 saveError,
               );
             }
@@ -3457,7 +3722,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         (sourceModel === NANO_BANANA_LOCAL_MODEL &&
           sourcePlatform === NANO_BANANA_LOCAL_PLATFORM) ||
         sourceModel === ADOBE_GPT_IMAGE2_MODEL ||
-        sourceModel === ADOBE_NANO_BANANA_PRO_MODEL;
+        sourceModel === ADOBE_NANO_BANANA_PRO_MODEL ||
+        sourceModel === XIMU_GPT_IMAGE2_MODEL ||
+        sourceModel === XIMU_NANO_BANANA_PRO_MODEL;
       const sourceImageUrl = sourceData.result?.data?.[0]?.url;
 
       const totalCells = gridSize * gridSize;

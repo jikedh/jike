@@ -37,7 +37,9 @@ export const getRequestErrorMessage = (error: any): string => {
   if (isAxiosError(error)) {
     const { status, data } = error.response ?? {};
     let serverMessage =
-      data?.message || data?.msg || data?.error || data?.detail;
+      typeof data === "string"
+        ? data
+        : data?.message || data?.msg || data?.error || data?.detail;
 
     if (serverMessage && typeof serverMessage !== "string") {
       serverMessage = JSON.stringify(serverMessage);

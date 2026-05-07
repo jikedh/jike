@@ -11,6 +11,8 @@ import {
   IMAGE_MODELS,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
+  XIMU_GPT_IMAGE2_MODEL,
+  XIMU_NANO_BANANA_PRO_MODEL,
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import { getImageGenerationPoints } from "shared/constants/model-points";
@@ -122,6 +124,45 @@ const NANO_BANANA_RESOLUTION_VALUES = toOptionValueSet(NANO_BANANA_RESOLUTIONS);
 const GPTIMAGE2_SIZE_VALUES = toOptionValueSet(GPTIMAGE2_SIZES);
 const ADOBE_GPTIMAGE2_SIZE_VALUES = toOptionValueSet(ADOBE_GPTIMAGE2_SIZES);
 const GPTIMAGE2_RESOLUTION_VALUES = new Set(["1K", "2K", "4K"]);
+const XIMU_GPTIMAGE2_SIZE_VALUES = new Set([
+  "1:1",
+  "3:2",
+  "2:3",
+  "16:9",
+  "9:16",
+  "5:4",
+  "4:5",
+  "4:3",
+  "3:4",
+  "21:9",
+  "9:21",
+  "1:3",
+  "3:1",
+  "2:1",
+  "1:2",
+]);
+const XIMU_NANO_BANANA_PRO_SIZE_VALUES = new Set([
+  "1:1",
+  "16:9",
+  "9:16",
+  "4:3",
+  "3:4",
+  "3:2",
+  "2:3",
+  "5:4",
+  "4:5",
+  "21:9",
+]);
+const XIMU_GPTIMAGE2_SIZES = [
+  ...GPTIMAGE2_SIZES.filter((item) =>
+    XIMU_GPTIMAGE2_SIZE_VALUES.has(item.value),
+  ),
+  { label: "1:3", value: "1:3", description: "竖向超长图" },
+  { label: "3:1", value: "3:1", description: "横向超宽图" },
+];
+const XIMU_NANO_BANANA_PRO_SIZES = GPTIMAGE2_SIZES.filter((item) =>
+  XIMU_NANO_BANANA_PRO_SIZE_VALUES.has(item.value),
+);
 const SEEDREAM_SIZE_VALUES = toOptionValueSet(SEEDREAM_ASPECT_RATIOS);
 const SEEDREAM_RESOLUTION_VALUES = toOptionValueSet(SEEDREAM_RESOLUTIONS);
 const MIDJOURNEY_SIZE_VALUES = toOptionValueSet(MIDJOURNEY_ASPECT_RATIOS);
@@ -261,11 +302,17 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const isAdobeGptImage2Model = model === ADOBE_GPT_IMAGE2_MODEL;
   const isAdobeNanoBananaProModel = model === ADOBE_NANO_BANANA_PRO_MODEL;
   const isAdobeImageModel = isAdobeGptImage2Model || isAdobeNanoBananaProModel;
+  const isXimuGptImage2Model = model === XIMU_GPT_IMAGE2_MODEL;
+  const isXimuNanoBananaProModel = model === XIMU_NANO_BANANA_PRO_MODEL;
+  const isXimuImageModel = isXimuGptImage2Model || isXimuNanoBananaProModel;
   const isGptImage2Model = model === "gpt-image-2";
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
   const isLocalGeminiDirectModel =
-    isGeminiPro2Model || isNanoBananaLocalModel || isAdobeImageModel;
+    isGeminiPro2Model ||
+    isNanoBananaLocalModel ||
+    isAdobeImageModel ||
+    isXimuImageModel;
 
   const supportedImageParams = useMemo<SupportedImageParams | null>(() => {
     if (isSeedreamModel) {
@@ -286,18 +333,26 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       };
     }
 
-    if (isNanoBananaLocalModel || isAdobeNanoBananaProModel) {
+    if (
+      isNanoBananaLocalModel ||
+      isAdobeNanoBananaProModel ||
+      isXimuNanoBananaProModel
+    ) {
       return {
-        sizes: NANO_BANANA_SIZE_VALUES,
+        sizes: isXimuNanoBananaProModel
+          ? XIMU_NANO_BANANA_PRO_SIZE_VALUES
+          : NANO_BANANA_SIZE_VALUES,
         resolutions: NANO_BANANA_RESOLUTION_VALUES,
         defaultSize: DEFAULT_NANO_BANANA_SIZE,
         defaultResolution: "2K",
       };
     }
 
-    if (isGptImage2Model) {
+    if (isGptImage2Model || isXimuGptImage2Model) {
       return {
-        sizes: GPTIMAGE2_SIZE_VALUES,
+        sizes: isXimuGptImage2Model
+          ? XIMU_GPTIMAGE2_SIZE_VALUES
+          : GPTIMAGE2_SIZE_VALUES,
         resolutions: GPTIMAGE2_RESOLUTION_VALUES,
         defaultSize: "1:1",
         defaultResolution: "2K",
@@ -330,6 +385,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     isMidjourneyModel,
     isNanoBananaLocalModel,
     isSeedreamModel,
+    isXimuGptImage2Model,
+    isXimuNanoBananaProModel,
   ]);
 
   useEffect(() => {
@@ -525,10 +582,18 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     const commandSizeMap: Record<string, string> = {
       "c-1": "4:3", // 角色参考图
       "c-2":
-        isNanoBananaLocalModel || isAdobeNanoBananaProModel ? "16:9" : "21:9", // 角色三视图
+        isNanoBananaLocalModel ||
+        isAdobeNanoBananaProModel ||
+        isXimuNanoBananaProModel
+          ? "16:9"
+          : "21:9", // 角色三视图
       "c-3": "16:9", // 多宫格电影分镜
       "c-4":
-        isNanoBananaLocalModel || isAdobeNanoBananaProModel ? "16:9" : "21:9", // VR图
+        isNanoBananaLocalModel ||
+        isAdobeNanoBananaProModel ||
+        isXimuNanoBananaProModel
+          ? "16:9"
+          : "21:9", // VR图
     };
     const commandSize = commandSizeMap[selected.id];
     const targetSize =
@@ -547,8 +612,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       "c-4":
         isNanoBananaLocalModel ||
         isAdobeNanoBananaProModel ||
+        isXimuNanoBananaProModel ||
         isGptImage2Model ||
-        isAdobeGptImage2Model
+        isAdobeGptImage2Model ||
+        isXimuGptImage2Model
           ? "4K"
           : "3K",
     };
@@ -1113,7 +1180,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         basePayload.metadata = {
           resolution,
         };
-      } else if (isGeminiModel || isNanoBananaLocalModel || isAdobeImageModel) {
+      } else if (
+        isGeminiModel ||
+        isNanoBananaLocalModel ||
+        isAdobeImageModel ||
+        isXimuImageModel
+      ) {
         // Gemini 3 Pro: size 作为画面比例
         basePayload.size = size;
         basePayload.metadata = {
@@ -1425,9 +1497,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                 (item) => item.id === Number(value),
               );
               const shouldResetNanoBananaSize =
-                selectedModel?.model === NANO_BANANA_LOCAL_MODEL &&
-                selectedModel?.platform === NANO_BANANA_LOCAL_PLATFORM &&
-                !NANO_BANANA_SIZE_VALUES.has(size);
+                ((selectedModel?.model === NANO_BANANA_LOCAL_MODEL &&
+                  selectedModel?.platform === NANO_BANANA_LOCAL_PLATFORM) ||
+                  selectedModel?.model === XIMU_NANO_BANANA_PRO_MODEL) &&
+                !(
+                  selectedModel?.model === XIMU_NANO_BANANA_PRO_MODEL
+                    ? XIMU_NANO_BANANA_PRO_SIZE_VALUES
+                    : NANO_BANANA_SIZE_VALUES
+                ).has(size);
               persistImageDefaultPreset({
                 model: selectedModel?.model ?? value,
                 platform: selectedModel?.platform,
@@ -1523,13 +1600,17 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             />
           )}
 
-          {(isGptImage2Model || isAdobeGptImage2Model) && (
+          {(isGptImage2Model || isAdobeGptImage2Model || isXimuGptImage2Model) && (
             // GPT-Image-2 整合参数面板
             <GptImage2ParamsPanel
               size={size}
               resolution={resolution}
               sizeOptions={
-                isAdobeGptImage2Model ? ADOBE_GPTIMAGE2_SIZES : undefined
+                isAdobeGptImage2Model
+                  ? ADOBE_GPTIMAGE2_SIZES
+                  : isXimuGptImage2Model
+                    ? XIMU_GPTIMAGE2_SIZES
+                    : undefined
               }
               onSizeChange={(value) => {
                 persistImageDefaultPreset({ size: value });
@@ -1542,11 +1623,15 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           )}
 
           {/* Midjourney 整合参数面板 - 仅在选择 Midjourney 模型时显示 */}
-          {isAdobeNanoBananaProModel && (
+          {(isAdobeNanoBananaProModel || isXimuNanoBananaProModel) && (
             <GeminiParamsPanel
               size={size}
               resolution={resolution}
-              sizeOptions={NANO_BANANA_LOCAL_SIZES}
+              sizeOptions={
+                isXimuNanoBananaProModel
+                  ? XIMU_NANO_BANANA_PRO_SIZES
+                  : NANO_BANANA_LOCAL_SIZES
+              }
               resolutionOptions={NANO_BANANA_RESOLUTIONS}
               onSizeChange={(value) => {
                 persistImageDefaultPreset({ size: value });

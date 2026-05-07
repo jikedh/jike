@@ -2,6 +2,8 @@ import {
   ADOBE_GPT_IMAGE2_MODEL,
   ADOBE_NANO_BANANA_PRO_MODEL,
   NANO_BANANA_LOCAL_MODEL,
+  XIMU_GPT_IMAGE2_MODEL,
+  XIMU_NANO_BANANA_PRO_MODEL,
 } from "../ai-models";
 
 export const IMAGE_MODEL_POINTS: Record<string, number> = {
@@ -12,6 +14,8 @@ export const IMAGE_MODEL_POINTS: Record<string, number> = {
   "midjourney-niji7": 27,
   [ADOBE_GPT_IMAGE2_MODEL]: 0,
   [ADOBE_NANO_BANANA_PRO_MODEL]: 0,
+  [XIMU_GPT_IMAGE2_MODEL]: 0,
+  [XIMU_NANO_BANANA_PRO_MODEL]: 0,
 };
 
 export const IMAGE_PLATFORM_POINTS: Record<string, number> = {
