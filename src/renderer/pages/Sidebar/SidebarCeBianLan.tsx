@@ -141,19 +141,19 @@ export const SidebarCeBianLan = () => {
             onClick={() => handleNavClick("/voice")}
           />
           {/* 暂时隐藏短片合成入口，后续恢复时取消注释即可。 */}
-          <SidebarNavItem
+          {/* <SidebarNavItem
             id="video"
             icon={<Film size={24} />}
             label="短片合成"
             onClick={() => handleNavClick("/video")}
-          />
+          /> */}
           {/* 暂时隐藏模型管理入口，后续恢复时取消注释即可。 */}
-          <SidebarNavItem
+          {/* <SidebarNavItem
             id="model-settings"
             icon={<PanelRightOpen size={24} />}
             label="模型管理(Test)"
             onClick={() => handleNavClick("/settings")}
-          />
+          /> */}
         </SidebarNav>
 
         <SidebarFooter classNames={{ root: "mt-auto" }}>
