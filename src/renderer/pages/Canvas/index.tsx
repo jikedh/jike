@@ -186,9 +186,9 @@ const CanvasPage = () => {
           animate={
             hasProjectEntered
               ? { opacity: 1, scale: 1, filter: "blur(0px)" }
-              : { opacity: 0.72, scale: 0.94, filter: "blur(10px)" }
+              : { opacity: 0.72, scale: 1, filter: "blur(0px)" }
           }
-          transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
         >
           <CanvasFlow projectId={projectId} isMiniMapVisible={isMiniMapVisible} />
 

@@ -1194,6 +1194,8 @@ export const CanvasFlow = ({
   const viewportStateRef = useRef(reactFlowInstance.getViewport());
   const pendingViewportRef = useRef(reactFlowInstance.getViewport());
   const viewportRafRef = useRef<number | null>(null);
+  const [isViewportInteracting, setIsViewportInteracting] = useState(false);
+  const viewportInteractionEndTimerRef = useRef<number | null>(null);
   const latestStoreNodesRef = useRef(useCanvasFlowStore.getState().nodes);
   const latestStoreEdgesRef = useRef(useCanvasFlowStore.getState().edges);
   // 用 ref 而非 state 追踪拖动状态，避免引发额外渲染
@@ -3421,6 +3423,31 @@ export const CanvasFlow = ({
     [flushViewportState],
   );
 
+  const clearViewportInteractionEndTimer = useCallback(() => {
+    if (viewportInteractionEndTimerRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(viewportInteractionEndTimerRef.current);
+    viewportInteractionEndTimerRef.current = null;
+  }, []);
+
+  const markViewportInteracting = useCallback(() => {
+    clearViewportInteractionEndTimer();
+    setIsViewportInteracting((current) => (current ? current : true));
+  }, [clearViewportInteractionEndTimer]);
+
+  const finishViewportInteracting = useCallback(
+    (delay = 180) => {
+      clearViewportInteractionEndTimer();
+      viewportInteractionEndTimerRef.current = window.setTimeout(() => {
+        viewportInteractionEndTimerRef.current = null;
+        setIsViewportInteracting(false);
+      }, delay);
+    },
+    [clearViewportInteractionEndTimer],
+  );
+
   const handleViewportMove = useCallback(
     (_: unknown, viewport: unknown) => {
       // 使用 unknown 避免在高频事件中引入额外类型噪音。
@@ -3429,6 +3456,8 @@ export const CanvasFlow = ({
         y: number;
         zoom: number;
       };
+      markViewportInteracting();
+      finishViewportInteracting();
 
       if (!shouldTrackViewport) {
         return;
@@ -3436,7 +3465,12 @@ export const CanvasFlow = ({
 
       scheduleViewportState(viewport as { x: number; y: number; zoom: number });
     },
-    [scheduleViewportState, shouldTrackViewport],
+    [
+      finishViewportInteracting,
+      markViewportInteracting,
+      scheduleViewportState,
+      shouldTrackViewport,
+    ],
   );
 
   const syncViewportStateNow = useCallback(() => {
@@ -3453,6 +3487,8 @@ export const CanvasFlow = ({
 
   const handleViewportMoveStart = useCallback(
     (event?: unknown) => {
+      markViewportInteracting();
+
       const nativeEvent = event as
         | MouseEvent
         | TouchEvent
@@ -3487,7 +3523,7 @@ export const CanvasFlow = ({
         startedByReactFlow: true,
       };
     },
-    [],
+    [markViewportInteracting],
   );
 
   const handleViewportMoveEnd = useCallback(
@@ -3515,8 +3551,13 @@ export const CanvasFlow = ({
 
       viewportPanStateRef.current = createIdleViewportPanState();
       syncViewportStateNow();
+      finishViewportInteracting(120);
     },
-    [scheduleContextMenuSuppressionRelease, syncViewportStateNow],
+    [
+      finishViewportInteracting,
+      scheduleContextMenuSuppressionRelease,
+      syncViewportStateNow,
+    ],
   );
 
   // 当开始需要追踪 viewport 时，先同步一次最新值，避免出现位置跳变。
@@ -3536,6 +3577,10 @@ export const CanvasFlow = ({
     return () => {
       if (viewportRafRef.current !== null) {
         window.cancelAnimationFrame(viewportRafRef.current);
+      }
+      if (viewportInteractionEndTimerRef.current !== null) {
+        window.clearTimeout(viewportInteractionEndTimerRef.current);
+        viewportInteractionEndTimerRef.current = null;
       }
     };
   }, []);
@@ -4769,7 +4814,9 @@ export const CanvasFlow = ({
             />
           ) : null}
 
-          {batchToolbarMode && batchToolbarScreenPosition ? (
+          {batchToolbarMode &&
+          batchToolbarScreenPosition &&
+          !isViewportInteracting ? (
             <CanvasBatchToolbar
               mode={batchToolbarMode}
               selectedCount={multiSelectedCount}

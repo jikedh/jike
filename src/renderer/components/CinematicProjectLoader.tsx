@@ -22,9 +22,9 @@ export function CinematicProjectLoader({
       animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
       exit={{
         opacity: 0,
-        scale: 1.22,
-        filter: "blur(26px)",
-        transition: { duration: 0.92, ease: [0.22, 1, 0.36, 1] },
+        scale: 1,
+        filter: "blur(0px)",
+        transition: { duration: 0.42, ease: [0.16, 1, 0.3, 1] },
       }}
       transition={{ duration: 0.62, ease: [0.16, 1, 0.3, 1] }}
       className={cn(
@@ -81,9 +81,9 @@ export function CinematicProjectLoader({
         animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
         exit={{
           opacity: 0,
-          scale: 1.34,
-          filter: "blur(18px)",
-          transition: { duration: 0.82, ease: [0.22, 1, 0.36, 1] },
+          scale: 1,
+          filter: "blur(0px)",
+          transition: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
         }}
         transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
         className="relative z-10 flex flex-col items-center gap-9 px-6 text-center"
