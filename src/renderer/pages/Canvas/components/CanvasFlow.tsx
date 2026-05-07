@@ -3262,6 +3262,23 @@ export const CanvasFlow = ({
         ? "selection"
         : null;
 
+  const batchToolbarScreenPosition = useMemo(() => {
+    const flowPosition =
+      selectedGroupToolbarFlowPosition ?? selectionToolbarFlowPosition;
+    if (!flowPosition) {
+      return null;
+    }
+
+    return {
+      x: flowPosition.x * viewportState.zoom + viewportState.x,
+      y: flowPosition.y * viewportState.zoom + viewportState.y,
+    };
+  }, [
+    selectedGroupToolbarFlowPosition,
+    selectionToolbarFlowPosition,
+    viewportState,
+  ]);
+
   const handleGroupLabelPointerDown = useCallback(
     (groupId: string) => {
       if (annotationWorkspace.open) {
@@ -4717,38 +4734,6 @@ export const CanvasFlow = ({
                 />
               ) : null}
 
-              {batchToolbarMode ? (
-                <CanvasBatchToolbar
-                  mode={batchToolbarMode}
-                  selectedCount={multiSelectedCount}
-                  groupCount={activeBatchGroup?.nodeIds.length ?? 0}
-                  position={
-                    selectedGroupToolbarFlowPosition ??
-                    selectionToolbarFlowPosition
-                  }
-                  onCreateGroup={() => {
-                    createGroup(multiSelectedNodeIds);
-                  }}
-                  onLayoutHorizontal={() => {
-                    if (!activeBatchGroup) {
-                      return;
-                    }
-                    layoutGroupHorizontal(activeBatchGroup.id);
-                  }}
-                  onGridLayout={() => {
-                    if (!activeBatchGroup) {
-                      return;
-                    }
-                    layoutGroupGrid(activeBatchGroup.id);
-                  }}
-                  onUngroup={() => {
-                    if (!activeBatchGroup) {
-                      return;
-                    }
-                    ungroup(activeBatchGroup.id);
-                  }}
-                />
-              ) : null}
             </ViewportPortal>
 
             {gridVisible && (
@@ -4781,6 +4766,51 @@ export const CanvasFlow = ({
               x={quickCreateScreenPosition.x}
               y={quickCreateScreenPosition.y}
               onPointerDown={handleQuickAddPointerDown}
+            />
+          ) : null}
+
+          {batchToolbarMode && batchToolbarScreenPosition ? (
+            <CanvasBatchToolbar
+              mode={batchToolbarMode}
+              selectedCount={multiSelectedCount}
+              groupCount={activeBatchGroup?.nodeIds.length ?? 0}
+              position={batchToolbarScreenPosition}
+              onCreateGroup={() => {
+                const reactFlowSelectedNodeIds = (
+                  reactFlowInstance.getNodes() as AllNodeType[]
+                )
+                  .filter((node) => node.selected)
+                  .map((node) => node.id);
+                const storeSelectedNodeIds = useCanvasFlowStore
+                  .getState()
+                  .nodes.filter((node) => node.selected)
+                  .map((node) => node.id);
+                const selectedNodeIds =
+                  reactFlowSelectedNodeIds.length >= 2
+                    ? reactFlowSelectedNodeIds
+                    : storeSelectedNodeIds.length >= 2
+                    ? storeSelectedNodeIds
+                    : multiSelectedNodeIds;
+                createGroup(selectedNodeIds);
+              }}
+              onLayoutHorizontal={() => {
+                if (!activeBatchGroup) {
+                  return;
+                }
+                layoutGroupHorizontal(activeBatchGroup.id);
+              }}
+              onGridLayout={() => {
+                if (!activeBatchGroup) {
+                  return;
+                }
+                layoutGroupGrid(activeBatchGroup.id);
+              }}
+              onUngroup={() => {
+                if (!activeBatchGroup) {
+                  return;
+                }
+                ungroup(activeBatchGroup.id);
+              }}
             />
           ) : null}
 
