@@ -6,22 +6,21 @@ import { Toaster } from "sonner";
  *
  * Sonner 默认配置：
  * - 位置：top-center（顶部中央）
- * - 主题：light（浅色主题）
- * - 动画：内置平滑过渡动画
+ * - 主题：dark（暗色主题）
+ * - 动画：全局 CSS 覆盖为紫色玻璃渐显
  */
 export const ToastContainer: React.FC = () => {
   return (
     <Toaster
       position="top-center"
-      theme="light"
-      richColors
+      theme="dark"
       closeButton
       duration={5000}
+      gap={10}
+      offset={24}
+      className="jike-toast-system"
       toastOptions={{
-        style: {
-          padding: "12px 16px",
-          borderRadius: "8px",
-        },
+        className: "jike-toast",
       }}
     />
   );

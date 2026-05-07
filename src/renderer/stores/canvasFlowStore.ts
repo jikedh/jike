@@ -95,6 +95,7 @@ import {
 import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
 import { getJikeingUserId, toChineseNumber } from "shared/utils/utils";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
+import { toast } from "sonner";
 import { create } from "zustand";
 import {
   createAdobe2ApiChatImageGeneration,
@@ -527,15 +528,32 @@ const pollImageGeneration = async (
         if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
           pendingTaskCounts.delete(nodeId);
         }
+        let shouldWarnPartialFailure = false;
+        let partialSuccessCount = 0;
+        let partialFailedCount = 0;
         setState((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const completedCount = (data.completedCount ?? 0) + 1;
             const allCompleted = completedCount >= totalTaskCount;
+            const successCount = data.result?.data?.filter((item) => item?.url)
+              .length ?? 0;
+            const hasSuccessfulImages = successCount > 0;
+
+            if (allCompleted && hasSuccessfulImages) {
+              shouldWarnPartialFailure = true;
+              partialSuccessCount = successCount;
+              partialFailedCount = Math.max(totalTaskCount - successCount, 1);
+            }
+
             return {
               ...data,
-              status: allCompleted
-                ? GenerationStatus.FAILED
-                : GenerationStatus.IN_PROGRESS,
+              status:
+                allCompleted && hasSuccessfulImages
+                  ? GenerationStatus.COMPLETED
+                  : allCompleted
+                    ? GenerationStatus.FAILED
+                    : GenerationStatus.IN_PROGRESS,
+              progress: allCompleted && hasSuccessfulImages ? 100 : data.progress,
               error: {
                 code: "TIMEOUT",
                 message: "图片生成超时，请稍后再试",
@@ -544,6 +562,11 @@ const pollImageGeneration = async (
             };
           }),
         }));
+        if (shouldWarnPartialFailure) {
+          toast.warning(
+            `已生成 ${partialSuccessCount} 张图片，${partialFailedCount} 张失败`,
+          );
+        }
         return;
       }
 
@@ -700,28 +723,52 @@ const pollImageGeneration = async (
         taskStatus === "CANCEL" ||
         taskStatus === "CANCELED"
       ) {
+        let shouldWarnPartialFailure = false;
+        let partialSuccessCount = 0;
+        let partialFailedCount = 0;
+
         setState((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const completedCount = (data.completedCount ?? 0) + 1;
             const allCompleted = completedCount >= totalTaskCount;
+            const successCount = data.result?.data?.filter((item) => item?.url)
+              .length ?? 0;
+            const hasSuccessfulImages = successCount > 0;
+            const message =
+              response?.message ||
+              response?.data?.message ||
+              "生成失败，请稍后再试";
+
+            if (allCompleted && hasSuccessfulImages) {
+              shouldWarnPartialFailure = true;
+              partialSuccessCount = successCount;
+              partialFailedCount = Math.max(totalTaskCount - successCount, 1);
+            }
 
             return {
               ...data,
-              status: allCompleted
-                ? GenerationStatus.FAILED
-                : GenerationStatus.IN_PROGRESS,
-              progress: 0,
+              status:
+                allCompleted && hasSuccessfulImages
+                  ? GenerationStatus.COMPLETED
+                  : allCompleted
+                    ? GenerationStatus.FAILED
+                    : GenerationStatus.IN_PROGRESS,
+              progress: allCompleted && hasSuccessfulImages ? 100 : 0,
               error: {
                 code: "IMAGE_GENERATION_FAILED",
-                message:
-                  response?.message ||
-                  response?.data?.message ||
-                  "生成失败，请稍后再试",
+                message,
               },
               completedCount,
             };
           }),
         }));
+
+        if (shouldWarnPartialFailure) {
+          toast.warning(
+            `已生成 ${partialSuccessCount} 张图片，${partialFailedCount} 张失败`,
+          );
+        }
+
         saveCurrentCanvasToHistory();
         if (useChatSettingsStore.getState().autoSaveEnabled) {
           getState().saveGraph();
@@ -805,15 +852,32 @@ const pollMjImageGeneration = async (
         if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
           pendingTaskCounts.delete(nodeId);
         }
+        let shouldWarnPartialFailure = false;
+        let partialSuccessCount = 0;
+        let partialFailedCount = 0;
         setState((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const completedCount = (data.completedCount ?? 0) + 1;
             const allCompleted = completedCount >= totalTaskCount;
+            const successCount = data.result?.data?.filter((item) => item?.url)
+              .length ?? 0;
+            const hasSuccessfulImages = successCount > 0;
+
+            if (allCompleted && hasSuccessfulImages) {
+              shouldWarnPartialFailure = true;
+              partialSuccessCount = successCount;
+              partialFailedCount = Math.max(totalTaskCount - successCount, 1);
+            }
+
             return {
               ...data,
-              status: allCompleted
-                ? GenerationStatus.FAILED
-                : GenerationStatus.IN_PROGRESS,
+              status:
+                allCompleted && hasSuccessfulImages
+                  ? GenerationStatus.COMPLETED
+                  : allCompleted
+                    ? GenerationStatus.FAILED
+                    : GenerationStatus.IN_PROGRESS,
+              progress: allCompleted && hasSuccessfulImages ? 100 : data.progress,
               error: {
                 code: "TIMEOUT",
                 message: "图片生成超时，请稍后再试",
@@ -822,6 +886,11 @@ const pollMjImageGeneration = async (
             };
           }),
         }));
+        if (shouldWarnPartialFailure) {
+          toast.warning(
+            `已生成 ${partialSuccessCount} 张图片，${partialFailedCount} 张失败`,
+          );
+        }
         return;
       }
 
@@ -940,28 +1009,52 @@ const pollMjImageGeneration = async (
 
       // FAILURE 或 CANCEL 状态表示失败
       if (response.status === "FAILURE" || response.status === "CANCEL") {
+        let shouldWarnPartialFailure = false;
+        let partialSuccessCount = 0;
+        let partialFailedCount = 0;
+
         setState((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const completedCount = (data.completedCount ?? 0) + 1;
             const allCompleted = completedCount >= totalTaskCount;
+            const successCount = data.result?.data?.filter((item) => item?.url)
+              .length ?? 0;
+            const hasSuccessfulImages = successCount > 0;
+            const message =
+              response.failReason ||
+              response.description ||
+              "生成失败，请稍后再试";
+
+            if (allCompleted && hasSuccessfulImages) {
+              shouldWarnPartialFailure = true;
+              partialSuccessCount = successCount;
+              partialFailedCount = Math.max(totalTaskCount - successCount, 1);
+            }
 
             return {
               ...data,
-              status: allCompleted
-                ? GenerationStatus.FAILED
-                : GenerationStatus.IN_PROGRESS,
-              progress: progressValue,
+              status:
+                allCompleted && hasSuccessfulImages
+                  ? GenerationStatus.COMPLETED
+                  : allCompleted
+                    ? GenerationStatus.FAILED
+                    : GenerationStatus.IN_PROGRESS,
+              progress: allCompleted && hasSuccessfulImages ? 100 : progressValue,
               error: {
                 code: "MJ_ERROR",
-                message:
-                  response.failReason ||
-                  response.description ||
-                  "生成失败，请稍后再试",
+                message,
               },
               completedCount,
             };
           }),
         }));
+
+        if (shouldWarnPartialFailure) {
+          toast.warning(
+            `已生成 ${partialSuccessCount} 张图片，${partialFailedCount} 张失败`,
+          );
+        }
+
         saveCurrentCanvasToHistory();
         if (useChatSettingsStore.getState().autoSaveEnabled) {
           getState().saveGraph();
