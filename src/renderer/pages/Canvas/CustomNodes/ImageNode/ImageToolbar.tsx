@@ -54,6 +54,8 @@ type ImageToolbarProps = {
   onCrop?: (file: File, cropRatio: string) => Promise<void>;
   onAnnotate?: () => void;
   onErase?: () => void;
+  onLighting?: () => void;
+  isLightingGenerating?: boolean;
 };
 
 type ActionKey =
@@ -85,6 +87,8 @@ export const ImageToolbar = memo(
     onCrop,
     onAnnotate,
     onErase,
+    onLighting,
+    isLightingGenerating: isExternalLightingGenerating = false,
   }: ImageToolbarProps) => {
     const [isLightboxOpen, setIsLightboxOpen] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
@@ -320,7 +324,7 @@ export const ImageToolbar = memo(
           return;
         }
 
-        handleLightingDialogOpenChange(true);
+        onLighting?.();
         return;
       }
 
@@ -584,7 +588,8 @@ export const ImageToolbar = memo(
             const isDisabled =
               (item.key === "download" && isDownloading) ||
               (item.key === "upload" && isUploading) ||
-              (item.key === "lighting" && isLightingGenerating) ||
+              (item.key === "lighting" &&
+                (isLightingGenerating || isExternalLightingGenerating)) ||
               ((item.key === "crop" || item.key === "lighting") &&
                 !currentImageUrl);
             const title =
