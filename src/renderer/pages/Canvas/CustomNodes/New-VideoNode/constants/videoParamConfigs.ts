@@ -1,4 +1,4 @@
-﻿import type { VideoModeKey } from "./videoModelCapabilities";
+import type { VideoModeKey } from "./videoModelCapabilities";
 
 export type VideoParamOption = {
   label: string;
@@ -82,14 +82,14 @@ const happyHorseRatios = [
 const audio = { label: "生成音频" };
 const promptExtend = { label: "智能改写 Prompt" };
 
-// vidu 鐨勫垎杈ㄧ巼閫夐」锛堟敮鎸?audio 鍜?seed锛?
+// vidu 的分辨率选项（支持 audio 和 seed）
 const viduResolutions = [
   { label: "540p", value: "540P" },
   { label: "720p", value: "720P" },
   { label: "1080p", value: "1080P" },
 ];
 
-// vidu-reference 鐨勫垎杈ㄧ巼閫夐」
+// vidu-reference 的分辨率选项
 const viduReferenceResolutions = viduResolutions;
 
 const resolution480720 = [

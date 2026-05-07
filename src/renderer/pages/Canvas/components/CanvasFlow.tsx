@@ -1,4 +1,4 @@
-﻿import {
+import {
   IconBrain,
   IconEye,
   IconMusic,
@@ -79,16 +79,78 @@ const DEFAULT_OPEN_ZOOM = 0.67;
 const STORE_NODE_CHANGE_THROTTLE_MS = 70;
 const MIN_GROUP_FRAME_SIZE = 80;
 const INTERACTIVE_SELECTION_SUPPRESSION_MS = 250;
-const CANVAS_INTERACTIVE_SELECTOR =
-  '.selection-box-deferred-ui, [data-slot="select-content"], [data-slot="popover-content"], [data-slot="dropdown-menu-content"]';
+const CANVAS_POINTER_EXCLUSION_SELECTOR =
+  [
+    ".react-flow__node",
+    ".react-flow__edge",
+    ".react-flow__handle",
+    ".react-flow__connection",
+    ".canvas-group-resize-handle",
+    ".canvas-group-name-badge",
+    ".canvas-batch-toolbar",
+    ".canvas-multi-select-quick-create",
+  ].join(", ");
+const CANVAS_NODE_INTERACTIVE_SELECTOR =
+  [
+    ".selection-box-deferred-ui",
+    ".nodrag",
+    ".nopan",
+    ".nowheel",
+    ".noflow",
+    ".nodelete",
+    '[data-slot="popover-trigger"]',
+    '[data-slot="select-trigger"]',
+    '[data-slot="dropdown-menu-trigger"]',
+    '[data-slot="dialog-trigger"]',
+    "button",
+    "input",
+    "textarea",
+    "select",
+    "a",
+    '[role="button"]',
+    '[contenteditable="true"]',
+  ].join(", ");
+const CANVAS_PORTAL_INTERACTIVE_SELECTOR =
+  [
+    '[data-slot="select-content"]',
+    '[data-slot="popover-content"]',
+    '[data-slot="dropdown-menu-content"]',
+    '[data-slot="dialog-content"]',
+    '[data-slot="modal-content"]',
+    '[data-slot="drawer-content"]',
+    '[data-slot="context-menu-content"]',
+  ].join(", ");
+const CANVAS_MODAL_LOCK_SELECTOR =
+  '[data-slot="dialog-content"], #panorama-root, .yarl__root';
 
-const isCanvasInteractiveTarget = (target: EventTarget | null) =>
+const isCanvasPointerExcludedTarget = (target: EventTarget | null) =>
   target instanceof Element &&
-  Boolean(target.closest(CANVAS_INTERACTIVE_SELECTOR));
+  Boolean(target.closest(CANVAS_POINTER_EXCLUSION_SELECTOR));
+
+const isCanvasNodeInteractiveTarget = (target: EventTarget | null) =>
+  target instanceof Element &&
+  Boolean(target.closest(CANVAS_NODE_INTERACTIVE_SELECTOR));
+
+const isCanvasPortalInteractiveTarget = (target: EventTarget | null) =>
+  target instanceof Element &&
+  Boolean(target.closest(CANVAS_PORTAL_INTERACTIVE_SELECTOR));
+
+const hasActiveCanvasModal = () =>
+  typeof document !== "undefined" &&
+  Boolean(document.querySelector(CANVAS_MODAL_LOCK_SELECTOR));
+
+const createIdleViewportPanState = () => ({
+  active: false,
+  startedByRightButton: false,
+  startX: 0,
+  startY: 0,
+  moved: false,
+  startedByReactFlow: false,
+});
 
 /**
- * 鏍规嵁璧风偣鍜岀粓鐐圭粯鍒朵竴鏉℃煍鍜岀殑璐濆灏旀洸绾裤€?
- * 杩欓噷鐩存帴浣跨敤灞忓箷鍧愭爣锛屾柟渚垮彔鍔犲埌 fixed 瑕嗙洊灞備笂銆?
+ * 根据起点和终点绘制一条柔和的贝塞尔曲线。
+ * 这里直接使用屏幕坐标，方便叠加到 fixed 覆盖层上。
  */
 const buildConnectionPath = (
   startX: number,
@@ -103,7 +165,7 @@ const buildConnectionPath = (
 };
 
 /**
- * 鎶婄嚎娈电殑鏈绋嶅井寰€鍥炵缉涓€鐐癸紝閬垮厤棰勮绾跨洿鎺ラ《鍒拌彍鍗曟垨鎸夐挳涓績銆?
+ * 把线段的末端稍微往回缩一点，避免预览线直接顶到菜单或按钮中心。
  */
 const shortenLineEnd = (
   startX: number,
@@ -469,12 +531,6 @@ const isEditableEventTarget = (target: EventTarget | null) => {
   );
 };
 
-const isMacOs = () => {
-  return (
-    typeof navigator !== "undefined" && navigator.userAgent.includes("Mac")
-  );
-};
-
 const scheduleIdleWork = (callback: () => void) => {
   if (typeof window === "undefined") {
     return () => { };
@@ -490,8 +546,8 @@ const scheduleIdleWork = (callback: () => void) => {
 };
 
 /**
- * 浼樺厛浠?DOM 鐩存帴璇诲彇 handle 鐨勭湡瀹炲睆骞曞潗鏍囥€?
- * 杩欐牱鍙互閬垮厤浠呮牴鎹妭鐐瑰楂樻帹绠楁椂锛実host 绾胯惤鍒拌妭鐐瑰唴閮ㄣ€?
+ * 优先从 DOM 直接读取 handle 的真实屏幕坐标。
+ * 这样可以避免仅根据节点宽高推算时，ghost 线落到节点内部。
  */
 const getHandleScreenPosition = (
   nodeId: string,
@@ -523,13 +579,13 @@ type CanvasFlowProps = {
   isMiniMapVisible: boolean;
 };
 
-// 鐢诲竷娴佺粍浠讹細浠呰礋璐?ReactFlow 鐩稿叧鐘舵€佷笌娓叉煋銆?
+// 画布流组件：仅负责 ReactFlow 相关状态与渲染。
 export const CanvasFlow = ({
   projectId,
   isMiniMapVisible,
 }: CanvasFlowProps) => {
-  // 閫氳繃 zustand 璇诲彇鍥剧姸鎬侊紝閬垮厤涓氬姟鍔ㄤ綔鏁ｈ惤鍦ㄥ涓粍浠躲€?
-  // 娉細nodes 鍜?edges 涓嶅湪姝よ闃咃紙楂橀鍙樺寲锛夛紝浣跨敤鏈湴 displayNodes/displayEdges 鍜?getState() 鑾峰彇
+  // 通过 zustand 读取图状态，避免业务动作散落在多个组件。
+  // 注：nodes 和 edges 不在此订阅（高频变化），使用本地 displayNodes/displayEdges 和 getState() 获取。
   const currentProjectId = useCanvasFlowStore((state) => state.projectId);
   const annotationWorkspace = useCanvasFlowStore(
     (state) => state.annotationWorkspace,
@@ -551,7 +607,7 @@ export const CanvasFlow = ({
   const { screenToFlowPosition } = reactFlowInstance;
   const navigate = useNavigate();
 
-  // 鎷栨嫿涓婁紶鍔熻兘
+  // 拖拽上传功能
   const {
     dragState,
     handleDragEnter,
@@ -561,7 +617,7 @@ export const CanvasFlow = ({
     handleFiles,
   } = useDragUpload();
 
-  // 绌烘牸閿寜涓嬬姸鎬佸悓鏃堕┍鍔?React Flow 鐨勫钩绉?妗嗛€夊垏鎹€?
+  // 空格键按下状态同时驱动 React Flow 的平移/框选切换。
   const spacePressedRef = useRef(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const previousAnnotationViewportRef = useRef<{
@@ -572,7 +628,7 @@ export const CanvasFlow = ({
   const annotationWasOpenRef = useRef(false);
   const isAnnotationLocked = annotationWorkspace.open;
 
-  // 纭瀵硅瘽妗嗙姸鎬?
+  // 确认对话框状态
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [generatingCount, setGeneratingCount] = useState(0);
   const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{
@@ -589,7 +645,7 @@ export const CanvasFlow = ({
     onConfirm: null,
   });
 
-  // 璺熻釜榧犳爣鍦ㄧ敾甯冧笂鐨勪綅缃紙浠呬緵浜嬩欢澶勭悊璇诲彇锛夛紝鐢?ref 閬垮厤 mousemove 瀵艰嚧鏁存爲閲嶆覆鏌撱€?
+  // 跟踪鼠标在画布上的位置（仅供事件处理读取），用 ref 避免 mousemove 导致整树重渲染。
   const mouseFlowPositionRef = useRef<{
     x: number;
     y: number;
@@ -615,14 +671,8 @@ export const CanvasFlow = ({
     startX: number;
     startY: number;
     moved: boolean;
-  }>({
-    active: false,
-    startedByRightButton: false,
-    startX: 0,
-    startY: 0,
-    moved: false,
-  });
-  const [isViewportPanning, setViewportPanning] = useState(false);
+    startedByReactFlow: boolean;
+  }>(createIdleViewportPanState());
   const [isSelectionBoxActive, setSelectionBoxActive] = useState(false);
   const selectionRectElementRef = useRef<HTMLDivElement | null>(null);
   const pendingManualSelectionRectRef = useRef<{
@@ -653,7 +703,7 @@ export const CanvasFlow = ({
     pendingManualSelectionRectRef.current = null;
   }, []);
 
-  // 鑾峰彇姝ｅ湪鐢熸垚鐨勪换鍔℃暟閲忓拰鍙栨秷鏂规硶
+  // 获取正在生成的任务数量和取消方法
   const getGeneratingTasksCount = useCanvasFlowStore(
     (state) => state.getGeneratingTasksCount,
   );
@@ -661,7 +711,7 @@ export const CanvasFlow = ({
     (state) => state.cancelAllGeneratingTasks,
   );
 
-  // 鑾峰彇鎾ら攢/閲嶅仛鏂规硶锛堥€氳繃 useUndoRedo hook锛?
+  // 获取撤销/重做方法（通过 useUndoRedo hook）
   const {
     undo,
     redo,
@@ -672,7 +722,7 @@ export const CanvasFlow = ({
     lastSavedVersionRef,
   } = useUndoRedo();
 
-  // 鑾峰彇澶嶅埗/绮樿创鏂规硶锛堥€氳繃 useCopyPaste hook锛?
+  // 获取复制/粘贴方法（通过 useCopyPaste hook）
   const { copySelectedNodes, pasteNodes } = useCopyPaste();
 
   useEffect(() => {
@@ -715,15 +765,15 @@ export const CanvasFlow = ({
     confirmAction?.();
   }, [deleteConfirmDialog.onConfirm, handleCloseDeleteConfirmDialog]);
 
-  // 澶勭悊閿洏蹇嵎閿?
+  // 处理键盘快捷键
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      // 妫€鏌ユ槸鍚﹀湪杈撳叆妗嗕腑
+      // 检查是否在输入框中
       if (isEditableEventTarget(event.target)) {
         return;
       }
 
-      if (annotationWorkspace.open) {
+      if (annotationWorkspace.open || hasActiveCanvasModal()) {
         return;
       }
 
@@ -770,7 +820,7 @@ export const CanvasFlow = ({
         return;
       }
 
-      // Ctrl+Z 鎴?Cmd+Z锛氭挙閿€
+      // Ctrl+Z 或 Cmd+Z：撤销
       if (
         (event.ctrlKey || event.metaKey) &&
         event.key === "z" &&
@@ -782,7 +832,7 @@ export const CanvasFlow = ({
         }
       }
 
-      // Ctrl+Shift+Z 鎴?Cmd+Shift+Z 鎴?Ctrl+Y锛氶噸鍋?
+      // Ctrl+Shift+Z 或 Cmd+Shift+Z 或 Ctrl+Y：重做
       if (
         (event.ctrlKey || event.metaKey) &&
         (event.key === "y" || (event.key === "z" && event.shiftKey))
@@ -793,7 +843,7 @@ export const CanvasFlow = ({
         }
       }
 
-      // Ctrl+C 鎴?Cmd+C锛氬鍒堕€変腑鑺傜偣
+      // Ctrl+C 或 Cmd+C：复制选中节点
       if (
         (event.ctrlKey || event.metaKey) &&
         event.key === "c" &&
@@ -802,7 +852,7 @@ export const CanvasFlow = ({
         copySelectedNodes();
       }
 
-      // Ctrl+V 鎴?Cmd+V锛氱矘璐磋妭鐐?
+      // Ctrl+V 或 Cmd+V：粘贴节点
       if (
         (event.ctrlKey || event.metaKey) &&
         event.key === "v" &&
@@ -811,7 +861,7 @@ export const CanvasFlow = ({
         return;
       }
 
-      // Ctrl+S 鎴?Cmd+S锛氫繚瀛樼敾甯?
+      // Ctrl+S 或 Cmd+S：保存画布
       if (
         (event.ctrlKey || event.metaKey) &&
         event.key === "s" &&
@@ -839,7 +889,7 @@ export const CanvasFlow = ({
     ],
   );
 
-  // 鐩戝惉閿洏浜嬩欢
+  // 监听键盘事件
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
     return () => {
@@ -872,7 +922,7 @@ export const CanvasFlow = ({
 
   useEffect(() => {
     const handleCopy = (event: ClipboardEvent) => {
-      if (annotationWorkspace.open) {
+      if (annotationWorkspace.open || hasActiveCanvasModal()) {
         return;
       }
 
@@ -898,7 +948,7 @@ export const CanvasFlow = ({
     };
   }, [annotationWorkspace.open]);
 
-  // 鐩戝惉 store 鐨?historyVersion 鍙樺寲锛岃Е鍙戝巻鍙茶褰曚繚瀛?
+  // 监听 store 的 historyVersion 变化，触发历史记录保存
   const historyVersion = useCanvasFlowStore((state) => state.historyVersion);
   const historyResetTrigger = useCanvasFlowStore(
     (state) => state.historyResetTrigger,
@@ -915,7 +965,7 @@ export const CanvasFlow = ({
     }
   }, [historyVersion, saveToHistory, lastSavedVersionRef]);
 
-  // 鐢诲竷鍏夋爣浜や簰锛氱┖鏍?鎶撴墜锛孋trl=鏀惧ぇ闀滐紝鑺傜偣=灏忔墜锛岄粯璁?绠ご
+  // 画布光标交互：空格=抓手，Ctrl=放大镜，节点=小手，默认=箭头
   useEffect(() => {
     const reactFlowEl = document.querySelector(".react-flow");
     if (!reactFlowEl) return;
@@ -924,7 +974,7 @@ export const CanvasFlow = ({
     let isCtrlPressed = false;
 
     const updateCursorState = () => {
-      if (annotationWorkspace.open) {
+      if (annotationWorkspace.open || hasActiveCanvasModal()) {
         reactFlowEl.removeAttribute("data-space-pressed");
         reactFlowEl.removeAttribute("data-ctrl-pressed");
         spacePressedRef.current = false;
@@ -955,7 +1005,7 @@ export const CanvasFlow = ({
         return;
       }
 
-      if (annotationWorkspace.open) {
+      if (annotationWorkspace.open || hasActiveCanvasModal()) {
         return;
       }
 
@@ -1004,7 +1054,7 @@ export const CanvasFlow = ({
 
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
-      if (annotationWorkspace.open) {
+      if (annotationWorkspace.open || hasActiveCanvasModal()) {
         return;
       }
 
@@ -1056,7 +1106,7 @@ export const CanvasFlow = ({
     };
   }, [annotationWorkspace.open, handleFiles, pasteNodes, screenToFlowPosition]);
 
-  // 鐩戝惉榧犳爣绉诲姩浠ユ洿鏂扮敾甯冧笂鐨勯紶鏍囦綅缃?
+  // 监听鼠标移动以更新画布上的鼠标位置
   useEffect(() => {
     let pendingMouseEvent: MouseEvent | null = null;
     let mouseMoveRaf: number | null = null;
@@ -1078,7 +1128,7 @@ export const CanvasFlow = ({
     };
 
     const handleMouseMove = (event: MouseEvent) => {
-      if (isDraggingRef.current) {
+      if (isDraggingRef.current || hasActiveCanvasModal()) {
         pendingMouseEvent = null;
         return;
       }
@@ -1099,82 +1149,18 @@ export const CanvasFlow = ({
     };
   }, [reactFlowInstance]);
 
-  useEffect(() => {
-    const handleWheel = (event: WheelEvent) => {
-      if (annotationWorkspace.open) {
-        return;
-      }
-
-      if (event.ctrlKey || event.metaKey) {
-        const target = event.target as HTMLElement | null;
-        if (!target?.closest(".nowheel")) {
-          return;
-        }
-
-        event.preventDefault();
-
-        const { zoom: currentZoom, x, y } = reactFlowInstance.getViewport();
-        const deltaModeFactor =
-          event.deltaMode === 1 ? 0.05 : event.deltaMode ? 1 : 0.002;
-        const wheelDelta =
-          -event.deltaY *
-          deltaModeFactor *
-          (event.ctrlKey && isMacOs() ? 10 : 1);
-        const newZoom = Math.min(
-          MAX_CANVAS_ZOOM,
-          Math.max(MIN_CANVAS_ZOOM, currentZoom * 2 ** wheelDelta),
-        );
-
-        const reactFlowBounds = (
-          event.currentTarget as HTMLElement
-        ).getBoundingClientRect();
-        const mouseX = event.clientX - reactFlowBounds.left;
-        const mouseY = event.clientY - reactFlowBounds.top;
-
-        const zoomRatio = newZoom / currentZoom;
-
-        const newX = mouseX - (mouseX - x) * zoomRatio;
-        const newY = mouseY - (mouseY - y) * zoomRatio;
-
-        reactFlowInstance.setViewport({
-          x: newX,
-          y: newY,
-          zoom: newZoom,
-        });
-      }
-    };
-
-    const reactFlowContainer = document.querySelector(".react-flow");
-    if (reactFlowContainer) {
-      reactFlowContainer.addEventListener(
-        "wheel",
-        handleWheel as EventListener,
-        { passive: false },
-      );
-    }
-
-    return () => {
-      if (reactFlowContainer) {
-        reactFlowContainer.removeEventListener(
-          "wheel",
-          handleWheel as EventListener,
-        );
-      }
-    };
-  }, [annotationWorkspace.open, reactFlowInstance]);
-
-  // ==================== 鎷栧姩鎬ц兘浼樺寲锛氭湰鍦?nodes 鐘舵€侀殧绂?====================
+  // ==================== 拖动性能优化：本地 nodes 状态隔离 ====================
   //
-  // 闂锛歊eactFlow 鍙楁帶妯″紡涓嬶紝鎷栧姩鏃舵瘡甯ц皟鐢?onNodesChange 鈫?Zustand set 鈫?
-  //       CanvasFlow 閲嶆覆鏌擄紙鍥犱负璁㈤槄浜?zustandNodes锛?鈫?React DevTools 璺熻釜
-  //       姣忔閲嶆覆鏌撳紑閿€ 鈫?鎵撳紑寮€鍙戣€呭伐鍏锋椂鍗￠】銆?
+  // 问题：ReactFlow 受控模式下，拖动时每帧调用 onNodesChange -> Zustand set ->
+  //       CanvasFlow 重渲染（因为订阅了 zustandNodes）-> React DevTools 跟踪
+  //       每次重渲染开销 -> 打开开发者工具时卡顿。
   //
-  // 瑙ｆ硶锛氱淮鎶ゆ湰鍦?displayNodes 鐘舵€佺敤浜?ReactFlow 娓叉煋锛?
-  //   - 鎷栧姩鏃讹細鍙洿鏂版湰鍦?displayNodes锛堣瑙夋祦鐣咃級锛屼笉鍐欏叆 Zustand锛堜笉瑙﹀彂鍏ㄥ眬閲嶆覆鏌擄級
-  //   - 鎷栧姩缁撴潫锛氬悓姝ユ渶缁堜綅缃埌 Zustand锛堟寔涔呭寲锛?
-  //   - 澶栭儴鍙樻洿锛堟坊鍔?鍒犻櫎鑺傜偣銆佸浘鐗囩敓鎴愮粨鏋滅瓑锛夛細Zustand 鍙樺寲鏃跺悓姝ュ埌 displayNodes
+  // 解法：维护本地 displayNodes 状态用于 ReactFlow 渲染。
+  //   - 拖动时：只更新本地 displayNodes（视觉流畅），不写入 Zustand（不触发全局重渲染）
+  //   - 拖动结束：同步最终位置到 Zustand（持久化）
+  //   - 外部变更（添加、删除节点、图片生成结果等）：Zustand 变化时同步到 displayNodes
 
-  // 鍒濆鍖栨湰鍦扮姸鎬?
+  // 初始化本地状态
   const [displayNodes, setDisplayNodes] = useState<AllNodeType[]>(
     () => useCanvasFlowStore.getState().nodes,
   );
@@ -1209,7 +1195,7 @@ export const CanvasFlow = ({
   const viewportRafRef = useRef<number | null>(null);
   const latestStoreNodesRef = useRef(useCanvasFlowStore.getState().nodes);
   const latestStoreEdgesRef = useRef(useCanvasFlowStore.getState().edges);
-  // 鐢?ref 鑰岄潪 state 杩借釜鎷栧姩鐘舵€侊紝閬垮厤寮曞彂棰濆娓叉煋
+  // 用 ref 而非 state 追踪拖动状态，避免引发额外渲染
   const isDraggingRef = useRef(false);
   const pendingNodeChangesRef = useRef<NodeChange<AllNodeType>[]>([]);
   const nodeChangeRafRef = useRef<number | null>(null);
@@ -1220,7 +1206,7 @@ export const CanvasFlow = ({
   const nodeDragPreviewStateRef = useRef<NodeDragPreviewState | null>(null);
   const nodeDragPreviewRafRef = useRef<number | null>(null);
 
-  // 绋冲畾 ReactFlow 瀵硅薄鍨?props 鐨勫紩鐢紝閬垮厤姣忔 render 鐢熸垚鏂板璞″鑷村瓙鏍戞棤鏁堟洿鏂?
+  // 稳定 ReactFlow 对象型 props 的引用，避免每次 render 生成新对象导致子树无效更新
   const connectionLineStyle = useMemo(
     () => ({
       stroke: "rgba(220, 178, 255, 0.5)",
@@ -1238,10 +1224,10 @@ export const CanvasFlow = ({
     [],
   );
 
-  // 鐩戝惉 Zustand 鐘舵€佸彉鍖栵紙澶栭儴鍙樻洿濡傛坊鍔?鍒犻櫎鑺傜偣銆佸浘鐗囩敓鎴愮粨鏋滅瓑锛?
+  // 监听 Zustand 状态变化（外部变更如添加、删除节点、图片生成结果等）
   useEffect(() => {
     const unsubscribe = useCanvasFlowStore.subscribe((newState) => {
-      // 鍙湪闈炴嫋鍔ㄦ椂鏇存柊鏄剧ず鑺傜偣锛屽苟涓斾粎鍦ㄥ紩鐢ㄥ彉鍖栨椂 setState
+      // 只在非拖动时更新显示节点，并且仅在引用变化时 setState
       if (
         !isDraggingRef.current &&
         latestStoreNodesRef.current !== newState.nodes
@@ -1250,7 +1236,7 @@ export const CanvasFlow = ({
         setDisplayNodes(newState.nodes);
       }
 
-      // 杈规暟缁勪粎鍦ㄥ紩鐢ㄥ彉鍖栨椂鏇存柊锛岄伩鍏嶆棤鏁?setState
+      // 边数组仅在引用变化时更新，避免无效 setState
       if (latestStoreEdgesRef.current !== newState.edges) {
         latestStoreEdgesRef.current = newState.edges;
         setDisplayEdges(newState.edges);
@@ -1259,7 +1245,7 @@ export const CanvasFlow = ({
     return unsubscribe;
   }, []);
 
-  // 鏈湴 onNodesChange锛氬彧璐熻矗鏇存柊 displayNodes锛屼綅缃彉鏇村湪鎷栧姩缁撴潫鏃跺鐞?
+  // 本地 onNodesChange：只负责更新 displayNodes，位置变更在拖动结束时处理
   const compactNodeChanges = useCallback(
     (changes: NodeChange<AllNodeType>[]) => {
       const latestPositionChanges = new Map<string, NodeChange<AllNodeType>>();
@@ -1440,7 +1426,7 @@ export const CanvasFlow = ({
 
   useEffect(() => {
     const handleInteractivePointerDown = (event: PointerEvent) => {
-      if (isCanvasInteractiveTarget(event.target)) {
+      if (isCanvasPortalInteractiveTarget(event.target)) {
         scheduleInteractiveSelectionSuppressionRelease();
       }
     };
@@ -1483,7 +1469,7 @@ export const CanvasFlow = ({
         return;
       }
 
-      // 濮嬬粓鏇存柊鏈湴鏄剧ず鐘舵€侊紝淇濊瘉鎷栧姩瑙嗚娴佺晠
+      // 始终更新本地显示状态，保证拖动视觉流畅
       scheduleDisplayNodeChanges(filteredChanges);
 
       // 高频变更按 70ms 节流写入 store；尺寸变更仍由拖拽结束/外部流程处理。
@@ -1936,7 +1922,11 @@ export const CanvasFlow = ({
   }, []);
 
   const handleSelectionStart = useCallback(() => {
-    if (annotationWorkspace.open) {
+    if (annotationWorkspace.open || hasActiveCanvasModal()) {
+      return;
+    }
+
+    if (isCanvasNodeInteractiveTarget(document.activeElement)) {
       return;
     }
 
@@ -2097,9 +2087,9 @@ export const CanvasFlow = ({
     };
   }, [clearManualSelectionRect]);
 
-  // 鐐瑰嚮鐢诲竷绌虹櫧鍖哄煙鏃跺彇娑堟墍鏈夎妭鐐圭殑閫変腑鐘舵€?
+  // 点击画布空白区域时取消所有节点的选中状态
   const handlePaneClick = useCallback(() => {
-    if (annotationWorkspace.open) {
+    if (annotationWorkspace.open || hasActiveCanvasModal()) {
       return;
     }
 
@@ -2782,6 +2772,21 @@ export const CanvasFlow = ({
       const isPrimaryButton = event.button === 0;
       const isShiftRightButton = event.shiftKey && event.button === 2;
 
+      if (hasActiveCanvasModal()) {
+        return;
+      }
+
+      if (spacePressedRef.current) {
+        return;
+      }
+
+      if (
+        isCanvasNodeInteractiveTarget(event.target) ||
+        isCanvasPortalInteractiveTarget(event.target)
+      ) {
+        return;
+      }
+
       if (event.button === 2 && !event.shiftKey) {
         viewportPanStateRef.current = {
           active: true,
@@ -2789,24 +2794,20 @@ export const CanvasFlow = ({
           startX: event.clientX,
           startY: event.clientY,
           moved: false,
+          startedByReactFlow: false,
         };
         return;
       }
 
       if (
+        hasActiveCanvasModal() ||
         annotationWorkspace.open ||
-        isSpacePressed ||
         (!isPrimaryButton && !isShiftRightButton)
       ) {
         return;
       }
 
-      const target = event.target as Element | null;
-      if (
-        target?.closest(
-          ".react-flow__node, .react-flow__edge, .react-flow__handle, .react-flow__connection, .canvas-group-resize-handle, .canvas-group-name-badge, .canvas-batch-toolbar, .canvas-multi-select-quick-create",
-        )
-      ) {
+      if (isCanvasPointerExcludedTarget(event.target)) {
         return;
       }
 
@@ -2957,7 +2958,6 @@ export const CanvasFlow = ({
       displayNodes,
       groups,
       handlePaneClick,
-      isSpacePressed,
       screenToFlowPosition,
       scheduleContextMenuSuppressionRelease,
       setSelectedGroupId,
@@ -2965,7 +2965,7 @@ export const CanvasFlow = ({
     ],
   );
 
-  // 涓洪珮棰戣鍙栧満鏅缓绔嬭妭鐐圭储寮曪紝閬垮厤閲嶅绾挎€ф壂鎻忋€?
+  // 为高频读取场景建立节点索引，避免重复线性扫描。
   const displayNodeById = useMemo(() => {
     const nodeMap = new Map<string, AllNodeType>();
     displayNodes.forEach((node) => {
@@ -2991,7 +2991,7 @@ export const CanvasFlow = ({
     displayNodeById,
   ]);
 
-  // 鍗曟閬嶅巻瀹屾垚澶氶€夌粺璁★細鍚屾椂寰楀埌閫変腑鑺傜偣 id 鍒楄〃涓庨€夊尯鍙充晶涓績鐐广€?
+  // 单次遍历完成多选统计：同时得到选中节点 id 列表与选区右侧中心点。
   const multiSelectedSummary = useMemo(() => {
     if (activeGroupDragId) {
       return {
@@ -3051,7 +3051,7 @@ export const CanvasFlow = ({
         height: maxBottom - minTop,
       },
       selectionRightCenterFlowPosition: {
-        // 鈥?鈥濆嚭鐜板湪閫夊尯鍙充晶锛岀暀涓€娈靛浐瀹氬亸绉伙紝閬垮厤璐磋竟閲嶅彔銆?
+        // “+”出现在选区右侧，留一段固定偏移，避免贴边重叠。
         x: maxRight + 32,
         y: minTop + (maxBottom - minTop) / 2,
       },
@@ -3068,37 +3068,16 @@ export const CanvasFlow = ({
     [multiSelectedNodeIds],
   );
 
-  // 灏嗘祦鍧愭爣杞崲涓哄睆骞曞潗鏍囷紝鐢ㄤ簬缁濆瀹氫綅娴姩鎸夐挳銆?
-  const selectionBoundsScreen = useMemo(() => {
-    if (!selectionBoundsFlow) {
+  const selectionToolbarFlowPosition = useMemo(() => {
+    if (!selectionBoundsFlow || multiSelectedCount < 2) {
       return null;
     }
 
-    const padding = 8;
     return {
-      x: selectionBoundsFlow.x * viewportState.zoom + viewportState.x - padding,
-      y: selectionBoundsFlow.y * viewportState.zoom + viewportState.y - padding,
-      width: selectionBoundsFlow.width * viewportState.zoom + padding * 2,
-      height: selectionBoundsFlow.height * viewportState.zoom + padding * 2,
+      x: selectionBoundsFlow.x + selectionBoundsFlow.width / 2,
+      y: selectionBoundsFlow.y - 12 / viewportState.zoom,
     };
-  }, [selectionBoundsFlow, viewportState]);
-
-  const selectionToolbarPosition = useMemo(() => {
-    if (!selectionBoundsScreen || multiSelectedCount < 2) {
-      return null;
-    }
-
-    const viewportWidth =
-      typeof window !== "undefined" ? window.innerWidth : 0;
-    return {
-      x: clamp(
-        selectionBoundsScreen.x + selectionBoundsScreen.width / 2,
-        24,
-        Math.max(viewportWidth - 24, 24),
-      ),
-      y: Math.max(selectionBoundsScreen.y - 12, 24),
-    };
-  }, [multiSelectedCount, selectionBoundsScreen]);
+  }, [multiSelectedCount, selectionBoundsFlow, viewportState.zoom]);
 
   const quickCreateScreenPosition = useMemo(() => {
     if (!selectionRightCenterFlowPosition || multiSelectedCount < 2) {
@@ -3207,34 +3186,19 @@ export const CanvasFlow = ({
     }).length;
   }, [groups, multiSelectedCount, multiSelectedNodeIds]);
 
-  const selectedGroupToolbarPosition = useMemo(() => {
+  const selectedGroupToolbarFlowPosition = useMemo(() => {
     if (!activeBatchGroup) {
       return null;
     }
 
-    const screenLeft =
-      activeBatchGroup.bounds.x * viewportState.zoom + viewportState.x;
-    const screenTop =
-      activeBatchGroup.bounds.y * viewportState.zoom + viewportState.y;
-    const screenWidth = activeBatchGroup.bounds.width * viewportState.zoom;
-    const gap = 12;
-    const viewportWidth =
-      typeof window !== "undefined" ? window.innerWidth : 0;
-    const anchorX = clamp(
-      screenLeft + screenWidth / 2,
-      24,
-      Math.max(viewportWidth - 24, 24),
-    );
-    const anchorY = Math.max(screenTop - gap, 24);
-
     return {
-      x: anchorX,
-      y: anchorY,
+      x: activeBatchGroup.bounds.x + activeBatchGroup.bounds.width / 2,
+      y: activeBatchGroup.bounds.y - 12 / viewportState.zoom,
     };
   }, [activeBatchGroup, viewportState]);
 
   const batchToolbarMode =
-    activeGroupDragId || isViewportPanning
+    activeGroupDragId
       ? null
       : activeBatchGroup
       ? "group"
@@ -3270,7 +3234,7 @@ export const CanvasFlow = ({
     ],
   );
 
-  // 褰?projectId 鍙樺寲鏃跺垏鎹㈤」鐩?
+  // 当 projectId 变化时切换项目
   useEffect(() => {
     if (projectId && projectId !== currentProjectId) {
       switchProject(projectId);
@@ -3344,9 +3308,8 @@ export const CanvasFlow = ({
   const GROUP_RESIZE_THRESHOLD = 2;
   const RIGHT_BUTTON_PAN_THRESHOLD = 4;
 
-  // 浠呭湪鍙犲姞灞傞渶瑕佽窡闅忕缉鏀?骞崇Щ鏃讹紝鎵嶈拷韪?viewport锛岄伩鍏?onMove 楂橀瑙﹀彂鏁存爲閲嶆覆鏌撱€?
+  // 仅在叠加层需要跟随缩放/平移时，才追踪 viewport，避免 onMove 高频触发整树重渲染。
   const shouldTrackViewport =
-    !isViewportPanning &&
     ((!activeGroupDragId &&
       (Boolean(selectionRightCenterFlowPosition) ||
         Boolean(activeBatchGroup))) ||
@@ -3354,7 +3317,7 @@ export const CanvasFlow = ({
       quickAddDragPreview.active ||
       Boolean(quickAddMenuOpen && quickAddMenuScreenPosition));
 
-  // 浣跨敤 rAF 鍚堝抚鏇存柊 viewport 鐘舵€侊紝閬垮厤姣忔 onMove 閮?setState銆?
+  // 使用 rAF 合帧更新 viewport 状态，避免每次 onMove 都 setState。
   const flushViewportState = useCallback(() => {
     viewportRafRef.current = null;
     const nextViewport = pendingViewportRef.current;
@@ -3387,7 +3350,7 @@ export const CanvasFlow = ({
 
   const handleViewportMove = useCallback(
     (_: unknown, viewport: unknown) => {
-      // 浣跨敤 unknown 閬垮厤鍦ㄩ珮棰戜簨浠朵腑寮曞叆棰濆绫诲瀷鍣煶銆?
+      // 使用 unknown 避免在高频事件中引入额外类型噪音。
       pendingViewportRef.current = viewport as {
         x: number;
         y: number;
@@ -3448,8 +3411,8 @@ export const CanvasFlow = ({
               ? nativeEvent.clientY
               : 0,
         moved: existingPanState.moved,
+        startedByReactFlow: true,
       };
-      setViewportPanning(true);
     },
     [],
   );
@@ -3477,20 +3440,13 @@ export const CanvasFlow = ({
         scheduleContextMenuSuppressionRelease();
       }
 
-      viewportPanStateRef.current = {
-        active: false,
-        startedByRightButton: false,
-        startX: 0,
-        startY: 0,
-        moved: false,
-      };
-      setViewportPanning(false);
+      viewportPanStateRef.current = createIdleViewportPanState();
       syncViewportStateNow();
     },
     [scheduleContextMenuSuppressionRelease, syncViewportStateNow],
   );
 
-  // 褰撳紑濮嬮渶瑕佽拷韪?viewport 鏃讹紝鍏堝悓姝ヤ竴娆℃渶鏂板€硷紝閬垮厤鍑虹幇浣嶇疆璺冲彉銆?
+  // 当开始需要追踪 viewport 时，先同步一次最新值，避免出现位置跳变。
   useEffect(() => {
     if (!shouldTrackViewport) {
       return;
@@ -3502,7 +3458,7 @@ export const CanvasFlow = ({
     setViewportState(latestViewport);
   }, [reactFlowInstance, shouldTrackViewport]);
 
-  // 缁勪欢鍗歌浇鏃舵竻鐞?rAF锛岄伩鍏嶆綔鍦ㄥ唴瀛樻硠婕忋€?
+  // 组件卸载时清理 rAF，避免潜在内存泄漏。
   useEffect(() => {
     return () => {
       if (viewportRafRef.current !== null) {
@@ -3674,13 +3630,7 @@ export const CanvasFlow = ({
             event.clientY - panState.startY,
           ) >= RIGHT_BUTTON_PAN_THRESHOLD)
       ) {
-        viewportPanStateRef.current = {
-          active: false,
-          startedByRightButton: false,
-          startX: 0,
-          startY: 0,
-          moved: false,
-        };
+        viewportPanStateRef.current = createIdleViewportPanState();
         clearSuppressedContextMenu();
         event.preventDefault();
         if ("stopPropagation" in event) {
@@ -3716,7 +3666,7 @@ export const CanvasFlow = ({
     [clearSuppressedContextMenu],
   );
 
-  // 鑿滃崟鍏抽棴鏃讹紝缁熶竴娓呯悊鎷栫嚎鐘舵€侊紝閬垮厤棰勮绾挎畫鐣欍€?
+  // 菜单关闭时，统一清理拖线状态，避免预览线残留。
   const handleCanvasContextMenuOpenChange = useCallback((open: boolean) => {
     if (open) {
       return;
@@ -3727,7 +3677,7 @@ export const CanvasFlow = ({
     setCanvasMenuMode("create");
   }, []);
 
-  // 閫氳繃鍘熺敓 dblclick 浜嬩欢瀹炵幇鍙屽嚮鍞ゅ嚭鑿滃崟
+  // 通过原生 dblclick 事件实现双击唤出菜单
   const handleNativeDblClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (annotationWorkspace.open) {
@@ -3736,7 +3686,7 @@ export const CanvasFlow = ({
         return;
       }
 
-      // 鍙搷搴旂偣鍦ㄧ敾甯冪┖鐧藉尯鍩燂紙.react-flow__pane锛変笂鐨勫弻鍑?
+      // 只响应点在画布空白区域（.react-flow__pane）上的双击
       const target = event.target as Element;
       if (
         target.closest(
@@ -3747,7 +3697,7 @@ export const CanvasFlow = ({
       }
 
       if (target.closest(".react-flow__pane")) {
-        // 闃绘 ReactFlow 榛樿鐨勫弻鍑荤缉鏀捐涓?
+        // 阻止 ReactFlow 默认的双击缩放行为
         event.preventDefault();
         event.stopPropagation();
         openContextMenuAt(event.clientX, event.clientY, "create");
@@ -3876,7 +3826,7 @@ export const CanvasFlow = ({
         }
       }
 
-      // 鏈懡涓妭鐐规椂锛屼繚鐣欒櫄鎷熻繛绾垮苟鎵撳紑鑿滃崟銆?
+      // 未命中节点时，保留虚拟连线并打开菜单。
       openContextMenuAt(pointer.clientX, pointer.clientY);
     },
     [
@@ -3983,7 +3933,7 @@ export const CanvasFlow = ({
     ],
   );
 
-  // 鑿滃崟鎬侀瑙堢嚎锛氭牴鎹嫋绾垮紑濮嬬殑鑺傜偣鍜岃彍鍗曚綅缃紝璁＄畻鍑轰竴涓ǔ瀹氱殑鏄剧ず璺緞銆?
+  // 菜单态预览线：根据拖线开始的节点和菜单位置，计算出一个稳定的显示路径。
   const connectionGhostPath = useMemo(() => {
     if (!connectionGhost) {
       return null;
@@ -4045,7 +3995,7 @@ export const CanvasFlow = ({
     viewportState,
   ]);
 
-  // Quick Add 棰勮绾匡細姣忎釜閫変腑鑺傜偣閮界粯鍒朵竴鏉＄嚎锛岀粺涓€鎸囧悜鎷栨嫿鐐规垨鑿滃崟钀界偣銆?
+  // Quick Add 预览线：每个选中节点都绘制一条线，统一指向拖拽点或菜单落点。
   const quickAddConnectionPaths = useMemo(() => {
     const hasDragTarget = quickAddDragPreview.active;
     const hasMenuTarget = quickAddMenuOpen && quickAddMenuScreenPosition;
@@ -4134,7 +4084,7 @@ export const CanvasFlow = ({
     viewportState,
   ]);
 
-  // 鎸変綇鈥?鈥濆紑濮嬫嫋鎷斤細鏄剧ず棰勮杩炵嚎锛涙澗鎵嬪悗鍦ㄩ噴鏀剧偣鎵撳紑绫诲瀷鑿滃崟銆?
+  // 按住“+”开始拖拽：显示预览连线；松手后在释放点打开类型菜单。
   const handleQuickAddPointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
       if (annotationWorkspace.open) {
@@ -4158,7 +4108,7 @@ export const CanvasFlow = ({
         endY: event.clientY,
       });
 
-      // 鎷栨嫿棰勮閲囩敤 rAF 鍚堝抚锛岄檷浣?pointermove 椋庢毚涓嬬殑 setState 棰戠巼銆?
+      // 拖拽预览采用 rAF 合帧，降低 pointermove 风暴下的 setState 频率。
       let pointerRafId: number | null = null;
       let latestPointerPoint = { x: event.clientX, y: event.clientY };
 
@@ -4392,7 +4342,7 @@ export const CanvasFlow = ({
             </>
           ) : null}
 
-          {/* 鑿滃崟鎬佽櫄鎷熻繛绾匡細鍦ㄦ嫋绾块噴鏀惧悗淇濈暀杩炴帴鎰熴€?*/}
+          {/* 菜单态虚拟连线：在拖线释放后保留连接感 */}
           <svg
             className="pointer-events-none fixed inset-0 z-20 overflow-visible"
             aria-hidden="true"
@@ -4471,11 +4421,11 @@ export const CanvasFlow = ({
             onMoveEnd={handleViewportMoveEnd}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
-            nodesDraggable={!isAnnotationLocked && !isSpacePressed}
+            nodesDraggable={!isAnnotationLocked}
             nodesConnectable={!isAnnotationLocked}
             nodesFocusable={!isAnnotationLocked}
             edgesFocusable={!isAnnotationLocked}
-            elementsSelectable={!isAnnotationLocked && !isSpacePressed}
+            elementsSelectable={!isAnnotationLocked}
             fitView
             fitViewOptions={{
               padding: 0.1,
@@ -4487,23 +4437,21 @@ export const CanvasFlow = ({
             colorMode="dark"
             style={{ background: "#090909" }}
             deleteKeyCode={null}
-            panOnDrag={
-              isAnnotationLocked ? false : isSpacePressed ? [0, 2] : [2]
-            }
+            panOnDrag={isAnnotationLocked ? false : [1, 2]}
             panActivationKeyCode={isAnnotationLocked ? null : "Space"}
-            noPanClassName={isSpacePressed ? "__space-pan-disabled" : "nopan"}
+            noPanClassName={isSpacePressed ? "__space-pan-all" : "nopan"}
+            noWheelClassName="__canvas-tools-allow-wheel"
             selectionOnDrag={false}
             selectionKeyCode={null}
             selectionMode={SelectionMode.Full}
             multiSelectionKeyCode={["Shift"]}
-            panOnScroll={!isAnnotationLocked}
-            panOnScrollSpeed={0.5}
+            panOnScroll={false}
             zoomOnDoubleClick={false}
             zoomOnScroll={!isAnnotationLocked}
             zoomOnPinch={!isAnnotationLocked}
-            preventScrolling={false}
+            preventScrolling
             connectionLineStyle={connectionLineStyle}
-            // 鍚搁檮寮€鍏充笌缃戞牸灏哄鐢辫缃腑蹇冮┍鍔?
+            // 吸附开关与网格尺寸由设置中心驱动
             snapToGrid={snapToGrid}
             snapGrid={[20, 20]}
             connectionRadius={50}
@@ -4530,7 +4478,11 @@ export const CanvasFlow = ({
                         height: `${group.bounds.height}px`,
                       }}
                       onPointerDown={(event) => {
-                        if (event.button !== 0 || annotationWorkspace.open) {
+                        if (
+                          event.button !== 0 ||
+                          annotationWorkspace.open ||
+                          spacePressedRef.current
+                        ) {
                           return;
                         }
 
@@ -4548,6 +4500,9 @@ export const CanvasFlow = ({
                       <div
                         className="canvas-group-resize-handle pointer-events-auto absolute inset-x-4 top-[-5px] h-3 cursor-ns-resize"
                         onPointerDown={(event) => {
+                          if (spacePressedRef.current) {
+                            return;
+                          }
                           event.preventDefault();
                           event.stopPropagation();
                           beginGroupResize(
@@ -4561,6 +4516,9 @@ export const CanvasFlow = ({
                       <div
                         className="canvas-group-resize-handle pointer-events-auto absolute inset-x-4 bottom-[-5px] h-3 cursor-ns-resize"
                         onPointerDown={(event) => {
+                          if (spacePressedRef.current) {
+                            return;
+                          }
                           event.preventDefault();
                           event.stopPropagation();
                           beginGroupResize(
@@ -4574,6 +4532,9 @@ export const CanvasFlow = ({
                       <div
                         className="canvas-group-resize-handle pointer-events-auto absolute inset-y-4 left-[-5px] w-3 cursor-ew-resize"
                         onPointerDown={(event) => {
+                          if (spacePressedRef.current) {
+                            return;
+                          }
                           event.preventDefault();
                           event.stopPropagation();
                           beginGroupResize(
@@ -4587,6 +4548,9 @@ export const CanvasFlow = ({
                       <div
                         className="canvas-group-resize-handle pointer-events-auto absolute inset-y-4 right-[-5px] w-3 cursor-ew-resize"
                         onPointerDown={(event) => {
+                          if (spacePressedRef.current) {
+                            return;
+                          }
                           event.preventDefault();
                           event.stopPropagation();
                           beginGroupResize(
@@ -4600,6 +4564,9 @@ export const CanvasFlow = ({
                       <div
                         className="canvas-group-resize-handle pointer-events-auto absolute left-[-6px] top-[-6px] size-5 cursor-nwse-resize"
                         onPointerDown={(event) => {
+                          if (spacePressedRef.current) {
+                            return;
+                          }
                           event.preventDefault();
                           event.stopPropagation();
                           beginGroupResize(
@@ -4613,6 +4580,9 @@ export const CanvasFlow = ({
                       <div
                         className="canvas-group-resize-handle pointer-events-auto absolute right-[-6px] bottom-[-6px] size-5 cursor-nwse-resize"
                         onPointerDown={(event) => {
+                          if (spacePressedRef.current) {
+                            return;
+                          }
                           event.preventDefault();
                           event.stopPropagation();
                           beginGroupResize(
@@ -4626,6 +4596,9 @@ export const CanvasFlow = ({
                       <div
                         className="canvas-group-resize-handle pointer-events-auto absolute right-[-6px] top-[-6px] size-5 cursor-nesw-resize"
                         onPointerDown={(event) => {
+                          if (spacePressedRef.current) {
+                            return;
+                          }
                           event.preventDefault();
                           event.stopPropagation();
                           beginGroupResize(
@@ -4639,6 +4612,9 @@ export const CanvasFlow = ({
                       <div
                         className="canvas-group-resize-handle pointer-events-auto absolute bottom-[-6px] left-[-6px] size-5 cursor-nesw-resize"
                         onPointerDown={(event) => {
+                          if (spacePressedRef.current) {
+                            return;
+                          }
                           event.preventDefault();
                           event.stopPropagation();
                           beginGroupResize(
@@ -4661,8 +4637,7 @@ export const CanvasFlow = ({
               </div>
 
               {selectionBoundsFlow &&
-                !isSelectionBoxActive &&
-                !isSpacePressed ? (
+                !isSelectionBoxActive ? (
                 <div
                   className="canvas-selection-bounds pointer-events-none absolute left-0 top-0 z-[11] rounded-lg border border-dashed border-[#B43FEB]/70 bg-[#B43FEB]/10 shadow-[0_0_0_1px_rgba(180,63,235,0.18),0_0_24px_rgba(180,63,235,0.18)]"
                   style={{
@@ -4677,13 +4652,45 @@ export const CanvasFlow = ({
                 multiSelectedCount >= 2 &&
                 !isSelectionBoxActive &&
                 !activeGroupDragId &&
-                !isViewportPanning &&
                 !quickAddDragPreview.active ? (
                 <MultiSelectQuickCreate
                   visible
                   x={selectionRightCenterFlowPosition.x}
                   y={selectionRightCenterFlowPosition.y}
                   onPointerDown={handleQuickAddPointerDown}
+                />
+              ) : null}
+
+              {batchToolbarMode ? (
+                <CanvasBatchToolbar
+                  mode={batchToolbarMode}
+                  selectedCount={multiSelectedCount}
+                  groupCount={activeBatchGroup?.nodeIds.length ?? 0}
+                  position={
+                    selectedGroupToolbarFlowPosition ??
+                    selectionToolbarFlowPosition
+                  }
+                  onCreateGroup={() => {
+                    createGroup(multiSelectedNodeIds);
+                  }}
+                  onLayoutHorizontal={() => {
+                    if (!activeBatchGroup) {
+                      return;
+                    }
+                    layoutGroupHorizontal(activeBatchGroup.id);
+                  }}
+                  onGridLayout={() => {
+                    if (!activeBatchGroup) {
+                      return;
+                    }
+                    layoutGroupGrid(activeBatchGroup.id);
+                  }}
+                  onUngroup={() => {
+                    if (!activeBatchGroup) {
+                      return;
+                    }
+                    ungroup(activeBatchGroup.id);
+                  }}
                 />
               ) : null}
             </ViewportPortal>
@@ -4712,43 +4719,12 @@ export const CanvasFlow = ({
           {quickCreateScreenPosition &&
           !isSelectionBoxActive &&
           !activeGroupDragId &&
-          !isViewportPanning &&
           !quickAddDragPreview.active ? (
             <MultiSelectQuickCreate
               visible
               x={quickCreateScreenPosition.x}
               y={quickCreateScreenPosition.y}
               onPointerDown={handleQuickAddPointerDown}
-            />
-          ) : null}
-
-          {batchToolbarMode ? (
-            <CanvasBatchToolbar
-              mode={batchToolbarMode}
-              selectedCount={multiSelectedCount}
-              groupCount={activeBatchGroup?.nodeIds.length ?? 0}
-              position={selectedGroupToolbarPosition ?? selectionToolbarPosition}
-              onCreateGroup={() => {
-                createGroup(multiSelectedNodeIds);
-              }}
-              onLayoutHorizontal={() => {
-                if (!activeBatchGroup) {
-                  return;
-                }
-                layoutGroupHorizontal(activeBatchGroup.id);
-              }}
-              onGridLayout={() => {
-                if (!activeBatchGroup) {
-                  return;
-                }
-                layoutGroupGrid(activeBatchGroup.id);
-              }}
-              onUngroup={() => {
-                if (!activeBatchGroup) {
-                  return;
-                }
-                ungroup(activeBatchGroup.id);
-              }}
             />
           ) : null}
 
@@ -4767,7 +4743,7 @@ export const CanvasFlow = ({
             </div>
           )}
 
-          {/* 杩斿洖鎸夐挳 */}
+          {/* 返回按钮 */}
           <div className="absolute top-4 left-4 z-10">
             <Button
               variant="default"
@@ -4780,7 +4756,7 @@ export const CanvasFlow = ({
             </Button>
           </div>
 
-          {/* 鎷栨嫿鏃惰窡韪厜鏍囩殑 + 绗﹀彿 */}
+          {/* 拖拽时跟踪光标的 + 符号 */}
           {quickAddDragPreview.active ? (
             <div
               className="fixed left-0 top-0 z-20 pointer-events-none"
@@ -4806,7 +4782,7 @@ export const CanvasFlow = ({
             </div>
           ) : null}
 
-          {/* 閲婃斁鐐硅妭鐐圭被鍨嬭彍鍗曪紙鐢ㄤ簬鎵归噺杩炵嚎鍒涘缓锛?*/}
+          {/* 释放点节点类型菜单（用于批量连线创建） */}
           {quickAddMenuScreenPosition ? (
             <DropdownMenu
               open={quickAddMenuOpen}
@@ -4915,14 +4891,14 @@ export const CanvasFlow = ({
         </div>
       </CanvasContextMenu>
 
-      {/* 鎷栨嫿涓婁紶閬僵 */}
+      {/* 拖拽上传遮罩 */}
       <DragOverlay
         isVisible={dragState.isDragging}
         fileCount={dragState.fileCount}
         acceptedTypes={dragState.acceptedTypes}
       />
 
-      {/* 纭閫€鍑哄璇濇 */}
+      {/* 确认退出对话框 */}
       <Dialog open={showExitDialog} onOpenChange={setShowExitDialog}>
         <DialogContent className="bg-[#1a1a1f] border-white/10">
           <DialogHeader>

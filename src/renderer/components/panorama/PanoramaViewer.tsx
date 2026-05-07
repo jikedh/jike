@@ -195,7 +195,11 @@ export function PanoramaViewer({
   return (
     <div
       id="panorama-root"
-      className="fixed inset-0 z-100 bg-gray-950 overflow-hidden"
+      data-slot="dialog-content"
+      className="nodrag nopan nowheel fixed inset-0 z-100 bg-gray-950 overflow-hidden"
+      onContextMenu={(event) => event.preventDefault()}
+      onPointerDown={(event) => event.stopPropagation()}
+      onWheel={(event) => event.stopPropagation()}
     >
       {/* Three.js 渲染画布 */}
       <PanoramaCanvas

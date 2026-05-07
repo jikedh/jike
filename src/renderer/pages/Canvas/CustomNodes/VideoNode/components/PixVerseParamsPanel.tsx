@@ -1,6 +1,6 @@
-﻿/**
- * PixVerse锛堜竾璞＄鍒涳級瑙嗛鍙傛暟闈㈡澘
- * 鏀寔瀛愭ā鍨嬮€夋嫨銆佸垎杈ㄧ巼銆佹椂闀裤€侀煶棰戠瓑鍙傛暟閰嶇疆
+/**
+ * PixVerse（万象秒创）视频参数面板
+ * 支持子模型选择、分辨率、时长、音频等参数配置
  */
 
 import { useMemo } from "react";
@@ -15,39 +15,39 @@ import { cn } from "shared/utils/utils";
 import { Volume2, VolumeX } from "lucide-react";
 
 type PixVerseParamsPanelProps = {
-  /** 褰撳墠瑙嗛鏁版嵁 */
+  /** 当前视频数据 */
   currentVideoData: any;
-  /** 鏇存柊鍥炶皟 */
+  /** 更新回调 */
   onPatch: (patch: any) => void;
 };
 
-/** 鑾峰彇褰撳墠瀛愭ā鍨嬪€?*/
+/** 获取当前子模型 */
 const getSubModel = (currentVideoData: any): string => {
   return currentVideoData?.metadata?.subModel ?? "pixverse/pixverse-v6-it2v";
 };
 
-/** 鑾峰彇褰撳墠鍒嗚鲸鐜囧€?*/
+/** 获取当前分辨率 */
 const getResolution = (currentVideoData: any): string => {
   return currentVideoData?.metadata?.resolution ?? "720P";
 };
 
-/** 鑾峰彇褰撳墠鏃堕暱鍊?*/
+/** 获取当前时长 */
 const getDuration = (currentVideoData: any): number => {
   return currentVideoData?.duration ?? 5;
 };
 
-/** 鑾峰彇褰撳墠闊抽鐘舵€?*/
+/** 获取当前音频状态 */
 const getAudio = (currentVideoData: any): boolean => {
   return Boolean(currentVideoData?.metadata?.audio ?? true);
 };
 
-/** 瀛愭ā鍨嬮€夐」 */
+/** 子模型选项 */
 const SUB_MODEL_OPTIONS = [
   { label: "V6（通用）", value: "pixverse/pixverse-v6-it2v" },
-  { label: "C1锛堢壒鏁堬級", value: "pixverse/pixverse-c1-it2v" },
+  { label: "C1（特效）", value: "pixverse/pixverse-c1-it2v" },
 ];
 
-/** 鍒嗚鲸鐜囬€夐」 */
+/** 分辨率选项 */
 const RESOLUTION_OPTIONS = [
   { label: "360p", value: "360P" },
   { label: "540p", value: "540P" },
@@ -55,7 +55,7 @@ const RESOLUTION_OPTIONS = [
   { label: "1080p", value: "1080P" },
 ];
 
-/** 鏃堕暱閫夐」 */
+/** 时长选项 */
 const DURATION_OPTIONS = [
   { label: "4s", value: 4 },
   { label: "5s", value: 5 },
@@ -63,7 +63,7 @@ const DURATION_OPTIONS = [
 ];
 
 /**
- * PixVerse 瑙嗛鍙傛暟闈㈡澘缁勪欢
+ * PixVerse 视频参数面板组件
  */
 export const PixVerseParamsPanel = ({
   currentVideoData,
@@ -74,7 +74,7 @@ export const PixVerseParamsPanel = ({
   const duration = getDuration(currentVideoData);
   const audio = getAudio(currentVideoData);
 
-  // 鐢熸垚鎽樿鏁版嵁
+  // 生成摘要数据
   const summaryItems = useMemo(() => {
     const parts: Array<
       { kind: "text"; value: string } | { kind: "audio"; enabled: boolean }
@@ -114,8 +114,8 @@ export const PixVerseParamsPanel = ({
     onPatch({
       metadata: {
         ...(currentVideoData?.metadata ?? {}),
-        generate_audio: checked, // 缁熶竴浣跨敤 generate_audio
-        audio: checked, // 鍏煎鏃ч€昏緫
+        generate_audio: checked, // 统一使用 generate_audio
+        audio: checked, // 兼容旧逻辑
       },
     });
   };
@@ -162,10 +162,10 @@ export const PixVerseParamsPanel = ({
         className="w-80 border border-neutral-700 bg-neutral-900 p-4 shadow-xl"
       >
         <div className="space-y-5">
-          {/* 瀛愭ā鍨嬮€夋嫨 */}
+          {/* 子模型选择 */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-neutral-300">
-              瀛愭ā鍨?{" "}
+              子模型{" "}
             </label>
             <div className="flex gap-2">
               {SUB_MODEL_OPTIONS.map((option) => {
@@ -195,14 +195,14 @@ export const PixVerseParamsPanel = ({
               })}
             </div>
             <p className="text-xs text-neutral-500">
-              V6锛氶€氱敤鍦烘櫙鎺ㄨ崘 | C1锛氭墦鏂椼€佹硶鏈壒鏁堝強楂橀€熻繍鍔?{" "}
+              V6：通用场景推荐 | C1：打斗、法术特效及高速运动{" "}
             </p>
           </div>
 
-          {/* 鍒嗚鲸鐜?*/}
+          {/* 分辨率 */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-neutral-300">
-              鍒嗚鲸鐜?{" "}
+              分辨率{" "}
             </label>
             <div className="flex gap-2">
               {RESOLUTION_OPTIONS.map((option) => {
@@ -233,10 +233,10 @@ export const PixVerseParamsPanel = ({
             </div>
           </div>
 
-          {/* 瑙嗛鏃堕暱 */}
+          {/* 视频时长 */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-neutral-300">
-              瑙嗛鏃堕暱
+              视频时长
             </label>
             <div className="flex gap-2">
               {DURATION_OPTIONS.map((option) => {
@@ -267,9 +267,9 @@ export const PixVerseParamsPanel = ({
             </div>
           </div>
 
-          {/* 鐢熸垚闊抽 */}
+          {/* 生成音频 */}
           <div className="flex items-center justify-between">
-            <span className="text-xs text-neutral-300">鐢熸垚闊抽</span>
+            <span className="text-xs text-neutral-300">生成音频</span>
             <Switch
               checked={audio}
               onCheckedChange={handleAudioChange}

@@ -184,7 +184,7 @@ export const VideoReferenceAssetsBar = ({
             >
               <img
                 src={item.displayUrl ?? item.url}
-                alt="鍙傝€冨浘"
+                alt="参考图"
                 className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
                 loading="lazy"
               />

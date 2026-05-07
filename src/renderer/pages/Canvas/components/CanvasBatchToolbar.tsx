@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import { memo } from "react";
 import { Button } from "@/components/ui/button";
-import { cn } from "shared/utils/utils";
 
 type CanvasBatchToolbarProps = {
   mode: "selection" | "group" | null;
@@ -37,16 +36,9 @@ export const CanvasBatchToolbar = memo(
       return null;
     }
 
-    const shouldAnchorToPosition = Boolean(position);
-
     return (
       <div
-        className={cn(
-          "canvas-batch-toolbar z-[40]",
-          shouldAnchorToPosition
-            ? "fixed"
-            : "fixed left-1/2 top-4 -translate-x-1/2",
-        )}
+        className="canvas-batch-toolbar absolute z-[40]"
         onPointerDown={(event) => {
           event.stopPropagation();
         }}
@@ -57,7 +49,11 @@ export const CanvasBatchToolbar = memo(
                 top: 0,
                 transform: `translate3d(${position.x}px, ${position.y}px, 0) translate(-50%, -100%)`,
               }
-            : undefined
+            : {
+                left: "50%",
+                top: 16,
+                transform: "translate(-50%, 0)",
+              }
         }
       >
         <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#101114]/92 px-3 py-2 shadow-[0_16px_38px_rgba(0,0,0,0.32)] backdrop-blur-md">

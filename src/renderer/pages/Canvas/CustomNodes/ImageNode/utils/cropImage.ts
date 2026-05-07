@@ -9,16 +9,26 @@ export type CropArea = {
  * 加载图片资源并等待图片就绪。
  * 这里显式设置 crossOrigin，尽量兼容 OSS 这类跨域图片地址。
  */
-const loadImage = (imageSrc: string) => {
+const loadImage = (imageSrc: string, crossOrigin?: "anonymous") => {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
-    image.crossOrigin = "anonymous";
+    if (crossOrigin) {
+      image.crossOrigin = crossOrigin;
+    }
 
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("图片加载失败"));
 
     image.src = imageSrc;
   });
+};
+
+const loadCropSourceImage = async (imageSrc: string) => {
+  try {
+    return await loadImage(imageSrc, "anonymous");
+  } catch {
+    return loadImage(imageSrc);
+  }
 };
 
 /**
@@ -30,7 +40,7 @@ export const createCroppedImageFile = async (
   cropArea: CropArea,
   fileName: string,
 ) => {
-  const sourceImage = await loadImage(imageSrc);
+  const sourceImage = await loadCropSourceImage(imageSrc);
 
   const canvas = document.createElement("canvas");
   const croppedWidth = Math.max(1, Math.round(cropArea.width));
@@ -57,14 +67,18 @@ export const createCroppedImageFile = async (
   );
 
   const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((result) => {
-      if (!result) {
-        reject(new Error("裁剪结果生成失败"));
-        return;
-      }
+    try {
+      canvas.toBlob((result) => {
+        if (!result) {
+          reject(new Error("裁剪结果生成失败"));
+          return;
+        }
 
-      resolve(result);
-    }, "image/png");
+        resolve(result);
+      }, "image/png");
+    } catch (error) {
+      reject(error);
+    }
   });
 
   return new File([blob], fileName, { type: "image/png" });
