@@ -44,6 +44,7 @@ import type {
 } from "shared/types/zustand/canvas-flow";
 import {
   getGroupBounds,
+  getNodeSize,
   layoutGroupGrid,
   layoutGroupHorizontally,
   normalizeGroupNodeIds,
@@ -60,9 +61,12 @@ import {
   assignMissingMediaSequences,
 } from "shared/utils/mediaSequence";
 import {
-  cloneNodeDataForCopy,
-  resetNodeDataRuntimeState,
-} from "shared/utils/nodeCopy";
+  buildPastedNodesAndEdges,
+  createCopiedEdgeTemplates,
+  createCopiedNodeTemplates,
+  syncMediaUrlsForPastedEdges,
+} from "shared/utils/canvasCopyPaste";
+import { resetNodeDataRuntimeState } from "shared/utils/nodeCopy";
 import { nodeFactoryMap } from "shared/utils/nodeFactory";
 import {
   buildReferenceHighlightState,
@@ -140,13 +144,15 @@ const normalizeCanvasGroups = (
   return groups
     .map((group) => ({
       ...group,
+      name: group.name,
       nodeIds: normalizeGroupNodeIds(group.nodeIds, existingNodeIds),
       gridLayoutOrder: group.gridLayoutOrder
         ? normalizeGroupNodeIds(group.gridLayoutOrder, existingNodeIds)
         : group.gridLayoutOrder,
       layoutOrigin: group.layoutOrigin,
+      frame: group.frame,
     }))
-    .filter((group) => group.nodeIds.length >= 2);
+    .filter((group) => group.nodeIds.length > 0 || Boolean(group.frame));
 };
 
 const removeNodeIdsFromGroups = (
@@ -168,8 +174,9 @@ const removeNodeIdsFromGroups = (
         )
         : group.gridLayoutOrder,
       layoutOrigin: group.layoutOrigin,
+      frame: group.frame,
     }))
-    .filter((group) => group.nodeIds.length >= 2);
+    .filter((group) => group.nodeIds.length > 0 || Boolean(group.frame));
 };
 
 const hasNodePositionChanges = (
@@ -1651,27 +1658,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     return `音频${toChineseNumber(sequence)}`;
   };
 
-  /**
-   * 将 ReactFlow 节点 type 映射为 store 的 NodeType 计数键。
-   */
-  const resolveNodeTypeForCounter = (node: AllNodeType): NodeType => {
-    const nodeTypeMap: Record<string, NodeType> = {
-      noteNode: "note",
-      imageNode: "image",
-      videoNode: "video",
-      newVideoNode: "newVideo",
-      agentNode: "agent",
-      panoramaNode: "panorama",
-      audioNode: "audio",
-      textAgentNode: "textAgent",
-      imageAgentNode: "imageAgent",
-      videoAgentNode: "videoAgent",
-      tableNode: "table",
-    };
-
-    return nodeTypeMap[node.type] ?? "default";
-  };
-
   const getNodeResultUrls = (node: AllNodeType | undefined): string[] => {
     const nodeData = node?.data as any;
 
@@ -2324,7 +2310,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      * @param nodeId 要复制的节点 ID
      */
     duplicateNode: (nodeId: string) => {
-      // 从最新的状态中获取节点，确保使用当前位置
       const currentState = get();
       const node = currentState.nodes.find((n) => n.id === nodeId);
       if (!node) {
@@ -2332,74 +2317,27 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         return;
       }
 
-      // 统一用映射后的 NodeType 参与 ID 计数，避免出现 audioNode-0 这类异常前缀。
-      const nodeType = resolveNodeTypeForCounter(node);
-
-      const newId = currentState.getNextNodeId(nodeType);
-
-      // 固定偏移量
-      const offsetX = 350;
-      const offsetY = 300;
-
-      const cleanData = cloneNodeDataForCopy(node.type, node.data);
-      const newNode = {
-        id: newId,
-        type: node.type,
-        position: {
-          x: node.position.x + offsetX,
-          y: node.position.y + offsetY,
-        },
-        data: {
-          // 这里拷贝了原节点的 data
-          ...cleanData,
-          createdAt: Date.now(),
-        },
-        selected: true,
-        dragging: false,
-        // 保留便签节点的宽高
-        ...(node.width !== undefined && { width: node.width }),
-        ...(node.height !== undefined && { height: node.height }),
-      } as AllNodeType;
-
-      const finalDuplicatedNode =
-        newNode.type === "audioNode"
-          ? {
-            ...newNode,
-            data: {
-              ...newNode.data,
-              nickname: getAudioNicknameByNodeId(newId),
-            },
-          }
-          : newNode;
+      const copiedNodes = createCopiedNodeTemplates([node]);
+      const copiedEdges = createCopiedEdgeTemplates([node], currentState.edges);
+      const { newNodes, newEdges } = buildPastedNodesAndEdges({
+        copiedNodes,
+        copiedEdges,
+        existingNodes: currentState.nodes,
+        getNextNodeId: currentState.getNextNodeId,
+        pasteCount: 1,
+      });
 
       set((state) => {
-        // 取消所有节点的选中状态，只选中新节点
         const updatedNodes = state.nodes.map((n) => ({
           ...n,
           selected: false,
         }));
 
-        const copiedIncomingEdges =
-          node.type === "imageNode" ||
-            node.type === "videoNode" ||
-            node.type === "newVideoNode"
-            ? state.edges
-              .filter((edge) => edge.target === node.id)
-              .map((edge, edgeIndex) => {
-                const { id: _id, target: _target, ...edgePayload } = edge;
-
-                return {
-                  ...edgePayload,
-                  id: `edge-${edge.source}-${newId}-${Date.now()}-${edgeIndex}`,
-                  target: newId,
-                } as EdgeType;
-              })
-            : [];
-        const nextEdges = [...state.edges, ...copiedIncomingEdges];
-        let nextNodes = [...updatedNodes, finalDuplicatedNode];
-        copiedIncomingEdges.forEach((edge) => {
-          nextNodes = syncMediaUrlsByEdge(nextNodes, edge, "add");
-        });
+        const nextNodes = syncMediaUrlsForPastedEdges(
+          [...updatedNodes, ...newNodes],
+          newEdges,
+        );
+        const nextEdges = [...state.edges, ...newEdges];
 
         return {
           nodes: nextNodes,
@@ -2536,6 +2474,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const group: CanvasGroup = {
         id: makeGroupId(),
         nodeIds: ungroupedNodeIds,
+        name: "分组",
         createdAt: Date.now(),
         layoutOrigin: layoutBounds
           ? {
@@ -2566,6 +2505,54 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       return group.id;
     },
 
+    updateGroupName: (groupId: string, name: string) => {
+      const nextName = name.trim();
+      if (!nextName) {
+        return;
+      }
+
+      set((state) => ({
+        groups: state.groups.map((group) =>
+          group.id === groupId
+            ? {
+                ...group,
+                name: nextName,
+              }
+            : group,
+        ),
+      }));
+
+      get().requestHistorySave();
+      if (useChatSettingsStore.getState().autoSaveEnabled) {
+        get().saveGraph();
+      }
+    },
+
+    updateGroupFrame: (groupId, frame, options) => {
+      set((state) => ({
+        groups: state.groups.map((group) =>
+          group.id === groupId
+            ? {
+                ...group,
+                frame,
+                layoutOrigin: {
+                  x: frame.x,
+                  y: frame.y,
+                },
+              }
+            : group,
+        ),
+      }));
+
+      get().requestHistorySave();
+      if (useChatSettingsStore.getState().autoSaveEnabled) {
+        get().saveGraph();
+      }
+      if (options?.syncMembers) {
+        get().syncGroupsByFrame([groupId]);
+      }
+    },
+
     ungroup: (groupId: string) => {
       set((state) => ({
         groups: state.groups.filter((group) => group.id !== groupId),
@@ -2575,6 +2562,122 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       get().requestHistorySave();
       get().saveGraph();
+    },
+
+    syncDraggedNodesWithGroups: (nodeIds: string[]) => {
+      const draggedNodeIds = Array.from(new Set(nodeIds)).filter(Boolean);
+      if (draggedNodeIds.length === 0) {
+        return;
+      }
+
+      const state = get();
+      const nodeById = new Map(state.nodes.map((node) => [node.id, node]));
+      const affectedGroupIds = state.groups
+        .filter((group) => {
+          if (group.nodeIds.some((nodeId) => draggedNodeIds.includes(nodeId))) {
+            return true;
+          }
+
+          const frame = group.frame ?? getGroupBounds(state.nodes, group.nodeIds, 18);
+          if (!frame) {
+            return false;
+          }
+
+          return draggedNodeIds.some((nodeId) => {
+            const node = nodeById.get(nodeId);
+            if (!node) {
+              return false;
+            }
+
+            const { width, height } = getNodeSize(node);
+            const centerX = node.position.x + width / 2;
+            const centerY = node.position.y + height / 2;
+            return (
+              centerX >= frame.x &&
+              centerX <= frame.x + frame.width &&
+              centerY >= frame.y &&
+              centerY <= frame.y + frame.height
+            );
+          });
+        })
+        .map((group) => group.id);
+
+      get().syncGroupsByFrame(affectedGroupIds);
+    },
+
+    syncGroupsByFrame: (groupIds) => {
+      const targetGroupIdSet =
+        groupIds && groupIds.length > 0 ? new Set(groupIds) : null;
+      let changed = false;
+
+      set((state) => {
+        const nextGroups = state.groups.map((group) => {
+          if (targetGroupIdSet && !targetGroupIdSet.has(group.id)) {
+            return group;
+          }
+
+          const frame =
+            group.frame ?? getGroupBounds(state.nodes, group.nodeIds, 18);
+          if (!frame) {
+            return group;
+          }
+
+          const nextNodeIds = state.nodes
+            .filter((node) => {
+              const { width, height } = getNodeSize(node);
+              const centerX = node.position.x + width / 2;
+              const centerY = node.position.y + height / 2;
+              return (
+                centerX >= frame.x &&
+                centerX <= frame.x + frame.width &&
+                centerY >= frame.y &&
+                centerY <= frame.y + frame.height
+              );
+            })
+            .map((node) => node.id);
+
+          const currentNodeIds = group.nodeIds.filter((nodeId) =>
+            state.nodes.some((node) => node.id === nodeId),
+          );
+          const isSame =
+            currentNodeIds.length === nextNodeIds.length &&
+            currentNodeIds.every(
+              (nodeId, index) => nodeId === nextNodeIds[index],
+            );
+
+          if (isSame) {
+            return {
+              ...group,
+              nodeIds: currentNodeIds,
+            };
+          }
+
+          changed = true;
+          return {
+            ...group,
+            nodeIds: nextNodeIds,
+            frame,
+            gridLayoutOrder: group.gridLayoutOrder?.filter((nodeId) =>
+              nextNodeIds.includes(nodeId),
+            ),
+          };
+        });
+
+        if (!changed) {
+          return state;
+        }
+
+        return {
+          groups: normalizeCanvasGroups(nextGroups, state.nodes),
+        };
+      });
+
+      if (changed) {
+        get().requestHistorySave();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          get().saveGraph();
+        }
+      }
     },
 
     layoutGroupHorizontal: (groupId: string) => {
@@ -2610,14 +2713,22 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           (item) =>
             item.id === groupId
               ? {
-                ...item,
-                layoutOrigin: layoutResult.bounds
-                  ? {
-                    x: layoutResult.bounds.x,
-                    y: layoutResult.bounds.y,
-                  }
-                  : item.layoutOrigin,
-              }
+                  ...item,
+                  layoutOrigin: layoutResult.bounds
+                    ? {
+                        x: layoutResult.bounds.x,
+                        y: layoutResult.bounds.y,
+                      }
+                    : item.layoutOrigin,
+                  frame: layoutResult.bounds
+                    ? {
+                        x: layoutResult.bounds.x,
+                        y: layoutResult.bounds.y,
+                        width: layoutResult.bounds.width,
+                        height: layoutResult.bounds.height,
+                      }
+                    : item.frame,
+                }
               : item,
         ),
       }));
@@ -2663,15 +2774,23 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           (item) =>
             item.id === groupId
               ? {
-                ...item,
-                gridLayoutOrder: layoutResult.orderedNodeIds,
-                layoutOrigin: layoutResult.bounds
-                  ? {
-                    x: layoutResult.bounds.x,
-                    y: layoutResult.bounds.y,
-                  }
-                  : item.layoutOrigin,
-              }
+                  ...item,
+                  gridLayoutOrder: layoutResult.orderedNodeIds,
+                  layoutOrigin: layoutResult.bounds
+                    ? {
+                        x: layoutResult.bounds.x,
+                        y: layoutResult.bounds.y,
+                      }
+                    : item.layoutOrigin,
+                  frame: layoutResult.bounds
+                    ? {
+                        x: layoutResult.bounds.x,
+                        y: layoutResult.bounds.y,
+                        width: layoutResult.bounds.width,
+                        height: layoutResult.bounds.height,
+                      }
+                    : item.frame,
+                }
               : item,
         ),
       }));
@@ -2693,18 +2812,25 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           item.id !== groupId
             ? item
             : {
-              ...item,
-              layoutOrigin: {
-                x:
-                  (item.layoutOrigin?.x ??
-                    getGroupBounds(current.nodes, item.nodeIds, 24)?.x ??
-                    0) + offset.x,
-                y:
-                  (item.layoutOrigin?.y ??
-                    getGroupBounds(current.nodes, item.nodeIds, 24)?.y ??
-                    0) + offset.y,
+                ...item,
+                layoutOrigin: {
+                  x:
+                    (item.layoutOrigin?.x ??
+                      getGroupBounds(current.nodes, item.nodeIds, 24)?.x ??
+                      0) + offset.x,
+                  y:
+                    (item.layoutOrigin?.y ??
+                      getGroupBounds(current.nodes, item.nodeIds, 24)?.y ??
+                      0) + offset.y,
+                },
+                frame: item.frame
+                  ? {
+                      ...item.frame,
+                      x: item.frame.x + offset.x,
+                      y: item.frame.y + offset.y,
+                    }
+                  : undefined,
               },
-            },
         ),
       }));
     },

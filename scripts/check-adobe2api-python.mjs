@@ -1,6 +1,6 @@
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "..");
 const pythonRoot = join(root, "resources", "python");
@@ -12,6 +12,22 @@ const embeddedPython = embeddedPythonCandidates.find((candidate) =>
   existsSync(candidate),
 );
 const readyMarker = join(pythonRoot, ".jike-adobe2api-python-ready");
+const requiredPython = { major: 3, minor: 13 };
+const requiredImports = [
+  "fastapi",
+  "uvicorn",
+  "pydantic",
+  "requests",
+  "curl_cffi",
+  "itsdangerous",
+  "PIL",
+];
+const requirements = join(
+  root,
+  "resources",
+  "adobe2api-master",
+  "requirements.txt",
+);
 
 if (!embeddedPython) {
   console.error(
@@ -22,22 +38,40 @@ if (!embeddedPython) {
 }
 
 if (!existsSync(readyMarker)) {
-  console.error(`[check-adobe2api-python] missing ready marker: ${readyMarker}`);
-  console.error("The Python environment may be incomplete. Run npm run prepare:adobe2api-python again.");
+  console.error(
+    `[check-adobe2api-python] missing ready marker: ${readyMarker}`,
+  );
+  console.error(
+    "The Python environment may be incomplete. Run npm run prepare:adobe2api-python again.",
+  );
   process.exit(1);
 }
 
 const code = [
-  "import sys",
-  "mods=['fastapi','uvicorn','pydantic','requests','curl_cffi','itsdangerous','PIL']",
-  "missing=[]",
+  "import importlib.metadata as md, pathlib, re, sys",
+  `required=(${requiredPython.major}, ${requiredPython.minor})`,
+  "errors=[]",
+  "if sys.version_info[:2] != required:",
+  "    errors.append(f'Expected Python {required[0]}.{required[1]}, got {sys.version}')",
+  `mods=${JSON.stringify(requiredImports)}`,
   "for m in mods:",
   "    try: __import__(m)",
-  "    except Exception as e: missing.append(f'{m}: {e}')",
+  "    except Exception as e: errors.append(f'{m}: {e}')",
+  `requirements_path=pathlib.Path(${JSON.stringify(requirements)})`,
+  "for line in requirements_path.read_text(encoding='utf-8').splitlines():",
+  "    line=line.strip()",
+  "    if not line or line.startswith('#'): continue",
+  "    match=re.match(r'^([A-Za-z0-9_.-]+)==([^;\\s]+)', line)",
+  "    if not match: continue",
+  "    name, expected = match.groups()",
+  "    try: actual = md.version(name)",
+  "    except Exception as e: errors.append(f'{name}: {e}'); continue",
+  "    if actual != expected:",
+  "        errors.append(f'{name}: expected {expected}, got {actual}')",
   "print(sys.executable)",
   "print(sys.version)",
-  "if missing:",
-  "    print('\\n'.join(missing))",
+  "if errors:",
+  "    print('\\n'.join(errors))",
   "    raise SystemExit(1)",
 ].join("\n");
 

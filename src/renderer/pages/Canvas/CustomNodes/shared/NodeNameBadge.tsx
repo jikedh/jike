@@ -1,5 +1,6 @@
 import {
   type KeyboardEvent,
+  type PointerEvent,
   type ReactNode,
   useEffect,
   useRef,
@@ -11,10 +12,16 @@ type NodeNameBadgeProps = {
   children: ReactNode;
   className?: string;
   icon?: ReactNode;
+  iconClassName?: string;
+  inputClassName?: string;
+  measureClassName?: string;
+  minInputWidth?: number;
+  maxInputWidth?: number;
   isEditing?: boolean;
   selected?: boolean;
   onEditStart?: () => void;
   onEditEnd?: () => void;
+  onPointerDown?: (event: PointerEvent<HTMLDivElement>) => void;
   onRename?: (name: string) => void;
 };
 
@@ -22,10 +29,16 @@ export const NodeNameBadge = ({
   children,
   className,
   icon,
+  iconClassName,
+  inputClassName,
+  measureClassName,
+  minInputWidth = 64,
+  maxInputWidth = 320,
   isEditing = false,
   selected = false,
   onEditStart,
   onEditEnd,
+  onPointerDown,
   onRename,
 }: NodeNameBadgeProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -39,8 +52,10 @@ export const NodeNameBadge = ({
     }
 
     const measuredWidth = measureRef.current?.offsetWidth ?? 0;
-    setInputWidth(Math.min(320, Math.max(64, measuredWidth + 22)));
-  }, [draftName, isEditing]);
+    setInputWidth(
+      Math.min(maxInputWidth, Math.max(minInputWidth, measuredWidth + 22)),
+    );
+  }, [draftName, isEditing, maxInputWidth, minInputWidth]);
 
   useEffect(() => {
     if (!isEditing) {
@@ -93,19 +108,30 @@ export const NodeNameBadge = ({
           onEditStart?.();
         }
       }}
+      onPointerDown={onPointerDown}
     >
-      {icon ? <span className="shrink-0 text-white/55">{icon}</span> : null}
+      {icon ? (
+        <span className={cn("shrink-0 text-white/55", iconClassName)}>
+          {icon}
+        </span>
+      ) : null}
       {isEditing ? (
         <span className="relative inline-flex min-w-0">
           <span
             ref={measureRef}
-            className="pointer-events-none invisible absolute left-0 top-0 whitespace-pre px-1.5 text-[13px] font-medium leading-5"
+            className={cn(
+              "pointer-events-none invisible absolute left-0 top-0 whitespace-pre px-1.5 text-[13px] font-medium leading-5",
+              measureClassName,
+            )}
           >
             {draftName || " "}
           </span>
           <input
             ref={inputRef}
-            className="nodrag nopan nowheel h-5 min-w-0 rounded border border-white/35 bg-[#1f1f23] px-1.5 text-[13px] font-medium leading-5 text-white outline-none ring-1 ring-[#B43FEB]/60"
+            className={cn(
+              "nodrag nopan nowheel h-5 min-w-0 rounded border border-white/35 bg-[#1f1f23] px-1.5 text-[13px] font-medium leading-5 text-white outline-none ring-1 ring-[#B43FEB]/60",
+              inputClassName,
+            )}
             style={{ width: `${inputWidth}px` }}
             value={draftName}
             onBlur={commitRename}

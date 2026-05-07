@@ -158,7 +158,7 @@ export const createNewVideoNode = (
     promptDraftHtml: "<p></p>",
     duration: 5,
     aspect_ratio: "16:9",
-    nickname: "新版视频",
+    nickname: "生成视频",
     status: GenerationStatus.COMPLETED,
     progress: 0,
     metadata: {

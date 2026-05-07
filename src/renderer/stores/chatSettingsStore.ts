@@ -30,6 +30,7 @@ const INITIAL_STATE: Pick<
   | "autoSaveEnabled"
   | "gridVisible"
   | "snapToGrid"
+  | "edgeAnimationEnabled"
   | "snapGridSize"
   | "nodeSearchVisible"
   | "devToolsVisible"
@@ -58,6 +59,7 @@ const INITIAL_STATE: Pick<
   defaultPersonaId: "none" as ChatPersonaId,
   autoSaveEnabled: true,
   gridVisible: true,
+  edgeAnimationEnabled: true,
   // 默认开启吸附网格，提升节点排版一致性
   snapToGrid: true,
   // 固定 20x20 网格步进，统一画布交互
@@ -126,6 +128,8 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
       setDefaultPersonaId: (personaId) => set({ defaultPersonaId: personaId }),
       setAutoSaveEnabled: (enabled) => set({ autoSaveEnabled: enabled }),
       setGridVisible: (visible) => set({ gridVisible: visible }),
+      setEdgeAnimationEnabled: (enabled) =>
+        set({ edgeAnimationEnabled: enabled }),
       // 切换是否启用网格吸附
       setSnapToGrid: (enabled) => set({ snapToGrid: enabled }),
       // 变更网格吸附步进
