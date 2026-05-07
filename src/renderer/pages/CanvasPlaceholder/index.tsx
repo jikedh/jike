@@ -23,8 +23,8 @@ import {
   getProjectListAsync,
   deleteProject,
   exportProjectDraft,
-  getCoverImageUrl,
   importProjectDraft,
+  loadProjectCoverObjectUrl,
   type ProjectMeta,
 } from "service/projectStorage";
 import { toast } from "sonner";
@@ -44,6 +44,9 @@ export default function CanvasPlaceholderPage() {
   const [exportingProjectId, setExportingProjectId] = useState<string | null>(
     null,
   );
+  const [projectCoverUrls, setProjectCoverUrls] = useState<
+    Record<string, string>
+  >({});
 
   const refreshProjects = async () => {
     const list = await getProjectListAsync();
@@ -61,6 +64,39 @@ export default function CanvasPlaceholderPage() {
   useEffect(() => {
     refreshProjects();
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const objectUrls: string[] = [];
+
+    const loadCovers = async () => {
+      const entries = await Promise.all(
+        projects.map(async (project) => {
+          const coverUrl = await loadProjectCoverObjectUrl(project);
+          if (coverUrl?.startsWith("blob:")) {
+            objectUrls.push(coverUrl);
+          }
+          return [project.id, coverUrl] as const;
+        }),
+      );
+
+      if (!isMounted) {
+        objectUrls.forEach((url) => URL.revokeObjectURL(url));
+        return;
+      }
+
+      setProjectCoverUrls(
+        Object.fromEntries(entries.filter(([, url]) => Boolean(url))),
+      );
+    };
+
+    loadCovers();
+
+    return () => {
+      isMounted = false;
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [projects]);
 
   // 处理项目卡片点击
   const handleProjectClick = (projectId: string) => {
@@ -229,8 +265,8 @@ export default function CanvasPlaceholderPage() {
               {/* Thumbnail */}
               <div className="relative aspect-video overflow-hidden bg-white/5">
                 {(() => {
-                  const localCoverUrl = getCoverImageUrl(project.id);
-                  const coverSrc = localCoverUrl || project.coverUrl;
+                  const coverSrc =
+                    projectCoverUrls[project.id] || project.coverUrl;
 
                   return coverSrc ? (
                     <img

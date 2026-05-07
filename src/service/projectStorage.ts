@@ -781,22 +781,10 @@ export const saveGeneratedVideoToLocal = async (
   return result.success ? fileName : null;
 };
 
-const arrayBufferToDataUrl = (buffer: ArrayBuffer, extension: string) => {
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-
-  const base64 = btoa(binary);
-  return `data:image/${extension};base64,${base64}`;
-};
-
 const persistProjectCoverMeta = async (
   projectId: string,
   coverLocalPath: string,
-  coverUrl: string,
+  coverUrl?: string,
 ) => {
   updateProject(projectId, {
     coverLocalPath,
@@ -852,7 +840,7 @@ export const saveCoverImageToLocal = async (
       await persistProjectCoverMeta(
         projectId,
         `${project.name}/cover.${ext}`,
-        imageData,
+        undefined,
       );
       return `cover.${ext}`;
     }
@@ -870,7 +858,7 @@ export const saveCoverImageToLocal = async (
     await persistProjectCoverMeta(
       projectId,
       `${project.name}/cover.${extension}`,
-      arrayBufferToDataUrl(imageData, extension),
+      undefined,
     );
 
     return `cover.${extension}`;
@@ -975,4 +963,39 @@ export const getCoverImageUrl = (projectId: string): string | null => {
   if (!project) return null;
 
   return project.coverUrl || null;
+};
+
+const getImageMimeType = (relativePath: string): string => {
+  const extension = relativePath.split(".").pop()?.toLowerCase();
+
+  switch (extension) {
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "webp":
+      return "image/webp";
+    case "gif":
+      return "image/gif";
+    case "png":
+    default:
+      return "image/png";
+  }
+};
+
+export const loadProjectCoverObjectUrl = async (
+  project: ProjectMeta,
+): Promise<string | null> => {
+  if (!project.coverLocalPath) {
+    return project.coverUrl || null;
+  }
+
+  const localCover = await readMediaFromLocal(project.coverLocalPath);
+  if (!localCover) {
+    return project.coverUrl || null;
+  }
+
+  const blob = new Blob([localCover], {
+    type: getImageMimeType(project.coverLocalPath),
+  });
+  return URL.createObjectURL(blob);
 };
