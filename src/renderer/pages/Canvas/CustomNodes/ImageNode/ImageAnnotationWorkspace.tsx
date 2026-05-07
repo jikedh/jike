@@ -964,18 +964,20 @@ export const ImageAnnotationWorkspace = ({
         !event.metaKey &&
         !event.altKey &&
         (event.key === "Backspace" || event.key === "Delete") &&
-        editTarget
+        (selectedTextId || selectedShapeId)
       ) {
         event.preventDefault();
 
-        if (editTarget.type === "text") {
-          const deletingId = editTarget.id;
+        if (selectedTextId) {
+          const deletingId = selectedTextId;
           commitTextItems((prev) =>
             prev.filter((item) => item.id !== deletingId),
           );
           setSelectedTextId(null);
-        } else {
-          const deletingId = editTarget.id;
+        }
+
+        if (selectedShapeId) {
+          const deletingId = selectedShapeId;
           commitShapeItems((prev) =>
             prev.filter((item) => item.id !== deletingId),
           );
@@ -992,10 +994,11 @@ export const ImageAnnotationWorkspace = ({
   }, [
     commitShapeItems,
     commitTextItems,
-    editTarget,
     handleRedo,
     handleUndo,
     open,
+    selectedShapeId,
+    selectedTextId,
   ]);
 
   const endTextDrag = useCallback(() => {
@@ -1899,7 +1902,6 @@ export const ImageAnnotationWorkspace = ({
                       { key: "brush", label: "画笔", icon: IconBrush },
                       { key: "rect", label: "矩形", icon: IconSquare },
                       { key: "text", label: "文字", icon: null },
-                      { key: "eraser", label: "橡皮擦", icon: IconEraser },
                     ] as const)
               ).map((item) => {
                 const Icon = item.icon;
