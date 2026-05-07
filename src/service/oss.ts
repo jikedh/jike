@@ -1,3 +1,4 @@
+import { uploadOssFile } from "@/api/jikeGo";
 import OSS from "ali-oss";
 
 const client = new OSS({
@@ -273,26 +274,16 @@ export function generateVideoLastFrameUrl(
 // ===================== 文件上传 =====================
 
 export async function uploadFileToOSS(file: File) {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 8);
-  const ext = file.name.split(".").pop()?.toLowerCase() || "";
+  const response = await uploadOssFile(file);
+  const data = response?.data || response;
 
-  // 根据扩展名自动判断目录
-  const videoExts = ["mp4", "mov", "avi", "mkv", "webm", "flv"];
-  const audioExts = ["mp3", "wav", "ogg", "aac", "flac"];
-
-  let directory = "image";
-  if (videoExts.includes(ext)) {
-    directory = "video";
-  } else if (audioExts.includes(ext)) {
-    directory = "audio";
-  }
-
-  const fileName = `${directory}/${timestamp}-${random}.${ext}`;
-
-  const result = await client.put(fileName, file);
-
-  return { url: result.url, name: file.name };
+  return {
+    url: data?.url || "",
+    name: data?.filename || file.name,
+    key: data?.key || "",
+    size: data?.size || file.size,
+    contentType: data?.content_type || data?.contentType || file.type,
+  };
 }
 
 /**

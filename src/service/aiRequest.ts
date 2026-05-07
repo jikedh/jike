@@ -105,6 +105,11 @@ const createService = (
       const baseURL = reqConfig.baseURL || config.getBaseURL();
       reqConfig.baseURL = baseURL;
 
+      if (typeof FormData !== "undefined" && reqConfig.data instanceof FormData) {
+        delete reqConfig.headers["Content-Type"];
+        delete reqConfig.headers["content-type"];
+      }
+
       const shouldSkipAuth = reqConfig.headers?.[SKIP_AUTH_HEADER] === "true";
       if (shouldSkipAuth) {
         delete reqConfig.headers[SKIP_AUTH_HEADER];

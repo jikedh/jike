@@ -46,6 +46,21 @@ export type DesktopChatCompletionsRequest = {
   [key: string]: any;
 };
 
+export type OssBlobType = "avatar" | "image" | "video";
+
+export type OssPutUrlRequest = {
+  blob_type: OssBlobType;
+  ext?: string;
+};
+
+export type OssUploadResp = {
+  url: string;
+  key: string;
+  filename: string;
+  size: number;
+  content_type: string;
+};
+
 export function healthCheck(): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
@@ -176,6 +191,29 @@ export function updateJikeGoUserInfo(data: {
     url: "/v1/user/info",
     method: "put",
     data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+export function getOssPutUrl(data: OssPutUrlRequest): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/oss/put-url",
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+export function uploadOssFile(file: File): any {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/oss/upload",
+    method: "post",
+    data: formData,
     headers: getJikeGoAuthHeaders(),
   });
 }
