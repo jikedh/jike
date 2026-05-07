@@ -19,6 +19,7 @@ import {
   querySceneStatus,
   registerByUsername,
   updateJikeGoUserInfo,
+  uploadOssFile,
 } from "@/api/jikeGo";
 
 const DESKTOP_PROXY_POLL_INTERVAL = 5000;
@@ -79,8 +80,8 @@ const LogPanel = ({ logs }: { logs: LogEntry[] }) => {
             <div
               key={index}
               className={`text-xs p-2 rounded ${log.status === "success"
-                  ? "bg-green-900/30 text-green-300"
-                  : "bg-red-900/30 text-red-300"
+                ? "bg-green-900/30 text-green-300"
+                : "bg-red-900/30 text-red-300"
                 }`}
             >
               <div className="flex items-center gap-2 mb-1">
@@ -171,6 +172,14 @@ export default function TestGoPage() {
     ext: "png",
     putUrl: "",
     accessUrl: "",
+  });
+  const [ossUploadData, setOssUploadData] = useState({
+    file: null as File | null,
+    url: "",
+    key: "",
+    filename: "",
+    size: 0,
+    contentType: "",
   });
   const [captchaImage, setCaptchaImage] = useState("");
   const [sceneQrcodeImage, setSceneQrcodeImage] = useState("");
@@ -348,6 +357,27 @@ export default function TestGoPage() {
         ...prev,
         putUrl: data?.put_url || data?.putUrl || "",
         accessUrl: data?.access_url || data?.accessUrl || "",
+      }));
+    });
+  };
+
+  const handleUploadOssFile = () => {
+    if (!ossUploadData.file) {
+      alert("请选择要上传的文件");
+      return;
+    }
+
+    callApi("uploadOssFile (/v1/oss/upload)", () =>
+      uploadOssFile(ossUploadData.file as File),
+    ).then((res: any) => {
+      const data = getResponseData(res);
+      setOssUploadData((prev) => ({
+        ...prev,
+        url: data?.url || "",
+        key: data?.key || "",
+        filename: data?.filename || "",
+        size: data?.size || 0,
+        contentType: data?.content_type || data?.contentType || "",
       }));
     });
   };
@@ -763,7 +793,7 @@ export default function TestGoPage() {
 
             <section className="bg-white/5 rounded-xl p-5 border border-white/10">
               <h2 className="text-lg font-semibold text-cyan-400 mb-4">
-                OSS 上传 URL 测试（/v1/oss/put-url）
+                旧 OSS 预签名上传测试（/v1/oss/put-url，第三方回传保留）
               </h2>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -801,7 +831,7 @@ export default function TestGoPage() {
                   </div>
                 </div>
                 <TestButton
-                  label="获取 OSS 上传 URL"
+                  label="获取旧预签名上传 URL"
                   onClick={handleGetOssPutUrl}
                   loading={loadingMap["getOssPutUrl (/v1/oss/put-url)"]}
                   variant="outline"
@@ -833,6 +863,68 @@ export default function TestGoPage() {
                         </a>
                       </div>
                     )}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="bg-white/5 rounded-xl p-5 border border-white/10">
+              <h2 className="text-lg font-semibold text-teal-400 mb-4">
+                OSS 服务端代理上传测试（/v1/oss/upload）
+              </h2>
+              <div className="space-y-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-white/50">file</label>
+                  <input
+                    type="file"
+                    onChange={(event) =>
+                      setOssUploadData((prev) => ({
+                        ...prev,
+                        file: event.target.files?.[0] || null,
+                        url: "",
+                        key: "",
+                        filename: "",
+                        size: 0,
+                        contentType: "",
+                      }))
+                    }
+                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-teal-500 outline-none"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-3 items-center">
+                  <TestButton
+                    label="上传到新 OSS Bucket"
+                    onClick={handleUploadOssFile}
+                    loading={loadingMap["uploadOssFile (/v1/oss/upload)"]}
+                    variant="outline"
+                  />
+                  {ossUploadData.file && (
+                    <span className="text-xs text-white/50">
+                      {ossUploadData.file.name} / {ossUploadData.file.size} bytes
+                    </span>
+                  )}
+                </div>
+                {ossUploadData.url && (
+                  <div className="space-y-3 p-3 bg-black/30 rounded border border-white/10 text-xs">
+                    <div>
+                      <div className="text-white/50 mb-1 uppercase tracking-wider">
+                        url
+                      </div>
+                      <a
+                        href={ossUploadData.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-teal-200 hover:text-teal-100 break-all font-mono"
+                      >
+                        {ossUploadData.url}
+                      </a>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-white/60">
+                      <div>key: {ossUploadData.key}</div>
+                      <div>filename: {ossUploadData.filename}</div>
+                      <div>size: {ossUploadData.size}</div>
+                      <div>content_type: {ossUploadData.contentType}</div>
+                    </div>
                   </div>
                 )}
               </div>
