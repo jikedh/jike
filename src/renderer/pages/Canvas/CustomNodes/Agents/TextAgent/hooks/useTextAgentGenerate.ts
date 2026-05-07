@@ -4,7 +4,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TextAgentNodeType, TextAgentPresetId } from "shared/types/flow";
-import { createChatCompletion } from "@/api/ai";
+import { createDesktopChatCompletions } from "@/api/jikeGo";
 import { useMessage } from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import {
@@ -187,9 +187,11 @@ export const useTextAgentGenerate = ({
 
     try {
       // 3. 调用 API
-      const response = await createChatCompletion(
+      const response = await createDesktopChatCompletions(
         {
           model: currentModel,
+          platform: "toapi",
+          upstreamPath: "/v1/chat/completions",
           messages: [
             {
               role: "user",
@@ -200,7 +202,7 @@ export const useTextAgentGenerate = ({
         abortController.signal,
       );
 
-      const resp = response as any;
+      const resp = (response as any)?.data ?? response;
 
       // 4. 检查 API 错误
       const errorMsg = handleApiError(resp);

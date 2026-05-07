@@ -10,6 +10,7 @@ import { SidebarCeBianLan } from "@/pages/Sidebar/SidebarCeBianLan";
 // 懒加载页面组件 - 按需加载，减少首屏加载量
 const HomePage = lazy(() => import("@/pages/Home"));
 const TestPage = lazy(() => import("@/pages/Test"));
+const TestGoPage = lazy(() => import("@/pages/TestGo"));
 const PanoramaDemo = lazy(() => import("@/pages/Test/PanoramaDemo"));
 const CanvasPlaceholderPage = lazy(() => import("@/pages/CanvasPlaceholder"));
 const ScriptPage = lazy(() => import("@/pages/Script"));
@@ -66,6 +67,10 @@ const router = createHashRouter([
       {
         path: "/test",
         element: <TestPage />,
+      },
+      {
+        path: "/test-go",
+        element: <TestGoPage />,
       },
       {
         path: "/canvas",

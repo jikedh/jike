@@ -70,21 +70,19 @@ const LogPanel = ({ logs }: { logs: LogEntry[] }) => {
           {logs.map((log, index) => (
             <div
               key={index}
-              className={`text-xs p-2 rounded ${
-                log.status === "success"
+              className={`text-xs p-2 rounded ${log.status === "success"
                   ? "bg-green-900/30 text-green-300"
                   : "bg-red-900/30 text-red-300"
-              }`}
+                }`}
             >
               <div className="flex items-center gap-2 mb-1">
                 <span className="opacity-60">{log.time}</span>
                 <span className="font-semibold">{log.api}</span>
                 <span
-                  className={`px-1.5 py-0.5 rounded text-[10px] ${
-                    log.status === "success"
+                  className={`px-1.5 py-0.5 rounded text-[10px] ${log.status === "success"
                       ? "bg-green-800/50"
                       : "bg-red-800/50"
-                  }`}
+                    }`}
                 >
                   {log.status === "success" ? "SUCCESS" : "ERROR"}
                 </span>

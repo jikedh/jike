@@ -368,6 +368,7 @@ const mirrorImagesToOss = async (images: NoteGenerationImage[]) => {
 const extractImages = (response: any): NoteGenerationImage[] => {
   const rawData =
     response?.result?.data ??
+    response?.data?.result?.data ??
     response?.data?.data ??
     response?.data?.images ??
     response?.result?.images ??
@@ -521,9 +522,9 @@ const pollStandardImageGeneration = async (
     if (isFailureStatus(status)) {
       throw new Error(
         response?.message ||
-          response?.data?.message ||
-          response?.result?.message ||
-          "图片生成失败，请稍后再试",
+        response?.data?.message ||
+        response?.result?.message ||
+        "图片生成失败，请稍后再试",
       );
     }
 
