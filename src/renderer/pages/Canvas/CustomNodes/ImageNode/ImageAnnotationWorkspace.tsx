@@ -165,7 +165,11 @@ type ImageAnnotationWorkspaceProps = {
 };
 
 const HISTORY_LIMIT = 40;
-const BASE_TEXT_FONT_SIZE = 28;
+const BASE_TEXT_FONT_SIZE = 44;
+const INLINE_TEXT_EDITOR_MIN_WIDTH = 18;
+const INLINE_TEXT_EDITOR_MAX_WIDTH = 520;
+const INLINE_TEXT_EDITOR_MIN_HEIGHT = 30;
+const INLINE_TEXT_EDITOR_MAX_HEIGHT = 180;
 const MIN_TEXT_SCALE = 0.5;
 const MAX_TEXT_SCALE = 8;
 const MIN_STROKE_WIDTH = 4;
@@ -190,9 +194,13 @@ const COLOR_OPTIONS = [
 ] as const;
 const TEXT_HANDLE_CONFIG = [
   { key: "nw", className: "-left-2 -top-2 cursor-nwse-resize" },
+  { key: "n", className: "left-3 right-3 -top-2 h-4 cursor-ns-resize" },
   { key: "ne", className: "-right-2 -top-2 cursor-nesw-resize" },
+  { key: "e", className: "-right-2 top-3 bottom-3 w-4 cursor-ew-resize" },
   { key: "se", className: "-right-2 -bottom-2 cursor-nwse-resize" },
+  { key: "s", className: "left-3 right-3 -bottom-2 h-4 cursor-ns-resize" },
   { key: "sw", className: "-left-2 -bottom-2 cursor-nesw-resize" },
+  { key: "w", className: "-left-2 top-3 bottom-3 w-4 cursor-ew-resize" },
 ] as const;
 const SHAPE_HANDLE_CONFIG = [
   { key: "nw", className: "-left-2 -top-2 cursor-nwse-resize" },
@@ -484,6 +492,8 @@ export const ImageAnnotationWorkspace = ({
   const dragShapeRef = useRef<DragShapeState | null>(null);
   const drawingRef = useRef(false);
   const lastDrawPointRef = useRef<Point | null>(null);
+  const pendingTextInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const commitPendingTextRef = useRef<(() => void) | null>(null);
 
   const [loadedImage, setLoadedImage] = useState<HTMLImageElement | null>(null);
   const [imageNaturalSize, setImageNaturalSize] = useState({
@@ -813,6 +823,32 @@ export const ImageAnnotationWorkspace = ({
   );
 
   useEffect(() => {
+    if (!pendingTextDraft) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      pendingTextInputRef.current?.focus();
+      pendingTextInputRef.current?.select();
+    });
+  }, [pendingTextDraft?.itemId]);
+
+  useEffect(() => {
+    if (!pendingTextDraft) {
+      return;
+    }
+
+    const keepTextInputFocused = () => {
+      pendingTextInputRef.current?.focus();
+    };
+
+    window.addEventListener("pointermove", keepTextInputFocused);
+    return () => {
+      window.removeEventListener("pointermove", keepTextInputFocused);
+    };
+  }, [pendingTextDraft]);
+
+  useEffect(() => {
     if (!open || !imageUrl) {
       return;
     }
@@ -1138,6 +1174,11 @@ export const ImageAnnotationWorkspace = ({
       setColorPickerOpen(false);
 
       if (tool === "text") {
+        if (pendingTextDraft) {
+          commitPendingTextRef.current?.();
+          return;
+        }
+
         setPendingTextDraft({
           itemId: undefined,
           x: point.x,
@@ -1165,7 +1206,7 @@ export const ImageAnnotationWorkspace = ({
         drawStroke(point, point);
       }
     },
-    [drawStroke, getCanvasPoint, tool],
+    [drawStroke, getCanvasPoint, pendingTextDraft, tool],
   );
 
   const handleStagePointerMove = useCallback(
@@ -1290,7 +1331,11 @@ export const ImageAnnotationWorkspace = ({
 
     const value = pendingTextDraft.value.trim();
     if (!value) {
+      if (pendingTextDraft.itemId) {
+        setSelectedTextId(pendingTextDraft.itemId);
+      }
       setPendingTextDraft(null);
+      setTool("idle");
       return;
     }
 
@@ -1306,9 +1351,10 @@ export const ImageAnnotationWorkspace = ({
             : item,
         ),
       );
-      setSelectedTextId(null);
-      setEditTarget(null);
+      setSelectedTextId(editingId);
+      setEditTarget({ type: "text", id: editingId });
       setPendingTextDraft(null);
+      setTool("idle");
       return;
     }
 
@@ -1322,16 +1368,27 @@ export const ImageAnnotationWorkspace = ({
     };
 
     commitTextItems((prev) => [...prev, nextItem]);
-    setSelectedTextId(null);
-    setEditTarget(null);
+    setSelectedTextId(nextItem.id);
+    setEditTarget({ type: "text", id: nextItem.id });
     setPendingTextDraft(null);
+    setTool("idle");
   }, [commitTextItems, currentColor, pendingTextDraft]);
+
+  useEffect(() => {
+    commitPendingTextRef.current = handleCommitPendingText;
+  }, [handleCommitPendingText]);
 
   const handleEnterTextEditMode = useCallback((item: TextItem) => {
     setSelectedTextId(item.id);
     setSelectedShapeId(null);
-    setPendingTextDraft(null);
     setEditTarget({ type: "text", id: item.id });
+    setTool("text");
+    setPendingTextDraft({
+      itemId: item.id,
+      x: item.x,
+      y: item.y,
+      value: item.text,
+    });
   }, []);
 
   const handleEnterShapeEditMode = useCallback((shape: ShapeItem) => {
@@ -1340,6 +1397,54 @@ export const ImageAnnotationWorkspace = ({
     setPendingTextDraft(null);
     setEditTarget({ type: "shape", id: shape.id });
   }, []);
+
+  const handleStartTextMove = useCallback(
+    (item: TextItem, event: React.PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const point = getCanvasPoint(event.clientX, event.clientY);
+      if (!point) {
+        return;
+      }
+
+      setSelectedTextId(item.id);
+      setSelectedShapeId(null);
+      setPendingTextDraft(null);
+      setEditTarget(null);
+      dragTextRef.current = {
+        type: "move",
+        id: item.id,
+        offsetX: point.x - item.x,
+        offsetY: point.y - item.y,
+      };
+    },
+    [getCanvasPoint],
+  );
+
+  const handleStartShapeMove = useCallback(
+    (shape: ShapeItem, event: React.PointerEvent<SVGElement | HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const point = getCanvasPoint(event.clientX, event.clientY);
+      if (!point) {
+        return;
+      }
+
+      setSelectedShapeId(shape.id);
+      setSelectedTextId(null);
+      setPendingTextDraft(null);
+      setEditTarget(null);
+      const bounds = getShapeBounds(shape);
+      dragShapeRef.current = {
+        type: "move",
+        id: shape.id,
+        startPoint: point,
+        startShape: deepCloneShapeItems([shape])[0],
+        startBounds: bounds,
+      };
+    },
+    [getCanvasPoint],
+  );
 
   const handleStartTextScale = useCallback(
     (item: TextItem, event: React.PointerEvent<HTMLDivElement>) => {
@@ -1812,7 +1917,17 @@ export const ImageAnnotationWorkspace = ({
                           : "border-[#B43FEB]/60 bg-[#B43FEB]/18 text-white"
                         : "border-transparent bg-white/[0.04] text-white/65 hover:bg-white/[0.08] hover:text-white",
                     )}
-                    onClick={() => setTool(item.key)}
+                    onClick={() => {
+                      if (tool === item.key) {
+                        setTool("idle");
+                        setPendingTextDraft(null);
+                        return;
+                      }
+                      setTool(item.key);
+                      if (item.key !== "text") {
+                        setPendingTextDraft(null);
+                      }
+                    }}
                     title={item.label}
                     aria-label={item.label}
                   >
@@ -2117,6 +2232,12 @@ export const ImageAnnotationWorkspace = ({
                                     }
                                   : undefined
                               }
+                              onPointerDown={
+                                canInteractWithShape
+                                  ? (event) =>
+                                      handleStartShapeMove(shape, event)
+                                  : undefined
+                              }
                             />
                             <rect
                               x={shape.x}
@@ -2158,6 +2279,12 @@ export const ImageAnnotationWorkspace = ({
                                           }
                                         : undefined
                                     }
+                                    onPointerDown={
+                                      canInteractWithShape
+                                        ? (event) =>
+                                            handleStartShapeMove(shape, event)
+                                        : undefined
+                                    }
                                   />
                                   <path
                                     d={brushPath}
@@ -2191,6 +2318,12 @@ export const ImageAnnotationWorkspace = ({
                                       event.stopPropagation();
                                       handleEnterShapeEditMode(shape);
                                     }
+                                  : undefined
+                              }
+                              onPointerDown={
+                                canInteractWithShape
+                                  ? (event) =>
+                                      handleStartShapeMove(shape, event)
                                   : undefined
                               }
                             />
@@ -2258,9 +2391,6 @@ export const ImageAnnotationWorkspace = ({
                 {selectedShape
                   ? (() => {
                       const bounds = getShapeBounds(selectedShape);
-                      const isEditing =
-                        editTarget?.type === "shape" &&
-                        editTarget.id === selectedShape.id;
                       const canInteractWithShape =
                         !isCanvasOnlyMode ||
                         (editTarget?.type === "shape" &&
@@ -2278,67 +2408,36 @@ export const ImageAnnotationWorkspace = ({
                               : "none",
                           }}
                           onPointerDown={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
+                            handleStartShapeMove(selectedShape, event);
                           }}
                         >
                           <div className="absolute inset-0 rounded-[10px] border border-[#B43FEB]/55 bg-[#B43FEB]/[0.04] shadow-[0_0_0_1px_rgba(180,63,235,0.18)]" />
-                          {isEditing
-                            ? (
-                                [
-                                  {
-                                    key: "n",
-                                    className:
-                                      "left-3 right-3 -top-2 h-4 cursor-ns-resize",
-                                  },
-                                  {
-                                    key: "s",
-                                    className:
-                                      "left-3 right-3 -bottom-2 h-4 cursor-ns-resize",
-                                  },
-                                  {
-                                    key: "w",
-                                    className:
-                                      "-left-2 top-3 bottom-3 w-4 cursor-ew-resize",
-                                  },
-                                  {
-                                    key: "e",
-                                    className:
-                                      "-right-2 top-3 bottom-3 w-4 cursor-ew-resize",
-                                  },
-                                ] as const
-                              ).map((edge) => (
-                                <div
-                                  key={edge.key}
-                                  className={cn("absolute", edge.className)}
-                                  onPointerDown={(event) =>
-                                    handleStartShapeScale(
-                                      selectedShape,
-                                      edge.key,
-                                      event,
-                                    )
-                                  }
-                                />
-                              ))
-                            : null}
-                          {isEditing
-                            ? SHAPE_HANDLE_CONFIG.map((handle) => (
-                                <div
-                                  key={handle.key}
-                                  className={cn(
-                                    "absolute h-4 w-4 rounded-full border border-white/70 bg-[#B43FEB] shadow-[0_4px_12px_rgba(180,63,235,0.35)]",
-                                    handle.className,
-                                  )}
-                                  onPointerDown={(event) =>
-                                    handleStartShapeScale(
-                                      selectedShape,
-                                      handle.key,
-                                      event,
-                                    )
-                                  }
-                                />
-                              ))
-                            : null}
+                          {SHAPE_HANDLE_CONFIG.map((handle) => (
+                            <div
+                              key={handle.key}
+                              className={cn(
+                                handle.key.length === 2
+                                  ? "absolute h-4 w-4 rounded-full border border-white/70 bg-[#B43FEB] shadow-[0_4px_12px_rgba(180,63,235,0.35)]"
+                                  : "absolute",
+                                handle.key === "n" &&
+                                  "left-3 right-3 -top-2 h-4 cursor-ns-resize",
+                                handle.key === "s" &&
+                                  "left-3 right-3 -bottom-2 h-4 cursor-ns-resize",
+                                handle.key === "w" &&
+                                  "-left-2 top-3 bottom-3 w-4 cursor-ew-resize",
+                                handle.key === "e" &&
+                                  "-right-2 top-3 bottom-3 w-4 cursor-ew-resize",
+                                handle.key.length === 2 && handle.className,
+                              )}
+                              onPointerDown={(event) =>
+                                handleStartShapeScale(
+                                  selectedShape,
+                                  handle.key,
+                                  event,
+                                )
+                              }
+                            />
+                          ))}
                         </div>
                       );
                     })()
@@ -2351,8 +2450,6 @@ export const ImageAnnotationWorkspace = ({
 
                   const metrics = getTextMetrics(item.text, item.scale);
                   const isSelected = item.id === selectedTextId;
-                  const isEditing =
-                    editTarget?.type === "text" && editTarget.id === item.id;
                   const canInteractWithText =
                     !isCanvasOnlyMode ||
                     (editTarget?.type === "text" && editTarget.id === item.id);
@@ -2380,8 +2477,7 @@ export const ImageAnnotationWorkspace = ({
                         )
                       }
                       onPointerDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
+                        handleStartTextMove(item, event);
                       }}
                       onDoubleClick={(event) => {
                         event.preventDefault();
@@ -2422,13 +2518,15 @@ export const ImageAnnotationWorkspace = ({
                           {item.text}
                         </div>
 
-                        {isSelected && isEditing ? (
+                        {isSelected ? (
                           <>
                             {TEXT_HANDLE_CONFIG.map((handle) => (
                               <div
                                 key={handle.key}
                                 className={cn(
-                                  "absolute h-4 w-4 rounded-full border border-white/70 bg-[#B43FEB] shadow-[0_4px_12px_rgba(180,63,235,0.35)]",
+                                  handle.key.length === 2
+                                    ? "absolute h-4 w-4 rounded-full border border-white/70 bg-[#B43FEB] shadow-[0_4px_12px_rgba(180,63,235,0.35)]"
+                                    : "absolute",
                                   handle.className,
                                 )}
                                 onPointerDown={(event) =>
@@ -2444,58 +2542,98 @@ export const ImageAnnotationWorkspace = ({
                 })}
 
                 {pendingTextDraft ? (
-                  <div
-                    className="absolute z-[110] w-56 rounded-2xl border border-white/10 bg-[#1a1a1d]/98 p-3 shadow-[0_20px_50px_rgba(0,0,0,0.42)] backdrop-blur-xl"
-                    style={{
-                      left: clamp(
-                        pendingTextDraft.x * stageScale,
-                        12,
-                        Math.max(12, stageSize.width - 236),
-                      ),
-                      top: clamp(
-                        pendingTextDraft.y * stageScale,
-                        12,
-                        Math.max(12, stageSize.height - 132),
-                      ),
-                    }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                  >
-                    <div className="mb-2 text-xs text-white/55">
-                      输入标注文字
-                    </div>
-                    <textarea
-                      autoFocus
-                      value={pendingTextDraft.value}
-                      onChange={(event) =>
-                        setPendingTextDraft((prev) =>
-                          prev ? { ...prev, value: event.target.value } : prev,
+                  (() => {
+                    const editingItem = pendingTextDraft.itemId
+                      ? textItems.find(
+                          (item) => item.id === pendingTextDraft.itemId,
                         )
-                      }
-                      rows={3}
-                      className="w-full resize-none rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/90 outline-none placeholder:text-white/25"
-                      placeholder={
-                        pendingTextDraft.itemId
-                          ? "编辑文字后点击确定"
-                          : "输入内容后点击确定"
-                      }
-                    />
-                    <div className="mt-3 flex justify-end gap-2">
-                      <button
-                        type="button"
-                        className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/70 transition hover:bg-white/[0.08] hover:text-white"
-                        onClick={() => setPendingTextDraft(null)}
+                      : null;
+                    const textScale = editingItem?.scale ?? 1;
+                    const metrics = getTextMetrics(
+                      pendingTextDraft.value || "|",
+                      textScale,
+                    );
+                    const width = clamp(
+                      metrics.width * stageScale + 6,
+                      INLINE_TEXT_EDITOR_MIN_WIDTH,
+                      Math.min(
+                        INLINE_TEXT_EDITOR_MAX_WIDTH,
+                        Math.max(80, stageSize.width - 16),
+                      ),
+                    );
+                    const height = clamp(
+                      metrics.height * stageScale + 4,
+                      INLINE_TEXT_EDITOR_MIN_HEIGHT,
+                      INLINE_TEXT_EDITOR_MAX_HEIGHT,
+                    );
+                    const left = clamp(
+                      pendingTextDraft.x * stageScale,
+                      8,
+                      Math.max(8, stageSize.width - width - 8),
+                    );
+                    const top = clamp(
+                      pendingTextDraft.y * stageScale,
+                      8,
+                      Math.max(8, stageSize.height - height - 8),
+                    );
+
+                    const textColor = editingItem?.color ?? currentColor;
+
+                    return (
+                      <div
+                        className="absolute z-[110]"
+                        style={{ left, top, width, height }}
                       >
-                        取消
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-lg bg-[#B43FEB] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#B43FEB]/85"
-                        onClick={handleCommitPendingText}
-                      >
-                        确定
-                      </button>
-                    </div>
-                  </div>
+                        {!pendingTextDraft.value ? (
+                          <div
+                            className="pointer-events-none absolute left-0 top-0 w-[2px] animate-pulse rounded-full"
+                            style={{
+                              height: BASE_TEXT_FONT_SIZE * textScale * stageScale * 1.25,
+                              backgroundColor: textColor,
+                              boxShadow:
+                                "0 0 0 1px rgba(255,255,255,0.3), 0 0 10px rgba(0,0,0,0.32)",
+                            }}
+                          />
+                        ) : null}
+                        <textarea
+                          ref={pendingTextInputRef}
+                          value={pendingTextDraft.value}
+                          rows={1}
+                          className="nodrag nopan nowheel absolute inset-0 resize-none overflow-hidden border-0 bg-transparent p-0 font-semibold leading-[1.35] outline-none"
+                          style={{
+                            color: textColor,
+                            fontSize:
+                              BASE_TEXT_FONT_SIZE * textScale * stageScale,
+                            lineHeight: 1.35,
+                            textShadow:
+                              "0 1px 2px rgba(0,0,0,0.28), 0 0 8px rgba(255,255,255,0.16)",
+                            caretColor: textColor,
+                          }}
+                          placeholder=""
+                          onChange={(event) =>
+                            setPendingTextDraft((prev) =>
+                              prev
+                                ? { ...prev, value: event.target.value }
+                                : prev,
+                            )
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" && !event.shiftKey) {
+                              event.preventDefault();
+                              handleCommitPendingText();
+                            }
+                            if (event.key === "Escape") {
+                              event.preventDefault();
+                              setPendingTextDraft(null);
+                              setTool("idle");
+                            }
+                          }}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onDoubleClick={(event) => event.stopPropagation()}
+                        />
+                      </div>
+                    );
+                  })()
                 ) : null}
               </div>
             </div>
@@ -2690,7 +2828,7 @@ export const ImageAnnotationWorkspace = ({
             </div>
           ) : (
             <div className="text-xs text-white/45">
-              点击图片即可开始标注，文字工具为点一下输入后再确认
+              点击图片即可开始标注，文字工具为点一下直接输入，Enter 或点击空白提交
             </div>
           )}
         </div>
