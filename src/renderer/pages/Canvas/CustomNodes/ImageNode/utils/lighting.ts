@@ -1,20 +1,48 @@
 import * as THREE from "three";
 
 export type LightingType = "soft" | "hard";
+export type LightingViewMode = "perspective" | "front";
+export type LightingDirection =
+  | "left"
+  | "top"
+  | "right"
+  | "front"
+  | "bottom"
+  | "back";
+
+export type LightingVector3 = {
+  x: number;
+  y: number;
+  z: number;
+};
+
+export type LightingProjection = {
+  x: number;
+  y: number;
+  depth: number;
+};
 
 export type LightingConfig = {
   presetId: string;
   lightType: LightingType;
   intensity: number;
   color: string;
+  viewMode: LightingViewMode;
+  lightDirection: LightingDirection;
+  rimLightEnabled: boolean;
   sceneAngle: number;
   horizontalAngle: number;
   pitchAngle: number;
   rotationY?: number;
+  lightVector?: LightingVector3;
+  rimLightVector?: LightingVector3;
 };
 
 export type LightingGenerationConfig = LightingConfig & {
+  smartMode?: boolean;
   aiPrompt?: string;
+  referenceImageUrl?: string;
+  referenceLightingPrompt?: string;
   model: string;
   platform?: string;
   size?: string;
@@ -27,216 +55,186 @@ export type LightingPreset = LightingConfig & {
 };
 
 export const DEFAULT_LIGHTING_CONFIG: LightingConfig = {
-  presetId: "natural-light",
+  presetId: "custom",
   lightType: "soft",
-  intensity: 48,
-  color: "#fff1d0",
+  intensity: 50,
+  color: "#ffffff",
+  viewMode: "perspective",
+  lightDirection: "left",
+  rimLightEnabled: false,
   sceneAngle: 0,
-  horizontalAngle: -18,
-  pitchAngle: 18,
+  horizontalAngle: -56,
+  pitchAngle: 12,
   rotationY: 0,
+  lightVector: { x: -0.74, y: 0.2, z: 0.64 },
+  rimLightVector: { x: 0.36, y: 0.28, z: -0.89 },
 };
 
 export const LIGHTING_PRESETS: LightingPreset[] = [
   {
-    presetId: "three-point",
-    name: "三点布光",
-    description: "均衡主光与轻轮廓",
+    presetId: "overexposed-film",
+    name: "过曝胶片",
+    description: "高亮低阴影，胶片泛白",
     lightType: "soft",
-    intensity: 58,
-    color: "#fff2d7",
-    sceneAngle: 12,
-    horizontalAngle: -28,
-    pitchAngle: 20,
+    intensity: 74,
+    color: "#fff7df",
+    viewMode: "perspective",
+    lightDirection: "front",
+    rimLightEnabled: false,
+    sceneAngle: 0,
+    horizontalAngle: 0,
+    pitchAngle: 24,
+    rotationY: 0,
+  },
+  {
+    presetId: "blue-backlight",
+    name: "蓝色逆光",
+    description: "冷蓝背光，边缘发亮",
+    lightType: "hard",
+    intensity: 68,
+    color: "#62b7ff",
+    viewMode: "perspective",
+    lightDirection: "back",
+    rimLightEnabled: true,
+    sceneAngle: 180,
+    horizontalAngle: 18,
+    pitchAngle: 8,
+    rotationY: 0,
   },
   {
     presetId: "rembrandt",
-    name: "伦勃朗布光",
-    description: "斜侧暖光与深阴影",
+    name: "伦勃朗光",
+    description: "斜侧暖光，三角高光",
     lightType: "hard",
     intensity: 66,
     color: "#ffd39a",
+    viewMode: "perspective",
+    lightDirection: "left",
+    rimLightEnabled: false,
     sceneAngle: -8,
     horizontalAngle: -52,
     pitchAngle: 24,
-  },
-  {
-    presetId: "split-light",
-    name: "分割光",
-    description: "强侧光切分明暗",
-    lightType: "hard",
-    intensity: 72,
-    color: "#f7f3ec",
-    sceneAngle: 0,
-    horizontalAngle: -82,
-    pitchAngle: 6,
-  },
-  {
-    presetId: "top-drama",
-    name: "顶光戏剧",
-    description: "高位压迫明暗",
-    lightType: "hard",
-    intensity: 68,
-    color: "#f6f8ff",
-    sceneAngle: 0,
-    horizontalAngle: 0,
-    pitchAngle: 56,
-  },
-  {
-    presetId: "anime-soft",
-    name: "动漫柔光",
-    description: "轻柔漫射高饱和",
-    lightType: "soft",
-    intensity: 42,
-    color: "#ffe5f0",
-    sceneAngle: 18,
-    horizontalAngle: -20,
-    pitchAngle: 28,
+    rotationY: 0,
   },
   {
     presetId: "cyberpunk",
     name: "赛博朋克",
-    description: "蓝紫霓虹对比",
+    description: "蓝紫霓虹，高反差",
     lightType: "hard",
     intensity: 76,
     color: "#4cd8ff",
+    viewMode: "perspective",
+    lightDirection: "right",
+    rimLightEnabled: true,
     sceneAngle: 32,
     horizontalAngle: 48,
     pitchAngle: -8,
+    rotationY: 0,
   },
   {
-    presetId: "natural-light",
-    name: "自然光",
-    description: "日常柔和窗光",
+    presetId: "sunset-haze",
+    name: "落日迷幻",
+    description: "橙粉低角度，微眩光",
     lightType: "soft",
-    intensity: 48,
-    color: "#fff1d0",
-    sceneAngle: 0,
-    horizontalAngle: -18,
-    pitchAngle: 18,
+    intensity: 62,
+    color: "#ff9b5f",
+    viewMode: "perspective",
+    lightDirection: "left",
+    rimLightEnabled: true,
+    sceneAngle: -18,
+    horizontalAngle: -58,
+    pitchAngle: -18,
+    rotationY: 0,
+  },
+  {
+    presetId: "mystic-low-key",
+    name: "神秘暗调",
+    description: "低曝光，冷色强阴影",
+    lightType: "hard",
+    intensity: 46,
+    color: "#9db7ff",
+    viewMode: "perspective",
+    lightDirection: "top",
+    rimLightEnabled: false,
+    sceneAngle: 18,
+    horizontalAngle: -36,
+    pitchAngle: 30,
+    rotationY: 0,
   },
   {
     presetId: "golden-hour",
     name: "黄金时刻",
-    description: "低角度金色暖光",
+    description: "金色暖光，柔和长阴影",
     lightType: "soft",
     intensity: 62,
     color: "#ffb45d",
+    viewMode: "perspective",
+    lightDirection: "left",
+    rimLightEnabled: true,
     sceneAngle: -18,
     horizontalAngle: -58,
     pitchAngle: -18,
+    rotationY: 0,
   },
   {
-    presetId: "blue-hour",
-    name: "蓝调时刻",
-    description: "冷蓝余晖与低反差",
-    lightType: "soft",
-    intensity: 44,
-    color: "#8bb6ff",
-    sceneAngle: 8,
-    horizontalAngle: 32,
-    pitchAngle: -12,
-  },
-  {
-    presetId: "high-key",
-    name: "高调光",
-    description: "通透明亮低阴影",
-    lightType: "soft",
-    intensity: 70,
-    color: "#ffffff",
+    presetId: "nolan-cool-gray",
+    name: "诺兰冷灰",
+    description: "冷灰主光，克制电影感",
+    lightType: "hard",
+    intensity: 56,
+    color: "#c5cfdd",
+    viewMode: "perspective",
+    lightDirection: "front",
+    rimLightEnabled: false,
     sceneAngle: 0,
-    horizontalAngle: -8,
-    pitchAngle: 34,
-  },
-  {
-    presetId: "low-key",
-    name: "低调光",
-    description: "低曝光强氛围",
-    lightType: "hard",
-    intensity: 54,
-    color: "#d9e7ff",
-    sceneAngle: 0,
-    horizontalAngle: -40,
-    pitchAngle: 10,
-  },
-  {
-    presetId: "rim-light",
-    name: "轮廓光",
-    description: "背侧轮廓提亮",
-    lightType: "hard",
-    intensity: 64,
-    color: "#e9f3ff",
-    sceneAngle: 180,
-    horizontalAngle: 78,
-    pitchAngle: 12,
-  },
-  {
-    presetId: "silhouette",
-    name: "剪影",
-    description: "背光压暗主体",
-    lightType: "hard",
-    intensity: 80,
-    color: "#fff0c7",
-    sceneAngle: 180,
-    horizontalAngle: 0,
-    pitchAngle: -8,
-  },
-  {
-    presetId: "neon",
-    name: "霓虹灯",
-    description: "彩色边缘闪耀",
-    lightType: "hard",
-    intensity: 74,
-    color: "#ff4fd8",
-    sceneAngle: 38,
-    horizontalAngle: 62,
-    pitchAngle: 4,
-  },
-  {
-    presetId: "practical",
-    name: "实景光",
-    description: "室内灯源柔暖",
-    lightType: "soft",
-    intensity: 50,
-    color: "#ffd188",
-    sceneAngle: -22,
-    horizontalAngle: 24,
-    pitchAngle: 10,
-  },
-  {
-    presetId: "chiaroscuro",
-    name: "明暗对比",
-    description: "古典强反差",
-    lightType: "hard",
-    intensity: 78,
-    color: "#f7c681",
-    sceneAngle: -12,
-    horizontalAngle: -62,
-    pitchAngle: 20,
-  },
-  {
-    presetId: "campfire",
-    name: "篝火光",
-    description: "低位橙红跳跃感",
-    lightType: "soft",
-    intensity: 60,
-    color: "#ff7b34",
-    sceneAngle: -28,
     horizontalAngle: -18,
-    pitchAngle: -48,
-  },
-  {
-    presetId: "moon-night",
-    name: "月夜神秘",
-    description: "冷色顶侧微光",
-    lightType: "soft",
-    intensity: 46,
-    color: "#9db7ff",
-    sceneAngle: 18,
-    horizontalAngle: 38,
-    pitchAngle: 34,
+    pitchAngle: 12,
+    rotationY: 0,
   },
 ];
+
+export const LIGHTING_DIRECTION_LABELS: Record<LightingDirection, string> = {
+  left: "左侧",
+  top: "顶部",
+  right: "右侧",
+  front: "前方",
+  bottom: "底部",
+  back: "后方",
+};
+
+export const LIGHTING_DIRECTION_CONFIGS: Record<
+  LightingDirection,
+  Pick<LightingConfig, "sceneAngle" | "horizontalAngle" | "pitchAngle">
+> = {
+  left: { sceneAngle: 0, horizontalAngle: -56, pitchAngle: 12 },
+  top: { sceneAngle: 0, horizontalAngle: 16, pitchAngle: 66 },
+  right: { sceneAngle: 0, horizontalAngle: 54, pitchAngle: -7 },
+  front: { sceneAngle: 0, horizontalAngle: -24, pitchAngle: -18 },
+  bottom: { sceneAngle: 0, horizontalAngle: -16, pitchAngle: -64 },
+  back: { sceneAngle: 180, horizontalAngle: 24, pitchAngle: 18 },
+};
+
+const LIGHTING_DIRECTION_VECTORS: Record<LightingDirection, LightingVector3> = {
+  left: { x: -0.74, y: 0.2, z: 0.64 },
+  top: { x: 0.12, y: 0.91, z: 0.4 },
+  right: { x: 0.78, y: -0.12, z: 0.62 },
+  front: { x: -0.36, y: -0.28, z: 0.89 },
+  bottom: { x: -0.12, y: -0.9, z: 0.42 },
+  back: { x: 0.36, y: 0.28, z: -0.89 },
+};
+
+const DEFAULT_RIM_LIGHT_VECTOR: LightingVector3 = LIGHTING_DIRECTION_VECTORS.back;
+
+export const getLightingConfigForDirection = (
+  config: LightingConfig,
+  direction: LightingDirection,
+): LightingConfig => ({
+  ...config,
+  lightDirection: direction,
+  ...LIGHTING_DIRECTION_CONFIGS[direction],
+  lightVector: LIGHTING_DIRECTION_VECTORS[direction],
+  presetId: "custom",
+});
 
 const getLightingPresetName = (presetId: string) =>
   LIGHTING_PRESETS.find((preset) => preset.presetId === presetId)?.name ??
@@ -287,17 +285,34 @@ export const buildLightingPrompt = (config: LightingGenerationConfig) => {
   const intensityText = getLightIntensityText(config.intensity);
   const directionText = getLightDirectionText(config);
   const colorText = getColorTemperatureText(config.color);
+  const baseDirectionText =
+    LIGHTING_DIRECTION_LABELS[config.lightDirection] ?? directionText;
+  const rimLightText = config.rimLightEnabled
+    ? "开启轮廓光，在主体边缘形成清晰但不过度的高光描边。"
+    : "关闭轮廓光，边缘高光保持自然克制。";
   const rotationText =
     Math.abs(config.rotationY ?? 0) > 4
       ? `参考预览中的主体 Y 轴旋转倾向约 ${config.rotationY} 度。`
       : "";
   const userPrompt = config.aiPrompt?.trim();
+  const referenceLightingPrompt = config.referenceLightingPrompt?.trim();
+  const smartModeText = config.smartMode
+    ? [
+        userPrompt ? `用户智能描述：${userPrompt}` : "",
+        referenceLightingPrompt
+          ? `参考图灯光描述：${referenceLightingPrompt}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : "";
 
   return [
-    "基于参考图进行光影重绘。保持主体身份、构图、姿态、服装、背景和画面比例不变，只调整布光、阴影、高光、反射和整体氛围。",
-    `灯光风格：${presetName}。使用${colorText}${lightTypeText}，光源来自${directionText}，${intensityText}。`,
+    "基于当前原图进行光影重绘。保持主体身份、构图、姿态、服装、背景和画面比例不变，只调整布光、阴影、高光、反射和整体氛围。",
+    `手动灯光参数：亮度 ${config.intensity}%，${colorText}${lightTypeText}，主光源方向为${baseDirectionText}（${directionText}），${rimLightText}${intensityText}。`,
+    config.presetId !== "custom" ? `智能预设风格：${presetName}。` : "",
     rotationText,
-    userPrompt ? `用户补充要求：${userPrompt}` : "",
+    smartModeText,
     "不要改变主体结构，不要新增物体，不要添加文字、水印或多余细节。",
   ]
     .filter(Boolean)
@@ -307,10 +322,9 @@ export const buildLightingPrompt = (config: LightingGenerationConfig) => {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
-const POINT_RANGE = 0.42;
+export const LIGHTING_POINT_RANGE = 0.5;
 const HORIZONTAL_RANGE = 110;
 const PITCH_RANGE = 70;
-const SCENE_POINT_FACTOR = 0.25;
 const ROTATION_Y_RANGE = 60;
 
 type RendererEntry = {
@@ -384,40 +398,188 @@ const disposeObject3D = (object: THREE.Object3D) => {
 const getRotationY = (config: LightingConfig) =>
   clamp(config.rotationY ?? 0, -ROTATION_Y_RANGE, ROTATION_Y_RANGE);
 
-export const getLightingPoint = (config: LightingConfig) => {
+const normalizeLightingVector = (vector: LightingVector3): LightingVector3 => {
+  const length = Math.hypot(vector.x, vector.y, vector.z);
+  if (!Number.isFinite(length) || length < 0.001) {
+    return { x: 0, y: 0, z: 1 };
+  }
+
+  return {
+    x: clamp(vector.x / length, -1, 1),
+    y: clamp(vector.y / length, -1, 1),
+    z: clamp(vector.z / length, -1, 1),
+  };
+};
+
+const getLightingVectorFromAngles = (
+  config: Pick<
+    LightingConfig,
+    "horizontalAngle" | "pitchAngle" | "sceneAngle" | "lightDirection"
+  >,
+): LightingVector3 => {
   const horizontal = clamp(
-    config.horizontalAngle + config.sceneAngle * SCENE_POINT_FACTOR,
+    config.horizontalAngle,
     -HORIZONTAL_RANGE,
     HORIZONTAL_RANGE,
   );
   const pitch = clamp(config.pitchAngle, -PITCH_RANGE, PITCH_RANGE);
+  const yaw = THREE.MathUtils.degToRad(horizontal);
+  const pitchRad = THREE.MathUtils.degToRad(pitch);
+  const zSign =
+    config.sceneAngle >= 90 || config.lightDirection === "back" ? -1 : 1;
+
+  return normalizeLightingVector({
+    x: Math.sin(yaw) * Math.cos(pitchRad),
+    y: Math.sin(pitchRad),
+    z: zSign * Math.max(0.12, Math.abs(Math.cos(yaw) * Math.cos(pitchRad))),
+  });
+};
+
+export const getLightingVector = (config: LightingConfig): LightingVector3 => {
+  if (config.lightVector) {
+    return normalizeLightingVector(config.lightVector);
+  }
+
+  return getLightingVectorFromAngles(config);
+};
+
+export const getRimLightingVector = (
+  config: LightingConfig,
+): LightingVector3 => normalizeLightingVector(
+  config.rimLightVector ?? DEFAULT_RIM_LIGHT_VECTOR,
+);
+
+const resolveLightingDirectionFromVector = (
+  vector: LightingVector3,
+): LightingDirection => {
+  if (vector.z < -0.22) {
+    return "back";
+  }
+  if (vector.y > 0.68) {
+    return "top";
+  }
+  if (vector.y < -0.68) {
+    return "bottom";
+  }
+  if (vector.z > 0.72 && Math.abs(vector.x) < 0.46) {
+    return "front";
+  }
+  return vector.x < 0 ? "left" : "right";
+};
+
+export const getLightingConfigFromVector = (
+  config: LightingConfig,
+  vector: LightingVector3,
+): LightingConfig => {
+  const nextVector = normalizeLightingVector(vector);
+  const sceneAngle = nextVector.z < -0.15 ? 180 : 0;
+  const horizontalAngle = THREE.MathUtils.radToDeg(
+    Math.atan2(nextVector.x, Math.max(0.18, Math.abs(nextVector.z))),
+  );
+  const pitchAngle = THREE.MathUtils.radToDeg(Math.asin(nextVector.y));
 
   return {
-    x: clamp(0.5 + (horizontal / HORIZONTAL_RANGE) * POINT_RANGE, 0.06, 0.94),
-    y: clamp(0.5 - (pitch / PITCH_RANGE) * POINT_RANGE, 0.06, 0.94),
+    ...config,
+    presetId: "custom",
+    lightDirection: resolveLightingDirectionFromVector(nextVector),
+    sceneAngle,
+    horizontalAngle: Math.round(
+      clamp(horizontalAngle, -HORIZONTAL_RANGE, HORIZONTAL_RANGE),
+    ),
+    pitchAngle: Math.round(clamp(pitchAngle, -PITCH_RANGE, PITCH_RANGE)),
+    lightVector: nextVector,
   };
+};
+
+export const getLightingProjection = (
+  config: LightingConfig,
+): LightingProjection => {
+  const viewVector = getLightingVector(config);
+
+  return getLightingProjectionFromVector(viewVector);
+};
+
+export const getRimLightingProjection = (
+  config: LightingConfig,
+): LightingProjection => getLightingProjectionFromVector(
+  getRimLightingVector(config),
+);
+
+const getLightingProjectionFromVector = (
+  viewVector: LightingVector3,
+): LightingProjection => {
+  return {
+    x: clamp(0.5 + viewVector.x * LIGHTING_POINT_RANGE, 0, 1),
+    y: clamp(0.5 - viewVector.y * LIGHTING_POINT_RANGE, 0, 1),
+    depth: viewVector.z,
+  };
+};
+
+export const getLightingPoint = (config: LightingConfig) => {
+  const projection = getLightingProjection(config);
+  return { x: projection.x, y: projection.y };
 };
 
 export const getLightingConfigFromPoint = (
   config: LightingConfig,
   point: { x: number; y: number },
 ): LightingConfig => {
-  const horizontal =
-    ((clamp(point.x, 0.06, 0.94) - 0.5) / POINT_RANGE) * HORIZONTAL_RANGE;
-  const pitch =
-    ((0.5 - clamp(point.y, 0.06, 0.94)) / POINT_RANGE) * PITCH_RANGE;
+  let viewX = (clamp(point.x, 0, 1) - 0.5) / LIGHTING_POINT_RANGE;
+  let viewY = (0.5 - clamp(point.y, 0, 1)) / LIGHTING_POINT_RANGE;
+  const projectedLength = Math.hypot(viewX, viewY);
+
+  if (projectedLength > 1) {
+    const scale = 1 / projectedLength;
+    viewX *= scale;
+    viewY *= scale;
+  }
+
+  const viewZLength = Math.sqrt(Math.max(0, 1 - viewX * viewX - viewY * viewY));
+  const currentVector = getLightingVector(config);
+  const desiredLocalZSign =
+    currentVector.z < -0.08 || config.lightDirection === "back" ? -1 : 1;
+  const frontCandidate = normalizeLightingVector({
+    x: viewX,
+    y: viewY,
+    z: viewZLength,
+  });
+  const backCandidate = normalizeLightingVector({
+    x: viewX,
+    y: viewY,
+    z: -viewZLength,
+  });
+  const nextVector =
+    Math.sign(frontCandidate.z || 1) === desiredLocalZSign
+      ? frontCandidate
+      : Math.sign(backCandidate.z || -1) === desiredLocalZSign
+        ? backCandidate
+        : Math.abs(frontCandidate.z - desiredLocalZSign) <
+            Math.abs(backCandidate.z - desiredLocalZSign)
+          ? frontCandidate
+          : backCandidate;
+
+  return getLightingConfigFromVector(config, nextVector);
+};
+
+export const getRimLightingConfigFromPoint = (
+  config: LightingConfig,
+  point: { x: number; y: number },
+): LightingConfig => {
+  const currentRimVector = getRimLightingVector(config);
+  const nextConfig = getLightingConfigFromPoint(
+    {
+      ...config,
+      lightDirection: currentRimVector.z < -0.08 ? "back" : config.lightDirection,
+      lightVector: currentRimVector,
+    },
+    point,
+  );
 
   return {
     ...config,
     presetId: "custom",
-    horizontalAngle: Math.round(
-      clamp(
-        horizontal - config.sceneAngle * SCENE_POINT_FACTOR,
-        -HORIZONTAL_RANGE,
-        HORIZONTAL_RANGE,
-      ),
-    ),
-    pitchAngle: Math.round(clamp(pitch, -PITCH_RANGE, PITCH_RANGE)),
+    rimLightEnabled: true,
+    rimLightVector: nextConfig.lightVector,
   };
 };
 
@@ -561,37 +723,66 @@ export const renderLightingToCanvas = (
 
   const ambientLight = new THREE.AmbientLight(
     "#ffffff",
-    hard ? 0.58 : 0.78,
+    (hard ? 0.22 : 0.28) + intensity * (hard ? 0.5 : 0.62),
   );
   scene.add(ambientLight);
 
-  const lightPoint = getLightingPoint(config);
-  const lightX = (lightPoint.x - 0.5) * planeWidth * 2.2;
-  const lightY = (0.5 - lightPoint.y) * planeHeight * 2.2;
-  const lightZ = 2.5 + Math.max(0, config.pitchAngle) / 35;
+  const lightVector = getLightingVector(config);
+  const backLightFactor = Math.max(0, -lightVector.z);
+  const lightX = lightVector.x * planeWidth * 1.8;
+  const lightY = lightVector.y * planeHeight * 1.8;
+  const lightZ =
+    lightVector.z >= 0
+      ? 2.2 + lightVector.z * 1.35
+      : -2.2 + lightVector.z * 1.2;
   const lightColor = new THREE.Color(config.color);
   const directionalLight = new THREE.DirectionalLight(
     lightColor,
-    (hard ? 2.2 : 1.65) * intensity,
+    (hard ? 2.25 : 1.72) * intensity * (1 - backLightFactor * 0.28),
   );
   directionalLight.position.set(lightX, lightY, lightZ);
   scene.add(directionalLight);
 
   const pointLight = new THREE.PointLight(
     lightColor,
-    (hard ? 7.5 : 5.2) * intensity,
+    (hard ? 7.5 : 5.2) * intensity * (1 - backLightFactor * 0.38),
     6,
     hard ? 1.8 : 1.25,
   );
-  pointLight.position.set(lightX, lightY, 2.2);
+  pointLight.position.set(lightX, lightY, lightVector.z >= 0 ? lightZ : -1.2);
   scene.add(pointLight);
 
-  const rimLight = new THREE.DirectionalLight(
-    "#dbe8ff",
-    hard ? 0.36 * intensity : 0.2 * intensity,
-  );
-  rimLight.position.set(-lightX, -lightY, -2.8);
-  scene.add(rimLight);
+  if (backLightFactor > 0.05) {
+    const bounceLight = new THREE.DirectionalLight(
+      lightColor,
+      (hard ? 0.35 : 0.28) * intensity * backLightFactor,
+    );
+    bounceLight.position.set(lightX * 0.28, lightY * 0.28, 1.35);
+    scene.add(bounceLight);
+
+    const backRimLight = new THREE.DirectionalLight(
+      lightColor,
+      (hard ? 0.72 : 0.48) * intensity * backLightFactor,
+    );
+    backRimLight.position.set(lightX, lightY, -3.4);
+    scene.add(backRimLight);
+  }
+
+  if (config.rimLightEnabled) {
+    const rimLightVector = getRimLightingVector(config);
+    const rimLightX = rimLightVector.x * planeWidth * 1.8;
+    const rimLightY = rimLightVector.y * planeHeight * 1.8;
+    const rimLightZ =
+      rimLightVector.z >= 0
+        ? 2 + rimLightVector.z * 1.2
+        : -2.4 + rimLightVector.z * 1.1;
+    const rimLight = new THREE.DirectionalLight(
+      "#dbe8ff",
+      hard ? 0.54 * intensity : 0.34 * intensity,
+    );
+    rimLight.position.set(rimLightX, rimLightY, rimLightZ);
+    scene.add(rimLight);
+  }
 
   renderer.render(scene, camera);
   disposeObject3D(scene);
@@ -603,6 +794,19 @@ export const renderLightingToCanvas = (
 
   context.clearRect(0, 0, width, height);
   context.drawImage(rendererEntry.canvas, 0, 0, width, height);
+  if (intensity < 0.5) {
+    context.save();
+    context.globalCompositeOperation = "multiply";
+    context.fillStyle = `rgba(0, 0, 0, ${(0.5 - intensity) * 0.62})`;
+    context.fillRect(0, 0, width, height);
+    context.restore();
+  } else if (intensity > 0.5) {
+    context.save();
+    context.globalCompositeOperation = "screen";
+    context.fillStyle = `rgba(255, 255, 255, ${(intensity - 0.5) * 0.38})`;
+    context.fillRect(0, 0, width, height);
+    context.restore();
+  }
   if (!options.preserveSourceAspectRatio) {
     trimBackgroundMargins(canvas);
   }

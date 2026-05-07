@@ -276,6 +276,76 @@ export async function createChatCompletion(data: any, signal?: AbortSignal) {
   });
 }
 
+function extractChatCompletionText(response: any): string {
+  const messageContent = response?.choices?.[0]?.message?.content;
+  if (typeof messageContent === "string") {
+    return messageContent.trim();
+  }
+
+  if (Array.isArray(messageContent)) {
+    return messageContent
+      .map((item) => item?.text || item?.content || "")
+      .filter(Boolean)
+      .join("")
+      .trim();
+  }
+
+  const outputText = response?.output_text;
+  if (typeof outputText === "string") {
+    return outputText.trim();
+  }
+
+  return "";
+}
+
+export async function analyzeLightingReferenceImage(
+  imageUrl: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const response = await createChatCompletion(
+    {
+      model: "gemini-3-pro-official",
+      stream: false,
+      temperature: 0.2,
+      messages: [
+        {
+          role: "system",
+          content:
+            "你是专业摄影灯光分析师，只输出中文灯光描述，不评价图片主体。",
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: [
+                "分析这张参考图的灯光特征，输出一段可直接用于 AI 图像重绘 prompt 的中文描述。",
+                "重点包含：主光方向、色温/色调、明暗对比、阴影硬度、轮廓光、高光、整体氛围。",
+                "不要描述人物身份、服装、构图细节，不要要求复刻参考图主体。",
+                "控制在 80 字以内。",
+              ].join("\n"),
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: imageUrl,
+              },
+            },
+          ],
+        },
+      ],
+    },
+    signal,
+  );
+
+  const description = extractChatCompletionText(response);
+  if (!description) {
+    throw new Error("未能提取参考图灯光描述");
+  }
+
+  return description;
+}
+
 // ===================== Midjourney 相关 =====================
 
 // 提交 Midjourney imagine 任务

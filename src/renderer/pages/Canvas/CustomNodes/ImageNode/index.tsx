@@ -1,15 +1,31 @@
 ﻿import {
   type NodeProps,
   Position,
+  type Viewport,
+  useReactFlow,
   useUpdateNodeInternals,
 } from "@xyflow/react";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { uploadFileToOSS } from "service/oss";
+import {
+  ADOBE_GPT_IMAGE2_MODEL,
+  ADOBE_NANO_BANANA_PRO_MODEL,
+  NANO_BANANA_LOCAL_MODEL,
+  NANO_BANANA_LOCAL_PLATFORM,
+} from "shared/constants/ai-models";
 import { setProjectCoverFromMediaRef } from "service/projectStorage";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageNodeType } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
+import { getRemoteMediaUrl } from "shared/utils/mediaPersistence";
 import { assignMissingMediaSequences } from "shared/utils/mediaSequence";
 import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
@@ -24,6 +40,7 @@ import { saveToolMediaFileToProject } from "../utils/localMedia";
 import { ImageAnnotationWorkspace } from "./ImageAnnotationWorkspace";
 import { ImageContent } from "./ImageContent";
 import { ImageGridCropDialog } from "./ImageGridCropDialog";
+import { ImageLightingDialog } from "./ImageLightingDialog";
 import { ImagePromptPanel } from "./ImagePromptPanel";
 import { ImageToolbar } from "./ImageToolbar";
 import { IconPhoto } from "@tabler/icons-react";
@@ -31,8 +48,17 @@ import {
   getAspectRatioFromMediaFile,
   getNodeSizeByAspectRatio,
 } from "./utils/aspectRatioUtils";
+import {
+  buildLightingPrompt,
+  type LightingGenerationConfig,
+} from "./utils/lighting";
 
 const DRAG_UI_RESTORE_DELAY = 140;
+const FALLBACK_NODE_WIDTH = 350;
+const FALLBACK_NODE_HEIGHT = 250;
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
 
 /**
  * 图片节点组件
@@ -50,7 +76,13 @@ export const ImageNode = memo(
     const [isDragUiSettled, setIsDragUiSettled] = useState(!isDragging);
     const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
     const [isGridCropOpen, setIsGridCropOpen] = useState(false);
+    const [isLightingDialogOpen, setIsLightingDialogOpen] = useState(false);
+    const [isLightingGenerating, setIsLightingGenerating] = useState(false);
     const [isRenaming, setIsRenaming] = useState(false);
+    const previousLightingViewportRef = useRef<Viewport | null>(null);
+    const reactFlowInstance = useReactFlow();
+    const reactFlowInstanceRef = useRef(reactFlowInstance);
+    reactFlowInstanceRef.current = reactFlowInstance;
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
     const updateNodeNickname = useCanvasFlowStore(
@@ -69,6 +101,12 @@ export const ImageNode = memo(
       (state) => state.updateNodeDimensions,
     );
     const onConnect = useCanvasFlowStore((state) => state.onConnect);
+    const startImageGeneration = useCanvasFlowStore(
+      (state) => state.startImageGeneration,
+    );
+    const startGeminiPro2Generation = useCanvasFlowStore(
+      (state) => state.startGeminiPro2Generation,
+    );
     const highlightedSourceNodeIds = useCanvasFlowStore(
       (state) => state.highlightedSourceNodeIds,
     );
@@ -77,6 +115,9 @@ export const ImageNode = memo(
       (state) => state.selectedNodesCount,
     );
     const projectId = useCanvasFlowStore((state) => state.projectId);
+    const setDefaultImagePreset = useChatSettingsStore(
+      (state) => state.setDefaultImagePreset,
+    );
 
     // 全景图查看器状态
     const panoramaViewer = useCanvasFlowStore((state) => state.panoramaViewer);
@@ -276,6 +317,82 @@ export const ImageNode = memo(
     }, [data.result?.data, projectId]);
 
     const hasMultipleResults = (data.result?.data?.length ?? 0) > 1;
+    const currentImageUrl =
+      getRemoteMediaUrl(data.result?.data?.[0]) ?? data.result?.data?.[0]?.url;
+
+    const restoreLightingViewport = useCallback(() => {
+      const previousViewport = previousLightingViewportRef.current;
+      previousLightingViewportRef.current = null;
+
+      if (previousViewport) {
+        reactFlowInstanceRef.current.setViewport(previousViewport, {
+          duration: 260,
+        });
+      }
+    }, []);
+
+    const focusLightingSourceNode = useCallback(() => {
+      const sourceNode = useCanvasFlowStore
+        .getState()
+        .nodes.find((node) => node.id === id);
+      if (!sourceNode) {
+        return;
+      }
+
+      if (!previousLightingViewportRef.current) {
+        previousLightingViewportRef.current =
+          reactFlowInstanceRef.current.getViewport();
+      }
+
+      const flowElement = document.querySelector(
+        ".react-flow",
+      ) as HTMLElement | null;
+      const bounds = flowElement?.getBoundingClientRect();
+      const viewportWidth = bounds?.width ?? window.innerWidth;
+      const viewportHeight = bounds?.height ?? window.innerHeight;
+      const nodeWidth = sourceNode.width ?? FALLBACK_NODE_WIDTH;
+      const nodeHeight = sourceNode.height ?? FALLBACK_NODE_HEIGHT;
+      const targetZoom = clamp(
+        Math.min(
+          (viewportWidth * 0.7) / nodeWidth,
+          (viewportHeight * 0.64) / nodeHeight,
+        ),
+        0.45,
+        1.85,
+      );
+      const centerX = sourceNode.position.x + nodeWidth / 2;
+      const centerY = sourceNode.position.y + nodeHeight / 2;
+      const nextViewport = {
+        x: viewportWidth / 2 - centerX * targetZoom,
+        y: viewportHeight / 2 - centerY * targetZoom + viewportHeight * 0.035,
+        zoom: targetZoom,
+      };
+
+      reactFlowInstanceRef.current.setViewport(nextViewport, { duration: 280 });
+    }, [id]);
+
+    const handleLightingDialogOpenChange = useCallback(
+      (open: boolean) => {
+        if (open && isLightingGenerating) {
+          return;
+        }
+
+        if (open) {
+          focusLightingSourceNode();
+        } else {
+          restoreLightingViewport();
+        }
+
+        setIsLightingDialogOpen(open);
+      },
+      [focusLightingSourceNode, isLightingGenerating, restoreLightingViewport],
+    );
+
+    useEffect(() => {
+      return () => {
+        restoreLightingViewport();
+      };
+    }, [restoreLightingViewport]);
 
     // 裁剪完成后：上传裁剪文件、创建子节点，并把裁剪结果挂到新节点上
     const handleCrop = useCallback(
@@ -493,6 +610,140 @@ export const ImageNode = memo(
       openImageAnnotation(currentUrl, id, "erase");
     }, [data.result?.data, id, openImageAnnotation]);
 
+    const handleLightingGenerate = useCallback(
+      async (config: LightingGenerationConfig) => {
+        if (!currentImageUrl) {
+          toast.info("暂无可调光图片");
+          throw new Error("暂无可调光图片");
+        }
+
+        setIsLightingGenerating(true);
+
+        try {
+          const sourceNode = useCanvasFlowStore
+            .getState()
+            .nodes.find((node) => node.id === id);
+          if (!sourceNode || sourceNode.type !== "imageNode") {
+            throw new Error("当前图片节点不存在");
+          }
+
+          const childPosition = {
+            x: sourceNode.position.x + (sourceNode.width ?? 350) + 80,
+            y: sourceNode.position.y,
+          };
+          const childId = addNode("image", childPosition);
+          if (!childId) {
+            throw new Error("灯光图片节点创建失败");
+          }
+
+          onConnect({
+            source: id,
+            target: childId,
+            sourceHandle: "output",
+            targetHandle: "input",
+          });
+
+          const isNiji7Model = config.model === "midjourney-niji7";
+          const isMidjourneyModel =
+            config.model === "midjourney" || isNiji7Model;
+          const isAdobeImageModel =
+            config.model === ADOBE_GPT_IMAGE2_MODEL ||
+            config.model === ADOBE_NANO_BANANA_PRO_MODEL;
+          const isNanoBananaLocalModel =
+            config.model === NANO_BANANA_LOCAL_MODEL &&
+            config.platform === NANO_BANANA_LOCAL_PLATFORM;
+          const isLocalDirectModel =
+            isAdobeImageModel || isNanoBananaLocalModel;
+          const backendModel = isNiji7Model ? "midjourney" : config.model;
+          const size = config.size ?? data.size ?? "1:1";
+          const resolution = config.resolution ?? data.resolution ?? "2K";
+          const prompt = buildLightingPrompt(config);
+          let finalPrompt = prompt;
+
+          if (isMidjourneyModel && !finalPrompt.includes("--ar")) {
+            finalPrompt = `${finalPrompt} --ar ${size}`;
+            if (isNiji7Model) {
+              finalPrompt = `${finalPrompt} --niji 7`;
+            }
+          }
+
+          const payload = {
+            model: backendModel,
+            originalModel: config.model,
+            platform: config.platform,
+            prompt: finalPrompt,
+            resolution,
+            n: 1,
+            image_urls: [currentImageUrl],
+            promptDraft: config.aiPrompt ?? "",
+            promptDraftHtml: `<p>${config.aiPrompt ?? ""}</p>`,
+            size,
+            metadata: { resolution },
+            lighting: config,
+            ...(isMidjourneyModel
+              ? {
+                  aspectRatio: data.aspectRatio ?? "1:1",
+                  midjourneyAdvanced: data.midjourneyAdvanced,
+                }
+              : {}),
+          };
+
+          updateImageNodeData(childId, {
+            badgeLabel: "灯光",
+            model: config.model,
+            originalModel: config.model,
+            platform: config.platform,
+            prompt: finalPrompt,
+            promptDraft: config.aiPrompt ?? "",
+            promptDraftHtml: `<p>${config.aiPrompt ?? ""}</p>`,
+            image_urls: [currentImageUrl],
+            size,
+            resolution,
+            result: {
+              type: "image",
+              data: [],
+            },
+            lighting: config,
+          });
+
+          setDefaultImagePreset({
+            model: config.model,
+            platform: config.platform,
+            size,
+            resolution,
+          });
+
+          if (isLocalDirectModel) {
+            await startGeminiPro2Generation(childId, payload);
+          } else {
+            await startImageGeneration(childId, payload);
+          }
+
+          toast.success("已开始灯光重绘生成");
+        } catch (error: any) {
+          console.error("灯光处理失败:", error);
+          toast.error(error?.message || "灯光处理失败，请重试");
+          throw error;
+        } finally {
+          setIsLightingGenerating(false);
+        }
+      },
+      [
+        addNode,
+        currentImageUrl,
+        data.aspectRatio,
+        data.midjourneyAdvanced,
+        data.resolution,
+        data.size,
+        id,
+        onConnect,
+        setDefaultImagePreset,
+        startGeminiPro2Generation,
+        startImageGeneration,
+        updateImageNodeData,
+      ],
+    );
+
     // 点击“设为主图”时交换主图与目标图，保持其余顺序不变
     const handleReorder = useCallback(
       (fromIndex: number) => {
@@ -548,6 +799,8 @@ export const ImageNode = memo(
                   onCrop={handleCrop}
                   onAnnotate={handleAnnotate}
                   onErase={handleErase}
+                  onLighting={() => handleLightingDialogOpenChange(true)}
+                  isLightingGenerating={isLightingGenerating}
                 />
               </div>
             )}
@@ -686,6 +939,17 @@ export const ImageNode = memo(
           imageUrl={data.result?.data?.[0]?.url}
           onOpenChange={setIsGridCropOpen}
           onConfirm={handleGridCrop}
+        />
+
+        <ImageLightingDialog
+          open={isLightingDialogOpen}
+          imageUrl={currentImageUrl}
+          initialModel={data.model}
+          initialPlatform={data.platform}
+          initialSize={data.size}
+          initialResolution={data.resolution}
+          onOpenChange={handleLightingDialogOpenChange}
+          onConfirm={handleLightingGenerate}
         />
       </>
     );
