@@ -8,6 +8,8 @@ import {
   createDesktopChatCompletions,
   createDesktopProxyTask,
   type DesktopProxyPlatform,
+  getOssPutUrl,
+  type OssBlobType,
   getDigitalCaptcha,
   getJikeGoUserInfo,
   getSceneQrcode,
@@ -76,19 +78,17 @@ const LogPanel = ({ logs }: { logs: LogEntry[] }) => {
           {logs.map((log, index) => (
             <div
               key={index}
-              className={`text-xs p-2 rounded ${
-                log.status === "success"
+              className={`text-xs p-2 rounded ${log.status === "success"
                   ? "bg-green-900/30 text-green-300"
                   : "bg-red-900/30 text-red-300"
-              }`}
+                }`}
             >
               <div className="flex items-center gap-2 mb-1">
                 <span className="opacity-60">{log.time}</span>
                 <span className="font-semibold">{log.api}</span>
                 <span
-                  className={`px-1.5 py-0.5 rounded text-[10px] ${
-                    log.status === "success" ? "bg-green-800/50" : "bg-red-800/50"
-                  }`}
+                  className={`px-1.5 py-0.5 rounded text-[10px] ${log.status === "success" ? "bg-green-800/50" : "bg-red-800/50"
+                    }`}
                 >
                   {log.status === "success" ? "SUCCESS" : "ERROR"}
                 </span>
@@ -118,12 +118,12 @@ const getTaskId = (response: any) =>
 const getTaskStatus = (response: any) =>
   String(
     response?.data?.status ||
-      response?.data?.task_status ||
-      response?.output?.task_status ||
-      response?.output?.status ||
-      response?.result?.status ||
-      response?.status ||
-      "",
+    response?.data?.task_status ||
+    response?.output?.task_status ||
+    response?.output?.status ||
+    response?.result?.status ||
+    response?.status ||
+    "",
   ).toLowerCase();
 
 const isTaskCompleted = (status: string) =>
@@ -137,12 +137,12 @@ const getMediaUrls = (response: any): string[] => {
     response?.result?.data || response?.data?.result?.data || response?.data?.data;
   const urls = Array.isArray(resultData)
     ? resultData
-        .map((item: any) =>
-          typeof item === "string"
-            ? item
-            : item?.url || item?.image_url || item?.video_url || "",
-        )
-        .filter(Boolean)
+      .map((item: any) =>
+        typeof item === "string"
+          ? item
+          : item?.url || item?.image_url || item?.video_url || "",
+      )
+      .filter(Boolean)
     : [];
 
   return [
@@ -165,6 +165,12 @@ export default function TestGoPage() {
     sceneId: "",
     nickname: "新昵称",
     avatar: "https://example.com/avatar.jpg",
+  });
+  const [ossApiData, setOssApiData] = useState({
+    blobType: "image" as OssBlobType,
+    ext: "png",
+    putUrl: "",
+    accessUrl: "",
   });
   const [captchaImage, setCaptchaImage] = useState("");
   const [sceneQrcodeImage, setSceneQrcodeImage] = useState("");
@@ -330,6 +336,22 @@ export default function TestGoPage() {
       }),
     );
 
+  const handleGetOssPutUrl = () => {
+    callApi("getOssPutUrl (/v1/oss/put-url)", () =>
+      getOssPutUrl({
+        blob_type: ossApiData.blobType,
+        ext: ossApiData.ext,
+      }),
+    ).then((res: any) => {
+      const data = getResponseData(res);
+      setOssApiData((prev) => ({
+        ...prev,
+        putUrl: data?.put_url || data?.putUrl || "",
+        accessUrl: data?.access_url || data?.accessUrl || "",
+      }));
+    });
+  };
+
   const handleChatPlatformChange = (platform: "dashscope" | "toapi") => {
     setChatApiData((prev) => ({
       ...prev,
@@ -475,26 +497,26 @@ export default function TestGoPage() {
         headers: isDashscope ? { "X-DashScope-Async": "enable" } : {},
         body: isDashscope
           ? {
-              model: videoApiData.model,
-              input: { prompt },
-              parameters: {
-                resolution: "720P",
-                ratio: videoApiData.ratio,
-                duration: Number(videoApiData.duration),
-                prompt_extend: true,
-                watermark: false,
-              },
-            }
-          : {
-              model: videoApiData.model,
-              prompt,
-              generation_type: "video",
-              mode: videoApiData.model.includes("fast") ? "fast" : "pro",
-              resolution: "720p",
+            model: videoApiData.model,
+            input: { prompt },
+            parameters: {
+              resolution: "720P",
               ratio: videoApiData.ratio,
               duration: Number(videoApiData.duration),
-              generate_audio: false,
+              prompt_extend: true,
+              watermark: false,
             },
+          }
+          : {
+            model: videoApiData.model,
+            prompt,
+            generation_type: "video",
+            mode: videoApiData.model.includes("fast") ? "fast" : "pro",
+            resolution: "720p",
+            ratio: videoApiData.ratio,
+            duration: Number(videoApiData.duration),
+            generate_audio: false,
+          },
       });
       const taskId = getTaskId(getResponseData(response));
       addLog(`${apiName} 创建任务`, "success", response);
@@ -543,456 +565,533 @@ export default function TestGoPage() {
 
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] gap-6">
           <div className="space-y-6">
-          <section className="bg-white/5 rounded-xl p-5 border border-white/10">
-            <h2 className="text-lg font-semibold text-sky-400 mb-4">
-              用户基础 API（jike-go /v1/user）
-            </h2>
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-3">
-                <TestButton
-                  label="健康检查"
-                  onClick={handleHealthCheck}
-                  loading={loadingMap["healthCheck (健康检查)"]}
-                />
-                <TestButton
-                  label="获取数字验证码"
-                  onClick={handleGetDigitalCaptcha}
-                  loading={loadingMap["getDigitalCaptcha (获取数字验证码)"]}
-                  variant="outline"
-                />
-                <TestButton
-                  label="用户注册"
-                  onClick={handleRegisterByUsername}
-                  loading={loadingMap["registerByUsername (用户注册)"]}
-                  variant="outline"
-                />
-                <TestButton
-                  label="用户名密码登录"
-                  onClick={handleLoginByUsername}
-                  loading={loadingMap["loginByUsername (用户名密码登录)"]}
-                  variant="outline"
-                />
-              </div>
+            <section className="bg-white/5 rounded-xl p-5 border border-white/10">
+              <h2 className="text-lg font-semibold text-sky-400 mb-4">
+                用户基础 API（jike-go /v1/user）
+              </h2>
+              <div className="space-y-4">
+                <div className="flex flex-wrap gap-3">
+                  <TestButton
+                    label="健康检查"
+                    onClick={handleHealthCheck}
+                    loading={loadingMap["healthCheck (健康检查)"]}
+                  />
+                  <TestButton
+                    label="获取数字验证码"
+                    onClick={handleGetDigitalCaptcha}
+                    loading={loadingMap["getDigitalCaptcha (获取数字验证码)"]}
+                    variant="outline"
+                  />
+                  <TestButton
+                    label="用户注册"
+                    onClick={handleRegisterByUsername}
+                    loading={loadingMap["registerByUsername (用户注册)"]}
+                    variant="outline"
+                  />
+                  <TestButton
+                    label="用户名密码登录"
+                    onClick={handleLoginByUsername}
+                    loading={loadingMap["loginByUsername (用户名密码登录)"]}
+                    variant="outline"
+                  />
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">用户名</label>
-                  <input
-                    type="text"
-                    value={userApiData.username}
-                    onChange={(e) =>
-                      setUserApiData((prev) => ({
-                        ...prev,
-                        username: e.target.value,
-                      }))
-                    }
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-sky-500 outline-none"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">密码</label>
-                  <input
-                    type="text"
-                    value={userApiData.password}
-                    onChange={(e) =>
-                      setUserApiData((prev) => ({
-                        ...prev,
-                        password: e.target.value,
-                      }))
-                    }
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-sky-500 outline-none"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">验证码 ID</label>
-                  <input
-                    type="text"
-                    value={userApiData.captchaId}
-                    onChange={(e) =>
-                      setUserApiData((prev) => ({
-                        ...prev,
-                        captchaId: e.target.value,
-                      }))
-                    }
-                    placeholder="captcha_id"
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-sky-500 outline-none"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">验证码答案</label>
-                  <input
-                    type="text"
-                    value={userApiData.captchaAnswer}
-                    onChange={(e) =>
-                      setUserApiData((prev) => ({
-                        ...prev,
-                        captchaAnswer: e.target.value,
-                      }))
-                    }
-                    placeholder="captcha_answer"
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-sky-500 outline-none"
-                  />
-                </div>
-              </div>
-
-              {captchaImage && (
-                <div className="p-3 bg-black/30 rounded border border-white/10">
-                  <div className="text-xs text-white/50 mb-2 uppercase tracking-wider">
-                    数字验证码图片
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">用户名</label>
+                    <input
+                      type="text"
+                      value={userApiData.username}
+                      onChange={(e) =>
+                        setUserApiData((prev) => ({
+                          ...prev,
+                          username: e.target.value,
+                        }))
+                      }
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-sky-500 outline-none"
+                    />
                   </div>
-                  <img
-                    src={captchaImage}
-                    alt="数字验证码"
-                    className="w-full max-w-xs rounded bg-white"
-                  />
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-3 items-end">
-                <TestButton
-                  label="获取登录二维码"
-                  onClick={handleGetSceneQrcode}
-                  loading={loadingMap["getSceneQrcode (获取登录二维码)"]}
-                  variant="outline"
-                />
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">scene_id</label>
-                  <input
-                    type="text"
-                    value={userApiData.sceneId}
-                    onChange={(e) =>
-                      setUserApiData((prev) => ({
-                        ...prev,
-                        sceneId: e.target.value,
-                      }))
-                    }
-                    placeholder="获取二维码后自动填充"
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-64 focus:border-sky-500 outline-none"
-                  />
-                </div>
-                <TestButton
-                  label="查询扫码状态"
-                  onClick={handleQuerySceneStatus}
-                  loading={loadingMap["querySceneStatus (查询扫码状态)"]}
-                  variant="outline"
-                />
-              </div>
-
-              {sceneQrcodeImage && (
-                <div className="p-3 bg-black/30 rounded border border-white/10">
-                  <div className="text-xs text-white/50 mb-2 uppercase tracking-wider">
-                    登录二维码
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">密码</label>
+                    <input
+                      type="text"
+                      value={userApiData.password}
+                      onChange={(e) =>
+                        setUserApiData((prev) => ({
+                          ...prev,
+                          password: e.target.value,
+                        }))
+                      }
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-sky-500 outline-none"
+                    />
                   </div>
-                  <img
-                    src={sceneQrcodeImage}
-                    alt="登录二维码"
-                    className="w-full max-w-50 rounded bg-white"
-                  />
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">验证码 ID</label>
+                    <input
+                      type="text"
+                      value={userApiData.captchaId}
+                      onChange={(e) =>
+                        setUserApiData((prev) => ({
+                          ...prev,
+                          captchaId: e.target.value,
+                        }))
+                      }
+                      placeholder="captcha_id"
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-sky-500 outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">验证码答案</label>
+                    <input
+                      type="text"
+                      value={userApiData.captchaAnswer}
+                      onChange={(e) =>
+                        setUserApiData((prev) => ({
+                          ...prev,
+                          captchaAnswer: e.target.value,
+                        }))
+                      }
+                      placeholder="captcha_answer"
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-sky-500 outline-none"
+                    />
+                  </div>
                 </div>
-              )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">昵称</label>
-                  <input
-                    type="text"
-                    value={userApiData.nickname}
-                    onChange={(e) =>
-                      setUserApiData((prev) => ({
-                        ...prev,
-                        nickname: e.target.value,
-                      }))
-                    }
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-sky-500 outline-none"
+                {captchaImage && (
+                  <div className="p-3 bg-black/30 rounded border border-white/10">
+                    <div className="text-xs text-white/50 mb-2 uppercase tracking-wider">
+                      数字验证码图片
+                    </div>
+                    <img
+                      src={captchaImage}
+                      alt="数字验证码"
+                      className="w-full max-w-xs rounded bg-white"
+                    />
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-3 items-end">
+                  <TestButton
+                    label="获取登录二维码"
+                    onClick={handleGetSceneQrcode}
+                    loading={loadingMap["getSceneQrcode (获取登录二维码)"]}
+                    variant="outline"
+                  />
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">scene_id</label>
+                    <input
+                      type="text"
+                      value={userApiData.sceneId}
+                      onChange={(e) =>
+                        setUserApiData((prev) => ({
+                          ...prev,
+                          sceneId: e.target.value,
+                        }))
+                      }
+                      placeholder="获取二维码后自动填充"
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm w-64 focus:border-sky-500 outline-none"
+                    />
+                  </div>
+                  <TestButton
+                    label="查询扫码状态"
+                    onClick={handleQuerySceneStatus}
+                    loading={loadingMap["querySceneStatus (查询扫码状态)"]}
+                    variant="outline"
                   />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">头像 URL</label>
-                  <input
-                    type="text"
-                    value={userApiData.avatar}
-                    onChange={(e) =>
-                      setUserApiData((prev) => ({
-                        ...prev,
-                        avatar: e.target.value,
-                      }))
-                    }
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-sky-500 outline-none"
+
+                {sceneQrcodeImage && (
+                  <div className="p-3 bg-black/30 rounded border border-white/10">
+                    <div className="text-xs text-white/50 mb-2 uppercase tracking-wider">
+                      登录二维码
+                    </div>
+                    <img
+                      src={sceneQrcodeImage}
+                      alt="登录二维码"
+                      className="w-full max-w-50 rounded bg-white"
+                    />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">昵称</label>
+                    <input
+                      type="text"
+                      value={userApiData.nickname}
+                      onChange={(e) =>
+                        setUserApiData((prev) => ({
+                          ...prev,
+                          nickname: e.target.value,
+                        }))
+                      }
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-sky-500 outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">头像 URL</label>
+                    <input
+                      type="text"
+                      value={userApiData.avatar}
+                      onChange={(e) =>
+                        setUserApiData((prev) => ({
+                          ...prev,
+                          avatar: e.target.value,
+                        }))
+                      }
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-sky-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <TestButton
+                    label="获取用户信息"
+                    onClick={handleGetJikeGoUserInfo}
+                    loading={loadingMap["getJikeGoUserInfo (获取用户信息)"]}
+                    variant="outline"
+                  />
+                  <TestButton
+                    label="更新用户信息"
+                    onClick={handleUpdateJikeGoUserInfo}
+                    loading={loadingMap["updateJikeGoUserInfo (更新用户信息)"]}
+                    variant="outline"
                   />
                 </div>
               </div>
+            </section>
 
-              <div className="flex flex-wrap gap-3">
+            <section className="bg-white/5 rounded-xl p-5 border border-white/10">
+              <h2 className="text-lg font-semibold text-cyan-400 mb-4">
+                OSS 上传 URL 测试（/v1/oss/put-url）
+              </h2>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">blob_type</label>
+                    <select
+                      value={ossApiData.blobType}
+                      onChange={(event) =>
+                        setOssApiData((prev) => ({
+                          ...prev,
+                          blobType: event.target.value as OssBlobType,
+                        }))
+                      }
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-cyan-500 outline-none"
+                    >
+                      <option value="avatar">avatar</option>
+                      <option value="image">image</option>
+                      <option value="video">video</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">ext</label>
+                    <input
+                      type="text"
+                      value={ossApiData.ext}
+                      onChange={(event) =>
+                        setOssApiData((prev) => ({
+                          ...prev,
+                          ext: event.target.value,
+                        }))
+                      }
+                      placeholder="png / jpg / mp4"
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-cyan-500 outline-none"
+                    />
+                  </div>
+                </div>
                 <TestButton
-                  label="获取用户信息"
-                  onClick={handleGetJikeGoUserInfo}
-                  loading={loadingMap["getJikeGoUserInfo (获取用户信息)"]}
+                  label="获取 OSS 上传 URL"
+                  onClick={handleGetOssPutUrl}
+                  loading={loadingMap["getOssPutUrl (/v1/oss/put-url)"]}
                   variant="outline"
                 />
-                <TestButton
-                  label="更新用户信息"
-                  onClick={handleUpdateJikeGoUserInfo}
-                  loading={loadingMap["updateJikeGoUserInfo (更新用户信息)"]}
-                  variant="outline"
-                />
+                {(ossApiData.putUrl || ossApiData.accessUrl) && (
+                  <div className="space-y-3 p-3 bg-black/30 rounded border border-white/10 text-xs">
+                    {ossApiData.putUrl && (
+                      <div>
+                        <div className="text-white/50 mb-1 uppercase tracking-wider">
+                          put_url
+                        </div>
+                        <div className="text-cyan-200 break-all font-mono">
+                          {ossApiData.putUrl}
+                        </div>
+                      </div>
+                    )}
+                    {ossApiData.accessUrl && (
+                      <div>
+                        <div className="text-white/50 mb-1 uppercase tracking-wider">
+                          access_url
+                        </div>
+                        <a
+                          href={ossApiData.accessUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-cyan-200 hover:text-cyan-100 break-all font-mono"
+                        >
+                          {ossApiData.accessUrl}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            </div>
-          </section>
+            </section>
 
-          <section className="bg-white/5 rounded-xl p-5 border border-white/10">
-            <h2 className="text-lg font-semibold text-emerald-400 mb-4">
-              对话测试（Desktop Proxy /chat/completions）
-            </h2>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">平台</label>
-                  <select
-                    value={chatApiData.platform}
-                    onChange={(event) =>
-                      handleChatPlatformChange(
-                        event.target.value as "dashscope" | "toapi",
-                      )
-                    }
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-emerald-500 outline-none"
-                  >
-                    <option value="dashscope">dashscope</option>
-                    <option value="toapi">toapi</option>
-                  </select>
+            <section className="bg-white/5 rounded-xl p-5 border border-white/10">
+              <h2 className="text-lg font-semibold text-emerald-400 mb-4">
+                对话测试（Desktop Proxy /chat/completions）
+              </h2>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">平台</label>
+                    <select
+                      value={chatApiData.platform}
+                      onChange={(event) =>
+                        handleChatPlatformChange(
+                          event.target.value as "dashscope" | "toapi",
+                        )
+                      }
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-emerald-500 outline-none"
+                    >
+                      <option value="dashscope">dashscope</option>
+                      <option value="toapi">toapi</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">模型</label>
+                    <input
+                      type="text"
+                      value={chatApiData.model}
+                      onChange={(event) =>
+                        setChatApiData((prev) => ({
+                          ...prev,
+                          model: event.target.value,
+                        }))
+                      }
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-emerald-500 outline-none"
+                    />
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">模型</label>
-                  <input
-                    type="text"
-                    value={chatApiData.model}
+                  <label className="text-xs text-white/50">对话内容</label>
+                  <textarea
+                    value={chatApiData.message}
                     onChange={(event) =>
                       setChatApiData((prev) => ({
                         ...prev,
-                        model: event.target.value,
+                        message: event.target.value,
                       }))
                     }
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-emerald-500 outline-none"
+                    rows={4}
+                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-emerald-500 outline-none resize-none"
                   />
                 </div>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-white/50">对话内容</label>
-                <textarea
-                  value={chatApiData.message}
-                  onChange={(event) =>
-                    setChatApiData((prev) => ({
-                      ...prev,
-                      message: event.target.value,
-                    }))
-                  }
-                  rows={4}
-                  className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-emerald-500 outline-none resize-none"
+                <TestButton
+                  label="发送对话请求"
+                  onClick={handleDesktopChat}
+                  loading={loadingMap["desktopChatCompletions (桌面代理对话)"]}
+                  variant="outline"
                 />
               </div>
-              <TestButton
-                label="发送对话请求"
-                onClick={handleDesktopChat}
-                loading={loadingMap["desktopChatCompletions (桌面代理对话)"]}
-                variant="outline"
-              />
-            </div>
-          </section>
+            </section>
 
-          <section className="bg-white/5 rounded-xl p-5 border border-white/10">
-            <h2 className="text-lg font-semibold text-fuchsia-400 mb-4">
-              图片生成测试（toapi，5 秒轮询）
-            </h2>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">平台</label>
-                  <select
-                    value="toapi"
-                    disabled
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm text-white/50 outline-none"
-                  >
-                    <option value="toapi">toapi</option>
-                  </select>
+            <section className="bg-white/5 rounded-xl p-5 border border-white/10">
+              <h2 className="text-lg font-semibold text-fuchsia-400 mb-4">
+                图片生成测试（toapi，5 秒轮询）
+              </h2>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">平台</label>
+                    <select
+                      value="toapi"
+                      disabled
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm text-white/50 outline-none"
+                    >
+                      <option value="toapi">toapi</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">模型</label>
+                    <input
+                      type="text"
+                      value={imageApiData.model}
+                      onChange={(event) =>
+                        setImageApiData((prev) => ({
+                          ...prev,
+                          model: event.target.value,
+                        }))
+                      }
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-fuchsia-500 outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">尺寸</label>
+                    <input
+                      type="text"
+                      value={imageApiData.size}
+                      onChange={(event) =>
+                        setImageApiData((prev) => ({
+                          ...prev,
+                          size: event.target.value,
+                        }))
+                      }
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-fuchsia-500 outline-none"
+                    />
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">模型</label>
-                  <input
-                    type="text"
-                    value={imageApiData.model}
+                  <label className="text-xs text-white/50">图片提示词</label>
+                  <textarea
+                    value={imageApiData.prompt}
                     onChange={(event) =>
                       setImageApiData((prev) => ({
                         ...prev,
-                        model: event.target.value,
+                        prompt: event.target.value,
                       }))
                     }
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-fuchsia-500 outline-none"
+                    rows={4}
+                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-fuchsia-500 outline-none resize-none"
                   />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">尺寸</label>
-                  <input
-                    type="text"
-                    value={imageApiData.size}
-                    onChange={(event) =>
-                      setImageApiData((prev) => ({
-                        ...prev,
-                        size: event.target.value,
-                      }))
-                    }
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-fuchsia-500 outline-none"
+                <div className="flex flex-wrap gap-3 items-center">
+                  <TestButton
+                    label="创建图片任务并轮询"
+                    onClick={handleCreateImageTask}
+                    loading={loadingMap["desktopImageGeneration (图片生成)"]}
+                    variant="outline"
                   />
+                  {imageApiData.taskId && (
+                    <span className="text-xs text-white/50">
+                      task_id: {imageApiData.taskId}
+                    </span>
+                  )}
                 </div>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-white/50">图片提示词</label>
-                <textarea
-                  value={imageApiData.prompt}
-                  onChange={(event) =>
-                    setImageApiData((prev) => ({
-                      ...prev,
-                      prompt: event.target.value,
-                    }))
-                  }
-                  rows={4}
-                  className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-fuchsia-500 outline-none resize-none"
-                />
-              </div>
-              <div className="flex flex-wrap gap-3 items-center">
-                <TestButton
-                  label="创建图片任务并轮询"
-                  onClick={handleCreateImageTask}
-                  loading={loadingMap["desktopImageGeneration (图片生成)"]}
-                  variant="outline"
-                />
-                {imageApiData.taskId && (
-                  <span className="text-xs text-white/50">
-                    task_id: {imageApiData.taskId}
-                  </span>
+                {imageApiData.resultUrls.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {imageApiData.resultUrls.map((url) => (
+                      <img
+                        key={url}
+                        src={url}
+                        alt="图片生成结果"
+                        className="w-full rounded bg-black/30 border border-white/10"
+                      />
+                    ))}
+                  </div>
                 )}
               </div>
-              {imageApiData.resultUrls.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {imageApiData.resultUrls.map((url) => (
-                    <img
-                      key={url}
-                      src={url}
-                      alt="图片生成结果"
-                      className="w-full rounded bg-black/30 border border-white/10"
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
+            </section>
 
-          <section className="bg-white/5 rounded-xl p-5 border border-white/10">
-            <h2 className="text-lg font-semibold text-orange-400 mb-4">
-              视频生成测试（kuaizi / dashscope，5 秒轮询）
-            </h2>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">平台</label>
-                  <select
-                    value={videoApiData.platform}
-                    onChange={(event) =>
-                      handleVideoPlatformChange(
-                        event.target.value as "kuaizi" | "dashscope",
-                      )
-                    }
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-orange-500 outline-none"
-                  >
-                    <option value="dashscope">dashscope</option>
-                    <option value="kuaizi">kuaizi</option>
-                  </select>
+            <section className="bg-white/5 rounded-xl p-5 border border-white/10">
+              <h2 className="text-lg font-semibold text-orange-400 mb-4">
+                视频生成测试（kuaizi / dashscope，5 秒轮询）
+              </h2>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">平台</label>
+                    <select
+                      value={videoApiData.platform}
+                      onChange={(event) =>
+                        handleVideoPlatformChange(
+                          event.target.value as "kuaizi" | "dashscope",
+                        )
+                      }
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-orange-500 outline-none"
+                    >
+                      <option value="dashscope">dashscope</option>
+                      <option value="kuaizi">kuaizi</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">模型</label>
+                    <input
+                      type="text"
+                      value={videoApiData.model}
+                      onChange={(event) =>
+                        setVideoApiData((prev) => ({
+                          ...prev,
+                          model: event.target.value,
+                        }))
+                      }
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-orange-500 outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">时长</label>
+                    <input
+                      type="number"
+                      value={videoApiData.duration}
+                      onChange={(event) =>
+                        setVideoApiData((prev) => ({
+                          ...prev,
+                          duration: Number(event.target.value),
+                        }))
+                      }
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-orange-500 outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-white/50">比例</label>
+                    <select
+                      value={videoApiData.ratio}
+                      onChange={(event) =>
+                        setVideoApiData((prev) => ({
+                          ...prev,
+                          ratio: event.target.value,
+                        }))
+                      }
+                      className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-orange-500 outline-none"
+                    >
+                      <option value="16:9">16:9</option>
+                      <option value="9:16">9:16</option>
+                      <option value="1:1">1:1</option>
+                    </select>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">模型</label>
-                  <input
-                    type="text"
-                    value={videoApiData.model}
+                  <label className="text-xs text-white/50">视频提示词</label>
+                  <textarea
+                    value={videoApiData.prompt}
                     onChange={(event) =>
                       setVideoApiData((prev) => ({
                         ...prev,
-                        model: event.target.value,
+                        prompt: event.target.value,
                       }))
                     }
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-orange-500 outline-none"
+                    rows={4}
+                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-orange-500 outline-none resize-none"
                   />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">时长</label>
-                  <input
-                    type="number"
-                    value={videoApiData.duration}
-                    onChange={(event) =>
-                      setVideoApiData((prev) => ({
-                        ...prev,
-                        duration: Number(event.target.value),
-                      }))
-                    }
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-orange-500 outline-none"
+                <div className="flex flex-wrap gap-3 items-center">
+                  <TestButton
+                    label="创建视频任务并轮询"
+                    onClick={handleCreateVideoTask}
+                    loading={loadingMap["desktopVideoGeneration (视频生成)"]}
+                    variant="outline"
                   />
+                  {videoApiData.taskId && (
+                    <span className="text-xs text-white/50">
+                      task_id: {videoApiData.taskId}
+                    </span>
+                  )}
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-white/50">比例</label>
-                  <select
-                    value={videoApiData.ratio}
-                    onChange={(event) =>
-                      setVideoApiData((prev) => ({
-                        ...prev,
-                        ratio: event.target.value,
-                      }))
-                    }
-                    className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-orange-500 outline-none"
-                  >
-                    <option value="16:9">16:9</option>
-                    <option value="9:16">9:16</option>
-                    <option value="1:1">1:1</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-white/50">视频提示词</label>
-                <textarea
-                  value={videoApiData.prompt}
-                  onChange={(event) =>
-                    setVideoApiData((prev) => ({
-                      ...prev,
-                      prompt: event.target.value,
-                    }))
-                  }
-                  rows={4}
-                  className="bg-black/30 border border-white/20 rounded px-3 py-2 text-sm focus:border-orange-500 outline-none resize-none"
-                />
-              </div>
-              <div className="flex flex-wrap gap-3 items-center">
-                <TestButton
-                  label="创建视频任务并轮询"
-                  onClick={handleCreateVideoTask}
-                  loading={loadingMap["desktopVideoGeneration (视频生成)"]}
-                  variant="outline"
-                />
-                {videoApiData.taskId && (
-                  <span className="text-xs text-white/50">
-                    task_id: {videoApiData.taskId}
-                  </span>
+                {videoApiData.resultUrls.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {videoApiData.resultUrls.map((url) => (
+                      <video
+                        key={url}
+                        src={url}
+                        controls
+                        className="w-full rounded bg-black/30 border border-white/10"
+                      />
+                    ))}
+                  </div>
                 )}
               </div>
-              {videoApiData.resultUrls.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {videoApiData.resultUrls.map((url) => (
-                    <video
-                      key={url}
-                      src={url}
-                      controls
-                      className="w-full rounded bg-black/30 border border-white/10"
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
+            </section>
           </div>
 
           <LogPanel logs={logs} />
