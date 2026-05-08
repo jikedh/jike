@@ -6,8 +6,12 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 env:
   NODE_VERSION: '24'
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   release:
