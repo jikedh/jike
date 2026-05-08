@@ -6,7 +6,7 @@ export const SidebarNav = ({ children, classNames }: SidebarNavProps) => {
   return (
     <div
       className={cn(
-        "flex flex-col items-center w-full gap-4",
+        "flex min-h-0 w-full flex-1 flex-col items-center gap-4 overflow-y-auto overscroll-contain no-scrollbar",
         classNames?.root,
       )}
     >

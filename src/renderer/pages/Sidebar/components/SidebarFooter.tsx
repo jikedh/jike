@@ -6,7 +6,7 @@ export const SidebarFooter = ({ children, classNames }: SidebarFooterProps) => {
   return (
     <div
       className={cn(
-        "flex-1 flex flex-col justify-end items-center mt-auto",
+        "flex shrink-0 flex-col items-center justify-end",
         classNames?.root,
       )}
     >

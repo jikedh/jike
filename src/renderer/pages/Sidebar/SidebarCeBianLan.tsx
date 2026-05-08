@@ -84,13 +84,60 @@ export const SidebarCeBianLan = () => {
     setIsFirstLoginModalOpen(false);
   };
 
+  const navItems = [
+    {
+      id: "home",
+      icon: <House size={24} />,
+      label: "首页",
+      path: "/home",
+    },
+    {
+      id: "canvas",
+      icon: <SquareDashedMousePointer size={24} />,
+      label: "项目",
+      path: "/canvas",
+    },
+    {
+      id: "script",
+      icon: <Type size={24} />,
+      label: "剧本",
+      path: "/script",
+    },
+    {
+      id: "assets",
+      icon: <Folder size={24} />,
+      label: "资产库",
+      path: "/assets",
+    },
+    {
+      id: "voice",
+      icon: <Mic size={24} />,
+      label: "配音工作室",
+      path: "/voice",
+    },
+    /* 暂时隐藏短片合成入口，后续恢复时取消注释即可。 */
+    // {
+    //   id: "video",
+    //   icon: <Film size={24} />,
+    //   label: "短片合成",
+    //   path: "/video",
+    // },
+    /* 暂时隐藏模型管理入口，后续恢复时取消注释即可。 */
+    // {
+    //   id: "model-settings",
+    //   icon: <PanelRightOpen size={24} />,
+    //   label: "模型管理(Test)",
+    //   path: "/settings",
+    // },
+  ];
+
   return (
     <>
       <SidebarRoot defaultActiveId="home">
         <button
           type="button"
           onClick={() => handleNavClick("/home")}
-          className="mb-10 flex flex-col items-center justify-center px-2 text-center cursor-pointer group"
+          className="mb-10 flex shrink-0 flex-col items-center justify-center px-2 text-center cursor-pointer group"
         >
           <div className="w-10 h-10 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
             <img
@@ -110,53 +157,18 @@ export const SidebarCeBianLan = () => {
         </button>
 
         <SidebarNav classNames={{ root: "flex-1" }}>
-          <SidebarNavItem
-            id="home"
-            icon={<House size={24} />}
-            label="首页"
-            onClick={() => handleNavClick("/home")}
-          />
-          <SidebarNavItem
-            id="canvas"
-            icon={<SquareDashedMousePointer size={24} />}
-            label="项目"
-            onClick={() => handleNavClick("/canvas")}
-          />
-          <SidebarNavItem
-            id="script"
-            icon={<Type size={24} />}
-            label="剧本"
-            onClick={() => handleNavClick("/script")}
-          />
-          <SidebarNavItem
-            id="assets"
-            icon={<Folder size={24} />}
-            label="资产库"
-            onClick={() => handleNavClick("/assets")}
-          />
-          <SidebarNavItem
-            id="voice"
-            icon={<Mic size={24} />}
-            label="配音工作室"
-            onClick={() => handleNavClick("/voice")}
-          />
-          {/* 暂时隐藏短片合成入口，后续恢复时取消注释即可。 */}
-          {/* <SidebarNavItem
-            id="video"
-            icon={<Film size={24} />}
-            label="短片合成"
-            onClick={() => handleNavClick("/video")}
-          /> */}
-          {/* 暂时隐藏模型管理入口，后续恢复时取消注释即可。 */}
-          {/* <SidebarNavItem
-            id="model-settings"
-            icon={<PanelRightOpen size={24} />}
-            label="模型管理(Test)"
-            onClick={() => handleNavClick("/settings")}
-          /> */}
+          {navItems.map((item) => (
+            <SidebarNavItem
+              key={item.id}
+              id={item.id}
+              icon={item.icon}
+              label={item.label}
+              onClick={() => handleNavClick(item.path)}
+            />
+          ))}
         </SidebarNav>
 
-        <SidebarFooter classNames={{ root: "mt-auto" }}>
+        <SidebarFooter classNames={{ root: "pt-4" }}>
           <UserAvatarDropdown userId={userId} balanceInfo={balanceInfo} />
           <SettingsButton onClick={handleSettingsClick} />
         </SidebarFooter>
