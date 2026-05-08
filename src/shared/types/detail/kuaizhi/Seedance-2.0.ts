@@ -1,4 +1,6 @@
 export interface Seedance20Request {
+  // 模型 ID：快子异步任务创建接口需要明确模型，避免落到不支持的同步调用。
+  model?: string; // 可选，默认为 "seedance-2.0"，目前仅支持该模型
   prompt: string; // 文本提示词：文生素材时条件必填；可在提示词中引用 images 素材
   generation_type: "video"; // 生成类型：视频任务可填写 "video"（条件必填）
   input_type?: "reference" | "first_last_frame"; // 输入类型："reference"（全能参考）| "first_last_frame"（首尾帧）

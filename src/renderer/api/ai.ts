@@ -424,7 +424,7 @@ export async function fetchMjTask(id: string) {
 export async function createLzVideoTask(data: Seedance20Request) {
   const response = await createDesktopProxyTask({
     platform: "kuaizi",
-    upstreamPath: "/lz/video/task/create",
+    upstreamPath: "/v1/lz/video/task/create",
     method: "POST",
     body: data,
   });
@@ -437,7 +437,7 @@ export async function createLzVideoTask(data: Seedance20Request) {
     "";
 
   await aiVideoTrackingService.track({
-    apiName: "/lz/video/task/create",
+    apiName: "/v1/lz/video/task/create",
     model: getSeedance20Model(data),
     taskId,
     prompt: data.prompt,
@@ -455,7 +455,7 @@ export async function createLzVideoTask(data: Seedance20Request) {
 export async function getLzVideoTaskStatus(taskId: string) {
   const response = await queryDesktopProxyTask({
     platform: "kuaizi",
-    upstreamPath: "/lz/video/task/status",
+    upstreamPath: "/v1/lz/video/task/status",
     method: "POST",
     body: { task_id: taskId },
   });

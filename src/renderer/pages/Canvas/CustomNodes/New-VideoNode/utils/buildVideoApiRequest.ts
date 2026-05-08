@@ -320,6 +320,7 @@ const buildSeedanceRequest = (
         }))
     : [];
   const body: Seedance20Request = {
+    model: request.model,
     prompt: getPrompt(request.prompt),
     generation_type: "video",
     mode: getSeedanceGenerationMode(request),
