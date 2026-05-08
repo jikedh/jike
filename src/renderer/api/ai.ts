@@ -351,7 +351,7 @@ export async function analyzeLightingReferenceImage(
 ): Promise<string> {
   const response = await createChatCompletion(
     {
-      model: "gemini-3-pro-official",
+      model: "deepseek-v3.2",
       stream: false,
       temperature: 0.2,
       messages: [
