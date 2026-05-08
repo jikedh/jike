@@ -28,6 +28,7 @@ export type DesktopProxyRequest = {
   query?: Record<string, any>;
   headers?: Record<string, string>;
   body?: any;
+  scoreCost?: number;
 };
 
 export type DesktopChatCompletionsRequest = {
@@ -89,6 +90,31 @@ export function createDesktopProxyTask(
     method: "post",
     data,
     signal,
+    headers: getJikeGoAiProxyHeaders(),
+  });
+}
+
+// 确认积分扣减
+export function confirmDesktopProxyScore(ledgerBizId: string): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/desktop/v1/ai/score/confirm",
+    method: "post",
+    data: { ledgerBizId },
+    headers: getJikeGoAiProxyHeaders(),
+  });
+}
+
+// 退还积分
+export function refundDesktopProxyScore(
+  ledgerBizId: string,
+  reason?: string,
+): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/desktop/v1/ai/score/refund",
+    method: "post",
+    data: { ledgerBizId, reason },
     headers: getJikeGoAiProxyHeaders(),
   });
 }

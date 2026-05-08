@@ -125,6 +125,10 @@ import {
   submitMjImagine,
 } from "@/api/ai";
 import {
+  confirmDesktopProxyScore,
+  refundDesktopProxyScore,
+} from "@/api/jikeGo";
+import {
   getClosestAspectRatio,
   getImageDimensions,
   getNodeSizeByAspectRatio,
@@ -1513,6 +1517,7 @@ const pollNewVideoGeneration = async ({
   isSeedance20,
   taskIndex,
   totalTasks,
+  ledgerBizId,
 }: {
   taskId: string;
   nodeId: string;
@@ -1524,6 +1529,7 @@ const pollNewVideoGeneration = async ({
   isSeedance20: boolean;
   taskIndex: number;
   totalTasks: number;
+  ledgerBizId?: string;
 }) => {
   const startTime = Date.now();
   let missingResultUrlStartTime: number | null = null;
@@ -1544,6 +1550,9 @@ const pollNewVideoGeneration = async ({
             },
           })),
         }));
+        if (ledgerBizId) {
+          refundDesktopProxyScore(ledgerBizId, "video generation timeout").catch(() => { });
+        }
         await updateVideoTrackFinalStatus(
           taskId,
           "FAIL",
@@ -1602,6 +1611,9 @@ const pollNewVideoGeneration = async ({
               };
             }),
           }));
+          if (ledgerBizId) {
+            refundDesktopProxyScore(ledgerBizId, "video completed but missing result URL").catch(() => { });
+          }
           await updateVideoTrackFinalStatus(
             normalizedTaskId,
             "FAIL",
@@ -1706,6 +1718,10 @@ const pollNewVideoGeneration = async ({
           }
           // 多任务都收敛后清理轮询控制器，避免后续停止/重新生成时拿到旧控制器。
           stopVideoPollingInternal(nodeId);
+          // 确认积分扣减
+          if (ledgerBizId) {
+            confirmDesktopProxyScore(ledgerBizId).catch(() => { });
+          }
           await refreshBalanceAfterGeneration({
             scene: "video",
             nodeId,
@@ -1760,6 +1776,10 @@ const pollNewVideoGeneration = async ({
           failedStatus === GenerationStatus.COMPLETED
         ) {
           stopVideoPollingInternal(nodeId);
+          // 退还积分
+          if (ledgerBizId) {
+            refundDesktopProxyScore(ledgerBizId, normalized.errorMessage || "video generation failed").catch(() => { });
+          }
         }
         await updateVideoTrackFinalStatus(
           normalizedTaskId,
@@ -1798,6 +1818,9 @@ const pollNewVideoGeneration = async ({
         },
       })),
     }));
+    if (ledgerBizId) {
+      refundDesktopProxyScore(ledgerBizId, serverMessage || "poll error").catch(() => { });
+    }
     await updateVideoTrackFinalStatus(
       taskId,
       "FAIL",
@@ -4209,20 +4232,26 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         const createTask = async () => {
           const response: any = isSeedance20
-            ? await createLzVideoTask(requestPayload)
-            : await createDashscopeVideoSynthesis(requestPayload);
+            ? await createLzVideoTask(requestPayload, requiredPoints)
+            : await createDashscopeVideoSynthesis(requestPayload, requiredPoints);
           const taskId = response?.data?.task_id ?? response?.output?.task_id;
 
           if (!taskId) {
+            // 创建失败时，如果有 ledgerBizId 需要退款
+            if (response?.ledgerBizId) {
+              refundDesktopProxyScore(response.ledgerBizId, "task creation failed: no task_id").catch(() => { });
+            }
             throw new Error("任务 ID 为空");
           }
 
-          return taskId as string;
+          return { taskId: taskId as string, ledgerBizId: response?.ledgerBizId as string | undefined };
         };
 
-        const taskIds = await Promise.all(
+        const taskResults = await Promise.all(
           Array.from({ length: totalTasks }, () => createTask()),
         );
+        const taskIds = taskResults.map((r) => r.taskId);
+        const ledgerBizId = taskResults[0]?.ledgerBizId;
 
         set((state) => ({
           nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
@@ -4234,6 +4263,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               ...data.metadata,
               tasks: taskIds,
               failedTasks: [],
+              ledgerBizId,
             },
           })),
         }));
@@ -4250,6 +4280,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             isSeedance20,
             taskIndex: index,
             totalTasks,
+            ledgerBizId,
           });
         });
       } catch (startError) {

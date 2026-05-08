@@ -157,6 +157,20 @@ function unwrapDesktopProxyData(response: any) {
   return response?.data ?? response;
 }
 
+/**
+ * 从代理响应中提取 ledgerBizId（积分预扣凭证）
+ * 当 scoreCost > 0 时，后端返回 {upstream, ledgerBizId} 结构
+ */
+function extractLedgerBizId(data: any): {
+  responseData: any;
+  ledgerBizId: string | undefined;
+} {
+  if (data?.upstream && data?.ledgerBizId) {
+    return { responseData: data.upstream, ledgerBizId: String(data.ledgerBizId) };
+  }
+  return { responseData: data, ledgerBizId: undefined };
+}
+
 async function createDesktopChatStream(data: any, signal?: AbortSignal) {
   const baseURL =
     (import.meta as any).env?.VITE_JIKE_GO_BASE_URL || "http://localhost:9181";
@@ -421,14 +435,19 @@ export async function fetchMjTask(id: string) {
 // ===================== 快手 AI 视频相关 =====================
 
 // 创建快手视频生成任务
-export async function createLzVideoTask(data: Seedance20Request) {
+export async function createLzVideoTask(
+  data: Seedance20Request,
+  scoreCost?: number,
+) {
   const response = await createDesktopProxyTask({
     platform: "kuaizi",
     upstreamPath: "/v1/lz/video/task/create",
     method: "POST",
     body: data,
+    scoreCost,
   });
-  const responseData = unwrapDesktopProxyData(response);
+  const rawData = unwrapDesktopProxyData(response);
+  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
   const taskId =
     responseData?.data?.task_id ??
     responseData?.task_id ??
@@ -448,7 +467,7 @@ export async function createLzVideoTask(data: Seedance20Request) {
     status: taskId ? "PENDING" : "FAIL",
   });
 
-  return responseData;
+  return { ...responseData, ledgerBizId };
 }
 
 // 查询快手视频生成任务状态
@@ -592,6 +611,7 @@ export async function createDashscopeChatCompletion(
  */
 export async function createDashscopeVideoSynthesis(
   data: BailianVideoGenerationRequest,
+  scoreCost?: number,
 ) {
   const response = await createDesktopProxyTask({
     platform: "dashscope",
@@ -601,8 +621,10 @@ export async function createDashscopeVideoSynthesis(
       "X-DashScope-Async": "enable",
     },
     body: data,
+    scoreCost,
   });
-  const responseData = unwrapDesktopProxyData(response);
+  const rawData = unwrapDesktopProxyData(response);
+  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
 
   const trackData = data as unknown as Record<string, unknown>;
   const trackResponse = responseData as {
@@ -633,7 +655,7 @@ export async function createDashscopeVideoSynthesis(
     status: taskStatus === "FAILED" || !taskId ? "FAIL" : "PENDING",
   });
 
-  return responseData;
+  return { ...responseData, ledgerBizId };
 }
 /**
  * 阿里云百炼视频生成任务状态查询接口
