@@ -685,7 +685,6 @@ export const ImageLightingDialog = ({
     try {
       const description = await analyzeLightingReferenceImage(
         url,
-        selectedModel?.model ?? initialModel ?? "gemini-3-pro-official",
         controller.signal,
       );
       setReferenceLightingPrompt(description);
@@ -702,7 +701,7 @@ export const ImageLightingDialog = ({
         referenceAnalyzeControllerRef.current = null;
       }
     }
-  }, [initialModel, selectedModel?.model]);
+  }, []);
 
   const handleRetryReferenceAnalysis = useCallback(() => {
     if (!referenceImageUrl || referenceStatus === "uploading") {
