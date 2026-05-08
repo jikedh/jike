@@ -22,7 +22,7 @@ export const SidebarNavItem = ({
     <button
       onClick={handleClick}
       className={cn(
-        "flex flex-col items-center justify-center py-3 px-2 rounded-xl transition-all duration-200 group w-16",
+        "flex w-16 shrink-0 flex-col items-center justify-center rounded-xl px-2 py-3 transition-all duration-200 group",
         isActive
           ? "bg-[#B43FEB]/10 text-[#B43FEB]"
           : "text-white/50 hover:bg-white/5 hover:text-white/90",

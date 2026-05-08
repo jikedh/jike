@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { createDesktopChatCompletions } from "@/api/jikeGo";
+import { createChatCompletion } from "@/api/ai";
 import {
   DEFAULT_CANVAS_CHAT_MODEL,
   isCanvasChatImageModel,
@@ -220,32 +220,29 @@ export const useCanvasChat = () => {
         messages: buildRequestMessages(payload.personaId, nextMessages),
       };
 
-      const response = await createDesktopChatCompletions(
+      const stream = await createChatCompletion(
         {
           ...requestPayload,
-          platform: "toapi",
-          upstreamPath: "/v1/chat/completions",
+          stream: true,
         },
         controller.signal,
       );
-      const resp = (response as any)?.data ?? response;
-      const generatedContent =
-        resp?.choices?.[0]?.message?.content ||
-        "生成出现了点问题，未能获取到有效内容，请稍后再试~";
 
-      setMessages((prev) => {
-        const assistantMessage = prev[assistantMessageIndex];
-        if (!assistantMessage || assistantMessage.role !== "assistant") {
-          return prev;
-        }
+      for await (const content of stream) {
+        setMessages((prev) => {
+          const assistantMessage = prev[assistantMessageIndex];
+          if (!assistantMessage || assistantMessage.role !== "assistant") {
+            return prev;
+          }
 
-        const updatedMessages = [...prev];
-        updatedMessages[assistantMessageIndex] = {
-          ...assistantMessage,
-          content: generatedContent,
-        };
-        return updatedMessages;
-      });
+          const updatedMessages = [...prev];
+          updatedMessages[assistantMessageIndex] = {
+            ...assistantMessage,
+            content: `${assistantMessage.content}${content}`,
+          };
+          return updatedMessages;
+        });
+      }
 
       setMessages((prev) => {
         const assistantMessage = prev[assistantMessageIndex];

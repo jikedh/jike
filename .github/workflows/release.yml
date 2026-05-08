@@ -1,50 +1,23 @@
 name: Release Build
 
+# 触发：推送 v 开头的 tag 时运行
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: '发布到 jike-publish 的 Release tag；留空时使用当前 ref 名称'
-        required: false
-        type: string
-      prerelease:
-        description: '是否标记为预发布版本'
-        required: false
-        default: false
-        type: boolean
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   NODE_VERSION: '24'
-  RELEASE_REPOSITORY: 2026617199/jike-publish
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   release:
     runs-on: windows-latest
 
     steps:
-      - name: Resolve release inputs
-        id: release_inputs
-        shell: pwsh
-        run: |
-          $releaseTag = '${{ inputs.release_tag }}'
-          if ([string]::IsNullOrWhiteSpace($releaseTag)) {
-            $releaseTag = '${{ github.ref_name }}'
-          }
-
-          $isPrerelease = '${{ inputs.prerelease }}'
-          if ([string]::IsNullOrWhiteSpace($isPrerelease)) {
-            $isPrerelease = if ($releaseTag -match 'beta|alpha') { 'true' } else { 'false' }
-          }
-
-          "release_tag=$releaseTag" >> $env:GITHUB_OUTPUT
-          "prerelease=$isPrerelease" >> $env:GITHUB_OUTPUT
-
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -66,22 +39,18 @@ jobs:
         run: npm ci
 
       - name: Build Electron app
-        run: npm run build:win -- --publish never
+        run: npm run build:win
         env:
           ELECTRON_CACHE: ${{ runner.temp }}/electron-cache
           ELECTRON_BUILDER_CACHE: ${{ runner.temp }}/electron-builder-cache
 
-      - name: Upload to public release repository
+      - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          repository: ${{ env.RELEASE_REPOSITORY }}
-          tag_name: ${{ steps.release_inputs.outputs.release_tag }}
           files: |
             release/jike-*-setup.exe
             release/latest.yml
-          prerelease: ${{ steps.release_inputs.outputs.prerelease }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.JIKE_TOKEN }}
+          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
 
       - name: Upload build logs on failure
         if: failure()

@@ -31,7 +31,7 @@ const statusMeta: Record<
 
 function EmptyState() {
   return (
-    <div className="h-full min-h-[420px] rounded-2xl border border-dashed border-white/10 bg-black/20 flex items-center justify-center text-sm text-zinc-400">
+    <div className="flex min-h-[320px] flex-1 items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/20 text-sm text-zinc-400 xl:min-h-0">
       启动本地服务后，这里会内嵌 Adobe2API 管理页面。
     </div>
   );
@@ -289,8 +289,8 @@ export default function SettingsPage() {
             </section>
           </div>
 
-          <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
+          <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 xl:h-[calc(100vh-160px)]">
+            <div className="mb-4 flex shrink-0 items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-medium">内嵌管理页</h2>
                 <p className="mt-1 text-sm text-zinc-400">
@@ -344,7 +344,7 @@ export default function SettingsPage() {
                     : "Adobe2API 测试页面"
                 }
                 src={embeddedUrl}
-                className="h-[calc(100vh-180px)] min-h-[760px] w-full rounded-xl bg-white"
+                className="min-h-[360px] w-full flex-1 rounded-xl bg-white xl:min-h-0"
               />
             ) : (
               <EmptyState />
