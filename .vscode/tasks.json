@@ -1,0 +1,33 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "npm: install",
+            "type": "shell",
+            "command": "npm install",
+            "options": {
+                "cwd": "${workspaceFolder:jike}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "npm: dev:electron",
+            "type": "shell",
+            "command": "npm run dev:electron",
+            "options": {
+                "cwd": "${workspaceFolder:jike}"
+            },
+            "isBackground": true,
+            "problemMatcher": []
+        },
+        {
+            "label": "npm: build:win",
+            "type": "shell",
+            "command": "npm run build:win",
+            "options": {
+                "cwd": "${workspaceFolder:jike}"
+            },
+            "problemMatcher": []
+        }
+    ]
+}
