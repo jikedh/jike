@@ -10,7 +10,7 @@ import {
 } from "shared/utils/utils";
 import { create } from "zustand";
 import { getUserInfo } from "@/api/ai";
-import { getBalanceInfo } from "@/api/jikeing";
+import { getJikeGoScoreBalance } from "@/api/jikeGo";
 
 const initialState: Pick<
   UserStoreType,
@@ -103,10 +103,18 @@ export const useUserStore = create<UserStoreType>((set, get) => ({
     if (!token) return;
 
     try {
-      const res = await getBalanceInfo();
+      const res = await getJikeGoScoreBalance();
       if ((res.code === 10000 || res.code === 200) && res.data) {
-        console.log("[fetchBalanceInfo] 获取积分信息成功:", res.data);
-        set({ balanceInfo: res.data as UserScoreVO });
+        const data = res.data;
+        const balanceInfo = {
+          forScore: Number(data.for_score ?? data.forScore ?? 0),
+          vipScore: Number(data.vip_score ?? data.vipScore ?? 0),
+          userId: Number(data.user_id ?? data.userId ?? 0),
+          id: Number(data.id ?? 0),
+          todayResigned: Boolean(data.today_resigned ?? data.todayResigned),
+        };
+        console.log("[fetchBalanceInfo] 获取积分信息成功:", balanceInfo);
+        set({ balanceInfo: balanceInfo as UserScoreVO });
       }
     } catch (error) {
       console.error("[fetchBalanceInfo] 获取积分信息异常:", error);

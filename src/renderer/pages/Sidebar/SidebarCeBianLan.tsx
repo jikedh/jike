@@ -116,19 +116,19 @@ export const SidebarCeBianLan = () => {
       path: "/voice",
     },
     /* 暂时隐藏短片合成入口，后续恢复时取消注释即可。 */
-    // {
-    //   id: "video",
-    //   icon: <Film size={24} />,
-    //   label: "短片合成",
-    //   path: "/video",
-    // },
+    {
+      id: "video",
+      icon: <Film size={24} />,
+      label: "短片合成",
+      path: "/video",
+    },
     /* 暂时隐藏模型管理入口，后续恢复时取消注释即可。 */
-    // {
-    //   id: "model-settings",
-    //   icon: <PanelRightOpen size={24} />,
-    //   label: "模型管理(Test)",
-    //   path: "/settings",
-    // },
+    {
+      id: "model-settings",
+      icon: <PanelRightOpen size={24} />,
+      label: "模型管理(Test)",
+      path: "/settings",
+    },
   ];
 
   return (

@@ -195,6 +195,15 @@ export function updateJikeGoUserInfo(data: {
   });
 }
 
+export function getJikeGoScoreBalance(): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/score/balance-info",
+    method: "get",
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
 export function getOssPutUrl(data: OssPutUrlRequest): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,

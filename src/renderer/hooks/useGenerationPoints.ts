@@ -4,7 +4,7 @@ import {
   POINTS_DISABLED_BALANCE,
   POINTS_FEATURE_ENABLED,
 } from "shared/constants/points";
-import { getBalanceInfo, getScoreConfig } from "@/api/jikeing";
+import { getScoreConfig } from "@/api/jikeing";
 import { useUserStore } from "@/stores/useUserStore";
 
 type EnsurePointsOptions = {
@@ -126,9 +126,10 @@ export function useGenerationPoints() {
       }
 
       try {
-        const balanceResponse = await getBalanceInfo();
-        const currentForScore = Number(balanceResponse?.data?.forScore ?? 0);
-        const currentVipScore = Number(balanceResponse?.data?.vipScore ?? 0);
+        await fetchBalanceInfo();
+        const latestBalanceInfo = useUserStore.getState().balanceInfo;
+        const currentForScore = Number(latestBalanceInfo?.forScore ?? 0);
+        const currentVipScore = Number(latestBalanceInfo?.vipScore ?? 0);
         const currentTotalPoints = currentForScore + currentVipScore;
 
         if (currentTotalPoints < normalizedRequiredPoints) {
@@ -148,7 +149,7 @@ export function useGenerationPoints() {
         return false;
       }
     },
-    [],
+    [fetchBalanceInfo],
   );
 
   const refreshBalanceInfo = useCallback(async () => {

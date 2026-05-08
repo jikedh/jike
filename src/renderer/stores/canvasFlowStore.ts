@@ -18,11 +18,6 @@ import {
   XIMU_NANO_BANANA_PRO_MODEL,
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
-import { getGenerationPointsByScene } from "shared/constants/model-points";
-import {
-  normalizeRequiredPoints,
-  POINTS_FEATURE_ENABLED,
-} from "shared/constants/points";
 import type { GeminiYwResponseBody } from "shared/types/detail/Yunwu/gemini-yw";
 import {
   buildFireflyGptImageToImageRequest,
@@ -107,7 +102,7 @@ import {
   wait,
 } from "shared/utils/reactflowUtils";
 import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
-import { getJikeingUserId, toChineseNumber } from "shared/utils/utils";
+import { toChineseNumber } from "shared/utils/utils";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
 import { toast } from "sonner";
 import { create } from "zustand";
@@ -129,7 +124,6 @@ import {
   getXimuImageResult,
   submitMjImagine,
 } from "@/api/ai";
-import { updateVipScore } from "@/api/jikeing";
 import {
   getClosestAspectRatio,
   getImageDimensions,
@@ -138,6 +132,7 @@ import {
 } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { buildMidjourneyPrompt } from "@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt";
 import { aiVideoTrackingService } from "@/services/aiVideoTracking";
+import { useUserStore } from "@/stores/useUserStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { saveCurrentCanvasToHistory } from "@/utils/canvasHistoryBridge";
 
@@ -835,7 +830,7 @@ const pollImageGeneration = async (
           pendingTaskCounts.delete(nodeId);
         }
 
-        await deductVipScoreAfterGeneration({
+        await refreshBalanceAfterGeneration({
           scene: "image",
           nodeId,
           taskId,
@@ -1128,7 +1123,7 @@ const pollMjImageGeneration = async (
           pendingTaskCounts.delete(nodeId);
         }
 
-        await deductVipScoreAfterGeneration({
+        await refreshBalanceAfterGeneration({
           scene: "image",
           nodeId,
           taskId,
@@ -1431,7 +1426,7 @@ const pollVideoTaskGeneration = async (
           processedResultData[0]?.url,
         );
 
-        await deductVipScoreAfterGeneration({
+        await refreshBalanceAfterGeneration({
           scene: "video",
           nodeId,
           taskId: normalizedTaskId,
@@ -1711,7 +1706,7 @@ const pollNewVideoGeneration = async ({
           }
           // 多任务都收敛后清理轮询控制器，避免后续停止/重新生成时拿到旧控制器。
           stopVideoPollingInternal(nodeId);
-          await deductVipScoreAfterGeneration({
+          await refreshBalanceAfterGeneration({
             scene: "video",
             nodeId,
             taskId: normalizedTaskId,
@@ -1811,64 +1806,8 @@ const pollNewVideoGeneration = async ({
   }
 };
 
-/**
- * 生成任务成功后的积分扣减。
- * 说明：扣费失败不会影响已完成结果，仅记录日志用于后续补偿处理。
- */
-const deductVipScoreAfterGeneration = async ({
-  model,
-  scene,
-  nodeId,
-  taskId,
-  requiredPoints,
-}: {
-  model?: string;
-  scene: "image" | "video";
-  nodeId: string;
-  taskId?: string;
-  requiredPoints?: number;
-}) => {
-  if (!POINTS_FEATURE_ENABLED) {
-    return;
-  }
-
-  const loginUserId = getJikeingUserId();
-  if (!loginUserId) {
-    console.warn("[score] 扣费跳过：未获取到登录用户", {
-      scene,
-      nodeId,
-      taskId,
-      model,
-    });
-    return;
-  }
-
-  const scoreCost = normalizeRequiredPoints(requiredPoints);
-  const finalScoreCost =
-    Number.isFinite(scoreCost) && scoreCost > 0
-      ? scoreCost
-      : getGenerationPointsByScene({ scene, model });
-  if (!(finalScoreCost > 0)) {
-    return;
-  }
-  try {
-    await updateVipScore({
-      userId: loginUserId,
-      vipScoreDelta: -finalScoreCost,
-    });
-  } catch (deductError: any) {
-    console.error("[score] 扣费失败", {
-      scene,
-      nodeId,
-      taskId,
-      model,
-      scoreCost: finalScoreCost,
-      message:
-        deductError?.message ||
-        getRequestErrorMessage(deductError) ||
-        "扣费接口调用失败",
-    });
-  }
+const refreshBalanceAfterGeneration = async (_?: any) => {
+  await useUserStore.getState().fetchBalanceInfo();
 };
 
 export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
@@ -2698,9 +2637,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         groups: state.groups.map((group) =>
           group.id === groupId
             ? {
-                ...group,
-                name: nextName,
-              }
+              ...group,
+              name: nextName,
+            }
             : group,
         ),
       }));
@@ -2716,13 +2655,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         groups: state.groups.map((group) =>
           group.id === groupId
             ? {
-                ...group,
-                frame,
-                layoutOrigin: {
-                  x: frame.x,
-                  y: frame.y,
-                },
-              }
+              ...group,
+              frame,
+              layoutOrigin: {
+                x: frame.x,
+                y: frame.y,
+              },
+            }
             : group,
         ),
       }));
@@ -2896,22 +2835,22 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           (item) =>
             item.id === groupId
               ? {
-                  ...item,
-                  layoutOrigin: layoutResult.bounds
-                    ? {
-                        x: layoutResult.bounds.x,
-                        y: layoutResult.bounds.y,
-                      }
-                    : item.layoutOrigin,
-                  frame: layoutResult.bounds
-                    ? {
-                        x: layoutResult.bounds.x,
-                        y: layoutResult.bounds.y,
-                        width: layoutResult.bounds.width,
-                        height: layoutResult.bounds.height,
-                      }
-                    : item.frame,
-                }
+                ...item,
+                layoutOrigin: layoutResult.bounds
+                  ? {
+                    x: layoutResult.bounds.x,
+                    y: layoutResult.bounds.y,
+                  }
+                  : item.layoutOrigin,
+                frame: layoutResult.bounds
+                  ? {
+                    x: layoutResult.bounds.x,
+                    y: layoutResult.bounds.y,
+                    width: layoutResult.bounds.width,
+                    height: layoutResult.bounds.height,
+                  }
+                  : item.frame,
+              }
               : item,
         ),
       }));
@@ -2957,23 +2896,23 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           (item) =>
             item.id === groupId
               ? {
-                  ...item,
-                  gridLayoutOrder: layoutResult.orderedNodeIds,
-                  layoutOrigin: layoutResult.bounds
-                    ? {
-                        x: layoutResult.bounds.x,
-                        y: layoutResult.bounds.y,
-                      }
-                    : item.layoutOrigin,
-                  frame: layoutResult.bounds
-                    ? {
-                        x: layoutResult.bounds.x,
-                        y: layoutResult.bounds.y,
-                        width: layoutResult.bounds.width,
-                        height: layoutResult.bounds.height,
-                      }
-                    : item.frame,
-                }
+                ...item,
+                gridLayoutOrder: layoutResult.orderedNodeIds,
+                layoutOrigin: layoutResult.bounds
+                  ? {
+                    x: layoutResult.bounds.x,
+                    y: layoutResult.bounds.y,
+                  }
+                  : item.layoutOrigin,
+                frame: layoutResult.bounds
+                  ? {
+                    x: layoutResult.bounds.x,
+                    y: layoutResult.bounds.y,
+                    width: layoutResult.bounds.width,
+                    height: layoutResult.bounds.height,
+                  }
+                  : item.frame,
+              }
               : item,
         ),
       }));
@@ -2995,25 +2934,25 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           item.id !== groupId
             ? item
             : {
-                ...item,
-                layoutOrigin: {
-                  x:
-                    (item.layoutOrigin?.x ??
-                      getGroupBounds(current.nodes, item.nodeIds, 24)?.x ??
-                      0) + offset.x,
-                  y:
-                    (item.layoutOrigin?.y ??
-                      getGroupBounds(current.nodes, item.nodeIds, 24)?.y ??
-                      0) + offset.y,
-                },
-                frame: item.frame
-                  ? {
-                      ...item.frame,
-                      x: item.frame.x + offset.x,
-                      y: item.frame.y + offset.y,
-                    }
-                  : undefined,
+              ...item,
+              layoutOrigin: {
+                x:
+                  (item.layoutOrigin?.x ??
+                    getGroupBounds(current.nodes, item.nodeIds, 24)?.x ??
+                    0) + offset.x,
+                y:
+                  (item.layoutOrigin?.y ??
+                    getGroupBounds(current.nodes, item.nodeIds, 24)?.y ??
+                    0) + offset.y,
               },
+              frame: item.frame
+                ? {
+                  ...item.frame,
+                  x: item.frame.x + offset.x,
+                  y: item.frame.y + offset.y,
+                }
+                : undefined,
+            },
         ),
       }));
     },
@@ -3381,7 +3320,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (useChatSettingsStore.getState().autoSaveEnabled) {
             get().saveGraph();
           }
-          await deductVipScoreAfterGeneration({
+          await refreshBalanceAfterGeneration({
             scene: "image",
             nodeId,
             model: originalModel,
@@ -3410,18 +3349,18 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           const request =
             originalModel === XIMU_GPT_IMAGE2_MODEL
               ? buildXimuGptImageRequest({
-                  cardCode: ximuCardCode,
-                  prompt,
-                  aspectRatio: resolveXimuGptAspectRatio({ size, resolution }),
-                  urls: ximuReferenceUrls,
-                })
+                cardCode: ximuCardCode,
+                prompt,
+                aspectRatio: resolveXimuGptAspectRatio({ size, resolution }),
+                urls: ximuReferenceUrls,
+              })
               : buildXimuNanoBananaRequest({
-                  cardCode: ximuCardCode,
-                  prompt,
-                  aspectRatio: resolveXimuNanoBananaProAspectRatio(size),
-                  imageSize: resolveXimuImageSize(resolution),
-                  urls: ximuReferenceUrls,
-                });
+                cardCode: ximuCardCode,
+                prompt,
+                aspectRatio: resolveXimuNanoBananaProAspectRatio(size),
+                imageSize: resolveXimuImageSize(resolution),
+                urls: ximuReferenceUrls,
+              });
 
           let submitResponse;
           try {
@@ -3511,7 +3450,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (useChatSettingsStore.getState().autoSaveEnabled) {
             get().saveGraph();
           }
-          await deductVipScoreAfterGeneration({
+          await refreshBalanceAfterGeneration({
             scene: "image",
             nodeId,
             model: originalModel,
@@ -3626,7 +3565,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           get().saveGraph();
         }
 
-        await deductVipScoreAfterGeneration({
+        await refreshBalanceAfterGeneration({
           scene: "image",
           nodeId,
           model: payload.originalModel ?? payload.model,
@@ -3824,8 +3763,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         const targetNodeType =
           nodeType === "newVideoNode"
-              ? "newVideo"
-              : "image";
+            ? "newVideo"
+            : "image";
         const validItems = (
           shouldSeparateGeneratingNewVideo
             ? resultData.slice(0, 1)
@@ -4258,7 +4197,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (useChatSettingsStore.getState().autoSaveEnabled) {
             get().saveGraph();
           }
-          await deductVipScoreAfterGeneration({
+          await refreshBalanceAfterGeneration({
             scene: "video",
             nodeId,
             taskId: response?.id,

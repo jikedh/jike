@@ -5,21 +5,16 @@ import {
   getImageTaskStatus,
   submitMjImagine,
 } from "@/api/ai";
-import { getBalanceInfo, updateVipScore } from "@/api/jikeing";
 import { buildMidjourneyPrompt } from "@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt";
 import { getImageDimensions } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { useUserStore } from "@/stores/useUserStore";
 import { generateImageUrl } from "service/oss";
-import {
-  getCanvasChatImageModelConfig,
-  getGenerationScoreCost,
-} from "shared/constants/ai-models";
+import { getCanvasChatImageModelConfig } from "shared/constants/ai-models";
 import { getImageGenerationPoints } from "shared/constants/modelPoints";
 import type { NoteGenerationImage } from "shared/types/NoteGeneration";
 import type { GeminiYwResponseBody } from "shared/types/detail/Yunwu/gemini-yw";
 import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
 import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
-import { getJikeingUserId } from "shared/utils/utils";
 
 const CHAT_IMAGE_POLL_INTERVAL = 10000;
 const CHAT_IMAGE_TIMEOUT = 5 * 60 * 1000;
@@ -416,14 +411,6 @@ const ensureEnoughPoints = async (
     balanceInfo = useUserStore.getState().balanceInfo;
   }
 
-  if (!balanceInfo) {
-    const response = await getBalanceInfo();
-    balanceInfo = response?.data ?? null;
-    if (balanceInfo) {
-      useUserStore.getState().setBalanceInfo(balanceInfo);
-    }
-  }
-
   const totalPoints =
     Number(balanceInfo?.forScore ?? 0) + Number(balanceInfo?.vipScore ?? 0);
   if (totalPoints < requiredPoints) {
@@ -435,33 +422,8 @@ const ensureEnoughPoints = async (
   return config;
 };
 
-const deductPoints = async (
-  config: ChatImageModelConfig,
-  requiredPoints: number,
-) => {
-  const loginUserId = getJikeingUserId();
-  if (!loginUserId) {
-    return;
-  }
-
-  const scoreCost =
-    Number.isFinite(requiredPoints) && requiredPoints > 0
-      ? requiredPoints
-      : getGenerationScoreCost(config.imageModel);
-
-  try {
-    await updateVipScore({
-      userId: loginUserId,
-      vipScoreDelta: -scoreCost,
-    });
-    await useUserStore.getState().fetchBalanceInfo();
-  } catch (error) {
-    console.error("[canvas-chat-image] 扣费失败", {
-      model: config.imageModel,
-      scoreCost,
-      message: getRequestErrorMessage(error),
-    });
-  }
+const refreshBalanceAfterGeneration = async () => {
+  await useUserStore.getState().fetchBalanceInfo();
 };
 
 const buildBasePayload = (config: ChatImageModelConfig, prompt: string) => {
@@ -684,7 +646,7 @@ export const generateCanvasChatImages = async ({
     images = await pollStandardImageGeneration(taskId, signal);
   }
 
-  await deductPoints(config, requiredPoints);
+  await refreshBalanceAfterGeneration();
 
   images = withPreviewImages(images);
   onProgress?.("图片已生成，正在转存预览...");

@@ -20,7 +20,7 @@ import type { NewVideoGenerationNode } from "shared/types/flow";
 import { formatDuration } from "shared/utils/getVideoDuration";
 import { appendMediaSequences } from "shared/utils/mediaSequence";
 import { createPresignedOssUploadTarget } from "shared/utils/presignedOssUploader";
-import { cn, downloadImageFromUrl, getJikeingUserId } from "shared/utils/utils";
+import { cn, downloadImageFromUrl } from "shared/utils/utils";
 import { toast } from "sonner";
 import Lightbox from "yet-another-react-lightbox";
 import Download from "yet-another-react-lightbox/plugins/download";
@@ -30,7 +30,6 @@ import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
 import Video from "yet-another-react-lightbox/plugins/video";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import { getVideoRemovalStatus, videoRemoval } from "@/api/ai";
-import { updateVipScore } from "@/api/jikeing";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +45,7 @@ import type { VideoTrimResult } from "./components/VideoTrimPanel";
 import { VideoTrimPanel } from "./components/VideoTrimPanel";
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { useUserStore } from "@/stores/useUserStore";
 import { getAspectRatioFromMediaFile } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { useVideoFrameCapture } from "./hooks/useVideoFrameCapture";
 import { getVideoUrlsFromNodeData } from "./utils/video-url";
@@ -90,10 +90,10 @@ const extractTaskStatusInfo = (response: any) => {
 
   const taskStatus = normalizeTaskStatus(
     nested?.task_status ??
-      nested?.status ??
-      payload?.task_status ??
-      payload?.status ??
-      output?.task_status,
+    nested?.status ??
+    payload?.task_status ??
+    payload?.status ??
+    output?.task_status,
   );
 
   const progressRaw = nested?.progress ?? payload?.progress ?? output?.progress;
@@ -757,7 +757,7 @@ const VideoSubtitleRemovalPanel = ({
                         height: Math.max(
                           0,
                           containerSize.height -
-                            (videoBounds.y + videoBounds.height),
+                          (videoBounds.y + videoBounds.height),
                         ),
                       }}
                     />
@@ -778,7 +778,7 @@ const VideoSubtitleRemovalPanel = ({
                         width: Math.max(
                           0,
                           containerSize.width -
-                            (videoBounds.x + videoBounds.width),
+                          (videoBounds.x + videoBounds.width),
                         ),
                         height: videoBounds.height,
                       }}
@@ -1190,8 +1190,6 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       taskId: string,
       targetNodeId: string,
       publicUrl: string,
-      userId: string,
-      pointsToDeduct: number,
     ) => {
       const existing = subtitlePollers[targetNodeId];
       if (existing) {
@@ -1235,16 +1233,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
               },
               error: undefined,
             } as any);
-            if (pointsToDeduct > 0 && userId) {
-              try {
-                await updateVipScore({
-                  userId,
-                  vipScoreDelta: -pointsToDeduct,
-                });
-              } catch (scoreError) {
-                console.error("积分扣减失败:", scoreError);
-              }
-            }
+            await useUserStore.getState().fetchBalanceInfo();
             clearPolling();
             return;
           }
@@ -1266,7 +1255,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             status: GenerationStatus.IN_PROGRESS,
             progress,
           } as any);
-        } catch {}
+        } catch { }
       };
 
       timer = window.setInterval(() => {
@@ -1371,29 +1360,16 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             },
             error: undefined,
           } as any);
-          const loginUserId = getJikeingUserId();
-          if (requiredPoints > 0 && loginUserId) {
-            try {
-              await updateVipScore({
-                userId: loginUserId,
-                vipScoreDelta: -requiredPoints,
-              });
-            } catch (scoreError) {
-              console.error("积分扣减失败:", scoreError);
-            }
-          }
+          await useUserStore.getState().fetchBalanceInfo();
         } else {
           updateNewVideoNodeData(newNodeId, {
             status: GenerationStatus.IN_PROGRESS,
             progress: 0,
           } as any);
-          const loginUserId = getJikeingUserId();
           startSubtitlePolling(
             taskId,
             newNodeId,
             target.publicUrl,
-            loginUserId ?? "",
-            requiredPoints,
           );
         }
       } catch (error: any) {
