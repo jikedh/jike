@@ -908,8 +908,8 @@ export const ImageLightingDialog = ({
             <div className="flex min-h-0 flex-1 flex-col rounded-2xl bg-[#1c1c1c] p-5">
               <div className="grid grid-cols-2 rounded-2xl border border-white/10 bg-[#181818] p-1">
                 {[
-                  { value: "perspective", label: "透视" },
                   { value: "front", label: "正面" },
+                  { value: "perspective", label: "透视" },
                 ].map((item) => (
                   <button
                     key={item.value}

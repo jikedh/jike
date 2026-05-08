@@ -59,7 +59,7 @@ export const DEFAULT_LIGHTING_CONFIG: LightingConfig = {
   lightType: "soft",
   intensity: 50,
   color: "#ffffff",
-  viewMode: "perspective",
+  viewMode: "front",
   lightDirection: "left",
   rimLightEnabled: false,
   sceneAngle: 0,
