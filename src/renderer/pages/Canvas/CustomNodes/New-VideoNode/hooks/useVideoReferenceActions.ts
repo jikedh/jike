@@ -6,21 +6,17 @@ import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { uploadFileToOSS } from "service/oss";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 
-/**
- * 参考资源交互 Hook。
- * 封装上传参考图与断开上游连接的行为，避免主组件持有过多交互细节。
- */
 export const useVideoReferenceActions = ({
   nodeId,
   currentImageUrls,
-  updateVideoNodeData,
+  updateNewVideoNodeData,
   deleteEdge,
   onDisconnectedNode,
   onRemovedReferenceImage,
 }: {
   nodeId: string;
   currentImageUrls: string[];
-  updateVideoNodeData: (nodeId: string, patch: any) => void;
+  updateNewVideoNodeData: (nodeId: string, patch: any) => void;
   deleteEdge: (edgeId: string) => void;
   onDisconnectedNode?: (sourceNodeId: string) => void;
   onRemovedReferenceImage?: (url: string, index: number) => void;
@@ -44,17 +40,12 @@ export const useVideoReferenceActions = ({
     [nodeId, deleteEdge, onDisconnectedNode],
   );
 
-  /**
-   * 删除本地参考图（非上游节点继承）。
-   * 仅从当前视频节点的 image_urls 中移除对应 URL。
-   */
   const handleRemoveReferenceImage = useCallback(
     (targetUrl: string, targetIndex?: number) => {
       if (!targetUrl) {
         return;
       }
 
-      // 相同 URL 也可能被重复作为有效参考图，删除时按下标移除单个引用实例。
       const nextUrls = [...(currentImageUrls ?? [])];
       const removeIndex =
         typeof targetIndex === "number"
@@ -65,12 +56,12 @@ export const useVideoReferenceActions = ({
       }
 
       nextUrls.splice(removeIndex, 1);
-      updateVideoNodeData(nodeId, {
+      updateNewVideoNodeData(nodeId, {
         image_urls: nextUrls,
       });
       onRemovedReferenceImage?.(targetUrl, removeIndex);
     },
-    [currentImageUrls, nodeId, onRemovedReferenceImage, updateVideoNodeData],
+    [currentImageUrls, nodeId, onRemovedReferenceImage, updateNewVideoNodeData],
   );
 
   const handleUploadClick = useCallback(() => {
@@ -90,7 +81,6 @@ export const useVideoReferenceActions = ({
       setIsUploading(true);
 
       try {
-        // 检查文件大小，大于10MB时压缩
         let fileToUpload = file;
         if (file.size > MAX_IMAGE_SIZE_MB) {
           fileToUpload = await compressImage(file);
@@ -104,7 +94,7 @@ export const useVideoReferenceActions = ({
           return;
         }
 
-        updateVideoNodeData(nodeId, {
+        updateNewVideoNodeData(nodeId, {
           image_urls: [...(currentImageUrls ?? []), nextUrl],
         });
         success("上传成功");
@@ -116,7 +106,7 @@ export const useVideoReferenceActions = ({
         event.target.value = "";
       }
     },
-    [warning, updateVideoNodeData, nodeId, currentImageUrls, success, error],
+    [warning, updateNewVideoNodeData, nodeId, currentImageUrls, success, error],
   );
 
   return {

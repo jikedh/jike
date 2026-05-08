@@ -48,7 +48,6 @@ import type {
   EdgeType,
   ImageGenerationNode,
   NewVideoGenerationNode,
-  VideoGenerationNode,
 } from "shared/types/flow";
 import type {
   AddNodeOptions,
@@ -101,7 +100,6 @@ import {
   updateTableNodeInList,
   updateTextAgentNodeInList,
   updateVideoAgentNodeInList,
-  updateVideoNodeInList,
   VIDEO_POLL_INTERVAL,
   VIDEO_RESULT_WAIT_TIMEOUT,
   VIDEO_TIMEOUT,
@@ -591,7 +589,7 @@ export const hydrateCanvasNodesForRuntime = async (
       }
 
       if (
-        (node.type === "videoNode" || node.type === "newVideoNode") &&
+        node.type === "newVideoNode" &&
         node.data?.result?.data
       ) {
         const processedData = node.data.result.data.map((item: any) =>
@@ -1242,7 +1240,7 @@ const pollMjImageGeneration = async (
  * 视频生成轮询逻辑
  * @param isSeedance20 是否为豆包 Seedance 2.0（使用快手 API 轮询）
  */
-const pollVideoGeneration = async (
+const pollVideoTaskGeneration = async (
   taskId: string,
   nodeId: string,
   signal: AbortSignal,
@@ -1263,10 +1261,10 @@ const pollVideoGeneration = async (
 
       // 检查是否超时
       if (Date.now() - startTime > VIDEO_TIMEOUT) {
-        console.error("[pollVideoGeneration] 视频生成超时");
+        console.error("[pollVideoTaskGeneration] 视频生成超时");
         stopVideoPollingInternal(nodeId);
         setState((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
             ...data,
             status: GenerationStatus.FAILED,
             error: {
@@ -1289,7 +1287,7 @@ const pollVideoGeneration = async (
         : await getDashscopeVideoTaskStatus(taskId);
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
-      if (!currentNode || currentNode.type !== "videoNode") {
+      if (!currentNode || currentNode.type !== "newVideoNode") {
         stopVideoPollingInternal(nodeId);
         return;
       }
@@ -1308,7 +1306,7 @@ const pollVideoGeneration = async (
             VIDEO_RESULT_WAIT_TIMEOUT
           ) {
             setState((state) => ({
-              nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+              nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
                 ...data,
                 status: GenerationStatus.IN_PROGRESS,
                 progress: normalized.progress,
@@ -1319,7 +1317,7 @@ const pollVideoGeneration = async (
           }
 
           setState((state) => ({
-            nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+            nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
               ...data,
               status: GenerationStatus.FAILED,
               progress: normalized.progress,
@@ -1368,7 +1366,7 @@ const pollVideoGeneration = async (
                 }
               } catch (saveError) {
                 console.error(
-                  "[pollVideoGeneration] 保存视频到本地失败:",
+                  "[pollVideoTaskGeneration] 保存视频到本地失败:",
                   saveError,
                 );
               }
@@ -1384,7 +1382,7 @@ const pollVideoGeneration = async (
                 }
               } catch (copyError) {
                 console.error(
-                  "[pollVideoGeneration] 转存视频到 OSS 失败:",
+                  "[pollVideoTaskGeneration] 转存视频到 OSS 失败:",
                   copyError,
                 );
               }
@@ -1400,7 +1398,7 @@ const pollVideoGeneration = async (
         );
 
         setState((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => {
+          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
             const existingData = data.result?.data ?? [];
             const mergedData = appendMediaSequences(
               existingData,
@@ -1437,8 +1435,8 @@ const pollVideoGeneration = async (
           scene: "video",
           nodeId,
           taskId: normalizedTaskId,
-          model: (currentNode.data as VideoGenerationNode)?.model,
-          requiredPoints: (currentNode.data as VideoGenerationNode)
+          model: (currentNode.data as NewVideoGenerationNode)?.model,
+          requiredPoints: (currentNode.data as NewVideoGenerationNode)
             ?.requiredPoints,
         });
         return;
@@ -1446,7 +1444,7 @@ const pollVideoGeneration = async (
 
       if (normalized.status === GenerationStatus.FAILED) {
         setState((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
             ...data,
             status: GenerationStatus.FAILED,
             progress: normalized.progress,
@@ -1474,7 +1472,7 @@ const pollVideoGeneration = async (
       missingResultUrlStartTime = null;
 
       setState((state) => ({
-        nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+        nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
           ...data,
           status: normalized.status,
           progress: normalized.progress,
@@ -1488,7 +1486,7 @@ const pollVideoGeneration = async (
     // 从 error 对象中提取后端返回的详细信息
     const serverMessage = getRequestErrorMessage(pollError);
     setState((state) => ({
-      nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
+      nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
         ...data,
         status: GenerationStatus.FAILED,
         error: {
@@ -1937,7 +1935,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       if (sourceNode.type === "imageNode") {
         if (
           targetNode.type === "imageNode" ||
-          targetNode.type === "videoNode" ||
           targetNode.type === "newVideoNode"
         ) {
           return "image_urls";
@@ -1949,16 +1946,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }
 
       if (
-        (targetNode.type === "videoNode" ||
-          targetNode.type === "newVideoNode") &&
-        (sourceNode.type === "videoNode" || sourceNode.type === "newVideoNode")
+        targetNode.type === "newVideoNode" &&
+        sourceNode.type === "newVideoNode"
       ) {
         return "video_urls";
       }
 
       if (
-        (targetNode.type === "videoNode" ||
-          targetNode.type === "newVideoNode") &&
+        targetNode.type === "newVideoNode" &&
         sourceNode.type === "audioNode"
       ) {
         return "audio_urls";
@@ -2346,14 +2341,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         defaultImagePlatform,
         defaultImageSize,
         defaultImageResolution,
-        defaultVideoModel,
-        defaultVideoAspectRatio,
-        defaultVideoDuration,
-        defaultVideoResolution,
-        defaultVideoMode,
-        defaultVideoGenerateAudio,
-        defaultVideoAudio,
-        defaultVideoPromptExtend,
         defaultNewVideoModel,
         defaultNewVideoAspectRatio,
         defaultNewVideoDuration,
@@ -2424,36 +2411,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                   },
                 },
               }
-              : newNode.type === "videoNode"
-                ? {
-                  ...newNode,
-                  data: {
-                    ...newNode.data,
-                    model: defaultVideoModel || newNode.data.model,
-                    aspect_ratio:
-                      defaultVideoAspectRatio || newNode.data.aspect_ratio,
-                    duration: defaultVideoDuration || newNode.data.duration,
-                    metadata: {
-                      ...(newNode.data.metadata ?? {}),
-                      resolution:
-                        defaultVideoResolution ||
-                        newNode.data.metadata?.resolution,
-                      ...(defaultVideoMode !== undefined
-                        ? { mode: defaultVideoMode }
-                        : {}),
-                      ...(defaultVideoGenerateAudio !== undefined
-                        ? { generate_audio: defaultVideoGenerateAudio }
-                        : {}),
-                      ...(defaultVideoAudio !== undefined
-                        ? { audio: defaultVideoAudio }
-                        : {}),
-                      ...(defaultVideoPromptExtend !== undefined
-                        ? { prompt_extend: defaultVideoPromptExtend }
-                        : {}),
-                    },
-                  },
-                }
-                : newNode;
+              : newNode;
 
       set((state) => ({
         nodes: [...state.nodes, finalNode],
@@ -2631,7 +2589,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         stopImagePollingInternal(nodeId);
       }
       if (
-        targetNode?.type === "videoNode" ||
         targetNode?.type === "newVideoNode"
       ) {
         stopVideoPollingInternal(nodeId);
@@ -3847,7 +3804,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const nodeType = sourceNode.type;
         const sourceData = sourceNode.data as
           | ImageGenerationNode
-          | VideoGenerationNode
           | NewVideoGenerationNode;
         const resultData = sourceData.result?.data;
         const isNewVideoGenerating =
@@ -3866,11 +3822,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         saveCurrentCanvasToHistory();
 
-        // 新版视频节点拆分后仍创建新版视频节点，避免多结果拆分时退回旧版体验。
         const targetNodeType =
-          nodeType === "videoNode"
-            ? "video"
-            : nodeType === "newVideoNode"
+          nodeType === "newVideoNode"
               ? "newVideo"
               : "image";
         const validItems = (
@@ -3888,8 +3841,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               250,
             )
             : getNodeSizeByAspectRatio(
-              (sourceData as VideoGenerationNode | NewVideoGenerationNode)
-                .aspect_ratio ?? "16:9",
+              (sourceData as NewVideoGenerationNode).aspect_ratio ?? "16:9",
               250,
             );
         const verticalGap = 32;
@@ -3931,8 +3883,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               validItems.map(async (item) => {
                 const videoUrl = item.remoteUrl || item.url;
                 let aspectRatio =
-                  (sourceData as VideoGenerationNode | NewVideoGenerationNode)
-                    .aspect_ratio ?? "16:9";
+                  (sourceData as NewVideoGenerationNode).aspect_ratio ??
+                  "16:9";
 
                 if (videoUrl) {
                   try {
@@ -3973,7 +3925,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             const baseNode = factory(newNodeId, { x: currentX, y: baseY });
 
             const finalNode =
-              targetNodeType === "video" || targetNodeType === "newVideo"
+              targetNodeType === "newVideo"
                 ? {
                   ...baseNode,
                   width: nodeSize.width,
@@ -4021,7 +3973,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               return node;
             }
 
-            if (targetNodeType === "video" || targetNodeType === "newVideo") {
+            if (targetNodeType === "newVideo") {
               return {
                 ...node,
                 data: {
@@ -4071,15 +4023,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     /**
      * 更新视频节点数据（局部 patch）
      */
-    updateVideoNodeData: (nodeId, patch) => {
-      set((state) => ({
-        nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-          ...data,
-          ...patch,
-        })),
-      }));
-    },
-
     updateNewVideoNodeData: (nodeId, patch) => {
       set((state) => ({
         nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
@@ -4177,83 +4120,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     /**
      * 创建视频生成任务并启动轮询
      */
-    startVideoGeneration: async (nodeId, payload) => {
-      // 先中止旧轮询，避免并发任务冲突
-      stopVideoPollingInternal(nodeId);
-
-      // 更新节点输入参数与状态
-      set((state) => ({
-        nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-          ...data,
-          ...payload,
-          status: GenerationStatus.QUEUED,
-          progress: 0,
-          error: undefined,
-        })),
-      }));
-
-      try {
-        const model = (payload as any).model ?? "";
-        // 判断是否为豆包 Seedance 2.0 Fast/Pro（使用快手 API）
-        const isSeedance20 =
-          model === "doubao-seedance-2.0-fast" ||
-          model === "doubao-seedance-2.0-pro";
-
-        let response: any;
-        if (isSeedance20) {
-          // 豆包 Seedance 2.0 使用快手 AI 视频接口
-          response = await createLzVideoTask(payload);
-        } else {
-          // 万象、PixVerse 等使用阿里云百炼视频接口
-          response = await createDashscopeVideoSynthesis(payload);
-        }
-
-        const taskId = response?.data?.task_id ?? response?.output?.task_id;
-
-        if (!taskId) {
-          throw new Error("任务 ID 为空");
-        }
-
-        // 标记为生成中并记录任务 ID
-        set((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            task_id: taskId,
-            status: GenerationStatus.IN_PROGRESS,
-            progress: response?.progress ?? 0,
-          })),
-        }));
-
-        const controller = new AbortController();
-        videoPollingControllers.set(nodeId, controller);
-        pollVideoGeneration(
-          taskId,
-          nodeId,
-          controller.signal,
-          set,
-          get,
-          isSeedance20,
-        );
-      } catch (startError) {
-        console.error("[Dashscope] 创建视频生成任务失败:", startError);
-        // 从 error 对象中提取后端返回的详细信息
-        const serverMessage = getRequestErrorMessage(startError);
-        set((state) => ({
-          nodes: updateVideoNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            status: GenerationStatus.FAILED,
-            error: {
-              code: "CREATE_TASK_FAILED",
-              message: "创建任务失败，请稍后再试",
-              detail: serverMessage,
-              serverMessage,
-            },
-          })),
-        }));
-        throw startError;
-      }
-    },
-
     startNewVideoGeneration: async (nodeId, payload, count = 1) => {
       stopVideoPollingInternal(nodeId);
 
@@ -4518,7 +4384,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           if (node.type === "imageNode") {
             imageNodesToStop.push(node.id);
           } else if (
-            node.type === "videoNode" ||
             node.type === "newVideoNode"
           ) {
             videoNodesToStop.push(node.id);
@@ -4548,7 +4413,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                 },
               };
             } else if (
-              node.type === "videoNode" ||
               node.type === "newVideoNode"
             ) {
               return {
@@ -4708,13 +4572,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const targetNode = nodes.find((n) => n.id === connection.target);
 
       if (
-        targetNode?.type === "videoNode" ||
         targetNode?.type === "newVideoNode"
       ) {
         const allowedSourceTypes = [
           "noteNode",
           "imageNode",
-          "videoNode",
           "newVideoNode",
           "audioNode",
         ];

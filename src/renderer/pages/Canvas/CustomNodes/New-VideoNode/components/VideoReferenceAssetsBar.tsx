@@ -5,10 +5,6 @@ import { cn, getVideoThumbnail } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
 
-/**
- * 视频缩略图按钮。
- * 输入视频 URL 后异步获取封面，失败时展示占位图标。
- */
 const VideoThumbnailButton = ({ videoUrl }: { videoUrl: string }) => {
   const [thumbnail, setThumbnail] = useState<string | null>(null);
 
@@ -50,10 +46,6 @@ const VideoThumbnailButton = ({ videoUrl }: { videoUrl: string }) => {
   );
 };
 
-/**
- * 参考项通用包裹层。
- * 提供统一尺寸与“断开连接”悬浮按钮。
- */
 const ReferenceItemWrapper = ({
   children,
   onDisconnect,
@@ -94,10 +86,6 @@ const ReferenceItemWrapper = ({
   );
 };
 
-/**
- * 参考资源条组件。
- * 负责展示上传按钮与参考图/参考音频/参考视频。
- */
 export const VideoReferenceAssetsBar = ({
   isUploading,
   fileInputRef,

@@ -16,12 +16,8 @@ import {
 } from "shared/utils/utils";
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
 import { handlePromptEditorWheelCapture } from "../../shared/wheelEvents";
-import { VideoMentionList } from "../VideoMentionList";
+import { MentionList } from "./MentionList";
 
-/**
- * 编辑器对外暴露的方法集合。
- * 目前仅提供读取纯文本能力，供容器在点击“生成”时合并提示词。
- */
 export interface VideoPromptEditorHandle {
   getPlainText: () => string;
   insertContent: (content: string) => void;
@@ -43,9 +39,6 @@ export interface VideoPromptEditorHandle {
   ) => number;
 }
 
-/**
- * 编辑器组件属性。
- */
 export interface VideoPromptEditorProps {
   promptDraftHtml: string;
   mentionItems: {
@@ -58,10 +51,6 @@ export interface VideoPromptEditorProps {
   onDraftChange: (payload: { text: string; html: string }) => void;
 }
 
-/**
- * 视频提示词富文本编辑器。
- * 将 TipTap 配置、@ 提及渲染与拖拽行为收敛到独立组件，降低容器复杂度。
- */
 export const VideoPromptEditor = forwardRef<
   VideoPromptEditorHandle,
   VideoPromptEditorProps
@@ -74,11 +63,6 @@ export const VideoPromptEditor = forwardRef<
 
   const mentionExtension = useMemo(() => {
     return Mention.extend({
-      /**
-       * 兼容历史数据：早期实现将 data-type 用作资源类型（image/video/audio），
-       * 会导致 Mention 节点在 setContent 时无法被 Tiptap 正常识别。
-       * 这里改为按 data-mention-id 兜底解析，确保旧草稿也能恢复为 mention 节点。
-       */
       parseHTML() {
         return [
           {
@@ -104,7 +88,6 @@ export const VideoPromptEditor = forwardRef<
           type: {
             default: "image",
             parseHTML: (element) => {
-              // 新协议：data-mention-kind；兼容旧协议：data-type=image/video/audio
               const mentionKind = element.getAttribute("data-mention-kind");
               if (mentionKind) {
                 return mentionKind;
@@ -176,7 +159,6 @@ export const VideoPromptEditor = forwardRef<
           "span",
           {
             ...options.HTMLAttributes,
-            // 保持 Tiptap Mention 的标准约定，避免再次被覆盖
             "data-type": "mention",
             "data-mention-id": node.attrs.id,
             "data-mention-value": node.attrs.value,
@@ -191,8 +173,8 @@ export const VideoPromptEditor = forwardRef<
       suggestion: {
         char: "@",
         allowSpaces: true,
-        allowedPrefixes: null, // 允许任意字符作为前缀
-        startOfLine: false, // 不限制行首
+        allowedPrefixes: null,
+        startOfLine: false,
         findSuggestionMatch: ({ $position }) => {
           const textBeforeCursor =
             $position.nodeBefore?.isText && $position.nodeBefore.text;
@@ -201,8 +183,6 @@ export const VideoPromptEditor = forwardRef<
             return null;
           }
 
-          // 只把光标前最近的 @ 作为当前触发范围，避免“第一个 @ 到第二个 @”
-          // 被 TipTap 默认规则合并成一段，导致选择资产时误删前面的提示词。
           return {
             range: {
               from: $position.pos - 1,
@@ -215,8 +195,6 @@ export const VideoPromptEditor = forwardRef<
         allow: ({ state, range }) => {
           const { from, to } = state.selection;
 
-          // 只有光标紧跟在 @ 后面时才弹出资产表。
-          // 即使 @ 后面已经有文字，只要用户把光标点回 @ 后面，也应该重新弹出。
           if (from !== to) {
             return false;
           }
@@ -239,7 +217,7 @@ export const VideoPromptEditor = forwardRef<
 
               editorDom = props.editor.view.dom;
 
-              component = new ReactRenderer(VideoMentionList, {
+              component = new ReactRenderer(MentionList, {
                 props: {
                   ...props,
                   command: (item: any) => {
@@ -321,12 +299,10 @@ export const VideoPromptEditor = forwardRef<
         spellcheck: "false",
       },
       handleKeyDown: (_view, event) => {
-        // 当焦点在视频提示词输入区时，空格仅用于输入，不向画布层冒泡。
         if (event.code === "Space" || event.key === " ") {
           event.stopPropagation();
         }
 
-        // 返回 false 让编辑器继续执行默认输入行为（插入空格字符）。
         return false;
       },
       handleDOMEvents: {
@@ -364,7 +340,6 @@ export const VideoPromptEditor = forwardRef<
       getPlainText: () => editor?.getText().trim() ?? "",
       insertContent: (content: string) => {
         if (!editor) return;
-        // Insert at current cursor position
         const { from } = editor.state.selection;
         editor.commands.insertContentAt(from, content);
       },
@@ -459,7 +434,6 @@ export const VideoPromptEditor = forwardRef<
             return true;
           }
 
-          // 参考素材重新排序后，同步已插入提示词里的 @图片1/@图片2 标签。
           transaction = transaction.setNodeMarkup(pos, undefined, {
             ...node.attrs,
             label: update.label,

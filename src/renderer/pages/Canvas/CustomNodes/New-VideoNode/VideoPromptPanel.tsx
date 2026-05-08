@@ -8,17 +8,17 @@ import { PresetDropdown } from "@/components/PresetDropdown";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
-import type { VideoPromptEditorHandle } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoPromptEditor";
-import { VideoPromptEditor } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoPromptEditor";
-import { VideoReferenceAssetsBar } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoReferenceAssetsBar";
+import type { VideoPromptEditorHandle } from "./components/VideoPromptEditor";
+import { VideoPromptEditor } from "./components/VideoPromptEditor";
+import { VideoReferenceAssetsBar } from "./components/VideoReferenceAssetsBar";
 import {
   getVideoLocalImageMentionId,
   getVideoParentAudioMentionId,
   getVideoParentImageMentionId,
   getVideoParentVideoMentionId,
   useVideoNodeReferences,
-} from "@/pages/Canvas/CustomNodes/VideoNode/hooks/useVideoNodeReferences";
-import { useVideoReferenceActions } from "@/pages/Canvas/CustomNodes/VideoNode/hooks/useVideoReferenceActions";
+} from "./hooks/useVideoNodeReferences";
+import { useVideoReferenceActions } from "./hooks/useVideoReferenceActions";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
@@ -835,7 +835,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   } = useVideoReferenceActions({
     nodeId,
     currentImageUrls: currentData?.image_urls ?? [],
-    updateVideoNodeData: updateNewVideoNodeData,
+    updateNewVideoNodeData,
     deleteEdge,
     onDisconnectedNode: handleDisconnectedReferenceNode,
     onRemovedReferenceImage: handleRemovedUploadedReferenceImage,

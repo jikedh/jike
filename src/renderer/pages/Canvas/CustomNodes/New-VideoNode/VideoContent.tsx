@@ -2,12 +2,12 @@ import { memo, useMemo } from "react";
 import { GenerationStatus } from "shared/constants/enum";
 import type { NewVideoGenerationNode } from "shared/types/flow";
 import { assignMissingMediaSequences } from "shared/utils/mediaSequence";
-import { CollapsibleVideoGallery } from "../VideoNode/CollapsibleVideoGallery";
+import { CollapsibleVideoGallery } from "./components/CollapsibleVideoGallery";
 
 type VideoContentProps = {
   data: NewVideoGenerationNode;
   nodeId?: string;
-  updateVideoNodeData?: (
+  updateNewVideoNodeData?: (
     nodeId: string,
     patch: Partial<NewVideoGenerationNode>,
   ) => void;
@@ -23,7 +23,7 @@ export const VideoContent = memo(
   ({
     data,
     nodeId,
-    updateVideoNodeData,
+    updateNewVideoNodeData,
     onRetry,
     onGalleryExpandedChange,
     frameSize,
@@ -103,7 +103,7 @@ export const VideoContent = memo(
           <CollapsibleVideoGallery
             videos={displayVideos}
             nodeId={nodeId}
-            updateVideoNodeData={updateVideoNodeData}
+            updateNewVideoNodeData={updateNewVideoNodeData}
             onExpandedChange={onGalleryExpandedChange}
             frameSize={frameSize}
           />

@@ -19,11 +19,7 @@ export interface CopiedEdgeTemplate {
 }
 
 const shouldKeepIncomingEdgeForCopiedNode = (node?: AllNodeType) => {
-  return (
-    node?.type === "imageNode" ||
-    node?.type === "videoNode" ||
-    node?.type === "newVideoNode"
-  );
+  return node?.type === "imageNode" || node?.type === "newVideoNode";
 };
 
 export const resolveNodeTypeForCopyCounter = (
@@ -32,7 +28,6 @@ export const resolveNodeTypeForCopyCounter = (
   const nodeTypeMap: Partial<Record<AllNodeType["type"], NodeType>> = {
     noteNode: "note",
     imageNode: "image",
-    videoNode: "video",
     agentNode: "agent",
     panoramaNode: "panorama",
     audioNode: "audio",
@@ -117,7 +112,6 @@ const getTargetMediaFieldByEdge = (
   if (sourceNode.type === "imageNode") {
     if (
       targetNode.type === "imageNode" ||
-      targetNode.type === "videoNode" ||
       targetNode.type === "newVideoNode"
     ) {
       return "image_urls";
@@ -125,14 +119,14 @@ const getTargetMediaFieldByEdge = (
   }
 
   if (
-    (targetNode.type === "videoNode" || targetNode.type === "newVideoNode") &&
-    (sourceNode.type === "videoNode" || sourceNode.type === "newVideoNode")
+    targetNode.type === "newVideoNode" &&
+    sourceNode.type === "newVideoNode"
   ) {
     return "video_urls";
   }
 
   if (
-    (targetNode.type === "videoNode" || targetNode.type === "newVideoNode") &&
+    targetNode.type === "newVideoNode" &&
     sourceNode.type === "audioNode"
   ) {
     return "audio_urls";

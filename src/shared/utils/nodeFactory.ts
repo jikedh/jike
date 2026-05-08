@@ -107,38 +107,6 @@ export const createPanoramaNode = (
 });
 
 /**
- * 创建视频节点
- */
-export const createVideoNode = (
-  id: string,
-  position: NodePosition,
-  options?: AddNodeOptions,
-): AllNodeType => ({
-  id,
-  type: "videoNode",
-  position,
-  width: 350,
-  height: 250,
-  data: {
-    model: "wan2.7-r2v",
-    prompt: "",
-    promptDraft: "",
-    promptDraftHtml: "<p></p>",
-    duration: 5,
-    aspect_ratio: "16:9",
-    nickname: "视频",
-    status: GenerationStatus.COMPLETED,
-    progress: 0,
-    metadata: {
-      resolution: "1080P",
-      prompt_extend: false,
-    },
-    result: { type: "video", data: [] },
-    createdAt: Date.now(),
-  },
-});
-
-/**
  * 创建新版视频节点
  */
 export const createNewVideoNode = (
@@ -303,7 +271,6 @@ export const nodeFactoryMap: Record<NodeType, NodeFactory> = {
   image: createImageNode,
   agent: createAgentNode,
   panorama: createPanoramaNode,
-  video: createVideoNode,
   newVideo: createNewVideoNode,
   audio: createAudioNode,
   textAgent: createTextAgentNode,

@@ -451,7 +451,6 @@ const applyNodeDragPreviewDom = (dragState: NodeDragPreviewState) => {
 const DELETE_CONFIRM_NODE_LABEL: Partial<Record<AllNodeType["type"], string>> =
 {
   imageNode: "图片节点",
-  videoNode: "视频节点",
   newVideoNode: "生成视频节点",
   agentNode: "智能体节点",
   textAgentNode: "文本智能体节点",
@@ -470,8 +469,8 @@ const getCanvasNodeTypeFromFlowNode = (
     return "image";
   }
 
-  if (node.type === "videoNode" || node.type === "newVideoNode") {
-    return "video";
+  if (node.type === "newVideoNode") {
+    return "newVideo";
   }
 
   if (node.type === "audioNode") {
@@ -495,7 +494,7 @@ const canPassMediaToNodeType = (
     return sourceNodeType === "image";
   }
 
-  if (targetNodeType === "video" || targetNodeType === "newVideo") {
+  if (targetNodeType === "newVideo") {
     return (
       sourceNodeType === "image" ||
       sourceNodeType === "video" ||
@@ -729,8 +728,8 @@ export const CanvasFlow = ({
   useEffect(() => {
     return scheduleIdleWork(() => {
       void import("../CustomNodes/ImageNode/ImagePromptPanel");
-      void import("../CustomNodes/VideoNode/VideoPromptPanel");
-      void import("../CustomNodes/VideoNode/components/VideoPromptEditor");
+      void import("../CustomNodes/New-VideoNode/VideoPromptPanel");
+      void import("../CustomNodes/New-VideoNode/components/VideoPromptEditor");
     });
   }, []);
 

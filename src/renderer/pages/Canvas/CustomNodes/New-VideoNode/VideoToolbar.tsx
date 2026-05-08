@@ -40,10 +40,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { VideoPlayer } from "@/components/ui/video-player";
-import { VideoSnapshotPanel } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoSnapshotPanel";
-import { VideoTimeline } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoTimeline";
-import type { VideoTrimResult } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoTrimPanel";
-import { VideoTrimPanel } from "@/pages/Canvas/CustomNodes/VideoNode/components/VideoTrimPanel";
+import { VideoSnapshotPanel } from "./components/VideoSnapshotPanel";
+import { VideoTimeline } from "./components/VideoTimeline";
+import type { VideoTrimResult } from "./components/VideoTrimPanel";
+import { VideoTrimPanel } from "./components/VideoTrimPanel";
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { getAspectRatioFromMediaFile } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
@@ -920,9 +920,6 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   const updateNewVideoNodeData = useCanvasFlowStore(
     (state) => state.updateNewVideoNodeData,
   );
-  const updateVideoNodeData = useCanvasFlowStore(
-    (state) => state.updateVideoNodeData,
-  );
 
   const {
     captureLastFrame,
@@ -1118,7 +1115,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           x: (sourceNode?.position.x ?? 0) + (sourceNode?.width ?? 350) + 80,
           y: sourceNode?.position.y ?? 0,
         };
-        const childId = addNode("video", childPosition);
+        const childId = addNode("newVideo", childPosition);
 
         onConnect({
           source: nodeId,
@@ -1138,7 +1135,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           response.data.format || "mp4",
         );
 
-        updateVideoNodeData(childId, {
+        updateNewVideoNodeData(childId, {
           badgeLabel: "视频裁剪",
           isUpload: true,
           aspect_ratio: data.aspect_ratio,
@@ -1184,7 +1181,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       nodeId,
       onConnect,
       projectId,
-      updateVideoNodeData,
+      updateNewVideoNodeData,
     ],
   );
 

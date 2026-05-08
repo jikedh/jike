@@ -76,90 +76,6 @@ export interface ImageGenerationNode {
 }
 
 /**
- * 视频生成节点数据结构
- * 用于 AI 视频生成任务
- */
-export interface VideoGenerationNode {
-  model: string; // 使用的模型
-  prompt: string; // 生成提示词
-  promptDraft?: string; // 输入面板草稿文本
-  promptDraftHtml?: string; // 输入面板草稿富文本
-  duration?: number; // 视频时长（秒）
-  aspect_ratio: string; // 宽高比，如 "16:9"
-  image_urls?: string[]; // 参考图像 URL 列表
-  video_urls?: string[]; // 参考视频 URL 列表（仅 Seedance 2.0 支持）
-  audio_urls?: string[]; // 参考音频 URL 列表（仅 Seedance 2.0 支持）
-  status?: GenerationStatus; // 当前生成状态
-  progress?: number; // 进度百分比（0-100）
-  requiredPoints?: number; // 本次生成预计消耗积分（用于扣费与 UI 对齐）
-  metadata: {
-    size?: string; // 视频尺寸，例如 "1920x1080", "720x720"
-    resolution?: string; // 视频分辨率，如 "720p", "480p"
-    url?: string; // 兼容部分模型返回的元数据视频地址
-    seed?: number; // 随机种子，用于控制生成内容的随机性
-    // Veo3 专属扩展参数
-    generateAudio?: boolean; // 是否生成音频
-    negativePrompt?: string; // 负面提示词
-    personGeneration?: string; // 人物生成安全设置
-    referenceImages?: string[]; // 素材/风格参考图 URL 数组
-    compressionQuality?: string; // 视频压缩质量
-    resizeMode?: string; // 图片调整模式
-    // Kling Video O1 专属扩展参数
-    mode?: string; // 生成模式：std(标准) | pro(专业)
-    watermark?: boolean; // 是否添加水印
-    video_list?: {
-      // 参考视频列表
-      video_url?: string; // 视频 URL
-      refer_type?: string; // 参考类型：base | feature
-      keep_original_sound?: string; // 是否保留原声：yes | no
-    }[];
-    // MiniMax Hailuo 2.3 专属扩展参数（严格遵循 API 字段命名）
-    first_frame_image?: string; // 首帧图片 URL
-    prompt_optimizer?: boolean; // 是否自动优化 prompt
-    fast_pretreatment?: boolean; // 是否快速预处理
-    // Seedance 2.0 专属扩展参数
-    input_type?: "reference" | "first_last_frame"; // 输入类型
-    generate_audio?: boolean; // 是否生成同步音频
-    audio?: boolean; // 是否生成音频（兼容旧字段与豆包 1.5 Pro）
-    web_search?: boolean; // 是否启用联网搜索增强（仅 pro）
-    generation_mode?:
-      | "text-to-video"
-      | "image-to-video"
-      | "first-last-frame"
-      | "multi-image-reference"; // UI 四按钮模式
-  };
-  audio?: boolean; // 是否生成音频（豆包 1.5 Pro 独有功能）
-  camerafixed?: boolean; // 是否固定摄像头
-
-  // ---- 输出结果 ----
-  task_id?: string; // 任务 ID（用于轮询）对应响应结果里面的id字段
-  error?: {
-    code?: string; // 错误代码
-    message?: string; // 错误信息（兜底显示）
-    detail?: string; // 后端返回的详细错误信息（优先展示）
-    serverMessage?: string; // 原始后端错误消息
-    status?: number; // HTTP 状态码
-  }; // 错误对象
-  result?: {
-    // 任务结果（仅成功时返回）
-    type: string; // 结果类型，固定为 video
-    data: {
-      // 视频数据数组
-      url: string; // 远程 OSS URL（始终存储）
-      remoteUrl?: string; // 兼容新字段，明确标识持久化远程地址
-      displayUrl?: string; // 运行时展示地址，允许为 blob URL，不参与持久化
-      format: string; // 视频格式（如 mp4）
-      localPath?: string; // 本地相对路径（仅用于 Electron 离线环境备用访问）
-      localName?: string; // 本地文件名（仅用于 Electron 离线环境备用访问）
-      [key: string]: any;
-    }[];
-  };
-  isUpload?: boolean; // 是否为上传视频（用于区分加载中/生成中）
-  lastFrame?: string; // 视频尾帧图片 URL
-  [key: string]: any; // React Flow 约束兼容
-}
-
-/**
  * 新版视频生成节点数据结构
  * 用于 AI 视频生成任务（重构版）
  */
@@ -453,7 +369,6 @@ export interface FlowStyleType {
 // 第二个泛型参数是 节点的类型标识符
 export type TextNodeType = Node<TextGenerationNode, "textNode">;
 export type ImageNodeType = Node<ImageGenerationNode, "imageNode">;
-export type VideoNodeType = Node<VideoGenerationNode, "videoNode">;
 // 节点里面的 data 结构是 NoteNodeData
 export type NoteNodeType = Node<NoteNodeData, "noteNode">;
 export type AgentNodeType = Node<AgentNode, "agentNode">;
@@ -477,7 +392,6 @@ export type NewVideoNodeType = Node<NewVideoGenerationNode, "newVideoNode">;
 export type AllNodeType =
   | TextNodeType
   | ImageNodeType
-  | VideoNodeType
   | NoteNodeType
   | AgentNodeType
   | TextAgentNodeType

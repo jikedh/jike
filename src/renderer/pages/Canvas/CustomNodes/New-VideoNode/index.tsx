@@ -261,7 +261,7 @@ const NewVideoNode = ({
             <VideoContent
               data={data}
               nodeId={id}
-              updateVideoNodeData={updateNewVideoNodeData}
+              updateNewVideoNodeData={updateNewVideoNodeData}
               onGalleryExpandedChange={setIsGalleryExpanded}
               frameSize={contentFrameSize}
             />

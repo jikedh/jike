@@ -64,15 +64,10 @@ export const useVideoFrameCapture = () => {
             }
           : centerPosition,
       );
-      // 兼容新旧视频节点类型读取 aspect_ratio
       const sourceAspectRatio = (() => {
         if (!sourceVideoNode) return undefined;
         if (sourceVideoNode.type === "newVideoNode") {
           return (sourceVideoNode.data as NewVideoGenerationNode).aspect_ratio;
-        }
-        if (sourceVideoNode.type === "videoNode") {
-          return (sourceVideoNode.data as { aspect_ratio?: string })
-            .aspect_ratio;
         }
         return undefined;
       })();

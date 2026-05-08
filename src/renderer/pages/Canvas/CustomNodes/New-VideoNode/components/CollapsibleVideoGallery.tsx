@@ -9,18 +9,18 @@ import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 
 type VideoItem = {
-  url: string; // 远程 OSS URL
-  format?: string; // 视频格式
-  localPath?: string; // 本地相对路径
-  localName?: string; // 本地文件名
-  remoteUrl?: string; // 远程持久化 URL
+  url: string;
+  format?: string;
+  localPath?: string;
+  localName?: string;
+  remoteUrl?: string;
   pending?: boolean;
 };
 
 type CollapsibleVideoGalleryProps = {
   videos: VideoItem[];
   nodeId?: string;
-  updateVideoNodeData?: (nodeId: string, patch: any) => void;
+  updateNewVideoNodeData?: (nodeId: string, patch: any) => void;
   onExpandedChange?: (expanded: boolean) => void;
   frameSize?: {
     width: number;
@@ -121,28 +121,18 @@ const getStackCardStyle = (
   } as const;
 };
 
-/**
- * 可折叠视频集合卡片
- * - collapsed：仅展示封面视频 + 右上角数量徽标
- * - expanded：两列网格展示全部视频
- * - 点击展开态中的视频，可将其移动到首位作为新封面
- * - 优先使用本地路径，如果不存在则使用远程 URL
- * - 刷新按钮：重新上传视频到 OSS
- */
 export const CollapsibleVideoGallery = memo(
   ({
     videos,
     nodeId,
-    updateVideoNodeData,
+    updateNewVideoNodeData,
     onExpandedChange,
     frameSize,
   }: CollapsibleVideoGalleryProps) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-    // 记录加载失败索引，统一渲染占位（使用 ref 避免频繁 setState）
     const brokenIndexesRef = useRef<Set<number>>(new Set());
     const [, forceUpdate] = useState(0);
-    // 记录正在刷新的视频索引
     const refreshingIndexesRef = useRef<Set<number>>(new Set());
     const [, forceRefreshUpdate] = useState(0);
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -170,14 +160,12 @@ export const CollapsibleVideoGallery = memo(
       );
     }, [cardHeight, cardWidth, expandedGap, videos.length]);
 
-    // 切换折叠/展开
     const handleToggleExpanded = useCallback((e: any) => {
       e.stopPropagation();
       setIsExpanded((prev) => !prev);
     }, []);
 
     const handleVideoError = useCallback((index: number) => {
-      // 使用 ref + forceUpdate 代替 setState，避免频繁重渲染
       if (!brokenIndexesRef.current.has(index)) {
         brokenIndexesRef.current.add(index);
         forceUpdate((n) => n + 1);
@@ -223,12 +211,11 @@ export const CollapsibleVideoGallery = memo(
       };
     }, [isExpanded]);
 
-    // 刷新视频：重新上传到 OSS
     const handleRefreshVideo = useCallback(
       async (e: React.MouseEvent, index: number) => {
         e.stopPropagation();
 
-        if (!nodeId || !updateVideoNodeData || !videos[index]?.localPath) {
+        if (!nodeId || !updateNewVideoNodeData || !videos[index]?.localPath) {
           return;
         }
 
@@ -237,30 +224,25 @@ export const CollapsibleVideoGallery = memo(
           return;
         }
 
-        // 使用 ref 追踪刷新状态，避免频繁 setState
         refreshingIndexesRef.current.add(index);
         forceRefreshUpdate((n) => n + 1);
 
         try {
-          // 读取本地文件
           const fileBytes = await readMediaFromLocal(item.localPath);
           if (!fileBytes) {
             throw new Error("无法获取本地文件路径");
           }
 
-          // 创建 File 对象
           const ext = item.localName.split(".").pop() || "mp4";
-          let file = new File([fileBytes], item.localName, {
+          const file = new File([fileBytes], item.localName, {
             type: `video/${ext}`,
           });
 
-          // 上传到 OSS
           const ossResult = await uploadFileToOSS(file);
           if (!ossResult.url) {
             throw new Error("上传到 OSS 失败");
           }
 
-          // 更新节点数据
           const newVideos = [...videos];
           newVideos[index] = {
             ...newVideos[index],
@@ -268,14 +250,13 @@ export const CollapsibleVideoGallery = memo(
             remoteUrl: ossResult.url,
           };
 
-          updateVideoNodeData(nodeId, {
+          updateNewVideoNodeData(nodeId, {
             result: {
               type: "video",
               data: newVideos,
             },
           });
 
-          // 移除加载失败标记
           brokenIndexesRef.current.delete(index);
         } catch (error) {
           console.error("[刷新视频] 刷新失败:", error);
@@ -284,7 +265,7 @@ export const CollapsibleVideoGallery = memo(
           forceRefreshUpdate((n) => n + 1);
         }
       },
-      [videos, nodeId, updateVideoNodeData],
+      [videos, nodeId, updateNewVideoNodeData],
     );
 
     const handleVideoClick = useCallback(
@@ -292,17 +273,15 @@ export const CollapsibleVideoGallery = memo(
         e.stopPropagation();
         if (index === 0) return;
 
-        // 将点击的视频移到首位
-        if (nodeId && updateVideoNodeData) {
+        if (nodeId && updateNewVideoNodeData) {
           const newVideos = [...videos];
           const clickedVideo = newVideos.splice(index, 1)[0];
           if (clickedVideo?.pending) return;
           newVideos.unshift(clickedVideo);
 
-          updateVideoNodeData(nodeId, {
+          updateNewVideoNodeData(nodeId, {
             result: {
               type: "video",
-              // 生成中的占位卡只参与 UI 展示，不写入真实视频结果。
               data: newVideos.filter((item) => !item.pending),
             },
           });
@@ -316,7 +295,7 @@ export const CollapsibleVideoGallery = memo(
 
         setIsExpanded(false);
       },
-      [videos, nodeId, updateVideoNodeData],
+      [videos, nodeId, updateNewVideoNodeData],
     );
 
     return (
@@ -501,7 +480,7 @@ export const CollapsibleVideoGallery = memo(
                   </div>
 
                   {nodeId &&
-                    updateVideoNodeData &&
+                    updateNewVideoNodeData &&
                     item.localPath &&
                     !isPending && (
                       <button

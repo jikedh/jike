@@ -8,7 +8,6 @@ import type {
   EdgeType,
   ImageGenerationNode,
   NewVideoGenerationNode,
-  VideoGenerationNode,
 } from "shared/types/flow";
 
 // ==================== 常量配置 ====================
@@ -103,30 +102,6 @@ export const updateImageNodeInList = (
     return {
       ...node,
       data: updater(node.data as ImageGenerationNode),
-    };
-  });
-};
-
-/**
- * 更新视频节点数据的通用辅助函数
- * @param nodes 节点数组
- * @param nodeId 要更新的节点 ID
- * @param updater 数据更新函数
- * @returns 更新后的节点数组
- */
-export const updateVideoNodeInList = (
-  nodes: AllNodeType[],
-  nodeId: string,
-  updater: (data: VideoGenerationNode) => VideoGenerationNode,
-): AllNodeType[] => {
-  return nodes.map((node) => {
-    if (node.id !== nodeId || node.type !== "videoNode") {
-      return node;
-    }
-
-    return {
-      ...node,
-      data: updater(node.data as VideoGenerationNode),
     };
   });
 };
@@ -397,5 +372,4 @@ export type {
   AudioGenerationNode,
   EdgeType,
   ImageGenerationNode,
-  VideoGenerationNode,
 } from "shared/types/flow";

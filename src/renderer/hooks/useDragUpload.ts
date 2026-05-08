@@ -88,8 +88,8 @@ export function useDragUpload() {
   const updateImageNodeData = useCanvasFlowStore(
     (state) => state.updateImageNodeData,
   );
-  const updateVideoNodeData = useCanvasFlowStore(
-    (state) => state.updateVideoNodeData,
+  const updateNewVideoNodeData = useCanvasFlowStore(
+    (state) => state.updateNewVideoNodeData,
   );
   const updateAudioNodeData = useCanvasFlowStore(
     (state) => state.updateAudioNodeData,
@@ -210,7 +210,7 @@ export function useDragUpload() {
           mediaType === "image"
             ? addNode("image", position)
             : mediaType === "video"
-              ? addNode("video", position)
+              ? addNode("newVideo", position)
               : addNode("audio", position);
 
         if (mediaType === "image") {
@@ -220,7 +220,7 @@ export function useDragUpload() {
             progress: 0,
           });
         } else if (mediaType === "video") {
-          updateVideoNodeData(nodeId, {
+          updateNewVideoNodeData(nodeId, {
             isUpload: true,
             status: GenerationStatus.IN_PROGRESS,
             progress: 0,
@@ -242,7 +242,7 @@ export function useDragUpload() {
               progress,
             });
           } else if (mediaType === "video") {
-            updateVideoNodeData(nodeId, {
+            updateNewVideoNodeData(nodeId, {
               status: GenerationStatus.IN_PROGRESS,
               isUpload: true,
               progress,
@@ -317,7 +317,7 @@ export function useDragUpload() {
               },
             });
           } else if (mediaType === "video") {
-            updateVideoNodeData(nodeId, {
+            updateNewVideoNodeData(nodeId, {
               status: GenerationStatus.COMPLETED,
               progress: 100,
               isUpload: true,
@@ -367,7 +367,7 @@ export function useDragUpload() {
               error: { message: "上传失败，请重试" },
             });
           } else if (mediaType === "video") {
-            updateVideoNodeData(nodeId, {
+            updateNewVideoNodeData(nodeId, {
               status: GenerationStatus.FAILED,
               error: { message: "上传失败，请重试" },
             });
@@ -390,7 +390,7 @@ export function useDragUpload() {
       uploadFile,
       addNode,
       updateImageNodeData,
-      updateVideoNodeData,
+      updateNewVideoNodeData,
       updateAudioNodeData,
     ],
   );

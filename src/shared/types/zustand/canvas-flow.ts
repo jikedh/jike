@@ -6,7 +6,6 @@ import type {
   EdgeType,
   ImageGenerationNode,
   NewVideoGenerationNode,
-  VideoGenerationNode,
 } from "shared/types/flow";
 
 /**
@@ -56,7 +55,6 @@ export type CanvasGroup = {
 export type NodeType =
   | "note"
   | "image"
-  | "video"
   | "newVideo"
   | "agent"
   | "panorama"
@@ -209,10 +207,6 @@ export type CanvasFlowStoreType = {
     nodeId: string,
     patch: Partial<ImageGenerationNode>,
   ) => void;
-  updateVideoNodeData: (
-    nodeId: string,
-    patch: Partial<VideoGenerationNode>,
-  ) => void;
   updateNewVideoNodeData: (
     nodeId: string,
     patch: Partial<NewVideoGenerationNode>,
@@ -250,7 +244,6 @@ export type CanvasFlowStoreType = {
   separateToNodes: (nodeId: string) => void;
 
   // ── 视频生成 ─────────────────────────────────
-  startVideoGeneration: (nodeId: string, payload: any) => Promise<void>;
   startNewVideoGeneration: (
     nodeId: string,
     payload: any,

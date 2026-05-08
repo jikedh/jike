@@ -4,7 +4,6 @@ import type {
   ImageGenerationNode,
   NewVideoGenerationNode,
   NoteNodeData,
-  VideoGenerationNode,
 } from "shared/types/flow";
 import {
   getDisplayMediaUrl,
@@ -15,27 +14,6 @@ import { useShallow } from "zustand/react/shallow";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { getPrimaryVideoUrlFromNodeData } from "../utils/video-url";
 
-const getPrimaryVideoUrlFromAnyVideoNode = (
-  data?: Partial<VideoGenerationNode | NewVideoGenerationNode> | null,
-) => {
-  if (!data) {
-    return undefined;
-  }
-
-  const resultUrl = data.result?.data?.find((item) => item?.url)?.url;
-  const metadataUrl = (data.metadata as Record<string, unknown> | undefined)
-    ?.url as string | undefined;
-  const legacyUrl = (data as Record<string, unknown>)?.video_url as
-    | string
-    | undefined;
-
-  return resultUrl ?? metadataUrl ?? legacyUrl;
-};
-
-/**
- * 视频节点引用项类型。
- * 统一用于参考资源条与 @ 提及列表。
- */
 export interface VideoReferenceItem {
   id: string;
   url: string;
@@ -44,9 +22,6 @@ export interface VideoReferenceItem {
   fileName?: string;
 }
 
-/**
- * 视频节点 mention 候选项类型。
- */
 export interface VideoMentionCandidate {
   id: string;
   label: string;
@@ -71,10 +46,6 @@ export const getVideoParentAudioMentionId = (nodeId: string) => {
   return `parent-audio-${nodeId}`;
 };
 
-/**
- * 聚合视频节点的上游资源与提及候选项。
- * 将主组件中的 edges/nodes 扫描逻辑集中到一个 hook，减少容器复杂度。
- */
 export const useVideoNodeReferences = ({
   nodeId,
   referenceImageUrls,
@@ -114,26 +85,15 @@ export const useVideoNodeReferences = ({
   }, [parentNodeEntryValues]);
 
   const parentVideoNodes = useMemo(() => {
-    return (
-      parentNodeEntries
-        // 新旧视频节点都可以作为视频智能输入和参考视频来源。
-        .filter(
-          (entry) =>
-            entry.type === "videoNode" || entry.type === "newVideoNode",
-        )
-        .map((entry) => ({
-          id: entry.id,
-          url:
-            entry.type === "videoNode"
-              ? getPrimaryVideoUrlFromNodeData(
-                entry.data as VideoGenerationNode,
-              )
-              : getPrimaryVideoUrlFromAnyVideoNode(
-                entry.data as NewVideoGenerationNode,
-              ),
-        }))
-        .filter((item) => item.url) as VideoReferenceItem[]
-    );
+    return parentNodeEntries
+      .filter((entry) => entry.type === "newVideoNode")
+      .map((entry) => ({
+        id: entry.id,
+        url: getPrimaryVideoUrlFromNodeData(
+          entry.data as NewVideoGenerationNode,
+        ),
+      }))
+      .filter((item) => item.url) as VideoReferenceItem[];
   }, [parentNodeEntries]);
 
   const parentAudioNodes = useMemo(() => {
@@ -213,8 +173,6 @@ export const useVideoNodeReferences = ({
   const videoMentionItems = useMemo(() => {
     const items: VideoMentionCandidate[] = [];
 
-    // 统一“本地上传图”和“节点继承图”的命名风格：全部使用“图片X”。
-    // 同时按 URL 去重，避免同一张图在 @ 列表中出现两次。
     const mergedImageSources = [
       ...localReferenceImageUrls.map((url) => ({
         id: getVideoLocalImageMentionId(url),
@@ -226,7 +184,6 @@ export const useVideoNodeReferences = ({
       })),
     ];
 
-    // 相同 URL 可能来自不同连接，不能按 URL 去重，否则 UI 和生成参数都会少一个参考位。
     mergedImageSources.forEach((item, index) => {
       items.push({
         id: item.id,
