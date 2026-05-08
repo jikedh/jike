@@ -50,54 +50,55 @@ function isHttpUrl(value: unknown): value is string {
   return typeof value === "string" && /^https?:\/\//i.test(value);
 }
 
-function extractReferenceImageUrl(data: unknown): string | undefined {
+function extractReferenceImageUrls(data: unknown): string[] | undefined {
   if (!data || typeof data !== "object") {
     return undefined;
   }
 
   const record = data as Record<string, any>;
-  const directUrl =
-    record.reference_image_url ||
-    record.referenceImageUrl ||
-    record.image_url ||
-    record.imageUrl;
-  if (isHttpUrl(directUrl)) {
-    return directUrl;
-  }
-
-  const imageUrls = record.image_urls || record.imageUrls;
-  if (Array.isArray(imageUrls)) {
-    const firstUrl = imageUrls.find(isHttpUrl);
-    if (firstUrl) {
-      return firstUrl;
+  const urls = new Set<string>();
+  const addUrl = (value: unknown) => {
+    if (isHttpUrl(value)) {
+      urls.add(value);
     }
-  }
+  };
+  const addUrls = (value: unknown) => {
+    if (Array.isArray(value)) {
+      value.forEach(addUrl);
+      return;
+    }
+    addUrl(value);
+  };
+
+  addUrls(record.reference_image_url);
+  addUrls(record.referenceImageUrl);
+  addUrls(record.image_url);
+  addUrls(record.imageUrl);
+  addUrls(record.image_urls);
+  addUrls(record.imageUrls);
 
   const imageItems = record.images || record.input?.images;
   if (Array.isArray(imageItems)) {
-    const firstImage = imageItems.find((item) => isHttpUrl(item?.url));
-    if (firstImage) {
-      return firstImage.url;
-    }
+    imageItems.forEach((item) => addUrl(item?.url));
   }
 
   const mediaItems = record.media || record.input?.media;
   if (Array.isArray(mediaItems)) {
-    const firstImageMedia = mediaItems.find(
-      (item) =>
+    mediaItems.forEach((item) => {
+      if (
         isHttpUrl(item?.url) &&
         (item?.type === "image" ||
           item?.type === "image_url" ||
           item?.type === "reference_image" ||
           item?.type === "first_frame" ||
-          item?.type === "last_frame"),
-    );
-    if (firstImageMedia) {
-      return firstImageMedia.url;
-    }
+          item?.type === "last_frame")
+      ) {
+        urls.add(item.url);
+      }
+    });
   }
 
-  return undefined;
+  return urls.size ? [...urls] : undefined;
 }
 
 function extractDurationSeconds(data: unknown): number | undefined {
@@ -461,7 +462,7 @@ export async function createLzVideoTask(
     taskId,
     prompt: data.prompt,
     duration: extractDurationSeconds(data),
-    referenceImageUrl: extractReferenceImageUrl(data),
+    referenceImageUrls: extractReferenceImageUrls(data),
     provider: "kuaizi",
     requestParams: data as unknown as Record<string, unknown>,
     status: taskId ? "PENDING" : "FAIL",
@@ -649,7 +650,7 @@ export async function createDashscopeVideoSynthesis(
     taskId,
     prompt: extractPrompt(data),
     duration: extractDurationSeconds(data),
-    referenceImageUrl: extractReferenceImageUrl(data),
+    referenceImageUrls: extractReferenceImageUrls(data),
     provider: "dashscope",
     requestParams: trackData,
     status: taskStatus === "FAILED" || !taskId ? "FAIL" : "PENDING",

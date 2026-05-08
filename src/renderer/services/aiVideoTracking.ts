@@ -9,7 +9,7 @@ export interface AIVideoTrackData {
   taskId: string;
   prompt?: string;
   duration?: number;
-  referenceImageUrl?: string;
+  referenceImageUrls?: string[];
   provider?: string;
   requestParams?: Record<string, unknown>;
   generatedVideoUrl?: string;
@@ -49,12 +49,20 @@ class AIVideoTrackingService {
         url: "/sorotask/v1/track",
         method: "post",
         data: {
-          ...trackData,
+          userId: trackData.userId,
+          userUuid: trackData.userUuid,
+          apiName: trackData.apiName,
+          model: trackData.model,
+          taskId: trackData.taskId,
+          prompt: trackData.prompt,
+          provider: trackData.provider,
+          responseTaskId: trackData.taskId,
+          status: trackData.status,
           requestParams: trackData.requestParams
             ? JSON.stringify(trackData.requestParams)
             : undefined,
           duration: trackData.duration,
-          reference_image_url: trackData.referenceImageUrl,
+          reference_image_url: trackData.referenceImageUrls,
           createTime: trackData.timestamp,
         },
       });
