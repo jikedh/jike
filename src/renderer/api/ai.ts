@@ -347,11 +347,12 @@ function extractChatCompletionText(response: any): string {
 
 export async function analyzeLightingReferenceImage(
   imageUrl: string,
+  model = "gemini-3-pro-official",
   signal?: AbortSignal,
 ): Promise<string> {
   const response = await createChatCompletion(
     {
-      model: "gemini-3-pro-official",
+      model,
       stream: false,
       temperature: 0.2,
       messages: [

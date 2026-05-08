@@ -191,10 +191,6 @@ const SliderControl = ({
   <label className="grid gap-2">
     <span className="flex items-center justify-between text-sm text-white/78">
       <span>{label}</span>
-      <span className="font-mono text-white/52">
-        {value}
-        {suffix}
-      </span>
     </span>
     <div className="grid grid-cols-[1fr_84px] items-center gap-3">
       <input
@@ -393,6 +389,7 @@ export const ImageLightingDialog = ({
         renderLightingToCanvas(previewImage, renderConfig, canvasRef.current, {
           maxSide: 820,
           preserveSourceAspectRatio: true,
+          matchSourceBrightness: true,
         });
       } catch (error) {
         console.error("灯光预览渲染失败:", error);
@@ -516,8 +513,8 @@ export const ImageLightingDialog = ({
       return undefined;
     }
 
-    const maxWidth = 82;
-    const maxHeight = 100;
+    const maxWidth = 98;
+    const maxHeight = 120;
     const scale = Math.min(maxWidth / naturalWidth, maxHeight / naturalHeight);
     return {
       width: Math.max(1, Math.round(naturalWidth * scale)),
@@ -688,6 +685,7 @@ export const ImageLightingDialog = ({
     try {
       const description = await analyzeLightingReferenceImage(
         url,
+        selectedModel?.model ?? initialModel ?? "gemini-3-pro-official",
         controller.signal,
       );
       setReferenceLightingPrompt(description);
@@ -704,7 +702,7 @@ export const ImageLightingDialog = ({
         referenceAnalyzeControllerRef.current = null;
       }
     }
-  }, []);
+  }, [initialModel, selectedModel?.model]);
 
   const handleRetryReferenceAnalysis = useCallback(() => {
     if (!referenceImageUrl || referenceStatus === "uploading") {
@@ -1198,7 +1196,6 @@ export const ImageLightingDialog = ({
               >
                 <span className="flex items-center gap-1.5">
                   轮廓光
-                  <IconHelpCircle size={13} className="text-white/28" />
                 </span>
                 <span
                   className={cn(

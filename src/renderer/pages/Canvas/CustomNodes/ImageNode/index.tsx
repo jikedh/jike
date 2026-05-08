@@ -20,6 +20,8 @@ import {
   ADOBE_NANO_BANANA_PRO_MODEL,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
+  XIMU_GPT_IMAGE2_MODEL,
+  XIMU_NANO_BANANA_PRO_MODEL,
 } from "shared/constants/ai-models";
 import { setProjectCoverFromMediaRef } from "service/projectStorage";
 import { GenerationStatus } from "shared/constants/enum";
@@ -649,11 +651,14 @@ export const ImageNode = memo(
           const isAdobeImageModel =
             config.model === ADOBE_GPT_IMAGE2_MODEL ||
             config.model === ADOBE_NANO_BANANA_PRO_MODEL;
+          const isXimuImageModel =
+            config.model === XIMU_GPT_IMAGE2_MODEL ||
+            config.model === XIMU_NANO_BANANA_PRO_MODEL;
           const isNanoBananaLocalModel =
             config.model === NANO_BANANA_LOCAL_MODEL &&
             config.platform === NANO_BANANA_LOCAL_PLATFORM;
           const isLocalDirectModel =
-            isAdobeImageModel || isNanoBananaLocalModel;
+            isAdobeImageModel || isXimuImageModel || isNanoBananaLocalModel;
           const backendModel = isNiji7Model ? "midjourney" : config.model;
           const size = config.size ?? data.size ?? "1:1";
           const resolution = config.resolution ?? data.resolution ?? "2K";

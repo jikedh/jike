@@ -334,6 +334,9 @@ type RendererEntry = {
 
 const rendererCache = new WeakMap<HTMLCanvasElement, RendererEntry>();
 const BACKGROUND_RGB = { r: 7, g: 7, b: 10 };
+const BRIGHTNESS_MATCH_MIN_INTENSITY = 0.45;
+const BRIGHTNESS_MATCH_MAX_BOOST = 1.35;
+const BRIGHTNESS_MATCH_MIN_GAP = 8;
 
 const loadImage = (imageSrc: string) => {
   return new Promise<HTMLImageElement>((resolve, reject) => {
@@ -674,11 +677,105 @@ const trimBackgroundMargins = (canvas: HTMLCanvasElement) => {
   context.putImageData(trimmed, 0, 0);
 };
 
+const getImageDataLuminance = (imageData: ImageData): number => {
+  const { data, width, height } = imageData;
+  const pixelCount = width * height;
+  const sampleStep = Math.max(1, Math.floor(pixelCount / 12000));
+  let total = 0;
+  let samples = 0;
+
+  for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += sampleStep) {
+    const index = pixelIndex * 4;
+    if (data[index + 3] < 8) {
+      continue;
+    }
+
+    total +=
+      data[index] * 0.2126 +
+      data[index + 1] * 0.7152 +
+      data[index + 2] * 0.0722;
+    samples += 1;
+  }
+
+  return samples > 0 ? total / samples : 0;
+};
+
+const getSourceImageLuminance = (
+  image: HTMLImageElement,
+  width: number,
+  height: number,
+): number | null => {
+  const sourceCanvas = document.createElement("canvas");
+  sourceCanvas.width = width;
+  sourceCanvas.height = height;
+  const sourceContext = sourceCanvas.getContext("2d", {
+    willReadFrequently: true,
+  });
+
+  if (!sourceContext) {
+    return null;
+  }
+
+  try {
+    sourceContext.drawImage(image, 0, 0, width, height);
+    return getImageDataLuminance(
+      sourceContext.getImageData(0, 0, width, height),
+    );
+  } catch {
+    return null;
+  }
+};
+
+const matchCanvasBrightnessToSource = (
+  image: HTMLImageElement,
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+) => {
+  const sourceLuminance = getSourceImageLuminance(image, width, height);
+  if (!sourceLuminance) {
+    return;
+  }
+
+  let imageData: ImageData;
+  try {
+    imageData = context.getImageData(0, 0, width, height);
+  } catch {
+    return;
+  }
+
+  const renderedLuminance = getImageDataLuminance(imageData);
+  if (
+    !renderedLuminance ||
+    renderedLuminance >= sourceLuminance - BRIGHTNESS_MATCH_MIN_GAP
+  ) {
+    return;
+  }
+
+  const boost = Math.min(
+    BRIGHTNESS_MATCH_MAX_BOOST,
+    sourceLuminance / renderedLuminance,
+  );
+  const { data } = imageData;
+
+  for (let index = 0; index < data.length; index += 4) {
+    data[index] = Math.min(255, Math.round(data[index] * boost));
+    data[index + 1] = Math.min(255, Math.round(data[index + 1] * boost));
+    data[index + 2] = Math.min(255, Math.round(data[index + 2] * boost));
+  }
+
+  context.putImageData(imageData, 0, 0);
+};
+
 export const renderLightingToCanvas = (
   image: HTMLImageElement,
   config: LightingConfig,
   canvas: HTMLCanvasElement,
-  options: { maxSide?: number; preserveSourceAspectRatio?: boolean } = {},
+  options: {
+    maxSide?: number;
+    preserveSourceAspectRatio?: boolean;
+    matchSourceBrightness?: boolean;
+  } = {},
 ) => {
   const { width, height } = getOutputSize(image, options.maxSide);
   canvas.width = width;
@@ -806,6 +903,12 @@ export const renderLightingToCanvas = (
     context.fillStyle = `rgba(255, 255, 255, ${(intensity - 0.5) * 0.38})`;
     context.fillRect(0, 0, width, height);
     context.restore();
+  }
+  if (
+    options.matchSourceBrightness &&
+    intensity >= BRIGHTNESS_MATCH_MIN_INTENSITY
+  ) {
+    matchCanvasBrightnessToSource(image, context, width, height);
   }
   if (!options.preserveSourceAspectRatio) {
     trimBackgroundMargins(canvas);
