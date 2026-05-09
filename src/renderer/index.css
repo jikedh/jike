@@ -636,6 +636,10 @@
 }
 
 /* 空格+拖动时：grabbing */
+.react-flow[data-space-pressed="true"] .react-flow__edge {
+  pointer-events: none;
+}
+
 .react-flow[data-space-pressed="true"].react-flow__pane--dragging,
 .react-flow[data-space-pressed="true"].react-flow__pane--dragging * {
   cursor: grabbing !important;
