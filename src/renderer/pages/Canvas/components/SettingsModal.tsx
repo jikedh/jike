@@ -129,6 +129,7 @@ export const SettingsModal = ({
     snapToGrid,
     edgeAnimationEnabled,
     storagePath,
+    assetStoragePath,
     ximuCardCode,
     setDefaultModel,
     setDefaultPersonaId,
@@ -139,6 +140,7 @@ export const SettingsModal = ({
     setSnapToGrid,
     setEdgeAnimationEnabled,
     setStoragePath,
+    setAssetStoragePath,
     setXimuCardCode,
     resetToDefault,
   } = useChatSettingsStore();
@@ -457,6 +459,20 @@ export const SettingsModal = ({
       setStoragePath(selectedPath);
       clearProjectList();
       success("存储路径已更新（旧路径数据不会自动迁移）");
+    }
+  };
+
+  const handleSelectAssetStoragePath = async () => {
+    if (!window.storage) {
+      error("存储功能不可用");
+      return;
+    }
+
+    const selectedPath = await window.storage.selectDirectory();
+
+    if (selectedPath && selectedPath !== assetStoragePath) {
+      setAssetStoragePath(selectedPath);
+      success("资产存储路径已更新");
     }
   };
 
@@ -1232,6 +1248,27 @@ export const SettingsModal = ({
                             size="sm"
                             variant="blue"
                             onClick={handleSelectStoragePath}
+                          >
+                            <IconFolder size={14} />
+                            选择路径
+                          </Button>
+                        </div>
+                      </section>
+                      <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                        <div className="mb-3 text-sm font-medium text-white/80">
+                          资产存储路径
+                        </div>
+                        <div className="text-xs text-white/40 mb-3">
+                          资产库文件将存储在此路径下，包括项目资产、按项目隔离的画布资产和资产索引
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm text-white/60 truncate">
+                            {assetStoragePath || "未设置"}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="blue"
+                            onClick={handleSelectAssetStoragePath}
                           >
                             <IconFolder size={14} />
                             选择路径

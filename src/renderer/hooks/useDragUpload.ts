@@ -8,19 +8,23 @@ import {
   saveVideoToLocal,
 } from "service/projectStorage";
 import {
+  CANVAS_ASSET_DRAG_MIME,
+  CANVAS_ASSET_DRAG_TYPE,
   CANVAS_IMAGE_DRAG_MIME,
   CANVAS_IMAGE_DRAG_TYPE,
+  type CanvasAssetDragPayload,
   type CanvasImageDragPayload,
 } from "shared/constants/canvasDrag";
 import { GenerationStatus } from "shared/constants/enum";
 import { getMediaType, type MediaType } from "shared/constants/mediaTypes";
 import { toast } from "sonner";
-import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import {
   getAspectRatioFromImageUrl,
   getAspectRatioFromMediaFile,
   getExactAspectRatio,
 } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
+import { insertAssetIntoCanvas } from "@/pages/Canvas/utils/assetInsert";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 
 /** 拖拽状态 */
 interface DragState {
@@ -57,6 +61,29 @@ const parseCanvasImageDragPayload = (
   }
 };
 
+const parseCanvasAssetDragPayload = (
+  dataTransfer: DataTransfer,
+): CanvasAssetDragPayload | null => {
+  const rawPayload = dataTransfer.getData(CANVAS_ASSET_DRAG_MIME);
+  if (!rawPayload) {
+    return null;
+  }
+
+  try {
+    const payload = JSON.parse(rawPayload) as CanvasAssetDragPayload;
+    if (
+      payload.type !== CANVAS_ASSET_DRAG_TYPE ||
+      !payload.asset?.id ||
+      !payload.asset?.fileUrl
+    ) {
+      return null;
+    }
+    return payload;
+  } catch {
+    return null;
+  }
+};
+
 const getImageAspectRatioFromDragItem = async (
   image: CanvasImageDragPayload["images"][number],
 ) => {
@@ -69,6 +96,10 @@ const getImageAspectRatioFromDragItem = async (
 
 const hasCanvasImageDragPayload = (dataTransfer: DataTransfer) => {
   return Array.from(dataTransfer.types).includes(CANVAS_IMAGE_DRAG_MIME);
+};
+
+const hasCanvasAssetDragPayload = (dataTransfer: DataTransfer) => {
+  return Array.from(dataTransfer.types).includes(CANVAS_ASSET_DRAG_MIME);
 };
 
 const getFilesFromDataTransfer = (dataTransfer: DataTransfer) => {
@@ -473,6 +504,24 @@ export function useDragUpload() {
         return;
       }
 
+      if (hasCanvasAssetDragPayload(event.dataTransfer)) {
+        const assetPayload = parseCanvasAssetDragPayload(event.dataTransfer);
+        const flowPosition = screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY,
+        });
+
+        setDragState({
+          isDragging: true,
+          dragPosition: flowPosition,
+          fileCount: 1,
+          acceptedTypes: assetPayload?.asset?.mediaType
+            ? [assetPayload.asset.mediaType]
+            : ["image"],
+        });
+        return;
+      }
+
       const files = getFilesFromDataTransfer(event.dataTransfer);
 
       if (files.length === 0) return;
@@ -566,6 +615,38 @@ export function useDragUpload() {
       );
       if (canvasImagePayload) {
         handleCanvasImages(canvasImagePayload, flowPosition);
+        return;
+      }
+
+      const canvasAssetPayload = parseCanvasAssetDragPayload(
+        event.dataTransfer,
+      );
+      if (canvasAssetPayload) {
+        void insertAssetIntoCanvas(
+          {
+            id: canvasAssetPayload.asset.id,
+            name: canvasAssetPayload.asset.name,
+            scope: "project",
+            category: canvasAssetPayload.asset.category,
+            mediaType: canvasAssetPayload.asset.mediaType,
+            fileUrl: canvasAssetPayload.asset.fileUrl,
+            coverUrl: canvasAssetPayload.asset.coverUrl,
+            originalFile: canvasAssetPayload.asset.fileUrl,
+            coverFile: canvasAssetPayload.asset.coverUrl,
+            metadataFile: "",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            tags: [],
+          },
+          flowPosition,
+        )
+          .then(() => {
+            toast.success("资产已插入画布");
+          })
+          .catch((error) => {
+            console.error("[useDragUpload] insert asset failed:", error);
+            toast.error("资产插入画布失败");
+          });
         return;
       }
 

@@ -32,6 +32,7 @@ import { assignMissingMediaSequences } from "shared/utils/mediaSequence";
 import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
 import { ButtonHandle } from "@/components/button-handle";
+import { dispatchCreateAssetFromNode } from "@/pages/Canvas/components/CanvasSidebar";
 import { PanoramaViewer } from "@/components/panorama/PanoramaViewer";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
@@ -787,6 +788,7 @@ export const ImageNode = memo(
           onGridCrop={handleContextMenuGridCrop}
           onSeparateToNodes={handleContextMenuSeparateToNodes}
           onSetAsCover={handleContextMenuSetAsCover}
+          onCreateAsset={() => dispatchCreateAssetFromNode(id)}
           hasMultipleResults={hasMultipleResults}
         >
           <div

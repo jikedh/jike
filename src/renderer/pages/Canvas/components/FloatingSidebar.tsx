@@ -1,4 +1,5 @@
 import {
+  IconArchive,
   IconDeviceFloppy,
   IconPlus,
   IconSettings,
@@ -62,6 +63,11 @@ const DEFAULT_ITEMS: FloatingSidebarItem[] = [
       { id: "storyboard-video", label: "分镜视频生成" },
       { id: "drama-analysis", label: "剧目分析" },
     ],
+  },
+  {
+    id: "asset-library",
+    label: "资产库",
+    icon: <IconArchive size={20} />,
   },
   {
     id: "save",

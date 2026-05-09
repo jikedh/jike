@@ -9,6 +9,7 @@ import { GenerationStatus } from "shared/constants/enum";
 import type { NewVideoNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
+import { dispatchCreateAssetFromNode } from "@/pages/Canvas/components/CanvasSidebar";
 import { getNodeSizeByAspectRatio } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
@@ -193,6 +194,7 @@ const NewVideoNode = ({
       onDuplicate={handleDuplicate}
       onDelete={handleDelete}
       onSeparateToNodes={handleSeparateToNodes}
+      onCreateAsset={() => dispatchCreateAssetFromNode(id)}
       hasMultipleResults={hasMultipleResults}
       separateToNodesLabel="独立为视频"
     >

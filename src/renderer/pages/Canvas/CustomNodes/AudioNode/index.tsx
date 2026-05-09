@@ -24,6 +24,7 @@ import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
 import useMessage from "@/hooks/useMessage";
 import { useNodeScale } from "@/hooks/useNodeScale";
+import { dispatchCreateAssetFromNode } from "@/pages/Canvas/components/CanvasSidebar";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { NodeNameBadge } from "../shared/NodeNameBadge";
@@ -960,6 +961,7 @@ export const AudioNode = memo(
       <NodeContextMenu
         onDuplicate={handleDuplicate}
         onDelete={handleDelete}
+        onCreateAsset={() => dispatchCreateAssetFromNode(id)}
       >
         <div
           className="group/node relative"

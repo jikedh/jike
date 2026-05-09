@@ -1,17 +1,17 @@
 import { app, dialog, ipcMain } from "electron";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
-  readFileSync,
-  writeFileSync,
   readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
   statSync,
   unlinkSync,
-  rmSync,
-  renameSync,
-  copyFileSync,
+  writeFileSync,
 } from "fs";
-import { join, dirname, basename } from "path";
+import { basename, dirname, join } from "path";
 
 const CANVAS_FILE = "canvas.json";
 const PROJECT_META_FILE = "project.json";
@@ -281,10 +281,6 @@ export function registerStorageHandlers(): void {
           indexChanged = true;
         }
       }
-
-      const projects = Object.values(index.projects || {}).sort(
-        (a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0),
-      );
 
       const diskProjects: any[] = [];
       try {
@@ -597,6 +593,27 @@ export function registerStorageHandlers(): void {
   );
 
   ipcMain.handle(
+    "storage:saveBufferToFile",
+    async (_, defaultFileName: string, buffer: ArrayBuffer) => {
+      try {
+        const result = await dialog.showSaveDialog({
+          title: "保存文件",
+          defaultPath: defaultFileName || "download",
+        });
+
+        if (result.canceled || !result.filePath) {
+          return { success: false, canceled: true };
+        }
+
+        writeFileSync(result.filePath, Buffer.from(buffer));
+        return { success: true, path: result.filePath };
+      } catch (error: any) {
+        return { success: false, error: error.message };
+      }
+    },
+  );
+
+  ipcMain.handle(
     "storage:renameProject",
     async (
       _,
@@ -859,7 +876,8 @@ export function registerStorageHandlers(): void {
         );
         updatedCanvas.projectName = importedProjectName;
         updatedCanvas.savedAt = now;
-        updatedCanvas.coverUrl = updatedCanvas.coverUrl || coverFallback.coverUrl;
+        updatedCanvas.coverUrl =
+          updatedCanvas.coverUrl || coverFallback.coverUrl;
         updatedCanvas.coverLocalPath =
           updatedCanvas.coverLocalPath || coverFallback.coverLocalPath;
         safeWriteJson(canvasPath, updatedCanvas);

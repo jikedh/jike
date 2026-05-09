@@ -31,11 +31,7 @@ export type DownloadApi = {
 };
 
 export type VideoProcessingApi = {
-  trim: (request: {
-    videoUrl: string;
-    start: number;
-    end: number;
-  }) => Promise<{
+  trim: (request: { videoUrl: string; start: number; end: number }) => Promise<{
     success: boolean;
     data?: {
       url: string;
@@ -68,6 +64,8 @@ const storageApi: StorageApi = {
     ipcRenderer.invoke("storage:deleteMedia", basePath, relativePath),
   downloadMedia: (basePath, url, relativePath) =>
     ipcRenderer.invoke("storage:downloadMedia", basePath, url, relativePath),
+  saveBufferToFile: (defaultFileName, buffer) =>
+    ipcRenderer.invoke("storage:saveBufferToFile", defaultFileName, buffer),
   mediaExists: (basePath, relativePath) =>
     ipcRenderer.invoke("storage:mediaExists", basePath, relativePath),
   renameProject: (basePath, oldProjectName, newProjectName) =>
