@@ -51,19 +51,24 @@ const NewVideoNode = ({
   const isSourceHighlighted = useCanvasFlowStore((state) =>
     state.highlightedSourceNodeIds.includes(id),
   );
+  const activeNodeId = useCanvasFlowStore((state) => state.activeNodeId);
+  const hasActiveVideoTool = useCanvasFlowStore(
+    (state) => state.activeVideoTool !== null,
+  );
 
   const selectedNodesCount = useCanvasFlowStore(
     (state) => state.selectedNodesCount,
   );
+  const isActiveNode = activeNodeId === id && selected;
 
   const handleVisibilityClass = useMemo(
     () =>
       isGalleryExpanded
         ? "invisible opacity-0"
-        : selected
+        : isActiveNode
           ? "visible opacity-100"
           : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100",
-    [isGalleryExpanded, selected],
+    [isActiveNode, isGalleryExpanded],
   );
 
   const nodeSize = useMemo(() => {
@@ -138,10 +143,10 @@ const NewVideoNode = ({
   }, [confirmDeleteIfNeeded, deleteNode, id]);
 
   const handleRenameStart = useCallback(() => {
-    if (selected) {
+    if (isActiveNode) {
       setIsRenaming(true);
     }
-  }, [selected]);
+  }, [isActiveNode]);
 
   const handleRename = useCallback(
     (name: string) => {
@@ -156,12 +161,12 @@ const NewVideoNode = ({
 
   const shouldShowToolbar = useMemo(
     () =>
-      selected &&
+      isActiveNode &&
       !isDragging &&
       isDragUiSettled &&
       selectedNodesCount <= 1,
     [
-      selected,
+      isActiveNode,
       isDragging,
       isDragUiSettled,
       selectedNodesCount,
@@ -218,7 +223,7 @@ const NewVideoNode = ({
           className={cn(
             "group/card relative flex h-full w-full flex-col rounded-xl border",
             hasMultipleResults && "bg-linear-to-br from-[#141418] to-[#0d0d10]",
-            selected
+            isActiveNode
               ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
               : isSourceHighlighted
                 ? "border-[#B43FEB]/65 shadow-[0_0_18px_rgba(180,63,235,0.28),0_0_36px_rgba(180,63,235,0.12)] ring-1 ring-[#B43FEB]/20"
@@ -227,7 +232,7 @@ const NewVideoNode = ({
         >
           <NodeNameBadge
             icon={<IconVideo size={14} />}
-            selected={selected}
+            selected={isActiveNode}
             isEditing={isRenaming}
             onEditStart={handleRenameStart}
             onEditEnd={() => setIsRenaming(false)}
@@ -236,7 +241,7 @@ const NewVideoNode = ({
             {badgeLabel}
           </NodeNameBadge>
 
-          {selected && !isDragging && (
+          {isActiveNode && !isDragging && (
             <>
               <div className="absolute -top-px -left-px w-4 h-4 border-l-2 border-t-2 border-[#B43FEB] rounded-tl-xl" />
               <div className="absolute -top-px -right-px w-4 h-4 border-r-2 border-t-2 border-[#B43FEB] rounded-tr-xl" />
@@ -265,6 +270,8 @@ const NewVideoNode = ({
               nodeId={id}
               updateNewVideoNodeData={updateNewVideoNodeData}
               onGalleryExpandedChange={setIsGalleryExpanded}
+              isNodeSelected={isActiveNode}
+              forcePosterOnly={hasActiveVideoTool}
               frameSize={contentFrameSize}
             />
           </div>

@@ -1,5 +1,14 @@
 import type { NewVideoGenerationNode } from "shared/types/flow";
 
+type VideoUrlItem = {
+  url?: string;
+  remoteUrl?: string;
+  displayUrl?: string;
+  localPath?: string;
+  localName?: string;
+  format?: string;
+};
+
 /**
  * 从新版视频节点结果中提取 URL 列表。
  * 支持多种数据来源：
@@ -30,6 +39,36 @@ export const getVideoUrlsFromNodeData = (
   if (legacyUrl) allUrls.push(legacyUrl);
 
   return Array.from(new Set(allUrls));
+};
+
+export const getVideoItemsFromNodeData = (
+  data?: Partial<NewVideoGenerationNode> | null,
+): VideoUrlItem[] => {
+  if (!data) {
+    return [];
+  }
+
+  const resultItems = (data.result?.data ?? []).filter((item) => item?.url);
+  const metadataUrl = (data.metadata as Record<string, unknown>)?.url as
+    | string
+    | undefined;
+  const legacyUrl = (data as Record<string, unknown>)?.video_url as
+    | string
+    | undefined;
+
+  const items: VideoUrlItem[] = [...resultItems];
+  if (metadataUrl) items.push({ url: metadataUrl, remoteUrl: metadataUrl });
+  if (legacyUrl) items.push({ url: legacyUrl, remoteUrl: legacyUrl });
+
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = item.remoteUrl || item.url || item.displayUrl || "";
+    if (!key || seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 };
 
 /**

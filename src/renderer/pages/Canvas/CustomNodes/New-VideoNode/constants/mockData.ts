@@ -21,5 +21,6 @@ export interface MentionItem {
   thumbnail: string;
   url?: string;
   mentionId?: string;
+  preserveLabel?: boolean;
   type: "image" | "video" | "audio";
 }

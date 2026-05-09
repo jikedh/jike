@@ -104,6 +104,7 @@ import {
 import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
 import { toChineseNumber } from "shared/utils/utils";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
+import { withVideoPosterFields } from "shared/utils/videoPoster";
 import { toast } from "sonner";
 import { create } from "zustand";
 import {
@@ -159,17 +160,86 @@ const normalizeCanvasGroups = (
 
   const existingNodeIds = new Set(nodes.map((node) => node.id));
   return groups
-    .map((group) => ({
-      ...group,
-      name: group.name,
-      nodeIds: normalizeGroupNodeIds(group.nodeIds, existingNodeIds),
-      gridLayoutOrder: group.gridLayoutOrder
-        ? normalizeGroupNodeIds(group.gridLayoutOrder, existingNodeIds)
-        : group.gridLayoutOrder,
-      layoutOrigin: group.layoutOrigin,
-      frame: group.frame,
-    }))
+    .map((group) => {
+      const nodeIds = normalizeGroupNodeIds(group.nodeIds, existingNodeIds);
+      const frame = group.frame ?? getGroupBounds(nodes, nodeIds, 24);
+
+      return {
+        ...group,
+        name: group.name,
+        nodeIds,
+        gridLayoutOrder: group.gridLayoutOrder
+          ? normalizeGroupNodeIds(group.gridLayoutOrder, existingNodeIds)
+          : group.gridLayoutOrder,
+        layoutOrigin:
+          group.layoutOrigin ??
+          (frame
+            ? {
+                x: frame.x,
+                y: frame.y,
+              }
+            : undefined),
+        frame: frame ?? undefined,
+      };
+    })
     .filter((group) => group.nodeIds.length > 0 || Boolean(group.frame));
+};
+
+type NewVideoResultItem = NonNullable<NewVideoGenerationNode["result"]>[
+  "data"
+][number];
+
+const normalizeVideoResultItemForPersistence = (item: NewVideoResultItem) => {
+  const remoteUrl = getRemoteMediaUrl(item);
+
+  return withVideoPosterFields({
+    ...item,
+    ...(remoteUrl ? { url: remoteUrl } : {}),
+    ...(remoteUrl ? { remoteUrl } : {}),
+  });
+};
+
+export const normalizeCanvasNodesForPersistence = (
+  nodes: AllNodeType[],
+): AllNodeType[] =>
+  nodes.map((node) => {
+    if (node.type !== "newVideoNode" || !node.data.result?.data) {
+      return node;
+    }
+
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        result: {
+          ...node.data.result,
+          data: node.data.result.data.map(
+            normalizeVideoResultItemForPersistence,
+          ),
+        },
+      },
+    };
+  });
+
+export const buildCanvasPersistedState = ({
+  nodes,
+  edges,
+  groups,
+  nodeIdCounters,
+}: Pick<
+  CanvasPersistedState,
+  "nodes" | "edges" | "groups" | "nodeIdCounters"
+>): CanvasPersistedState => {
+  const persistedNodes = normalizeCanvasNodesForPersistence(nodes);
+
+  return {
+    version: CANVAS_STORAGE_VERSION,
+    savedAt: Date.now(),
+    nodes: persistedNodes,
+    edges,
+    groups: normalizeCanvasGroups(groups, persistedNodes),
+    nodeIdCounters,
+  };
 };
 
 const removeNodeIdsFromGroups = (
@@ -639,6 +709,7 @@ const pollImageGeneration = async (
   ) => void,
   getState: () => CanvasFlowStoreType,
   totalTaskCount: number,
+  ledgerBizId?: string,
 ) => {
   const startTime = Date.now();
 
@@ -696,6 +767,9 @@ const pollImageGeneration = async (
           toast.warning(
             `已生成 ${partialSuccessCount} 张图片，${partialFailedCount} 张失败`,
           );
+        }
+        if (ledgerBizId) {
+          refundDesktopProxyScore(ledgerBizId, "image generation timeout", "image").catch(() => { });
         }
         return;
       }
@@ -834,6 +908,10 @@ const pollImageGeneration = async (
           pendingTaskCounts.delete(nodeId);
         }
 
+        if (ledgerBizId) {
+          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
+        }
+
         await refreshBalanceAfterGeneration({
           scene: "image",
           nodeId,
@@ -910,6 +988,9 @@ const pollImageGeneration = async (
         if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
           pendingTaskCounts.delete(nodeId);
         }
+        if (ledgerBizId) {
+          refundDesktopProxyScore(ledgerBizId, "image generation failed", "image").catch(() => { });
+        }
         return;
       }
 
@@ -949,6 +1030,9 @@ const pollImageGeneration = async (
     if (useChatSettingsStore.getState().autoSaveEnabled) {
       getState().saveGraph();
     }
+    if (ledgerBizId) {
+      refundDesktopProxyScore(ledgerBizId, "image poll error", "image").catch(() => { });
+    }
   }
 };
 
@@ -964,6 +1048,7 @@ const pollMjImageGeneration = async (
   ) => void,
   getState: () => CanvasFlowStoreType,
   totalTaskCount: number,
+  ledgerBizId?: string,
 ) => {
   const startTime = Date.now();
   try {
@@ -1020,6 +1105,9 @@ const pollMjImageGeneration = async (
           toast.warning(
             `已生成 ${partialSuccessCount} 张图片，${partialFailedCount} 张失败`,
           );
+        }
+        if (ledgerBizId) {
+          refundDesktopProxyScore(ledgerBizId, "midjourney image generation timeout", "image").catch(() => { });
         }
         return;
       }
@@ -1127,6 +1215,10 @@ const pollMjImageGeneration = async (
           pendingTaskCounts.delete(nodeId);
         }
 
+        if (ledgerBizId) {
+          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
+        }
+
         await refreshBalanceAfterGeneration({
           scene: "image",
           nodeId,
@@ -1196,6 +1288,9 @@ const pollMjImageGeneration = async (
         if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
           pendingTaskCounts.delete(nodeId);
         }
+        if (ledgerBizId) {
+          refundDesktopProxyScore(ledgerBizId, "midjourney image generation failed", "image").catch(() => { });
+        }
         return;
       }
 
@@ -1231,6 +1326,9 @@ const pollMjImageGeneration = async (
     saveCurrentCanvasToHistory();
     if (useChatSettingsStore.getState().autoSaveEnabled) {
       getState().saveGraph();
+    }
+    if (ledgerBizId) {
+      refundDesktopProxyScore(ledgerBizId, "midjourney image poll error", "image").catch(() => { });
     }
   }
 };
@@ -1387,12 +1485,13 @@ const pollVideoTaskGeneration = async (
               }
             }
 
-            return {
+            return withVideoPosterFields({
               ...item,
               url: ossUrl,
+              remoteUrl: ossUrl,
               localName,
               localPath,
-            };
+            });
           }),
         );
 
@@ -1670,12 +1769,13 @@ const pollNewVideoGeneration = async ({
               }
             }
 
-            return {
+            return withVideoPosterFields({
               ...item,
               url: ossUrl,
+              remoteUrl: ossUrl,
               localName,
               localPath,
-            };
+            });
           }),
         );
 
@@ -2026,6 +2126,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     historyResetTrigger: 0,
     // 选中节点数量初始化（用于避免 O(n²) 遍历）
     selectedNodesCount: 0,
+    activeNodeId: null,
+    activeVideoTool: null,
     isSelectionBoxActive: false,
     groups: [],
     selectedGroupId: null,
@@ -2042,6 +2144,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     setPanoramaViewer: (panoramaViewer) => set({ panoramaViewer }),
     setAnnotationWorkspace: (annotationWorkspace) =>
       set({ annotationWorkspace }),
+    setActiveNodeId: (activeNodeId) => set({ activeNodeId }),
+    setActiveVideoTool: (activeVideoTool) => set({ activeVideoTool }),
     setSelectionBoxActive: (isSelectionBoxActive) => {
       if (get().isSelectionBoxActive !== isSelectionBoxActive) {
         set({ isSelectionBoxActive });
@@ -2115,6 +2219,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           hydrated: true,
           historyResetTrigger: get().historyResetTrigger + 1,
           groups: [],
+          activeNodeId: null,
+          activeVideoTool: null,
           selectedGroupId: null,
         });
         get().requestHistorySave();
@@ -2138,10 +2244,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         return node;
       });
+      const persistedReadyNodes =
+        normalizeCanvasNodesForPersistence(processedNodes);
 
       set({
         projectId,
-        nodes: processedNodes,
+        nodes: persistedReadyNodes,
         edges: data.edges,
         highlightedEdgeIds: [],
         highlightedSourceNodeIds: [],
@@ -2149,7 +2257,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         nodeIdCounters: data.nodeIdCounters,
         hydrated: true,
         historyResetTrigger: get().historyResetTrigger + 1,
-        groups: normalizeCanvasGroups(data.groups, processedNodes),
+        groups: normalizeCanvasGroups(data.groups, persistedReadyNodes),
+        activeNodeId: null,
+        activeVideoTool: null,
         selectedGroupId: null,
       });
       get().requestHistorySave();
@@ -2162,14 +2272,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const state = get();
       if (!state.projectId) return;
 
-      const data: CanvasPersistedState = {
-        version: CANVAS_STORAGE_VERSION,
-        savedAt: Date.now(),
-        nodes: state.nodes,
-        edges: state.edges,
-        groups: normalizeCanvasGroups(state.groups, state.nodes),
-        nodeIdCounters: state.nodeIdCounters,
-      };
+      const data = buildCanvasPersistedState(state);
       const storageKey = getCanvasDataKey(state.projectId);
       localStorage.setItem(storageKey, JSON.stringify(data));
 
@@ -2198,7 +2301,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const storageKey = getCanvasDataKey(state.projectId);
         const raw = localStorage.getItem(storageKey);
         if (!raw) {
-          set({ nodes: [], edges: [], groups: [], selectedGroupId: null });
+          set({
+            nodes: [],
+            edges: [],
+            groups: [],
+            activeNodeId: null,
+            activeVideoTool: null,
+            selectedGroupId: null,
+          });
           return;
         }
 
@@ -2207,19 +2317,37 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           data.version !== CANVAS_STORAGE_VERSION &&
           data.version !== LEGACY_CANVAS_STORAGE_VERSION
         ) {
-          set({ nodes: [], edges: [], groups: [], selectedGroupId: null });
+          set({
+            nodes: [],
+            edges: [],
+            groups: [],
+            activeNodeId: null,
+            activeVideoTool: null,
+            selectedGroupId: null,
+          });
           return;
         }
 
+        const persistedReadyNodes = normalizeCanvasNodesForPersistence(data.nodes);
+
         set({
-          nodes: data.nodes,
+          nodes: persistedReadyNodes,
           edges: data.edges,
           nodeIdCounters: data.nodeIdCounters,
-          groups: normalizeCanvasGroups(data.groups, data.nodes),
+          groups: normalizeCanvasGroups(data.groups, persistedReadyNodes),
+          activeNodeId: null,
+          activeVideoTool: null,
           selectedGroupId: null,
         });
       } catch {
-        set({ nodes: [], edges: [], groups: [], selectedGroupId: null });
+        set({
+          nodes: [],
+          edges: [],
+          groups: [],
+          activeNodeId: null,
+          activeVideoTool: null,
+          selectedGroupId: null,
+        });
       }
     },
 
@@ -2242,6 +2370,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         highlightedSourceNodeIds: [],
         referenceHoverRefCounts: {},
         groups: [],
+        activeNodeId: null,
+        activeVideoTool: null,
         selectedGroupId: null,
         nodeIdCounters: {
           note: 1,
@@ -2627,6 +2757,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             y: layoutBounds.y,
           }
           : undefined,
+        frame: layoutBounds ?? undefined,
       };
 
       set((current) => ({
@@ -3032,9 +3163,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       // 判断是否为 Midjourney 模型
       const isMidjourney = payload.model === "midjourney";
+      const scoreCost = Number(payload.requiredPoints ?? 0) || undefined;
 
       try {
         let taskId: string;
+        let ledgerBizId: string | undefined;
 
         if (isMidjourney) {
           const finalPrompt = buildMidjourneyPrompt({
@@ -3046,17 +3179,22 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           });
 
           // Midjourney 模型使用 zeakai API
-          const response = await submitMjImagine({ prompt: finalPrompt });
+          const response = await submitMjImagine({ prompt: finalPrompt }, scoreCost);
+          ledgerBizId = response?.ledgerBizId;
 
           // code === 1 表示提交成功
           if (response.code !== 1) {
+            if (ledgerBizId) {
+              refundDesktopProxyScore(ledgerBizId, response.description || "midjourney task creation failed", "image").catch(() => { });
+            }
             throw new Error(response.description || "Midjourney 任务提交失败");
           }
 
           taskId = response.result;
         } else {
           // 非 Midjourney 模型：创建图片生成任务，获取 task_id 后启动轮询
-          const response: any = await createImageGeneration(payload);
+          const response: any = await createImageGeneration(payload, scoreCost);
+          ledgerBizId = response?.ledgerBizId;
 
           // 从响应中提取 task_id（兼容多种返回结构）
           taskId =
@@ -3071,11 +3209,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             response?.id;
 
           if (!taskId) {
+            if (ledgerBizId) {
+              refundDesktopProxyScore(ledgerBizId, "image task creation failed: no task_id", "image").catch(() => { });
+            }
             throw new Error("未返回任务 ID，请稍后再试");
           }
         }
 
         if (!taskId) {
+          if (ledgerBizId) {
+            refundDesktopProxyScore(ledgerBizId, "image task creation failed: empty task_id", "image").catch(() => { });
+          }
           throw new Error("任务 ID 为空");
         }
 
@@ -3101,6 +3245,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             set,
             get,
             totalTaskCount,
+            ledgerBizId,
           );
         } else {
           // 非 Midjourney 模型使用标准轮询
@@ -3111,6 +3256,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             set,
             get,
             totalTaskCount,
+            ledgerBizId,
           );
         }
       } catch (startError) {
@@ -3193,6 +3339,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         resolution,
       });
       const ximuImageModel = resolveXimuImageModel(originalModel);
+      const scoreCost = Number(requiredPoints ?? 0) || undefined;
+      let ledgerBizId: string | undefined;
 
       // 更新节点状态为排队中
       set((state) => ({
@@ -3528,7 +3676,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const response: GeminiYwResponseBody = await generateGeminiContent(
           directGeminiModel,
           requestBody,
+          undefined,
+          scoreCost,
         );
+        ledgerBizId = (response as any)?.ledgerBizId;
 
         // 4. 解析响应，提取图片 Base64
         const candidates = response.candidates ?? [];
@@ -3588,6 +3739,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           get().saveGraph();
         }
 
+        if (ledgerBizId) {
+          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
+        }
+
         await refreshBalanceAfterGeneration({
           scene: "image",
           nodeId,
@@ -3619,6 +3774,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         saveCurrentCanvasToHistory();
         if (useChatSettingsStore.getState().autoSaveEnabled) {
           get().saveGraph();
+        }
+        if (ledgerBizId) {
+          refundDesktopProxyScore(ledgerBizId, rawServerMessage || "gemini image generation failed", "image").catch(() => { });
         }
         throw startError;
       }
@@ -4184,6 +4342,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             const copiedUrl = await copyVideoUrlToOss(videoUrl);
             if (copiedUrl) {
               resultItem.url = copiedUrl;
+              resultItem.remoteUrl = copiedUrl;
             }
           } catch (copyError) {
             console.error(
@@ -4191,6 +4350,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               copyError,
             );
           }
+          resultItem = withVideoPosterFields(resultItem);
 
           set((state) => ({
             nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
@@ -4418,25 +4578,22 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      */
     exportCanvasData: () => {
       const state = get();
-      return {
-        version: CANVAS_STORAGE_VERSION,
-        savedAt: Date.now(),
-        nodes: state.nodes,
-        edges: state.edges,
-        groups: normalizeCanvasGroups(state.groups, state.nodes),
-        nodeIdCounters: state.nodeIdCounters,
-      };
+      return buildCanvasPersistedState(state);
     },
 
     /**
      * 导入画布数据（覆盖模式）
      */
     importCanvasData: (data) => {
+      const normalizedData = buildCanvasPersistedState(data);
+
       set({
-        nodes: data.nodes,
-        edges: data.edges,
-        nodeIdCounters: data.nodeIdCounters,
-        groups: normalizeCanvasGroups(data.groups, data.nodes),
+        nodes: normalizedData.nodes,
+        edges: normalizedData.edges,
+        nodeIdCounters: normalizedData.nodeIdCounters,
+        groups: normalizedData.groups,
+        activeNodeId: null,
+        activeVideoTool: null,
         selectedGroupId: null,
       });
     },

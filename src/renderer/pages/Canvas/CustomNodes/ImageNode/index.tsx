@@ -113,6 +113,7 @@ export const ImageNode = memo(
     const highlightedSourceNodeIds = useCanvasFlowStore(
       (state) => state.highlightedSourceNodeIds,
     );
+    const activeNodeId = useCanvasFlowStore((state) => state.activeNodeId);
     // 从 store 直接读取选中节点数量，避免 O(n²) 遍历
     const selectedNodesCount = useCanvasFlowStore(
       (state) => state.selectedNodesCount,
@@ -136,6 +137,7 @@ export const ImageNode = memo(
 
     const isAnnotationMode = annotationWorkspace.open;
     const isAnnotationTarget = annotationWorkspace.sourceNodeId === id;
+    const isActiveNode = activeNodeId === id && selected;
 
     // 使用 useMemo 缓存样式类名，避免每次渲染都重新拼接字符串
     useEffect(() => {
@@ -157,22 +159,22 @@ export const ImageNode = memo(
       () =>
         isGalleryExpanded || isAnnotationMode
           ? "invisible opacity-0"
-          : selected
+          : isActiveNode
             ? "visible opacity-100"
             : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100",
-      [isAnnotationMode, isGalleryExpanded, selected],
+      [isActiveNode, isAnnotationMode, isGalleryExpanded],
     );
 
     // 使用 useMemo 缓存工具栏显示条件，避免每次渲染都重新计算
     const shouldShowToolbar = useMemo(
       () =>
-        selected &&
+        isActiveNode &&
         !isDragging &&
         isDragUiSettled &&
         selectedNodesCount <= 1 &&
         !isAnnotationMode,
       [
-        selected,
+        isActiveNode,
         isDragging,
         isDragUiSettled,
         isAnnotationMode,
@@ -257,10 +259,10 @@ export const ImageNode = memo(
     }, [confirmDeleteIfNeeded, deleteNode, id]);
 
     const handleRenameStart = useCallback(() => {
-      if (selected) {
+      if (isActiveNode) {
         setIsRenaming(true);
       }
-    }, [selected]);
+    }, [isActiveNode]);
 
     const handleRename = useCallback(
       (name: string) => {
@@ -819,7 +821,7 @@ export const ImageNode = memo(
                   "bg-linear-to-br from-[#141418] to-[#0d0d10]",
                 isAnnotationMode
                   ? "border-transparent shadow-none ring-0"
-                  : selected
+                  : isActiveNode
                     ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
                     : isSourceHighlighted
                       ? "border-[#B43FEB]/65 shadow-[0_0_18px_rgba(180,63,235,0.28),0_0_36px_rgba(180,63,235,0.12)] ring-1 ring-[#B43FEB]/20"
@@ -828,7 +830,7 @@ export const ImageNode = memo(
             >
               <NodeNameBadge
                 icon={<IconPhoto size={14} />}
-                selected={selected}
+                selected={isActiveNode}
                 isEditing={isRenaming}
                 onEditStart={handleRenameStart}
                 onEditEnd={() => setIsRenaming(false)}
@@ -856,7 +858,7 @@ export const ImageNode = memo(
               />
 
               {/* 选中状态角落装饰 */}
-              {selected && !isDragging && !isAnnotationMode && (
+              {isActiveNode && !isDragging && !isAnnotationMode && (
                 <>
                   <div className="absolute -top-px -left-px w-4 h-4 border-l-2 border-t-2 border-[#B43FEB] rounded-tl-xl" />
                   <div className="absolute -top-px -right-px w-4 h-4 border-r-2 border-t-2 border-[#B43FEB] rounded-tr-xl" />
@@ -891,6 +893,7 @@ export const ImageNode = memo(
                   nodeId={id}
                   updateImageNodeData={updateImageNodeData}
                   onGalleryExpandedChange={setIsGalleryExpanded}
+                  isNodeActive={isActiveNode}
                   frameSize={{
                     width: nodeSize.width,
                     height: nodeSize.height,

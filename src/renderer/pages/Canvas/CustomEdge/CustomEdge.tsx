@@ -32,7 +32,14 @@ const SELECTED_EDGE_GLASS_STYLE = {
 };
 
 const EDGE_CUT_BUTTON_ANIMATION_MS = 220;
+const EDGE_HOVER_ACTIVATION_MS = 300;
 const EDGE_HOVER_GRACE_MS = 800;
+
+const isSpacePanActive = () => {
+  return document
+    .querySelector(".react-flow")
+    ?.hasAttribute("data-space-pressed");
+};
 
 const CustomEdgeComponent = (props: EdgeProps) => {
   const [edgePath] = getBezierPath(props);
@@ -41,31 +48,29 @@ const CustomEdgeComponent = (props: EdgeProps) => {
   const [toolbarVisible, setToolbarVisible] = useState(false);
   const [showCutButton, setShowCutButton] = useState(false);
   const [cutButtonPosition, setCutButtonPosition] = useState({ x: 0, y: 0 });
+  const hoverActivationTimerRef = useRef<number | null>(null);
   const hideTimerRef = useRef<number | null>(null);
   const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge);
   const isHighlighted = useCanvasFlowStore((state) =>
     state.highlightedEdgeIds.includes(props.id),
   );
-  const isConnectedToSelectedNode = useCanvasFlowStore((state) =>
-    state.nodes.some(
-      (node) =>
-        node.selected && (node.id === props.source || node.id === props.target),
-    ),
+  const isConnectedToActiveNode = useCanvasFlowStore(
+    (state) =>
+      Boolean(state.activeNodeId) &&
+      (state.activeNodeId === props.source || state.activeNodeId === props.target),
   );
   const edgeAnimationEnabled = useChatSettingsStore(
     (state) => state.edgeAnimationEnabled,
   );
   const edgeStyle = useMemo(() => {
-    const isActive = isConnectedToSelectedNode || isHovered;
+    const isActive = isConnectedToActiveNode || isHovered;
 
     if (!isHighlighted) {
       return {
         ...(props.style ?? {}),
         ...DEFAULT_EDGE_STYLE,
         stroke: isActive ? "#B43FEB" : DEFAULT_EDGE_STYLE.stroke,
-        strokeWidth: isActive
-          ? 1.35
-          : DEFAULT_EDGE_STYLE.strokeWidth,
+        strokeWidth: isActive ? 1.35 : DEFAULT_EDGE_STYLE.strokeWidth,
         opacity: isActive ? 0.66 : undefined,
       };
     }
@@ -80,20 +85,39 @@ const CustomEdgeComponent = (props: EdgeProps) => {
       animation: "reference-edge-dash 1.2s linear infinite",
       filter: "drop-shadow(0 0 8px rgba(180,63,235,0.85))",
     };
-  }, [isConnectedToSelectedNode, isHighlighted, isHovered, props.style]);
+  }, [isConnectedToActiveNode, isHighlighted, isHovered, props.style]);
 
-  const handleHoverStart = useCallback((event?: React.PointerEvent) => {
-    setIsHovered(true);
+  const clearHoverActivationTimer = useCallback(() => {
+    if (hoverActivationTimerRef.current !== null) {
+      window.clearTimeout(hoverActivationTimerRef.current);
+      hoverActivationTimerRef.current = null;
+    }
+  }, []);
 
+  const handleHoverStart = useCallback(() => {
     if (hideTimerRef.current !== null) {
       window.clearTimeout(hideTimerRef.current);
       hideTimerRef.current = null;
     }
-  }, []);
+
+    if (isHovered || hoverActivationTimerRef.current !== null) {
+      return;
+    }
+
+    hoverActivationTimerRef.current = window.setTimeout(() => {
+      hoverActivationTimerRef.current = null;
+      setIsHovered(true);
+    }, EDGE_HOVER_ACTIVATION_MS);
+  }, [isHovered]);
 
   const handleEdgeClick = useCallback(
     (event: React.PointerEvent<SVGPathElement>) => {
+      if (event.button !== 0 || isSpacePanActive()) {
+        return;
+      }
+
       event.stopPropagation();
+      clearHoverActivationTimer();
 
       const position = screenToFlowPosition({
         x: event.clientX,
@@ -104,22 +128,27 @@ const CustomEdgeComponent = (props: EdgeProps) => {
       setToolbarVisible(true);
       setShowCutButton(true);
     },
-    [screenToFlowPosition],
+    [clearHoverActivationTimer, screenToFlowPosition],
   );
 
   const handleHoverEnd = useCallback(() => {
+    clearHoverActivationTimer();
+
     if (hideTimerRef.current !== null) {
       window.clearTimeout(hideTimerRef.current);
     }
 
+    setIsHovered(false);
     setShowCutButton(false);
 
-    hideTimerRef.current = window.setTimeout(() => {
-      setIsHovered(false);
-      setToolbarVisible(false);
-      hideTimerRef.current = null;
-    }, Math.max(EDGE_HOVER_GRACE_MS, EDGE_CUT_BUTTON_ANIMATION_MS));
-  }, []);
+    hideTimerRef.current = window.setTimeout(
+      () => {
+        setToolbarVisible(false);
+        hideTimerRef.current = null;
+      },
+      Math.max(EDGE_HOVER_GRACE_MS, EDGE_CUT_BUTTON_ANIMATION_MS),
+    );
+  }, [clearHoverActivationTimer]);
 
   const handleCutButtonEnter = useCallback(() => {
     if (hideTimerRef.current !== null) {
@@ -134,13 +163,14 @@ const CustomEdgeComponent = (props: EdgeProps) => {
 
   useEffect(() => {
     return () => {
+      clearHoverActivationTimer();
       if (hideTimerRef.current !== null) {
         window.clearTimeout(hideTimerRef.current);
       }
     };
-  }, []);
+  }, [clearHoverActivationTimer]);
 
-  const isFlowing = isHighlighted || isConnectedToSelectedNode || isHovered;
+  const isFlowing = isHighlighted || isConnectedToActiveNode || isHovered;
 
   return (
     <>
@@ -178,7 +208,7 @@ const CustomEdgeComponent = (props: EdgeProps) => {
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={22}
-        className="cursor-pointer"
+        data-canvas-edge-hitbox="true"
         onPointerEnter={handleHoverStart}
         onPointerLeave={handleHoverEnd}
         onPointerDown={handleEdgeClick}

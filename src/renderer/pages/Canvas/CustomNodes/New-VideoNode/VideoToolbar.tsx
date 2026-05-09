@@ -14,6 +14,7 @@ import {
 import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
+import { readMediaFromLocal } from "service/projectStorage";
 import { GenerationStatus } from "shared/constants/enum";
 import { normalizeRequiredPoints } from "shared/constants/points";
 import type { NewVideoGenerationNode } from "shared/types/flow";
@@ -21,6 +22,7 @@ import { formatDuration } from "shared/utils/getVideoDuration";
 import { appendMediaSequences } from "shared/utils/mediaSequence";
 import { createPresignedOssUploadTarget } from "shared/utils/presignedOssUploader";
 import { cn, downloadImageFromUrl } from "shared/utils/utils";
+import { withVideoPosterFields } from "shared/utils/videoPoster";
 import { toast } from "sonner";
 import Lightbox from "yet-another-react-lightbox";
 import Download from "yet-another-react-lightbox/plugins/download";
@@ -48,7 +50,10 @@ import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useUserStore } from "@/stores/useUserStore";
 import { getAspectRatioFromMediaFile } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { useVideoFrameCapture } from "./hooks/useVideoFrameCapture";
-import { getVideoUrlsFromNodeData } from "./utils/video-url";
+import {
+  getVideoItemsFromNodeData,
+  getVideoUrlsFromNodeData,
+} from "./utils/video-url";
 import {
   saveToolMediaFileToProject,
   saveToolMediaUrlToProject,
@@ -695,7 +700,7 @@ const VideoSubtitleRemovalPanel = ({
                   videoClassName="h-full w-full object-contain"
                   showDefaultControls={false}
                   playsInline
-                  preload="auto"
+                  preload="metadata"
                   onLoadedMetadata={(event) => {
                     const w = event.currentTarget.videoWidth || 0;
                     const h = event.currentTarget.videoHeight || 0;
@@ -912,13 +917,18 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   const [isTrimmingVideo, setIsTrimmingVideo] = useState(false);
   const [isSubtitlePanelOpen, setIsSubtitlePanelOpen] = useState(false);
   const [isSubmittingSubtitle, setIsSubmittingSubtitle] = useState(false);
+  const [previewVideoUrls, setPreviewVideoUrls] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const previewObjectUrlsRef = useRef<string[]>([]);
 
   const addNode = useCanvasFlowStore((state) => state.addNode);
   const projectId = useCanvasFlowStore((state) => state.projectId);
   const onConnect = useCanvasFlowStore((state) => state.onConnect);
   const updateNewVideoNodeData = useCanvasFlowStore(
     (state) => state.updateNewVideoNodeData,
+  );
+  const setActiveVideoTool = useCanvasFlowStore(
+    (state) => state.setActiveVideoTool,
   );
 
   const {
@@ -930,6 +940,9 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
   const videoUrls = useMemo(() => {
     return getVideoUrlsFromNodeData(data);
+  }, [data]);
+  const videoItems = useMemo(() => {
+    return getVideoItemsFromNodeData(data);
   }, [data]);
   const currentVideoUrl = videoUrls[0];
 
@@ -949,6 +962,56 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
     ],
     [],
   );
+
+  const revokePreviewObjectUrls = useCallback(() => {
+    previewObjectUrlsRef.current.forEach((url) => {
+      URL.revokeObjectURL(url);
+    });
+    previewObjectUrlsRef.current = [];
+  }, []);
+
+  const buildPreviewVideoUrls = useCallback(async () => {
+    revokePreviewObjectUrls();
+
+    const urls = await Promise.all(
+      videoItems.map(async (item) => {
+        if (!item.localPath) {
+          return item.displayUrl || item.remoteUrl || item.url || "";
+        }
+
+        try {
+          const bytes = await readMediaFromLocal(item.localPath);
+          if (!bytes) {
+            return item.displayUrl || item.remoteUrl || item.url || "";
+          }
+
+          const ext = (item.localName || item.localPath)
+            .split("?")[0]
+            .split(".")
+            .pop();
+          const objectUrl = URL.createObjectURL(
+            new Blob([bytes], {
+              type: `video/${ext || item.format || "mp4"}`,
+            }),
+          );
+          previewObjectUrlsRef.current.push(objectUrl);
+          return objectUrl;
+        } catch (error) {
+          console.warn("[视频预览] 读取本地视频失败，使用远程地址:", error);
+          return item.displayUrl || item.remoteUrl || item.url || "";
+        }
+      }),
+    );
+
+    return urls.filter((url): url is string => Boolean(url));
+  }, [revokePreviewObjectUrls, videoItems]);
+
+  useEffect(() => {
+    return () => {
+      revokePreviewObjectUrls();
+      setActiveVideoTool(null);
+    };
+  }, [revokePreviewObjectUrls, setActiveVideoTool]);
 
   // 触发文件选择
   const handleUploadClick = () => {
@@ -976,7 +1039,11 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       const currentData = data.result?.data ?? [];
       const resultItem = await saveToolMediaFileToProject(
         projectId,
-        { url: uploadedUrl, remoteUrl: uploadedUrl, format: fileExt },
+        withVideoPosterFields({
+          url: uploadedUrl,
+          remoteUrl: uploadedUrl,
+          format: fileExt,
+        }),
         file,
         "video",
         fileExt,
@@ -1021,6 +1088,8 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         toast.info("暂无可预览视频");
         return;
       }
+      setActiveVideoTool({ nodeId, tool: "preview" });
+      setPreviewVideoUrls(await buildPreviewVideoUrls());
       setIsLightboxOpen(true);
       return;
     }
@@ -1051,6 +1120,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         toast.info("暂无可用视频");
         return;
       }
+      setActiveVideoTool({ nodeId, tool: "snapshot" });
       setIsSnapshotPanelOpen(true);
       return;
     }
@@ -1060,6 +1130,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         toast.info("暂无可裁剪视频");
         return;
       }
+      setActiveVideoTool({ nodeId, tool: "trim" });
       setIsTrimPanelOpen(true);
       return;
     }
@@ -1078,10 +1149,37 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         toast.info("暂无可用视频");
         return;
       }
+      setActiveVideoTool({ nodeId, tool: "removeCaptions" });
       setIsSubtitlePanelOpen(true);
       return;
     }
   };
+
+  const closeVideoTool = useCallback(() => {
+    setActiveVideoTool(null);
+  }, [setActiveVideoTool]);
+
+  const closeSnapshotPanel = useCallback(() => {
+    setIsSnapshotPanelOpen(false);
+    closeVideoTool();
+  }, [closeVideoTool]);
+
+  const closeSubtitlePanel = useCallback(() => {
+    setIsSubtitlePanelOpen(false);
+    closeVideoTool();
+  }, [closeVideoTool]);
+
+  const closeTrimPanel = useCallback(() => {
+    setIsTrimPanelOpen(false);
+    closeVideoTool();
+  }, [closeVideoTool]);
+
+  const closeLightbox = useCallback(() => {
+    setIsLightboxOpen(false);
+    revokePreviewObjectUrls();
+    setPreviewVideoUrls([]);
+    closeVideoTool();
+  }, [closeVideoTool, revokePreviewObjectUrls]);
 
   const isPreviewActive = isLightboxOpen;
 
@@ -1126,11 +1224,11 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
         const resultItem = await saveToolMediaUrlToProject(
           projectId,
-          {
+          withVideoPosterFields({
             url: response.data.url,
             remoteUrl: response.data.url,
             format: response.data.format,
-          },
+          }),
           "video",
           response.data.format || "mp4",
         );
@@ -1220,7 +1318,11 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
             const resultItem = await saveToolMediaUrlToProject(
               projectId,
-              { url: publicUrl, remoteUrl: publicUrl, format: "mp4" },
+              withVideoPosterFields({
+                url: publicUrl,
+                remoteUrl: publicUrl,
+                format: "mp4",
+              }),
               "video",
               "mp4",
             );
@@ -1356,7 +1458,13 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             progress: 100,
             result: {
               type: "video",
-              data: [{ url: target.publicUrl, format: "mp4" }],
+              data: [
+                withVideoPosterFields({
+                  url: target.publicUrl,
+                  remoteUrl: target.publicUrl,
+                  format: "mp4",
+                }),
+              ],
             },
             error: undefined,
           } as any);
@@ -1455,7 +1563,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       {/* 截帧面板 */}
       <VideoSnapshotPanel
         open={isSnapshotPanelOpen}
-        onClose={() => setIsSnapshotPanelOpen(false)}
+        onClose={closeSnapshotPanel}
         videoUrl={currentVideoUrl || ""}
         onSnapshot={(timeMs) =>
           captureSnapshot(currentVideoUrl || "", timeMs, nodeId)
@@ -1466,7 +1574,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       {/* 去字幕面板 */}
       <VideoSubtitleRemovalPanel
         open={isSubtitlePanelOpen}
-        onClose={() => setIsSubtitlePanelOpen(false)}
+        onClose={closeSubtitlePanel}
         videoUrl={currentVideoUrl || ""}
         onSubmit={handleSubmitRemoveCaptions}
         isSubmitting={isSubmittingSubtitle}
@@ -1474,7 +1582,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
       <VideoTrimPanel
         open={isTrimPanelOpen}
-        onClose={() => setIsTrimPanelOpen(false)}
+        onClose={closeTrimPanel}
         videoUrl={currentVideoUrl || ""}
         onTrim={handleTrimVideo}
         isTrimming={isTrimmingVideo}
@@ -1483,16 +1591,16 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       {isLightboxOpen ? (
         <Lightbox
           open={isLightboxOpen}
-          close={() => {
-            setIsLightboxOpen(false);
-          }}
-          slides={videoUrls
+          close={closeLightbox}
+          slides={(previewVideoUrls.length > 0 ? previewVideoUrls : videoUrls)
             .filter((url): url is string => !!url)
             .map((url) => ({
               type: "video" as const,
               sources: [{ src: url, type: "video/mp4" }],
             }))}
           plugins={[Video, Fullscreen, Slideshow, Zoom, Share, Download]}
+          video={{ preload: "metadata" }}
+          carousel={{ preload: 0 }}
           zoom={{ maxZoomPixelRatio: 4, zoomInMultiplier: 2 }}
           controller={{ closeOnBackdropClick: true }}
         />

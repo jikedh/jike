@@ -12,6 +12,7 @@ type ImageContentProps = {
   nodeId?: string;
   updateImageNodeData?: (nodeId: string, patch: any) => void;
   onGalleryExpandedChange?: (expanded: boolean) => void;
+  isNodeActive?: boolean;
   frameSize?: {
     width: number;
     height: number;
@@ -34,6 +35,7 @@ export const ImageContent = memo(
     nodeId,
     updateImageNodeData,
     onGalleryExpandedChange,
+    isNodeActive = false,
     frameSize,
   }: ImageContentProps) => {
     // 结果图片列表（支持多张），保留原始对象结构用于排序
@@ -113,6 +115,7 @@ export const ImageContent = memo(
           nodeId={nodeId}
           updateImageNodeData={updateImageNodeData}
           onExpandedChange={onGalleryExpandedChange}
+          isNodeActive={isNodeActive}
           frameSize={frameSize}
         />
       );

@@ -108,6 +108,7 @@ type ReferenceSource =
   | {
     id?: string;
     mentionId?: string;
+    label?: string;
     url: string;
     thumbnail?: string;
   };
@@ -128,6 +129,7 @@ const normalizeReferenceSource = (
   return {
     id: item.id ?? fallbackId,
     mentionId: item.mentionId,
+    label: item.label?.trim(),
     url: item.url,
     thumbnail: item.thumbnail ?? item.url,
   };
@@ -150,6 +152,8 @@ const buildOrderedReferenceItems = (
         thumbnail: source.thumbnail,
         url: source.url,
         mentionId: source.mentionId,
+        preserveLabel: Boolean(source.label),
+        ...(source.label ? { label: source.label } : {}),
         type: "image" as const,
       };
     }),
@@ -165,6 +169,8 @@ const buildOrderedReferenceItems = (
         thumbnail: source.thumbnail,
         url: source.url,
         mentionId: source.mentionId,
+        preserveLabel: Boolean(source.label),
+        ...(source.label ? { label: source.label } : {}),
         type: "video" as const,
       };
     }),
@@ -180,6 +186,8 @@ const buildOrderedReferenceItems = (
         thumbnail: source.thumbnail,
         url: source.url,
         mentionId: source.mentionId,
+        preserveLabel: Boolean(source.label),
+        ...(source.label ? { label: source.label } : {}),
         type: "audio" as const,
       };
     }),
@@ -199,6 +207,10 @@ const relabelReferenceItemsByOrder = (items: MentionItem[]) => {
 
   return items.map((item) => {
     counters[item.type] += 1;
+    if (item.preserveLabel && item.label.trim()) {
+      return item;
+    }
+
     return {
       ...item,
       label: `${labelPrefix[item.type]}${counters[item.type]}`,
@@ -432,6 +444,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       ...parentImageNodes.map((item) => ({
         id: `parent-image-${item.id}`,
         mentionId: getVideoParentImageMentionId(item.id),
+        label: item.label,
         url: item.url,
         thumbnail: item.displayUrl ?? item.url,
       })),
@@ -464,6 +477,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       ...parentVideoNodes.map((item) => ({
         id: `parent-video-${item.id}`,
         mentionId: getVideoParentVideoMentionId(item.id),
+        label: item.label,
         url: item.url,
         thumbnail: item.url,
       })),
@@ -496,6 +510,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       ...parentAudioNodes.map((item) => ({
         id: `parent-audio-${item.id}`,
         mentionId: getVideoParentAudioMentionId(item.id),
+        label: item.label,
         url: item.url,
         thumbnail: "/audio-icon.svg",
       })),

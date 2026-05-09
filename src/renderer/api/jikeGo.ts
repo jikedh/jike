@@ -21,6 +21,8 @@ export type DesktopProxyPlatform =
   | "zeakai"
   | "yunwu";
 
+export type DesktopProxyScoreBizType = "image" | "video";
+
 export type DesktopProxyRequest = {
   platform: DesktopProxyPlatform;
   upstreamPath: string;
@@ -29,6 +31,11 @@ export type DesktopProxyRequest = {
   headers?: Record<string, string>;
   body?: any;
   scoreCost?: number;
+  scoreBizType?: DesktopProxyScoreBizType;
+  scoreModel?: string;
+  scoreSource?: string;
+  scoreSourceLabel?: string;
+  scoreTaskId?: string;
 };
 
 export type DesktopChatCompletionsRequest = {
@@ -95,12 +102,22 @@ export function createDesktopProxyTask(
 }
 
 // 确认积分扣减
-export function confirmDesktopProxyScore(ledgerBizId: string): any {
+export function confirmDesktopProxyScore(
+  ledgerBizId: string,
+  scoreBizType: DesktopProxyScoreBizType = "video",
+  meta?: {
+    scoreModel?: string;
+    scoreSource?: string;
+    scoreSourceLabel?: string;
+    scoreTaskId?: string;
+    generateTime?: number;
+  },
+): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/desktop/v1/ai/score/confirm",
     method: "post",
-    data: { ledgerBizId },
+    data: { ledgerBizId, scoreBizType, ...meta },
     headers: getJikeGoAiProxyHeaders(),
   });
 }
@@ -109,12 +126,19 @@ export function confirmDesktopProxyScore(ledgerBizId: string): any {
 export function refundDesktopProxyScore(
   ledgerBizId: string,
   reason?: string,
+  scoreBizType: DesktopProxyScoreBizType = "video",
+  meta?: {
+    scoreModel?: string;
+    scoreSource?: string;
+    scoreSourceLabel?: string;
+    scoreTaskId?: string;
+  },
 ): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/desktop/v1/ai/score/refund",
     method: "post",
-    data: { ledgerBizId, reason },
+    data: { ledgerBizId, reason, scoreBizType, ...meta },
     headers: getJikeGoAiProxyHeaders(),
   });
 }
@@ -226,6 +250,19 @@ export function getJikeGoScoreBalance(): any {
     baseURL: JIKE_GO_BASE_URL,
     url: "/v1/score/balance-info",
     method: "get",
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+export function getJikeGoScoreRecords(params?: {
+  page?: number;
+  pageSize?: number;
+}): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/score/records",
+    method: "get",
+    params,
     headers: getJikeGoAuthHeaders(),
   });
 }

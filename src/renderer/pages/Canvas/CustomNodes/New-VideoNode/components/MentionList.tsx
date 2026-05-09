@@ -1,5 +1,11 @@
 import { IconMusic, IconPhoto, IconVideo } from "@tabler/icons-react";
-import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 
 import { cn } from "shared/utils/utils";
 import type { MentionItem } from "../constants/mockData";
@@ -22,10 +28,18 @@ export interface MentionListHandle {
 export const MentionList = forwardRef<MentionListHandle, MentionListProps>(
   ({ items, command }, ref) => {
     const [selectedIndex, setSelectedIndex] = useState(0);
+    const selectedItemRef = useRef<HTMLButtonElement | null>(null);
 
     useEffect(() => {
       setSelectedIndex(0);
     }, [items]);
+
+    useEffect(() => {
+      selectedItemRef.current?.scrollIntoView({
+        block: "nearest",
+        inline: "nearest",
+      });
+    }, [selectedIndex, items.length]);
 
     useImperativeHandle(ref, () => ({
       onKeyDown: ({ event }: { event: KeyboardEvent }) => {
@@ -78,6 +92,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(
         {items.map((item, index) => (
           <button
             key={item.id}
+            ref={index === selectedIndex ? selectedItemRef : undefined}
             type="button"
             className={cn(
               "flex w-full cursor-pointer items-center gap-3 border-b border-neutral-800 px-3 py-2 text-left last:border-b-0",

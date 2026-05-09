@@ -26,6 +26,7 @@ type CollapsibleImageGalleryProps = {
   nodeId?: string;
   updateImageNodeData?: (nodeId: string, patch: any) => void;
   onExpandedChange?: (expanded: boolean) => void;
+  isNodeActive?: boolean;
   frameSize?: {
     width: number;
     height: number;
@@ -154,6 +155,7 @@ export const CollapsibleImageGallery = memo(
     nodeId,
     updateImageNodeData,
     onExpandedChange,
+    isNodeActive = false,
     frameSize,
   }: CollapsibleImageGalleryProps) => {
     // 默认折叠，仅展示封面
@@ -213,12 +215,21 @@ export const CollapsibleImageGallery = memo(
     // 切换折叠/展开
     const handleToggleExpanded = useCallback((e: any) => {
       e.stopPropagation();
+      if (!isNodeActive) {
+        return;
+      }
       setIsExpanded((prev) => !prev);
-    }, []);
+    }, [isNodeActive]);
 
     useEffect(() => {
       onExpandedChange?.(isExpanded);
     }, [isExpanded, onExpandedChange]);
+
+    useEffect(() => {
+      if (!isNodeActive && isExpanded) {
+        setIsExpanded(false);
+      }
+    }, [isExpanded, isNodeActive]);
 
     useEffect(() => {
       if (!isExpanded && hoveredIndex !== null) {
@@ -517,6 +528,7 @@ export const CollapsibleImageGallery = memo(
                     {isPrimary && totalCount > 1 && (
                       <button
                         type="button"
+                        disabled={!isNodeActive}
                         onClick={handleToggleExpanded}
                         onDoubleClick={(e) => e.stopPropagation()}
                         className="nodrag inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-white/12 bg-black/60 px-3 py-2 text-[11px] font-medium text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"

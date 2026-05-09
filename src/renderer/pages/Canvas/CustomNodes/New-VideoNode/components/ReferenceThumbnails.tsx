@@ -38,9 +38,11 @@ const TYPE_LABELS: Record<MentionItem["type"], string> = {
 };
 
 const MediaBadge = ({
+  label,
   type,
   index,
 }: {
+  label?: string;
   type: MentionItem["type"];
   index: number;
 }) => (
@@ -48,14 +50,24 @@ const MediaBadge = ({
     <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-black/65 px-1 text-[10px] font-medium text-white">
       {index + 1}
     </span>
-    <span className="rounded-full bg-black/55 px-1.5 py-0.5 text-[9px] font-medium leading-none text-white/85">
-      {TYPE_LABELS[type]}
+    <span
+      className="max-w-12 truncate rounded-full bg-black/55 px-1.5 py-0.5 text-[9px] font-medium leading-none text-white/85"
+      title={label || TYPE_LABELS[type]}
+    >
+      {label || TYPE_LABELS[type]}
     </span>
   </div>
 );
 
-const Placeholder = ({ type }: { type: "video" | "audio" }) => {
+const Placeholder = ({
+  type,
+  label,
+}: {
+  type: "video" | "audio";
+  label?: string;
+}) => {
   const Icon = type === "video" ? IconVideo : IconMusic;
+  const displayLabel = label?.trim() || TYPE_LABELS[type];
 
   return (
     <div
@@ -67,12 +79,17 @@ const Placeholder = ({ type }: { type: "video" | "audio" }) => {
       )}
     >
       <Icon size={18} stroke={1.8} />
-      <span className="text-[10px] font-medium">{TYPE_LABELS[type]}</span>
+      <span
+        className="max-w-full truncate px-1 text-[10px] font-medium"
+        title={displayLabel}
+      >
+        {displayLabel}
+      </span>
     </div>
   );
 };
 
-const VideoThumbnail = ({ url }: { url: string }) => {
+const VideoThumbnail = ({ url, label }: { url: string; label?: string }) => {
   const [thumbnail, setThumbnail] = useState<string | null>(null);
 
   useEffect(() => {
@@ -101,13 +118,13 @@ const VideoThumbnail = ({ url }: { url: string }) => {
   }, [url]);
 
   if (!thumbnail) {
-    return <Placeholder type="video" />;
+    return <Placeholder type="video" label={label} />;
   }
 
   return (
     <img
       src={thumbnail}
-      alt="视频"
+      alt={label || "视频"}
       className="h-full w-full object-cover"
       draggable={false}
       loading="lazy"
@@ -139,11 +156,11 @@ const ReferenceCard = ({
           </div>
         )
       ) : item.type === "video" ? (
-        <VideoThumbnail url={item.thumbnail} />
+        <VideoThumbnail url={item.thumbnail} label={item.label} />
       ) : (
-        <Placeholder type="audio" />
+        <Placeholder type="audio" label={item.label} />
       )}
-      <MediaBadge type={item.type} index={index} />
+      <MediaBadge label={item.label} type={item.type} index={index} />
     </div>
   );
 
