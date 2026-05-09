@@ -228,6 +228,10 @@ export async function createImageGeneration(
     body: data,
     scoreCost,
     scoreBizType: "image",
+    scoreModel: data.model,
+    scoreSource: "toapi",
+    // scoreSourceLabel: "ToAPI 图片生成",
+    scoreSourceLabel: data.model,
   });
 
   const rawData = unwrapDesktopProxyData(response);
@@ -429,6 +433,9 @@ export async function submitMjImagine(
     body: data,
     scoreCost,
     scoreBizType: "image",
+    scoreModel: "midjourney",
+    scoreSource: "zeakai",
+    scoreSourceLabel: "Midjourney",
   });
 
   const rawData = unwrapDesktopProxyData(response);
@@ -461,6 +468,9 @@ export async function createLzVideoTask(
     body: data,
     scoreCost,
     scoreBizType: "video",
+    scoreModel: getSeedance20Model(data),
+    scoreSource: "kuaizi",
+    scoreSourceLabel: "快手可灵",
   });
   const rawData = unwrapDesktopProxyData(response);
   const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
@@ -567,6 +577,9 @@ export async function generateGeminiContent(
       body: data,
       scoreCost,
       scoreBizType: "image",
+      scoreModel: modeName,
+      scoreSource: "yunwu",
+      scoreSourceLabel: "Gemini",
     },
     signal,
   );
@@ -644,6 +657,9 @@ export async function createDashscopeVideoSynthesis(
     body: data,
     scoreCost,
     scoreBizType: "video",
+    scoreModel: data.model,
+    scoreSource: "dashscope",
+    scoreSourceLabel: "阿里云百炼",
   });
   const rawData = unwrapDesktopProxyData(response);
   const { responseData, ledgerBizId } = extractLedgerBizId(rawData);

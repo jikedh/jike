@@ -32,6 +32,10 @@ export type DesktopProxyRequest = {
   body?: any;
   scoreCost?: number;
   scoreBizType?: DesktopProxyScoreBizType;
+  scoreModel?: string;
+  scoreSource?: string;
+  scoreSourceLabel?: string;
+  scoreTaskId?: string;
 };
 
 export type DesktopChatCompletionsRequest = {
@@ -101,12 +105,19 @@ export function createDesktopProxyTask(
 export function confirmDesktopProxyScore(
   ledgerBizId: string,
   scoreBizType: DesktopProxyScoreBizType = "video",
+  meta?: {
+    scoreModel?: string;
+    scoreSource?: string;
+    scoreSourceLabel?: string;
+    scoreTaskId?: string;
+    generateTime?: number;
+  },
 ): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/desktop/v1/ai/score/confirm",
     method: "post",
-    data: { ledgerBizId, scoreBizType },
+    data: { ledgerBizId, scoreBizType, ...meta },
     headers: getJikeGoAiProxyHeaders(),
   });
 }
@@ -116,12 +127,18 @@ export function refundDesktopProxyScore(
   ledgerBizId: string,
   reason?: string,
   scoreBizType: DesktopProxyScoreBizType = "video",
+  meta?: {
+    scoreModel?: string;
+    scoreSource?: string;
+    scoreSourceLabel?: string;
+    scoreTaskId?: string;
+  },
 ): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/desktop/v1/ai/score/refund",
     method: "post",
-    data: { ledgerBizId, reason, scoreBizType },
+    data: { ledgerBizId, reason, scoreBizType, ...meta },
     headers: getJikeGoAiProxyHeaders(),
   });
 }
@@ -233,6 +250,19 @@ export function getJikeGoScoreBalance(): any {
     baseURL: JIKE_GO_BASE_URL,
     url: "/v1/score/balance-info",
     method: "get",
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+export function getJikeGoScoreRecords(params?: {
+  page?: number;
+  pageSize?: number;
+}): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/score/records",
+    method: "get",
+    params,
     headers: getJikeGoAuthHeaders(),
   });
 }

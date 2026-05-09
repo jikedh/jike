@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import type { ScoreRecordItem } from "shared/types/jikeing";
 import { getJikeingToken, getJikeingUserId } from "shared/utils/utils";
 import { toast } from "sonner";
 import {
@@ -6,6 +7,7 @@ import {
     getRechargeOrderStatus,
     updateVipScore,
 } from "@/api/jikeing";
+import { getJikeGoScoreRecords } from "@/api/jikeGo";
 import { useUserStore } from "@/stores/useUserStore";
 import { HistorySection } from "./components/HistorySection";
 import { ProfileHeader } from "./components/ProfileHeader";
@@ -27,9 +29,34 @@ export function PointsView() {
         null,
     );
 
+    // 积分明细状态
+    const [records, setRecords] = useState<ScoreRecordItem[]>([]);
+    const [recordsPage, setRecordsPage] = useState(1);
+    const [recordsTotal, setRecordsTotal] = useState(0);
+    const [recordsLoading, setRecordsLoading] = useState(false);
+    const [recordsError, setRecordsError] = useState<string | null>(null);
+
     const balanceInfo = useUserStore((state) => state.balanceInfo);
     const fetchBalanceInfo = useUserStore((state) => state.fetchBalanceInfo);
     const setBalanceInfo = useUserStore((state) => state.setBalanceInfo);
+
+    const fetchRecords = useCallback(async (page = 1) => {
+        setRecordsLoading(true);
+        setRecordsError(null);
+        try {
+            const res = await getJikeGoScoreRecords({ page, pageSize: 10 });
+            const data = res?.data;
+            if (data) {
+                setRecords(data.list || []);
+                setRecordsPage(data.page || 1);
+                setRecordsTotal(data.total || 0);
+            }
+        } catch (error: any) {
+            setRecordsError(error?.message || "加载积分明细失败");
+        } finally {
+            setRecordsLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
         const token = getJikeingToken();
@@ -42,8 +69,9 @@ export function PointsView() {
             setAvatarUrl(url);
 
             void fetchBalanceInfo();
+            void fetchRecords(1);
         }
-    }, []);
+    }, [fetchBalanceInfo, fetchRecords]);
 
     const selectedPackage =
         selectedPackageId === null
@@ -182,7 +210,17 @@ export function PointsView() {
 
             <section className="mx-auto grid max-w-6xl gap-12 px-8 py-12">
                 <RechargeGrid packages={RECHARGE_PACKAGES} onRecharge={handleRecharge} />
-                <HistorySection activeTab={activeTab} onTabChange={setActiveTab} />
+                <HistorySection
+                    activeTab={activeTab}
+                    onTabChange={setActiveTab}
+                    records={records}
+                    page={recordsPage}
+                    total={recordsTotal}
+                    loading={recordsLoading}
+                    error={recordsError}
+                    onPageChange={(page) => void fetchRecords(page)}
+                    onRetry={() => void fetchRecords(1)}
+                />
             </section>
 
             <RechargeDialog
