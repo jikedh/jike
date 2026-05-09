@@ -26,7 +26,10 @@ import {
 import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getProjectById, saveAutoCoverImageToLocal } from "service/projectStorage";
+import {
+  getProjectById,
+  saveAutoCoverImageToLocal,
+} from "service/projectStorage";
 import { GenerationStatus } from "shared/constants/enum";
 import type { AllNodeType, EdgeType } from "shared/types/flow";
 import type { CanvasGroup } from "shared/types/zustand/canvas-flow";
@@ -66,8 +69,8 @@ import {
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { edgeTypes, nodeTypes } from "../constants/canvasConfig";
-import { CanvasContextMenu, type CanvasNodeType } from "./CanvasContextMenu";
 import { CanvasBatchToolbar } from "./CanvasBatchToolbar";
+import { CanvasContextMenu, type CanvasNodeType } from "./CanvasContextMenu";
 import { CanvasGroupNameBadge } from "./CanvasGroupNameBadge";
 import { DragOverlay } from "./DragOverlay";
 import { MultiSelectQuickCreate } from "./MultiSelectQuickCreate";
@@ -80,47 +83,44 @@ const DEFAULT_OPEN_ZOOM = 0.67;
 const STORE_NODE_CHANGE_THROTTLE_MS = 70;
 const MIN_GROUP_FRAME_SIZE = 80;
 const INTERACTIVE_SELECTION_SUPPRESSION_MS = 250;
-const CANVAS_POINTER_EXCLUSION_SELECTOR =
-  [
-    ".react-flow__node",
-    ".react-flow__edge",
-    ".react-flow__handle",
-    ".react-flow__connection",
-    ".canvas-group-resize-handle",
-    ".canvas-group-name-badge",
-    ".canvas-batch-toolbar",
-    ".canvas-multi-select-quick-create",
-  ].join(", ");
-const CANVAS_NODE_INTERACTIVE_SELECTOR =
-  [
-    ".selection-box-deferred-ui",
-    ".nodrag",
-    ".nopan",
-    ".nowheel",
-    ".noflow",
-    ".nodelete",
-    '[data-slot="popover-trigger"]',
-    '[data-slot="select-trigger"]',
-    '[data-slot="dropdown-menu-trigger"]',
-    '[data-slot="dialog-trigger"]',
-    "button",
-    "input",
-    "textarea",
-    "select",
-    "a",
-    '[role="button"]',
-    '[contenteditable="true"]',
-  ].join(", ");
-const CANVAS_PORTAL_INTERACTIVE_SELECTOR =
-  [
-    '[data-slot="select-content"]',
-    '[data-slot="popover-content"]',
-    '[data-slot="dropdown-menu-content"]',
-    '[data-slot="dialog-content"]',
-    '[data-slot="modal-content"]',
-    '[data-slot="drawer-content"]',
-    '[data-slot="context-menu-content"]',
-  ].join(", ");
+const CANVAS_POINTER_EXCLUSION_SELECTOR = [
+  ".react-flow__node",
+  ".react-flow__edge",
+  ".react-flow__handle",
+  ".react-flow__connection",
+  ".canvas-group-resize-handle",
+  ".canvas-group-name-badge",
+  ".canvas-batch-toolbar",
+  ".canvas-multi-select-quick-create",
+].join(", ");
+const CANVAS_NODE_INTERACTIVE_SELECTOR = [
+  ".selection-box-deferred-ui",
+  ".nodrag",
+  ".nopan",
+  ".nowheel",
+  ".noflow",
+  ".nodelete",
+  '[data-slot="popover-trigger"]',
+  '[data-slot="select-trigger"]',
+  '[data-slot="dropdown-menu-trigger"]',
+  '[data-slot="dialog-trigger"]',
+  "button",
+  "input",
+  "textarea",
+  "select",
+  "a",
+  '[role="button"]',
+  '[contenteditable="true"]',
+].join(", ");
+const CANVAS_PORTAL_INTERACTIVE_SELECTOR = [
+  '[data-slot="select-content"]',
+  '[data-slot="popover-content"]',
+  '[data-slot="dropdown-menu-content"]',
+  '[data-slot="dialog-content"]',
+  '[data-slot="modal-content"]',
+  '[data-slot="drawer-content"]',
+  '[data-slot="context-menu-content"]',
+].join(", ");
 const CANVAS_MODAL_LOCK_SELECTOR =
   '[data-slot="dialog-content"], #panorama-root, .yarl__root';
 
@@ -360,10 +360,7 @@ const buildPreviewEdgePath = (
   })[0];
 };
 
-const getNodeDragDelta = (
-  dragState: NodeDragPreviewState,
-  nodeId: string,
-) => {
+const getNodeDragDelta = (dragState: NodeDragPreviewState, nodeId: string) => {
   const startPosition = dragState.startPositions.get(nodeId);
   const latestPosition = dragState.latestPositions.get(nodeId);
 
@@ -387,9 +384,7 @@ const getPrimaryNodeDragDelta = (dragState: NodeDragPreviewState) => {
   return getNodeDragDelta(dragState, primaryNodeId);
 };
 
-const restoreNodeDragPreviewDom = (
-  dragState: NodeDragPreviewState | null,
-) => {
+const restoreNodeDragPreviewDom = (dragState: NodeDragPreviewState | null) => {
   if (!dragState) {
     return;
   }
@@ -410,12 +405,10 @@ const restoreNodeDragPreviewDom = (
 const applyNodeDragPreviewDom = (dragState: NodeDragPreviewState) => {
   const primaryDelta = getPrimaryNodeDragDelta(dragState);
 
-  dragState.nodeElements.forEach(
-    ({ element, originalTransform, nodeId }) => {
-      const delta = nodeId ? getNodeDragDelta(dragState, nodeId) : primaryDelta;
-      element.style.transform = `${originalTransform} translate3d(${delta.x}px, ${delta.y}px, 0)`;
-    },
-  );
+  dragState.nodeElements.forEach(({ element, originalTransform, nodeId }) => {
+    const delta = nodeId ? getNodeDragDelta(dragState, nodeId) : primaryDelta;
+    element.style.transform = `${originalTransform} translate3d(${delta.x}px, ${delta.y}px, 0)`;
+  });
   dragState.selectionElements.forEach(
     ({ element, originalTransform, nodeId, deltaScale = 1 }) => {
       const delta = nodeId ? getNodeDragDelta(dragState, nodeId) : primaryDelta;
@@ -449,14 +442,14 @@ const applyNodeDragPreviewDom = (dragState: NodeDragPreviewState) => {
 };
 
 const DELETE_CONFIRM_NODE_LABEL: Partial<Record<AllNodeType["type"], string>> =
-{
-  imageNode: "图片节点",
-  newVideoNode: "生成视频节点",
-  agentNode: "智能体节点",
-  textAgentNode: "文本智能体节点",
-  imageAgentNode: "图片智能体节点",
-  videoAgentNode: "视频智能体节点",
-};
+  {
+    imageNode: "图片节点",
+    newVideoNode: "生成视频节点",
+    agentNode: "智能体节点",
+    textAgentNode: "文本智能体节点",
+    imageAgentNode: "图片智能体节点",
+    videoAgentNode: "视频智能体节点",
+  };
 
 const getCanvasNodeTypeFromFlowNode = (
   node: AllNodeType | undefined,
@@ -533,7 +526,7 @@ const isEditableEventTarget = (target: EventTarget | null) => {
 
 const scheduleIdleWork = (callback: () => void) => {
   if (typeof window === "undefined") {
-    return () => { };
+    return () => {};
   }
 
   if ("requestIdleCallback" in window) {
@@ -673,6 +666,30 @@ export const CanvasFlow = ({
     moved: boolean;
     startedByReactFlow: boolean;
   }>(createIdleViewportPanState());
+  const highPriorityViewportPanRef = useRef<{
+    cleanup?: () => void;
+    frameId: number | null;
+    moved: boolean;
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    latestClientX: number;
+    latestClientY: number;
+    startedByRightButton: boolean;
+    startViewport: {
+      x: number;
+      y: number;
+      zoom: number;
+    };
+  } | null>(null);
+  const startHighPriorityViewportPanRef = useRef<
+    | ((
+        event: React.PointerEvent<HTMLDivElement>,
+        options: { startedByRightButton: boolean },
+      ) => void)
+    | null
+  >(null);
+  const syncViewportStateNowRef = useRef<() => void>(() => {});
   const [isSelectionBoxActive, setSelectionBoxActive] = useState(false);
   const selectionRectElementRef = useRef<HTMLDivElement | null>(null);
   const pendingManualSelectionRectRef = useRef<{
@@ -1073,10 +1090,10 @@ export const CanvasFlow = ({
         void handleFiles(
           files,
           mouseFlowPositionRef.current ??
-          screenToFlowPosition({
-            x: window.innerWidth / 2,
-            y: window.innerHeight / 2,
-          }),
+            screenToFlowPosition({
+              x: window.innerWidth / 2,
+              y: window.innerHeight / 2,
+            }),
         );
         return;
       }
@@ -1179,7 +1196,9 @@ export const CanvasFlow = ({
   const layoutGroupGrid = useCanvasFlowStore((state) => state.layoutGroupGrid);
   const ungroup = useCanvasFlowStore((state) => state.ungroup);
   const updateGroupName = useCanvasFlowStore((state) => state.updateGroupName);
-  const updateGroupFrame = useCanvasFlowStore((state) => state.updateGroupFrame);
+  const updateGroupFrame = useCanvasFlowStore(
+    (state) => state.updateGroupFrame,
+  );
   const [previewGroupFrames, setPreviewGroupFrames] = useState<
     Record<string, GroupFrame>
   >({});
@@ -1380,6 +1399,8 @@ export const CanvasFlow = ({
         window.cancelAnimationFrame(nodeDragPreviewRafRef.current);
         nodeDragPreviewRafRef.current = null;
       }
+      highPriorityViewportPanRef.current?.cleanup?.();
+      highPriorityViewportPanRef.current = null;
       restoreNodeDragPreviewDom(nodeDragPreviewStateRef.current);
       nodeDragPreviewStateRef.current = null;
       if (storeNodeChangeTimerRef.current !== null) {
@@ -1438,9 +1459,13 @@ export const CanvasFlow = ({
     });
 
     return () => {
-      document.removeEventListener("pointerdown", handleInteractivePointerDown, {
-        capture: true,
-      });
+      document.removeEventListener(
+        "pointerdown",
+        handleInteractivePointerDown,
+        {
+          capture: true,
+        },
+      );
     };
   }, [scheduleInteractiveSelectionSuppressionRelease]);
 
@@ -1553,7 +1578,7 @@ export const CanvasFlow = ({
       const latestPositions = new Map(startPositions);
       const nodeElements =
         typeof document !== "undefined"
-          ? nodeIds
+          ? (nodeIds
               .map((nodeId) => {
                 const element = document.querySelector(
                   `.react-flow__node[data-id="${CSS.escape(nodeId)}"]`,
@@ -1569,7 +1594,7 @@ export const CanvasFlow = ({
                   originalTransform: element.style.transform,
                 };
               })
-              .filter(Boolean) as NodeDragDomSnapshot[]
+              .filter(Boolean) as NodeDragDomSnapshot[])
           : [];
       const selectionElements =
         typeof document !== "undefined" && nodeIds.length > 1
@@ -1581,9 +1606,7 @@ export const CanvasFlow = ({
                 ".canvas-selection-bounds",
               ) as HTMLElement | null,
               ...Array.from(
-                document.querySelectorAll<HTMLElement>(
-                  ".canvas-batch-toolbar",
-                ),
+                document.querySelectorAll<HTMLElement>(".canvas-batch-toolbar"),
               ),
               ...Array.from(
                 document.querySelectorAll<HTMLElement>(
@@ -1609,7 +1632,7 @@ export const CanvasFlow = ({
           : [];
       const connectedEdgePreviews =
         typeof document !== "undefined"
-          ? displayEdges
+          ? (displayEdges
               .filter((edge) => {
                 const sourceDragged = nodeIdSet.has(edge.source);
                 const targetDragged = nodeIdSet.has(edge.target);
@@ -1634,11 +1657,7 @@ export const CanvasFlow = ({
                     "target",
                   );
 
-                if (
-                  pathElements.length === 0 ||
-                  !sourcePoint ||
-                  !targetPoint
-                ) {
+                if (pathElements.length === 0 || !sourcePoint || !targetPoint) {
                   return null;
                 }
 
@@ -1661,7 +1680,7 @@ export const CanvasFlow = ({
                   targetY: targetPoint.y,
                 };
               })
-              .filter(Boolean) as GroupDragConnectedEdgeSnapshot[]
+              .filter(Boolean) as GroupDragConnectedEdgeSnapshot[])
           : [];
 
       return {
@@ -2102,7 +2121,10 @@ export const CanvasFlow = ({
           (session.additive && session.initialSelectedNodeIds.has(node.id));
         const currentSelected = currentSelectedById.get(node.id) ?? false;
 
-        if (currentSelected === nextSelected && node.selected === nextSelected) {
+        if (
+          currentSelected === nextSelected &&
+          node.selected === nextSelected
+        ) {
           return null;
         }
 
@@ -2135,7 +2157,11 @@ export const CanvasFlow = ({
       flushStoreNodeChanges();
       applyCenterPointSelection();
     });
-  }, [applyCenterPointSelection, clearManualSelectionRect, flushStoreNodeChanges]);
+  }, [
+    applyCenterPointSelection,
+    clearManualSelectionRect,
+    flushStoreNodeChanges,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -2261,7 +2287,7 @@ export const CanvasFlow = ({
           : null;
       const nodeElements =
         typeof document !== "undefined"
-          ? groupNodeIds
+          ? (groupNodeIds
               .map((nodeId) => {
                 const element = document.querySelector(
                   `.react-flow__node[data-id="${CSS.escape(nodeId)}"]`,
@@ -2276,7 +2302,7 @@ export const CanvasFlow = ({
                   originalTransform: element.style.transform,
                 };
               })
-              .filter(Boolean) as GroupDragDomSnapshot[]
+              .filter(Boolean) as GroupDragDomSnapshot[])
           : [];
       const getHandleCenter = (
         nodeId: string,
@@ -2300,7 +2326,7 @@ export const CanvasFlow = ({
       };
       const connectedEdgePreviews =
         typeof document !== "undefined"
-          ? displayEdges
+          ? (displayEdges
               .filter((edge) => {
                 const sourceInGroup = groupNodeIdSet.has(edge.source);
                 const targetInGroup = groupNodeIdSet.has(edge.target);
@@ -2325,11 +2351,7 @@ export const CanvasFlow = ({
                     "target",
                   );
 
-                if (
-                  pathElements.length === 0 ||
-                  !sourcePoint ||
-                  !targetPoint
-                ) {
+                if (pathElements.length === 0 || !sourcePoint || !targetPoint) {
                   return null;
                 }
 
@@ -2352,7 +2374,7 @@ export const CanvasFlow = ({
                   targetY: targetPoint.y,
                 };
               })
-              .filter(Boolean) as GroupDragConnectedEdgeSnapshot[]
+              .filter(Boolean) as GroupDragConnectedEdgeSnapshot[])
           : [];
 
       groupDragStateRef.current = {
@@ -2408,12 +2430,10 @@ export const CanvasFlow = ({
 
           const delta = {
             x:
-              (latestDragState.latestClientX -
-                latestDragState.startClientX) /
+              (latestDragState.latestClientX - latestDragState.startClientX) /
               latestDragState.startZoom,
             y:
-              (latestDragState.latestClientY -
-                latestDragState.startClientY) /
+              (latestDragState.latestClientY - latestDragState.startClientY) /
               latestDragState.startZoom,
           };
 
@@ -2435,9 +2455,11 @@ export const CanvasFlow = ({
               edgePreview.targetY + (edgePreview.targetMoves ? delta.y : 0),
             );
 
-            refreshEdgePreviewPathElements(edgePreview).forEach((pathElement) => {
-              pathElement.setAttribute("d", nextPath);
-            });
+            refreshEdgePreviewPathElements(edgePreview).forEach(
+              (pathElement) => {
+                pathElement.setAttribute("d", nextPath);
+              },
+            );
           });
         });
       };
@@ -2476,7 +2498,10 @@ export const CanvasFlow = ({
         });
         dragState.connectedEdgePreviews.forEach((edgePreview) => {
           edgePreview.pathElements.forEach((pathElement, index) => {
-            pathElement.setAttribute("d", edgePreview.originalPaths[index] ?? "");
+            pathElement.setAttribute(
+              "d",
+              edgePreview.originalPaths[index] ?? "",
+            );
           });
         });
 
@@ -2606,7 +2631,10 @@ export const CanvasFlow = ({
         });
         dragState?.connectedEdgePreviews.forEach((edgePreview) => {
           edgePreview.pathElements.forEach((pathElement, index) => {
-            pathElement.setAttribute("d", edgePreview.originalPaths[index] ?? "");
+            pathElement.setAttribute(
+              "d",
+              edgePreview.originalPaths[index] ?? "",
+            );
           });
         });
         setPreviewGroupFrames((prev) => {
@@ -2712,10 +2740,7 @@ export const CanvasFlow = ({
         groupResizeRafRef.current = window.requestAnimationFrame(() => {
           groupResizeRafRef.current = null;
           const latestResizeState = groupResizeStateRef.current;
-          if (
-            !latestResizeState ||
-            latestResizeState.groupId !== groupId
-          ) {
+          if (!latestResizeState || latestResizeState.groupId !== groupId) {
             return;
           }
 
@@ -2828,12 +2853,23 @@ export const CanvasFlow = ({
     (event: React.PointerEvent<HTMLDivElement>) => {
       const isPrimaryButton = event.button === 0;
       const isShiftRightButton = event.shiftKey && event.button === 2;
+      const isSpacePrimaryPan = spacePressedRef.current && isPrimaryButton;
+      const isRightButtonPan = event.button === 2 && !event.shiftKey;
 
-      if (hasActiveCanvasModal()) {
+      if (hasActiveCanvasModal() || annotationWorkspace.open) {
         return;
       }
 
-      if (spacePressedRef.current) {
+      if (isSpacePrimaryPan || isRightButtonPan) {
+        const startHighPriorityViewportPan =
+          startHighPriorityViewportPanRef.current;
+        if (!startHighPriorityViewportPan) {
+          return;
+        }
+
+        startHighPriorityViewportPan(event, {
+          startedByRightButton: isRightButtonPan,
+        });
         return;
       }
 
@@ -2844,23 +2880,7 @@ export const CanvasFlow = ({
         return;
       }
 
-      if (event.button === 2 && !event.shiftKey) {
-        viewportPanStateRef.current = {
-          active: true,
-          startedByRightButton: true,
-          startX: event.clientX,
-          startY: event.clientY,
-          moved: false,
-          startedByReactFlow: false,
-        };
-        return;
-      }
-
-      if (
-        hasActiveCanvasModal() ||
-        annotationWorkspace.open ||
-        (!isPrimaryButton && !isShiftRightButton)
-      ) {
+      if (!isPrimaryButton && !isShiftRightButton) {
         return;
       }
 
@@ -3190,7 +3210,8 @@ export const CanvasFlow = ({
           group.nodeIds,
           18,
         );
-        const frame = previewGroupFrames[group.id] ?? group.frame ?? contentBounds;
+        const frame =
+          previewGroupFrames[group.id] ?? group.frame ?? contentBounds;
         if (!frame) {
           return null;
         }
@@ -3254,10 +3275,9 @@ export const CanvasFlow = ({
     };
   }, [activeBatchGroup, viewportState]);
 
-  const batchToolbarMode =
-    activeGroupDragId
-      ? null
-      : activeBatchGroup
+  const batchToolbarMode = activeGroupDragId
+    ? null
+    : activeBatchGroup
       ? "group"
       : multiSelectedCount >= 2 && selectedUngroupedCount === multiSelectedCount
         ? "selection"
@@ -3301,11 +3321,7 @@ export const CanvasFlow = ({
       setSelectionBoxActive(false);
       setSelectedGroupId(groupId);
     },
-    [
-      annotationWorkspace.open,
-      setSelectedGroupId,
-      storeOnNodesChange,
-    ],
+    [annotationWorkspace.open, setSelectedGroupId, storeOnNodesChange],
   );
 
   // 当 projectId 变化时切换项目
@@ -3384,12 +3400,12 @@ export const CanvasFlow = ({
 
   // 仅在叠加层需要跟随缩放/平移时，才追踪 viewport，避免 onMove 高频触发整树重渲染。
   const shouldTrackViewport =
-    ((!activeGroupDragId &&
+    (!activeGroupDragId &&
       (Boolean(selectionRightCenterFlowPosition) ||
         Boolean(activeBatchGroup))) ||
-      Boolean(connectionGhost) ||
-      quickAddDragPreview.active ||
-      Boolean(quickAddMenuOpen && quickAddMenuScreenPosition));
+    Boolean(connectionGhost) ||
+    quickAddDragPreview.active ||
+    Boolean(quickAddMenuOpen && quickAddMenuScreenPosition);
 
   // 使用 rAF 合帧更新 viewport 状态，避免每次 onMove 都 setState。
   const flushViewportState = useCallback(() => {
@@ -3447,6 +3463,190 @@ export const CanvasFlow = ({
     [clearViewportInteractionEndTimer],
   );
 
+  const syncViewportStateNow = useCallback(() => {
+    if (viewportRafRef.current !== null) {
+      window.cancelAnimationFrame(viewportRafRef.current);
+      viewportRafRef.current = null;
+    }
+
+    const latestViewport = reactFlowInstance.getViewport();
+    pendingViewportRef.current = latestViewport;
+    viewportStateRef.current = latestViewport;
+    setViewportState(latestViewport);
+  }, [reactFlowInstance]);
+  syncViewportStateNowRef.current = syncViewportStateNow;
+
+  const startHighPriorityViewportPan = useCallback(
+    (
+      event: React.PointerEvent<HTMLDivElement>,
+      options: {
+        startedByRightButton: boolean;
+      },
+    ) => {
+      if (highPriorityViewportPanRef.current?.cleanup) {
+        highPriorityViewportPanRef.current.cleanup();
+      }
+
+      if (!options.startedByRightButton) {
+        event.preventDefault();
+      }
+      event.stopPropagation();
+
+      const panSession = {
+        cleanup: undefined,
+        frameId: null,
+        moved: false,
+        pointerId: event.pointerId,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        latestClientX: event.clientX,
+        latestClientY: event.clientY,
+        startedByRightButton: options.startedByRightButton,
+        startViewport: reactFlowInstance.getViewport(),
+      };
+
+      highPriorityViewportPanRef.current = panSession;
+      viewportPanStateRef.current = {
+        active: true,
+        startedByRightButton: options.startedByRightButton,
+        startX: event.clientX,
+        startY: event.clientY,
+        moved: false,
+        startedByReactFlow: false,
+      };
+      markViewportInteracting();
+
+      const updateViewport = () => {
+        panSession.frameId = null;
+        const deltaX = panSession.latestClientX - panSession.startClientX;
+        const deltaY = panSession.latestClientY - panSession.startClientY;
+        const moved = Math.hypot(deltaX, deltaY) >= RIGHT_BUTTON_PAN_THRESHOLD;
+
+        if (moved) {
+          panSession.moved = true;
+          viewportPanStateRef.current = {
+            ...viewportPanStateRef.current,
+            moved: true,
+          };
+        }
+
+        const nextViewport = {
+          x: panSession.startViewport.x + deltaX,
+          y: panSession.startViewport.y + deltaY,
+          zoom: panSession.startViewport.zoom,
+        };
+        pendingViewportRef.current = nextViewport;
+        viewportStateRef.current = nextViewport;
+        scheduleViewportState(nextViewport);
+        void reactFlowInstance.setViewport(nextViewport, { duration: 0 });
+      };
+
+      const handlePointerMove = (pointerEvent: PointerEvent) => {
+        if (pointerEvent.pointerId !== panSession.pointerId) {
+          return;
+        }
+
+        panSession.latestClientX = pointerEvent.clientX;
+        panSession.latestClientY = pointerEvent.clientY;
+
+        const movedEnough =
+          Math.hypot(
+            panSession.latestClientX - panSession.startClientX,
+            panSession.latestClientY - panSession.startClientY,
+          ) >= RIGHT_BUTTON_PAN_THRESHOLD;
+
+        if (
+          panSession.startedByRightButton &&
+          !movedEnough &&
+          !panSession.moved
+        ) {
+          return;
+        }
+
+        pointerEvent.preventDefault();
+
+        if (panSession.frameId !== null) {
+          return;
+        }
+
+        panSession.frameId = window.requestAnimationFrame(updateViewport);
+      };
+
+      const cleanup = () => {
+        window.removeEventListener("pointermove", handlePointerMove, {
+          capture: true,
+        });
+        window.removeEventListener("pointerup", finishPan, {
+          capture: true,
+        });
+        window.removeEventListener("pointercancel", cancelPan, {
+          capture: true,
+        });
+
+        if (panSession.frameId !== null) {
+          window.cancelAnimationFrame(panSession.frameId);
+          panSession.frameId = null;
+          updateViewport();
+        }
+
+        if (highPriorityViewportPanRef.current === panSession) {
+          highPriorityViewportPanRef.current = null;
+        }
+      };
+
+      const finishPan = (pointerEvent: PointerEvent) => {
+        if (pointerEvent.pointerId !== panSession.pointerId) {
+          return;
+        }
+
+        handlePointerMove(pointerEvent);
+        cleanup();
+        if (panSession.startedByRightButton && panSession.moved) {
+          scheduleContextMenuSuppressionRelease();
+        }
+        viewportPanStateRef.current = createIdleViewportPanState();
+        syncViewportStateNowRef.current();
+        finishViewportInteracting(120);
+      };
+
+      const cancelPan = (pointerEvent: PointerEvent) => {
+        if (pointerEvent.pointerId !== panSession.pointerId) {
+          return;
+        }
+
+        cleanup();
+        viewportPanStateRef.current = createIdleViewportPanState();
+        syncViewportStateNowRef.current();
+        finishViewportInteracting(120);
+      };
+
+      panSession.cleanup = cleanup;
+      window.addEventListener("pointermove", handlePointerMove, {
+        capture: true,
+      });
+      window.addEventListener("pointerup", finishPan, { capture: true });
+      window.addEventListener("pointercancel", cancelPan, { capture: true });
+    },
+    [
+      finishViewportInteracting,
+      markViewportInteracting,
+      reactFlowInstance,
+      scheduleContextMenuSuppressionRelease,
+      scheduleViewportState,
+    ],
+  );
+
+  useEffect(() => {
+    startHighPriorityViewportPanRef.current = startHighPriorityViewportPan;
+    return () => {
+      if (
+        startHighPriorityViewportPanRef.current === startHighPriorityViewportPan
+      ) {
+        startHighPriorityViewportPanRef.current = null;
+      }
+    };
+  }, [startHighPriorityViewportPan]);
+
   const handleViewportMove = useCallback(
     (_: unknown, viewport: unknown) => {
       // 使用 unknown 避免在高频事件中引入额外类型噪音。
@@ -3472,18 +3672,6 @@ export const CanvasFlow = ({
     ],
   );
 
-  const syncViewportStateNow = useCallback(() => {
-    if (viewportRafRef.current !== null) {
-      window.cancelAnimationFrame(viewportRafRef.current);
-      viewportRafRef.current = null;
-    }
-
-    const latestViewport = reactFlowInstance.getViewport();
-    pendingViewportRef.current = latestViewport;
-    viewportStateRef.current = latestViewport;
-    setViewportState(latestViewport);
-  }, [reactFlowInstance]);
-
   const handleViewportMoveStart = useCallback(
     (event?: unknown) => {
       markViewportInteracting();
@@ -3494,8 +3682,7 @@ export const CanvasFlow = ({
         | PointerEvent
         | undefined;
       const isRightButton =
-        nativeEvent instanceof MouseEvent ||
-        nativeEvent instanceof PointerEvent
+        nativeEvent instanceof MouseEvent || nativeEvent instanceof PointerEvent
           ? nativeEvent.button === 2
           : false;
       const existingPanState = viewportPanStateRef.current;
@@ -3504,20 +3691,18 @@ export const CanvasFlow = ({
         active: true,
         startedByRightButton:
           existingPanState.startedByRightButton || isRightButton,
-        startX:
-          existingPanState.startedByRightButton
-            ? existingPanState.startX
-            : nativeEvent instanceof MouseEvent ||
-                nativeEvent instanceof PointerEvent
-              ? nativeEvent.clientX
-              : 0,
-        startY:
-          existingPanState.startedByRightButton
-            ? existingPanState.startY
-            : nativeEvent instanceof MouseEvent ||
-                nativeEvent instanceof PointerEvent
-              ? nativeEvent.clientY
-              : 0,
+        startX: existingPanState.startedByRightButton
+          ? existingPanState.startX
+          : nativeEvent instanceof MouseEvent ||
+              nativeEvent instanceof PointerEvent
+            ? nativeEvent.clientX
+            : 0,
+        startY: existingPanState.startedByRightButton
+          ? existingPanState.startY
+          : nativeEvent instanceof MouseEvent ||
+              nativeEvent instanceof PointerEvent
+            ? nativeEvent.clientY
+            : 0,
         moved: existingPanState.moved,
         startedByReactFlow: true,
       };
@@ -3715,11 +3900,13 @@ export const CanvasFlow = ({
         return;
       }
 
-      const detail = (event as CustomEvent<{
-        x: number;
-        y: number;
-        mode?: "create" | "upload";
-      }>).detail;
+      const detail = (
+        event as CustomEvent<{
+          x: number;
+          y: number;
+          mode?: "create" | "upload";
+        }>
+      ).detail;
       if (!detail) {
         return;
       }
@@ -3772,11 +3959,25 @@ export const CanvasFlow = ({
 
   const handleCanvasContextMenuCapture = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!suppressNextContextMenuRef.current) {
+      const panState = viewportPanStateRef.current;
+      const shouldSuppressRightButtonPanMenu =
+        panState.startedByRightButton &&
+        (panState.moved ||
+          Math.hypot(
+            event.clientX - panState.startX,
+            event.clientY - panState.startY,
+          ) >= RIGHT_BUTTON_PAN_THRESHOLD);
+
+      if (
+        !suppressNextContextMenuRef.current &&
+        !shouldSuppressRightButtonPanMenu
+      ) {
         return;
       }
 
-      clearSuppressedContextMenu();
+      if (suppressNextContextMenuRef.current) {
+        clearSuppressedContextMenu();
+      }
       event.preventDefault();
       event.stopPropagation();
     },
@@ -4741,20 +4942,19 @@ export const CanvasFlow = ({
                             event.clientY,
                           );
                         }}
-                        />
-                        <CanvasGroupNameBadge
-                          name={group.name ?? "分组"}
-                          selected={isSelected}
-                          onSelect={() => handleGroupLabelPointerDown(group.id)}
-                          onRename={(name) => updateGroupName(group.id, name)}
-                        />
-                      </div>
-                    );
-                  })}
+                      />
+                      <CanvasGroupNameBadge
+                        name={group.name ?? "分组"}
+                        selected={isSelected}
+                        onSelect={() => handleGroupLabelPointerDown(group.id)}
+                        onRename={(name) => updateGroupName(group.id, name)}
+                      />
+                    </div>
+                  );
+                })}
               </div>
 
-              {selectionBoundsFlow &&
-                !isSelectionBoxActive ? (
+              {selectionBoundsFlow && !isSelectionBoxActive ? (
                 <div
                   className="canvas-selection-bounds pointer-events-none absolute left-0 top-0 z-[11] rounded-lg border border-dashed border-[#B43FEB]/70 bg-[#B43FEB]/10 shadow-[0_0_0_1px_rgba(180,63,235,0.18),0_0_24px_rgba(180,63,235,0.18)]"
                   style={{
@@ -4766,10 +4966,10 @@ export const CanvasFlow = ({
               ) : null}
 
               {selectionRightCenterFlowPosition &&
-                multiSelectedCount >= 2 &&
-                !isSelectionBoxActive &&
-                !activeGroupDragId &&
-                !quickAddDragPreview.active ? (
+              multiSelectedCount >= 2 &&
+              !isSelectionBoxActive &&
+              !activeGroupDragId &&
+              !quickAddDragPreview.active ? (
                 <MultiSelectQuickCreate
                   visible
                   x={selectionRightCenterFlowPosition.x}
@@ -4777,7 +4977,6 @@ export const CanvasFlow = ({
                   onPointerDown={handleQuickAddPointerDown}
                 />
               ) : null}
-
             </ViewportPortal>
 
             {gridVisible && (
@@ -4835,8 +5034,8 @@ export const CanvasFlow = ({
                   reactFlowSelectedNodeIds.length >= 2
                     ? reactFlowSelectedNodeIds
                     : storeSelectedNodeIds.length >= 2
-                    ? storeSelectedNodeIds
-                    : multiSelectedNodeIds;
+                      ? storeSelectedNodeIds
+                      : multiSelectedNodeIds;
                 createGroup(selectedNodeIds);
               }}
               onLayoutHorizontal={() => {
@@ -4955,7 +5154,7 @@ export const CanvasFlow = ({
                 <DropdownMenuItem
                   className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
                   onSelect={() => handleCreateNodeFromQuickAddMenu("video")}
-                  style={{ display: 'none' }}
+                  style={{ display: "none" }}
                 >
                   <IconVideo size={16} />
                   新建生成视频节点

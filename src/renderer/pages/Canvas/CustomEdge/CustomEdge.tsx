@@ -34,6 +34,12 @@ const SELECTED_EDGE_GLASS_STYLE = {
 const EDGE_CUT_BUTTON_ANIMATION_MS = 220;
 const EDGE_HOVER_GRACE_MS = 800;
 
+const isSpacePanActive = () => {
+  return document
+    .querySelector(".react-flow")
+    ?.hasAttribute("data-space-pressed");
+};
+
 const CustomEdgeComponent = (props: EdgeProps) => {
   const [edgePath] = getBezierPath(props);
   const { screenToFlowPosition } = useReactFlow();
@@ -63,9 +69,7 @@ const CustomEdgeComponent = (props: EdgeProps) => {
         ...(props.style ?? {}),
         ...DEFAULT_EDGE_STYLE,
         stroke: isActive ? "#B43FEB" : DEFAULT_EDGE_STYLE.stroke,
-        strokeWidth: isActive
-          ? 1.35
-          : DEFAULT_EDGE_STYLE.strokeWidth,
+        strokeWidth: isActive ? 1.35 : DEFAULT_EDGE_STYLE.strokeWidth,
         opacity: isActive ? 0.66 : undefined,
       };
     }
@@ -93,6 +97,10 @@ const CustomEdgeComponent = (props: EdgeProps) => {
 
   const handleEdgeClick = useCallback(
     (event: React.PointerEvent<SVGPathElement>) => {
+      if (event.button !== 0 || isSpacePanActive()) {
+        return;
+      }
+
       event.stopPropagation();
 
       const position = screenToFlowPosition({
@@ -114,11 +122,14 @@ const CustomEdgeComponent = (props: EdgeProps) => {
 
     setShowCutButton(false);
 
-    hideTimerRef.current = window.setTimeout(() => {
-      setIsHovered(false);
-      setToolbarVisible(false);
-      hideTimerRef.current = null;
-    }, Math.max(EDGE_HOVER_GRACE_MS, EDGE_CUT_BUTTON_ANIMATION_MS));
+    hideTimerRef.current = window.setTimeout(
+      () => {
+        setIsHovered(false);
+        setToolbarVisible(false);
+        hideTimerRef.current = null;
+      },
+      Math.max(EDGE_HOVER_GRACE_MS, EDGE_CUT_BUTTON_ANIMATION_MS),
+    );
   }, []);
 
   const handleCutButtonEnter = useCallback(() => {
@@ -178,7 +189,7 @@ const CustomEdgeComponent = (props: EdgeProps) => {
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={22}
-        className="cursor-pointer"
+        data-canvas-edge-hitbox="true"
         onPointerEnter={handleHoverStart}
         onPointerLeave={handleHoverEnd}
         onPointerDown={handleEdgeClick}
