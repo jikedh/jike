@@ -321,12 +321,6 @@ export const CollapsibleVideoGallery = memo(
     }, [isExpanded, isNodeSelected, videos]);
 
     useEffect(() => {
-      if (!isNodeSelected && isExpanded) {
-        setIsExpanded(false);
-      }
-    }, [isExpanded, isNodeSelected]);
-
-    useEffect(() => {
       return () => {
         Object.values(localVideoObjectUrlsRef.current).forEach((url) => {
           URL.revokeObjectURL(url);

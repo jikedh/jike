@@ -160,17 +160,81 @@ const normalizeCanvasGroups = (
 
   const existingNodeIds = new Set(nodes.map((node) => node.id));
   return groups
-    .map((group) => ({
-      ...group,
-      name: group.name,
-      nodeIds: normalizeGroupNodeIds(group.nodeIds, existingNodeIds),
-      gridLayoutOrder: group.gridLayoutOrder
-        ? normalizeGroupNodeIds(group.gridLayoutOrder, existingNodeIds)
-        : group.gridLayoutOrder,
-      layoutOrigin: group.layoutOrigin,
-      frame: group.frame,
-    }))
+    .map((group) => {
+      const nodeIds = normalizeGroupNodeIds(group.nodeIds, existingNodeIds);
+      const frame = group.frame ?? getGroupBounds(nodes, nodeIds, 24);
+
+      return {
+        ...group,
+        name: group.name,
+        nodeIds,
+        gridLayoutOrder: group.gridLayoutOrder
+          ? normalizeGroupNodeIds(group.gridLayoutOrder, existingNodeIds)
+          : group.gridLayoutOrder,
+        layoutOrigin:
+          group.layoutOrigin ??
+          (frame
+            ? {
+                x: frame.x,
+                y: frame.y,
+              }
+            : undefined),
+        frame: frame ?? undefined,
+      };
+    })
     .filter((group) => group.nodeIds.length > 0 || Boolean(group.frame));
+};
+
+const normalizeVideoResultItemForPersistence = (
+  item: NewVideoGenerationNode["result"]["data"][number],
+) => {
+  const remoteUrl = getRemoteMediaUrl(item);
+
+  return withVideoPosterFields({
+    ...item,
+    ...(remoteUrl ? { remoteUrl } : {}),
+  });
+};
+
+export const normalizeCanvasNodesForPersistence = (
+  nodes: AllNodeType[],
+): AllNodeType[] =>
+  nodes.map((node) => {
+    if (node.type !== "newVideoNode" || !node.data.result?.data) {
+      return node;
+    }
+
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        result: {
+          ...node.data.result,
+          data: node.data.result.data.map(normalizeVideoResultItemForPersistence),
+        },
+      },
+    };
+  });
+
+export const buildCanvasPersistedState = ({
+  nodes,
+  edges,
+  groups,
+  nodeIdCounters,
+}: Pick<
+  CanvasPersistedState,
+  "nodes" | "edges" | "groups" | "nodeIdCounters"
+>): CanvasPersistedState => {
+  const persistedNodes = normalizeCanvasNodesForPersistence(nodes);
+
+  return {
+    version: CANVAS_STORAGE_VERSION,
+    savedAt: Date.now(),
+    nodes: persistedNodes,
+    edges,
+    groups: normalizeCanvasGroups(groups, persistedNodes),
+    nodeIdCounters,
+  };
 };
 
 const removeNodeIdsFromGroups = (
@@ -2682,6 +2746,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             y: layoutBounds.y,
           }
           : undefined,
+        frame: layoutBounds ?? undefined,
       };
 
       set((current) => ({
