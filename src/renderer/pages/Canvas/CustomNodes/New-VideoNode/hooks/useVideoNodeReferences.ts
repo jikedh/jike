@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type {
   AudioGenerationNode,
+  AllNodeType,
   ImageGenerationNode,
   NewVideoGenerationNode,
   NoteNodeData,
@@ -17,6 +18,7 @@ import { getPrimaryVideoUrlFromNodeData } from "../utils/video-url";
 export interface VideoReferenceItem {
   id: string;
   url: string;
+  label?: string;
   displayUrl?: string;
   relativePath?: string;
   fileName?: string;
@@ -46,6 +48,36 @@ export const getVideoParentAudioMentionId = (nodeId: string) => {
   return `parent-audio-${nodeId}`;
 };
 
+const getNodeDisplayLabel = (node: Pick<AllNodeType, "type" | "data">) => {
+  if (!node.data || typeof node.data !== "object") {
+    return "";
+  }
+
+  const data = node.data as Record<string, unknown>;
+  const nickname = typeof data.nickname === "string" ? data.nickname.trim() : "";
+  if (nickname) {
+    return nickname;
+  }
+
+  const badgeLabel =
+    typeof data.badgeLabel === "string" ? data.badgeLabel.trim() : "";
+  if (badgeLabel) {
+    return badgeLabel;
+  }
+
+  if (node.type === "imageNode") {
+    return data.isUpload ? "上传图片" : "生成图片";
+  }
+  if (node.type === "newVideoNode") {
+    return data.isUpload ? "上传视频" : "生成视频";
+  }
+  if (node.type === "audioNode") {
+    return data.isUpload ? "上传音频" : "生成音频";
+  }
+
+  return "";
+};
+
 export const useVideoNodeReferences = ({
   nodeId,
   referenceImageUrls,
@@ -71,13 +103,20 @@ export const useVideoNodeReferences = ({
       id: string;
       type: string;
       data: unknown;
+      label: string;
     }> = [];
 
     for (let i = 0; i < parentNodeEntryValues.length; i += 3) {
+      const type = String(parentNodeEntryValues[i + 1] ?? "");
+      const data = parentNodeEntryValues[i + 2];
       entries.push({
         id: String(parentNodeEntryValues[i] ?? ""),
-        type: String(parentNodeEntryValues[i + 1] ?? ""),
-        data: parentNodeEntryValues[i + 2],
+        type,
+        data,
+        label: getNodeDisplayLabel({
+          type: type as AllNodeType["type"],
+          data: data as AllNodeType["data"],
+        }),
       });
     }
 
@@ -89,6 +128,7 @@ export const useVideoNodeReferences = ({
       .filter((entry) => entry.type === "newVideoNode")
       .map((entry) => ({
         id: entry.id,
+        label: entry.label,
         url: getPrimaryVideoUrlFromNodeData(
           entry.data as NewVideoGenerationNode,
         ),
@@ -103,6 +143,7 @@ export const useVideoNodeReferences = ({
         const firstItem = (entry.data as AudioGenerationNode).result?.data?.[0];
         return {
           id: entry.id,
+          label: entry.label,
           url: getRemoteMediaUrl(firstItem),
         };
       })
@@ -119,6 +160,7 @@ export const useVideoNodeReferences = ({
         const displayUrl = getDisplayMediaUrl(firstItem) ?? referenceUrl;
         return {
           id: entry.id,
+          label: entry.label,
           url: referenceUrl,
           displayUrl,
           relativePath: firstItem?.relativePath,
@@ -176,39 +218,44 @@ export const useVideoNodeReferences = ({
     const mergedImageSources = [
       ...localReferenceImageUrls.map((url) => ({
         id: getVideoLocalImageMentionId(url),
+        label: undefined,
         url,
       })),
       ...parentImageNodes.map((item) => ({
         id: getVideoParentImageMentionId(item.id),
+        label: item.label,
         url: item.displayUrl ?? item.url,
       })),
     ];
 
     mergedImageSources.forEach((item, index) => {
+      const label = item.label || `图片${toChineseNumber(index + 1)}`;
       items.push({
         id: item.id,
-        label: `图片${toChineseNumber(index + 1)}`,
-        value: `图片${toChineseNumber(index + 1)}`,
+        label,
+        value: label,
         thumbnail: item.url,
         type: "image",
       });
     });
 
     parentVideoNodes.forEach((item, index) => {
+      const label = item.label || `视频${toChineseNumber(index + 1)}`;
       items.push({
         id: getVideoParentVideoMentionId(item.id),
-        label: `视频${toChineseNumber(index + 1)}`,
-        value: `视频${toChineseNumber(index + 1)}`,
+        label,
+        value: label,
         thumbnail: item.url,
         type: "video",
       });
     });
 
     parentAudioNodes.forEach((item, index) => {
+      const label = item.label || `音频${toChineseNumber(index + 1)}`;
       items.push({
         id: getVideoParentAudioMentionId(item.id),
-        label: `音频${toChineseNumber(index + 1)}`,
-        value: `音频${toChineseNumber(index + 1)}`,
+        label,
+        value: label,
         thumbnail: "/audio-icon.svg",
         type: "audio",
       });

@@ -5,8 +5,15 @@ import { cn, getVideoThumbnail } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
 
-const VideoThumbnailButton = ({ videoUrl }: { videoUrl: string }) => {
+const VideoThumbnailButton = ({
+  videoUrl,
+  label,
+}: {
+  videoUrl: string;
+  label?: string;
+}) => {
   const [thumbnail, setThumbnail] = useState<string | null>(null);
+  const displayLabel = label?.trim() || "视频";
 
   useEffect(() => {
     getVideoThumbnail(videoUrl)
@@ -18,7 +25,7 @@ const VideoThumbnailButton = ({ videoUrl }: { videoUrl: string }) => {
     return (
       <img
         src={thumbnail}
-        alt="视频"
+        alt={displayLabel}
         className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
         loading="lazy"
       />
@@ -41,7 +48,9 @@ const VideoThumbnailButton = ({ videoUrl }: { videoUrl: string }) => {
         <polygon points="23 7 16 12 23 17 23 7" />
         <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
       </svg>
-      <span>视频</span>
+      <span className="max-w-full truncate px-1" title={displayLabel}>
+        {displayLabel}
+      </span>
     </div>
   );
 };
@@ -107,9 +116,14 @@ export const VideoReferenceAssetsBar = ({
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   referenceImageUrls: string[];
   referenceImageIndexes?: number[];
-  parentImageNodes: { id: string; url: string; displayUrl?: string }[];
-  parentAudioNodes: { id: string; url: string }[];
-  parentVideoNodes: { id: string; url: string }[];
+  parentImageNodes: {
+    id: string;
+    url: string;
+    displayUrl?: string;
+    label?: string;
+  }[];
+  parentAudioNodes: { id: string; url: string; label?: string }[];
+  parentVideoNodes: { id: string; url: string; label?: string }[];
   referenceContent?: ReactNode;
   onDisconnectNode: (sourceNodeId: string) => void;
   onRemoveReferenceImage: (url: string, index: number) => void;
@@ -179,34 +193,43 @@ export const VideoReferenceAssetsBar = ({
             </ReferenceItemWrapper>
           ))}
 
-          {parentAudioNodes.map((item, index) => (
-            <ReferenceItemWrapper
-              key={`audio-${item.id}-${index}`}
-              className="border-[#B43FEB]/40 bg-[#B43FEB]/20"
-              onDisconnect={() => onDisconnectNode(item.id)}
-              onMouseEnter={() => onReferenceHoverChange(item.id, true)}
-              onMouseLeave={() => onReferenceHoverChange(item.id, false)}
-            >
-              <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] text-[#B43FEB]">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M9 18V5l12-2v13" />
-                  <circle cx="6" cy="18" r="3" />
-                  <circle cx="18" cy="16" r="3" />
-                </svg>
-                <span>音频</span>
-              </div>
-            </ReferenceItemWrapper>
-          ))}
+          {parentAudioNodes.map((item, index) => {
+            const displayLabel = item.label?.trim() || "音频";
+
+            return (
+              <ReferenceItemWrapper
+                key={`audio-${item.id}-${index}`}
+                className="border-[#B43FEB]/40 bg-[#B43FEB]/20"
+                onDisconnect={() => onDisconnectNode(item.id)}
+                onMouseEnter={() => onReferenceHoverChange(item.id, true)}
+                onMouseLeave={() => onReferenceHoverChange(item.id, false)}
+              >
+                <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] text-[#B43FEB]">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M9 18V5l12-2v13" />
+                    <circle cx="6" cy="18" r="3" />
+                    <circle cx="18" cy="16" r="3" />
+                  </svg>
+                  <span
+                    className="max-w-full truncate px-1"
+                    title={displayLabel}
+                  >
+                    {displayLabel}
+                  </span>
+                </div>
+              </ReferenceItemWrapper>
+            );
+          })}
 
           {parentVideoNodes.map((item, index) => (
             <ReferenceItemWrapper
@@ -216,7 +239,7 @@ export const VideoReferenceAssetsBar = ({
               onMouseEnter={() => onReferenceHoverChange(item.id, true)}
               onMouseLeave={() => onReferenceHoverChange(item.id, false)}
             >
-              <VideoThumbnailButton videoUrl={item.url} />
+              <VideoThumbnailButton videoUrl={item.url} label={item.label} />
             </ReferenceItemWrapper>
           ))}
         </>
