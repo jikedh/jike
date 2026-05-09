@@ -160,17 +160,86 @@ const normalizeCanvasGroups = (
 
   const existingNodeIds = new Set(nodes.map((node) => node.id));
   return groups
-    .map((group) => ({
-      ...group,
-      name: group.name,
-      nodeIds: normalizeGroupNodeIds(group.nodeIds, existingNodeIds),
-      gridLayoutOrder: group.gridLayoutOrder
-        ? normalizeGroupNodeIds(group.gridLayoutOrder, existingNodeIds)
-        : group.gridLayoutOrder,
-      layoutOrigin: group.layoutOrigin,
-      frame: group.frame,
-    }))
+    .map((group) => {
+      const nodeIds = normalizeGroupNodeIds(group.nodeIds, existingNodeIds);
+      const frame = group.frame ?? getGroupBounds(nodes, nodeIds, 24);
+
+      return {
+        ...group,
+        name: group.name,
+        nodeIds,
+        gridLayoutOrder: group.gridLayoutOrder
+          ? normalizeGroupNodeIds(group.gridLayoutOrder, existingNodeIds)
+          : group.gridLayoutOrder,
+        layoutOrigin:
+          group.layoutOrigin ??
+          (frame
+            ? {
+                x: frame.x,
+                y: frame.y,
+              }
+            : undefined),
+        frame: frame ?? undefined,
+      };
+    })
     .filter((group) => group.nodeIds.length > 0 || Boolean(group.frame));
+};
+
+type NewVideoResultItem = NonNullable<NewVideoGenerationNode["result"]>[
+  "data"
+][number];
+
+const normalizeVideoResultItemForPersistence = (item: NewVideoResultItem) => {
+  const remoteUrl = getRemoteMediaUrl(item);
+
+  return withVideoPosterFields({
+    ...item,
+    ...(remoteUrl ? { url: remoteUrl } : {}),
+    ...(remoteUrl ? { remoteUrl } : {}),
+  });
+};
+
+export const normalizeCanvasNodesForPersistence = (
+  nodes: AllNodeType[],
+): AllNodeType[] =>
+  nodes.map((node) => {
+    if (node.type !== "newVideoNode" || !node.data.result?.data) {
+      return node;
+    }
+
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        result: {
+          ...node.data.result,
+          data: node.data.result.data.map(
+            normalizeVideoResultItemForPersistence,
+          ),
+        },
+      },
+    };
+  });
+
+export const buildCanvasPersistedState = ({
+  nodes,
+  edges,
+  groups,
+  nodeIdCounters,
+}: Pick<
+  CanvasPersistedState,
+  "nodes" | "edges" | "groups" | "nodeIdCounters"
+>): CanvasPersistedState => {
+  const persistedNodes = normalizeCanvasNodesForPersistence(nodes);
+
+  return {
+    version: CANVAS_STORAGE_VERSION,
+    savedAt: Date.now(),
+    nodes: persistedNodes,
+    edges,
+    groups: normalizeCanvasGroups(groups, persistedNodes),
+    nodeIdCounters,
+  };
 };
 
 const removeNodeIdsFromGroups = (
@@ -2057,6 +2126,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     historyResetTrigger: 0,
     // 选中节点数量初始化（用于避免 O(n²) 遍历）
     selectedNodesCount: 0,
+    activeNodeId: null,
+    activeVideoTool: null,
     isSelectionBoxActive: false,
     groups: [],
     selectedGroupId: null,
@@ -2073,6 +2144,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     setPanoramaViewer: (panoramaViewer) => set({ panoramaViewer }),
     setAnnotationWorkspace: (annotationWorkspace) =>
       set({ annotationWorkspace }),
+    setActiveNodeId: (activeNodeId) => set({ activeNodeId }),
+    setActiveVideoTool: (activeVideoTool) => set({ activeVideoTool }),
     setSelectionBoxActive: (isSelectionBoxActive) => {
       if (get().isSelectionBoxActive !== isSelectionBoxActive) {
         set({ isSelectionBoxActive });
@@ -2146,6 +2219,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           hydrated: true,
           historyResetTrigger: get().historyResetTrigger + 1,
           groups: [],
+          activeNodeId: null,
+          activeVideoTool: null,
           selectedGroupId: null,
         });
         get().requestHistorySave();
@@ -2169,10 +2244,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         return node;
       });
+      const persistedReadyNodes =
+        normalizeCanvasNodesForPersistence(processedNodes);
 
       set({
         projectId,
-        nodes: processedNodes,
+        nodes: persistedReadyNodes,
         edges: data.edges,
         highlightedEdgeIds: [],
         highlightedSourceNodeIds: [],
@@ -2180,7 +2257,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         nodeIdCounters: data.nodeIdCounters,
         hydrated: true,
         historyResetTrigger: get().historyResetTrigger + 1,
-        groups: normalizeCanvasGroups(data.groups, processedNodes),
+        groups: normalizeCanvasGroups(data.groups, persistedReadyNodes),
+        activeNodeId: null,
+        activeVideoTool: null,
         selectedGroupId: null,
       });
       get().requestHistorySave();
@@ -2193,14 +2272,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const state = get();
       if (!state.projectId) return;
 
-      const data: CanvasPersistedState = {
-        version: CANVAS_STORAGE_VERSION,
-        savedAt: Date.now(),
-        nodes: state.nodes,
-        edges: state.edges,
-        groups: normalizeCanvasGroups(state.groups, state.nodes),
-        nodeIdCounters: state.nodeIdCounters,
-      };
+      const data = buildCanvasPersistedState(state);
       const storageKey = getCanvasDataKey(state.projectId);
       localStorage.setItem(storageKey, JSON.stringify(data));
 
@@ -2229,7 +2301,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const storageKey = getCanvasDataKey(state.projectId);
         const raw = localStorage.getItem(storageKey);
         if (!raw) {
-          set({ nodes: [], edges: [], groups: [], selectedGroupId: null });
+          set({
+            nodes: [],
+            edges: [],
+            groups: [],
+            activeNodeId: null,
+            activeVideoTool: null,
+            selectedGroupId: null,
+          });
           return;
         }
 
@@ -2238,19 +2317,37 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           data.version !== CANVAS_STORAGE_VERSION &&
           data.version !== LEGACY_CANVAS_STORAGE_VERSION
         ) {
-          set({ nodes: [], edges: [], groups: [], selectedGroupId: null });
+          set({
+            nodes: [],
+            edges: [],
+            groups: [],
+            activeNodeId: null,
+            activeVideoTool: null,
+            selectedGroupId: null,
+          });
           return;
         }
 
+        const persistedReadyNodes = normalizeCanvasNodesForPersistence(data.nodes);
+
         set({
-          nodes: data.nodes,
+          nodes: persistedReadyNodes,
           edges: data.edges,
           nodeIdCounters: data.nodeIdCounters,
-          groups: normalizeCanvasGroups(data.groups, data.nodes),
+          groups: normalizeCanvasGroups(data.groups, persistedReadyNodes),
+          activeNodeId: null,
+          activeVideoTool: null,
           selectedGroupId: null,
         });
       } catch {
-        set({ nodes: [], edges: [], groups: [], selectedGroupId: null });
+        set({
+          nodes: [],
+          edges: [],
+          groups: [],
+          activeNodeId: null,
+          activeVideoTool: null,
+          selectedGroupId: null,
+        });
       }
     },
 
@@ -2273,6 +2370,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         highlightedSourceNodeIds: [],
         referenceHoverRefCounts: {},
         groups: [],
+        activeNodeId: null,
+        activeVideoTool: null,
         selectedGroupId: null,
         nodeIdCounters: {
           note: 1,
@@ -2658,6 +2757,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             y: layoutBounds.y,
           }
           : undefined,
+        frame: layoutBounds ?? undefined,
       };
 
       set((current) => ({
@@ -4478,25 +4578,22 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      */
     exportCanvasData: () => {
       const state = get();
-      return {
-        version: CANVAS_STORAGE_VERSION,
-        savedAt: Date.now(),
-        nodes: state.nodes,
-        edges: state.edges,
-        groups: normalizeCanvasGroups(state.groups, state.nodes),
-        nodeIdCounters: state.nodeIdCounters,
-      };
+      return buildCanvasPersistedState(state);
     },
 
     /**
      * 导入画布数据（覆盖模式）
      */
     importCanvasData: (data) => {
+      const normalizedData = buildCanvasPersistedState(data);
+
       set({
-        nodes: data.nodes,
-        edges: data.edges,
-        nodeIdCounters: data.nodeIdCounters,
-        groups: normalizeCanvasGroups(data.groups, data.nodes),
+        nodes: normalizedData.nodes,
+        edges: normalizedData.edges,
+        nodeIdCounters: normalizedData.nodeIdCounters,
+        groups: normalizedData.groups,
+        activeNodeId: null,
+        activeVideoTool: null,
         selectedGroupId: null,
       });
     },

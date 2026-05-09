@@ -35,6 +35,7 @@ type CollapsibleVideoGalleryProps = {
   updateNewVideoNodeData?: (nodeId: string, patch: any) => void;
   onExpandedChange?: (expanded: boolean) => void;
   isNodeSelected?: boolean;
+  forcePosterOnly?: boolean;
   frameSize?: {
     width: number;
     height: number;
@@ -144,6 +145,7 @@ export const CollapsibleVideoGallery = memo(
     updateNewVideoNodeData,
     onExpandedChange,
     isNodeSelected = false,
+    forcePosterOnly = false,
     frameSize,
   }: CollapsibleVideoGalleryProps) => {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -298,7 +300,7 @@ export const CollapsibleVideoGallery = memo(
 
       videos.forEach((item, index) => {
         const shouldRenderPlayer =
-          isExpanded || (index === 0 && isNodeSelected);
+          !forcePosterOnly && (isExpanded || (index === 0 && isNodeSelected));
 
         if (item.pending || !item.localPath || !shouldRenderPlayer) {
           return;
@@ -318,13 +320,7 @@ export const CollapsibleVideoGallery = memo(
       return () => {
         cancelled = true;
       };
-    }, [isExpanded, isNodeSelected, videos]);
-
-    useEffect(() => {
-      if (!isNodeSelected && isExpanded) {
-        setIsExpanded(false);
-      }
-    }, [isExpanded, isNodeSelected]);
+    }, [forcePosterOnly, isExpanded, isNodeSelected, videos]);
 
     useEffect(() => {
       return () => {
@@ -486,7 +482,7 @@ export const CollapsibleVideoGallery = memo(
             const posterUrl = posterUrls[index] ?? "";
             const videoKey = getVideoKey(item, index);
             const shouldRenderPlayer =
-              isExpanded || (isPrimary && isNodeSelected);
+              !forcePosterOnly && (isExpanded || (isPrimary && isNodeSelected));
             const remoteVideoUrl = item.remoteUrl || item.url || "";
             const isWaitingForLocalVideo =
               shouldRenderPlayer &&

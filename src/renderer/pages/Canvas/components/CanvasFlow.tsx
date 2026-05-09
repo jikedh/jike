@@ -1189,6 +1189,7 @@ export const CanvasFlow = ({
   const setSelectedGroupId = useCanvasFlowStore(
     (state) => state.setSelectedGroupId,
   );
+  const setActiveNodeId = useCanvasFlowStore((state) => state.setActiveNodeId);
   const createGroup = useCanvasFlowStore((state) => state.createGroup);
   const layoutGroupHorizontal = useCanvasFlowStore(
     (state) => state.layoutGroupHorizontal,
@@ -1735,6 +1736,18 @@ export const CanvasFlow = ({
     ],
   );
 
+  const handleNodeClick = useCallback(
+    (_event: React.MouseEvent, node: AllNodeType) => {
+      if (annotationWorkspace.open || hasActiveCanvasModal()) {
+        return;
+      }
+
+      setActiveNodeId(node.id);
+      setSelectedGroupId(null);
+    },
+    [annotationWorkspace.open, setActiveNodeId, setSelectedGroupId],
+  );
+
   const handleNodeDrag = useCallback(
     (_event: React.MouseEvent, node: AllNodeType, nodes: AllNodeType[]) => {
       const dragState = nodeDragPreviewStateRef.current;
@@ -2008,9 +2021,10 @@ export const CanvasFlow = ({
 
     suppressDefaultSelectionRef.current = true;
     deferSelectionCalculationRef.current = true;
+    setActiveNodeId(null);
     setSelectionBoxActive(true);
     setSelectedGroupId(null);
-  }, [annotationWorkspace.open, setSelectedGroupId]);
+  }, [annotationWorkspace.open, setActiveNodeId, setSelectedGroupId]);
 
   const getNodeFlowRect = useCallback((node: AllNodeType) => {
     const { width, height } = getNodeSize(node);
@@ -2080,6 +2094,7 @@ export const CanvasFlow = ({
     suppressDefaultSelectionRef.current = false;
     deferSelectionCalculationRef.current = false;
     clearManualSelectionRect();
+    setActiveNodeId(null);
 
     if (!session?.active) {
       return;
@@ -2146,6 +2161,7 @@ export const CanvasFlow = ({
     displayNodes,
     isNodeInsideSelectionRect,
     screenToFlowPosition,
+    setActiveNodeId,
     storeOnNodesChange,
   ]);
 
@@ -2182,6 +2198,7 @@ export const CanvasFlow = ({
 
     setSelectionBoxActive(false);
     clearManualSelectionRect();
+    setActiveNodeId(null);
     setSelectedGroupId(null);
 
     const allNodes = useCanvasFlowStore.getState().nodes;
@@ -2198,6 +2215,7 @@ export const CanvasFlow = ({
   }, [
     annotationWorkspace.open,
     clearManualSelectionRect,
+    setActiveNodeId,
     setSelectionBoxActive,
     setSelectedGroupId,
     storeOnNodesChange,
@@ -2272,6 +2290,7 @@ export const CanvasFlow = ({
         );
       }
 
+      setActiveNodeId(null);
       setSelectionBoxActive(false);
       setSelectedGroupId(groupId);
 
@@ -2654,6 +2673,7 @@ export const CanvasFlow = ({
       displayNodes,
       groups,
       screenToFlowPosition,
+      setActiveNodeId,
       setSelectedGroupId,
       setDisplayNodes,
       storeOnNodesChange,
@@ -2843,6 +2863,7 @@ export const CanvasFlow = ({
       displayNodes,
       groups,
       screenToFlowPosition,
+      setActiveNodeId,
       setSelectedGroupId,
       storeOnNodesChange,
       updateGroupFrame,
@@ -3037,6 +3058,7 @@ export const CanvasFlow = ({
       handlePaneClick,
       screenToFlowPosition,
       scheduleContextMenuSuppressionRelease,
+      setActiveNodeId,
       setSelectedGroupId,
       updateManualSelectionRect,
     ],
@@ -4731,6 +4753,7 @@ export const CanvasFlow = ({
             onNodeDragStart={handleNodeDragStart}
             onNodeDrag={handleNodeDrag}
             onNodeDragStop={handleNodeDragStop}
+            onNodeClick={handleNodeClick}
             onSelectionStart={handleSelectionStart}
             onSelectionEnd={handleSelectionEnd}
             onPaneClick={handlePaneClick}
@@ -5036,6 +5059,7 @@ export const CanvasFlow = ({
                     : storeSelectedNodeIds.length >= 2
                       ? storeSelectedNodeIds
                       : multiSelectedNodeIds;
+                setActiveNodeId(null);
                 createGroup(selectedNodeIds);
               }}
               onLayoutHorizontal={() => {
