@@ -2057,6 +2057,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     historyResetTrigger: 0,
     // 选中节点数量初始化（用于避免 O(n²) 遍历）
     selectedNodesCount: 0,
+    activeNodeId: null,
     isSelectionBoxActive: false,
     groups: [],
     selectedGroupId: null,
@@ -2073,6 +2074,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     setPanoramaViewer: (panoramaViewer) => set({ panoramaViewer }),
     setAnnotationWorkspace: (annotationWorkspace) =>
       set({ annotationWorkspace }),
+    setActiveNodeId: (activeNodeId) => set({ activeNodeId }),
     setSelectionBoxActive: (isSelectionBoxActive) => {
       if (get().isSelectionBoxActive !== isSelectionBoxActive) {
         set({ isSelectionBoxActive });
@@ -2146,6 +2148,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           hydrated: true,
           historyResetTrigger: get().historyResetTrigger + 1,
           groups: [],
+          activeNodeId: null,
           selectedGroupId: null,
         });
         get().requestHistorySave();
@@ -2181,6 +2184,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         hydrated: true,
         historyResetTrigger: get().historyResetTrigger + 1,
         groups: normalizeCanvasGroups(data.groups, processedNodes),
+        activeNodeId: null,
         selectedGroupId: null,
       });
       get().requestHistorySave();
@@ -2229,7 +2233,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const storageKey = getCanvasDataKey(state.projectId);
         const raw = localStorage.getItem(storageKey);
         if (!raw) {
-          set({ nodes: [], edges: [], groups: [], selectedGroupId: null });
+          set({
+            nodes: [],
+            edges: [],
+            groups: [],
+            activeNodeId: null,
+            selectedGroupId: null,
+          });
           return;
         }
 
@@ -2238,7 +2248,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           data.version !== CANVAS_STORAGE_VERSION &&
           data.version !== LEGACY_CANVAS_STORAGE_VERSION
         ) {
-          set({ nodes: [], edges: [], groups: [], selectedGroupId: null });
+          set({
+            nodes: [],
+            edges: [],
+            groups: [],
+            activeNodeId: null,
+            selectedGroupId: null,
+          });
           return;
         }
 
@@ -2247,10 +2263,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           edges: data.edges,
           nodeIdCounters: data.nodeIdCounters,
           groups: normalizeCanvasGroups(data.groups, data.nodes),
+          activeNodeId: null,
           selectedGroupId: null,
         });
       } catch {
-        set({ nodes: [], edges: [], groups: [], selectedGroupId: null });
+        set({
+          nodes: [],
+          edges: [],
+          groups: [],
+          activeNodeId: null,
+          selectedGroupId: null,
+        });
       }
     },
 
@@ -2273,6 +2296,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         highlightedSourceNodeIds: [],
         referenceHoverRefCounts: {},
         groups: [],
+        activeNodeId: null,
         selectedGroupId: null,
         nodeIdCounters: {
           note: 1,
@@ -4497,6 +4521,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         edges: data.edges,
         nodeIdCounters: data.nodeIdCounters,
         groups: normalizeCanvasGroups(data.groups, data.nodes),
+        activeNodeId: null,
         selectedGroupId: null,
       });
     },

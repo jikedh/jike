@@ -122,6 +122,7 @@ export type CanvasFlowStoreType = {
   historyResetTrigger: number;
   // 选中的节点数量（用于避免 O(n²) 遍历计算）
   selectedNodesCount: number;
+  activeNodeId: string | null;
   isSelectionBoxActive: boolean;
   groups: CanvasGroup[];
   selectedGroupId: string | null;
@@ -153,6 +154,7 @@ export type CanvasFlowStoreType = {
     sourceNodeId: string | null;
     mode?: "annotate" | "erase";
   }) => void;
+  setActiveNodeId: (nodeId: string | null) => void;
   setSelectionBoxActive: (active: boolean) => void;
   setGroups: (groups: CanvasGroup[]) => void;
   setSelectedGroupId: (groupId: string | null) => void;

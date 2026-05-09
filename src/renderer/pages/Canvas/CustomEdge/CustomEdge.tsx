@@ -52,17 +52,16 @@ const CustomEdgeComponent = (props: EdgeProps) => {
   const isHighlighted = useCanvasFlowStore((state) =>
     state.highlightedEdgeIds.includes(props.id),
   );
-  const isConnectedToSelectedNode = useCanvasFlowStore((state) =>
-    state.nodes.some(
-      (node) =>
-        node.selected && (node.id === props.source || node.id === props.target),
-    ),
+  const isConnectedToActiveNode = useCanvasFlowStore(
+    (state) =>
+      Boolean(state.activeNodeId) &&
+      (state.activeNodeId === props.source || state.activeNodeId === props.target),
   );
   const edgeAnimationEnabled = useChatSettingsStore(
     (state) => state.edgeAnimationEnabled,
   );
   const edgeStyle = useMemo(() => {
-    const isActive = isConnectedToSelectedNode || isHovered;
+    const isActive = isConnectedToActiveNode || isHovered;
 
     if (!isHighlighted) {
       return {
@@ -84,7 +83,7 @@ const CustomEdgeComponent = (props: EdgeProps) => {
       animation: "reference-edge-dash 1.2s linear infinite",
       filter: "drop-shadow(0 0 8px rgba(180,63,235,0.85))",
     };
-  }, [isConnectedToSelectedNode, isHighlighted, isHovered, props.style]);
+  }, [isConnectedToActiveNode, isHighlighted, isHovered, props.style]);
 
   const handleHoverStart = useCallback((event?: React.PointerEvent) => {
     setIsHovered(true);
@@ -151,7 +150,7 @@ const CustomEdgeComponent = (props: EdgeProps) => {
     };
   }, []);
 
-  const isFlowing = isHighlighted || isConnectedToSelectedNode || isHovered;
+  const isFlowing = isHighlighted || isConnectedToActiveNode || isHovered;
 
   return (
     <>
