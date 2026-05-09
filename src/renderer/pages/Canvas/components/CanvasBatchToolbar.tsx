@@ -1,11 +1,6 @@
-import {
-  ArrowLeftRight,
-  Group,
-  LayoutGrid,
-  Ungroup,
-} from "lucide-react";
-import { memo, useRef } from "react";
+import { ArrowLeftRight, Group, LayoutGrid, Ungroup } from "lucide-react";
 import type { MouseEvent, PointerEvent } from "react";
+import { memo, useRef } from "react";
 import { cn } from "shared/utils/utils";
 
 type CanvasBatchToolbarProps = {
@@ -37,45 +32,63 @@ export const CanvasBatchToolbar = memo(
     onUngroup,
   }: CanvasBatchToolbarProps) => {
     const lastActionTimeRef = useRef(0);
+    const groupActionBlockedUntilRef = useRef(0);
 
     if (!mode) {
       return null;
     }
 
-    const runAction = (callback?: () => void) => {
+    const runAction = (
+      callback?: () => void,
+      options?: {
+        blockGroupActionsAfter?: boolean;
+        groupAction?: boolean;
+      },
+    ) => {
       const now = Date.now();
+      if (options?.groupAction && now < groupActionBlockedUntilRef.current) {
+        return;
+      }
       if (now - lastActionTimeRef.current < 120) {
         return;
       }
       lastActionTimeRef.current = now;
+      if (options?.blockGroupActionsAfter) {
+        groupActionBlockedUntilRef.current = now + 500;
+      }
       callback?.();
     };
 
     const handleToolbarPointerUp = (
       event: PointerEvent<HTMLButtonElement>,
       callback?: () => void,
+      options?: Parameters<typeof runAction>[1],
     ) => {
       event.preventDefault();
       event.stopPropagation();
-      runAction(callback);
+      runAction(callback, options);
     };
 
     const handleToolbarClick = (
       event: MouseEvent<HTMLButtonElement>,
       callback?: () => void,
+      options?: Parameters<typeof runAction>[1],
     ) => {
       event.preventDefault();
       event.stopPropagation();
-      runAction(callback);
+      runAction(callback, options);
     };
 
-    const handleButtonPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    const handleButtonPointerDown = (
+      event: PointerEvent<HTMLButtonElement>,
+    ) => {
       event.stopPropagation();
     };
 
     return (
       <div
         className="canvas-batch-toolbar noflow nodrag nopan nowheel absolute z-[40]"
+        role="presentation"
         onPointerDown={(event) => {
           event.stopPropagation();
         }}
@@ -106,9 +119,15 @@ export const CanvasBatchToolbar = memo(
                 type="button"
                 onPointerDown={handleButtonPointerDown}
                 onPointerUp={(event) =>
-                  handleToolbarPointerUp(event, onCreateGroup)
+                  handleToolbarPointerUp(event, onCreateGroup, {
+                    blockGroupActionsAfter: true,
+                  })
                 }
-                onClick={(event) => handleToolbarClick(event, onCreateGroup)}
+                onClick={(event) =>
+                  handleToolbarClick(event, onCreateGroup, {
+                    blockGroupActionsAfter: true,
+                  })
+                }
                 className={cn(
                   toolbarButtonClassName,
                   "bg-[#B43FEB] text-white shadow-[0_0_15px_rgba(180,63,235,0.3)] hover:bg-[#9d35ce]",
@@ -127,10 +146,14 @@ export const CanvasBatchToolbar = memo(
                 type="button"
                 onPointerDown={handleButtonPointerDown}
                 onPointerUp={(event) =>
-                  handleToolbarPointerUp(event, onLayoutHorizontal)
+                  handleToolbarPointerUp(event, onLayoutHorizontal, {
+                    groupAction: true,
+                  })
                 }
                 onClick={(event) =>
-                  handleToolbarClick(event, onLayoutHorizontal)
+                  handleToolbarClick(event, onLayoutHorizontal, {
+                    groupAction: true,
+                  })
                 }
                 className={cn(
                   toolbarButtonClassName,
@@ -144,9 +167,15 @@ export const CanvasBatchToolbar = memo(
                 type="button"
                 onPointerDown={handleButtonPointerDown}
                 onPointerUp={(event) =>
-                  handleToolbarPointerUp(event, onGridLayout)
+                  handleToolbarPointerUp(event, onGridLayout, {
+                    groupAction: true,
+                  })
                 }
-                onClick={(event) => handleToolbarClick(event, onGridLayout)}
+                onClick={(event) =>
+                  handleToolbarClick(event, onGridLayout, {
+                    groupAction: true,
+                  })
+                }
                 className={cn(
                   toolbarButtonClassName,
                   "border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
@@ -158,8 +187,16 @@ export const CanvasBatchToolbar = memo(
               <button
                 type="button"
                 onPointerDown={handleButtonPointerDown}
-                onPointerUp={(event) => handleToolbarPointerUp(event, onUngroup)}
-                onClick={(event) => handleToolbarClick(event, onUngroup)}
+                onPointerUp={(event) =>
+                  handleToolbarPointerUp(event, onUngroup, {
+                    groupAction: true,
+                  })
+                }
+                onClick={(event) =>
+                  handleToolbarClick(event, onUngroup, {
+                    groupAction: true,
+                  })
+                }
                 className={cn(
                   toolbarButtonClassName,
                   "border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white",
