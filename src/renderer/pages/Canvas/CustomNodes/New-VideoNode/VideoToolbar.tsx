@@ -700,7 +700,7 @@ const VideoSubtitleRemovalPanel = ({
                   videoClassName="h-full w-full object-contain"
                   showDefaultControls={false}
                   playsInline
-                  preload="auto"
+                  preload="metadata"
                   onLoadedMetadata={(event) => {
                     const w = event.currentTarget.videoWidth || 0;
                     const h = event.currentTarget.videoHeight || 0;
@@ -927,6 +927,9 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   const updateNewVideoNodeData = useCanvasFlowStore(
     (state) => state.updateNewVideoNodeData,
   );
+  const setActiveVideoTool = useCanvasFlowStore(
+    (state) => state.setActiveVideoTool,
+  );
 
   const {
     captureLastFrame,
@@ -1006,8 +1009,9 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   useEffect(() => {
     return () => {
       revokePreviewObjectUrls();
+      setActiveVideoTool(null);
     };
-  }, [revokePreviewObjectUrls]);
+  }, [revokePreviewObjectUrls, setActiveVideoTool]);
 
   // 触发文件选择
   const handleUploadClick = () => {
@@ -1084,6 +1088,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         toast.info("暂无可预览视频");
         return;
       }
+      setActiveVideoTool({ nodeId, tool: "preview" });
       setPreviewVideoUrls(await buildPreviewVideoUrls());
       setIsLightboxOpen(true);
       return;
@@ -1115,6 +1120,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         toast.info("暂无可用视频");
         return;
       }
+      setActiveVideoTool({ nodeId, tool: "snapshot" });
       setIsSnapshotPanelOpen(true);
       return;
     }
@@ -1124,6 +1130,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         toast.info("暂无可裁剪视频");
         return;
       }
+      setActiveVideoTool({ nodeId, tool: "trim" });
       setIsTrimPanelOpen(true);
       return;
     }
@@ -1142,10 +1149,37 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         toast.info("暂无可用视频");
         return;
       }
+      setActiveVideoTool({ nodeId, tool: "removeCaptions" });
       setIsSubtitlePanelOpen(true);
       return;
     }
   };
+
+  const closeVideoTool = useCallback(() => {
+    setActiveVideoTool(null);
+  }, [setActiveVideoTool]);
+
+  const closeSnapshotPanel = useCallback(() => {
+    setIsSnapshotPanelOpen(false);
+    closeVideoTool();
+  }, [closeVideoTool]);
+
+  const closeSubtitlePanel = useCallback(() => {
+    setIsSubtitlePanelOpen(false);
+    closeVideoTool();
+  }, [closeVideoTool]);
+
+  const closeTrimPanel = useCallback(() => {
+    setIsTrimPanelOpen(false);
+    closeVideoTool();
+  }, [closeVideoTool]);
+
+  const closeLightbox = useCallback(() => {
+    setIsLightboxOpen(false);
+    revokePreviewObjectUrls();
+    setPreviewVideoUrls([]);
+    closeVideoTool();
+  }, [closeVideoTool, revokePreviewObjectUrls]);
 
   const isPreviewActive = isLightboxOpen;
 
@@ -1529,7 +1563,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       {/* 截帧面板 */}
       <VideoSnapshotPanel
         open={isSnapshotPanelOpen}
-        onClose={() => setIsSnapshotPanelOpen(false)}
+        onClose={closeSnapshotPanel}
         videoUrl={currentVideoUrl || ""}
         onSnapshot={(timeMs) =>
           captureSnapshot(currentVideoUrl || "", timeMs, nodeId)
@@ -1540,7 +1574,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       {/* 去字幕面板 */}
       <VideoSubtitleRemovalPanel
         open={isSubtitlePanelOpen}
-        onClose={() => setIsSubtitlePanelOpen(false)}
+        onClose={closeSubtitlePanel}
         videoUrl={currentVideoUrl || ""}
         onSubmit={handleSubmitRemoveCaptions}
         isSubmitting={isSubmittingSubtitle}
@@ -1548,7 +1582,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
       <VideoTrimPanel
         open={isTrimPanelOpen}
-        onClose={() => setIsTrimPanelOpen(false)}
+        onClose={closeTrimPanel}
         videoUrl={currentVideoUrl || ""}
         onTrim={handleTrimVideo}
         isTrimming={isTrimmingVideo}
@@ -1557,11 +1591,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       {isLightboxOpen ? (
         <Lightbox
           open={isLightboxOpen}
-          close={() => {
-            setIsLightboxOpen(false);
-            revokePreviewObjectUrls();
-            setPreviewVideoUrls([]);
-          }}
+          close={closeLightbox}
           slides={(previewVideoUrls.length > 0 ? previewVideoUrls : videoUrls)
             .filter((url): url is string => !!url)
             .map((url) => ({
@@ -1569,6 +1599,8 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
               sources: [{ src: url, type: "video/mp4" }],
             }))}
           plugins={[Video, Fullscreen, Slideshow, Zoom, Share, Download]}
+          video={{ preload: "metadata" }}
+          carousel={{ preload: 0 }}
           zoom={{ maxZoomPixelRatio: 4, zoomInMultiplier: 2 }}
           controller={{ closeOnBackdropClick: true }}
         />

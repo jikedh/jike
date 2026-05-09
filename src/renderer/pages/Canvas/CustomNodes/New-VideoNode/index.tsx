@@ -51,6 +51,9 @@ const NewVideoNode = ({
     state.highlightedSourceNodeIds.includes(id),
   );
   const activeNodeId = useCanvasFlowStore((state) => state.activeNodeId);
+  const hasActiveVideoTool = useCanvasFlowStore(
+    (state) => state.activeVideoTool !== null,
+  );
 
   const selectedNodesCount = useCanvasFlowStore(
     (state) => state.selectedNodesCount,
@@ -266,6 +269,7 @@ const NewVideoNode = ({
               updateNewVideoNodeData={updateNewVideoNodeData}
               onGalleryExpandedChange={setIsGalleryExpanded}
               isNodeSelected={isActiveNode}
+              forcePosterOnly={hasActiveVideoTool}
               frameSize={contentFrameSize}
             />
           </div>

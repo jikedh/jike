@@ -284,7 +284,7 @@ export const VideoSnapshotPanel = ({
                   videoClassName="h-full w-full object-contain"
                   showDefaultControls={false}
                   playsInline
-                  preload="auto"
+                  preload="metadata"
                   onLoadedMetadata={(event) => {
                     const nextDuration = event.currentTarget.duration || 0;
                     setDuration(nextDuration);

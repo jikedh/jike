@@ -52,6 +52,13 @@ export type CanvasGroup = {
 /**
  * 画布支持的节点类型标识。
  */
+export type ActiveVideoTool =
+  | {
+      nodeId: string;
+      tool: "preview" | "snapshot" | "trim" | "removeCaptions";
+    }
+  | null;
+
 export type NodeType =
   | "note"
   | "image"
@@ -123,6 +130,7 @@ export type CanvasFlowStoreType = {
   // 选中的节点数量（用于避免 O(n²) 遍历计算）
   selectedNodesCount: number;
   activeNodeId: string | null;
+  activeVideoTool: ActiveVideoTool;
   isSelectionBoxActive: boolean;
   groups: CanvasGroup[];
   selectedGroupId: string | null;
@@ -155,6 +163,7 @@ export type CanvasFlowStoreType = {
     mode?: "annotate" | "erase";
   }) => void;
   setActiveNodeId: (nodeId: string | null) => void;
+  setActiveVideoTool: (tool: ActiveVideoTool) => void;
   setSelectionBoxActive: (active: boolean) => void;
   setGroups: (groups: CanvasGroup[]) => void;
   setSelectedGroupId: (groupId: string | null) => void;
