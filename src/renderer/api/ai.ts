@@ -217,15 +217,22 @@ async function createDesktopChatStream(data: any, signal?: AbortSignal) {
 // ===================== 图片生成相关 =====================
 
 // 创建图片生成任务
-export async function createImageGeneration(data: ToApiImageGenerationRequest) {
+export async function createImageGeneration(
+  data: ToApiImageGenerationRequest,
+  scoreCost?: number,
+) {
   const response = await createDesktopProxyTask({
     platform: "toapi",
     upstreamPath: "/v1/images/generations",
     method: "POST",
     body: data,
+    scoreCost,
+    scoreBizType: "image",
   });
 
-  return unwrapDesktopProxyData(response);
+  const rawData = unwrapDesktopProxyData(response);
+  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
+  return ledgerBizId ? { ...responseData, ledgerBizId } : responseData;
 }
 
 export function createAdobe2ApiImageGeneration(
@@ -411,15 +418,22 @@ export async function analyzeLightingReferenceImage(
 // ===================== Midjourney 相关 =====================
 
 // 提交 Midjourney imagine 任务
-export async function submitMjImagine(data: { prompt: string }) {
+export async function submitMjImagine(
+  data: { prompt: string },
+  scoreCost?: number,
+) {
   const response = await createDesktopProxyTask({
     platform: "zeakai",
     upstreamPath: "/mj/submit/imagine",
     method: "POST",
     body: data,
+    scoreCost,
+    scoreBizType: "image",
   });
 
-  return unwrapDesktopProxyData(response);
+  const rawData = unwrapDesktopProxyData(response);
+  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
+  return ledgerBizId ? { ...responseData, ledgerBizId } : responseData;
 }
 
 // 获取 Midjourney 任务状态
@@ -446,6 +460,7 @@ export async function createLzVideoTask(
     method: "POST",
     body: data,
     scoreCost,
+    scoreBizType: "video",
   });
   const rawData = unwrapDesktopProxyData(response);
   const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
@@ -529,6 +544,7 @@ export async function generateGeminiContent(
   modeName: string,
   data: any,
   signal?: AbortSignal,
+  scoreCost?: number,
 ) {
   const adobe2ApiState = await getAdobe2ApiState();
   if (adobe2ApiState?.status === "running" && adobe2ApiState.baseUrl) {
@@ -549,11 +565,15 @@ export async function generateGeminiContent(
       upstreamPath: `/v1beta/models/${modeName}:generateContent`,
       method: "POST",
       body: data,
+      scoreCost,
+      scoreBizType: "image",
     },
     signal,
   );
 
-  return unwrapDesktopProxyData(response);
+  const rawData = unwrapDesktopProxyData(response);
+  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
+  return ledgerBizId ? { ...responseData, ledgerBizId } : responseData;
 }
 
 // ===================== 阿里云百炼相关 =====================
@@ -623,6 +643,7 @@ export async function createDashscopeVideoSynthesis(
     },
     body: data,
     scoreCost,
+    scoreBizType: "video",
   });
   const rawData = unwrapDesktopProxyData(response);
   const { responseData, ledgerBizId } = extractLedgerBizId(rawData);

@@ -21,6 +21,8 @@ export type DesktopProxyPlatform =
   | "zeakai"
   | "yunwu";
 
+export type DesktopProxyScoreBizType = "image" | "video";
+
 export type DesktopProxyRequest = {
   platform: DesktopProxyPlatform;
   upstreamPath: string;
@@ -29,6 +31,7 @@ export type DesktopProxyRequest = {
   headers?: Record<string, string>;
   body?: any;
   scoreCost?: number;
+  scoreBizType?: DesktopProxyScoreBizType;
 };
 
 export type DesktopChatCompletionsRequest = {
@@ -95,12 +98,15 @@ export function createDesktopProxyTask(
 }
 
 // 确认积分扣减
-export function confirmDesktopProxyScore(ledgerBizId: string): any {
+export function confirmDesktopProxyScore(
+  ledgerBizId: string,
+  scoreBizType: DesktopProxyScoreBizType = "video",
+): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/desktop/v1/ai/score/confirm",
     method: "post",
-    data: { ledgerBizId },
+    data: { ledgerBizId, scoreBizType },
     headers: getJikeGoAiProxyHeaders(),
   });
 }
@@ -109,12 +115,13 @@ export function confirmDesktopProxyScore(ledgerBizId: string): any {
 export function refundDesktopProxyScore(
   ledgerBizId: string,
   reason?: string,
+  scoreBizType: DesktopProxyScoreBizType = "video",
 ): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/desktop/v1/ai/score/refund",
     method: "post",
-    data: { ledgerBizId, reason },
+    data: { ledgerBizId, reason, scoreBizType },
     headers: getJikeGoAiProxyHeaders(),
   });
 }

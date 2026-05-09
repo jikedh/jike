@@ -5,6 +5,10 @@ import {
   getImageTaskStatus,
   submitMjImagine,
 } from "@/api/ai";
+import {
+  confirmDesktopProxyScore,
+  refundDesktopProxyScore,
+} from "@/api/jikeGo";
 import { buildMidjourneyPrompt } from "@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt";
 import { getImageDimensions } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { useUserStore } from "@/stores/useUserStore";
@@ -529,8 +533,9 @@ const pollMidjourneyImageGeneration = async (
 
 const generateGeminiPro2Images = async (
   prompt: string,
+  requiredPoints: number,
   signal?: AbortSignal,
-): Promise<NoteGenerationImage[]> => {
+): Promise<{ images: NoteGenerationImage[]; ledgerBizId?: string }> => {
   throwIfAborted(signal);
 
   const requestBody = {
@@ -544,7 +549,9 @@ const generateGeminiPro2Images = async (
     "gemini-3-pro-image-preview",
     requestBody,
     signal,
+    requiredPoints,
   );
+  const ledgerBizId = (response as any)?.ledgerBizId;
 
   throwIfAborted(signal);
 
@@ -557,7 +564,7 @@ const generateGeminiPro2Images = async (
     throw new Error("Gemini 图片生成完成，但未返回图片");
   }
 
-  return Promise.all(
+  const images = await Promise.all(
     imageParts.map(async (part: any, index: number) => {
       const inlineData = part.inlineData ?? part.inline_data;
       const base64Data = inlineData.data;
@@ -583,6 +590,8 @@ const generateGeminiPro2Images = async (
       }
     }),
   );
+
+  return { images, ledgerBizId };
 };
 
 export const generateCanvasChatImages = async ({
@@ -610,59 +619,86 @@ export const generateCanvasChatImages = async ({
   throwIfAborted(signal);
 
   const payload = buildBasePayload(config, normalizedPrompt);
-  let images: NoteGenerationImage[];
+  let images: NoteGenerationImage[] = [];
+  let ledgerBizId: string | undefined;
 
-  if (config.imagePlatform === "google_pro2") {
-    onProgress?.("正在生成图片...");
-    images = await generateGeminiPro2Images(payload.prompt, signal);
-  } else if (payload.model === "midjourney") {
-    onProgress?.("已提交 Midjourney 任务，正在生成图片...");
-    const finalPrompt = buildMidjourneyPrompt({
-      prompt: payload.prompt,
-      referenceUrls: [],
-      styleUrls: [],
-    });
-    const response: any = await submitMjImagine({ prompt: finalPrompt });
-    if (response?.code !== 1) {
-      throw new Error(response?.description || "Midjourney 任务提交失败");
-    }
-
-    throwIfAborted(signal);
-
-    const taskId = extractTaskId(response);
-    if (!taskId) {
-      throw new Error("未返回图片生成任务 ID，请稍后再试");
-    }
-    images = await pollMidjourneyImageGeneration(taskId, signal);
-  } else {
-    onProgress?.("已提交图片任务，正在生成图片...");
-    const response: any = await createImageGeneration(payload);
-    throwIfAborted(signal);
-
-    const taskId = extractTaskId(response);
-    if (!taskId) {
-      throw new Error("未返回图片生成任务 ID，请稍后再试");
-    }
-    images = await pollStandardImageGeneration(taskId, signal);
-  }
-
-  await refreshBalanceAfterGeneration();
-
-  images = withPreviewImages(images);
-  onProgress?.("图片已生成，正在转存预览...");
-  images = await mirrorImagesToOss(images);
-  images = withPreviewImages(images);
   try {
-    images = await preloadImagePreviews(images, signal);
-  } catch (error: any) {
-    if (error?.name === "AbortError") {
-      throw error;
+    if (config.imagePlatform === "google_pro2") {
+      onProgress?.("正在生成图片...");
+      const result = await generateGeminiPro2Images(
+        payload.prompt,
+        requiredPoints,
+        signal,
+      );
+      images = result.images;
+      ledgerBizId = result.ledgerBizId;
+    } else if (payload.model === "midjourney") {
+      onProgress?.("已提交 Midjourney 任务，正在生成图片...");
+      const finalPrompt = buildMidjourneyPrompt({
+        prompt: payload.prompt,
+        referenceUrls: [],
+        styleUrls: [],
+      });
+      const response: any = await submitMjImagine(
+        { prompt: finalPrompt },
+        requiredPoints,
+      );
+      ledgerBizId = response?.ledgerBizId;
+      if (response?.code !== 1) {
+        throw new Error(response?.description || "Midjourney 任务提交失败");
+      }
+
+      throwIfAborted(signal);
+
+      const taskId = extractTaskId(response);
+      if (!taskId) {
+        throw new Error("未返回图片生成任务 ID，请稍后再试");
+      }
+      images = await pollMidjourneyImageGeneration(taskId, signal);
+    } else {
+      onProgress?.("已提交图片任务，正在生成图片...");
+      const response: any = await createImageGeneration(payload, requiredPoints);
+      ledgerBizId = response?.ledgerBizId;
+      throwIfAborted(signal);
+
+      const taskId = extractTaskId(response);
+      if (!taskId) {
+        throw new Error("未返回图片生成任务 ID，请稍后再试");
+      }
+      images = await pollStandardImageGeneration(taskId, signal);
     }
 
-    console.warn(
-      "[canvas-chat-image] image preview preload did not complete",
-      error,
-    );
+    await refreshBalanceAfterGeneration();
+
+    images = withPreviewImages(images);
+    onProgress?.("图片已生成，正在转存预览...");
+    images = await mirrorImagesToOss(images);
+    images = withPreviewImages(images);
+    try {
+      images = await preloadImagePreviews(images, signal);
+    } catch (error: any) {
+      if (error?.name === "AbortError") {
+        throw error;
+      }
+
+      console.warn(
+        "[canvas-chat-image] image preview preload did not complete",
+        error,
+      );
+    }
+
+    if (ledgerBizId) {
+      await confirmDesktopProxyScore(ledgerBizId, "image");
+    }
+  } catch (error) {
+    if (ledgerBizId) {
+      await refundDesktopProxyScore(
+        ledgerBizId,
+        getRequestErrorMessage(error) || "canvas chat image generation failed",
+        "image",
+      ).catch(() => { });
+    }
+    throw error;
   }
 
   /* removed legacy fire-and-forget preload
