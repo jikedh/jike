@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CanvasPersistedState } from "shared/types/zustand/canvas-flow";
 import {
+  buildCanvasPersistedState,
   hydrateCanvasNodesForRuntime,
   useCanvasFlowStore,
 } from "@/stores/canvasFlowStore";
@@ -28,14 +29,12 @@ export function useUndoRedo() {
     const state = useCanvasFlowStore.getState();
     const { nodes, edges, groups, nodeIdCounters } = state;
 
-    const entry: CanvasPersistedState = {
-      version: 2,
-      savedAt: Date.now(),
+    const entry: CanvasPersistedState = buildCanvasPersistedState({
       nodes: JSON.parse(JSON.stringify(nodes)),
       edges: JSON.parse(JSON.stringify(edges)),
       groups: JSON.parse(JSON.stringify(groups)),
       nodeIdCounters: { ...nodeIdCounters },
-    };
+    });
 
     const currentHistory = historyRef.current;
     const currentIndex = historyIndexRef.current;

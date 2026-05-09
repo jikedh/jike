@@ -185,13 +185,16 @@ const normalizeCanvasGroups = (
     .filter((group) => group.nodeIds.length > 0 || Boolean(group.frame));
 };
 
-const normalizeVideoResultItemForPersistence = (
-  item: NewVideoGenerationNode["result"]["data"][number],
-) => {
+type NewVideoResultItem = NonNullable<NewVideoGenerationNode["result"]>[
+  "data"
+][number];
+
+const normalizeVideoResultItemForPersistence = (item: NewVideoResultItem) => {
   const remoteUrl = getRemoteMediaUrl(item);
 
   return withVideoPosterFields({
     ...item,
+    ...(remoteUrl ? { url: remoteUrl } : {}),
     ...(remoteUrl ? { remoteUrl } : {}),
   });
 };
@@ -210,7 +213,9 @@ export const normalizeCanvasNodesForPersistence = (
         ...node.data,
         result: {
           ...node.data.result,
-          data: node.data.result.data.map(normalizeVideoResultItemForPersistence),
+          data: node.data.result.data.map(
+            normalizeVideoResultItemForPersistence,
+          ),
         },
       },
     };
@@ -2236,10 +2241,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         return node;
       });
+      const persistedReadyNodes =
+        normalizeCanvasNodesForPersistence(processedNodes);
 
       set({
         projectId,
-        nodes: processedNodes,
+        nodes: persistedReadyNodes,
         edges: data.edges,
         highlightedEdgeIds: [],
         highlightedSourceNodeIds: [],
@@ -2247,7 +2254,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         nodeIdCounters: data.nodeIdCounters,
         hydrated: true,
         historyResetTrigger: get().historyResetTrigger + 1,
-        groups: normalizeCanvasGroups(data.groups, processedNodes),
+        groups: normalizeCanvasGroups(data.groups, persistedReadyNodes),
         activeNodeId: null,
         selectedGroupId: null,
       });
@@ -2261,14 +2268,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const state = get();
       if (!state.projectId) return;
 
-      const data: CanvasPersistedState = {
-        version: CANVAS_STORAGE_VERSION,
-        savedAt: Date.now(),
-        nodes: state.nodes,
-        edges: state.edges,
-        groups: normalizeCanvasGroups(state.groups, state.nodes),
-        nodeIdCounters: state.nodeIdCounters,
-      };
+      const data = buildCanvasPersistedState(state);
       const storageKey = getCanvasDataKey(state.projectId);
       localStorage.setItem(storageKey, JSON.stringify(data));
 
@@ -2322,11 +2322,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           return;
         }
 
+        const persistedReadyNodes = normalizeCanvasNodesForPersistence(data.nodes);
+
         set({
-          nodes: data.nodes,
+          nodes: persistedReadyNodes,
           edges: data.edges,
           nodeIdCounters: data.nodeIdCounters,
-          groups: normalizeCanvasGroups(data.groups, data.nodes),
+          groups: normalizeCanvasGroups(data.groups, persistedReadyNodes),
           activeNodeId: null,
           selectedGroupId: null,
         });
@@ -4567,25 +4569,20 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      */
     exportCanvasData: () => {
       const state = get();
-      return {
-        version: CANVAS_STORAGE_VERSION,
-        savedAt: Date.now(),
-        nodes: state.nodes,
-        edges: state.edges,
-        groups: normalizeCanvasGroups(state.groups, state.nodes),
-        nodeIdCounters: state.nodeIdCounters,
-      };
+      return buildCanvasPersistedState(state);
     },
 
     /**
      * 导入画布数据（覆盖模式）
      */
     importCanvasData: (data) => {
+      const normalizedData = buildCanvasPersistedState(data);
+
       set({
-        nodes: data.nodes,
-        edges: data.edges,
-        nodeIdCounters: data.nodeIdCounters,
-        groups: normalizeCanvasGroups(data.groups, data.nodes),
+        nodes: normalizedData.nodes,
+        edges: normalizedData.edges,
+        nodeIdCounters: normalizedData.nodeIdCounters,
+        groups: normalizedData.groups,
         activeNodeId: null,
         selectedGroupId: null,
       });
