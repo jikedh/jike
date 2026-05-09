@@ -639,6 +639,7 @@ const pollImageGeneration = async (
   ) => void,
   getState: () => CanvasFlowStoreType,
   totalTaskCount: number,
+  ledgerBizId?: string,
 ) => {
   const startTime = Date.now();
 
@@ -696,6 +697,9 @@ const pollImageGeneration = async (
           toast.warning(
             `已生成 ${partialSuccessCount} 张图片，${partialFailedCount} 张失败`,
           );
+        }
+        if (ledgerBizId) {
+          refundDesktopProxyScore(ledgerBizId, "image generation timeout", "image").catch(() => { });
         }
         return;
       }
@@ -834,6 +838,10 @@ const pollImageGeneration = async (
           pendingTaskCounts.delete(nodeId);
         }
 
+        if (ledgerBizId) {
+          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
+        }
+
         await refreshBalanceAfterGeneration({
           scene: "image",
           nodeId,
@@ -910,6 +918,9 @@ const pollImageGeneration = async (
         if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
           pendingTaskCounts.delete(nodeId);
         }
+        if (ledgerBizId) {
+          refundDesktopProxyScore(ledgerBizId, "image generation failed", "image").catch(() => { });
+        }
         return;
       }
 
@@ -949,6 +960,9 @@ const pollImageGeneration = async (
     if (useChatSettingsStore.getState().autoSaveEnabled) {
       getState().saveGraph();
     }
+    if (ledgerBizId) {
+      refundDesktopProxyScore(ledgerBizId, "image poll error", "image").catch(() => { });
+    }
   }
 };
 
@@ -964,6 +978,7 @@ const pollMjImageGeneration = async (
   ) => void,
   getState: () => CanvasFlowStoreType,
   totalTaskCount: number,
+  ledgerBizId?: string,
 ) => {
   const startTime = Date.now();
   try {
@@ -1020,6 +1035,9 @@ const pollMjImageGeneration = async (
           toast.warning(
             `已生成 ${partialSuccessCount} 张图片，${partialFailedCount} 张失败`,
           );
+        }
+        if (ledgerBizId) {
+          refundDesktopProxyScore(ledgerBizId, "midjourney image generation timeout", "image").catch(() => { });
         }
         return;
       }
@@ -1127,6 +1145,10 @@ const pollMjImageGeneration = async (
           pendingTaskCounts.delete(nodeId);
         }
 
+        if (ledgerBizId) {
+          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
+        }
+
         await refreshBalanceAfterGeneration({
           scene: "image",
           nodeId,
@@ -1196,6 +1218,9 @@ const pollMjImageGeneration = async (
         if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
           pendingTaskCounts.delete(nodeId);
         }
+        if (ledgerBizId) {
+          refundDesktopProxyScore(ledgerBizId, "midjourney image generation failed", "image").catch(() => { });
+        }
         return;
       }
 
@@ -1231,6 +1256,9 @@ const pollMjImageGeneration = async (
     saveCurrentCanvasToHistory();
     if (useChatSettingsStore.getState().autoSaveEnabled) {
       getState().saveGraph();
+    }
+    if (ledgerBizId) {
+      refundDesktopProxyScore(ledgerBizId, "midjourney image poll error", "image").catch(() => { });
     }
   }
 };
@@ -3032,9 +3060,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       // 判断是否为 Midjourney 模型
       const isMidjourney = payload.model === "midjourney";
+      const scoreCost = Number(payload.requiredPoints ?? 0) || undefined;
 
       try {
         let taskId: string;
+        let ledgerBizId: string | undefined;
 
         if (isMidjourney) {
           const finalPrompt = buildMidjourneyPrompt({
@@ -3046,17 +3076,22 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           });
 
           // Midjourney 模型使用 zeakai API
-          const response = await submitMjImagine({ prompt: finalPrompt });
+          const response = await submitMjImagine({ prompt: finalPrompt }, scoreCost);
+          ledgerBizId = response?.ledgerBizId;
 
           // code === 1 表示提交成功
           if (response.code !== 1) {
+            if (ledgerBizId) {
+              refundDesktopProxyScore(ledgerBizId, response.description || "midjourney task creation failed", "image").catch(() => { });
+            }
             throw new Error(response.description || "Midjourney 任务提交失败");
           }
 
           taskId = response.result;
         } else {
           // 非 Midjourney 模型：创建图片生成任务，获取 task_id 后启动轮询
-          const response: any = await createImageGeneration(payload);
+          const response: any = await createImageGeneration(payload, scoreCost);
+          ledgerBizId = response?.ledgerBizId;
 
           // 从响应中提取 task_id（兼容多种返回结构）
           taskId =
@@ -3071,11 +3106,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             response?.id;
 
           if (!taskId) {
+            if (ledgerBizId) {
+              refundDesktopProxyScore(ledgerBizId, "image task creation failed: no task_id", "image").catch(() => { });
+            }
             throw new Error("未返回任务 ID，请稍后再试");
           }
         }
 
         if (!taskId) {
+          if (ledgerBizId) {
+            refundDesktopProxyScore(ledgerBizId, "image task creation failed: empty task_id", "image").catch(() => { });
+          }
           throw new Error("任务 ID 为空");
         }
 
@@ -3101,6 +3142,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             set,
             get,
             totalTaskCount,
+            ledgerBizId,
           );
         } else {
           // 非 Midjourney 模型使用标准轮询
@@ -3111,6 +3153,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             set,
             get,
             totalTaskCount,
+            ledgerBizId,
           );
         }
       } catch (startError) {
@@ -3193,6 +3236,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         resolution,
       });
       const ximuImageModel = resolveXimuImageModel(originalModel);
+      const scoreCost = Number(requiredPoints ?? 0) || undefined;
+      let ledgerBizId: string | undefined;
 
       // 更新节点状态为排队中
       set((state) => ({
@@ -3528,7 +3573,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const response: GeminiYwResponseBody = await generateGeminiContent(
           directGeminiModel,
           requestBody,
+          undefined,
+          scoreCost,
         );
+        ledgerBizId = (response as any)?.ledgerBizId;
 
         // 4. 解析响应，提取图片 Base64
         const candidates = response.candidates ?? [];
@@ -3588,6 +3636,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           get().saveGraph();
         }
 
+        if (ledgerBizId) {
+          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
+        }
+
         await refreshBalanceAfterGeneration({
           scene: "image",
           nodeId,
@@ -3619,6 +3671,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         saveCurrentCanvasToHistory();
         if (useChatSettingsStore.getState().autoSaveEnabled) {
           get().saveGraph();
+        }
+        if (ledgerBizId) {
+          refundDesktopProxyScore(ledgerBizId, rawServerMessage || "gemini image generation failed", "image").catch(() => { });
         }
         throw startError;
       }
