@@ -53,6 +53,10 @@ export interface ImageGenerationNode {
       url: string; // 远程 OSS URL（始终存储）
       remoteUrl?: string; // 兼容新字段，明确标识持久化远程地址
       displayUrl?: string; // 运行时展示地址，允许为 blob URL，不参与持久化
+      thumbnailUrl?: string;
+      posterUrl?: string;
+      coverUrl?: string;
+      mediaType?: "image" | "video";
       relativePath?: string; // 本地相对路径（兼容字段，仅用于 Electron 离线环境备用访问）
       localPath?: string; // 本地相对路径（仅用于 Electron 离线环境备用访问）
       localFileName?: string; // 本地文件名（兼容字段，仅用于 Electron 离线环境备用访问）
@@ -106,6 +110,10 @@ export interface NewVideoGenerationNode {
       remoteUrl?: string;
       displayUrl?: string;
       format?: string;
+      thumbnailUrl?: string;
+      posterUrl?: string;
+      coverUrl?: string;
+      mediaType?: "video";
       localPath?: string;
       localName?: string;
       [key: string]: any;

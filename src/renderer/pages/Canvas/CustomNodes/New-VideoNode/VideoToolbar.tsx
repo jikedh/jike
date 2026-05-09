@@ -14,6 +14,7 @@ import {
 import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
+import { readMediaFromLocal } from "service/projectStorage";
 import { GenerationStatus } from "shared/constants/enum";
 import { normalizeRequiredPoints } from "shared/constants/points";
 import type { NewVideoGenerationNode } from "shared/types/flow";
@@ -21,6 +22,7 @@ import { formatDuration } from "shared/utils/getVideoDuration";
 import { appendMediaSequences } from "shared/utils/mediaSequence";
 import { createPresignedOssUploadTarget } from "shared/utils/presignedOssUploader";
 import { cn, downloadImageFromUrl } from "shared/utils/utils";
+import { withVideoPosterFields } from "shared/utils/videoPoster";
 import { toast } from "sonner";
 import Lightbox from "yet-another-react-lightbox";
 import Download from "yet-another-react-lightbox/plugins/download";
@@ -48,7 +50,10 @@ import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useUserStore } from "@/stores/useUserStore";
 import { getAspectRatioFromMediaFile } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { useVideoFrameCapture } from "./hooks/useVideoFrameCapture";
-import { getVideoUrlsFromNodeData } from "./utils/video-url";
+import {
+  getVideoItemsFromNodeData,
+  getVideoUrlsFromNodeData,
+} from "./utils/video-url";
 import {
   saveToolMediaFileToProject,
   saveToolMediaUrlToProject,
@@ -912,7 +917,9 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   const [isTrimmingVideo, setIsTrimmingVideo] = useState(false);
   const [isSubtitlePanelOpen, setIsSubtitlePanelOpen] = useState(false);
   const [isSubmittingSubtitle, setIsSubmittingSubtitle] = useState(false);
+  const [previewVideoUrls, setPreviewVideoUrls] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const previewObjectUrlsRef = useRef<string[]>([]);
 
   const addNode = useCanvasFlowStore((state) => state.addNode);
   const projectId = useCanvasFlowStore((state) => state.projectId);
@@ -930,6 +937,9 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
   const videoUrls = useMemo(() => {
     return getVideoUrlsFromNodeData(data);
+  }, [data]);
+  const videoItems = useMemo(() => {
+    return getVideoItemsFromNodeData(data);
   }, [data]);
   const currentVideoUrl = videoUrls[0];
 
@@ -949,6 +959,55 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
     ],
     [],
   );
+
+  const revokePreviewObjectUrls = useCallback(() => {
+    previewObjectUrlsRef.current.forEach((url) => {
+      URL.revokeObjectURL(url);
+    });
+    previewObjectUrlsRef.current = [];
+  }, []);
+
+  const buildPreviewVideoUrls = useCallback(async () => {
+    revokePreviewObjectUrls();
+
+    const urls = await Promise.all(
+      videoItems.map(async (item) => {
+        if (!item.localPath) {
+          return item.displayUrl || item.remoteUrl || item.url || "";
+        }
+
+        try {
+          const bytes = await readMediaFromLocal(item.localPath);
+          if (!bytes) {
+            return item.displayUrl || item.remoteUrl || item.url || "";
+          }
+
+          const ext = (item.localName || item.localPath)
+            .split("?")[0]
+            .split(".")
+            .pop();
+          const objectUrl = URL.createObjectURL(
+            new Blob([bytes], {
+              type: `video/${ext || item.format || "mp4"}`,
+            }),
+          );
+          previewObjectUrlsRef.current.push(objectUrl);
+          return objectUrl;
+        } catch (error) {
+          console.warn("[视频预览] 读取本地视频失败，使用远程地址:", error);
+          return item.displayUrl || item.remoteUrl || item.url || "";
+        }
+      }),
+    );
+
+    return urls.filter((url): url is string => Boolean(url));
+  }, [revokePreviewObjectUrls, videoItems]);
+
+  useEffect(() => {
+    return () => {
+      revokePreviewObjectUrls();
+    };
+  }, [revokePreviewObjectUrls]);
 
   // 触发文件选择
   const handleUploadClick = () => {
@@ -976,7 +1035,11 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       const currentData = data.result?.data ?? [];
       const resultItem = await saveToolMediaFileToProject(
         projectId,
-        { url: uploadedUrl, remoteUrl: uploadedUrl, format: fileExt },
+        withVideoPosterFields({
+          url: uploadedUrl,
+          remoteUrl: uploadedUrl,
+          format: fileExt,
+        }),
         file,
         "video",
         fileExt,
@@ -1021,6 +1084,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         toast.info("暂无可预览视频");
         return;
       }
+      setPreviewVideoUrls(await buildPreviewVideoUrls());
       setIsLightboxOpen(true);
       return;
     }
@@ -1126,11 +1190,11 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
         const resultItem = await saveToolMediaUrlToProject(
           projectId,
-          {
+          withVideoPosterFields({
             url: response.data.url,
             remoteUrl: response.data.url,
             format: response.data.format,
-          },
+          }),
           "video",
           response.data.format || "mp4",
         );
@@ -1220,7 +1284,11 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
             const resultItem = await saveToolMediaUrlToProject(
               projectId,
-              { url: publicUrl, remoteUrl: publicUrl, format: "mp4" },
+              withVideoPosterFields({
+                url: publicUrl,
+                remoteUrl: publicUrl,
+                format: "mp4",
+              }),
               "video",
               "mp4",
             );
@@ -1356,7 +1424,13 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             progress: 100,
             result: {
               type: "video",
-              data: [{ url: target.publicUrl, format: "mp4" }],
+              data: [
+                withVideoPosterFields({
+                  url: target.publicUrl,
+                  remoteUrl: target.publicUrl,
+                  format: "mp4",
+                }),
+              ],
             },
             error: undefined,
           } as any);
@@ -1485,8 +1559,10 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           open={isLightboxOpen}
           close={() => {
             setIsLightboxOpen(false);
+            revokePreviewObjectUrls();
+            setPreviewVideoUrls([]);
           }}
-          slides={videoUrls
+          slides={(previewVideoUrls.length > 0 ? previewVideoUrls : videoUrls)
             .filter((url): url is string => !!url)
             .map((url) => ({
               type: "video" as const,

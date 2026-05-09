@@ -490,7 +490,7 @@ const canPassMediaToNodeType = (
   if (targetNodeType === "newVideo") {
     return (
       sourceNodeType === "image" ||
-      sourceNodeType === "video" ||
+      sourceNodeType === "newVideo" ||
       sourceNodeType === "audio"
     );
   }
@@ -5153,7 +5153,7 @@ export const CanvasFlow = ({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
-                  onSelect={() => handleCreateNodeFromQuickAddMenu("video")}
+                  onSelect={() => handleCreateNodeFromQuickAddMenu("newVideo")}
                   style={{ display: "none" }}
                 >
                   <IconVideo size={16} />

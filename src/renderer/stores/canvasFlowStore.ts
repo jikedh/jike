@@ -104,6 +104,7 @@ import {
 import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
 import { toChineseNumber } from "shared/utils/utils";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
+import { withVideoPosterFields } from "shared/utils/videoPoster";
 import { toast } from "sonner";
 import { create } from "zustand";
 import {
@@ -1387,12 +1388,13 @@ const pollVideoTaskGeneration = async (
               }
             }
 
-            return {
+            return withVideoPosterFields({
               ...item,
               url: ossUrl,
+              remoteUrl: ossUrl,
               localName,
               localPath,
-            };
+            });
           }),
         );
 
@@ -1670,12 +1672,13 @@ const pollNewVideoGeneration = async ({
               }
             }
 
-            return {
+            return withVideoPosterFields({
               ...item,
               url: ossUrl,
+              remoteUrl: ossUrl,
               localName,
               localPath,
-            };
+            });
           }),
         );
 
@@ -4184,6 +4187,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             const copiedUrl = await copyVideoUrlToOss(videoUrl);
             if (copiedUrl) {
               resultItem.url = copiedUrl;
+              resultItem.remoteUrl = copiedUrl;
             }
           } catch (copyError) {
             console.error(
@@ -4191,6 +4195,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               copyError,
             );
           }
+          resultItem = withVideoPosterFields(resultItem);
 
           set((state) => ({
             nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {

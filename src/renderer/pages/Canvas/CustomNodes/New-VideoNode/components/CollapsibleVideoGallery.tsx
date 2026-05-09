@@ -1,9 +1,17 @@
-import { IconChevronDown, IconRefresh, IconVideo } from "@tabler/icons-react";
+import {
+  IconChevronDown,
+  IconRefresh,
+  IconVideo,
+} from "@tabler/icons-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import { readMediaFromLocal } from "service/projectStorage";
 import { getMediaSequence } from "shared/utils/mediaSequence";
 import { cn } from "shared/utils/utils";
+import {
+  getVideoPosterUrl,
+  withVideoPosterFields,
+} from "shared/utils/videoPoster";
 import { VideoPlayer } from "@/components/ui/video-player";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
@@ -14,6 +22,10 @@ type VideoItem = {
   localPath?: string;
   localName?: string;
   remoteUrl?: string;
+  thumbnailUrl?: string;
+  posterUrl?: string;
+  coverUrl?: string;
+  mediaType?: string;
   pending?: boolean;
 };
 
@@ -22,6 +34,7 @@ type CollapsibleVideoGalleryProps = {
   nodeId?: string;
   updateNewVideoNodeData?: (nodeId: string, patch: any) => void;
   onExpandedChange?: (expanded: boolean) => void;
+  isNodeSelected?: boolean;
   frameSize?: {
     width: number;
     height: number;
@@ -121,26 +134,38 @@ const getStackCardStyle = (
   } as const;
 };
 
+const getVideoKey = (item: VideoItem, index: number) =>
+  `${item.remoteUrl || item.localPath || item.url || "pending"}-${index}`;
+
 export const CollapsibleVideoGallery = memo(
   ({
     videos,
     nodeId,
     updateNewVideoNodeData,
     onExpandedChange,
+    isNodeSelected = false,
     frameSize,
   }: CollapsibleVideoGalleryProps) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
     const brokenIndexesRef = useRef<Set<number>>(new Set());
+    const brokenPosterIndexesRef = useRef<Set<number>>(new Set());
     const [, forceUpdate] = useState(0);
     const refreshingIndexesRef = useRef<Set<number>>(new Set());
     const [, forceRefreshUpdate] = useState(0);
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const [localVideoUrls, setLocalVideoUrls] = useState<
+      Record<string, string>
+    >({});
+    const [localVideoFallbackKeys, setLocalVideoFallbackKeys] = useState<
+      Record<string, true>
+    >({});
+    const localVideoObjectUrlsRef = useRef<Record<string, string>>({});
 
     const totalCount = videos.length;
 
-    const displayUrls = useMemo(() => {
-      return videos.map((item) => item.url ?? "");
+    const posterUrls = useMemo(() => {
+      return videos.map((item) => getVideoPosterUrl(item) ?? "");
     }, [videos]);
     const badgeText = `${totalCount}个`;
     const cardWidth = frameSize?.width ?? 180;
@@ -172,12 +197,142 @@ export const CollapsibleVideoGallery = memo(
       }
     }, []);
 
+    const handlePosterError = useCallback((index: number) => {
+      if (!brokenPosterIndexesRef.current.has(index)) {
+        brokenPosterIndexesRef.current.add(index);
+        forceUpdate((n) => n + 1);
+      }
+    }, []);
+
     const isRefreshing = useCallback((index: number) => {
       return refreshingIndexesRef.current.has(index);
     }, []);
 
     const isBroken = useCallback((index: number) => {
       return brokenIndexesRef.current.has(index);
+    }, []);
+
+    const isPosterBroken = useCallback((index: number) => {
+      return brokenPosterIndexesRef.current.has(index);
+    }, []);
+
+    useEffect(() => {
+      let cancelled = false;
+      const desiredKeys = new Set<string>();
+
+      const pruneLocalUrls = () => {
+        for (const [key, url] of Object.entries(
+          localVideoObjectUrlsRef.current,
+        )) {
+          if (!desiredKeys.has(key)) {
+            URL.revokeObjectURL(url);
+            delete localVideoObjectUrlsRef.current[key];
+          }
+        }
+
+        setLocalVideoUrls((prev) => {
+          const next = Object.fromEntries(
+            Object.entries(prev).filter(([key]) => desiredKeys.has(key)),
+          );
+          return Object.keys(next).length === Object.keys(prev).length
+            ? prev
+            : next;
+        });
+        setLocalVideoFallbackKeys((prev) => {
+          const next = Object.fromEntries(
+            Object.entries(prev).filter(([key]) => desiredKeys.has(key)),
+          ) as Record<string, true>;
+          return Object.keys(next).length === Object.keys(prev).length
+            ? prev
+            : next;
+        });
+      };
+
+      const loadLocalVideo = async (item: VideoItem, videoKey: string) => {
+        try {
+          const bytes = await readMediaFromLocal(item.localPath as string);
+          if (!bytes || cancelled) {
+            if (!bytes) {
+              setLocalVideoFallbackKeys((prev) => ({
+                ...prev,
+                [videoKey]: true,
+              }));
+            }
+            return;
+          }
+
+          const ext = (item.localName || item.localPath)
+            .split("?")[0]
+            .split(".")
+            .pop();
+          const objectUrl = URL.createObjectURL(
+            new Blob([bytes], {
+              type: `video/${ext || item.format || "mp4"}`,
+            }),
+          );
+
+          if (cancelled) {
+            URL.revokeObjectURL(objectUrl);
+            return;
+          }
+
+          const previousUrl = localVideoObjectUrlsRef.current[videoKey];
+          if (previousUrl) {
+            URL.revokeObjectURL(previousUrl);
+          }
+          localVideoObjectUrlsRef.current[videoKey] = objectUrl;
+          setLocalVideoUrls((prev) => ({
+            ...prev,
+            [videoKey]: objectUrl,
+          }));
+        } catch (error) {
+          console.warn("[视频本地播放] 读取本地视频失败:", error);
+          if (!cancelled) {
+            setLocalVideoFallbackKeys((prev) => ({
+              ...prev,
+              [videoKey]: true,
+            }));
+          }
+        }
+      };
+
+      videos.forEach((item, index) => {
+        const shouldRenderPlayer =
+          isExpanded || (index === 0 && isNodeSelected);
+
+        if (item.pending || !item.localPath || !shouldRenderPlayer) {
+          return;
+        }
+
+        const videoKey = getVideoKey(item, index);
+        desiredKeys.add(videoKey);
+        if (localVideoObjectUrlsRef.current[videoKey]) {
+          return;
+        }
+
+        void loadLocalVideo(item, videoKey);
+      });
+
+      pruneLocalUrls();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [isExpanded, isNodeSelected, videos]);
+
+    useEffect(() => {
+      if (!isNodeSelected && isExpanded) {
+        setIsExpanded(false);
+      }
+    }, [isExpanded, isNodeSelected]);
+
+    useEffect(() => {
+      return () => {
+        Object.values(localVideoObjectUrlsRef.current).forEach((url) => {
+          URL.revokeObjectURL(url);
+        });
+        localVideoObjectUrlsRef.current = {};
+      };
     }, []);
 
     useEffect(() => {
@@ -249,6 +404,7 @@ export const CollapsibleVideoGallery = memo(
             url: ossResult.url,
             remoteUrl: ossResult.url,
           };
+          newVideos[index] = withVideoPosterFields(newVideos[index]);
 
           updateNewVideoNodeData(nodeId, {
             result: {
@@ -258,6 +414,7 @@ export const CollapsibleVideoGallery = memo(
           });
 
           brokenIndexesRef.current.delete(index);
+          brokenPosterIndexesRef.current.delete(index);
         } catch (error) {
           console.error("[刷新视频] 刷新失败:", error);
         } finally {
@@ -326,7 +483,22 @@ export const CollapsibleVideoGallery = memo(
             const sequence = getMediaSequence(item, index);
             const shouldUseCardChrome =
               totalCount > 1 && (!isExpanded || isSecondary);
-            const displayUrl = displayUrls[index] ?? "";
+            const posterUrl = posterUrls[index] ?? "";
+            const videoKey = getVideoKey(item, index);
+            const shouldRenderPlayer =
+              isExpanded || (isPrimary && isNodeSelected);
+            const remoteVideoUrl = item.remoteUrl || item.url || "";
+            const isWaitingForLocalVideo =
+              shouldRenderPlayer &&
+              Boolean(item.localPath) &&
+              !localVideoUrls[videoKey] &&
+              !localVideoFallbackKeys[videoKey];
+            const displayUrl =
+              shouldRenderPlayer && localVideoUrls[videoKey]
+                ? localVideoUrls[videoKey]
+                : isWaitingForLocalVideo
+                  ? ""
+                  : remoteVideoUrl;
             const expandedLayout = expandedLayouts[index];
             const stackStyle = getStackCardStyle(
               index,
@@ -341,7 +513,7 @@ export const CollapsibleVideoGallery = memo(
 
             return (
               <div
-                key={`${item.remoteUrl || item.localPath || item.url}-${index}`}
+                key={videoKey}
                 role="presentation"
                 className={cn(
                   "group/card absolute left-0 top-0 rounded-[14px] transition-[transform,filter,opacity,box-shadow,border-color,width,height] duration-[700ms] ease-[cubic-bezier(0.2,0.85,0.15,1)] will-change-[transform,filter,opacity,width,height]",
@@ -414,12 +586,21 @@ export const CollapsibleVideoGallery = memo(
                       </div>
                       <span>生成中...</span>
                     </div>
-                  ) : displayUrl && !isBroken(index) ? (
+                  ) : isWaitingForLocalVideo ? (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-[13px] bg-[#121216] text-[11px] text-muted-foreground">
+                      <div className="relative h-7 w-7">
+                        <div className="absolute inset-0 rounded-full border-2 border-primary/25" />
+                        <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary" />
+                      </div>
+                      <span>读取本地视频...</span>
+                    </div>
+                  ) : displayUrl && shouldRenderPlayer && !isBroken(index) ? (
                     <VideoPlayer
                       src={displayUrl}
                       muted={!isPrimary}
                       loop={!isPrimary}
                       autoPlay={!isPrimary}
+                      poster={posterUrl || undefined}
                       playsInline
                       preload="metadata"
                       showDefaultControls={isPrimary}
@@ -433,6 +614,37 @@ export const CollapsibleVideoGallery = memo(
                       )}
                       onError={() => handleVideoError(index)}
                     />
+                  ) : displayUrl || (posterUrl && !isPosterBroken(index)) ? (
+                    <div
+                      className={cn(
+                        "relative flex h-full w-full items-center justify-center overflow-hidden rounded-[13px] bg-[#121216]",
+                        posterUrl && !isPosterBroken(index)
+                          ? ""
+                          : "text-[11px] text-muted-foreground",
+                      )}
+                    >
+                      {posterUrl && !isPosterBroken(index) ? (
+                        <img
+                          src={posterUrl}
+                          alt={`视频封面-${sequence}`}
+                          className={cn(
+                            "h-full w-full rounded-[13px] transition-transform duration-300 ease-out",
+                            isExpanded && isSecondary
+                              ? "object-contain"
+                              : "object-cover",
+                            isSecondary && isFocused && "scale-[1.08]",
+                          )}
+                          loading="lazy"
+                          draggable={false}
+                          onError={() => handlePosterError(index)}
+                        />
+                      ) : (
+                        <div className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-[13px] bg-[#121216] text-[11px] text-muted-foreground">
+                          <IconVideo size={24} className="text-white/35" />
+                          <span>Video</span>
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="flex h-full w-full items-center justify-center rounded-[13px] bg-[#121216] text-[11px] text-muted-foreground">
                       视频加载失败

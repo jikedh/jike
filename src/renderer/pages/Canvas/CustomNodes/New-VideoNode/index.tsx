@@ -263,6 +263,7 @@ const NewVideoNode = ({
               nodeId={id}
               updateNewVideoNodeData={updateNewVideoNodeData}
               onGalleryExpandedChange={setIsGalleryExpanded}
+              isNodeSelected={selected}
               frameSize={contentFrameSize}
             />
           </div>
