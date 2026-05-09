@@ -1,5 +1,6 @@
 import {
   IconCopy,
+  IconArchive,
   IconLayoutGrid,
   IconPhoto,
   IconTrash,
@@ -25,6 +26,7 @@ type NodeContextMenuProps = PropsWithChildren<{
   onGridCrop?: () => void;
   onSeparateToNodes?: () => void;
   onSetAsCover?: () => void;
+  onCreateAsset?: () => void;
   hasMultipleResults?: boolean;
   separateToNodesLabel?: string;
 }>;
@@ -37,6 +39,7 @@ export const NodeContextMenu = ({
   onGridCrop,
   onSeparateToNodes,
   onSetAsCover,
+  onCreateAsset,
   hasMultipleResults,
   separateToNodesLabel = "独立为图片",
 }: NodeContextMenuProps) => {
@@ -108,6 +111,16 @@ export const NodeContextMenu = ({
           >
             <IconPhoto size={15} />
             设置为封面图
+          </ContextMenuItem>
+        )}
+
+        {onCreateAsset && (
+          <ContextMenuItem
+            className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer transition-colors"
+            onSelect={onCreateAsset}
+          >
+            <IconArchive size={15} />
+            创建资产
           </ContextMenuItem>
         )}
 

@@ -34,6 +34,7 @@ export type ChatSettingsStoreType = {
   nodeSearchVisible: boolean;
   devToolsVisible: boolean;
   storagePath: string;
+  assetStoragePath: string;
   ximuCardCode: string;
 
   // ── 配对 setter ───────────────────────────────
@@ -72,6 +73,7 @@ export type ChatSettingsStoreType = {
   setNodeSearchVisible: (visible: boolean) => void;
   setDevToolsVisible: (visible: boolean) => void;
   setStoragePath: (path: string) => void;
+  setAssetStoragePath: (path: string) => void;
   setXimuCardCode: (cardCode: string) => void;
 
   // ── 业务 action ───────────────────────────────

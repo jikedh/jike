@@ -54,6 +54,10 @@ export type StorageApi = {
     url: string,
     relativePath: string,
   ) => Promise<StorageResult<{ path?: string }>>;
+  saveBufferToFile: (
+    defaultFileName: string,
+    buffer: ArrayBuffer,
+  ) => Promise<StorageResult<{ path?: string; canceled?: boolean }>>;
   mediaExists: (basePath: string, relativePath: string) => Promise<boolean>;
   renameProject: (
     basePath: string,

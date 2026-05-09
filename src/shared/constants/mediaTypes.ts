@@ -36,6 +36,49 @@ export const SUPPORTED_AUDIO_EXTENSIONS = [
 ] as const;
 
 /**
+ * 资产库支持的图片格式扩展名
+ * 这里比通用画布上传更收窄，避免 bmp/svg 等格式在资产预览、AI 引用链路中表现不一致。
+ */
+export const SUPPORTED_ASSET_IMAGE_EXTENSIONS = [
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+] as const;
+
+/**
+ * 资产库支持的视频格式扩展名
+ */
+export const SUPPORTED_ASSET_VIDEO_EXTENSIONS = [
+  ".mp4",
+  ".webm",
+  ".mov",
+] as const;
+
+/**
+ * 资产库支持的音频格式扩展名
+ */
+export const SUPPORTED_ASSET_AUDIO_EXTENSIONS = [
+  ".mp3",
+  ".wav",
+  ".m4a",
+  ".aac",
+  ".ogg",
+] as const;
+
+export const SUPPORTED_ASSET_EXTENSIONS = [
+  ...SUPPORTED_ASSET_IMAGE_EXTENSIONS,
+  ...SUPPORTED_ASSET_VIDEO_EXTENSIONS,
+  ...SUPPORTED_ASSET_AUDIO_EXTENSIONS,
+] as const;
+
+export const ASSET_FILE_ACCEPT = SUPPORTED_ASSET_EXTENSIONS.join(",");
+
+export const ASSET_SUPPORTED_TYPES_LABEL =
+  "图片 jpg/jpeg/png/webp/gif，视频 mp4/webm/mov，音频 mp3/wav/m4a/aac/ogg";
+
+/**
  * 图片 MIME 类型映射
  */
 export const IMAGE_MIME_TYPES = [
@@ -84,6 +127,24 @@ function getFileExtension(filename: string): string {
   const lastDot = filename.lastIndexOf(".");
   if (lastDot === -1) return "";
   return filename.slice(lastDot).toLowerCase();
+}
+
+/**
+ * 根据文件扩展名判断是否为资产库支持的媒体类型。
+ * 资产库存储使用原始扩展名落盘，因此这里以扩展名作为准入标准。
+ */
+export function getAssetMediaTypeByFileName(
+  filename: string,
+): MediaType | null {
+  const ext = getFileExtension(filename);
+  if (SUPPORTED_ASSET_IMAGE_EXTENSIONS.includes(ext as any)) return "image";
+  if (SUPPORTED_ASSET_VIDEO_EXTENSIONS.includes(ext as any)) return "video";
+  if (SUPPORTED_ASSET_AUDIO_EXTENSIONS.includes(ext as any)) return "audio";
+  return null;
+}
+
+export function getAssetMediaType(file: File): MediaType | null {
+  return getAssetMediaTypeByFileName(file.name);
 }
 
 /**

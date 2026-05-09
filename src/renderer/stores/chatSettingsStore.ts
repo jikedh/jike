@@ -35,6 +35,7 @@ const INITIAL_STATE: Pick<
   | "nodeSearchVisible"
   | "devToolsVisible"
   | "storagePath"
+  | "assetStoragePath"
   | "ximuCardCode"
 > = {
   defaultModel: DEFAULT_CANVAS_CHAT_MODEL,
@@ -68,6 +69,7 @@ const INITIAL_STATE: Pick<
   nodeSearchVisible: false,
   devToolsVisible: false,
   storagePath: "",
+  assetStoragePath: "",
   ximuCardCode: "",
 };
 
@@ -139,6 +141,7 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
       setNodeSearchVisible: (visible) => set({ nodeSearchVisible: visible }),
       setDevToolsVisible: (visible) => set({ devToolsVisible: visible }),
       setStoragePath: (path) => set({ storagePath: path }),
+      setAssetStoragePath: (path) => set({ assetStoragePath: path }),
       setXimuCardCode: (cardCode) => set({ ximuCardCode: cardCode }),
       resetToDefault: () => set(INITIAL_STATE),
     }),
