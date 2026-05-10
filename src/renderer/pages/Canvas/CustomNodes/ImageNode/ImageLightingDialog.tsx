@@ -17,7 +17,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { uploadFileToOSS } from "service/oss";
-import { IMAGE_MODELS } from "shared/constants/ai-models";
+import {
+  IMAGE_MODELS,
+  getVisibleImageModels,
+} from "shared/constants/ai-models";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { cn } from "shared/utils/utils";
 import { analyzeLightingReferenceImage } from "@/api/ai";
@@ -30,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import {
   DEFAULT_LIGHTING_CONFIG,
   disposeLightingRenderer,
@@ -255,6 +259,20 @@ export const ImageLightingDialog = ({
   onOpenChange,
   onConfirm,
 }: ImageLightingDialogProps) => {
+  const adobeChannelModelsEnabled = useChatSettingsStore(
+    (state) => state.adobeChannelModelsEnabled,
+  );
+  const ximuChannelModelsEnabled = useChatSettingsStore(
+    (state) => state.ximuChannelModelsEnabled,
+  );
+  const visibleImageModels = useMemo(
+    () =>
+      getVisibleImageModels(
+        adobeChannelModelsEnabled,
+        ximuChannelModelsEnabled,
+      ),
+    [adobeChannelModelsEnabled, ximuChannelModelsEnabled],
+  );
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewSphereRef = useRef<HTMLDivElement | null>(null);
   const previewSpaceRef = useRef<HTMLDivElement | null>(null);
@@ -1229,7 +1247,7 @@ export const ImageLightingDialog = ({
                     <SelectValue placeholder="选择模型" />
                   </SelectTrigger>
                   <SelectContent className="z-[230] border-white/10 bg-[#252528] text-white">
-                    {IMAGE_MODELS.map((item) => (
+                    {visibleImageModels.map((item) => (
                       <SelectItem
                         key={item.id}
                         value={String(item.id)}

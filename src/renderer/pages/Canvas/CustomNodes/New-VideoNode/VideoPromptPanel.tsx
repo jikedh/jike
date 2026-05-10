@@ -29,7 +29,11 @@ import {
 } from "./components/BottomParamsBar";
 import { ModeToggleBar } from "./components/ModeToggleBar";
 import { ReferenceThumbnails } from "./components/ReferenceThumbnails";
-import { type MentionItem, VIDEO_MODEL_OPTIONS } from "./constants/mockData";
+import {
+  type MentionItem,
+  VIDEO_MODEL_OPTIONS,
+  getVideoModelOptions,
+} from "./constants/mockData";
 import {
   ALL_MODE_KEYS,
   getFirstSupportedModeForModel,
@@ -79,13 +83,14 @@ const buildPromptDraftHtml = (html?: string, text?: string) => {
 const normalizeNewVideoModelId = (
   value: string | undefined,
   mode?: VideoModeKey,
+  modelOptions = VIDEO_MODEL_OPTIONS,
 ) => {
   const availableModelIds = new Set(
-    VIDEO_MODEL_OPTIONS.map((option) => option.value),
+    modelOptions.map((option) => option.value),
   );
   const fallbackModel = availableModelIds.has("adobe-sora2-pro")
     ? "adobe-sora2-pro"
-    : VIDEO_MODEL_OPTIONS[0].value;
+    : modelOptions[0]?.value ?? VIDEO_MODEL_OPTIONS[0].value;
 
   // Q2 模型暂时屏蔽：历史节点或上一次错误拆分的 ID 统一落到 Q3 Pro，避免下拉出现空值。
   if (
@@ -300,6 +305,13 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const setDefaultNewVideoPreset = useChatSettingsStore(
     (state) => state.setDefaultNewVideoPreset,
   );
+  const adobeChannelModelsEnabled = useChatSettingsStore(
+    (state) => state.adobeChannelModelsEnabled,
+  );
+  const videoModelOptions = useMemo(
+    () => getVideoModelOptions(adobeChannelModelsEnabled),
+    [adobeChannelModelsEnabled],
+  );
 
   const currentData = useCanvasFlowStore((state) => {
     const node = state.nodes.find(
@@ -314,7 +326,11 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const initialMode = isVideoModeKey(currentData?.metadata?.mode)
     ? currentData?.metadata?.mode
     : "all-reference";
-  const model = normalizeNewVideoModelId(currentData?.model, initialMode);
+  const model = normalizeNewVideoModelId(
+    currentData?.model,
+    initialMode,
+    videoModelOptions,
+  );
 
   const [activeMode, setActiveMode] = useState<VideoModeKey>(initialMode);
   const [selectedModel, setSelectedModel] = useState(model);
@@ -1221,6 +1237,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
 
         <BottomParamsBar
           selectedModel={selectedModel}
+          modelOptions={videoModelOptions}
           selectedParams={selectedParams}
           prompt={promptText}
           referenceItems={generationReferenceItems}

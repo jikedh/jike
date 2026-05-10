@@ -12,9 +12,15 @@ import {
 import {
   ADOBE_GPT_IMAGE2_MODEL,
   ADOBE_NANO_BANANA_PRO_MODEL,
+  getVisibleImageModels,
+  isAdobeImageGenerationModel,
+  isXimuGptImageGenerationModel,
+  isXimuImageGenerationModel,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
+  XIMU_GPT_IMAGE2_VIP_MODEL,
   XIMU_GPT_IMAGE2_MODEL,
+  XIMU_NANO_BANANA2_MODEL,
   XIMU_NANO_BANANA_PRO_MODEL,
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
@@ -33,6 +39,7 @@ import {
   getXimuResultPayload,
   resolveXimuGptAspectRatio,
   resolveXimuImageSize,
+  resolveXimuNanoBanana2AspectRatio,
   resolveXimuNanoBananaProAspectRatio,
   XIMU_TASK_FAILED_STATUSES,
   XIMU_TASK_SUCCESS_STATUSES,
@@ -136,6 +143,10 @@ import {
   getVideoDimensions,
 } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { buildMidjourneyPrompt } from "@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt";
+import {
+  getVisibleVideoModels,
+  isAdobeVideoGenerationModel,
+} from "@/pages/Canvas/CustomNodes/New-VideoNode/constants/videoModelCapabilities";
 import { aiVideoTrackingService } from "@/services/aiVideoTracking";
 import { useUserStore } from "@/stores/useUserStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
@@ -424,7 +435,13 @@ const resolveAdobeImageModel = ({
 
 const resolveXimuImageModel = (model?: string) => {
   if (model === XIMU_GPT_IMAGE2_MODEL) {
+    return "gpt-image-2" as const;
+  }
+  if (model === XIMU_GPT_IMAGE2_VIP_MODEL) {
     return "gpt-image-2-vip" as const;
+  }
+  if (model === XIMU_NANO_BANANA2_MODEL) {
+    return "nano-banana-2" as const;
   }
   if (model === XIMU_NANO_BANANA_PRO_MODEL) {
     return "nano-banana-pro" as const;
@@ -2433,6 +2450,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         defaultImagePlatform,
         defaultImageSize,
         defaultImageResolution,
+        adobeChannelModelsEnabled,
+        ximuChannelModelsEnabled,
         defaultNewVideoModel,
         defaultNewVideoAspectRatio,
         defaultNewVideoDuration,
@@ -2441,6 +2460,21 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         defaultNewVideoGenerateAudio,
         defaultNewVideoPromptExtend,
       } = useChatSettingsStore.getState();
+      const visibleNewVideoModelIds = new Set(
+        getVisibleVideoModels(adobeChannelModelsEnabled).map((model) => model.id),
+      );
+      const visibleImageModel = getVisibleImageModels(
+        adobeChannelModelsEnabled,
+        ximuChannelModelsEnabled,
+      ).find(
+        (item) =>
+          item.model === defaultImageModel &&
+          item.platform === defaultImagePlatform,
+      );
+      const isDefaultHiddenChannelImageModel =
+        (isAdobeImageGenerationModel(defaultImageModel) ||
+          isXimuImageGenerationModel(defaultImageModel)) &&
+        !visibleImageModel;
       const finalNode =
         newNode.type === "audioNode"
           ? {
@@ -2455,8 +2489,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               ...newNode,
               data: {
                 ...newNode.data,
-                model: defaultImageModel || newNode.data.model,
-                platform: defaultImagePlatform || newNode.data.platform,
+                model: isDefaultHiddenChannelImageModel
+                  ? newNode.data.model
+                  : defaultImageModel || newNode.data.model,
+                platform: isDefaultHiddenChannelImageModel
+                  ? newNode.data.platform
+                  : defaultImagePlatform || newNode.data.platform,
                 size: defaultImageSize || newNode.data.size,
                 resolution: defaultImageResolution || newNode.data.resolution,
               },
@@ -2475,9 +2513,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                     "vidu",
                     "pixverse",
                     "happyhorse",
+                    "adobe-sora2-pro",
                     "keling",
-                  ].includes(defaultNewVideoModel ?? "")
+                  ].includes(defaultNewVideoModel ?? "") &&
+                    visibleNewVideoModelIds.has(defaultNewVideoModel ?? "")
                     ? defaultNewVideoModel
+                    : isAdobeVideoGenerationModel(newNode.data.model) &&
+                        !visibleNewVideoModelIds.has(newNode.data.model)
+                      ? "seedance-2.0-pro"
                     : newNode.data.model,
                   aspect_ratio:
                     defaultNewVideoAspectRatio || newNode.data.aspect_ratio,
@@ -3518,17 +3561,26 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
           const ximuReferenceUrls = await normalizeXimuReferenceUrls(imageUrls);
           const request =
-            originalModel === XIMU_GPT_IMAGE2_MODEL
+            isXimuGptImageGenerationModel(originalModel)
               ? buildXimuGptImageRequest({
+                model: ximuImageModel as any,
                 cardCode: ximuCardCode,
                 prompt,
-                aspectRatio: resolveXimuGptAspectRatio({ size, resolution }),
+                aspectRatio: resolveXimuGptAspectRatio({
+                  model: ximuImageModel as any,
+                  size,
+                  resolution,
+                }),
                 urls: ximuReferenceUrls,
               })
               : buildXimuNanoBananaRequest({
+                model: ximuImageModel as any,
                 cardCode: ximuCardCode,
                 prompt,
-                aspectRatio: resolveXimuNanoBananaProAspectRatio(size),
+                aspectRatio:
+                  originalModel === XIMU_NANO_BANANA2_MODEL
+                    ? resolveXimuNanoBanana2AspectRatio(size)
+                    : resolveXimuNanoBananaProAspectRatio(size),
                 imageSize: resolveXimuImageSize(resolution),
                 urls: ximuReferenceUrls,
               });
@@ -3536,7 +3588,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           let submitResponse;
           try {
             submitResponse =
-              originalModel === XIMU_GPT_IMAGE2_MODEL
+              isXimuGptImageGenerationModel(originalModel)
                 ? await createXimuGptImageGeneration(request as any)
                 : await createXimuNanoBananaGeneration(request as any);
           } catch (submitError) {
@@ -3800,8 +3852,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           sourcePlatform === NANO_BANANA_LOCAL_PLATFORM) ||
         sourceModel === ADOBE_GPT_IMAGE2_MODEL ||
         sourceModel === ADOBE_NANO_BANANA_PRO_MODEL ||
-        sourceModel === XIMU_GPT_IMAGE2_MODEL ||
-        sourceModel === XIMU_NANO_BANANA_PRO_MODEL;
+        isXimuImageGenerationModel(sourceModel);
       const sourceImageUrl = sourceData.result?.data?.[0]?.url;
 
       const totalCells = gridSize * gridSize;

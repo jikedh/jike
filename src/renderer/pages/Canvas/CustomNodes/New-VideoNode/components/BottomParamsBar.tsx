@@ -10,7 +10,11 @@ import {
 } from "@/components/ui/select";
 
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
-import { type MentionItem, VIDEO_MODEL_OPTIONS } from "../constants/mockData";
+import {
+  type MentionItem,
+  type ModelOption,
+  VIDEO_MODEL_OPTIONS,
+} from "../constants/mockData";
 import type { VideoModeKey } from "../constants/videoModelCapabilities";
 import type { VideoParamState } from "../constants/videoParamConfigs";
 import { VideoParamsPopover } from "./VideoParamsPopover";
@@ -37,6 +41,7 @@ interface BottomParamsBarProps {
   isGenerating?: boolean;
   disabled?: boolean;
   accessory?: ReactNode;
+  modelOptions?: ModelOption[];
 }
 
 export const BottomParamsBar = ({
@@ -52,6 +57,7 @@ export const BottomParamsBar = ({
   isGenerating = false,
   disabled = false,
   accessory,
+  modelOptions = VIDEO_MODEL_OPTIONS,
 }: BottomParamsBarProps) => {
   const handleClick = () => {
     const request: VideoGenerateRequest = {
@@ -72,7 +78,7 @@ export const BottomParamsBar = ({
             <SelectValue />
           </SelectTrigger>
           <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
-            {VIDEO_MODEL_OPTIONS.map((model) => (
+            {modelOptions.map((model) => (
               <SelectItem
                 key={model.value}
                 value={model.value}

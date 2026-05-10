@@ -21,8 +21,10 @@ export type {
 export {
   buildXimuNanoBananaRequest,
   resolveXimuImageSize,
+  resolveXimuNanoBanana2AspectRatio,
   resolveXimuNanoBananaProAspectRatio,
   XIMU_IMAGE_SIZES,
+  XIMU_NANO_BANANA2_ASPECT_RATIOS,
   XIMU_NANO_BANANA_PRO_ASPECT_RATIOS,
 } from "./nano-banana/nano-banana-pro";
 

@@ -258,6 +258,19 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
   },
 ];
 
+export const ADOBE_SORA2_PRO_VIDEO_MODEL_ID = "adobe-sora2-pro";
+
+export const isAdobeVideoGenerationModel = (modelId?: string) =>
+  modelId === ADOBE_SORA2_PRO_VIDEO_MODEL_ID;
+
+export const getVisibleVideoModels = (
+  adobeChannelModelsEnabled = false,
+) =>
+  MOCK_MAIN_MODELS.filter(
+    (model) =>
+      adobeChannelModelsEnabled || !isAdobeVideoGenerationModel(model.id),
+  );
+
 export const getSupportedModesForModel = (modelId: string): VideoModeKey[] => {
   const modelConfig = MOCK_MAIN_MODELS.find((model) => model.id === modelId);
   const modes = new Set<VideoModeKey>();

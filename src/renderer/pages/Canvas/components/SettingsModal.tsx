@@ -19,7 +19,10 @@ import {
   presetsService,
 } from "service/localStorageService";
 import { clearProjectList } from "service/projectStorage";
-import { CANVAS_CHAT_MODELS } from "shared/constants/ai-models";
+import {
+  CANVAS_CHAT_MODELS,
+  XIMU_MODEL_PURCHASE_URL,
+} from "shared/constants/ai-models";
 import {
   CANVAS_CHAT_PERSONAS,
   NO_CHAT_PERSONA_ID,
@@ -131,6 +134,8 @@ export const SettingsModal = ({
     storagePath,
     assetStoragePath,
     ximuCardCode,
+    adobeChannelModelsEnabled,
+    ximuChannelModelsEnabled,
     setDefaultModel,
     setDefaultPersonaId,
     setAutoSaveEnabled,
@@ -142,6 +147,8 @@ export const SettingsModal = ({
     setStoragePath,
     setAssetStoragePath,
     setXimuCardCode,
+    setAdobeChannelModelsEnabled,
+    setXimuChannelModelsEnabled,
     resetToDefault,
   } = useChatSettingsStore();
   const { success, error } = useMessage();
@@ -709,61 +716,116 @@ export const SettingsModal = ({
                       </div>
 
                       {activeModelChannel === "ximu" && (
-                        <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
-                          <div className="mb-3">
-                            <div className="text-sm font-medium text-white/80">
-                              西牧渠道卡密
-                            </div>
-                            <div className="mt-1 text-xs text-white/45">
-                              用于 GPT-Image-2 和 Nano Banana Pro（西牧渠道）生图。
+                        <div className="space-y-4">
+                          <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-medium text-white/80">
+                                  西牧渠道模型
+                                </div>
+                                <div className="mt-1 text-xs text-white/45">
+                                  开启后会在图片节点显示 GPT-Image-2（西牧渠道）、GPT-Image-2 VIP（西牧渠道）、Nano Banana 2（西牧渠道）和 Nano Banana Pro（西牧渠道）。
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  asChild
+                                  size="sm"
+                                  variant="blue"
+                                  ignoreTitleCase
+                                >
+                                  <a
+                                    href={XIMU_MODEL_PURCHASE_URL}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    <IconExternalLink size={14} />
+                                    购买卡密
+                                  </a>
+                                </Button>
+                                <Switch
+                                  checked={ximuChannelModelsEnabled}
+                                  onCheckedChange={setXimuChannelModelsEnabled}
+                                  aria-label="启用西牧渠道模型"
+                                />
+                              </div>
                             </div>
                           </div>
 
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Input
-                              type="password"
-                              value={ximuCardInput}
-                              placeholder="XIMU-XXXXXX-XXXXXX-XXXXXX"
-                              className="h-9 min-w-[320px] flex-1 border-white/10 bg-black/40 text-white placeholder:text-white/25"
-                              onChange={(event) => {
-                                setXimuCardInput(event.target.value);
-                                setXimuError(null);
-                                setXimuBalanceText(null);
-                              }}
-                            />
-                            <Button
-                              size="sm"
-                              variant="blue"
-                              onClick={saveXimuCardCode}
-                              ignoreTitleCase
-                            >
-                              保存卡密
-                            </Button>
-                            <Button
-                              size="sm"
-                              loading={ximuBusy}
-                              onClick={() => void checkXimuBalance()}
-                              ignoreTitleCase
-                            >
-                              查询余额
-                            </Button>
-                          </div>
+                          <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                            <div className="mb-3">
+                              <div className="text-sm font-medium text-white/80">
+                                西牧渠道卡密
+                              </div>
+                              <div className="mt-1 text-xs text-white/45">
+                                用于西牧渠道的 GPT-Image-2、GPT-Image-2 VIP、Nano Banana 2 和 Nano Banana Pro 生图。
+                              </div>
+                            </div>
 
-                          {ximuBalanceText ? (
-                            <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
-                              {ximuBalanceText}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Input
+                                type="password"
+                                value={ximuCardInput}
+                                placeholder="XIMU-XXXXXX-XXXXXX-XXXXXX"
+                                className="h-9 min-w-[320px] flex-1 border-white/10 bg-black/40 text-white placeholder:text-white/25"
+                                onChange={(event) => {
+                                  setXimuCardInput(event.target.value);
+                                  setXimuError(null);
+                                  setXimuBalanceText(null);
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                variant="blue"
+                                onClick={saveXimuCardCode}
+                                ignoreTitleCase
+                              >
+                                保存卡密
+                              </Button>
+                              <Button
+                                size="sm"
+                                loading={ximuBusy}
+                                onClick={() => void checkXimuBalance()}
+                                ignoreTitleCase
+                              >
+                                查询余额
+                              </Button>
                             </div>
-                          ) : null}
-                          {ximuError ? (
-                            <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
-                              {ximuError}
-                            </div>
-                          ) : null}
+
+                            {ximuBalanceText ? (
+                              <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+                                {ximuBalanceText}
+                              </div>
+                            ) : null}
+                            {ximuError ? (
+                              <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+                                {ximuError}
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
                       )}
 
                       {activeModelChannel === "adobe" && (
                         <>
+                          <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-medium text-white/80">
+                                  Adobe 渠道模型
+                                </div>
+                                <div className="mt-1 text-xs text-white/45">
+                                  开启后会在图片节点显示 GPT-Image-2（Adobe版本）、Nano Banana Pro（Adobe版本），并在视频节点显示 Sora2Pro（Adobe版本）。
+                                </div>
+                              </div>
+                              <Switch
+                                checked={adobeChannelModelsEnabled}
+                                onCheckedChange={setAdobeChannelModelsEnabled}
+                                aria-label="启用 Adobe 渠道模型"
+                              />
+                            </div>
+                          </div>
+
                           <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
