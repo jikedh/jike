@@ -18,6 +18,7 @@ import type {
   Adobe2ApiVideoGenerationRequest,
   Sora2ProVideoRequest,
 } from "shared/types/detail/Adobe2API";
+import type { Grok2ApiVideoGenerationRequest } from "shared/types/detail/Grok2API";
 
 import type { VideoGenerateRequest } from "../components/BottomParamsBar";
 import type { VideoModeKey } from "../constants/videoModelCapabilities";
@@ -26,7 +27,8 @@ export type NewVideoApiRequest =
   | Seedance20Request
   | BailianVideoGenerationRequest
   | ViduQ3Image2VideoRequest
-  | Adobe2ApiVideoGenerationRequest;
+  | Adobe2ApiVideoGenerationRequest
+  | Grok2ApiVideoGenerationRequest;
 
 type ViduQ3Image2VideoRequest = {
   model: "vidu/viduq3_turbo_img2video" | "vidu/viduq3-pro_img2video";
@@ -120,6 +122,55 @@ const getAdobeVideoRatioSuffix = (request: VideoGenerateRequest) =>
   isOneOf(getRatio(request), ["16:9", "9:16"] as const, "16:9") === "9:16"
     ? "9x16"
     : "16x9";
+
+const getGrokVideoSize = (request: VideoGenerateRequest) =>
+  (
+    {
+      "16:9": "1280x720",
+      "9:16": "720x1280",
+      "1:1": "1024x1024",
+      "3:2": "1792x1024",
+      "2:3": "1024x1792",
+    } as const
+  )[getRatio(request)] ?? "1280x720";
+
+const getGrokVideoResolution = (request: VideoGenerateRequest) =>
+  isOneOf(
+    request.params.resolution?.toLowerCase(),
+    ["480p", "720p"] as const,
+    "720p",
+  );
+
+const getGrokVideoDuration = (request: VideoGenerateRequest) =>
+  pickDuration(request.params.duration, [6, 10, 12, 16, 20] as const, 6);
+
+const buildGrokVideoRequest = (
+  request: VideoGenerateRequest,
+): Grok2ApiVideoGenerationRequest => {
+  const images = getImages(request).slice(0, 7);
+  return {
+    model: "grok-imagine-video",
+    stream: false,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: getPrompt(request.prompt) },
+          ...images.map((url) => ({
+            type: "image_url" as const,
+            image_url: { url },
+          })),
+        ],
+      },
+    ],
+    video_config: {
+      seconds: getGrokVideoDuration(request),
+      size: getGrokVideoSize(request),
+      resolution_name: getGrokVideoResolution(request),
+      preset: "normal",
+    },
+  };
+};
 
 const buildAdobeSora2ProRequest = (
   request: VideoGenerateRequest,
@@ -870,6 +921,8 @@ export const buildVideoApiRequest = (
       return buildHappyHorseRequest(request);
     case "adobe-sora2-pro":
       return buildAdobeSora2ProRequest(request);
+    case "grok-imagine-video":
+      return buildGrokVideoRequest(request);
     case "adobe-veo31":
     case "adobe-veo31-fast":
       return buildAdobeVeo31Request(request);

@@ -10,6 +10,7 @@ import {
   ADOBE_NANO_BANANA_PRO_MODEL,
   IMAGE_MODELS,
   getVisibleImageModels,
+  isGrokImageGenerationModel,
   isXimuGptImageGenerationModel,
   isXimuImageGenerationModel,
   isXimuNanoBananaGenerationModel,
@@ -52,6 +53,8 @@ import {
   GeminiParamsPanel,
   GEMINI_RESOLUTIONS,
   GEMINI_SIZES,
+  GROK_IMAGE_RESOLUTIONS,
+  GROK_IMAGE_SIZES,
   NANO_BANANA_RESOLUTIONS,
   NANO_BANANA_LOCAL_SIZES,
 } from "./components/GeminiParamsPanel";
@@ -127,6 +130,8 @@ const toOptionValueSet = (options: Array<{ value: string }>) =>
 const GEMINI_SIZE_VALUES = toOptionValueSet(GEMINI_SIZES);
 const GEMINI_RESOLUTION_VALUES = toOptionValueSet(GEMINI_RESOLUTIONS);
 const NANO_BANANA_RESOLUTION_VALUES = toOptionValueSet(NANO_BANANA_RESOLUTIONS);
+const GROK_IMAGE_SIZE_VALUES = toOptionValueSet(GROK_IMAGE_SIZES);
+const GROK_IMAGE_RESOLUTION_VALUES = toOptionValueSet(GROK_IMAGE_RESOLUTIONS);
 const GPTIMAGE2_SIZE_VALUES = toOptionValueSet(GPTIMAGE2_SIZES);
 const ADOBE_GPTIMAGE2_SIZE_VALUES = toOptionValueSet(ADOBE_GPTIMAGE2_SIZES);
 const GPTIMAGE2_RESOLUTION_VALUES = new Set(["1K", "2K", "4K"]);
@@ -253,6 +258,9 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const ximuChannelModelsEnabled = useChatSettingsStore(
     (state) => state.ximuChannelModelsEnabled,
   );
+  const grokChannelModelsEnabled = useChatSettingsStore(
+    (state) => state.grokChannelModelsEnabled,
+  );
   const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge);
   const setReferenceHoverHighlight = useCanvasFlowStore(
     (state) => state.setReferenceHoverHighlight,
@@ -272,8 +280,9 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       getVisibleImageModels(
         adobeChannelModelsEnabled,
         ximuChannelModelsEnabled,
+        grokChannelModelsEnabled,
       ),
-    [adobeChannelModelsEnabled, ximuChannelModelsEnabled],
+    [adobeChannelModelsEnabled, grokChannelModelsEnabled, ximuChannelModelsEnabled],
   );
 
   // 从 currentImageData 获取基础字段
@@ -354,6 +363,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const isXimuNanoBananaProModel = model === XIMU_NANO_BANANA_PRO_MODEL;
   const isXimuNanoBananaModel = isXimuNanoBananaGenerationModel(model);
   const isXimuImageModel = isXimuImageGenerationModel(model);
+  const isGrokImageModel = isGrokImageGenerationModel(model);
   const isGptImage2Model = model === "gpt-image-2";
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
@@ -361,7 +371,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     isGeminiPro2Model ||
     isNanoBananaLocalModel ||
     isAdobeImageModel ||
-    isXimuImageModel;
+    isXimuImageModel ||
+    isGrokImageModel;
 
   const supportedImageParams = useMemo<SupportedImageParams | null>(() => {
     if (isSeedreamModel) {
@@ -396,6 +407,15 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         resolutions: NANO_BANANA_RESOLUTION_VALUES,
         defaultSize: DEFAULT_NANO_BANANA_SIZE,
         defaultResolution: "2K",
+      };
+    }
+
+    if (isGrokImageModel) {
+      return {
+        sizes: GROK_IMAGE_SIZE_VALUES,
+        resolutions: GROK_IMAGE_RESOLUTION_VALUES,
+        defaultSize: "1:1",
+        defaultResolution: "standard",
       };
     }
 
@@ -443,6 +463,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     isXimuNanoBanana2Model,
     isXimuNanoBananaModel,
     isXimuNanoBananaProModel,
+    isGrokImageModel,
   ]);
 
   useEffect(() => {
@@ -1569,6 +1590,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               const shouldResetXimuGptResolution =
                 selectedModel?.model === XIMU_GPT_IMAGE2_MODEL &&
                 resolution !== "1K";
+              const shouldResetGrokSize =
+                isGrokImageGenerationModel(selectedModel?.model) &&
+                !GROK_IMAGE_SIZE_VALUES.has(size);
+              const shouldResetGrokResolution =
+                isGrokImageGenerationModel(selectedModel?.model) &&
+                resolution !== "standard";
               persistImageDefaultPreset({
                 model: selectedModel?.model ?? value,
                 platform: selectedModel?.platform,
@@ -1576,8 +1603,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                   ? DEFAULT_NANO_BANANA_SIZE
                   : shouldResetXimuGptSize
                     ? "auto"
+                    : shouldResetGrokSize
+                      ? "1:1"
                   : undefined,
-                resolution: shouldResetXimuGptResolution ? "1K" : undefined,
+                resolution: shouldResetXimuGptResolution
+                  ? "1K"
+                  : shouldResetGrokResolution
+                    ? "standard"
+                    : undefined,
               });
               updateImageNodeData(nodeId, {
                 model: selectedModel?.model ?? value,
@@ -1586,7 +1619,11 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                   ? { size: DEFAULT_NANO_BANANA_SIZE }
                   : {}),
                 ...(shouldResetXimuGptSize ? { size: "auto" } : {}),
+                ...(shouldResetGrokSize ? { size: "1:1" } : {}),
                 ...(shouldResetXimuGptResolution ? { resolution: "1K" } : {}),
+                ...(shouldResetGrokResolution
+                  ? { resolution: "standard" }
+                  : {}),
               });
             }}
           >
@@ -1688,6 +1725,23 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                     ? GPTIMAGE2_RESOLUTION_OPTIONS
                     : undefined
               }
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
+            />
+          )}
+
+          {isGrokImageModel && (
+            <GeminiParamsPanel
+              size={size}
+              resolution={resolution}
+              sizeOptions={GROK_IMAGE_SIZES}
+              resolutionOptions={GROK_IMAGE_RESOLUTIONS}
               onSizeChange={(value) => {
                 persistImageDefaultPreset({ size: value });
                 updateImageNodeData(nodeId, { size: value });

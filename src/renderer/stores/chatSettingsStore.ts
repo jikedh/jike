@@ -39,6 +39,7 @@ const INITIAL_STATE: Pick<
   | "ximuCardCode"
   | "adobeChannelModelsEnabled"
   | "ximuChannelModelsEnabled"
+  | "grokChannelModelsEnabled"
 > = {
   defaultModel: DEFAULT_CANVAS_CHAT_MODEL,
   defaultImageModel: "gemini-3-pro-image-preview",
@@ -75,6 +76,7 @@ const INITIAL_STATE: Pick<
   ximuCardCode: "",
   adobeChannelModelsEnabled: false,
   ximuChannelModelsEnabled: false,
+  grokChannelModelsEnabled: false,
 };
 
 export const useChatSettingsStore = create<ChatSettingsStoreType>()(
@@ -151,6 +153,8 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
         set({ adobeChannelModelsEnabled: enabled }),
       setXimuChannelModelsEnabled: (enabled) =>
         set({ ximuChannelModelsEnabled: enabled }),
+      setGrokChannelModelsEnabled: (enabled) =>
+        set({ grokChannelModelsEnabled: enabled }),
       resetToDefault: () => set(INITIAL_STATE),
     }),
     {

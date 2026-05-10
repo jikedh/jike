@@ -308,9 +308,16 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const adobeChannelModelsEnabled = useChatSettingsStore(
     (state) => state.adobeChannelModelsEnabled,
   );
+  const grokChannelModelsEnabled = useChatSettingsStore(
+    (state) => state.grokChannelModelsEnabled,
+  );
   const videoModelOptions = useMemo(
-    () => getVideoModelOptions(adobeChannelModelsEnabled),
-    [adobeChannelModelsEnabled],
+    () =>
+      getVideoModelOptions(
+        adobeChannelModelsEnabled,
+        grokChannelModelsEnabled,
+      ),
+    [adobeChannelModelsEnabled, grokChannelModelsEnabled],
   );
 
   const currentData = useCanvasFlowStore((state) => {

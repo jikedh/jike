@@ -21,6 +21,10 @@ import {
 import { clearProjectList } from "service/projectStorage";
 import {
   CANVAS_CHAT_MODELS,
+  GROK_IMAGE_EDIT_MODEL,
+  GROK_IMAGE_LITE_MODEL,
+  GROK_IMAGE_MODEL,
+  GROK_IMAGE_PRO_MODEL,
   XIMU_MODEL_PURCHASE_URL,
 } from "shared/constants/ai-models";
 import {
@@ -28,6 +32,7 @@ import {
   NO_CHAT_PERSONA_ID,
 } from "shared/constants/chat-personas";
 import type { Adobe2ApiState } from "shared/types/adobe2api";
+import type { Grok2ApiState } from "shared/types/grok2api";
 import { cn } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,6 +118,39 @@ const normalizeXimuBalanceValue = (value: unknown): string | null => {
   return null;
 };
 
+const getGrok2ApiBridge = () => {
+  if (window.grok2api) {
+    return window.grok2api;
+  }
+
+  const ipcRenderer = (window as any).electron?.ipcRenderer;
+  const invoke =
+    typeof ipcRenderer?.invoke === "function"
+      ? ipcRenderer.invoke.bind(ipcRenderer)
+      : null;
+  if (!invoke) {
+    return null;
+  }
+
+  return {
+    getState: () => invoke("grok2api:getState"),
+    start: () => invoke("grok2api:start"),
+    stop: () => invoke("grok2api:stop"),
+    restart: () => invoke("grok2api:restart"),
+    openAdminWindow: () => invoke("grok2api:openAdminWindow"),
+    updateSettings: (patch: any) => invoke("grok2api:updateSettings", patch),
+    getLogs: (limit?: number) => invoke("grok2api:getLogs", limit),
+  };
+};
+
+const getGrok2ApiBridgeOrThrow = () => {
+  const bridge = getGrok2ApiBridge();
+  if (!bridge) {
+    throw new Error("Grok2API 控制接口未加载，请重启应用后再试");
+  }
+  return bridge;
+};
+
 export const SettingsModal = ({
   open,
   onClose,
@@ -136,6 +174,7 @@ export const SettingsModal = ({
     ximuCardCode,
     adobeChannelModelsEnabled,
     ximuChannelModelsEnabled,
+    grokChannelModelsEnabled,
     setDefaultModel,
     setDefaultPersonaId,
     setAutoSaveEnabled,
@@ -149,6 +188,7 @@ export const SettingsModal = ({
     setXimuCardCode,
     setAdobeChannelModelsEnabled,
     setXimuChannelModelsEnabled,
+    setGrokChannelModelsEnabled,
     resetToDefault,
   } = useChatSettingsStore();
   const { success, error } = useMessage();
@@ -181,8 +221,13 @@ export const SettingsModal = ({
     "start" | "stop" | "restart" | null
   >(null);
   const [adobeError, setAdobeError] = useState<string | null>(null);
+  const [grokState, setGrokState] = useState<Grok2ApiState | null>(null);
+  const [grokBusyAction, setGrokBusyAction] = useState<
+    "start" | "stop" | "restart" | null
+  >(null);
+  const [grokError, setGrokError] = useState<string | null>(null);
   const [activeModelChannel, setActiveModelChannel] = useState<
-    "adobe" | "ximu"
+    "adobe" | "ximu" | "grok"
   >("adobe");
   const [ximuCardInput, setXimuCardInput] = useState(ximuCardCode);
   const [ximuBalanceText, setXimuBalanceText] = useState<string | null>(null);
@@ -224,6 +269,35 @@ export const SettingsModal = ({
     void refreshAdobeState();
     const timer = window.setInterval(() => {
       void refreshAdobeState();
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeSection, open]);
+
+  useEffect(() => {
+    if (!open || activeSection !== "local-gemini") return;
+
+    let cancelled = false;
+    const refreshGrokState = async () => {
+      try {
+        const next = await getGrok2ApiBridgeOrThrow().getState();
+        if (!cancelled) {
+          setGrokState(next);
+          setGrokError(null);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setGrokError(err?.message || "读取 Grok2API 状态失败");
+        }
+      }
+    };
+
+    void refreshGrokState();
+    const timer = window.setInterval(() => {
+      void refreshGrokState();
     }, 3000);
 
     return () => {
@@ -302,6 +376,41 @@ export const SettingsModal = ({
       setAdobeError(err?.message || "打开 Adobe2API 管理后台失败");
     } finally {
       setAdobeBusyAction(null);
+    }
+  };
+
+  const runGrokAction = async (action: "start" | "stop" | "restart") => {
+    try {
+      setGrokBusyAction(action);
+      setGrokError(null);
+      const grok2api = getGrok2ApiBridgeOrThrow();
+      const next =
+        action === "start"
+          ? await grok2api.start()
+          : action === "stop"
+            ? await grok2api.stop()
+            : await grok2api.restart();
+      setGrokState(next);
+    } catch (err: any) {
+      setGrokError(err?.message || "Grok2API 操作失败");
+      try {
+        setGrokState(await getGrok2ApiBridgeOrThrow().getState());
+      } catch {}
+    } finally {
+      setGrokBusyAction(null);
+    }
+  };
+
+  const openGrokAdminWindow = async () => {
+    try {
+      setGrokBusyAction("start");
+      setGrokError(null);
+      const next = await getGrok2ApiBridgeOrThrow().openAdminWindow();
+      setGrokState(next);
+    } catch (err: any) {
+      setGrokError(err?.message || "打开 Grok2API 管理后台失败");
+    } finally {
+      setGrokBusyAction(null);
     }
   };
 
@@ -698,6 +807,7 @@ export const SettingsModal = ({
                         {[
                           { id: "adobe" as const, label: "adobe渠道" },
                           { id: "ximu" as const, label: "西牧渠道" },
+                          { id: "grok" as const, label: "grok渠道" },
                         ].map((item) => (
                           <button
                             key={item.id}
@@ -804,6 +914,164 @@ export const SettingsModal = ({
                             ) : null}
                           </div>
                         </div>
+                      )}
+
+                      {activeModelChannel === "grok" && (
+                        <>
+                          <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-medium text-white/80">
+                                  Grok 渠道模型
+                                </div>
+                                <div className="mt-1 text-xs text-white/45">
+                                  开启后会在图片节点显示 Grok Imagine 图片模型，并在视频节点显示 Grok Imagine Video（Grok渠道）。
+                                </div>
+                              </div>
+                              <Switch
+                                checked={grokChannelModelsEnabled}
+                                onCheckedChange={setGrokChannelModelsEnabled}
+                                aria-label="启用 Grok 渠道模型"
+                              />
+                            </div>
+
+                            <div className="mt-4 grid gap-3 md:grid-cols-2">
+                              <div className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-3">
+                                <div className="mb-2 text-xs font-medium text-white/65">
+                                  图片模型
+                                </div>
+                                <div className="space-y-1 text-xs text-white/45">
+                                  {[
+                                    GROK_IMAGE_LITE_MODEL,
+                                    GROK_IMAGE_MODEL,
+                                    GROK_IMAGE_PRO_MODEL,
+                                    `${GROK_IMAGE_EDIT_MODEL}（编辑模型）`,
+                                  ].map((model) => (
+                                    <div key={model}>{model}</div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-3">
+                                <div className="mb-2 text-xs font-medium text-white/65">
+                                  视频模型
+                                </div>
+                                <div className="text-xs text-white/45">
+                                  grok-imagine-video
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-medium text-white/80">
+                                  本地 Grok2API 管理
+                                </div>
+                                <div className="mt-1 text-xs text-white/45">
+                                  {grokState?.baseUrl ||
+                                    "启动后会在这里加载 Grok2API 后台"}
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  className={cn(
+                                    "rounded-full px-3 py-1 text-xs",
+                                    grokState?.status === "running" &&
+                                      "bg-emerald-500/15 text-emerald-200",
+                                    grokState?.status === "starting" &&
+                                      "bg-amber-500/15 text-amber-200",
+                                    grokState?.status === "error" &&
+                                      "bg-red-500/15 text-red-200",
+                                    (!grokState ||
+                                      grokState.status === "stopped") &&
+                                      "bg-white/10 text-white/55",
+                                  )}
+                                >
+                                  {grokState?.status === "running"
+                                    ? "运行中"
+                                    : grokState?.status === "starting"
+                                      ? "启动中"
+                                      : grokState?.status === "error"
+                                        ? "异常"
+                                        : "未启动"}
+                                </span>
+
+                                <Button
+                                  size="sm"
+                                  variant="blue"
+                                  loading={grokBusyAction === "start"}
+                                  disabled={
+                                    grokBusyAction !== null ||
+                                    grokState?.status === "running"
+                                  }
+                                  onClick={() => void runGrokAction("start")}
+                                  ignoreTitleCase
+                                >
+                                  <IconPlayerPlay size={14} />
+                                  启动服务
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  loading={grokBusyAction === "restart"}
+                                  disabled={grokBusyAction !== null}
+                                  onClick={() => void runGrokAction("restart")}
+                                  ignoreTitleCase
+                                >
+                                  <IconRotateClockwise size={14} />
+                                  重启
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  disabled={
+                                    grokBusyAction !== null ||
+                                    grokState?.status === "stopped"
+                                  }
+                                  onClick={() => void runGrokAction("stop")}
+                                  ignoreTitleCase
+                                >
+                                  停止
+                                </Button>
+                                {grokState?.status === "running" ? (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => void openGrokAdminWindow()}
+                                    ignoreTitleCase
+                                  >
+                                    <IconExternalLink size={14} />
+                                    应用内打开
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </div>
+
+                            <div className="mt-3 text-xs text-white/40">
+                              项目目录：{grokState?.resolvedProjectPath || "未设置"}
+                            </div>
+
+                            {grokError || grokState?.lastError ? (
+                              <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+                                {grokError || grokState?.lastError}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="overflow-hidden rounded-xl border border-white/5 bg-white">
+                            {grokState?.status === "running" ? (
+                              <iframe
+                                key={grokState.manageUrl}
+                                title="Grok2API 管理后台"
+                                src={grokState.manageUrl}
+                                className="h-[min(58vh,620px)] w-full bg-white"
+                              />
+                            ) : (
+                              <div className="flex h-[420px] items-center justify-center bg-black/30 text-sm text-white/45">
+                                启动本地服务后，这里会显示 Grok2API 账号管理后台。
+                              </div>
+                            )}
+                          </div>
+                        </>
                       )}
 
                       {activeModelChannel === "adobe" && (

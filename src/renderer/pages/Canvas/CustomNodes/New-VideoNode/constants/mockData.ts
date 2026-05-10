@@ -17,8 +17,12 @@ export const VIDEO_MODEL_OPTIONS: ModelOption[] = MOCK_MAIN_MODELS.map(
 
 export const getVideoModelOptions = (
   adobeChannelModelsEnabled = false,
+  grokChannelModelsEnabled = false,
 ): ModelOption[] =>
-  getVisibleVideoModels(adobeChannelModelsEnabled).map((model) => ({
+  getVisibleVideoModels(
+    adobeChannelModelsEnabled,
+    grokChannelModelsEnabled,
+  ).map((model) => ({
     value: model.id,
     label: model.label,
   }));

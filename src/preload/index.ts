@@ -1,6 +1,7 @@
 import { electronAPI } from "@electron-toolkit/preload";
 import { contextBridge, ipcRenderer } from "electron";
 import type { Adobe2Api } from "shared/types/adobe2api";
+import type { Grok2Api } from "shared/types/grok2api";
 import type { StorageApi } from "shared/types/storage";
 
 export type DebugApi = {
@@ -143,6 +144,16 @@ const adobe2Api: Adobe2Api = {
     ipcRenderer.invoke("adobe2api:selectOutputDirectory"),
 };
 
+const grok2Api: Grok2Api = {
+  getState: () => ipcRenderer.invoke("grok2api:getState"),
+  start: () => ipcRenderer.invoke("grok2api:start"),
+  stop: () => ipcRenderer.invoke("grok2api:stop"),
+  restart: () => ipcRenderer.invoke("grok2api:restart"),
+  openAdminWindow: () => ipcRenderer.invoke("grok2api:openAdminWindow"),
+  updateSettings: (patch) => ipcRenderer.invoke("grok2api:updateSettings", patch),
+  getLogs: (limit) => ipcRenderer.invoke("grok2api:getLogs", limit),
+};
+
 export type TrackingApi = {
   send: (
     data: AIVideoTrackData,
@@ -191,6 +202,7 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld("download", downloadApi);
     contextBridge.exposeInMainWorld("videoProcessing", videoProcessingApi);
     contextBridge.exposeInMainWorld("adobe2api", adobe2Api);
+    contextBridge.exposeInMainWorld("grok2api", grok2Api);
     contextBridge.exposeInMainWorld("tracking", trackingApi);
   } catch (error) {
     console.error(error);
@@ -208,6 +220,8 @@ if (process.contextIsolated) {
   window.videoProcessing = videoProcessingApi;
   // @ts-ignore (define in dts)
   window.adobe2api = adobe2Api;
+  // @ts-ignore (define in dts)
+  window.grok2api = grok2Api;
   // @ts-ignore (define in dts)
   window.tracking = trackingApi;
 }

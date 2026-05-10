@@ -2,6 +2,7 @@ import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
 import { handleRequestError } from "shared/utils/requestErrorHandler";
 import { getJikeingToken } from "shared/utils/utils";
 import type { Adobe2ApiState } from "shared/types/adobe2api";
+import type { Grok2ApiState } from "shared/types/grok2api";
 
 const REQUEST_TIMEOUT = 300000;
 
@@ -32,6 +33,27 @@ async function getAdobe2ApiState(): Promise<Adobe2ApiState | null> {
   } catch {
     return null;
   }
+}
+
+async function getGrok2ApiState(): Promise<Grok2ApiState | null> {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    if (window.grok2api) {
+      return await window.grok2api.getState();
+    }
+
+    const ipcRenderer = (window as any).electron?.ipcRenderer;
+    if (typeof ipcRenderer?.invoke === "function") {
+      return await ipcRenderer.invoke("grok2api:getState");
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
 }
 
 function normalizeBaseUrl(url: string | undefined): string {
@@ -74,6 +96,30 @@ async function applyAdobe2ApiAuth(reqConfig: AxiosRequestConfig): Promise<void> 
   }
 
   applyAdobe2ApiHeaders(reqConfig, adobe2ApiState.apiKey);
+}
+
+function applyGrok2ApiHeaders(
+  reqConfig: AxiosRequestConfig,
+  apiKey: string,
+): void {
+  const headerRecord = toHeaderRecord(reqConfig.headers);
+  reqConfig.headers = headerRecord;
+  headerRecord.Authorization = `Bearer ${apiKey}`;
+}
+
+async function applyGrok2ApiAuth(reqConfig: AxiosRequestConfig): Promise<void> {
+  const grok2ApiState = await getGrok2ApiState();
+  if (!grok2ApiState?.baseUrl || !grok2ApiState.apiKey) {
+    return;
+  }
+
+  const requestBaseUrl = normalizeBaseUrl(reqConfig.baseURL);
+  const grok2ApiBaseUrl = normalizeBaseUrl(grok2ApiState.baseUrl);
+  if (!requestBaseUrl || requestBaseUrl !== grok2ApiBaseUrl) {
+    return;
+  }
+
+  applyGrok2ApiHeaders(reqConfig, grok2ApiState.apiKey);
 }
 
 const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
@@ -128,6 +174,7 @@ const createService = (
       }
 
       await applyAdobe2ApiAuth(reqConfig);
+      await applyGrok2ApiAuth(reqConfig);
 
       return reqConfig;
     },
@@ -173,6 +220,30 @@ const adobe2ApiRequest = async <T = any>(
   return await axios(finalConfig).then((response) => response.data);
 };
 
+const grok2ApiRequest = async <T = any>(
+  config: AxiosRequestConfig,
+): Promise<T> => {
+  const grok2ApiState = await getGrok2ApiState();
+  const nextConfig = { ...config };
+
+  if (grok2ApiState?.baseUrl) {
+    nextConfig.baseURL = grok2ApiState.baseUrl;
+  }
+
+  await applyGrok2ApiAuth(nextConfig);
+
+  const finalConfig: AxiosRequestConfig = {
+    ...nextConfig,
+    timeout: nextConfig.timeout ?? REQUEST_TIMEOUT,
+    headers: {
+      ...DEFAULT_HEADERS,
+      ...toHeaderRecord(nextConfig.headers),
+    },
+  };
+
+  return await axios(finalConfig).then((response) => response.data);
+};
+
 const jikeingRequest = async <T = any>(
   config: AxiosRequestConfig,
 ): Promise<T> => {
@@ -197,6 +268,8 @@ export {
   ximuService,
   adobe2ApiRequest,
   getAdobe2ApiState,
+  grok2ApiRequest,
+  getGrok2ApiState,
   SKIP_AUTH_HEADER,
 };
 export {

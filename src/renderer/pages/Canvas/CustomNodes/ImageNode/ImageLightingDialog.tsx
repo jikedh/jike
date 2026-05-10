@@ -265,13 +265,17 @@ export const ImageLightingDialog = ({
   const ximuChannelModelsEnabled = useChatSettingsStore(
     (state) => state.ximuChannelModelsEnabled,
   );
+  const grokChannelModelsEnabled = useChatSettingsStore(
+    (state) => state.grokChannelModelsEnabled,
+  );
   const visibleImageModels = useMemo(
     () =>
       getVisibleImageModels(
         adobeChannelModelsEnabled,
         ximuChannelModelsEnabled,
+        grokChannelModelsEnabled,
       ),
-    [adobeChannelModelsEnabled, ximuChannelModelsEnabled],
+    [adobeChannelModelsEnabled, grokChannelModelsEnabled, ximuChannelModelsEnabled],
   );
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewSphereRef = useRef<HTMLDivElement | null>(null);
