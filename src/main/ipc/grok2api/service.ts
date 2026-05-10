@@ -25,7 +25,7 @@ const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 8000;
 const SETTINGS_FILE = "settings.json";
 const LOG_FILE = "grok2api.log";
-const HEALTH_PATH = "/v1/models";
+const HEALTH_PATH = "/health";
 const MANAGE_PATH = "/admin/account";
 const LOGIN_PATH = "/admin/login";
 
@@ -80,6 +80,8 @@ async function fetchJson(url: string, apiKey?: string | null): Promise<any> {
 
 export class Grok2ApiService {
   private child: ChildProcessWithoutNullStreams | null = null;
+
+  private readonly stoppingPids = new Set<number>();
 
   private state: Grok2ApiState;
 
@@ -444,13 +446,37 @@ export class Grok2ApiService {
     proxyUrl: string | null,
     appUrl: string,
   ): string {
-    const normalizedContent = content.replace(/^\uFEFF/, "");
+    const normalizedContent = this.removeLegacyTopLevelProxyKeys(
+      content.replace(/^\uFEFF/, ""),
+    );
     return this.patchVideoOutputConfig(
       this.patchAppUrlConfig(
         this.patchProxyConfig(normalizedContent, proxyUrl),
         appUrl,
       ),
     );
+  }
+
+  private removeLegacyTopLevelProxyKeys(content: string): string {
+    const lines = content.split(/\r?\n/);
+    let reachedSection = false;
+    let changed = false;
+
+    const output = lines.filter((line) => {
+      if (/^\s*\[/.test(line)) {
+        reachedSection = true;
+      }
+      if (
+        !reachedSection &&
+        /^\s*(proxy_url|resource_proxy_url)\s*=/.test(line)
+      ) {
+        changed = true;
+        return false;
+      }
+      return true;
+    });
+
+    return changed ? output.join("\n") : content;
   }
 
   private patchAppUrlConfig(content: string, appUrl: string): string {
@@ -551,13 +577,14 @@ export class Grok2ApiService {
       return line;
     });
 
-    if (content.includes("[proxy.egress]")) {
-      const insertAt = output.findIndex((line, index) => {
-        if (index === 0) {
-          return false;
-        }
-        return /^\s*\[/.test(line) && output[index - 1] !== "[proxy.egress]";
-      });
+    const proxySectionStart = output.findIndex((line) =>
+      /^\s*\[proxy\.egress\]\s*$/.test(line),
+    );
+
+    if (proxySectionStart > -1) {
+      const insertAt = output.findIndex(
+        (line, index) => index > proxySectionStart && /^\s*\[/.test(line),
+      );
       const patchLines = [
         touchedMode ? null : `mode = "${mode}"`,
         touchedProxyUrl ? null : `proxy_url = "${proxyValue}"`,
@@ -680,6 +707,183 @@ export class Grok2ApiService {
     });
   }
 
+  private killProcessTree(pid: number): void {
+    if (process.platform === "win32") {
+      const result = spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], {
+        windowsHide: true,
+      });
+      if (!result.error && result.status === 0) {
+        return;
+      }
+    }
+
+    try {
+      process.kill(pid);
+    } catch {
+      // The process may have already exited.
+    }
+  }
+
+  private findListeningPids(settings: Grok2ApiSettings): number[] {
+    if (process.platform === "win32") {
+      const result = spawnSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-Command",
+          [
+            "$ErrorActionPreference = 'SilentlyContinue'",
+            `$port = ${settings.port}`,
+            "Get-NetTCPConnection -LocalPort $port -State Listen | Select-Object -ExpandProperty OwningProcess -Unique",
+          ].join("; "),
+        ],
+        { encoding: "utf8", windowsHide: true },
+      );
+      if (result.error || result.status !== 0) {
+        return [];
+      }
+      return Array.from(
+        new Set(
+          result.stdout
+            .split(/\r?\n/)
+            .map((line) => Number.parseInt(line.trim(), 10))
+            .filter((pid) => Number.isInteger(pid) && pid > 0),
+        ),
+      );
+    }
+
+    const result = spawnSync(
+      "sh",
+      ["-c", `lsof -tiTCP:${settings.port} -sTCP:LISTEN 2>/dev/null || true`],
+      { encoding: "utf8" },
+    );
+    if (result.error) {
+      return [];
+    }
+    return Array.from(
+      new Set(
+        result.stdout
+          .split(/\r?\n/)
+          .map((line) => Number.parseInt(line.trim(), 10))
+          .filter((pid) => Number.isInteger(pid) && pid > 0),
+      ),
+    );
+  }
+
+  private readProcessCommandLine(pid: number): string | null {
+    if (process.platform === "win32") {
+      const result = spawnSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-Command",
+          `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}"; if ($p) { $p.CommandLine }`,
+        ],
+        { encoding: "utf8", windowsHide: true },
+      );
+      if (result.error || result.status !== 0) {
+        return null;
+      }
+      return result.stdout.trim() || null;
+    }
+
+    const result = spawnSync("ps", ["-p", String(pid), "-o", "command="], {
+      encoding: "utf8",
+    });
+    if (result.error || result.status !== 0) {
+      return null;
+    }
+    return result.stdout.trim() || null;
+  }
+
+  private findChildPids(pid: number): number[] {
+    if (process.platform === "win32") {
+      const result = spawnSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-Command",
+          `Get-CimInstance Win32_Process -Filter "ParentProcessId = ${pid}" | Select-Object -ExpandProperty ProcessId`,
+        ],
+        { encoding: "utf8", windowsHide: true },
+      );
+      if (result.error || result.status !== 0) {
+        return [];
+      }
+      return result.stdout
+        .split(/\r?\n/)
+        .map((line) => Number.parseInt(line.trim(), 10))
+        .filter((childPid) => Number.isInteger(childPid) && childPid > 0);
+    }
+
+    const result = spawnSync("pgrep", ["-P", String(pid)], {
+      encoding: "utf8",
+    });
+    if (result.error || result.status !== 0) {
+      return [];
+    }
+    return result.stdout
+      .split(/\r?\n/)
+      .map((line) => Number.parseInt(line.trim(), 10))
+      .filter((childPid) => Number.isInteger(childPid) && childPid > 0);
+  }
+
+  private findListeningGrokPids(settings: Grok2ApiSettings): number[] {
+    const pids = new Set<number>();
+    for (const pid of this.findListeningPids(settings)) {
+      const commandLine = this.readProcessCommandLine(pid);
+      if (this.isGrokProcessCommandLine(commandLine)) {
+        pids.add(pid);
+        continue;
+      }
+
+      for (const childPid of this.findChildPids(pid)) {
+        const childCommandLine = this.readProcessCommandLine(childPid);
+        if (this.isGrokProcessCommandLine(childCommandLine)) {
+          pids.add(pid);
+          pids.add(childPid);
+        }
+      }
+    }
+    return Array.from(pids);
+  }
+
+  private isGrokProcessCommandLine(commandLine: string | null): boolean {
+    return /(?:app\.main:app|granian|multiprocessing\.spawn|--multiprocessing-fork)/i.test(
+      commandLine || "",
+    );
+  }
+
+  private getListeningGrokPid(settings: Grok2ApiSettings): number | null {
+    return this.findListeningGrokPids(settings)[0] ?? null;
+  }
+
+  private killListeningGrokProcesses(settings: Grok2ApiSettings): number[] {
+    const pids = this.findListeningGrokPids(settings);
+    for (const pid of pids) {
+      this.stoppingPids.add(pid);
+      this.killProcessTree(pid);
+    }
+    return pids;
+  }
+
+  private async waitForPortRelease(
+    settings: Grok2ApiSettings,
+    timeoutMs = 5000,
+  ): Promise<boolean> {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      try {
+        await this.assertPortAvailable(settings);
+        return true;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+
+    return false;
+  }
+
   private async waitForHealthy(timeoutMs = 30000): Promise<void> {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeoutMs) {
@@ -717,6 +921,20 @@ export class Grok2ApiService {
         });
       }
     }
+    if (this.child) {
+      return this.setState(this.state.status, {
+        pid: this.child.pid ?? null,
+      });
+    }
+    try {
+      await fetchJson(this.state.healthUrl, this.state.apiKey);
+      return this.setState("running", {
+        pid: this.getListeningGrokPid(this.state.settings),
+        lastError: null,
+      });
+    } catch {
+      // No Electron-owned child and no healthy service on the configured port.
+    }
     if (this.state.status === "running") {
       return this.setState("stopped", { pid: null });
     }
@@ -751,6 +969,27 @@ export class Grok2ApiService {
     this.ensureRuntimeProxyConfig(this.resolveSystemProxyUrl());
 
     try {
+      await fetchJson(this.state.healthUrl, this.state.apiKey);
+      return this.setState("running", {
+        pid: this.getListeningGrokPid(this.state.settings),
+        lastError: null,
+        lastExitCode: null,
+      });
+    } catch {
+      // No reusable Grok2API service is already listening; continue spawning.
+    }
+
+    const stalePids = this.killListeningGrokProcesses(this.state.settings);
+    if (stalePids.length > 0) {
+      await this.appendLog(
+        `\n[${new Date().toISOString()}] clearing stale grok2api port owner before start: ${stalePids.join(
+          ", ",
+        )}\n`,
+      );
+      await this.waitForPortRelease(this.state.settings);
+    }
+
+    try {
       await this.assertPortAvailable(this.state.settings);
     } catch (error: any) {
       const message = error?.message || "Grok2API 端口不可用";
@@ -770,27 +1009,51 @@ export class Grok2ApiService {
       "utf-8",
     );
 
-    this.child = spawn(entry.command, entry.args, {
+    const child = spawn(entry.command, entry.args, {
       cwd: entry.cwd,
       env: this.buildEnv(this.state.settings, entry),
       windowsHide: true,
     });
+    this.child = child;
+    const childPid = child.pid ?? null;
 
-    this.child.stdout.on("data", (chunk) => {
+    child.stdout.on("data", (chunk) => {
       void this.appendLog(chunk.toString());
     });
-    this.child.stderr.on("data", (chunk) => {
+    child.stderr.on("data", (chunk) => {
       void this.appendLog(chunk.toString());
     });
-    this.child.on("error", (error) => {
+    child.on("error", (error) => {
       void this.appendLog(`[spawn error] ${error.message}\n`);
       this.setState("error", {
         lastError: error.message,
         pid: null,
       });
     });
-    this.child.on("exit", (code) => {
-      this.child = null;
+    child.on("exit", (code) => {
+      const isCurrentChild = this.child === child;
+      const stoppedIntentionally =
+        childPid !== null && this.stoppingPids.delete(childPid);
+
+      if (isCurrentChild) {
+        this.child = null;
+      }
+
+      if (stoppedIntentionally) {
+        if (isCurrentChild || !this.child) {
+          this.setState("stopped", {
+            lastExitCode: code ?? null,
+            pid: null,
+            lastError: null,
+          });
+        }
+        return;
+      }
+
+      if (!isCurrentChild) {
+        return;
+      }
+
       if (code !== 0) {
         void this.appendLog(
           `[process exit] Grok2API exited with code ${code ?? "unknown"}\n`,
@@ -819,15 +1082,41 @@ export class Grok2ApiService {
 
   async stop(): Promise<Grok2ApiState> {
     if (!this.child) {
+      const pids = this.killListeningGrokProcesses(this.state.settings);
+      if (pids.length > 0) {
+        await this.appendLog(
+          `\n[${new Date().toISOString()}] stopping grok2api by port owner: ${pids.join(
+            ", ",
+          )}\n`,
+        );
+        const released = await this.waitForPortRelease(this.state.settings);
+        if (!released) {
+          await this.appendLog(
+            `[stop warning] Grok2API port ${this.state.settings.host}:${this.state.settings.port} is still busy after stop\n`,
+          );
+        }
+      }
       return this.setState("stopped", { pid: null });
     }
 
     const target = this.child;
+    const targetPid = target.pid ?? null;
     await this.appendLog(
       `\n[${new Date().toISOString()}] stopping grok2api...\n`,
     );
-    target.kill();
+    if (targetPid !== null) {
+      this.stoppingPids.add(targetPid);
+      this.killProcessTree(targetPid);
+    } else {
+      target.kill();
+    }
     this.child = null;
+    const released = await this.waitForPortRelease(this.state.settings);
+    if (!released) {
+      await this.appendLog(
+        `[stop warning] Grok2API port ${this.state.settings.host}:${this.state.settings.port} is still busy after stop\n`,
+      );
+    }
     return this.setState("stopped", { pid: null });
   }
 
