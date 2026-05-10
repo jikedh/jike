@@ -1564,7 +1564,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       <div className={PROMPT_PANEL_STYLES.divider} />
 
       <div className={PROMPT_PANEL_STYLES.controlArea}>
-        <div className="flex items-center gap-3 flex-wrap w-full">
+        <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden">
           {/* 生成模型 - 始终在最左侧 */}
           <Select
             value={String(currentModelId)}
@@ -1627,7 +1627,17 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               });
             }}
           >
-            <SelectTrigger className={PROMPT_PANEL_STYLES.modelSelect}>
+            <SelectTrigger
+              className={cn(
+                PROMPT_PANEL_STYLES.modelSelect,
+                "h-8 min-w-[136px] max-w-[42%] w-[240px] shrink overflow-hidden px-3",
+                "[&_[data-slot=select-value]]:block [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate",
+              )}
+              title={
+                visibleImageModels.find((item) => item.id === currentModelId)
+                  ?.name
+              }
+            >
               <SelectValue placeholder="选择模型" />
             </SelectTrigger>
             <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
@@ -1806,7 +1816,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           )}
 
           {/* 数量选择和生成按钮 */}
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex shrink-0 items-center gap-3">
             {/* 预设提示词下拉 */}
             <PresetDropdown
               presetType="image"
