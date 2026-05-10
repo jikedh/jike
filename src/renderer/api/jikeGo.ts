@@ -267,6 +267,19 @@ export function getJikeGoScoreRecords(params?: {
   });
 }
 
+export function getJikeGoScoreTransactions(params?: {
+  page?: number;
+  pageSize?: number;
+}): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/score/transactions",
+    method: "get",
+    params,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
 export function getOssPutUrl(data: OssPutUrlRequest): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
