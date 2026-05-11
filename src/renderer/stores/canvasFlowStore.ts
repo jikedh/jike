@@ -2774,7 +2774,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      * 删除边
      * @param edgeId 要删除的边 ID
      */
-    deleteEdge: (edgeId: string) => {
+    deleteEdge: (edgeId: string, skipHistory = false) => {
+      // 删除前同步保存当前完整状态快照，确保撤销时能恢复边及关联数据
+      if (!skipHistory) {
+        saveCurrentCanvasToHistory();
+      }
+
       set((state) => ({
         nodes: (() => {
           const edgeToDelete = state.edges.find((edge) => edge.id === edgeId);
@@ -2796,12 +2801,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         })(),
       }));
 
-      // 保存历史记录
-      get().requestHistorySave();
+      // 删除后同步保存快照（确保 redo 能正确重放删除后的状态）
+      if (!skipHistory) {
+        saveCurrentCanvasToHistory();
 
-      // 自动保存
-      if (useChatSettingsStore.getState().autoSaveEnabled) {
-        get().saveGraph();
+        // 自动保存
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          get().saveGraph();
+        }
       }
     },
 
@@ -2809,8 +2816,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      * 删除节点及其关联的所有边
      * 自动清理依赖该节点的下游节点（图片/视频）的 image_urls
      * @param nodeId 要删除的节点 ID
+     * @param skipHistory 跳过历史保存（批量删除时由调用方统一保存）
      */
-    deleteNode: (nodeId: string) => {
+    deleteNode: (nodeId: string, skipHistory = false) => {
       const targetNode = get().nodes.find((node) => node.id === nodeId);
       if (targetNode?.type === "imageNode") {
         stopImagePollingInternal(nodeId);
@@ -2819,6 +2827,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         targetNode?.type === "newVideoNode"
       ) {
         stopVideoPollingInternal(nodeId);
+      }
+
+      // 删除前同步保存当前完整状态快照，确保撤销时能恢复节点的全部数据
+      if (!skipHistory) {
+        saveCurrentCanvasToHistory();
       }
 
       set((state) => {
@@ -2854,8 +2867,33 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         };
       });
 
-      // 保存历史记录
-      get().requestHistorySave();
+      // 删除后同步保存快照（确保 redo 能正确重放删除后的状态）
+      if (!skipHistory) {
+        saveCurrentCanvasToHistory();
+
+        // 自动保存
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          get().saveGraph();
+        }
+      }
+    },
+
+    /**
+     * 批量删除节点和边，只保存一次前/后历史快照
+     * 用于 Delete/Backspace 键批量删除选中元素的场景
+     */
+    deleteMultipleElements: (nodeIds: string[], edgeIds: string[]) => {
+      if (nodeIds.length === 0 && edgeIds.length === 0) return;
+
+      // 删除前同步保存当前完整状态快照
+      saveCurrentCanvasToHistory();
+
+      // 逐个删除，跳过内部历史保存
+      edgeIds.forEach((edgeId) => get().deleteEdge(edgeId, true));
+      nodeIds.forEach((nodeId) => get().deleteNode(nodeId, true));
+
+      // 删除后同步保存快照（确保 redo 正确）
+      saveCurrentCanvasToHistory();
 
       // 自动保存
       if (useChatSettingsStore.getState().autoSaveEnabled) {

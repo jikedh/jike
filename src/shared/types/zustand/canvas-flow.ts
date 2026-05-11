@@ -191,9 +191,11 @@ export type CanvasFlowStoreType = {
     position?: NodePosition,
     options?: AddNodeOptions,
   ) => string;
-  deleteEdge: (edgeId: string) => void;
+  deleteEdge: (edgeId: string, skipHistory?: boolean) => void;
   duplicateNode: (nodeId: string) => void;
-  deleteNode: (nodeId: string) => void;
+  deleteNode: (nodeId: string, skipHistory?: boolean) => void;
+  /** 批量删除节点和边，只保存一次前/后历史快照 */
+  deleteMultipleElements: (nodeIds: string[], edgeIds: string[]) => void;
   createGroup: (nodeIds: string[]) => string;
   ungroup: (groupId: string) => void;
   syncDraggedNodesWithGroups: (nodeIds: string[]) => void;
