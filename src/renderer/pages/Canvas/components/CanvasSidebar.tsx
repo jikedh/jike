@@ -130,6 +130,37 @@ export const CanvasSidebar = () => {
     [centerFlowPosition],
   );
 
+  const handleUseAssets = useCallback(
+    async (assets: AssetRecord[]) => {
+      if (assets.length === 0) return;
+
+      const basePosition = centerFlowPosition();
+      const nodeWidth = 380;
+      const nodeHeight = 300;
+      const perRow = 3;
+
+      try {
+        for (let index = 0; index < assets.length; index += 1) {
+          const row = Math.floor(index / perRow);
+          const col = index % perRow;
+          await insertAssetIntoCanvas(assets[index], {
+            x: basePosition.x + col * nodeWidth,
+            y: basePosition.y + row * nodeHeight,
+          });
+        }
+        toast.success(
+          assets.length === 1
+            ? "资产已插入画布"
+            : `已插入 ${assets.length} 个资产`,
+        );
+      } catch (error) {
+        console.error("[CanvasSidebar] batch insert assets failed", error);
+        toast.error("批量插入资产失败");
+      }
+    },
+    [centerFlowPosition],
+  );
+
   const handleDropAsset = useCallback(
     async (asset: AssetRecord, clientPosition: { x: number; y: number }) => {
       try {
@@ -232,6 +263,7 @@ export const CanvasSidebar = () => {
         refreshKey={assetRefreshKey}
         onClose={() => setAssetLibraryOpen(false)}
         onUse={handleUseAsset}
+        onUseMany={handleUseAssets}
         onDropAsset={handleDropAsset}
       />
       <CreateAssetDialog

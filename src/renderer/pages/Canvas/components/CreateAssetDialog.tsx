@@ -4,6 +4,8 @@ import {
   type AssetCategory,
   type AssetMediaRef,
   type AssetMediaType,
+  DEFAULT_ASSET_FOLDER_ID,
+  DEFAULT_ASSET_FOLDER_NAME,
   createAssetFromMediaRef,
   getAssetFileUrl,
 } from "service/assetStorage";
@@ -28,14 +30,14 @@ type CreateAssetDialogProps = {
 };
 
 const categoryOptions: Array<{ id: AssetCategory; label: string }> = [
-  { id: "person", label: "人物" },
+  { id: "role", label: "角色" },
   { id: "scene", label: "场景" },
   { id: "prop", label: "道具" },
   { id: "audio", label: "音效" },
 ];
 
 const getDefaultCategory = (mediaType?: AssetMediaType): AssetCategory =>
-  mediaType === "audio" ? "audio" : "person";
+  mediaType === "audio" ? "audio" : "role";
 
 const getMediaIcon = (mediaType?: AssetMediaType) => {
   if (mediaType === "video") return <IconVideo size={18} />;
@@ -51,7 +53,7 @@ export const CreateAssetDialog = ({
   onCreated,
 }: CreateAssetDialogProps) => {
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<AssetCategory>("person");
+  const [category, setCategory] = useState<AssetCategory>("image");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -87,11 +89,13 @@ export const CreateAssetDialog = ({
       await createAssetFromMediaRef({
         basePath,
         name: name.trim(),
-        scope: "canvas",
+        scope: "project",
         category,
         mediaType: request.mediaType,
         mediaRef: request.mediaRef,
         projectId: request.projectId || undefined,
+        folderId: DEFAULT_ASSET_FOLDER_ID,
+        folderName: DEFAULT_ASSET_FOLDER_NAME,
         nodeId: request.nodeId,
       });
       toast.success("资产已创建");
@@ -113,7 +117,7 @@ export const CreateAssetDialog = ({
         <div className="flex h-13 items-center justify-between border-b border-white/10 px-5">
           <div className="flex items-center gap-2 text-sm font-medium">
             {getMediaIcon(request.mediaType)}
-            创建素材文件夹
+            创建项目资产
           </div>
           <button
             type="button"

@@ -1,6 +1,8 @@
 import {
+  IconArrowLeft,
   IconCheck,
   IconDownload,
+  IconFolder,
   IconMusic,
   IconPhoto,
   IconTrash,
@@ -10,34 +12,35 @@ import {
 } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  type AssetFolder,
   type AssetCategory,
   type AssetMediaType,
   type AssetRecord,
   type AssetScope,
+  createAssetFolderId,
   createAssetFromBuffer,
+  deleteAssetFolderById,
   deleteAssetsById,
+  readAssetIndex,
   getAssetCategoryLabel,
   getAssetDisplayUrl,
-  readAssetIndex,
-  renameAsset,
 } from "service/assetStorage";
 import {
   CANVAS_ASSET_DRAG_MIME,
   CANVAS_ASSET_DRAG_TYPE,
   type CanvasAssetDragPayload,
 } from "shared/constants/canvasDrag";
-import {
-  getAssetMediaType,
-  SUPPORTED_ASSET_AUDIO_EXTENSIONS,
-  SUPPORTED_ASSET_IMAGE_EXTENSIONS,
-  SUPPORTED_ASSET_VIDEO_EXTENSIONS,
-} from "shared/constants/mediaTypes";
+import { getAssetMediaType } from "shared/constants/mediaTypes";
 import type { AllNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { downloadAssets } from "../utils/assetDownload";
-import { countAssetReferencesInCanvas } from "../utils/assetReferences";
+import {
+  buildCanvasMediaAssets,
+  removeCanvasMediaAssetsFromNodes,
+} from "../utils/canvasMediaAssets";
 
 type AssetLibraryDialogProps = {
   open: boolean;
@@ -47,6 +50,7 @@ type AssetLibraryDialogProps = {
   refreshKey?: number;
   onClose: () => void;
   onUse?: (asset: AssetRecord) => void;
+  onUseMany?: (assets: AssetRecord[]) => void;
   onDropAsset?: (
     asset: AssetRecord,
     clientPosition: { x: number; y: number },
@@ -60,41 +64,78 @@ const scopes: Array<{ id: AssetScope; label: string }> = [
   { id: "public", label: "公共资产" },
 ];
 
-const categories: Array<{ id: AssetCategory; label: string }> = [
-  { id: "person", label: "人物" },
+const projectCategories: Array<{ id: AssetCategory; label: string }> = [
+  { id: "role", label: "角色" },
   { id: "scene", label: "场景" },
   { id: "prop", label: "道具" },
   { id: "audio", label: "音效" },
 ];
 
+const canvasCategories: Array<{ id: AssetCategory; label: string }> = [
+  { id: "image", label: "图片" },
+  { id: "video", label: "视频" },
+  { id: "audio", label: "音频" },
+];
+
 const PAGE_SIZE = 24;
 
-const VISUAL_ASSET_FILE_ACCEPT = [
-  ...SUPPORTED_ASSET_IMAGE_EXTENSIONS,
-  ...SUPPORTED_ASSET_VIDEO_EXTENSIONS,
-].join(",");
-const AUDIO_ASSET_FILE_ACCEPT = SUPPORTED_ASSET_AUDIO_EXTENSIONS.join(",");
-const VISUAL_ASSET_SUPPORTED_TYPES_LABEL =
-  "图片 jpg/jpeg/png/webp/gif，视频 mp4/webm/mov";
-const AUDIO_ASSET_SUPPORTED_TYPES_LABEL = "音频 mp3/wav/m4a/aac/ogg";
+const categoryAliases: Record<string, AssetCategory> = {
+  role: "role",
+  roles: "role",
+  character: "role",
+  characters: "role",
+  person: "role",
+  people: "role",
+  "人物": "role",
+  "角色": "role",
+  scene: "scene",
+  scenes: "scene",
+  "场景": "scene",
+  prop: "prop",
+  props: "prop",
+  object: "prop",
+  objects: "prop",
+  "道具": "prop",
+  audio: "audio",
+  audios: "audio",
+  sound: "audio",
+  sounds: "audio",
+  sfx: "audio",
+  "音频": "audio",
+  "音效": "audio",
+};
 
-const getCategoryUploadAccept = (category: AssetCategory) =>
-  category === "audio" ? AUDIO_ASSET_FILE_ACCEPT : VISUAL_ASSET_FILE_ACCEPT;
+const normalizeImportPath = (value: string) => value.replace(/\\/g, "/");
 
-const getCategorySupportedTypesLabel = (category: AssetCategory) =>
-  category === "audio"
-    ? AUDIO_ASSET_SUPPORTED_TYPES_LABEL
-    : VISUAL_ASSET_SUPPORTED_TYPES_LABEL;
+const getFileRelativePath = (file: File) =>
+  normalizeImportPath(
+    ((file as File & { webkitRelativePath?: string }).webkitRelativePath ||
+      file.name),
+  );
 
-const isMediaTypeAllowedInCategory = (
-  mediaType: AssetMediaType,
+const getImportCategory = (file: File): AssetCategory | null => {
+  const parts = getFileRelativePath(file).split("/").filter(Boolean);
+  const folderParts = parts.slice(1, -1);
+
+  for (const part of folderParts) {
+    const normalized = part.trim().toLowerCase();
+    const category = categoryAliases[part.trim()] || categoryAliases[normalized];
+    if (category) return category;
+  }
+
+  return null;
+};
+
+const isCategoryMediaAllowed = (
   category: AssetCategory,
-) => (category === "audio" ? mediaType === "audio" : mediaType !== "audio");
-
-const getUploadCategory = (
   mediaType: AssetMediaType,
-  category: AssetCategory,
-): AssetCategory => (mediaType === "audio" ? "audio" : category);
+) => {
+  if (category === "audio") return mediaType === "audio";
+  if (category === "role" || category === "scene" || category === "prop") {
+    return mediaType === "image" || mediaType === "video";
+  }
+  return category === mediaType;
+};
 
 const getAssetIcon = (mediaType: AssetMediaType) => {
   if (mediaType === "video") return <IconVideo size={16} />;
@@ -102,24 +143,27 @@ const getAssetIcon = (mediaType: AssetMediaType) => {
   return <IconPhoto size={16} />;
 };
 
-const createDragPayload = (asset: AssetRecord): CanvasAssetDragPayload => ({
-  type: CANVAS_ASSET_DRAG_TYPE,
-  asset: {
-    id: asset.id,
-    name: asset.name,
-    mediaType: asset.mediaType,
-    category: asset.category,
-    fileUrl: asset.fileUrl,
-    coverUrl: asset.coverUrl,
-    localName: asset.fileUrl.split("/").pop(),
-  },
-});
-
 const getMediaTypeLabel = (mediaType: AssetMediaType) => {
   if (mediaType === "image") return "图片";
   if (mediaType === "video") return "视频";
   return "音频";
 };
+
+const createDragPayload = (asset: AssetRecord): CanvasAssetDragPayload => ({
+  type: CANVAS_ASSET_DRAG_TYPE,
+  asset: {
+    id: asset.id,
+    name: asset.name,
+    scope: asset.scope,
+    mediaType: asset.mediaType,
+    category: asset.category,
+    fileUrl: asset.fileUrl,
+    originalFile: asset.originalFile,
+    coverUrl: asset.coverUrl,
+    localName: (asset.originalFile || asset.fileUrl).split("/").pop(),
+    projectId: asset.projectId,
+  },
+});
 
 const AssetPreviewPane = ({
   asset,
@@ -211,15 +255,16 @@ export const AssetLibraryDialog = ({
   refreshKey,
   onClose,
   onUse,
+  onUseMany,
   onDropAsset,
   variant = "dialog",
 }: AssetLibraryDialogProps) => {
   const [activeScope, setActiveScope] = useState<AssetScope>("project");
-  const [activeCategory, setActiveCategory] = useState<AssetCategory>("person");
-  const [assets, setAssets] = useState<AssetRecord[]>([]);
+  const [activeCategory, setActiveCategory] = useState<AssetCategory>("image");
+  const [projectAssets, setProjectAssets] = useState<AssetRecord[]>([]);
+  const [assetFolders, setAssetFolders] = useState<AssetFolder[]>([]);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [batchMode, setBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [contextMenu, setContextMenu] = useState<{
@@ -227,14 +272,21 @@ export const AssetLibraryDialog = ({
     x: number;
     y: number;
   } | null>(null);
-  const [renamingAsset, setRenamingAsset] = useState<AssetRecord | null>(null);
-  const [renameInput, setRenameInput] = useState("");
+  const [folderContextMenu, setFolderContextMenu] = useState<{
+    folder: AssetFolder;
+    x: number;
+    y: number;
+  } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     assets: AssetRecord[];
+    folder?: AssetFolder;
     message: string;
   } | null>(null);
   const [previewAsset, setPreviewAsset] = useState<AssetRecord | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [activeProjectAssetId, setActiveProjectAssetId] = useState<
+    string | null
+  >(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const isPageVariant = variant === "page";
   const allowInsert = !isPageVariant && Boolean(onUse);
@@ -243,16 +295,49 @@ export const AssetLibraryDialog = ({
       isPageVariant ? scopes.filter((scope) => scope.id !== "canvas") : scopes,
     [isPageVariant],
   );
+  const canvasAssets = useMemo(
+    () => buildCanvasMediaAssets(nodes, projectId),
+    [nodes, projectId],
+  );
+  const projectOptions = useMemo(() => {
+    const folderMap = new Map(assetFolders.map((folder) => [folder.id, folder]));
+    for (const asset of projectAssets) {
+      if (asset.scope !== "project" || !asset.folderId) continue;
+      if (folderMap.has(asset.folderId)) continue;
+      folderMap.set(asset.folderId, {
+        id: asset.folderId,
+        name: asset.folderName || "未命名文件夹",
+        createdAt: asset.createdAt,
+        updatedAt: asset.updatedAt,
+      });
+    }
+    return Array.from(folderMap.values());
+  }, [assetFolders, projectAssets]);
+  const activeProjectOption = projectOptions.find(
+    (folder) => folder.id === activeProjectAssetId,
+  );
+  const isProjectRoot = activeScope === "project" && !activeProjectAssetId;
+  const activeCategories =
+    activeScope === "project" ? projectCategories : canvasCategories;
+  const listedAssets =
+    activeScope === "canvas"
+      ? canvasAssets
+      : activeScope === "project"
+        ? projectAssets
+        : [];
+  const isCanvasScope = activeScope === "canvas";
+  const allowBatchOperations = activeScope !== "public";
 
   const reloadAssets = useCallback(async () => {
     if (!basePath || !open) return;
     setLoading(true);
     try {
       const index = await readAssetIndex(basePath);
-      setAssets(index.assets);
+      setAssetFolders(index.folders);
+      setProjectAssets(index.assets.filter((asset) => asset.scope === "project"));
     } catch (error) {
       console.error("[AssetLibrary] load failed", error);
-      toast.error("读取资产库失败");
+      toast.error("读取项目资产失败");
     } finally {
       setLoading(false);
     }
@@ -264,7 +349,6 @@ export const AssetLibraryDialog = ({
 
   useEffect(() => {
     if (!open) {
-      setBatchMode(false);
       setSelectedIds([]);
     }
   }, [open]);
@@ -272,7 +356,39 @@ export const AssetLibraryDialog = ({
   useEffect(() => {
     setSelectedIds([]);
     setPage(1);
+    setPreviewAsset(null);
+    if (activeScope !== "project") {
+      setActiveProjectAssetId(null);
+    }
+    if (
+      activeScope === "project" &&
+      !projectCategories.some((category) => category.id === activeCategory)
+    ) {
+      setActiveCategory("role");
+    }
+    if (
+      activeScope === "canvas" &&
+      !canvasCategories.some((category) => category.id === activeCategory)
+    ) {
+      setActiveCategory("image");
+    }
   }, [activeScope, activeCategory]);
+
+  useEffect(() => {
+    setSelectedIds([]);
+    setPage(1);
+    setPreviewAsset(null);
+    if (activeProjectAssetId) {
+      setActiveCategory("role");
+    }
+  }, [activeProjectAssetId]);
+
+  useEffect(() => {
+    const input = folderInputRef.current;
+    if (!input) return;
+    input.setAttribute("webkitdirectory", "");
+    input.setAttribute("directory", "");
+  }, [open]);
 
   useEffect(() => {
     if (!visibleScopes.some((scope) => scope.id === activeScope)) {
@@ -281,29 +397,41 @@ export const AssetLibraryDialog = ({
   }, [activeScope, visibleScopes]);
 
   useEffect(() => {
-    if (!contextMenu) return;
+    if (!contextMenu && !folderContextMenu) return;
 
-    const closeMenu = () => setContextMenu(null);
+    const closeMenu = () => {
+      setContextMenu(null);
+      setFolderContextMenu(null);
+    };
     window.addEventListener("pointerdown", closeMenu);
     window.addEventListener("keydown", closeMenu);
     return () => {
       window.removeEventListener("pointerdown", closeMenu);
       window.removeEventListener("keydown", closeMenu);
     };
-  }, [contextMenu]);
+  }, [contextMenu, folderContextMenu]);
 
   const filteredAssets = useMemo(() => {
     if (activeScope === "public") return [];
-    return assets.filter((asset) => {
+    return listedAssets.filter((asset) => {
       if (asset.scope !== activeScope || asset.category !== activeCategory) {
         return false;
       }
+      if (activeScope === "project") {
+        return asset.folderId === activeProjectAssetId;
+      }
       if (activeScope === "canvas") {
-        return asset.projectId === projectId;
+        return (asset.projectId || null) === (projectId || null);
       }
       return true;
     });
-  }, [activeCategory, activeScope, assets, projectId]);
+  }, [
+    activeCategory,
+    activeProjectAssetId,
+    activeScope,
+    listedAssets,
+    projectId,
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAssets.length / PAGE_SIZE));
   const pageAssets = filteredAssets.slice(
@@ -316,9 +444,32 @@ export const AssetLibraryDialog = ({
       : null;
 
   const selectedAssets = useMemo(
-    () => assets.filter((asset) => selectedIds.includes(asset.id)),
-    [assets, selectedIds],
+    () => listedAssets.filter((asset) => selectedIds.includes(asset.id)),
+    [listedAssets, selectedIds],
   );
+  const getProjectAssetCount = useCallback(
+    (targetFolderId: string) =>
+      projectAssets.filter(
+        (asset) =>
+          asset.scope === "project" && asset.folderId === targetFolderId,
+      ).length,
+    [projectAssets],
+  );
+  const isCurrentPageAllSelected =
+    pageAssets.length > 0 &&
+    pageAssets.every((asset) => selectedIds.includes(asset.id));
+
+  const toggleCurrentPageSelected = useCallback(() => {
+    const pageAssetIds = pageAssets.map((asset) => asset.id);
+    if (pageAssetIds.length === 0) return;
+
+    setSelectedIds((current) => {
+      if (pageAssetIds.every((id) => current.includes(id))) {
+        return current.filter((id) => !pageAssetIds.includes(id));
+      }
+      return Array.from(new Set([...current, ...pageAssetIds]));
+    });
+  }, [pageAssets]);
 
   const handleDownloadAssets = useCallback(async () => {
     if (selectedAssets.length === 0 || downloading) return;
@@ -359,76 +510,78 @@ export const AssetLibraryDialog = ({
     [basePath, downloading],
   );
 
-  const handleUpload = useCallback(
+  const handleImportFolder = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(event.target.files ?? []);
       event.target.value = "";
+      if (files.length === 0 || !basePath) return;
 
-      if (activeScope === "public") {
-        toast.warning("公共资产暂不支持本地上传");
-        return;
-      }
-      if (files.length === 0) return;
+      const firstRelativePath = getFileRelativePath(files[0]);
+      const folderName =
+        firstRelativePath.split("/").filter(Boolean)[0] || "未命名资产文件夹";
+      const folderId = createAssetFolderId();
+      const now = new Date().toISOString();
+      let importedCount = 0;
+      let skippedCount = 0;
 
+      setLoading(true);
       try {
-        const validFiles: Array<{
-          file: File;
-          mediaType: AssetMediaType;
-        }> = [];
-        const invalidFiles: File[] = [];
-
         for (const file of files) {
           const mediaType = getAssetMediaType(file);
-          if (!mediaType) {
-            invalidFiles.push(file);
+          const category = getImportCategory(file);
+
+          if (!mediaType || !category || !isCategoryMediaAllowed(category, mediaType)) {
+            skippedCount += 1;
             continue;
           }
-          if (!isMediaTypeAllowedInCategory(mediaType, activeCategory)) {
-            invalidFiles.push(file);
-            continue;
-          }
-          validFiles.push({ file, mediaType });
-        }
 
-        if (invalidFiles.length > 0) {
-          const fileNames = invalidFiles
-            .slice(0, 3)
-            .map((file) => file.name)
-            .join("、");
-          toast.warning(
-            `已跳过不支持的资产类型：${fileNames}${invalidFiles.length > 3 ? " 等" : ""}。当前分类支持${getCategorySupportedTypesLabel(activeCategory)}`,
-          );
-        }
-
-        if (validFiles.length === 0) return;
-
-        for (const { file, mediaType } of validFiles) {
           await createAssetFromBuffer({
             basePath,
             name: file.name.replace(/\.[^.]+$/, ""),
-            scope: activeScope,
-            category: getUploadCategory(mediaType, activeCategory),
+            scope: "project",
+            category,
             mediaType,
             fileName: file.name,
             buffer: await file.arrayBuffer(),
-            projectId:
-              activeScope === "canvas" ? projectId || undefined : undefined,
-            source: { type: "upload", projectId: projectId || undefined },
+            folderId,
+            folderName,
+            source: { type: "upload" },
           });
+          importedCount += 1;
         }
 
+        if (importedCount === 0) {
+          toast.warning(
+            "未导入资产。请确认文件夹内包含角色、场景、道具、音效子文件夹，并放入支持的媒体文件。",
+          );
+          return;
+        }
+
+        setAssetFolders((current) => [
+          {
+            id: folderId,
+            name: folderName,
+            sourceName: folderName,
+            createdAt: now,
+            updatedAt: now,
+          },
+          ...current.filter((folder) => folder.id !== folderId),
+        ]);
+        setActiveProjectAssetId(folderId);
         toast.success(
-          validFiles.length === 1
-            ? "资产已上传"
-            : `已上传 ${validFiles.length} 个资产`,
+          skippedCount > 0
+            ? `已导入 ${importedCount} 个资产，跳过 ${skippedCount} 个文件`
+            : `已导入 ${importedCount} 个资产`,
         );
         await reloadAssets();
       } catch (error) {
-        console.error("[AssetLibrary] upload failed", error);
-        toast.error(error instanceof Error ? error.message : "上传资产失败");
+        console.error("[AssetLibrary] import folder failed", error);
+        toast.error(error instanceof Error ? error.message : "导入资产文件夹失败");
+      } finally {
+        setLoading(false);
       }
     },
-    [activeCategory, activeScope, basePath, projectId, reloadAssets],
+    [basePath, reloadAssets],
   );
 
   const toggleSelected = useCallback((assetId: string) => {
@@ -443,60 +596,71 @@ export const AssetLibraryDialog = ({
     (targetAssets: AssetRecord[]) => {
       if (targetAssets.length === 0) return;
 
-      const referenceCount = targetAssets.reduce(
-        (sum, asset) => sum + countAssetReferencesInCanvas(asset, nodes),
-        0,
+      const isCanvasAssetDelete = targetAssets.every(
+        (asset) => asset.scope === "canvas",
       );
-      const referencedAssetCount = targetAssets.filter(
-        (asset) => countAssetReferencesInCanvas(asset, nodes) > 0,
-      ).length;
-
       const message =
         targetAssets.length === 1
-          ? referenceCount > 0
-            ? `该资产已被当前画布中的 ${referenceCount} 处引用，删除后相关节点可能无法正常显示。是否继续删除？`
-            : "确定删除该资产吗？删除后不可恢复。"
-          : referenceCount > 0
-            ? `选中的 ${targetAssets.length} 个资产中有 ${referencedAssetCount} 个已被当前画布引用，共 ${referenceCount} 处引用。删除后相关节点可能无法正常显示。是否继续删除？`
-            : `确定删除选中的 ${targetAssets.length} 个资产吗？删除后不可恢复。`;
+          ? isCanvasAssetDelete
+            ? "确定从当前画布资产中删除该媒体吗？相关节点中的该媒体引用会被移除。"
+            : "确定删除该项目资产吗？删除后会移除复制到资产库中的文件。"
+          : isCanvasAssetDelete
+            ? `确定从当前画布资产中删除选中的 ${targetAssets.length} 个媒体吗？相关节点中的这些媒体引用会被移除。`
+            : `确定删除选中的 ${targetAssets.length} 个项目资产吗？删除后会移除复制到资产库中的文件。`;
 
       setDeleteConfirm({ assets: targetAssets, message });
     },
-    [nodes],
+    [],
+  );
+
+  const handleDeleteFolder = useCallback(
+    (folder: AssetFolder) => {
+      const count = getProjectAssetCount(folder.id);
+      setDeleteConfirm({
+        assets: [],
+        folder,
+        message: `确定删除资产文件夹“${folder.name}”吗？该文件夹内 ${count} 个资产和复制到资产库中的文件都会被删除。`,
+      });
+    },
+    [getProjectAssetCount],
   );
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteConfirm) return;
 
     try {
-      await deleteAssetsById(
-        basePath,
-        deleteConfirm.assets.map((asset) => asset.id),
-      );
+      if (deleteConfirm.folder) {
+        await deleteAssetFolderById(basePath, deleteConfirm.folder.id);
+        if (activeProjectAssetId === deleteConfirm.folder.id) {
+          setActiveProjectAssetId(null);
+        }
+      } else if (deleteConfirm.assets.every((asset) => asset.scope === "canvas")) {
+        const store = useCanvasFlowStore.getState();
+        const result = removeCanvasMediaAssetsFromNodes(
+          store.nodes,
+          deleteConfirm.assets,
+        );
+        if (result.removedCount > 0) {
+          store.setNodes(result.nodes);
+          store.requestHistorySave();
+          store.saveGraph();
+        }
+      } else {
+        await deleteAssetsById(
+          basePath,
+          deleteConfirm.assets.map((asset) => asset.id),
+        );
+      }
+
       setSelectedIds([]);
       setDeleteConfirm(null);
-      toast.success("资产已删除");
+      toast.success(deleteConfirm.folder ? "资产文件夹已删除" : "资产已删除");
       await reloadAssets();
     } catch (error) {
       console.error("[AssetLibrary] delete failed", error);
       toast.error("删除资产失败");
     }
-  }, [basePath, deleteConfirm, reloadAssets]);
-
-  const handleRenameAsset = useCallback(async () => {
-    if (!renamingAsset) return;
-
-    try {
-      await renameAsset(basePath, renamingAsset.id, renameInput);
-      toast.success("资产名称已更新");
-      setRenamingAsset(null);
-      setRenameInput("");
-      await reloadAssets();
-    } catch (error) {
-      console.error("[AssetLibrary] rename failed", error);
-      toast.error(error instanceof Error ? error.message : "修改资产名称失败");
-    }
-  }, [basePath, reloadAssets, renameInput, renamingAsset]);
+  }, [activeProjectAssetId, basePath, deleteConfirm, reloadAssets]);
 
   const handleOverlayDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
@@ -515,7 +679,7 @@ export const AssetLibraryDialog = ({
 
       try {
         const payload = JSON.parse(rawPayload) as CanvasAssetDragPayload;
-        const asset = assets.find((item) => item.id === payload.asset?.id);
+        const asset = listedAssets.find((item) => item.id === payload.asset?.id);
         if (!asset) return;
 
         onDropAsset(asset, { x: event.clientX, y: event.clientY });
@@ -524,7 +688,7 @@ export const AssetLibraryDialog = ({
         toast.error("资产拖拽失败");
       }
     },
-    [assets, isPageVariant, onClose, onDropAsset],
+    [isPageVariant, listedAssets, onClose, onDropAsset],
   );
 
   const handleOverlayDragOver = useCallback(
@@ -593,7 +757,7 @@ export const AssetLibraryDialog = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {batchMode ? (
+            {allowBatchOperations && !isProjectRoot ? (
               <>
                 <span className="mr-2 text-xs text-white/50">
                   已选{selectedIds.length}项
@@ -614,32 +778,14 @@ export const AssetLibraryDialog = ({
                   <IconDownload size={14} />
                   {downloading ? "下载中" : "下载"}
                 </Button>
-                {allowInsert ? (
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      selectedAssets.forEach((asset) => onUse?.(asset))
-                    }
-                    disabled={selectedIds.length === 0}
-                  >
-                    <IconCheck size={14} />
-                    使用
-                  </Button>
-                ) : null}
                 <Button
                   size="sm"
-                  onClick={() =>
-                    setSelectedIds(pageAssets.map((asset) => asset.id))
-                  }
+                  onClick={toggleCurrentPageSelected}
                 >
-                  全选
+                  {isCurrentPageAllSelected ? "全不选" : "全选"}
                 </Button>
               </>
-            ) : (
-              <Button size="sm" onClick={() => setBatchMode(true)}>
-                批量操作
-              </Button>
-            )}
+            ) : null}
             {!isPageVariant ? (
               <button
                 type="button"
@@ -654,45 +800,109 @@ export const AssetLibraryDialog = ({
 
         <div className="flex shrink-0 items-center justify-between px-6 pt-5">
           <div className="flex items-center gap-5">
-            {categories.map((category) => (
+            {activeScope === "project" && activeProjectAssetId ? (
               <button
                 type="button"
-                key={category.id}
-                onClick={() => setActiveCategory(category.id)}
-                className={cn(
-                  "text-xs transition-colors",
-                  activeCategory === category.id
-                    ? "text-white"
-                    : "text-white/38 hover:text-white/70",
-                )}
+                onClick={() => setActiveProjectAssetId(null)}
+                className="flex items-center gap-1.5 text-xs text-white/45 transition-colors hover:text-white"
               >
-                {category.label}
+                <IconArrowLeft size={14} />
+                {activeProjectOption?.name || "返回文件夹"}
               </button>
-            ))}
+            ) : null}
+            {!isProjectRoot
+              ? activeCategories.map((category) => (
+                  <button
+                    type="button"
+                    key={category.id}
+                    onClick={() => setActiveCategory(category.id)}
+                    className={cn(
+                      "text-xs transition-colors",
+                      activeCategory === category.id
+                        ? "text-white"
+                        : "text-white/38 hover:text-white/70",
+                    )}
+                  >
+                    {category.label}
+                  </button>
+                ))
+              : null}
           </div>
           <div className="text-xs text-white/35">
             {activeScope === "public"
               ? "公共资产接口待接入"
+              : isProjectRoot
+                ? `${projectOptions.length} 个文件夹`
+              : isCanvasScope
+                ? "当前画布媒体"
               : `${filteredAssets.length} 个资产`}
           </div>
         </div>
 
         <div className="flex min-h-0 flex-1 gap-5 overflow-hidden px-6 py-6">
           <div className="min-w-0 flex-1 overflow-auto">
-            {activeScope !== "public" ? (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(118px,1fr))] gap-5">
+            {isProjectRoot ? (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-5">
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex aspect-[4/5] flex-col items-center justify-center rounded-md border border-dashed border-white/15 bg-white/[0.03] text-white/50 transition-colors hover:border-[#B43FEB]/70 hover:bg-[#B43FEB]/10 hover:text-white"
+                  onClick={() => folderInputRef.current?.click()}
+                  className="group flex aspect-[4/3] flex-col justify-between rounded-md border border-dashed border-white/15 bg-white/[0.03] p-4 text-left text-white/55 transition-colors hover:border-[#B43FEB]/70 hover:bg-[#B43FEB]/10 hover:text-white"
                 >
-                  <IconUpload size={24} />
-                  <span className="mt-3 text-xs">本地上传</span>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[#B43FEB]/15 text-[#d486ff]">
+                    <IconUpload size={24} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm text-white/88">
+                      导入文件夹
+                    </div>
+                    <div className="mt-1 text-xs text-white/40">
+                      角色 / 场景 / 道具 / 音效
+                    </div>
+                  </div>
                 </button>
-
-                {loading ? (
+                {projectOptions.map((project) => {
+                  const count = getProjectAssetCount(project.id);
+                  return (
+                    <button
+                      type="button"
+                      key={project.id}
+                      onClick={() => setActiveProjectAssetId(project.id)}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        setFolderContextMenu({
+                          folder: project,
+                          x: event.clientX,
+                          y: event.clientY,
+                        });
+                      }}
+                      className="group flex aspect-[4/3] flex-col justify-between rounded-md border border-white/8 bg-[#2a2a2a] p-4 text-left transition-colors hover:border-[#B43FEB]/60 hover:bg-[#303030]"
+                    >
+                      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[#B43FEB]/15 text-[#d486ff]">
+                        <IconFolder size={24} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-sm text-white/88">
+                          {project.name}
+                        </div>
+                        <div className="mt-1 text-xs text-white/40">
+                          {count} 个资产
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : activeScope !== "public" ? (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(118px,1fr))] gap-5">
+                {loading && !isCanvasScope ? (
                   <div className="col-span-full flex h-40 items-center justify-center text-sm text-white/45">
                     正在读取资产...
+                  </div>
+                ) : pageAssets.length === 0 ? (
+                  <div className="col-span-full flex h-40 items-center justify-center rounded-md border border-dashed border-white/10 text-sm text-white/40">
+                    {isCanvasScope
+                      ? "当前画布暂无该类型媒体"
+                      : "暂无资产"}
                   </div>
                 ) : (
                   pageAssets.map((asset) => {
@@ -731,10 +941,7 @@ export const AssetLibraryDialog = ({
                           type="button"
                           className="block w-full text-left"
                           onClick={() => {
-                            if (batchMode) {
-                              toggleSelected(asset.id);
-                              return;
-                            }
+                            toggleSelected(asset.id);
                             if (isPageVariant) {
                               setPreviewAsset(asset);
                             }
@@ -771,11 +978,9 @@ export const AssetLibraryDialog = ({
                           </div>
                         </button>
 
-                        {batchMode ? (
-                          <div className="absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded bg-black/70">
-                            {selected ? <IconCheck size={14} /> : null}
-                          </div>
-                        ) : null}
+                        <div className="absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded bg-black/70">
+                          {selected ? <IconCheck size={14} /> : null}
+                        </div>
                       </div>
                     );
                   })
@@ -792,41 +997,60 @@ export const AssetLibraryDialog = ({
           ) : null}
         </div>
 
-        <div className="flex h-14 shrink-0 items-center border-t border-white/10 px-6">
-          <div className="flex items-center gap-2 text-xs text-white/45">
-            <button
-              type="button"
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
-              disabled={page <= 1}
-              className="rounded px-2 py-1 hover:bg-white/10 disabled:opacity-30"
-            >
-              &lt;
-            </button>
-            <span className="rounded bg-white/10 px-2 py-1">{page}</span>
-            <span>/</span>
-            <span>{totalPages}</span>
-            <button
-              type="button"
-              onClick={() =>
-                setPage((current) => Math.min(totalPages, current + 1))
-              }
-              disabled={page >= totalPages}
-              className="rounded px-2 py-1 hover:bg-white/10 disabled:opacity-30"
-            >
-              &gt;
-            </button>
-            <span className="ml-3">{PAGE_SIZE}条/页</span>
-            <span>{getAssetCategoryLabel(activeCategory)}</span>
-          </div>
+        <div className="flex h-14 shrink-0 items-center justify-between border-t border-white/10 px-6">
+          {!isProjectRoot ? (
+            <div className="flex items-center gap-2 text-xs text-white/45">
+              <button
+                type="button"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={page <= 1}
+                className="rounded px-2 py-1 hover:bg-white/10 disabled:opacity-30"
+              >
+                &lt;
+              </button>
+              <span className="rounded bg-white/10 px-2 py-1">{page}</span>
+              <span>/</span>
+              <span>{totalPages}</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setPage((current) => Math.min(totalPages, current + 1))
+                }
+                disabled={page >= totalPages}
+                className="rounded px-2 py-1 hover:bg-white/10 disabled:opacity-30"
+              >
+                &gt;
+              </button>
+              <span className="ml-3">{PAGE_SIZE}条/页</span>
+              <span>{getAssetCategoryLabel(activeCategory)}</span>
+            </div>
+          ) : (
+            <div />
+          )}
+          {allowInsert && !isProjectRoot ? (
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={onClose}>
+                取消
+              </Button>
+              <Button
+                size="sm"
+                variant="blue"
+                onClick={() => onUseMany?.(selectedAssets)}
+                disabled={selectedIds.length === 0}
+                ignoreTitleCase
+              >
+                确定
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <input
-          ref={fileInputRef}
+          ref={folderInputRef}
           type="file"
           multiple
           className="hidden"
-          accept={getCategoryUploadAccept(activeCategory)}
-          onChange={handleUpload}
+          onChange={handleImportFolder}
         />
       </div>
       {contextMenu ? (
@@ -861,17 +1085,6 @@ export const AssetLibraryDialog = ({
           </button>
           <button
             type="button"
-            className="flex w-full items-center rounded-md px-3 py-2 text-left text-white/80 hover:bg-[#B43FEB]/10 hover:text-white"
-            onClick={() => {
-              setRenamingAsset(contextMenu.asset);
-              setRenameInput(contextMenu.asset.name);
-              setContextMenu(null);
-            }}
-          >
-            重命名
-          </button>
-          <button
-            type="button"
             className="flex w-full items-center rounded-md px-3 py-2 text-left text-red-300 hover:bg-red-500/15 hover:text-red-200"
             onClick={() => {
               const asset = contextMenu.asset;
@@ -884,34 +1097,23 @@ export const AssetLibraryDialog = ({
         </div>
       ) : null}
 
-      {renamingAsset ? (
-        <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/40">
-          <div className="w-[min(420px,90vw)] rounded-xl border border-white/10 bg-[#171717] p-5 text-white shadow-2xl">
-            <div className="text-sm font-medium">修改资产名称</div>
-            <input
-              value={renameInput}
-              onChange={(event) => setRenameInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  void handleRenameAsset();
-                }
-              }}
-              className="mt-4 h-10 w-full rounded-md border border-white/10 bg-black/30 px-3 text-sm outline-none focus:border-[#B43FEB]/70"
-              autoFocus
-            />
-            <div className="mt-5 flex justify-end gap-2">
-              <Button size="sm" onClick={() => setRenamingAsset(null)}>
-                取消
-              </Button>
-              <Button
-                size="sm"
-                variant="blue"
-                onClick={() => void handleRenameAsset()}
-              >
-                保存
-              </Button>
-            </div>
-          </div>
+      {folderContextMenu ? (
+        <div
+          className="fixed z-[90] w-32 overflow-hidden rounded-lg border border-white/10 bg-[#121214] p-1 text-sm text-white shadow-2xl"
+          style={{ left: folderContextMenu.x, top: folderContextMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="flex w-full items-center rounded-md px-3 py-2 text-left text-red-300 hover:bg-red-500/15 hover:text-red-200"
+            onClick={() => {
+              const folder = folderContextMenu.folder;
+              setFolderContextMenu(null);
+              handleDeleteFolder(folder);
+            }}
+          >
+            删除
+          </button>
         </div>
       ) : null}
 

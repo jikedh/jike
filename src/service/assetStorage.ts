@@ -5,8 +5,17 @@ import {
 } from "shared/constants/mediaTypes";
 
 export type AssetScope = "project" | "canvas" | "public";
-export type AssetCategory = "person" | "scene" | "prop" | "audio";
 export type AssetMediaType = "image" | "video" | "audio";
+export type AssetLibraryCategory = "role" | "scene" | "prop" | "audio";
+export type AssetCategory = AssetLibraryCategory | AssetMediaType;
+
+export type AssetFolder = {
+  id: string;
+  name: string;
+  sourceName?: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type AssetRecord = {
   id: string;
@@ -20,6 +29,8 @@ export type AssetRecord = {
   coverFile?: string;
   metadataFile: string;
   projectId?: string;
+  folderId?: string;
+  folderName?: string;
   source?: {
     type: "canvas" | "upload";
     projectId?: string;
@@ -34,6 +45,7 @@ export type AssetRecord = {
 
 export type AssetIndex = {
   version: 1;
+  folders: AssetFolder[];
   assets: AssetRecord[];
 };
 
@@ -46,6 +58,8 @@ export type CreateAssetInput = {
   fileName: string;
   buffer: ArrayBuffer;
   projectId?: string;
+  folderId?: string;
+  folderName?: string;
   source?: AssetRecord["source"];
 };
 
@@ -59,12 +73,16 @@ export type AssetMediaRef = {
 };
 
 const ASSET_INDEX_PATH = "assets/index.json";
+export const DEFAULT_ASSET_FOLDER_ID = "unassigned";
+export const DEFAULT_ASSET_FOLDER_NAME = "未归档资产";
 
 const categoryLabels: Record<AssetCategory, string> = {
-  person: "人物",
+  role: "角色",
   scene: "场景",
   prop: "道具",
-  audio: "音效",
+  image: "图片",
+  video: "视频",
+  audio: "音频",
 };
 
 const mediaTypeExtensions: Record<AssetMediaType, string> = {
@@ -94,8 +112,59 @@ const normalizeRelativePath = (value: string) =>
 
 const hasFileExtension = (fileName: string) => /\.[a-z0-9]+$/i.test(fileName);
 
-export const getAssetCategoryLabel = (category: AssetCategory) =>
-  categoryLabels[category];
+const isAssetMediaType = (value: unknown): value is AssetMediaType =>
+  value === "image" || value === "video" || value === "audio";
+
+const isAssetLibraryCategory = (value: unknown): value is AssetLibraryCategory =>
+  value === "role" || value === "scene" || value === "prop" || value === "audio";
+
+const isAssetCategory = (value: unknown): value is AssetCategory =>
+  isAssetMediaType(value) || isAssetLibraryCategory(value);
+
+const normalizeAssetCategory = (
+  category: unknown,
+  mediaType: unknown,
+  scope?: AssetScope,
+): AssetCategory => {
+  if (category === "person") return "role";
+  if (isAssetCategory(category)) {
+    if (
+      scope === "project" &&
+      (category === "image" || category === "video")
+    ) {
+      return isAssetMediaType(mediaType) && mediaType === "audio"
+        ? "audio"
+        : "prop";
+    }
+    return category;
+  }
+  if (isAssetMediaType(mediaType)) return mediaType;
+  return "image";
+};
+
+const normalizeAssetRecord = (asset: AssetRecord): AssetRecord => {
+  const mediaType = isAssetMediaType(asset.mediaType)
+    ? asset.mediaType
+    : getAssetMediaTypeByFileName(asset.originalFile || asset.fileUrl || "") ||
+      "image";
+
+  return {
+    ...asset,
+    mediaType,
+    category: normalizeAssetCategory(asset.category, mediaType, asset.scope),
+    folderId:
+      asset.scope === "project"
+        ? asset.folderId || asset.projectId || DEFAULT_ASSET_FOLDER_ID
+        : asset.folderId,
+    folderName:
+      asset.scope === "project"
+        ? asset.folderName || DEFAULT_ASSET_FOLDER_NAME
+        : asset.folderName,
+  };
+};
+
+export const getAssetCategoryLabel = (category: AssetCategory | string) =>
+  categoryLabels[normalizeAssetCategory(category, category)] || "资产";
 
 export const getAssetStoragePath = (): string => {
   try {
@@ -112,6 +181,9 @@ export const getAssetFileUrl = (
   basePath: string,
   relativePath: string,
 ): string => {
+  if (/^(https?:|file:|blob:|data:)/i.test(relativePath.trim())) {
+    return relativePath;
+  }
   const normalizedBase = basePath.replace(/\\/g, "/").replace(/\/+$/, "");
   const normalizedRelative = normalizeRelativePath(relativePath);
   if (!normalizedBase || !normalizedRelative) {
@@ -147,23 +219,41 @@ const createAssetId = () =>
     .replace(/[-:.TZ]/g, "")
     .slice(0, 14)}_${Math.random().toString(36).slice(2, 8)}`;
 
+export const createAssetFolderId = () =>
+  `folder_${new Date()
+    .toISOString()
+    .replace(/[-:.TZ]/g, "")
+    .slice(0, 14)}_${Math.random().toString(36).slice(2, 8)}`;
+
 const getAssetFolder = (input: {
   scope: Exclude<AssetScope, "public">;
   category: AssetCategory;
   id: string;
   projectId?: string;
+  folderId?: string;
 }) => {
+  const projectSegment = sanitizePathSegment(input.projectId || "unassigned");
+  const folderSegment = sanitizePathSegment(
+    input.folderId || DEFAULT_ASSET_FOLDER_ID,
+  );
+
   if (input.scope === "canvas") {
     return [
       "assets",
       "canvas",
-      sanitizePathSegment(input.projectId || "unknown-project"),
+      projectSegment,
       input.category,
       input.id,
     ].join("/");
   }
 
-  return ["assets", "project", input.category, input.id].join("/");
+  return [
+    "assets",
+    "project-folders",
+    folderSegment,
+    input.category,
+    input.id,
+  ].join("/");
 };
 
 const readTextFile = async (basePath: string, relativePath: string) => {
@@ -183,19 +273,50 @@ const writeTextFile = async (
 
 export const readAssetIndex = async (basePath: string): Promise<AssetIndex> => {
   if (!window.storage || !basePath) {
-    return { version: 1, assets: [] };
+    return { version: 1, folders: [], assets: [] };
   }
 
   try {
     const raw = await readTextFile(basePath, ASSET_INDEX_PATH);
-    if (!raw) return { version: 1, assets: [] };
+    if (!raw) return { version: 1, folders: [], assets: [] };
     const parsed = JSON.parse(raw) as Partial<AssetIndex>;
+    const assets = Array.isArray(parsed.assets)
+      ? (parsed.assets as AssetRecord[]).map(normalizeAssetRecord)
+      : [];
+    const existingFolders = Array.isArray(parsed.folders)
+      ? (parsed.folders as AssetFolder[])
+      : [];
+    const folderMap = new Map<string, AssetFolder>();
+
+    for (const folder of existingFolders) {
+      if (!folder?.id) continue;
+      folderMap.set(folder.id, {
+        id: folder.id,
+        name: folder.name || DEFAULT_ASSET_FOLDER_NAME,
+        sourceName: folder.sourceName,
+        createdAt: folder.createdAt || new Date().toISOString(),
+        updatedAt: folder.updatedAt || folder.createdAt || new Date().toISOString(),
+      });
+    }
+
+    for (const asset of assets) {
+      if (asset.scope !== "project" || !asset.folderId) continue;
+      if (folderMap.has(asset.folderId)) continue;
+      folderMap.set(asset.folderId, {
+        id: asset.folderId,
+        name: asset.folderName || DEFAULT_ASSET_FOLDER_NAME,
+        createdAt: asset.createdAt,
+        updatedAt: asset.updatedAt,
+      });
+    }
+
     return {
       version: 1,
-      assets: Array.isArray(parsed.assets) ? parsed.assets : [],
+      folders: Array.from(folderMap.values()),
+      assets,
     };
   } catch {
-    return { version: 1, assets: [] };
+    return { version: 1, folders: [], assets: [] };
   }
 };
 
@@ -212,6 +333,31 @@ export const initializeAssetStorage = async (basePath: string) => {
   await writeAssetIndex(basePath, index);
 };
 
+export const upsertAssetFolder = async (
+  basePath: string,
+  folder: AssetFolder,
+) => {
+  const index = await readAssetIndex(basePath);
+  const folderMap = new Map(index.folders.map((item) => [item.id, item]));
+  folderMap.set(folder.id, folder);
+  await writeAssetIndex(basePath, {
+    version: 1,
+    folders: Array.from(folderMap.values()),
+    assets: index.assets,
+  });
+};
+
+const isCategoryMediaCompatible = (
+  category: AssetCategory,
+  mediaType: AssetMediaType,
+) => {
+  if (category === "audio") return mediaType === "audio";
+  if (category === "role" || category === "scene" || category === "prop") {
+    return mediaType === "image" || mediaType === "video";
+  }
+  return category === mediaType;
+};
+
 export const createAssetFromBuffer = async (
   input: CreateAssetInput,
 ): Promise<AssetRecord> => {
@@ -222,14 +368,26 @@ export const createAssetFromBuffer = async (
   if (supportedMediaType !== input.mediaType) {
     throw new Error("资产文件类型与媒体类型不一致");
   }
+  if (!isCategoryMediaCompatible(input.category, input.mediaType)) {
+    throw new Error("资产分类与媒体类型不匹配");
+  }
 
   const id = createAssetId();
   const now = new Date().toISOString();
   const extension = inferExtension(input.fileName, input.mediaType);
+  const folderId =
+    input.scope === "project"
+      ? input.folderId || input.projectId || DEFAULT_ASSET_FOLDER_ID
+      : undefined;
+  const folderName =
+    input.scope === "project"
+      ? input.folderName || DEFAULT_ASSET_FOLDER_NAME
+      : undefined;
   const folder = getAssetFolder({
     scope: input.scope,
     category: input.category,
     projectId: input.projectId,
+    folderId,
     id,
   });
   const originalFile = `${folder}/original.${extension}`;
@@ -247,7 +405,9 @@ export const createAssetFromBuffer = async (
     originalFile,
     coverFile,
     metadataFile,
-    projectId: input.scope === "canvas" ? input.projectId : undefined,
+    projectId: input.projectId,
+    folderId,
+    folderName,
     source: input.source,
     createdAt: now,
     updatedAt: now,
@@ -270,8 +430,20 @@ export const createAssetFromBuffer = async (
   );
 
   const index = await readAssetIndex(input.basePath);
+  const folderMap = new Map(index.folders.map((item) => [item.id, item]));
+  if (input.scope === "project" && folderId && folderName) {
+    const existingFolder = folderMap.get(folderId);
+    folderMap.set(folderId, {
+      id: folderId,
+      name: folderName,
+      sourceName: existingFolder?.sourceName,
+      createdAt: existingFolder?.createdAt || now,
+      updatedAt: now,
+    });
+  }
   await writeAssetIndex(input.basePath, {
     version: 1,
+    folders: Array.from(folderMap.values()),
     assets: [asset, ...index.assets.filter((item) => item.id !== id)],
   });
 
@@ -306,6 +478,8 @@ export const createAssetFromMediaRef = async (input: {
   mediaType: AssetMediaType;
   mediaRef: AssetMediaRef;
   projectId?: string;
+  folderId?: string;
+  folderName?: string;
   nodeId?: string;
 }) => {
   const buffer = await readSourceMediaBuffer(input.mediaRef);
@@ -328,6 +502,8 @@ export const createAssetFromMediaRef = async (input: {
     fileName,
     buffer,
     projectId: input.projectId,
+    folderId: input.folderId,
+    folderName: input.folderName,
     source: {
       type: "canvas",
       projectId: input.projectId,
@@ -361,7 +537,32 @@ export const deleteAssetsById = async (
 
   await writeAssetIndex(basePath, {
     version: 1,
+    folders: index.folders,
     assets: index.assets.filter((asset) => !targetIds.has(asset.id)),
+  });
+};
+
+export const deleteAssetFolderById = async (
+  basePath: string,
+  folderId: string,
+) => {
+  const index = await readAssetIndex(basePath);
+  const deletingAssets = index.assets.filter(
+    (asset) => asset.scope === "project" && asset.folderId === folderId,
+  );
+
+  if (deletingAssets.length > 0) {
+    await deleteAssetsById(
+      basePath,
+      deletingAssets.map((asset) => asset.id),
+    );
+  }
+
+  const nextIndex = await readAssetIndex(basePath);
+  await writeAssetIndex(basePath, {
+    version: 1,
+    folders: nextIndex.folders.filter((folder) => folder.id !== folderId),
+    assets: nextIndex.assets.filter((asset) => asset.folderId !== folderId),
   });
 };
 
@@ -394,6 +595,7 @@ export const renameAsset = async (
   );
   await writeAssetIndex(basePath, {
     version: 1,
+    folders: index.folders,
     assets: index.assets.map((item) =>
       item.id === assetId ? renamedAsset : item,
     ),
