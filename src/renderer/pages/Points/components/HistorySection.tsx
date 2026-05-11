@@ -1,5 +1,7 @@
 import {
   AlertCircle,
+  ArrowDownLeft,
+  ArrowUpRight,
   ChevronLeft,
   ChevronRight,
   CreditCard,
@@ -7,12 +9,13 @@ import {
   ImageIcon,
   Loader2,
   ReceiptText,
+  RefreshCw,
   Video,
   X,
   Zap,
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import type { ScoreRecordItem } from "shared/types/jikeing";
+import type { ScoreRecordItem, ScoreTransactionItem } from "shared/types/jikeing";
 import { cn } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +25,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { transactionHistory } from "../lib/constants";
 import type { ActiveTab } from "../lib/types";
 
 const TabButton = ({
@@ -359,88 +361,321 @@ const UsageHistoryList = ({
   );
 };
 
-const TransactionHistoryList = () => (
-  <ul className="divide-y divide-white/5">
-    {transactionHistory.map((item) => {
-      const isGift = item.amount.startsWith("+");
+const getTransactionIcon = (item: ScoreTransactionItem): ReactNode => {
+  switch (item.transactionType) {
+    case "recharge":
+      return <CreditCard className="h-5 w-5" />;
+    case "daily_checkin":
+      return <Gift className="h-5 w-5" />;
+    case "refund":
+      return <RefreshCw className="h-5 w-5" />;
+    case "consume":
+      if (item.bizType === "desktop_video" || item.bizType === "video") {
+        return <Video className="h-5 w-5" />;
+      }
+      if (item.bizType === "desktop_image" || item.bizType === "image") {
+        return <ImageIcon className="h-5 w-5" />;
+      }
+      return <Zap className="h-5 w-5" />;
+    case "admin_adjust":
+      return item.direction === "income" ? <ArrowDownLeft className="h-5 w-5" /> : <ArrowUpRight className="h-5 w-5" />;
+    default:
+      return item.direction === "income" ? <Gift className="h-5 w-5" /> : <Zap className="h-5 w-5" />;
+  }
+};
 
-      return (
-        <li
-          key={item.id}
-          className="flex items-center justify-between p-5 transition-colors hover:bg-white/[0.02]"
-        >
-          <article className="flex items-center gap-4">
+const getTransactionTitle = (item: ScoreTransactionItem): string => {
+  if (item.transactionTypeLabel) return item.transactionTypeLabel;
+  if (item.sourceLabel) return item.sourceLabel;
+  return item.memo || "积分变动";
+};
+
+const getTransactionDescription = (item: ScoreTransactionItem): string => {
+  const parts: string[] = [];
+  if (item.amountText && item.transactionType === "recharge") {
+    parts.push(item.amountText);
+  }
+  if (item.model) parts.push(item.model);
+  if (item.orderStatusLabel && item.transactionType === "recharge") {
+    parts.push(item.orderStatusLabel);
+  }
+  parts.push(formatTime(item.occurredAt || item.createTime));
+  return parts.join(" · ");
+};
+
+const formatAmountFen = (amountFen: number | null | undefined): string => {
+  if (amountFen == null) return "";
+  return `¥${(amountFen / 100).toFixed(2)}`;
+};
+
+const TransactionDetailDialog = ({
+  record,
+  open,
+  onOpenChange,
+}: {
+  record: ScoreTransactionItem | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) => {
+  if (!record) return null;
+
+  const isIncome = record.direction === "income";
+  const scoreText = isIncome
+    ? `+${record.totalScore}`
+    : `-${Math.abs(record.totalScore)}`;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-[#1a1a1e] border-white/10 text-white max-h-[80vh] overflow-y-auto">
+        <DialogClose className="text-white/40 hover:text-white hover:bg-white/10">
+          <X className="h-4 w-4" />
+        </DialogClose>
+        <DialogHeader>
+          <DialogTitle className="text-white flex items-center gap-3">
             <span
               className={cn(
-                "flex h-10 w-10 items-center justify-center rounded-xl",
-                isGift
+                "flex h-9 w-9 items-center justify-center rounded-xl",
+                isIncome
                   ? "bg-green-500/10 text-green-500"
                   : "bg-blue-500/10 text-blue-500",
               )}
             >
-              {isGift ? (
-                <Gift className="h-5 w-5" />
-              ) : (
-                <CreditCard className="h-5 w-5" />
-              )}
+              {getTransactionIcon(record)}
             </span>
-            <section>
-              <h3 className="text-sm font-bold text-white/90">{item.type}</h3>
-              <p className="text-[10px] font-mono uppercase tracking-wider text-white/30">
-                {`${item.date} · ${item.method}`}
-              </p>
-            </section>
-          </article>
-          <p className="text-right">
-            <strong
-              className={cn(
-                "block text-sm font-black",
-                isGift ? "text-green-500" : "text-white/90",
-              )}
-            >
-              {item.amount}
-            </strong>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-green-500/80">
-              Success
-            </span>
-          </p>
-        </li>
-      );
-    })}
-  </ul>
-);
+            <span>{getTransactionTitle(record)}</span>
+          </DialogTitle>
+        </DialogHeader>
 
-export const HistorySection = ({
-  activeTab,
-  onTabChange,
-  records,
-  page,
-  total,
+        <div className="mt-4 space-y-0">
+          <DetailRow label="类型" value={record.transactionTypeLabel || record.transactionType || "-"} />
+          <DetailRow label="积分变动" value={scoreText} />
+          <DetailRow label="永久积分" value={`${isIncome ? "+" : "-"}${Math.abs(record.forScore)}`} />
+          <DetailRow label="会员积分" value={`${isIncome ? "+" : "-"}${Math.abs(record.vipScore)}`} />
+          <DetailRow label="永久积分余额" value={String(record.forBalanceScore ?? "-")} />
+          <DetailRow label="会员积分余额" value={String(record.vipBalanceScore ?? "-")} />
+          <DetailRow label="来源" value={record.sourceLabel || record.source || "-"} />
+          {record.amountFen != null && (
+            <DetailRow label="支付金额" value={formatAmountFen(record.amountFen)} />
+          )}
+          {record.orderId && (
+            <DetailRow label="订单号" value={record.orderId} />
+          )}
+          {record.packageId && (
+            <DetailRow label="套餐 ID" value={record.packageId} />
+          )}
+          {record.orderStatus && (
+            <DetailRow label="订单状态" value={record.orderStatusLabel || record.orderStatus} />
+          )}
+          {record.model && (
+            <DetailRow label="模型" value={record.model} />
+          )}
+          {record.bizType && (
+            <DetailRow label="业务类型" value={record.bizType} />
+          )}
+          {record.bizId && (
+            <DetailRow label="业务 ID" value={record.bizId} />
+          )}
+          {record.taskId && (
+            <DetailRow label="任务 ID" value={record.taskId} />
+          )}
+          {record.ledgerStatus && (
+            <DetailRow label="流水状态" value={record.ledgerStatusLabel || record.ledgerStatus} />
+          )}
+          {record.failReason && (
+            <DetailRow label="失败/退款原因" value={record.failReason} />
+          )}
+          {record.memo && (
+            <DetailRow label="备注" value={record.memo} />
+          )}
+          {record.paidTime > 0 && (
+            <DetailRow label="支付时间" value={formatTime(record.paidTime)} />
+          )}
+          <DetailRow label="发生时间" value={formatTime(record.occurredAt)} />
+          <DetailRow label="创建时间" value={formatTime(record.createTime)} />
+          {record.updateTime > 0 && (
+            <DetailRow label="更新时间" value={formatTime(record.updateTime)} />
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const TransactionHistoryList = ({
+  transactions,
   loading,
   error,
-  onPageChange,
   onRetry,
+  onItemClick,
 }: {
+  transactions: ScoreTransactionItem[];
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+  onItemClick: (item: ScoreTransactionItem) => void;
+}) => {
+  if (loading && transactions.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-16 text-white/40">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+        加载中...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-16 text-white/40">
+        <AlertCircle className="h-8 w-8 text-red-400/60" />
+        <p className="text-sm">{error}</p>
+        <Button
+          unstyled
+          className="text-xs text-[#B43FEB] hover:text-[#B43FEB]/80"
+          onClick={onRetry}
+        >
+          重新加载
+        </Button>
+      </div>
+    );
+  }
+
+  if (transactions.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-16 text-white/30">
+        <ReceiptText className="h-8 w-8" />
+        <p className="text-sm">暂无充值消费记录</p>
+      </div>
+    );
+  }
+
+  return (
+    <ul className="divide-y divide-white/5">
+      {transactions.map((item) => {
+        const isIncome = item.direction === "income";
+        const scoreText = isIncome
+          ? `+${item.totalScore}`
+          : `-${Math.abs(item.totalScore)}`;
+
+        return (
+          <li
+            key={item.id}
+            className="flex items-center justify-between p-5 transition-colors hover:bg-white/2 cursor-pointer"
+            onClick={() => onItemClick(item)}
+          >
+            <article className="flex items-center gap-4">
+              <span
+                className={cn(
+                  "flex h-10 w-10 items-center justify-center rounded-xl",
+                  isIncome
+                    ? "bg-green-500/10 text-green-500"
+                    : "bg-blue-500/10 text-blue-500",
+                )}
+              >
+                {getTransactionIcon(item)}
+              </span>
+              <section>
+                <h3 className="text-sm font-bold text-white/90">
+                  {getTransactionTitle(item)}
+                </h3>
+                <p className="text-[10px] font-mono uppercase tracking-wider text-white/30">
+                  {getTransactionDescription(item)}
+                </p>
+              </section>
+            </article>
+            <p className="text-right">
+              <strong
+                className={cn(
+                  "block text-sm font-black",
+                  isIncome ? "text-green-500" : "text-white/90",
+                )}
+              >
+                {scoreText}
+              </strong>
+              {item.amountFen != null && item.transactionType === "recharge" && (
+                <span className="text-[10px] font-bold text-white/40">
+                  {formatAmountFen(item.amountFen)}
+                </span>
+              )}
+              {!item.amountFen && (
+                <span
+                  className={cn(
+                    "text-[10px] font-bold uppercase tracking-widest",
+                    item.transactionType === "refund"
+                      ? "text-orange-400/80"
+                      : isIncome
+                        ? "text-green-500/80"
+                        : "text-blue-400/80",
+                  )}
+                >
+                  {item.orderStatusLabel || item.ledgerStatusLabel || item.transactionTypeLabel || ""}
+                </span>
+              )}
+            </p>
+          </li>
+        );
+      })}
+    </ul>
+  );
+};
+
+type HistorySectionProps = {
   activeTab: ActiveTab;
   onTabChange: (tab: ActiveTab) => void;
   records: ScoreRecordItem[];
+  transactions: ScoreTransactionItem[];
   page: number;
+  transactionsPage: number;
   total: number;
+  transactionsTotal: number;
   loading: boolean;
+  transactionsLoading: boolean;
   error: string | null;
+  transactionsError: string | null;
   onPageChange: (page: number) => void;
+  onTransactionPageChange: (page: number) => void;
   onRetry: () => void;
-}) => {
+  onTransactionRetry: () => void;
+};
+
+export const HistorySection = (props: HistorySectionProps) => {
+  const {
+    activeTab,
+    onTabChange,
+    records,
+    transactions,
+    page,
+    transactionsPage,
+    total,
+    transactionsTotal,
+    loading,
+    transactionsLoading,
+    error,
+    transactionsError,
+    onPageChange,
+    onTransactionPageChange,
+    onRetry,
+    onTransactionRetry,
+  } = props;
   const pageSize = 10;
   const totalPages = Math.ceil(total / pageSize);
+  const transactionsTotalPages = Math.ceil(transactionsTotal / pageSize);
 
-  // 详情弹窗状态
+  // 积分消耗明细详情弹窗状态
   const [detailRecord, setDetailRecord] = useState<ScoreRecordItem | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+
+  // 充值消费明细详情弹窗状态
+  const [txDetailRecord, setTxDetailRecord] = useState<ScoreTransactionItem | null>(null);
+  const [txDetailOpen, setTxDetailOpen] = useState(false);
 
   const handleItemClick = (item: ScoreRecordItem) => {
     setDetailRecord(item);
     setDetailOpen(true);
+  };
+
+  const handleTxItemClick = (item: ScoreTransactionItem) => {
+    setTxDetailRecord(item);
+    setTxDetailOpen(true);
   };
 
   return (
@@ -480,7 +715,21 @@ export const HistorySection = ({
             />
           </>
         ) : (
-          <TransactionHistoryList />
+          <>
+            <TransactionHistoryList
+              transactions={transactions}
+              loading={transactionsLoading}
+              error={transactionsError}
+              onRetry={onTransactionRetry}
+              onItemClick={handleTxItemClick}
+            />
+            <Pagination
+              page={transactionsPage}
+              totalPages={transactionsTotalPages}
+              loading={transactionsLoading}
+              onPageChange={onTransactionPageChange}
+            />
+          </>
         )}
       </article>
 
@@ -488,6 +737,11 @@ export const HistorySection = ({
         record={detailRecord}
         open={detailOpen}
         onOpenChange={setDetailOpen}
+      />
+      <TransactionDetailDialog
+        record={txDetailRecord}
+        open={txDetailOpen}
+        onOpenChange={setTxDetailOpen}
       />
     </section>
   );

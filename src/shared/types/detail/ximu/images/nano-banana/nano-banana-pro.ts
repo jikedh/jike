@@ -29,6 +29,7 @@ export interface XimuNanoBananaRequest extends XimuBaseImageRequest {
 }
 
 export interface BuildXimuNanoBananaRequestOptions {
+  model?: XimuNanoBananaModel;
   cardCode: string;
   prompt?: string;
   aspectRatio?: XimuNanoBananaAspectRatio;
@@ -51,8 +52,19 @@ export const XIMU_NANO_BANANA_PRO_ASPECT_RATIOS = [
   "21:9",
 ] as const satisfies readonly XimuNanoBananaAspectRatio[];
 
+export const XIMU_NANO_BANANA2_ASPECT_RATIOS = [
+  ...XIMU_NANO_BANANA_PRO_ASPECT_RATIOS,
+  "1:4",
+  "4:1",
+  "1:8",
+  "8:1",
+] as const satisfies readonly XimuNanoBananaAspectRatio[];
+
 export const XIMU_IMAGE_SIZES = ["1K", "2K", "4K"] as const;
 
+const XIMU_NANO_BANANA2_ASPECT_RATIO_SET = new Set<string>(
+  XIMU_NANO_BANANA2_ASPECT_RATIOS,
+);
 const XIMU_NANO_BANANA_PRO_ASPECT_RATIO_SET = new Set<string>(
   XIMU_NANO_BANANA_PRO_ASPECT_RATIOS,
 );
@@ -75,7 +87,18 @@ export const resolveXimuNanoBananaProAspectRatio = (
   return ratio as XimuNanoBananaAspectRatio;
 };
 
+export const resolveXimuNanoBanana2AspectRatio = (
+  size?: string,
+): XimuNanoBananaAspectRatio => {
+  const ratio = size || "auto";
+  if (!XIMU_NANO_BANANA2_ASPECT_RATIO_SET.has(ratio)) {
+    throw new Error(`Nano Banana 2 西牧渠道暂不支持 ${ratio} 比例`);
+  }
+  return ratio as XimuNanoBananaAspectRatio;
+};
+
 export function buildXimuNanoBananaRequest({
+  model = "nano-banana-pro",
   cardCode,
   prompt,
   aspectRatio = "auto",
@@ -84,7 +107,7 @@ export function buildXimuNanoBananaRequest({
   shutProgress = false,
 }: BuildXimuNanoBananaRequestOptions): XimuNanoBananaRequest {
   return {
-    model: "nano-banana-pro",
+    model,
     cardCode,
     prompt: prompt || "",
     aspectRatio,

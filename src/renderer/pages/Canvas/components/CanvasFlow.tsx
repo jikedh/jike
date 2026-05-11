@@ -589,6 +589,9 @@ export const CanvasFlow = ({
   const addNode = useCanvasFlowStore((state) => state.addNode);
   const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
   const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge);
+  const deleteMultipleElements = useCanvasFlowStore(
+    (state) => state.deleteMultipleElements,
+  );
   const switchProject = useCanvasFlowStore((state) => state.switchProject);
   const gridVisible = useChatSettingsStore((state) => state.gridVisible);
   const snapToGrid = useChatSettingsStore((state) => state.snapToGrid);
@@ -824,16 +827,20 @@ export const CanvasFlow = ({
           openDeleteConfirmDialog({
             message,
             onConfirm: () => {
-              edgesToDelete.forEach((edge) => deleteEdge(edge.id));
-              nodesToDelete.forEach((node) => deleteNode(node.id));
+              deleteMultipleElements(
+                nodesToDelete.map((node) => node.id),
+                edgesToDelete.map((edge) => edge.id),
+              );
             },
           });
           return;
         }
 
         event.preventDefault();
-        selectedEdges.forEach((edge) => deleteEdge(edge.id));
-        selectedNodes.forEach((node) => deleteNode(node.id));
+        deleteMultipleElements(
+          selectedNodes.map((node) => node.id),
+          selectedEdges.map((edge) => edge.id),
+        );
         return;
       }
 

@@ -13,9 +13,16 @@ import {
   ADOBE_GPT_IMAGE2_MODEL,
   ADOBE_NANO_BANANA_PRO_MODEL,
   IMAGE_MODELS,
+  getVisibleImageModels,
+  isGrokImageGenerationModel,
+  isXimuGptImageGenerationModel,
+  isXimuImageGenerationModel,
+  isXimuNanoBananaGenerationModel,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
   XIMU_GPT_IMAGE2_MODEL,
+  XIMU_GPT_IMAGE2_VIP_MODEL,
+  XIMU_NANO_BANANA2_MODEL,
   XIMU_NANO_BANANA_PRO_MODEL,
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
@@ -38,6 +45,8 @@ import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import { saveToolMediaFileToProject } from "../utils/localMedia";
 import {
   GeminiParamsPanel,
+  GROK_IMAGE_RESOLUTIONS,
+  GROK_IMAGE_SIZES,
   NANO_BANANA_RESOLUTIONS,
   NANO_BANANA_LOCAL_SIZES,
 } from "./components/GeminiParamsPanel";
@@ -188,6 +197,15 @@ const DEFAULT_NANO_BANANA_SIZE = "1:1";
 const NANO_BANANA_SIZE_VALUES = new Set(
   NANO_BANANA_LOCAL_SIZES.map((item) => item.value),
 );
+const GROK_IMAGE_SIZE_VALUES = new Set(GROK_IMAGE_SIZES.map((item) => item.value));
+const GPTIMAGE2_RESOLUTION_OPTIONS = [
+  { label: "1K", value: "1K", description: "标准" },
+  { label: "2K", value: "2K", description: "高清" },
+  { label: "4K", value: "4K", description: "超清" },
+];
+const XIMU_GPTIMAGE2_RESOLUTION_OPTIONS = [
+  { label: "1K", value: "1K", description: "标准" },
+];
 const XIMU_NANO_BANANA_PRO_SIZE_VALUES = new Set([
   "1:1",
   "16:9",
@@ -200,10 +218,25 @@ const XIMU_NANO_BANANA_PRO_SIZE_VALUES = new Set([
   "4:5",
   "21:9",
 ]);
+const XIMU_NANO_BANANA2_SIZE_VALUES = new Set([
+  ...XIMU_NANO_BANANA_PRO_SIZE_VALUES,
+  "1:4",
+  "4:1",
+  "1:8",
+  "8:1",
+]);
 const XIMU_NANO_BANANA_PRO_SIZES = GPTIMAGE2_SIZES.filter((item) =>
   XIMU_NANO_BANANA_PRO_SIZE_VALUES.has(item.value),
 );
+const XIMU_NANO_BANANA2_SIZES = [
+  ...XIMU_NANO_BANANA_PRO_SIZES,
+  { label: "1:4", value: "1:4", description: "竖向超长图" },
+  { label: "4:1", value: "4:1", description: "横向超宽图" },
+  { label: "1:8", value: "1:8", description: "竖向极长图" },
+  { label: "8:1", value: "8:1", description: "横向极宽图" },
+];
 const XIMU_GPTIMAGE2_SIZES = [
+  { label: "auto", value: "auto", description: "自动比例" },
   ...GPTIMAGE2_SIZES.filter((item) =>
     [
       "1:1",
@@ -584,6 +617,24 @@ export const ImageAnnotationWorkspace = ({
   const setDefaultImagePreset = useChatSettingsStore(
     (state) => state.setDefaultImagePreset,
   );
+  const adobeChannelModelsEnabled = useChatSettingsStore(
+    (state) => state.adobeChannelModelsEnabled,
+  );
+  const ximuChannelModelsEnabled = useChatSettingsStore(
+    (state) => state.ximuChannelModelsEnabled,
+  );
+  const grokChannelModelsEnabled = useChatSettingsStore(
+    (state) => state.grokChannelModelsEnabled,
+  );
+  const visibleImageModels = useMemo(
+    () =>
+      getVisibleImageModels(
+        adobeChannelModelsEnabled,
+        ximuChannelModelsEnabled,
+        grokChannelModelsEnabled,
+      ),
+    [adobeChannelModelsEnabled, grokChannelModelsEnabled, ximuChannelModelsEnabled],
+  );
 
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex >= 0 && historyIndex < history.length - 1;
@@ -630,18 +681,28 @@ export const ImageAnnotationWorkspace = ({
     eraseModel === ADOBE_NANO_BANANA_PRO_MODEL;
   const isEraseAdobeImageModel =
     isEraseAdobeGptImage2Model || isEraseAdobeNanoBananaProModel;
-  const isEraseXimuGptImage2Model = eraseModel === XIMU_GPT_IMAGE2_MODEL;
+  const isEraseXimuGptImage2Model =
+    isXimuGptImageGenerationModel(eraseModel);
+  const isEraseXimuGptImage2StandardModel =
+    eraseModel === XIMU_GPT_IMAGE2_MODEL;
+  const isEraseXimuGptImage2VipModel =
+    eraseModel === XIMU_GPT_IMAGE2_VIP_MODEL;
+  const isEraseXimuNanoBanana2Model =
+    eraseModel === XIMU_NANO_BANANA2_MODEL;
   const isEraseXimuNanoBananaProModel =
     eraseModel === XIMU_NANO_BANANA_PRO_MODEL;
-  const isEraseXimuImageModel =
-    isEraseXimuGptImage2Model || isEraseXimuNanoBananaProModel;
+  const isEraseXimuNanoBananaModel =
+    isXimuNanoBananaGenerationModel(eraseModel);
+  const isEraseXimuImageModel = isXimuImageGenerationModel(eraseModel);
+  const isEraseGrokImageModel = isGrokImageGenerationModel(eraseModel);
   const isEraseGptImage2Model = eraseModel === "gpt-image-2";
   const isEraseGeminiPro2Model = erasePlatform === "google_pro2";
   const isEraseLocalGeminiDirectModel =
     isEraseGeminiPro2Model ||
     isEraseNanoBananaLocalModel ||
     isEraseAdobeImageModel ||
-    isEraseXimuImageModel;
+    isEraseXimuImageModel ||
+    isEraseGrokImageModel;
 
   const stageScale = useMemo(() => {
     if (!imageNaturalSize.width || !imageNaturalSize.height) {
@@ -2707,24 +2768,49 @@ export const ImageAnnotationWorkspace = ({
                 <Select
                   value={String(eraseCurrentModelId)}
                   onValueChange={(value) => {
-                    const selectedModel = IMAGE_MODELS.find(
+                    const selectedModel = visibleImageModels.find(
                       (item) => item.id === Number(value),
                     );
                     const shouldResetNanoBananaSize =
                       ((selectedModel?.model === NANO_BANANA_LOCAL_MODEL &&
                         selectedModel?.platform === NANO_BANANA_LOCAL_PLATFORM) ||
-                        selectedModel?.model === XIMU_NANO_BANANA_PRO_MODEL) &&
+                        isXimuNanoBananaGenerationModel(selectedModel?.model)) &&
                       !(
-                        selectedModel?.model === XIMU_NANO_BANANA_PRO_MODEL
-                          ? XIMU_NANO_BANANA_PRO_SIZE_VALUES
+                        selectedModel?.model === XIMU_NANO_BANANA2_MODEL
+                          ? XIMU_NANO_BANANA2_SIZE_VALUES
+                          : selectedModel?.model === XIMU_NANO_BANANA_PRO_MODEL
+                            ? XIMU_NANO_BANANA_PRO_SIZE_VALUES
                           : NANO_BANANA_SIZE_VALUES
                       ).has(eraseSize);
+                    const shouldResetXimuGptSize =
+                      isXimuGptImageGenerationModel(selectedModel?.model) &&
+                      !XIMU_GPTIMAGE2_SIZES.some(
+                        (item) => item.value === eraseSize,
+                      );
+                    const shouldResetXimuGptResolution =
+                      selectedModel?.model === XIMU_GPT_IMAGE2_MODEL &&
+                      eraseResolution !== "1K";
+                    const shouldResetGrokSize =
+                      isGrokImageGenerationModel(selectedModel?.model) &&
+                      !GROK_IMAGE_SIZE_VALUES.has(eraseSize);
+                    const shouldResetGrokResolution =
+                      isGrokImageGenerationModel(selectedModel?.model) &&
+                      eraseResolution !== "standard";
 
                     persistEraseImageDefaultPreset({
                       model: selectedModel?.model ?? value,
                       platform: selectedModel?.platform,
                       size: shouldResetNanoBananaSize
                         ? DEFAULT_NANO_BANANA_SIZE
+                        : shouldResetXimuGptSize
+                          ? "auto"
+                          : shouldResetGrokSize
+                            ? "1:1"
+                        : undefined,
+                      resolution: shouldResetXimuGptResolution
+                        ? "1K"
+                        : shouldResetGrokResolution
+                          ? "standard"
                         : undefined,
                     });
                     updateEraseImageParams({
@@ -2732,6 +2818,14 @@ export const ImageAnnotationWorkspace = ({
                       platform: selectedModel?.platform,
                       ...(shouldResetNanoBananaSize
                         ? { size: DEFAULT_NANO_BANANA_SIZE }
+                        : {}),
+                      ...(shouldResetXimuGptSize ? { size: "auto" } : {}),
+                      ...(shouldResetGrokSize ? { size: "1:1" } : {}),
+                      ...(shouldResetXimuGptResolution
+                        ? { resolution: "1K" }
+                        : {}),
+                      ...(shouldResetGrokResolution
+                        ? { resolution: "standard" }
                         : {}),
                     });
                   }}
@@ -2742,7 +2836,7 @@ export const ImageAnnotationWorkspace = ({
                   <SelectContent
                     className={PROMPT_PANEL_STYLES.modelSelectContent}
                   >
-                    {IMAGE_MODELS.map((item) => (
+                    {visibleImageModels.map((item) => (
                       <SelectItem
                         key={item.id}
                         value={String(item.id)}
@@ -2786,16 +2880,35 @@ export const ImageAnnotationWorkspace = ({
 
                 {isEraseNanoBananaLocalModel ||
                 isEraseAdobeNanoBananaProModel ||
-                isEraseXimuNanoBananaProModel ? (
+                isEraseXimuNanoBananaModel ? (
                   <GeminiParamsPanel
                     size={eraseSize}
                     resolution={eraseResolution}
                     sizeOptions={
-                      isEraseXimuNanoBananaProModel
-                        ? XIMU_NANO_BANANA_PRO_SIZES
+                      isEraseXimuNanoBanana2Model
+                        ? XIMU_NANO_BANANA2_SIZES
+                        : isEraseXimuNanoBananaProModel
+                          ? XIMU_NANO_BANANA_PRO_SIZES
                         : NANO_BANANA_LOCAL_SIZES
                     }
                     resolutionOptions={NANO_BANANA_RESOLUTIONS}
+                    onSizeChange={(value) => {
+                      persistEraseImageDefaultPreset({ size: value });
+                      updateEraseImageParams({ size: value });
+                    }}
+                    onResolutionChange={(value) => {
+                      persistEraseImageDefaultPreset({ resolution: value });
+                      updateEraseImageParams({ resolution: value });
+                    }}
+                  />
+                ) : null}
+
+                {isEraseGrokImageModel ? (
+                  <GeminiParamsPanel
+                    size={eraseSize}
+                    resolution={eraseResolution}
+                    sizeOptions={GROK_IMAGE_SIZES}
+                    resolutionOptions={GROK_IMAGE_RESOLUTIONS}
                     onSizeChange={(value) => {
                       persistEraseImageDefaultPreset({ size: value });
                       updateEraseImageParams({ size: value });
@@ -2817,6 +2930,13 @@ export const ImageAnnotationWorkspace = ({
                       isEraseXimuGptImage2Model
                         ? XIMU_GPTIMAGE2_SIZES
                         : undefined
+                    }
+                    resolutionOptions={
+                      isEraseXimuGptImage2StandardModel
+                        ? XIMU_GPTIMAGE2_RESOLUTION_OPTIONS
+                        : isEraseXimuGptImage2VipModel
+                          ? GPTIMAGE2_RESOLUTION_OPTIONS
+                          : undefined
                     }
                     onSizeChange={(value) => {
                       persistEraseImageDefaultPreset({ size: value });

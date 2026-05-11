@@ -9,9 +9,16 @@ import {
   ADOBE_GPT_IMAGE2_MODEL,
   ADOBE_NANO_BANANA_PRO_MODEL,
   IMAGE_MODELS,
+  getVisibleImageModels,
+  isGrokImageGenerationModel,
+  isXimuGptImageGenerationModel,
+  isXimuImageGenerationModel,
+  isXimuNanoBananaGenerationModel,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
   XIMU_GPT_IMAGE2_MODEL,
+  XIMU_GPT_IMAGE2_VIP_MODEL,
+  XIMU_NANO_BANANA2_MODEL,
   XIMU_NANO_BANANA_PRO_MODEL,
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
@@ -46,6 +53,8 @@ import {
   GeminiParamsPanel,
   GEMINI_RESOLUTIONS,
   GEMINI_SIZES,
+  GROK_IMAGE_RESOLUTIONS,
+  GROK_IMAGE_SIZES,
   NANO_BANANA_RESOLUTIONS,
   NANO_BANANA_LOCAL_SIZES,
 } from "./components/GeminiParamsPanel";
@@ -121,10 +130,22 @@ const toOptionValueSet = (options: Array<{ value: string }>) =>
 const GEMINI_SIZE_VALUES = toOptionValueSet(GEMINI_SIZES);
 const GEMINI_RESOLUTION_VALUES = toOptionValueSet(GEMINI_RESOLUTIONS);
 const NANO_BANANA_RESOLUTION_VALUES = toOptionValueSet(NANO_BANANA_RESOLUTIONS);
+const GROK_IMAGE_SIZE_VALUES = toOptionValueSet(GROK_IMAGE_SIZES);
+const GROK_IMAGE_RESOLUTION_VALUES = toOptionValueSet(GROK_IMAGE_RESOLUTIONS);
 const GPTIMAGE2_SIZE_VALUES = toOptionValueSet(GPTIMAGE2_SIZES);
 const ADOBE_GPTIMAGE2_SIZE_VALUES = toOptionValueSet(ADOBE_GPTIMAGE2_SIZES);
 const GPTIMAGE2_RESOLUTION_VALUES = new Set(["1K", "2K", "4K"]);
+const XIMU_GPTIMAGE2_RESOLUTION_VALUES = new Set(["1K"]);
+const GPTIMAGE2_RESOLUTION_OPTIONS = [
+  { label: "1K", value: "1K", description: "标准" },
+  { label: "2K", value: "2K", description: "高清" },
+  { label: "4K", value: "4K", description: "超清" },
+];
+const XIMU_GPTIMAGE2_RESOLUTION_OPTIONS = [
+  { label: "1K", value: "1K", description: "标准" },
+];
 const XIMU_GPTIMAGE2_SIZE_VALUES = new Set([
+  "auto",
   "1:1",
   "3:2",
   "2:3",
@@ -153,7 +174,15 @@ const XIMU_NANO_BANANA_PRO_SIZE_VALUES = new Set([
   "4:5",
   "21:9",
 ]);
+const XIMU_NANO_BANANA2_SIZE_VALUES = new Set([
+  ...XIMU_NANO_BANANA_PRO_SIZE_VALUES,
+  "1:4",
+  "4:1",
+  "1:8",
+  "8:1",
+]);
 const XIMU_GPTIMAGE2_SIZES = [
+  { label: "auto", value: "auto", description: "自动比例" },
   ...GPTIMAGE2_SIZES.filter((item) =>
     XIMU_GPTIMAGE2_SIZE_VALUES.has(item.value),
   ),
@@ -163,6 +192,13 @@ const XIMU_GPTIMAGE2_SIZES = [
 const XIMU_NANO_BANANA_PRO_SIZES = GPTIMAGE2_SIZES.filter((item) =>
   XIMU_NANO_BANANA_PRO_SIZE_VALUES.has(item.value),
 );
+const XIMU_NANO_BANANA2_SIZES = [
+  ...XIMU_NANO_BANANA_PRO_SIZES,
+  { label: "1:4", value: "1:4", description: "竖向超长图" },
+  { label: "4:1", value: "4:1", description: "横向超宽图" },
+  { label: "1:8", value: "1:8", description: "竖向极长图" },
+  { label: "8:1", value: "8:1", description: "横向极宽图" },
+];
 const SEEDREAM_SIZE_VALUES = toOptionValueSet(SEEDREAM_ASPECT_RATIOS);
 const SEEDREAM_RESOLUTION_VALUES = toOptionValueSet(SEEDREAM_RESOLUTIONS);
 const MIDJOURNEY_SIZE_VALUES = toOptionValueSet(MIDJOURNEY_ASPECT_RATIOS);
@@ -216,6 +252,15 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const setDefaultImagePreset = useChatSettingsStore(
     (state) => state.setDefaultImagePreset,
   );
+  const adobeChannelModelsEnabled = useChatSettingsStore(
+    (state) => state.adobeChannelModelsEnabled,
+  );
+  const ximuChannelModelsEnabled = useChatSettingsStore(
+    (state) => state.ximuChannelModelsEnabled,
+  );
+  const grokChannelModelsEnabled = useChatSettingsStore(
+    (state) => state.grokChannelModelsEnabled,
+  );
   const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge);
   const setReferenceHoverHighlight = useCanvasFlowStore(
     (state) => state.setReferenceHoverHighlight,
@@ -230,6 +275,15 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
     return node.data as ImageGenerationNode;
   });
+  const visibleImageModels = useMemo(
+    () =>
+      getVisibleImageModels(
+        adobeChannelModelsEnabled,
+        ximuChannelModelsEnabled,
+        grokChannelModelsEnabled,
+      ),
+    [adobeChannelModelsEnabled, grokChannelModelsEnabled, ximuChannelModelsEnabled],
+  );
 
   // 从 currentImageData 获取基础字段
   const model = currentImageData?.model ?? "gemini-3-pro-image-preview";
@@ -302,9 +356,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const isAdobeGptImage2Model = model === ADOBE_GPT_IMAGE2_MODEL;
   const isAdobeNanoBananaProModel = model === ADOBE_NANO_BANANA_PRO_MODEL;
   const isAdobeImageModel = isAdobeGptImage2Model || isAdobeNanoBananaProModel;
-  const isXimuGptImage2Model = model === XIMU_GPT_IMAGE2_MODEL;
+  const isXimuGptImage2Model = isXimuGptImageGenerationModel(model);
+  const isXimuGptImage2StandardModel = model === XIMU_GPT_IMAGE2_MODEL;
+  const isXimuGptImage2VipModel = model === XIMU_GPT_IMAGE2_VIP_MODEL;
+  const isXimuNanoBanana2Model = model === XIMU_NANO_BANANA2_MODEL;
   const isXimuNanoBananaProModel = model === XIMU_NANO_BANANA_PRO_MODEL;
-  const isXimuImageModel = isXimuGptImage2Model || isXimuNanoBananaProModel;
+  const isXimuNanoBananaModel = isXimuNanoBananaGenerationModel(model);
+  const isXimuImageModel = isXimuImageGenerationModel(model);
+  const isGrokImageModel = isGrokImageGenerationModel(model);
   const isGptImage2Model = model === "gpt-image-2";
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
@@ -312,7 +371,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     isGeminiPro2Model ||
     isNanoBananaLocalModel ||
     isAdobeImageModel ||
-    isXimuImageModel;
+    isXimuImageModel ||
+    isGrokImageModel;
 
   const supportedImageParams = useMemo<SupportedImageParams | null>(() => {
     if (isSeedreamModel) {
@@ -336,15 +396,26 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     if (
       isNanoBananaLocalModel ||
       isAdobeNanoBananaProModel ||
-      isXimuNanoBananaProModel
+      isXimuNanoBananaModel
     ) {
       return {
-        sizes: isXimuNanoBananaProModel
-          ? XIMU_NANO_BANANA_PRO_SIZE_VALUES
-          : NANO_BANANA_SIZE_VALUES,
+        sizes: isXimuNanoBanana2Model
+          ? XIMU_NANO_BANANA2_SIZE_VALUES
+          : isXimuNanoBananaProModel
+            ? XIMU_NANO_BANANA_PRO_SIZE_VALUES
+            : NANO_BANANA_SIZE_VALUES,
         resolutions: NANO_BANANA_RESOLUTION_VALUES,
         defaultSize: DEFAULT_NANO_BANANA_SIZE,
         defaultResolution: "2K",
+      };
+    }
+
+    if (isGrokImageModel) {
+      return {
+        sizes: GROK_IMAGE_SIZE_VALUES,
+        resolutions: GROK_IMAGE_RESOLUTION_VALUES,
+        defaultSize: "1:1",
+        defaultResolution: "standard",
       };
     }
 
@@ -353,9 +424,11 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         sizes: isXimuGptImage2Model
           ? XIMU_GPTIMAGE2_SIZE_VALUES
           : GPTIMAGE2_SIZE_VALUES,
-        resolutions: GPTIMAGE2_RESOLUTION_VALUES,
-        defaultSize: "1:1",
-        defaultResolution: "2K",
+        resolutions: isXimuGptImage2StandardModel
+          ? XIMU_GPTIMAGE2_RESOLUTION_VALUES
+          : GPTIMAGE2_RESOLUTION_VALUES,
+        defaultSize: isXimuGptImage2Model ? "auto" : "1:1",
+        defaultResolution: isXimuGptImage2StandardModel ? "1K" : "2K",
       };
     }
 
@@ -386,7 +459,11 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     isNanoBananaLocalModel,
     isSeedreamModel,
     isXimuGptImage2Model,
+    isXimuGptImage2StandardModel,
+    isXimuNanoBanana2Model,
+    isXimuNanoBananaModel,
     isXimuNanoBananaProModel,
+    isGrokImageModel,
   ]);
 
   useEffect(() => {
@@ -584,14 +661,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       "c-2":
         isNanoBananaLocalModel ||
         isAdobeNanoBananaProModel ||
-        isXimuNanoBananaProModel
+        isXimuNanoBananaModel
           ? "16:9"
           : "21:9", // 角色三视图
       "c-3": "16:9", // 多宫格电影分镜
       "c-4":
         isNanoBananaLocalModel ||
         isAdobeNanoBananaProModel ||
-        isXimuNanoBananaProModel
+        isXimuNanoBananaModel
           ? "16:9"
           : "21:9", // VR图
     };
@@ -612,7 +689,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       "c-4":
         isNanoBananaLocalModel ||
         isAdobeNanoBananaProModel ||
-        isXimuNanoBananaProModel ||
+        isXimuNanoBananaModel ||
         isGptImage2Model ||
         isAdobeGptImage2Model ||
         isXimuGptImage2Model
@@ -1487,30 +1564,53 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       <div className={PROMPT_PANEL_STYLES.divider} />
 
       <div className={PROMPT_PANEL_STYLES.controlArea}>
-        <div className="flex items-center gap-3 flex-wrap w-full">
+        <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden">
           {/* 生成模型 - 始终在最左侧 */}
           <Select
             value={String(currentModelId)}
             onValueChange={(value) => {
               // 通过 id 精确查找模型配置
-              const selectedModel = IMAGE_MODELS.find(
+              const selectedModel = visibleImageModels.find(
                 (item) => item.id === Number(value),
               );
               const shouldResetNanoBananaSize =
                 ((selectedModel?.model === NANO_BANANA_LOCAL_MODEL &&
                   selectedModel?.platform === NANO_BANANA_LOCAL_PLATFORM) ||
-                  selectedModel?.model === XIMU_NANO_BANANA_PRO_MODEL) &&
+                  isXimuNanoBananaGenerationModel(selectedModel?.model)) &&
                 !(
-                  selectedModel?.model === XIMU_NANO_BANANA_PRO_MODEL
-                    ? XIMU_NANO_BANANA_PRO_SIZE_VALUES
+                  selectedModel?.model === XIMU_NANO_BANANA2_MODEL
+                    ? XIMU_NANO_BANANA2_SIZE_VALUES
+                    : selectedModel?.model === XIMU_NANO_BANANA_PRO_MODEL
+                      ? XIMU_NANO_BANANA_PRO_SIZE_VALUES
                     : NANO_BANANA_SIZE_VALUES
                 ).has(size);
+              const shouldResetXimuGptSize =
+                isXimuGptImageGenerationModel(selectedModel?.model) &&
+                !XIMU_GPTIMAGE2_SIZE_VALUES.has(size);
+              const shouldResetXimuGptResolution =
+                selectedModel?.model === XIMU_GPT_IMAGE2_MODEL &&
+                resolution !== "1K";
+              const shouldResetGrokSize =
+                isGrokImageGenerationModel(selectedModel?.model) &&
+                !GROK_IMAGE_SIZE_VALUES.has(size);
+              const shouldResetGrokResolution =
+                isGrokImageGenerationModel(selectedModel?.model) &&
+                resolution !== "standard";
               persistImageDefaultPreset({
                 model: selectedModel?.model ?? value,
                 platform: selectedModel?.platform,
                 size: shouldResetNanoBananaSize
                   ? DEFAULT_NANO_BANANA_SIZE
+                  : shouldResetXimuGptSize
+                    ? "auto"
+                    : shouldResetGrokSize
+                      ? "1:1"
                   : undefined,
+                resolution: shouldResetXimuGptResolution
+                  ? "1K"
+                  : shouldResetGrokResolution
+                    ? "standard"
+                    : undefined,
               });
               updateImageNodeData(nodeId, {
                 model: selectedModel?.model ?? value,
@@ -1518,14 +1618,30 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                 ...(shouldResetNanoBananaSize
                   ? { size: DEFAULT_NANO_BANANA_SIZE }
                   : {}),
+                ...(shouldResetXimuGptSize ? { size: "auto" } : {}),
+                ...(shouldResetGrokSize ? { size: "1:1" } : {}),
+                ...(shouldResetXimuGptResolution ? { resolution: "1K" } : {}),
+                ...(shouldResetGrokResolution
+                  ? { resolution: "standard" }
+                  : {}),
               });
             }}
           >
-            <SelectTrigger className={PROMPT_PANEL_STYLES.modelSelect}>
+            <SelectTrigger
+              className={cn(
+                PROMPT_PANEL_STYLES.modelSelect,
+                "h-8 min-w-[136px] max-w-[42%] w-[240px] shrink overflow-hidden px-3",
+                "[&_[data-slot=select-value]]:block [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate",
+              )}
+              title={
+                visibleImageModels.find((item) => item.id === currentModelId)
+                  ?.name
+              }
+            >
               <SelectValue placeholder="选择模型" />
             </SelectTrigger>
             <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
-              {IMAGE_MODELS.map((item) => (
+              {visibleImageModels.map((item) => (
                 <SelectItem
                   key={item.id}
                   value={String(item.id)}
@@ -1612,24 +1728,51 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                     ? XIMU_GPTIMAGE2_SIZES
                     : undefined
               }
+              resolutionOptions={
+                isXimuGptImage2StandardModel
+                  ? XIMU_GPTIMAGE2_RESOLUTION_OPTIONS
+                  : isXimuGptImage2VipModel
+                    ? GPTIMAGE2_RESOLUTION_OPTIONS
+                    : undefined
+              }
               onSizeChange={(value) => {
                 persistImageDefaultPreset({ size: value });
                 updateImageNodeData(nodeId, { size: value });
               }}
               onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
+            />
+          )}
+
+          {isGrokImageModel && (
+            <GeminiParamsPanel
+              size={size}
+              resolution={resolution}
+              sizeOptions={GROK_IMAGE_SIZES}
+              resolutionOptions={GROK_IMAGE_RESOLUTIONS}
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
                 updateImageNodeData(nodeId, { resolution: value });
               }}
             />
           )}
 
           {/* Midjourney 整合参数面板 - 仅在选择 Midjourney 模型时显示 */}
-          {(isAdobeNanoBananaProModel || isXimuNanoBananaProModel) && (
+          {(isAdobeNanoBananaProModel || isXimuNanoBananaModel) && (
             <GeminiParamsPanel
               size={size}
               resolution={resolution}
               sizeOptions={
-                isXimuNanoBananaProModel
-                  ? XIMU_NANO_BANANA_PRO_SIZES
+                isXimuNanoBanana2Model
+                  ? XIMU_NANO_BANANA2_SIZES
+                  : isXimuNanoBananaProModel
+                    ? XIMU_NANO_BANANA_PRO_SIZES
                   : NANO_BANANA_LOCAL_SIZES
               }
               resolutionOptions={NANO_BANANA_RESOLUTIONS}
@@ -1673,7 +1816,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           )}
 
           {/* 数量选择和生成按钮 */}
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex shrink-0 items-center gap-3">
             {/* 预设提示词下拉 */}
             <PresetDropdown
               presetType="image"

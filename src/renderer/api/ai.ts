@@ -2,6 +2,7 @@ import { EventSourceParserStream } from "eventsource-parser/stream";
 import {
   adobe2ApiRequest,
   getAdobe2ApiState,
+  grok2ApiRequest,
   jikeingService,
   ximuRequest,
   wuhenRequest,
@@ -24,6 +25,13 @@ import type {
   FireflyGptImageToImageRequest,
   FireflyGptImageToImageResponse,
 } from "shared/types/detail/Adobe2API";
+import type {
+  Grok2ApiChatImageEditRequest,
+  Grok2ApiImageGenerationRequest,
+  Grok2ApiImageGenerationResponse,
+  Grok2ApiVideoGenerationRequest,
+  Grok2ApiVideoGenerationResponse,
+} from "shared/types/detail/Grok2API";
 import type {
   XimuCardBalanceResponse,
   XimuGptImageRequest,
@@ -277,6 +285,39 @@ export function createAdobe2ApiVideoGeneration(
     method: "post",
     data,
     timeout: 900000,
+  });
+}
+
+export function createGrok2ApiImageGeneration(
+  data: Grok2ApiImageGenerationRequest,
+) {
+  return grok2ApiRequest<Grok2ApiImageGenerationResponse>({
+    url: "/v1/images/generations",
+    method: "post",
+    data,
+    timeout: 900000,
+  });
+}
+
+export function createGrok2ApiChatImageEditGeneration(
+  data: Grok2ApiChatImageEditRequest,
+) {
+  return grok2ApiRequest<Grok2ApiImageGenerationResponse>({
+    url: "/v1/chat/completions",
+    method: "post",
+    data,
+    timeout: 900000,
+  });
+}
+
+export function createGrok2ApiVideoGeneration(
+  data: Grok2ApiVideoGenerationRequest,
+) {
+  return grok2ApiRequest<Grok2ApiVideoGenerationResponse>({
+    url: "/v1/chat/completions",
+    method: "post",
+    data,
+    timeout: 1800000,
   });
 }
 

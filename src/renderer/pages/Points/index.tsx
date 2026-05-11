@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ScoreRecordItem } from "shared/types/jikeing";
+import type { ScoreRecordItem, ScoreTransactionItem } from "shared/types/jikeing";
 import { getJikeingToken, getJikeingUserId } from "shared/utils/utils";
 import { toast } from "sonner";
 import {
@@ -7,7 +7,7 @@ import {
     getRechargeOrderStatus,
     updateVipScore,
 } from "@/api/jikeing";
-import { getJikeGoScoreRecords } from "@/api/jikeGo";
+import { getJikeGoScoreRecords, getJikeGoScoreTransactions } from "@/api/jikeGo";
 import { useUserStore } from "@/stores/useUserStore";
 import { HistorySection } from "./components/HistorySection";
 import { ProfileHeader } from "./components/ProfileHeader";
@@ -36,6 +36,13 @@ export function PointsView() {
     const [recordsLoading, setRecordsLoading] = useState(false);
     const [recordsError, setRecordsError] = useState<string | null>(null);
 
+    // 充值消费明细状态
+    const [transactions, setTransactions] = useState<ScoreTransactionItem[]>([]);
+    const [transactionsPage, setTransactionsPage] = useState(1);
+    const [transactionsTotal, setTransactionsTotal] = useState(0);
+    const [transactionsLoading, setTransactionsLoading] = useState(false);
+    const [transactionsError, setTransactionsError] = useState<string | null>(null);
+
     const balanceInfo = useUserStore((state) => state.balanceInfo);
     const fetchBalanceInfo = useUserStore((state) => state.fetchBalanceInfo);
     const setBalanceInfo = useUserStore((state) => state.setBalanceInfo);
@@ -58,6 +65,24 @@ export function PointsView() {
         }
     }, []);
 
+    const fetchTransactions = useCallback(async (page = 1) => {
+        setTransactionsLoading(true);
+        setTransactionsError(null);
+        try {
+            const res = await getJikeGoScoreTransactions({ page, pageSize: 10 });
+            const data = res?.data;
+            if (data) {
+                setTransactions(data.list || []);
+                setTransactionsPage(data.page || 1);
+                setTransactionsTotal(data.total || 0);
+            }
+        } catch (error: any) {
+            setTransactionsError(error?.message || "加载充值消费明细失败");
+        } finally {
+            setTransactionsLoading(false);
+        }
+    }, []);
+
     useEffect(() => {
         const token = getJikeingToken();
         if (token) {
@@ -70,8 +95,20 @@ export function PointsView() {
 
             void fetchBalanceInfo();
             void fetchRecords(1);
+            void fetchTransactions(1);
         }
-    }, [fetchBalanceInfo, fetchRecords]);
+    }, [fetchBalanceInfo, fetchRecords, fetchTransactions]);
+
+    useEffect(() => {
+        if (
+            activeTab === "transaction" &&
+            getJikeingToken() &&
+            transactions.length === 0 &&
+            !transactionsLoading
+        ) {
+            void fetchTransactions(1);
+        }
+    }, [activeTab, fetchTransactions, transactions.length, transactionsLoading]);
 
     const selectedPackage =
         selectedPackageId === null
@@ -140,6 +177,9 @@ export function PointsView() {
                                 forScore: balanceInfo.forScore + selectedPackage.points,
                             });
                         }
+                        void fetchBalanceInfo();
+                        void fetchRecords(1);
+                        void fetchTransactions(1);
                         toast.success("充值成功，积分已到账");
                     } catch (error: any) {
                         console.error(error);
@@ -181,6 +221,9 @@ export function PointsView() {
         };
     }, [
         balanceInfo,
+        fetchBalanceInfo,
+        fetchRecords,
+        fetchTransactions,
         nativePayOrder?.orderId,
         selectedPackage,
         setBalanceInfo,
@@ -214,12 +257,19 @@ export function PointsView() {
                     activeTab={activeTab}
                     onTabChange={setActiveTab}
                     records={records}
+                    transactions={transactions}
                     page={recordsPage}
+                    transactionsPage={transactionsPage}
                     total={recordsTotal}
+                    transactionsTotal={transactionsTotal}
                     loading={recordsLoading}
+                    transactionsLoading={transactionsLoading}
                     error={recordsError}
+                    transactionsError={transactionsError}
                     onPageChange={(page) => void fetchRecords(page)}
+                    onTransactionPageChange={(page) => void fetchTransactions(page)}
                     onRetry={() => void fetchRecords(1)}
+                    onTransactionRetry={() => void fetchTransactions(1)}
                 />
             </section>
 

@@ -72,6 +72,13 @@ const seedanceRatios = [
 
 const squareRatios = [RATIO.wide, RATIO.vertical, RATIO.square];
 const adobeVideoRatios = [RATIO.wide, RATIO.vertical];
+const grokVideoRatios = [
+  RATIO.wide,
+  RATIO.vertical,
+  RATIO.square,
+  { label: "3:2", value: "3:2" },
+  { label: "2:3", value: "2:3" },
+];
 const happyHorseRatios = [
   RATIO.wide,
   RATIO.vertical,
@@ -145,6 +152,36 @@ const adobeSora2ProConfig = (mode: VideoModeKey): VideoParamConfig => ({
     aspectRatio: "16:9",
     duration: 4,
     generateAudio: true,
+  },
+});
+
+const grokVideoConfig = (mode: VideoModeKey): VideoParamConfig => ({
+  modelId: "grok-imagine-video",
+  mode,
+  aspectRatios: grokVideoRatios,
+  qualityGroup: {
+    key: "resolution",
+    label: "分辨率",
+    options: [
+      { label: "480p", value: "480p" },
+      { label: "720p", value: "720p" },
+    ],
+  },
+  duration: {
+    type: "buttons",
+    options: [
+      { label: "6s", value: 6 },
+      { label: "10s", value: 10 },
+      { label: "12s", value: 12 },
+      { label: "16s", value: 16 },
+      { label: "20s", value: 20 },
+    ],
+  },
+  defaults: {
+    aspectRatio: "16:9",
+    resolution: "720p",
+    duration: 6,
+    generateAudio: false,
   },
 });
 
@@ -512,6 +549,10 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
     adobeSora2ProConfig("text-to-video"),
   [byModeKey("adobe-sora2-pro", "image-to-video")]:
     adobeSora2ProConfig("image-to-video"),
+  [byModeKey("grok-imagine-video", "text-to-video")]:
+    grokVideoConfig("text-to-video"),
+  [byModeKey("grok-imagine-video", "image-to-video")]:
+    grokVideoConfig("image-to-video"),
   keling: {
     modelId: "keling",
     aspectRatios: [RATIO.wide, RATIO.vertical, RATIO.square],

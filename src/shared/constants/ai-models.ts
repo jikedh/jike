@@ -139,7 +139,14 @@ export const ADOBE_GPT_IMAGE2_MODEL = "gpt-image-2-adobe";
 export const ADOBE_NANO_BANANA_PRO_MODEL = "nano-banana-pro-adobe";
 export const XIMU_PLATFORM = "ximu";
 export const XIMU_GPT_IMAGE2_MODEL = "gpt-image-2-ximu";
+export const XIMU_GPT_IMAGE2_VIP_MODEL = "gpt-image-2-vip-ximu";
+export const XIMU_NANO_BANANA2_MODEL = "nano-banana-2-ximu";
 export const XIMU_NANO_BANANA_PRO_MODEL = "nano-banana-pro-ximu";
+export const GROK2API_PLATFORM = "grok2api";
+export const GROK_IMAGE_LITE_MODEL = "grok-imagine-image-lite";
+export const GROK_IMAGE_MODEL = "grok-imagine-image";
+export const GROK_IMAGE_PRO_MODEL = "grok-imagine-image-pro";
+export const GROK_IMAGE_EDIT_MODEL = "grok-imagine-image-edit";
 
 export const IMAGE_MODELS = [
   // { id: 1, name: 'doubao-seedream-4-0', model: 'doubao-seedream-4-0', platform: 'Seedream' },
@@ -188,10 +195,46 @@ export const IMAGE_MODELS = [
     platform: XIMU_PLATFORM,
   },
   {
+    id: 13,
+    name: "GPT-Image-2 VIP（西牧渠道）",
+    model: XIMU_GPT_IMAGE2_VIP_MODEL,
+    platform: XIMU_PLATFORM,
+  },
+  {
+    id: 14,
+    name: "Nano Banana 2（西牧渠道）",
+    model: XIMU_NANO_BANANA2_MODEL,
+    platform: XIMU_PLATFORM,
+  },
+  {
     id: 12,
     name: "Nano Banana Pro（西牧渠道）",
     model: XIMU_NANO_BANANA_PRO_MODEL,
     platform: XIMU_PLATFORM,
+  },
+  {
+    id: 15,
+    name: "Grok Imagine Image Lite（Grok渠道）",
+    model: GROK_IMAGE_LITE_MODEL,
+    platform: GROK2API_PLATFORM,
+  },
+  {
+    id: 16,
+    name: "Grok Imagine Image（Grok渠道）",
+    model: GROK_IMAGE_MODEL,
+    platform: GROK2API_PLATFORM,
+  },
+  {
+    id: 17,
+    name: "Grok Imagine Image Pro（Grok渠道）",
+    model: GROK_IMAGE_PRO_MODEL,
+    platform: GROK2API_PLATFORM,
+  },
+  {
+    id: 18,
+    name: "Grok Imagine Image Edit（Grok渠道）",
+    model: GROK_IMAGE_EDIT_MODEL,
+    platform: GROK2API_PLATFORM,
   },
   // {
   //   id: 10,
@@ -200,6 +243,51 @@ export const IMAGE_MODELS = [
   //   platform: "google_pro2",
   // },
 ];
+
+export const ADOBE_IMAGE_MODEL_IDS = new Set([
+  ADOBE_GPT_IMAGE2_MODEL,
+  ADOBE_NANO_BANANA_PRO_MODEL,
+]);
+export const XIMU_IMAGE_MODEL_IDS = new Set([
+  XIMU_GPT_IMAGE2_MODEL,
+  XIMU_GPT_IMAGE2_VIP_MODEL,
+  XIMU_NANO_BANANA2_MODEL,
+  XIMU_NANO_BANANA_PRO_MODEL,
+]);
+export const GROK_IMAGE_MODEL_IDS = new Set([
+  GROK_IMAGE_LITE_MODEL,
+  GROK_IMAGE_MODEL,
+  GROK_IMAGE_PRO_MODEL,
+  GROK_IMAGE_EDIT_MODEL,
+]);
+export const XIMU_MODEL_PURCHASE_URL = "https://pay.ldxp.cn/shop/HNGFW0MA";
+
+export const isAdobeImageGenerationModel = (model?: string) =>
+  Boolean(model && ADOBE_IMAGE_MODEL_IDS.has(model));
+
+export const isXimuImageGenerationModel = (model?: string) =>
+  Boolean(model && XIMU_IMAGE_MODEL_IDS.has(model));
+
+export const isGrokImageGenerationModel = (model?: string) =>
+  Boolean(model && GROK_IMAGE_MODEL_IDS.has(model));
+
+export const isXimuGptImageGenerationModel = (model?: string) =>
+  model === XIMU_GPT_IMAGE2_MODEL || model === XIMU_GPT_IMAGE2_VIP_MODEL;
+
+export const isXimuNanoBananaGenerationModel = (model?: string) =>
+  model === XIMU_NANO_BANANA2_MODEL || model === XIMU_NANO_BANANA_PRO_MODEL;
+
+export const getVisibleImageModels = (
+  adobeChannelModelsEnabled = false,
+  ximuChannelModelsEnabled = false,
+  grokChannelModelsEnabled = false,
+) =>
+  IMAGE_MODELS.filter(
+    (item) =>
+      (adobeChannelModelsEnabled || !isAdobeImageGenerationModel(item.model)) &&
+      (ximuChannelModelsEnabled || !isXimuImageGenerationModel(item.model)) &&
+      (grokChannelModelsEnabled || !isGrokImageGenerationModel(item.model)),
+  );
 
 export const CANVAS_CHAT_IMAGE_MODEL_PREFIX = "canvas-image:";
 
@@ -232,7 +320,13 @@ export const GENERATION_SCORE_COST_MAP: Record<string, number> = {
   [ADOBE_GPT_IMAGE2_MODEL]: 0,
   [ADOBE_NANO_BANANA_PRO_MODEL]: 0,
   [XIMU_GPT_IMAGE2_MODEL]: 0,
+  [XIMU_GPT_IMAGE2_VIP_MODEL]: 0,
+  [XIMU_NANO_BANANA2_MODEL]: 0,
   [XIMU_NANO_BANANA_PRO_MODEL]: 0,
+  [GROK_IMAGE_LITE_MODEL]: 0,
+  [GROK_IMAGE_MODEL]: 0,
+  [GROK_IMAGE_PRO_MODEL]: 0,
+  [GROK_IMAGE_EDIT_MODEL]: 0,
   // 视频模型
   "doubao-seedance-2.0": 30,
   "wan2.7-i2v": 30,

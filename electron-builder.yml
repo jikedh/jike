@@ -16,6 +16,7 @@ files:
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   - '!resources/adobe2api-master/**'
+  - '!resources/grok2api-main/**'
   - '!resources/python/**'
 extraResources:
   - from: resources/adobe2api-master
@@ -35,6 +36,18 @@ extraResources:
       - '**/*'
       - '!**/__pycache__/**'
       - '!**/*.pyc'
+  - from: resources/grok2api-main
+    to: grok2api-main
+    filter:
+      - '**/*'
+      - '!data/**'
+      - '!logs/**'
+      - '!__pycache__/**'
+      - '!**/__pycache__/**'
+      - '!**/*.pyc'
+      - '!.git/**'
+      - '!.github/**'
+      - '!.env'
 win:
   executableName: 即刻
   icon: resources/icons/icon.png

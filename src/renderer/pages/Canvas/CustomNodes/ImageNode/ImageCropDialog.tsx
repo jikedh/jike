@@ -1,7 +1,9 @@
 import {
+  IconArrowsMaximize,
   IconAspectRatio,
   IconCheck,
   IconChevronDown,
+  IconColorSwatch,
   IconPhoto,
   IconX,
 } from "@tabler/icons-react";
@@ -9,8 +11,13 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "shared/utils/utils";
-import { createCroppedImageFile } from "./utils/cropImage";
+import {
+  createCroppedImageFile,
+  createExpandedImageFile,
+  getExpandedCanvasSize,
+} from "./utils/cropImage";
 
 type CropRatioKey =
   | "original"
@@ -76,6 +83,8 @@ const HANDLE_CONFIG = [
   },
 ] as const;
 
+const DEFAULT_EXPAND_BACKGROUND = "#ffffff";
+
 export const ImageCropDialog = memo(
   ({ open, imageUrl, onOpenChange, onConfirm }: ImageCropDialogProps) => {
     const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -95,6 +104,14 @@ export const ImageCropDialog = memo(
       width: number;
       height: number;
     } | null>(null);
+    const [viewportSize, setViewportSize] = useState<{
+      width: number;
+      height: number;
+    } | null>(null);
+    const [expandMode, setExpandMode] = useState(false);
+    const [expandBackground, setExpandBackground] = useState(
+      DEFAULT_EXPAND_BACKGROUND,
+    );
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const selectedRatio = useMemo(() => {
@@ -118,6 +135,22 @@ export const ImageCropDialog = memo(
 
       return selectedRatio.aspect ?? 1;
     }, [cropRatio, naturalSize?.height, naturalSize?.width, selectedRatio]);
+
+    const expandTargetAspect = useMemo(() => {
+      if (cropRatio === "custom" && cropRect?.width && cropRect.height) {
+        return cropRect.width / cropRect.height;
+      }
+
+      if (aspect) {
+        return aspect;
+      }
+
+      if (naturalSize?.width && naturalSize.height) {
+        return naturalSize.width / naturalSize.height;
+      }
+
+      return 1;
+    }, [aspect, cropRatio, cropRect, naturalSize?.height, naturalSize?.width]);
 
     const clamp = useCallback(
       (value: number, minValue: number, maxValue: number) => {
@@ -177,6 +210,19 @@ export const ImageCropDialog = memo(
       }
 
       const viewportRect = viewportRef.current.getBoundingClientRect();
+      setViewportSize({
+        width: viewportRect.width,
+        height: viewportRect.height,
+      });
+      setNaturalSize({
+        width: imageRef.current.naturalWidth,
+        height: imageRef.current.naturalHeight,
+      });
+
+      if (expandMode) {
+        return;
+      }
+
       const imageRect = imageRef.current.getBoundingClientRect();
       const nextBounds = {
         x: imageRect.left - viewportRect.left,
@@ -186,11 +232,6 @@ export const ImageCropDialog = memo(
       };
 
       setImageBounds(nextBounds);
-      setNaturalSize({
-        width: imageRef.current.naturalWidth,
-        height: imageRef.current.naturalHeight,
-      });
-
       setCropRect((prev) => {
         if (!prev) {
           const baseRect = {
@@ -219,7 +260,12 @@ export const ImageCropDialog = memo(
 
         return applyAspectToRect(scaledRect, nextBounds);
       });
-    }, [applyAspectToRect, imageBounds?.height, imageBounds?.width]);
+    }, [
+      applyAspectToRect,
+      expandMode,
+      imageBounds?.height,
+      imageBounds?.width,
+    ]);
 
     useEffect(() => {
       if (!open) {
@@ -231,6 +277,9 @@ export const ImageCropDialog = memo(
       setImageBounds(null);
       setCropRect(null);
       setNaturalSize(null);
+      setViewportSize(null);
+      setExpandMode(false);
+      setExpandBackground(DEFAULT_EXPAND_BACKGROUND);
       setIsSubmitting(false);
     }, [open, imageUrl]);
 
@@ -243,6 +292,15 @@ export const ImageCropDialog = memo(
       window.addEventListener("resize", handleResize);
       return () => window.removeEventListener("resize", handleResize);
     }, [open, syncImageBounds]);
+
+    useEffect(() => {
+      if (!open || expandMode) {
+        return;
+      }
+
+      const frame = window.requestAnimationFrame(syncImageBounds);
+      return () => window.cancelAnimationFrame(frame);
+    }, [expandMode, open, syncImageBounds]);
 
     useEffect(() => {
       if (!imageBounds) {
@@ -272,6 +330,10 @@ export const ImageCropDialog = memo(
         const start = drag.startRect;
         const mode = drag.mode;
         let nextRect: Rect = { ...start };
+
+        if (expandMode) {
+          return;
+        }
 
         if (mode === "move") {
           nextRect.x = clamp(start.x + dx, 0, imageBounds.width - start.width);
@@ -322,7 +384,7 @@ export const ImageCropDialog = memo(
           height: clamp(nextRect.height, minSize, imageBounds.height),
         });
       },
-      [clamp, imageBounds],
+      [clamp, expandMode, imageBounds],
     );
 
     const handlePointerUp = useCallback(() => {
@@ -333,7 +395,7 @@ export const ImageCropDialog = memo(
 
     const startDrag = useCallback(
       (mode: DragMode, event: React.PointerEvent<HTMLDivElement>) => {
-        if (!cropRect) {
+        if (!cropRect || expandMode) {
           return;
         }
 
@@ -350,17 +412,36 @@ export const ImageCropDialog = memo(
         window.addEventListener("pointermove", handlePointerMove);
         window.addEventListener("pointerup", handlePointerUp);
       },
-      [cropRect, handlePointerMove, handlePointerUp],
+      [cropRect, expandMode, handlePointerMove, handlePointerUp],
     );
 
     const handleConfirm = useCallback(async () => {
-      if (!imageUrl || !cropRect || !imageBounds || !naturalSize) {
+      if (!imageUrl || !naturalSize) {
         return;
       }
 
       setIsSubmitting(true);
 
       try {
+        if (expandMode) {
+          const expandedFile = await createExpandedImageFile(
+            imageUrl,
+            expandTargetAspect,
+            expandBackground,
+            `expanded-${Date.now()}.png`,
+          );
+          await onConfirm(
+            expandedFile,
+            cropRatio === "custom" ? "original" : selectedRatio.value,
+          );
+          onOpenChange(false);
+          return;
+        }
+
+        if (!cropRect || !imageBounds) {
+          return;
+        }
+
         const scaleX = naturalSize.width / imageBounds.width;
         const scaleY = naturalSize.height / imageBounds.height;
         const croppedFile = await createCroppedImageFile(
@@ -383,6 +464,10 @@ export const ImageCropDialog = memo(
       }
     }, [
       cropRect,
+      cropRatio,
+      expandBackground,
+      expandMode,
+      expandTargetAspect,
       imageBounds,
       imageUrl,
       naturalSize,
@@ -401,6 +486,45 @@ export const ImageCropDialog = memo(
     if (!open) {
       return null;
     }
+
+    const expandedPreview =
+      expandMode && naturalSize && viewportSize
+        ? (() => {
+            const canvasSize = getExpandedCanvasSize(
+              naturalSize.width,
+              naturalSize.height,
+              expandTargetAspect,
+            );
+            const maxWidth = Math.max(1, viewportSize.width - 48);
+            const maxHeight = Math.max(1, viewportSize.height - 48);
+            const scale = Math.min(
+              maxWidth / canvasSize.width,
+              maxHeight / canvasSize.height,
+              1,
+            );
+            const canvasWidth = canvasSize.width * scale;
+            const canvasHeight = canvasSize.height * scale;
+            const canvasX = (viewportSize.width - canvasWidth) / 2;
+            const canvasY = (viewportSize.height - canvasHeight) / 2;
+            const imageWidth = naturalSize.width * scale;
+            const imageHeight = naturalSize.height * scale;
+
+            return {
+              canvas: {
+                x: canvasX,
+                y: canvasY,
+                width: canvasWidth,
+                height: canvasHeight,
+              },
+              image: {
+                x: canvasX + (canvasWidth - imageWidth) / 2,
+                y: canvasY + (canvasHeight - imageHeight) / 2,
+                width: imageWidth,
+                height: imageHeight,
+              },
+            };
+          })()
+        : null;
 
     const content = (
       <div
@@ -464,12 +588,47 @@ export const ImageCropDialog = memo(
 
             <div className="h-8 w-px bg-white/10" />
 
+            <div className="flex h-10 items-center gap-2 rounded-xl border border-white/8 bg-white/[0.04] px-3">
+              <IconArrowsMaximize size={17} className="text-white/55" />
+              <span className="text-sm font-medium text-white/82">图片扩比</span>
+              <Switch
+                checked={expandMode}
+                onCheckedChange={setExpandMode}
+                className="h-5 w-9 data-[state=checked]:bg-white/80 data-[state=unchecked]:bg-white/15"
+                aria-label="图片扩比"
+              />
+            </div>
+
+            {expandMode ? (
+              <label className="flex h-10 items-center gap-2 rounded-xl border border-white/8 bg-white/[0.04] px-3">
+                <IconColorSwatch size={17} className="text-white/55" />
+                <span className="text-sm font-medium text-white/75">背景</span>
+                <span
+                  className="h-5 w-5 rounded-md border border-white/20 shadow-inner"
+                  style={{ backgroundColor: expandBackground }}
+                />
+                <input
+                  type="color"
+                  value={expandBackground}
+                  onChange={(event) => setExpandBackground(event.target.value)}
+                  className="h-6 w-6 cursor-pointer opacity-0"
+                  aria-label="扩比背景颜色"
+                />
+              </label>
+            ) : null}
+
+            <div className="h-8 w-px bg-white/10" />
+
             <Button
               type="button"
               size="sm"
               className="h-10 rounded-xl bg-white px-5 text-sm font-semibold text-black hover:bg-white/90"
               loading={isSubmitting}
-              disabled={!imageUrl || !cropRect || !imageBounds || !naturalSize}
+              disabled={
+                !imageUrl ||
+                !naturalSize ||
+                (!expandMode && (!cropRect || !imageBounds))
+              }
               onClick={handleConfirm}
             >
               <span className="inline-flex items-center gap-1.5">
@@ -488,16 +647,44 @@ export const ImageCropDialog = memo(
               >
                 {imageUrl ? (
                   <>
+                    {expandedPreview ? (
+                      <div
+                        className="pointer-events-none absolute rounded-sm border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.35)]"
+                        style={{
+                          left: expandedPreview.canvas.x,
+                          top: expandedPreview.canvas.y,
+                          width: expandedPreview.canvas.width,
+                          height: expandedPreview.canvas.height,
+                          backgroundColor: expandBackground,
+                          boxShadow: "0 0 0 9999px rgba(0,0,0,0.48)",
+                        }}
+                      />
+                    ) : null}
                     <img
                       ref={imageRef}
                       src={imageUrl}
                       alt="裁剪预览"
-                      className="max-h-full max-w-full select-none object-contain"
+                      className={cn(
+                        "select-none object-contain",
+                        expandedPreview
+                          ? "absolute z-[1]"
+                          : "max-h-full max-w-full",
+                      )}
+                      style={
+                        expandedPreview
+                          ? {
+                              left: expandedPreview.image.x,
+                              top: expandedPreview.image.y,
+                              width: expandedPreview.image.width,
+                              height: expandedPreview.image.height,
+                            }
+                          : undefined
+                      }
                       draggable={false}
                       onLoad={syncImageBounds}
                     />
 
-                    {imageBounds && cropRect ? (
+                    {imageBounds && cropRect && !expandMode ? (
                       <>
                         <div
                           className="pointer-events-none absolute"

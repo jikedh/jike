@@ -25,6 +25,14 @@ export const NANO_BANANA_LOCAL_SIZES = GEMINI_SIZES.filter((item) =>
   ["1:1", "16:9", "9:16", "4:3", "3:4"].includes(item.value),
 );
 
+export const GROK_IMAGE_SIZES = [
+  { label: "1:1", value: "1:1", description: "1024×1024" },
+  { label: "16:9", value: "16:9", description: "1280×720" },
+  { label: "9:16", value: "9:16", description: "720×1280" },
+  { label: "3:2", value: "3:2", description: "1792×1024" },
+  { label: "2:3", value: "2:3", description: "1024×1792" },
+];
+
 // Gemini 3 Pro 分辨率选项
 export const GEMINI_RESOLUTIONS = [
   { label: "1K", value: "1K", description: "默认分辨率" },
@@ -36,6 +44,10 @@ export const NANO_BANANA_RESOLUTIONS = [
   { label: "1K", value: "1K", description: "默认分辨率" },
   { label: "2K", value: "2K", description: "标准分辨率" },
   { label: "4K", value: "4K", description: "高清分辨率" },
+];
+
+export const GROK_IMAGE_RESOLUTIONS = [
+  { label: "标准", value: "standard", description: "Grok 原生尺寸" },
 ];
 
 type GeminiParamsPanelProps = {

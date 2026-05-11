@@ -36,6 +36,7 @@ type GptImage2ParamsPanelProps = {
   size: string;
   resolution: string;
   sizeOptions?: ImageParamOption[];
+  resolutionOptions?: ImageParamOption[];
   onSizeChange: (value: string) => void;
   onResolutionChange: (value: string) => void;
 };
@@ -44,6 +45,11 @@ export const GptImage2ParamsPanel = ({
   size,
   resolution,
   sizeOptions = GPTIMAGE2_SIZES,
+  resolutionOptions = [
+    { label: "1K", value: "1K", description: "标准" },
+    { label: "2K", value: "2K", description: "高清" },
+    { label: "4K", value: "4K", description: "超清" },
+  ],
   onSizeChange,
   onResolutionChange,
 }: GptImage2ParamsPanelProps) => {
@@ -52,11 +58,7 @@ export const GptImage2ParamsPanel = ({
       size={size}
       resolution={resolution}
       sizeOptions={sizeOptions}
-      resolutionOptions={[
-        { label: "1K", value: "1K", description: "标准" },
-        { label: "2K", value: "2K", description: "高清" },
-        { label: "4K", value: "4K", description: "超清" },
-      ]}
+      resolutionOptions={resolutionOptions}
       sizeLabel="图片比例"
       resolutionLabel="分辨率"
       onSizeChange={onSizeChange}

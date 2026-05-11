@@ -33,6 +33,7 @@ export interface XimuGptImageRequest extends XimuBaseImageRequest {
 }
 
 export interface BuildXimuGptImageRequestOptions {
+  model?: XimuGptImageModel;
   cardCode: string;
   prompt?: string;
   aspectRatio?: XimuGptImageAspectRatio;
@@ -65,18 +66,23 @@ const XIMU_GPT_IMAGE_ASPECT_RATIO_SET = new Set<string>(
 );
 
 export const resolveXimuGptAspectRatio = ({
+  model = "gpt-image-2",
   size,
   resolution,
 }: {
+  model?: XimuGptImageModel;
   size?: string;
   resolution?: string;
 }): XimuGptImageAspectRatio => {
-  const ratio = size || "1:1";
+  const ratio = size || "auto";
   if (!XIMU_GPT_IMAGE_ASPECT_RATIO_SET.has(ratio)) {
     throw new Error(`GPT-Image-2 西牧渠道暂不支持 ${ratio} 比例`);
   }
 
   if (ratio === "1:1") {
+    if (model !== "gpt-image-2-vip" && resolution !== "1K") {
+      throw new Error("GPT-Image-2 西牧渠道仅支持 1K 分辨率");
+    }
     if (resolution === "2K") {
       return "2048x2048";
     }
@@ -90,15 +96,16 @@ export const resolveXimuGptAspectRatio = ({
 };
 
 export function buildXimuGptImageRequest({
+  model = "gpt-image-2-vip",
   cardCode,
   prompt,
-  aspectRatio = "1:1",
+  aspectRatio = "auto",
   quality = "auto",
   urls,
   shutProgress = false,
 }: BuildXimuGptImageRequestOptions): XimuGptImageRequest {
   return {
-    model: "gpt-image-2-vip",
+    model,
     cardCode,
     prompt: prompt || "",
     aspectRatio,

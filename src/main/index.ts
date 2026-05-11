@@ -19,11 +19,13 @@ import {
   registerDebugHandlers,
   registerDownloadHandlers,
   registerAdobe2ApiHandlers,
+  registerGrok2ApiHandlers,
   registerStorageHandlers,
   registerTrackingHandlers,
   registerVideoProcessingHandlers,
 } from "./ipc";
 import { adobe2ApiService } from "./ipc/adobe2api/service";
+import { grok2ApiService } from "./ipc/grok2api/service";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -126,6 +128,7 @@ function createWindow(): void {
   registerDebugHandlers();
   registerDownloadHandlers();
   registerAdobe2ApiHandlers();
+  registerGrok2ApiHandlers();
   registerTrackingHandlers();
   registerVideoProcessingHandlers();
 }
@@ -160,5 +163,6 @@ if (gotSingleInstanceLock) {
 
 app.on("window-all-closed", () => {
   void adobe2ApiService.stop();
+  void grok2ApiService.stop();
   app.quit();
 });

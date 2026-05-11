@@ -35,8 +35,10 @@ export {
   buildXimuNanoBananaRequest,
   resolveXimuGptAspectRatio,
   resolveXimuImageSize,
+  resolveXimuNanoBanana2AspectRatio,
   resolveXimuNanoBananaProAspectRatio,
   XIMU_GPT_IMAGE_ASPECT_RATIOS,
   XIMU_IMAGE_SIZES,
+  XIMU_NANO_BANANA2_ASPECT_RATIOS,
   XIMU_NANO_BANANA_PRO_ASPECT_RATIOS,
 } from "./images";
