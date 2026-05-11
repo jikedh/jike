@@ -56,9 +56,24 @@ export type DesktopChatCompletionsRequest = {
 
 export type OssBlobType = "avatar" | "image" | "video";
 
+export type UploadOssBlobType = "image" | "video" | "audio";
+
 export type OssPutUrlRequest = {
   blob_type: OssBlobType;
   ext?: string;
+};
+
+export type UploadOssPutUrlRequest = {
+  blob_type: UploadOssBlobType;
+  ext?: string;
+  content_type?: string;
+};
+
+export type UploadOssPutUrlResp = {
+  put_url: string;
+  headers: Record<string, string>;
+  access_url: string;
+  key: string;
 };
 
 export type OssUploadResp = {
@@ -299,6 +314,17 @@ export function uploadOssFile(file: File): any {
     url: "/v1/oss/upload",
     method: "post",
     data: formData,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+// UploadOss 预签名上传：获取预签名 PUT URL
+export function getUploadOssPutUrl(data: UploadOssPutUrlRequest): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/oss/upload-put-url",
+    method: "post",
+    data,
     headers: getJikeGoAuthHeaders(),
   });
 }

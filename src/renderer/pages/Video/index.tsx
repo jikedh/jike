@@ -313,6 +313,9 @@ export default function VideoPage() {
           <Button onClick={() => navigate("/test-go")} variant="blue">
             跳转到测试-GO页面
           </Button>
+          <Button onClick={() => navigate("/video/upload-test")} variant="blue">
+            UploadOSS 上传测试
+          </Button>
         </div>
       </div>
     </div>
