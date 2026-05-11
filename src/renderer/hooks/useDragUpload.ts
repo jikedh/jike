@@ -622,18 +622,31 @@ export function useDragUpload() {
         event.dataTransfer,
       );
       if (canvasAssetPayload) {
+        const assetFileUrl = canvasAssetPayload.asset.fileUrl;
+        const assetScope = canvasAssetPayload.asset.scope || "project";
+        const assetLocalPath =
+          canvasAssetPayload.asset.originalFile ||
+          (assetFileUrl.startsWith("assets/")
+            ? assetFileUrl
+            : undefined);
         void insertAssetIntoCanvas(
           {
             id: canvasAssetPayload.asset.id,
             name: canvasAssetPayload.asset.name,
-            scope: "project",
+            scope: assetScope,
             category: canvasAssetPayload.asset.category,
             mediaType: canvasAssetPayload.asset.mediaType,
-            fileUrl: canvasAssetPayload.asset.fileUrl,
+            fileUrl: assetFileUrl,
             coverUrl: canvasAssetPayload.asset.coverUrl,
-            originalFile: canvasAssetPayload.asset.fileUrl,
+            originalFile: assetLocalPath || assetFileUrl,
             coverFile: canvasAssetPayload.asset.coverUrl,
             metadataFile: "",
+            projectId: canvasAssetPayload.asset.projectId || undefined,
+            source: {
+              type: assetScope === "canvas" ? "canvas" : "upload",
+              projectId: canvasAssetPayload.asset.projectId || undefined,
+              nodeId: undefined,
+            },
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             tags: [],

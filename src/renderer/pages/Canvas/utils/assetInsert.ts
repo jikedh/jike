@@ -15,6 +15,42 @@ type InsertPosition = {
 
 const getLocalName = (path: string) => path.split("/").pop() || "asset";
 
+const isAbsoluteMediaUrl = (value: string) =>
+  /^(https?:|file:|blob:|data:)/i.test(value.trim());
+
+const getProjectStoragePath = () => {
+  try {
+    const raw = localStorage.getItem("canvas-chat-settings");
+    if (!raw) return "";
+    const parsed = JSON.parse(raw);
+    return parsed.state?.storagePath || "";
+  } catch {
+    return "";
+  }
+};
+
+const resolveAssetFileUrl = (asset: AssetRecord) => {
+  if (isAbsoluteMediaUrl(asset.fileUrl)) {
+    return asset.fileUrl;
+  }
+
+  const basePath =
+    asset.source?.type === "canvas" && !asset.fileUrl.startsWith("assets/")
+      ? getProjectStoragePath()
+      : getAssetStoragePath();
+
+  return getAssetFileUrl(basePath, asset.fileUrl);
+};
+
+const getNodeLocalPath = (asset: AssetRecord) => {
+  const candidate =
+    asset.source?.type === "canvas"
+      ? asset.originalFile || asset.fileUrl
+      : asset.fileUrl;
+
+  return candidate && !isAbsoluteMediaUrl(candidate) ? candidate : "";
+};
+
 const getAspectRatioFromAssetUrl = async (
   fileUrl: string,
   mediaType: AssetRecord["mediaType"],
@@ -40,9 +76,11 @@ export const insertAssetIntoCanvas = async (
   position: InsertPosition,
 ) => {
   const store = useCanvasFlowStore.getState();
-  const assetStoragePath = getAssetStoragePath();
-  const fileUrl = getAssetFileUrl(assetStoragePath, asset.fileUrl);
-  const localName = getLocalName(asset.fileUrl);
+  const fileUrl = resolveAssetFileUrl(asset);
+  const localPath = getNodeLocalPath(asset);
+  const localName = getLocalName(
+    localPath || asset.originalFile || asset.fileUrl,
+  );
   const aspectRatio = await getAspectRatioFromAssetUrl(
     fileUrl,
     asset.mediaType,
@@ -61,7 +99,7 @@ export const insertAssetIntoCanvas = async (
         data: [
           {
             url: fileUrl,
-            localPath: asset.fileUrl,
+            ...(localPath ? { localPath } : {}),
             localName,
           },
         ],
@@ -80,7 +118,7 @@ export const insertAssetIntoCanvas = async (
         data: [
           {
             url: fileUrl,
-            localPath: asset.fileUrl,
+            ...(localPath ? { localPath } : {}),
             localName,
             format: localName.split(".").pop() || "mp4",
           },
@@ -99,7 +137,7 @@ export const insertAssetIntoCanvas = async (
         data: [
           {
             url: fileUrl,
-            localPath: asset.fileUrl,
+            ...(localPath ? { localPath } : {}),
             localName,
             format: localName.split(".").pop() || "mp3",
           },

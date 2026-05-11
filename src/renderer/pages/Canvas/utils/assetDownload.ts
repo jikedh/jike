@@ -95,6 +95,20 @@ const getAssetDownloadName = (asset: AssetRecord) => {
   return `${baseName}.${ext}`;
 };
 
+const getProjectStoragePath = () => {
+  try {
+    const raw = localStorage.getItem("canvas-chat-settings");
+    if (!raw) return "";
+    const parsed = JSON.parse(raw);
+    return parsed.state?.storagePath || "";
+  } catch {
+    return "";
+  }
+};
+
+const isAbsoluteMediaUrl = (value: string) =>
+  /^(https?:|file:|blob:|data:)/i.test(value.trim());
+
 const uniquifyNames = (entries: ZipEntry[]) => {
   const seen = new Map<string, number>();
 
@@ -229,7 +243,24 @@ const readAssetEntry = async (
   basePath: string,
   asset: AssetRecord,
 ): Promise<ZipEntry> => {
-  const result = await window.storage.readMedia(basePath, asset.originalFile);
+  const sourcePath = asset.originalFile || asset.fileUrl;
+
+  if (isAbsoluteMediaUrl(sourcePath)) {
+    const response = await fetch(sourcePath);
+    if (!response.ok) {
+      throw new Error(`读取资产失败：${asset.name}`);
+    }
+    return {
+      name: getAssetDownloadName(asset),
+      data: new Uint8Array(await response.arrayBuffer()),
+    };
+  }
+
+  const readBasePath =
+    asset.source?.type === "canvas" && !sourcePath.startsWith("assets/")
+      ? getProjectStoragePath()
+      : basePath;
+  const result = await window.storage.readMedia(readBasePath, sourcePath);
   if (!result.success || !result.data) {
     throw new Error(result.error || `读取资产失败：${asset.name}`);
   }

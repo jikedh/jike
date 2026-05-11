@@ -21,11 +21,14 @@ export type CanvasImageDragPayload = {
 export type CanvasAssetDragItem = {
   id: string;
   name: string;
+  scope: "project" | "canvas";
   mediaType: "image" | "video" | "audio";
-  category: "person" | "scene" | "prop" | "audio";
+  category: "role" | "scene" | "prop" | "image" | "video" | "audio";
   fileUrl: string;
+  originalFile?: string;
   coverUrl?: string;
   localName?: string;
+  projectId?: string;
 };
 
 export type CanvasAssetDragPayload = {

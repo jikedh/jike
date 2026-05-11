@@ -67,7 +67,7 @@ export default function AssetsPage() {
             </div>
             <h2 className="mt-5 text-lg font-medium">选择资产存储路径</h2>
             <p className="mt-3 text-sm leading-6 text-white/48">
-              资产库会在该目录下保存项目资产和索引文件。设置后可在这里统一上传、预览、重命名、删除和下载资产。
+              资产库会在该目录下保存导入的资产文件夹和索引文件。设置后可按角色、场景、道具、音效分类管理、插入、删除和下载资产。
             </p>
             <Button
               className="mt-6"
