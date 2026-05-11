@@ -20,8 +20,7 @@ import { normalizeRequiredPoints } from "shared/constants/points";
 import type { NewVideoGenerationNode } from "shared/types/flow";
 import { formatDuration } from "shared/utils/getVideoDuration";
 import { appendMediaSequences } from "shared/utils/mediaSequence";
-import { createPresignedOssUploadTarget } from "shared/utils/presignedOssUploader";
-import { cn, downloadImageFromUrl } from "shared/utils/utils";
+import { cn, downloadImageFromUrl, getJikeingToken } from "shared/utils/utils";
 import { withVideoPosterFields } from "shared/utils/videoPoster";
 import { toast } from "sonner";
 import Lightbox from "yet-another-react-lightbox";
@@ -32,6 +31,7 @@ import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
 import Video from "yet-another-react-lightbox/plugins/video";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import { getVideoRemovalStatus, videoRemoval } from "@/api/ai";
+import { getUploadOssPutUrl } from "@/api/jikeGo";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { Button } from "@/components/ui/button";
 import {
@@ -1196,10 +1196,16 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           throw new Error("视频裁剪组件未初始化，请重启应用后重试");
         }
 
+        const authToken = getJikeingToken();
+        const backendBaseUrl =
+          import.meta.env.VITE_JIKE_GO_BASE_URL || "http://localhost:9181";
+
         const response = await window.videoProcessing.trim({
           videoUrl: currentVideoUrl,
           start: range.start,
           end: range.end,
+          authToken: authToken || undefined,
+          backendBaseUrl,
         });
 
         if (!response.success || !response.data?.url) {
@@ -1287,7 +1293,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
     (
       taskId: string,
       targetNodeId: string,
-      publicUrl: string,
+      accessUrl: string,
     ) => {
       const existing = subtitlePollers[targetNodeId];
       if (existing) {
@@ -1319,8 +1325,8 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             const resultItem = await saveToolMediaUrlToProject(
               projectId,
               withVideoPosterFields({
-                url: publicUrl,
-                remoteUrl: publicUrl,
+                url: accessUrl,
+                remoteUrl: accessUrl,
                 format: "mp4",
               }),
               "video",
@@ -1384,11 +1390,18 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           .getState()
           .edges.filter((edge) => edge.source === nodeId).length;
 
-        const target = await createPresignedOssUploadTarget({
-          directory: "video",
-          extension: "mp4",
-          contentType: "application/octet-stream",
+        const putUrlResponse = await getUploadOssPutUrl({
+          blob_type: "video",
+          ext: "mp4",
+          content_type: "application/octet-stream",
         });
+        const target = putUrlResponse?.data ?? putUrlResponse;
+        const accessUrl =
+          target?.access_url || target?.put_url?.split("?")[0] || "";
+
+        if (!target?.put_url) {
+          throw new Error("未获取到预签名上传地址");
+        }
 
         const newNodeId = addNode("newVideo", {
           x: basePosition.x - 390,
@@ -1410,7 +1423,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           wuhen: {
             taskId: "",
             rect,
-            resultVideoUrl: target.publicUrl,
+            resultVideoUrl: accessUrl,
           },
         } as any);
 
@@ -1427,7 +1440,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           video_url: currentVideoUrl,
           method: "sel_area",
           rect,
-          upload_url: target.uploadUrl,
+          upload_url: target.put_url,
           model: "video_removal_std",
         });
 
@@ -1448,7 +1461,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           wuhen: {
             taskId,
             rect,
-            resultVideoUrl: target.publicUrl,
+            resultVideoUrl: accessUrl,
           },
         } as any);
 
@@ -1460,8 +1473,8 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
               type: "video",
               data: [
                 withVideoPosterFields({
-                  url: target.publicUrl,
-                  remoteUrl: target.publicUrl,
+                  url: accessUrl,
+                  remoteUrl: accessUrl,
                   format: "mp4",
                 }),
               ],
@@ -1474,11 +1487,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             status: GenerationStatus.IN_PROGRESS,
             progress: 0,
           } as any);
-          startSubtitlePolling(
-            taskId,
-            newNodeId,
-            target.publicUrl,
-          );
+          startSubtitlePolling(taskId, newNodeId, accessUrl);
         }
       } catch (error: any) {
         toast.error(error?.message || "去字幕失败");

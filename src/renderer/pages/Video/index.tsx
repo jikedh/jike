@@ -6,10 +6,10 @@ import { useNavigate } from "react-router-dom";
 // import { Input } from "~/components/ui/input";
 // import { Button } from "~/components/ui/button";
 // import { videoRemoval, getVideoRemovalStatus } from "~/api/ai";
-import { PresignedOssUploader } from "shared/utils/presignedOssUploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getVideoRemovalStatus, videoRemoval } from "@/api/ai";
+import { getUploadOssPutUrl } from "@/api/jikeGo";
 
 export default function VideoPage() {
   const navigate = useNavigate();
@@ -38,11 +38,21 @@ export default function VideoPage() {
     try {
       // 步骤1: 获取预签名上传地址
       console.log("步骤1: 获取预签名上传地址...");
-      const presignedTarget = await PresignedOssUploader.createTarget({
-        directory: "video",
-        extension: "mp4",
-        contentType: "application/octet-stream",
+      const putUrlResponse = await getUploadOssPutUrl({
+        blob_type: "video",
+        ext: "mp4",
+        content_type: "application/octet-stream",
       });
+      const presignedTarget = putUrlResponse?.data ?? putUrlResponse;
+      const accessUrl =
+        presignedTarget?.access_url ||
+        presignedTarget?.put_url?.split("?")[0] ||
+        "";
+
+      if (!presignedTarget?.put_url) {
+        throw new Error("未获取到预签名上传地址");
+      }
+
       console.log("预签名目标:", presignedTarget);
 
       // 步骤2: 调用视频消除接口
@@ -57,7 +67,7 @@ export default function VideoPage() {
           x2: 1633,
           y2: 1080,
         },
-        upload_url: presignedTarget.uploadUrl,
+        upload_url: presignedTarget.put_url,
       });
       console.log("视频消除响应:", response);
 
@@ -73,7 +83,7 @@ export default function VideoPage() {
 
       // 步骤3: 轮询任务状态
       console.log("步骤3: 开始轮询任务状态...");
-      await pollTaskStatus(id, presignedTarget.publicUrl);
+      await pollTaskStatus(id, accessUrl);
     } catch (error) {
       console.error("视频消除流程出错:", error);
     } finally {
@@ -162,10 +172,21 @@ export default function VideoPage() {
     try {
       // 步骤1: 获取预签名上传地址
       console.log("步骤1: 获取预签名上传地址...");
-      const presignedTarget = await PresignedOssUploader.createTarget({
-        directory: "video",
-        extension: "mp4",
+      const putUrlResponse = await getUploadOssPutUrl({
+        blob_type: "video",
+        ext: "mp4",
+        content_type: selectedFile.type || "video/mp4",
       });
+      const presignedTarget = putUrlResponse?.data ?? putUrlResponse;
+      const accessUrl =
+        presignedTarget?.access_url ||
+        presignedTarget?.put_url?.split("?")[0] ||
+        "";
+
+      if (!presignedTarget?.put_url) {
+        throw new Error("未获取到预签名上传地址");
+      }
+
       console.log("预签名目标:", presignedTarget);
 
       // 步骤2: 使用预签名地址上传文件
@@ -175,15 +196,23 @@ export default function VideoPage() {
       const arrayBuffer = await selectedFile.arrayBuffer();
       setUploadProgress(60);
 
-      await PresignedOssUploader.upload({
-        target: presignedTarget,
-        data: arrayBuffer,
-        // 不设置 contentType，让 OSS 根据扩展名自动判断
+      const uploadResponse = await fetch(presignedTarget.put_url, {
+        method: "PUT",
+        body: arrayBuffer,
+        headers: presignedTarget.headers || {},
       });
 
+      if (!uploadResponse.ok) {
+        const message = await uploadResponse.text().catch(() => "");
+        throw new Error(
+          `上传失败: ${uploadResponse.status} ${uploadResponse.statusText}${message ? ` - ${message}` : ""
+          }`,
+        );
+      }
+
       setUploadProgress(100);
-      console.log("上传完成，公开访问URL:", presignedTarget.publicUrl);
-      setUploadedVideoUrl(presignedTarget.publicUrl);
+      console.log("上传完成，公开访问URL:", accessUrl);
+      setUploadedVideoUrl(accessUrl);
     } catch (error) {
       console.error("上传失败:", error);
     } finally {

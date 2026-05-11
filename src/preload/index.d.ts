@@ -35,6 +35,8 @@ export type VideoProcessingApi = {
     videoUrl: string;
     start: number;
     end: number;
+    authToken?: string;
+    backendBaseUrl?: string;
   }) => Promise<{
     success: boolean;
     data?: {
