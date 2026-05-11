@@ -3,7 +3,6 @@ import IceClient, {
   SubmitMediaProducingJobRequest,
 } from "@alicloud/ice20201109";
 import ffmpeg from "@ffmpeg-installer/ffmpeg";
-import OSS from "ali-oss";
 import { app } from "electron";
 import { spawn } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -71,14 +70,6 @@ const getAliyunConfig = (): AliyunRuntimeConfig | null => {
     imsEndpoint: imsEndpoint || undefined,
   };
 };
-
-const createOssClient = (config: AliyunRuntimeConfig) =>
-  new OSS({
-    region: config.ossRegion,
-    accessKeyId: config.accessKeyId,
-    accessKeySecret: config.accessKeySecret,
-    bucket: config.ossBucket,
-  });
 
 const createIceClient = (config: AliyunRuntimeConfig) => {
   if (!config.imsRegionId || !config.imsEndpoint) {
@@ -151,33 +142,19 @@ const uploadTrimmedVideo = async (options: {
   filePath: string;
   authToken?: string;
   backendBaseUrl?: string;
-  config: AliyunRuntimeConfig | null;
 }) => {
-  const { buffer, filePath, authToken, backendBaseUrl, config } = options;
+  const { buffer, filePath, authToken, backendBaseUrl } = options;
 
-  if (authToken) {
-    try {
-      return await uploadLocalVideoToBackend(
-        buffer,
-        basename(filePath),
-        authToken,
-        resolveBackendBaseUrl(backendBaseUrl),
-      );
-    } catch (error) {
-      if (!config) {
-        throw error;
-      }
-      console.warn("[video-processing] backend upload failed, fallback to OSS", {
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
+  if (!authToken) {
+    throw new Error("缺少登录凭证，无法通过后端上传裁剪后的视频");
   }
 
-  if (config) {
-    return uploadLocalVideoToOss(filePath, config);
-  }
-
-  throw new Error("缺少上传配置，无法上传裁剪后的视频");
+  return uploadLocalVideoToBackend(
+    buffer,
+    basename(filePath),
+    authToken,
+    resolveBackendBaseUrl(backendBaseUrl),
+  );
 };
 
 const assertValidRange = ({ videoUrl, start, end }: VideoTrimRequest) => {
@@ -328,19 +305,8 @@ const downloadToTempFile = async (url: string, filePath: string) => {
   await writeFile(filePath, buffer);
 };
 
-const uploadLocalVideoToOss = async (
-  filePath: string,
-  config: AliyunRuntimeConfig,
-) => {
-  const objectKey = createOutputObjectKey();
-  const client = createOssClient(config);
-  const result = await client.put(objectKey, filePath);
-  return result.url || createPublicOssUrl(config, objectKey);
-};
-
 const trimVideoByFfmpeg = async (
   request: VideoTrimRequest,
-  config: AliyunRuntimeConfig | null,
 ): Promise<VideoTrimResult> => {
   const tempDir = join(app.getPath("temp"), "jike-video-trim", `${Date.now()}`);
   const inputPath = join(tempDir, "source-video");
@@ -396,7 +362,6 @@ const trimVideoByFfmpeg = async (
       filePath: outputPath,
       authToken: request.authToken,
       backendBaseUrl: request.backendBaseUrl,
-      config,
     });
     return {
       url,
@@ -433,6 +398,6 @@ export const videoProcessingService = {
       }
     }
 
-    return await trimVideoByFfmpeg(normalizedRequest, config);
+    return await trimVideoByFfmpeg(normalizedRequest);
   },
 };
