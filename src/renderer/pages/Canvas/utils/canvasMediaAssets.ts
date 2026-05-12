@@ -60,6 +60,17 @@ const getNodeMediaType = (node: AllNodeType): AssetMediaType | null => {
 
 const getDisplayUrl = (item: MediaItem) => {
   const localPath = item.localPath || item.relativePath;
+  const remoteUrl =
+    item.thumbnailUrl ||
+    item.posterUrl ||
+    item.coverUrl ||
+    item.displayUrl ||
+    item.remoteUrl ||
+    item.url;
+
+  if (remoteUrl) {
+    return remoteUrl;
+  }
 
   if (localPath) {
     const basePath = localPath.startsWith("assets/")
@@ -68,16 +79,7 @@ const getDisplayUrl = (item: MediaItem) => {
     if (basePath) return getAssetFileUrl(basePath, localPath);
   }
 
-  return (
-    item.displayUrl ||
-    item.remoteUrl ||
-    item.url ||
-    item.thumbnailUrl ||
-    item.posterUrl ||
-    item.coverUrl ||
-    localPath ||
-    ""
-  );
+  return localPath || "";
 };
 
 const getDedupKey = (item: MediaItem) => {

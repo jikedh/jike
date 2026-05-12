@@ -19,15 +19,14 @@ import {
   type AssetRecord,
   type AssetScope,
   createAssetFolderId,
-  createAssetsFromBuffers,
   deleteAssetFolderById,
   deleteAssetsById,
-  readAssetIndex,
+  readCombinedAssetIndex,
   getAssetCategoryLabel,
   getAssetDisplayUrl,
+  getAssetOriginalDisplayUrl,
   renameAsset,
   renameAssetFolder,
-  upsertAssetFolder,
 } from "service/assetStorage";
 import {
   CANVAS_ASSET_DRAG_MIME,
@@ -208,7 +207,7 @@ const AssetPreviewPane = ({
     );
   }
 
-  const displayUrl = getAssetDisplayUrl(asset, basePath);
+  const displayUrl = getAssetOriginalDisplayUrl(asset, basePath);
   const updatedAt = new Date(asset.updatedAt || asset.createdAt);
 
   return (
@@ -328,6 +327,7 @@ export const AssetLibraryDialog = ({
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const assetUploadInputRef = useRef<HTMLInputElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const selectionAnchorIdRef = useRef<string | null>(null);
   const isPageVariant = variant === "page";
   const allowInsert = !isPageVariant && Boolean(onUse);
   const visibleScopes = useMemo(
@@ -374,7 +374,7 @@ export const AssetLibraryDialog = ({
     if (!basePath || !open) return;
     setLoading(true);
     try {
-      const index = await readAssetIndex(basePath);
+      const index = await readCombinedAssetIndex(basePath);
       setAssetFolders(index.folders);
       setProjectAssets(index.assets.filter((asset) => asset.scope === "project"));
     } catch (error) {
@@ -392,11 +392,13 @@ export const AssetLibraryDialog = ({
   useEffect(() => {
     if (!open) {
       setSelectedIds([]);
+      selectionAnchorIdRef.current = null;
     }
   }, [open]);
 
   useEffect(() => {
     setSelectedIds([]);
+    selectionAnchorIdRef.current = null;
     setPage(1);
     setPreviewAsset(null);
     if (activeScope !== "project") {
@@ -418,6 +420,7 @@ export const AssetLibraryDialog = ({
 
   useEffect(() => {
     setSelectedIds([]);
+    selectionAnchorIdRef.current = null;
     setPage(1);
     setPreviewAsset(null);
     if (activeProjectAssetId) {
@@ -486,9 +489,10 @@ export const AssetLibraryDialog = ({
       ? previewAsset
       : null;
 
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const selectedAssets = useMemo(
-    () => listedAssets.filter((asset) => selectedIds.includes(asset.id)),
-    [listedAssets, selectedIds],
+    () => listedAssets.filter((asset) => selectedIdSet.has(asset.id)),
+    [listedAssets, selectedIdSet],
   );
   const projectAssetCountMap = useMemo(() => {
     const countMap = new Map<string, number>();
@@ -504,17 +508,22 @@ export const AssetLibraryDialog = ({
   );
   const isCurrentPageAllSelected =
     pageAssets.length > 0 &&
-    pageAssets.every((asset) => selectedIds.includes(asset.id));
+    pageAssets.every((asset) => selectedIdSet.has(asset.id));
 
   const toggleCurrentPageSelected = useCallback(() => {
     const pageAssetIds = pageAssets.map((asset) => asset.id);
     if (pageAssetIds.length === 0) return;
 
     setSelectedIds((current) => {
-      if (pageAssetIds.every((id) => current.includes(id))) {
-        return current.filter((id) => !pageAssetIds.includes(id));
+      const currentSet = new Set(current);
+      if (pageAssetIds.every((id) => currentSet.has(id))) {
+        const pageAssetIdSet = new Set(pageAssetIds);
+        return current.filter((id) => !pageAssetIdSet.has(id));
       }
-      return Array.from(new Set([...current, ...pageAssetIds]));
+      for (const id of pageAssetIds) {
+        currentSet.add(id);
+      }
+      return Array.from(currentSet);
     });
   }, [pageAssets]);
 
@@ -584,7 +593,6 @@ export const AssetLibraryDialog = ({
 
       setLoading(true);
       try {
-        const inputs: Parameters<typeof createAssetsFromBuffers>[0] = [];
         for (const file of files) {
           const mediaType = getAssetMediaType(file);
           const category = getImportCategory(file);
@@ -594,23 +602,16 @@ export const AssetLibraryDialog = ({
             continue;
           }
 
-          inputs.push({
+          const targetPath = getFileRelativePath(file);
+          const saveResult = await window.storage.writeRawFile(
             basePath,
-            name: file.name.replace(/\.[^.]+$/, ""),
-            scope: "project",
-            category,
-            mediaType,
-            fileName: file.name,
-            buffer: await file.arrayBuffer(),
-            folderId,
-            folderName,
-            source: { type: "upload" },
-          });
-        }
-
-        if (inputs.length > 0) {
-          const assets = await createAssetsFromBuffers(inputs);
-          importedCount = assets.length;
+            targetPath,
+            await file.arrayBuffer(),
+          );
+          if (!saveResult.success) {
+            throw new Error(saveResult.error || "保存资产文件失败");
+          }
+          importedCount += 1;
         }
 
         if (importedCount === 0) {
@@ -666,7 +667,6 @@ export const AssetLibraryDialog = ({
 
       setLoading(true);
       try {
-        const inputs: Parameters<typeof createAssetsFromBuffers>[0] = [];
         for (const file of files) {
           const mediaType = getAssetMediaType(file);
           if (!mediaType || !isCategoryMediaAllowed(activeCategory, mediaType)) {
@@ -674,23 +674,23 @@ export const AssetLibraryDialog = ({
             continue;
           }
 
-          inputs.push({
+          const categoryFolder =
+            projectCategories.find((category) => category.id === activeCategory)
+              ?.label || getAssetCategoryLabel(activeCategory);
+          const targetPath = [
+            activeProjectOption.name,
+            categoryFolder,
+            file.name,
+          ].join("/");
+          const saveResult = await window.storage.writeRawFile(
             basePath,
-            name: file.name.replace(/\.[^.]+$/, ""),
-            scope: "project",
-            category: activeCategory,
-            mediaType,
-            fileName: file.name,
-            buffer: await file.arrayBuffer(),
-            folderId: activeProjectAssetId,
-            folderName: activeProjectOption.name,
-            source: { type: "upload" },
-          });
-        }
-
-        if (inputs.length > 0) {
-          const assets = await createAssetsFromBuffers(inputs);
-          importedCount = assets.length;
+            targetPath,
+            await file.arrayBuffer(),
+          );
+          if (!saveResult.success) {
+            throw new Error(saveResult.error || "保存资产文件失败");
+          }
+          importedCount += 1;
         }
 
         if (importedCount === 0) {
@@ -740,14 +740,20 @@ export const AssetLibraryDialog = ({
       if (assetNameDialogMode === "create-folder") {
         const now = new Date().toISOString();
         const folder: AssetFolder = {
-          id: createAssetFolderId(),
+          id: `disk_folder_${Date.now().toString(36)}_${Math.random()
+            .toString(36)
+            .slice(2, 8)}`,
           name,
           sourceName: name,
           createdAt: now,
           updatedAt: now,
         };
 
-        await upsertAssetFolder(basePath, folder);
+        await window.storage.writeRawFile(
+          basePath,
+          `${name}/.jike-keep`,
+          new TextEncoder().encode("").buffer,
+        );
         setAssetFolders((current) => [
           folder,
           ...current.filter((item) => item.id !== folder.id),
@@ -756,7 +762,21 @@ export const AssetLibraryDialog = ({
         toast.success("资产项目已创建");
         await reloadAssets();
       } else if (assetNameDialogMode === "rename-folder" && renamingFolder) {
-        const folder = await renameAssetFolder(basePath, renamingFolder.id, name);
+        let folder: AssetFolder;
+        if (renamingFolder.id.startsWith("disk_folder_")) {
+          const oldName = renamingFolder.name;
+          const result = await window.storage.renameRawPath?.(
+            basePath,
+            oldName,
+            name,
+          );
+          if (!result?.success) {
+            throw new Error(result?.error || "重命名资产项目失败");
+          }
+          folder = { ...renamingFolder, name, sourceName: name, updatedAt: new Date().toISOString() };
+        } else {
+          folder = await renameAssetFolder(basePath, renamingFolder.id, name);
+        }
         setAssetFolders((current) =>
           current.map((item) => (item.id === folder.id ? folder : item)),
         );
@@ -825,13 +845,50 @@ export const AssetLibraryDialog = ({
     renamingFolder,
   ]);
 
-  const toggleSelected = useCallback((assetId: string) => {
-    setSelectedIds((current) =>
-      current.includes(assetId)
-        ? current.filter((id) => id !== assetId)
-        : [...current, assetId],
-    );
+  const clearSelection = useCallback(() => {
+    setSelectedIds([]);
+    selectionAnchorIdRef.current = null;
+    setPreviewAsset(null);
   }, []);
+
+  const handleAssetClick = useCallback(
+    (event: React.MouseEvent, asset: AssetRecord) => {
+      const additive = event.ctrlKey || event.metaKey;
+      const rangeSelect = event.shiftKey;
+      const assetIds = filteredAssets.map((item) => item.id);
+
+      setSelectedIds((current) => {
+        if (rangeSelect) {
+          const fallbackAnchorId = current[0] || asset.id;
+          const anchorId = selectionAnchorIdRef.current || fallbackAnchorId;
+          const anchorIndex = assetIds.indexOf(anchorId);
+          const targetIndex = assetIds.indexOf(asset.id);
+
+          if (anchorIndex >= 0 && targetIndex >= 0) {
+            const start = Math.min(anchorIndex, targetIndex);
+            const end = Math.max(anchorIndex, targetIndex);
+            const rangeIds = assetIds.slice(start, end + 1);
+            return additive
+              ? Array.from(new Set([...current, ...rangeIds]))
+              : rangeIds;
+          }
+        }
+
+        selectionAnchorIdRef.current = asset.id;
+        if (additive) {
+          return current.includes(asset.id)
+            ? current.filter((id) => id !== asset.id)
+            : [...current, asset.id];
+        }
+        return [asset.id];
+      });
+
+      if (isPageVariant) {
+        setPreviewAsset(asset);
+      }
+    },
+    [filteredAssets, isPageVariant],
+  );
 
   const handleDeleteAssets = useCallback(
     (targetAssets: AssetRecord[]) => {
@@ -871,7 +928,14 @@ export const AssetLibraryDialog = ({
 
     try {
       if (deleteConfirm.folder) {
-        await deleteAssetFolderById(basePath, deleteConfirm.folder.id);
+        if (deleteConfirm.folder.id.startsWith("disk_folder_")) {
+          await window.storage.deleteRawPath?.(
+            basePath,
+            deleteConfirm.folder.name,
+          );
+        } else {
+          await deleteAssetFolderById(basePath, deleteConfirm.folder.id);
+        }
         if (activeProjectAssetId === deleteConfirm.folder.id) {
           setActiveProjectAssetId(null);
         }
@@ -886,10 +950,21 @@ export const AssetLibraryDialog = ({
           store.requestHistorySave();
           store.saveGraph();
         }
+      } else if (
+        deleteConfirm.assets.every((asset) => asset.source?.type === "disk")
+      ) {
+        for (const asset of deleteConfirm.assets) {
+          await window.storage.deleteRawPath?.(basePath, asset.originalFile);
+          if (asset.coverFile?.startsWith(".jike-assets-cache/")) {
+            await window.storage.deleteRawPath?.(basePath, asset.coverFile);
+          }
+        }
       } else {
         await deleteAssetsById(
           basePath,
-          deleteConfirm.assets.map((asset) => asset.id),
+          deleteConfirm.assets
+            .filter((asset) => asset.source?.type !== "disk")
+            .map((asset) => asset.id),
         );
       }
 
@@ -1127,6 +1202,11 @@ export const AssetLibraryDialog = ({
                     </div>
                   </div>
                 </button>
+                {loading && projectOptions.length === 0 ? (
+                  <div className="col-span-full flex h-40 items-center justify-center text-sm text-white/45">
+                    正在读取资产...
+                  </div>
+                ) : null}
                 {projectOptions.map((project) => {
                   const count = getProjectAssetCount(project.id);
                   return (
@@ -1160,7 +1240,16 @@ export const AssetLibraryDialog = ({
                 })}
               </div>
             ) : activeScope !== "public" ? (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(118px,1fr))] gap-5">
+              <div
+                role="list"
+                aria-label="assets"
+                className="grid min-h-full grid-cols-[repeat(auto-fill,minmax(118px,1fr))] content-start gap-5"
+                onClick={(event) => {
+                  if (event.currentTarget === event.target) {
+                    clearSelection();
+                  }
+                }}
+              >
                 {loading && !isCanvasScope ? (
                   <div className="col-span-full flex h-40 items-center justify-center text-sm text-white/45">
                     正在读取资产...
@@ -1173,7 +1262,7 @@ export const AssetLibraryDialog = ({
                   </div>
                 ) : (
                   pageAssets.map((asset) => {
-                    const selected = selectedIds.includes(asset.id);
+                    const selected = selectedIdSet.has(asset.id);
                     const displayUrl = getAssetDisplayUrl(asset, basePath);
 
                     return (
@@ -1207,12 +1296,7 @@ export const AssetLibraryDialog = ({
                         <button
                           type="button"
                           className="block w-full text-left"
-                          onClick={() => {
-                            toggleSelected(asset.id);
-                            if (isPageVariant) {
-                              setPreviewAsset(asset);
-                            }
-                          }}
+                          onClick={(event) => handleAssetClick(event, asset)}
                         >
                           <div className="flex aspect-[4/5] items-center justify-center bg-[#333]">
                             {asset.mediaType === "image" ? (
@@ -1255,9 +1339,11 @@ export const AssetLibraryDialog = ({
                           </div>
                         </button>
 
-                        <div className="absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded bg-black/70">
-                          {selected ? <IconCheck size={14} /> : null}
-                        </div>
+                        {selected ? (
+                          <div className="absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded bg-black/70">
+                            <IconCheck size={14} />
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })

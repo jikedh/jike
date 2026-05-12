@@ -4,6 +4,14 @@ import type { ChatSettingsStoreType } from "shared/types/zustand/chat-settings";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+const GLOBAL_SETTINGS_KEY = "canvasGlobalSettings";
+const LOCAL_SETTINGS_KEY = "canvas-chat-settings";
+
+type GlobalSettings = {
+  storagePath?: string;
+  assetStoragePath?: string;
+};
+
 const INITIAL_STATE: Pick<
   ChatSettingsStoreType,
   | "defaultModel"
@@ -79,6 +87,62 @@ const INITIAL_STATE: Pick<
   grokChannelModelsEnabled: false,
 };
 
+const getElectronIpc = () => {
+  if (typeof window === "undefined") return null;
+  return window.electron?.ipcRenderer || null;
+};
+
+const readLocalPersistedPaths = (): GlobalSettings => {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(LOCAL_SETTINGS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return {
+      storagePath: parsed.state?.storagePath || "",
+      assetStoragePath: parsed.state?.assetStoragePath || "",
+    };
+  } catch {
+    return {};
+  }
+};
+
+const readGlobalSettings = async (): Promise<GlobalSettings> => {
+  const ipcRenderer = getElectronIpc();
+  if (!ipcRenderer) return {};
+  try {
+    const value = await ipcRenderer.invoke("app:dbStore:get", {
+      key: GLOBAL_SETTINGS_KEY,
+    });
+    return value && typeof value === "object" ? value : {};
+  } catch (error) {
+    console.warn("[chatSettingsStore] read global settings failed", error);
+    return {};
+  }
+};
+
+const writeGlobalSettings = (settings: GlobalSettings) => {
+  const ipcRenderer = getElectronIpc();
+  if (!ipcRenderer) return;
+  try {
+    ipcRenderer.send("app:dbStore:set", {
+      key: GLOBAL_SETTINGS_KEY,
+      value: settings,
+    });
+  } catch (error) {
+    console.warn("[chatSettingsStore] write global settings failed", error);
+  }
+};
+
+const writeGlobalSettingsPatch = (patch: GlobalSettings) => {
+  const state = useChatSettingsStore.getState();
+  writeGlobalSettings({
+    storagePath: state.storagePath,
+    assetStoragePath: state.assetStoragePath,
+    ...patch,
+  });
+};
+
 export const useChatSettingsStore = create<ChatSettingsStoreType>()(
   persist(
     (set) => ({
@@ -146,8 +210,14 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
       setSnapGridSize: (size) => set({ snapGridSize: size }),
       setNodeSearchVisible: (visible) => set({ nodeSearchVisible: visible }),
       setDevToolsVisible: (visible) => set({ devToolsVisible: visible }),
-      setStoragePath: (path) => set({ storagePath: path }),
-      setAssetStoragePath: (path) => set({ assetStoragePath: path }),
+      setStoragePath: (path) => {
+        set({ storagePath: path });
+        writeGlobalSettingsPatch({ storagePath: path });
+      },
+      setAssetStoragePath: (path) => {
+        set({ assetStoragePath: path });
+        writeGlobalSettingsPatch({ assetStoragePath: path });
+      },
       setXimuCardCode: (cardCode) => set({ ximuCardCode: cardCode }),
       setAdobeChannelModelsEnabled: (enabled) =>
         set({ adobeChannelModelsEnabled: enabled }),
@@ -155,10 +225,52 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
         set({ ximuChannelModelsEnabled: enabled }),
       setGrokChannelModelsEnabled: (enabled) =>
         set({ grokChannelModelsEnabled: enabled }),
-      resetToDefault: () => set(INITIAL_STATE),
+      resetToDefault: () => {
+        set(INITIAL_STATE);
+        writeGlobalSettings({
+          storagePath: INITIAL_STATE.storagePath,
+          assetStoragePath: INITIAL_STATE.assetStoragePath,
+        });
+      },
     }),
     {
-      name: "canvas-chat-settings",
+      name: LOCAL_SETTINGS_KEY,
     },
   ),
 );
+
+void (async () => {
+  const globalSettings = await readGlobalSettings();
+  const localSettings = readLocalPersistedPaths();
+  const state = useChatSettingsStore.getState();
+
+  const nextSettings: GlobalSettings = {
+    storagePath:
+      globalSettings.storagePath || state.storagePath || localSettings.storagePath,
+    assetStoragePath:
+      globalSettings.assetStoragePath ||
+      state.assetStoragePath ||
+      localSettings.assetStoragePath,
+  };
+
+  const shouldUpdateState =
+    (nextSettings.storagePath &&
+      nextSettings.storagePath !== state.storagePath) ||
+    (nextSettings.assetStoragePath &&
+      nextSettings.assetStoragePath !== state.assetStoragePath);
+
+  if (shouldUpdateState) {
+    useChatSettingsStore.setState({
+      storagePath: nextSettings.storagePath || state.storagePath,
+      assetStoragePath:
+        nextSettings.assetStoragePath || state.assetStoragePath,
+    });
+  }
+
+  if (
+    nextSettings.storagePath !== globalSettings.storagePath ||
+    nextSettings.assetStoragePath !== globalSettings.assetStoragePath
+  ) {
+    writeGlobalSettings(nextSettings);
+  }
+})();

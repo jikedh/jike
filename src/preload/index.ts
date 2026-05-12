@@ -69,8 +69,17 @@ const storageApi: StorageApi = {
     ipcRenderer.invoke("storage:writeRawFile", basePath, relativePath, buffer),
   readRawFile: (basePath, relativePath) =>
     ipcRenderer.invoke("storage:readRawFile", basePath, relativePath),
+  scanAssetLibrary: (basePath) =>
+    ipcRenderer.invoke("storage:scanAssetLibrary", basePath),
   deleteRawPath: (basePath, relativePath) =>
     ipcRenderer.invoke("storage:deleteRawPath", basePath, relativePath),
+  renameRawPath: (basePath, oldRelativePath, newRelativePath) =>
+    ipcRenderer.invoke(
+      "storage:renameRawPath",
+      basePath,
+      oldRelativePath,
+      newRelativePath,
+    ),
   listMedia: (basePath, projectName, mediaType) =>
     ipcRenderer.invoke("storage:listMedia", basePath, projectName, mediaType),
   deleteMedia: (basePath, relativePath) =>
