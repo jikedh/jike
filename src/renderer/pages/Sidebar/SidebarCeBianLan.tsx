@@ -1,4 +1,5 @@
 import {
+  BookOpenText,
   Film,
   Folder,
   House,
@@ -96,6 +97,12 @@ export const SidebarCeBianLan = () => {
       icon: <SquareDashedMousePointer size={24} />,
       label: "项目",
       path: "/canvas",
+    },
+    {
+      id: "story",
+      icon: <BookOpenText size={24} />,
+      label: "故事创作",
+      path: "/story",
     },
     {
       id: "script",

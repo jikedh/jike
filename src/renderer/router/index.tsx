@@ -14,6 +14,7 @@ const TestPage = lazy(() => import("@/pages/Test"));
 const TestGoPage = lazy(() => import("@/pages/TestGo"));
 const PanoramaDemo = lazy(() => import("@/pages/Test/PanoramaDemo"));
 const CanvasPlaceholderPage = lazy(() => import("@/pages/CanvasPlaceholder"));
+const StoryPage = lazy(() => import("@/pages/Story"));
 const ScriptPage = lazy(() => import("@/pages/Script"));
 const AssetsPage = lazy(() => import("@/pages/Assets"));
 const VoicePage = lazy(() => import("@/pages/Voice"));
@@ -80,6 +81,22 @@ const router = createHashRouter([
       {
         path: "/canvas",
         element: <CanvasPlaceholderPage />,
+      },
+      {
+        path: "/story",
+        element: <StoryPage />,
+      },
+      {
+        path: "/story/:projectId",
+        element: <StoryPage />,
+      },
+      {
+        path: "/story/:projectId/snippets/:snippetId",
+        element: <StoryPage />,
+      },
+      {
+        path: "/story/:projectId/snippets/:snippetId/agent",
+        element: <StoryPage />,
       },
       {
         path: "/script",

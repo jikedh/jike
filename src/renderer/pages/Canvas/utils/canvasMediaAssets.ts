@@ -3,6 +3,7 @@ import { getAssetFileUrl, getAssetStoragePath } from "service/assetStorage";
 import type { AllNodeType } from "shared/types/flow";
 
 type MediaItem = {
+  assetName?: string;
   url?: string;
   remoteUrl?: string;
   displayUrl?: string;
@@ -36,6 +37,7 @@ const stripQueryAndHash = (value: string) => value.split("?")[0].split("#")[0];
 
 const getFileName = (item: MediaItem, fallback: string) => {
   const candidate =
+    item.assetName ||
     item.localName ||
     item.localFileName ||
     item.localPath ||
@@ -241,4 +243,54 @@ export const removeCanvasMediaAssetsFromNodes = (
   });
 
   return { nodes: nextNodes, removedCount };
+};
+
+export const renameCanvasMediaAssetInNodes = (
+  nodes: AllNodeType[],
+  asset: AssetRecord,
+  name: string,
+): { nodes: AllNodeType[]; renamedCount: number } => {
+  const nextName = name.trim();
+  const targetKey = getAssetDedupKey(asset);
+  if (!nextName || !targetKey) {
+    return { nodes, renamedCount: 0 };
+  }
+
+  let renamedCount = 0;
+
+  const nextNodes = nodes.map((node) => {
+    if (!getNodeMediaType(node)) return node;
+
+    const data = node.data as Record<string, any>;
+    const resultData = data.result?.data;
+    if (!Array.isArray(resultData)) return node;
+
+    let nodeRenamed = false;
+    const nextData = resultData.map((item) => {
+      const key = getDedupKey(item);
+      if (!key || key !== targetKey) return item;
+
+      renamedCount += 1;
+      nodeRenamed = true;
+      return {
+        ...item,
+        assetName: nextName,
+      };
+    });
+
+    if (!nodeRenamed) return node;
+
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        result: {
+          ...data.result,
+          data: nextData,
+        },
+      },
+    } as AllNodeType;
+  });
+
+  return { nodes: nextNodes, renamedCount };
 };

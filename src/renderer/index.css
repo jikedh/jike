@@ -550,6 +550,29 @@
   .model-selector-scroll::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.28);
   }
+
+  .asset-library-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #b43feb #050506;
+  }
+
+  .asset-library-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .asset-library-scrollbar::-webkit-scrollbar-track {
+    background: #050506;
+  }
+
+  .asset-library-scrollbar::-webkit-scrollbar-thumb {
+    background: #b43feb;
+    border: 2px solid #050506;
+    border-radius: 999px;
+  }
+
+  .asset-library-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #c65cff;
+  }
 }
 
 /* NoteNode 专用滚动条 */

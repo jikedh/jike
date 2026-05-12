@@ -347,6 +347,54 @@ export const upsertAssetFolder = async (
   });
 };
 
+export const renameAssetFolder = async (
+  basePath: string,
+  folderId: string,
+  name: string,
+): Promise<AssetFolder> => {
+  const nextName = name.trim();
+  if (!nextName) {
+    throw new Error("资产项目名称不能为空");
+  }
+
+  const index = await readAssetIndex(basePath);
+  const existingFolder = index.folders.find((folder) => folder.id === folderId);
+  if (!existingFolder) {
+    throw new Error("资产项目不存在");
+  }
+
+  const now = new Date().toISOString();
+  const renamedFolder: AssetFolder = {
+    ...existingFolder,
+    name: nextName,
+    updatedAt: now,
+  };
+  const nextAssets = index.assets.map((asset) =>
+    asset.scope === "project" && asset.folderId === folderId
+      ? {
+          ...asset,
+          folderName: nextName,
+          updatedAt: now,
+        }
+      : asset,
+  );
+
+  for (const asset of nextAssets) {
+    if (asset.scope !== "project" || asset.folderId !== folderId) continue;
+    await writeTextFile(basePath, asset.metadataFile, JSON.stringify(asset, null, 2));
+  }
+
+  await writeAssetIndex(basePath, {
+    version: 1,
+    folders: index.folders.map((folder) =>
+      folder.id === folderId ? renamedFolder : folder,
+    ),
+    assets: nextAssets,
+  });
+
+  return renamedFolder;
+};
+
 const isCategoryMediaCompatible = (
   category: AssetCategory,
   mediaType: AssetMediaType,
