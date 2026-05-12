@@ -8,6 +8,7 @@
   FolderOpen,
   ImagePlus,
   Loader2,
+  Music,
   Pencil,
   Play,
   Plus,
@@ -21,7 +22,11 @@
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { initializeAssetStorage } from "service/assetStorage";
+import {
+  getAssetOriginalDisplayUrl,
+  initializeAssetStorage,
+  type AssetRecord,
+} from "service/assetStorage";
 import { uploadFileToOSS } from "service/oss";
 import {
   createEmptyAgentData,
@@ -37,6 +42,7 @@ import {
 } from "service/storyboardStorage";
 import { GenerationStatus } from "shared/constants/enum";
 import type { Seedance20Request } from "shared/types/detail/kuaizhi/Seedance-2.0";
+import { cn } from "shared/utils/utils";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
 import { toast } from "sonner";
 import {
@@ -64,6 +70,8 @@ const assetKinds: Array<{ id: StoryboardAssetKind; label: string }> = [
   { id: "prop", label: "道具" },
   { id: "audio", label: "音效" },
 ];
+
+const assetDetailKinds = assetKinds.filter((kind) => kind.id !== "audio");
 
 const storyAgentSteps: Array<{ id: StoryboardAgentStep; label: string }> = [
   { id: "script", label: "输入剧本" },
@@ -117,7 +125,7 @@ const inputClass =
   "w-full rounded-lg border border-white/10 bg-black/45 px-3 py-2.5 text-sm text-white outline-none transition-all placeholder:text-white/25 focus:border-[#B43FEB] focus:ring-1 focus:ring-[#B43FEB]";
 
 const textAreaClass =
-  "w-full resize-none rounded-lg border border-white/10 bg-black/45 px-3 py-2.5 text-sm leading-6 text-white outline-none transition-all placeholder:text-white/25 focus:border-[#B43FEB] focus:ring-1 focus:ring-[#B43FEB]";
+  "story-scrollbar-scope w-full resize-none rounded-lg border border-white/10 bg-black/45 px-3 py-2.5 text-sm leading-6 text-white outline-none transition-all placeholder:text-white/25 focus:border-[#B43FEB] focus:ring-1 focus:ring-[#B43FEB]";
 
 const formatTime = (timestamp: number) =>
   new Date(timestamp).toLocaleString("zh-CN", {
@@ -149,6 +157,59 @@ const getMimeTypeByPath = (path: string, fallback = "application/octet-stream") 
   if (extension === "wav") return "audio/wav";
   return fallback;
 };
+
+const getStoryAssetMediaType = (
+  item: Pick<StoryboardAssetItem, "kind" | "mediaType" | "localPath" | "mediaUrl">,
+) => {
+  if (item.mediaType) return item.mediaType;
+  if (item.kind === "audio") return "audio";
+  const source = item.localPath || item.mediaUrl || "";
+  const extension = source.split("?")[0].split("#")[0].split(".").pop()?.toLowerCase();
+  if (["mp4", "webm", "mov"].includes(extension || "")) return "video";
+  if (["mp3", "wav", "m4a", "aac", "ogg"].includes(extension || "")) return "audio";
+  return "image";
+};
+
+const getMediaTypeFromFile = (
+  file: File,
+): NonNullable<StoryboardAssetItem["mediaType"]> => {
+  if (file.type.startsWith("audio/")) return "audio";
+  if (file.type.startsWith("video/")) return "video";
+  if (file.type.startsWith("image/")) return "image";
+  const extension = getFileExtension(file, "").toLowerCase();
+  if (["mp4", "webm", "mov"].includes(extension)) return "video";
+  if (["mp3", "wav", "m4a", "aac", "ogg"].includes(extension)) return "audio";
+  return "image";
+};
+
+const getAssetKindFromRecord = (asset: AssetRecord): StoryboardAssetKind => {
+  if (
+    asset.category === "role" ||
+    asset.category === "scene" ||
+    asset.category === "prop" ||
+    asset.category === "audio"
+  ) {
+    return asset.category;
+  }
+  return asset.mediaType === "audio" ? "audio" : "prop";
+};
+
+const createLibraryStoryboardAsset = (
+  asset: AssetRecord,
+  kind: StoryboardAssetKind,
+  assetStoragePath: string,
+): StoryboardAssetItem => ({
+  id: createId(`library_${kind}`),
+  kind,
+  name: asset.name,
+  prompt: "",
+  source: "library",
+  status: "ready",
+  mediaType: asset.mediaType,
+  mediaUrl: asset.ossUrl || getAssetOriginalDisplayUrl(asset, assetStoragePath),
+  localPath: undefined,
+  assetId: asset.id,
+});
 
 const clampVideoDuration = (value: number | undefined) => {
   if (!Number.isFinite(value)) return 5;
@@ -290,7 +351,7 @@ const StoragePathGuard = ({
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#09090b] text-white">
+    <div className="story-scrollbar-scope flex h-full flex-col bg-[#09090b] text-white">
       <StoryHeader
         title="故事创作"
         icon={<BookOpenText size={20} />}
@@ -586,7 +647,7 @@ const StoryProjectListPage = () => {
 
   return (
     <StoragePathGuard>
-      <div className="flex h-full flex-col overflow-hidden bg-[#09090b] text-white">
+      <div className="story-scrollbar-scope flex h-full flex-col overflow-hidden bg-[#09090b] text-white">
         <StoryHeader
           title="故事创作"
           icon={<BookOpenText size={20} />}
@@ -885,7 +946,7 @@ const StorySnippetListPage = ({ projectId }: { projectId: string }) => {
 
   return (
     <StoragePathGuard>
-      <div className="flex h-full flex-col overflow-hidden bg-[#09090b] text-white">
+      <div className="story-scrollbar-scope flex h-full flex-col overflow-hidden bg-[#09090b] text-white">
         <StoryHeader
           title={project?.name || "片段管理"}
           icon={<Clapperboard size={20} />}
@@ -930,7 +991,7 @@ const StorySnippetListPage = ({ projectId }: { projectId: string }) => {
                   key={snippet.id}
                   type="button"
                   onClick={() =>
-                    navigate(`/story/${projectId}/snippets/${snippet.id}`)
+                    navigate(`/story/${projectId}/snippets/${snippet.id}/agent`)
                   }
                   className="group rounded-xl border border-white/5 bg-[#121214] p-5 text-left transition-all hover:border-[#B43FEB]/45 hover:bg-[#B43FEB]/5"
                 >
@@ -957,7 +1018,7 @@ const StorySnippetListPage = ({ projectId }: { projectId: string }) => {
           projectId={projectId}
           onClose={() => setDialogOpen(false)}
           onCreated={(snippet) =>
-            navigate(`/story/${projectId}/snippets/${snippet.id}`)
+            navigate(`/story/${projectId}/snippets/${snippet.id}/agent`)
           }
         />
       </div>
@@ -1063,7 +1124,7 @@ const StoryWorkspacePage = ({
 
   return (
     <StoragePathGuard>
-      <div className="flex h-full flex-col overflow-hidden bg-[#09090b] text-white">
+      <div className="story-scrollbar-scope flex h-full flex-col overflow-hidden bg-[#09090b] text-white">
         <StoryHeader
           title={snippet?.name || "片段创作"}
           icon={<Clapperboard size={20} />}
@@ -1137,12 +1198,14 @@ const AssetColumnItem = ({
   index,
   onChange,
   onUpload,
+  onUseLibrary,
   onGenerate,
 }: {
   item: StoryboardAssetItem;
   index: number;
   onChange: (patch: Partial<StoryboardAssetItem>) => void;
   onUpload: (file: File) => void;
+  onUseLibrary: () => void;
   onGenerate: () => void;
 }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -1162,6 +1225,7 @@ const AssetColumnItem = ({
         </span>
       </div>
       <div className="space-y-3">
+        <StoryAssetPreview item={item} />
         <input
           className={inputClass}
           value={item.name}
@@ -1189,6 +1253,10 @@ const AssetColumnItem = ({
             <Upload size={13} />
             本地上传
           </Button>
+          <Button size="sm" onClick={onUseLibrary}>
+            <FolderOpen size={13} />
+            资产库上传
+          </Button>
           <Button
             size="sm"
             variant="blue"
@@ -1203,10 +1271,82 @@ const AssetColumnItem = ({
             AI 生成
           </Button>
         </div>
-        <div className="mt-2 text-xs text-white/35">
-          {item.localPath || item.mediaUrl || "未绑定素材"}
-        </div>
       </div>
+    </div>
+  );
+};
+
+const StoryAssetPreview = ({
+  item,
+  compact = false,
+}: {
+  item: StoryboardAssetItem;
+  compact?: boolean;
+}) => {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const mediaType = getStoryAssetMediaType(item);
+  const previewUrl = objectUrl || item.mediaUrl || "";
+
+  useEffect(() => {
+    let active = true;
+    let nextUrl: string | null = null;
+
+    if (!item.localPath) {
+      setObjectUrl(null);
+      return;
+    }
+
+    storyboardStorage.readObjectUrl(item.localPath).then((url) => {
+      if (!active) {
+        if (url) URL.revokeObjectURL(url);
+        return;
+      }
+      nextUrl = url;
+      setObjectUrl(url);
+    });
+
+    return () => {
+      active = false;
+      if (nextUrl) URL.revokeObjectURL(nextUrl);
+    };
+  }, [item.localPath]);
+
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-center overflow-hidden rounded-lg border border-white/8 bg-black/35",
+        compact ? "h-12 w-14" : "aspect-video w-full",
+      )}
+    >
+      {previewUrl && mediaType === "image" ? (
+        <img
+          src={previewUrl}
+          alt={item.name || "资产预览"}
+          className="h-full w-full object-cover"
+          loading="lazy"
+          decoding="async"
+        />
+      ) : previewUrl && mediaType === "video" ? (
+        compact ? (
+          <div className="flex h-full w-full items-center justify-center text-white/55">
+            <Video size={18} />
+          </div>
+        ) : (
+          <video src={previewUrl} className="h-full w-full object-cover" controls />
+        )
+      ) : mediaType === "audio" ? (
+        <div className="flex w-full flex-col items-center gap-3 px-3 text-white/55">
+          <Music size={compact ? 18 : 24} />
+          {previewUrl && !compact ? (
+            <audio src={previewUrl} className="w-full" controls />
+          ) : null}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-2 text-xs text-white/35">
+          <FileImage size={24} />
+          未绑定预览
+        </div>
+      )}
     </div>
   );
 };
@@ -1225,6 +1365,11 @@ const StoryAgentPage = ({
   );
   const [activeStep, setActiveStep] = useState<StoryboardAgentStep>("script");
   const [editingShot, setEditingShot] = useState<StoryboardShot | null>(null);
+  const [selectingAssetShotId, setSelectingAssetShotId] = useState<string | null>(
+    null,
+  );
+  const [selectingAssetDetailTarget, setSelectingAssetDetailTarget] =
+    useState<{ kind: StoryboardAssetKind; id: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [splitting, setSplitting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1257,6 +1402,16 @@ const StoryAgentPage = ({
       settings.defaultVideoResolution,
     ],
   );
+
+  const agentAssetMap = useMemo(() => {
+    const map = new Map<string, StoryboardAssetItem>();
+    for (const list of Object.values(agent.assets)) {
+      for (const item of list) {
+        map.set(item.id, item);
+      }
+    }
+    return map;
+  }, [agent.assets]);
 
   const saveAgent = useCallback(
     async (next: StoryboardAgentData) => {
@@ -1380,6 +1535,7 @@ const StoryAgentPage = ({
         name: agent.assets[kind].find((item) => item.id === id)?.name || file.name,
         source: "upload",
         status: "ready",
+        mediaType: getMediaTypeFromFile(file),
         localPath,
       });
       toast.success("资产已上传");
@@ -1475,6 +1631,7 @@ const StoryAgentPage = ({
       await saveAssetPatch(kind, id, {
         source: "ai",
         status: "ready",
+        mediaType: "image",
         mediaUrl: imageUrl,
       });
       toast.success("AI 资产生成结果已回填");
@@ -1486,6 +1643,10 @@ const StoryAgentPage = ({
   };
 
   const splitScript = async () => {
+    if (!agent.scriptTitle.trim()) {
+      toast.error("请先填写剧本标题");
+      return;
+    }
     if (!agent.scriptContent.trim()) {
       toast.error("请先输入剧本内容");
       return;
@@ -1717,6 +1878,138 @@ const StoryAgentPage = ({
     toast.success("视频编辑信息已保存");
   };
 
+  const openAssetLibraryForShot = (shotId: string) => {
+    if (!settings.assetStoragePath) {
+      toast.error("请先在资源管理中设置资产库路径");
+      return;
+    }
+    setSelectingAssetDetailTarget(null);
+    setSelectingAssetShotId(shotId);
+  };
+
+  const openAssetLibraryForAssetDetail = (
+    kind: StoryboardAssetKind,
+    id: string,
+  ) => {
+    if (!settings.assetStoragePath) {
+      toast.error("请先在资源管理中设置资产库路径");
+      return;
+    }
+    setSelectingAssetShotId(null);
+    setSelectingAssetDetailTarget({ kind, id });
+  };
+
+  const handleUseAssetDetailLibraryAssets = async (assets: AssetRecord[]) => {
+    if (!selectingAssetDetailTarget || assets.length === 0) return;
+
+    const usableAssets = assets.filter((asset) => asset.mediaType !== "audio");
+    if (usableAssets.length === 0) {
+      toast.error("资产详情仅支持图片或视频资产");
+      return;
+    }
+
+    const currentAgent = agentRef.current;
+    const { kind, id } = selectingAssetDetailTarget;
+    const currentList = currentAgent.assets[kind] || [];
+    const targetIndex = currentList.findIndex((item) => item.id === id);
+
+    if (targetIndex < 0) {
+      setSelectingAssetDetailTarget(null);
+      toast.error("当前资产项不存在");
+      return;
+    }
+
+    const nextList = [...currentList];
+    const firstAsset = usableAssets[0];
+    const firstItem = createLibraryStoryboardAsset(
+      firstAsset,
+      kind,
+      settings.assetStoragePath,
+    );
+    nextList[targetIndex] = {
+      ...nextList[targetIndex],
+      ...firstItem,
+      id,
+      kind,
+    };
+
+    const existingAssetIds = new Set(
+      nextList
+        .map((item) => item.assetId)
+        .filter((assetId): assetId is string => Boolean(assetId)),
+    );
+
+    for (const asset of usableAssets.slice(1)) {
+      if (existingAssetIds.has(asset.id)) continue;
+      const item = createLibraryStoryboardAsset(
+        asset,
+        kind,
+        settings.assetStoragePath,
+      );
+      nextList.push(item);
+      existingAssetIds.add(asset.id);
+    }
+
+    await saveAgent({
+      ...currentAgent,
+      assets: {
+        ...currentAgent.assets,
+        [kind]: nextList,
+      },
+    });
+    setSelectingAssetDetailTarget(null);
+    toast.success(`已导入 ${usableAssets.length} 个资产`);
+  };
+
+  const handleUseLibraryAssets = async (assets: AssetRecord[]) => {
+    if (!selectingAssetShotId || assets.length === 0) return;
+
+    const currentAgent = agentRef.current;
+    const nextAssets: Record<StoryboardAssetKind, StoryboardAssetItem[]> = {
+      role: [...currentAgent.assets.role],
+      scene: [...currentAgent.assets.scene],
+      prop: [...currentAgent.assets.prop],
+      audio: [...currentAgent.assets.audio],
+    };
+    const selectedIds: string[] = [];
+
+    for (const asset of assets) {
+      const kind = getAssetKindFromRecord(asset);
+      const existing = Object.values(nextAssets)
+        .flat()
+        .find((item) => item.assetId === asset.id);
+      if (existing) {
+        selectedIds.push(existing.id);
+        continue;
+      }
+
+      const item = createLibraryStoryboardAsset(
+        asset,
+        kind,
+        settings.assetStoragePath,
+      );
+      nextAssets[kind].push(item);
+      selectedIds.push(item.id);
+    }
+
+    const nextAgent = {
+      ...currentAgent,
+      assets: nextAssets,
+      shots: currentAgent.shots.map((shot) =>
+        shot.id === selectingAssetShotId
+          ? {
+              ...shot,
+              assetIds: Array.from(new Set([...shot.assetIds, ...selectedIds])),
+            }
+          : shot,
+      ),
+    };
+
+    await saveAgent(nextAgent);
+    setSelectingAssetShotId(null);
+    toast.success(`已选择 ${assets.length} 个资产`);
+  };
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-[#09090b] text-white/45">
@@ -1728,11 +2021,11 @@ const StoryAgentPage = ({
 
   return (
     <StoragePathGuard>
-      <div className="flex h-full flex-col overflow-hidden bg-[#09090b] text-white">
+      <div className="story-scrollbar-scope flex h-full flex-col overflow-hidden bg-[#09090b] text-white">
         <StoryHeader
           title="剧本 Agent"
           icon={<Bot size={20} />}
-          backTo={`/story/${projectId}/snippets/${snippetId}`}
+          backTo={`/story/${projectId}`}
           action={
             <div className="flex items-center gap-3">
               {saving && (
@@ -1794,7 +2087,7 @@ const StoryAgentPage = ({
             <div className="grid grid-cols-2 gap-4">
               <label>
                 <span className="mb-2 block text-sm text-white/65">
-                  剧本标题
+                  剧本标题 <span className="text-red-400">*</span>
                 </span>
                 <input
                   className={inputClass}
@@ -1891,15 +2184,15 @@ const StoryAgentPage = ({
                     资产详情
                   </h2>
                   <p className="mt-1 text-xs text-white/40">
-                    角色、场景、道具、音效按列管理，每列是独立资产列表。
+                    角色、场景、道具按列管理，每列是独立资产列表。
                   </p>
                 </div>
                 <Button variant="blue" onClick={proceedToShots}>
                   下一步
                 </Button>
               </div>
-              <div className="grid gap-4 xl:grid-cols-4">
-                {assetKinds.map((kind) => (
+              <div className="grid gap-4 lg:grid-cols-3">
+                {assetDetailKinds.map((kind) => (
                   <div
                     key={kind.id}
                     className="flex min-h-[520px] flex-col rounded-lg border border-white/8 bg-black/20"
@@ -1929,6 +2222,9 @@ const StoryAgentPage = ({
                             }
                             onUpload={(file) =>
                               void uploadAsset(kind.id, item.id, file)
+                            }
+                            onUseLibrary={() =>
+                              openAssetLibraryForAssetDetail(kind.id, item.id)
                             }
                             onGenerate={() =>
                               void generateAssetWithAi(kind.id, item.id)
@@ -1988,7 +2284,11 @@ const StoryAgentPage = ({
                       <ShotRow
                         key={shot.id}
                         shot={shot}
+                        selectedAssets={shot.assetIds
+                          .map((id) => agentAssetMap.get(id))
+                          .filter(Boolean) as StoryboardAssetItem[]}
                         onChange={(patch) => updateShot(shot.id, patch)}
+                        onSelectAssets={() => openAssetLibraryForShot(shot.id)}
                         onUploadImage={(file) =>
                           void uploadShotImage(shot.id, file)
                         }
@@ -2016,6 +2316,32 @@ const StoryAgentPage = ({
               shot={editingShot}
               onClose={() => setEditingShot(null)}
               onSave={(videoEdit) => void saveVideoEdit(editingShot.id, videoEdit)}
+            />
+          ) : null}
+
+          {selectingAssetDetailTarget && settings.assetStoragePath ? (
+            <AssetLibraryDialog
+              open
+              basePath={settings.assetStoragePath}
+              projectId={null}
+              nodes={[]}
+              onClose={() => setSelectingAssetDetailTarget(null)}
+              onUse={(asset) => void handleUseAssetDetailLibraryAssets([asset])}
+              onUseMany={(assets) =>
+                void handleUseAssetDetailLibraryAssets(assets)
+              }
+            />
+          ) : null}
+
+          {selectingAssetShotId && settings.assetStoragePath ? (
+            <AssetLibraryDialog
+              open
+              basePath={settings.assetStoragePath}
+              projectId={null}
+              nodes={[]}
+              onClose={() => setSelectingAssetShotId(null)}
+              onUse={(asset) => void handleUseLibraryAssets([asset])}
+              onUseMany={(assets) => void handleUseLibraryAssets(assets)}
             />
           ) : null}
         </main>
@@ -2224,12 +2550,16 @@ const VideoEditDrawer = ({
 
 const ShotRow = ({
   shot,
+  selectedAssets,
   onChange,
+  onSelectAssets,
   onUploadImage,
   onGenerateVideo,
 }: {
   shot: StoryboardShot;
+  selectedAssets: StoryboardAssetItem[];
   onChange: (patch: Partial<StoryboardShot>) => void;
+  onSelectAssets: () => void;
   onUploadImage: (file: File) => void;
   onGenerateVideo: () => void;
 }) => {
@@ -2248,10 +2578,35 @@ const ShotRow = ({
         />
       </td>
       <td className="px-3 py-3">
-        <div className="rounded-lg border border-white/8 bg-black/25 p-3 text-xs text-white/45">
-          已引用 {shot.assetIds.length} 个资产
+        <div className="space-y-2 rounded-lg border border-white/8 bg-black/25 p-3">
+          {selectedAssets.length === 0 ? (
+            <div className="text-xs text-white/40">未选择资产</div>
+          ) : (
+            selectedAssets.map((asset) => (
+              <div
+                key={asset.id}
+                className="grid grid-cols-[56px_1fr] gap-2 rounded-md border border-white/8 bg-white/[0.03] p-2"
+              >
+                <StoryAssetPreview item={asset} compact />
+                <div className="min-w-0">
+                  <div className="truncate text-xs text-white/75">
+                    {asset.name || "未命名资产"}
+                  </div>
+                  <div className="mt-1 text-[10px] text-white/35">
+                    {asset.kind === "role"
+                      ? "角色"
+                      : asset.kind === "scene"
+                        ? "场景"
+                        : asset.kind === "prop"
+                          ? "道具"
+                          : "音效"}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
-        <Button className="mt-2" size="sm">
+        <Button className="mt-2" size="sm" onClick={onSelectAssets}>
           <Plus size={13} />
           选择资产
         </Button>

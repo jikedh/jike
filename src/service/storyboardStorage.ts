@@ -39,6 +39,7 @@ export type StoryboardAssetItem = {
   prompt: string;
   source: "upload" | "ai" | "library";
   status: "idle" | "generating" | "ready" | "failed";
+  mediaType?: "image" | "video" | "audio";
   mediaUrl?: string;
   localPath?: string;
   assetId?: string;

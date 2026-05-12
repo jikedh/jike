@@ -573,6 +573,40 @@
   .asset-library-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #c65cff;
   }
+
+  .story-scrollbar-scope,
+  .story-scrollbar-scope * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.86) #050506;
+  }
+
+  .story-scrollbar-scope::-webkit-scrollbar,
+  .story-scrollbar-scope *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .story-scrollbar-scope::-webkit-scrollbar-track,
+  .story-scrollbar-scope *::-webkit-scrollbar-track {
+    background: #050506;
+  }
+
+  .story-scrollbar-scope::-webkit-scrollbar-thumb,
+  .story-scrollbar-scope *::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.86);
+    border: 2px solid #050506;
+    border-radius: 999px;
+  }
+
+  .story-scrollbar-scope::-webkit-scrollbar-thumb:hover,
+  .story-scrollbar-scope *::-webkit-scrollbar-thumb:hover {
+    background: #ffffff;
+  }
+
+  .story-scrollbar-scope::-webkit-scrollbar-corner,
+  .story-scrollbar-scope *::-webkit-scrollbar-corner {
+    background: #050506;
+  }
 }
 
 /* NoteNode 专用滚动条 */
