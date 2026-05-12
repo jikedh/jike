@@ -41,7 +41,8 @@ export default function VideoPage() {
       const putUrlResponse = await getUploadOssPutUrl({
         blob_type: "video",
         ext: "mp4",
-        content_type: "application/octet-stream",
+        content_type: "video/mp4",
+        ttl: 43200,
       });
       const presignedTarget = putUrlResponse?.data ?? putUrlResponse;
       const accessUrl =
@@ -68,6 +69,7 @@ export default function VideoPage() {
           y2: 1080,
         },
         upload_url: presignedTarget.put_url,
+        upload_headers: presignedTarget.headers,
       });
       console.log("视频消除响应:", response);
 

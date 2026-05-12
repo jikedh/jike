@@ -1393,7 +1393,8 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         const putUrlResponse = await getUploadOssPutUrl({
           blob_type: "video",
           ext: "mp4",
-          content_type: "application/octet-stream",
+          content_type: "video/mp4",
+          ttl: 43200,
         });
         const target = putUrlResponse?.data ?? putUrlResponse;
         const accessUrl =
@@ -1441,6 +1442,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           method: "sel_area",
           rect,
           upload_url: target.put_url,
+          upload_headers: target.headers,
           model: "video_removal_std",
         });
 
