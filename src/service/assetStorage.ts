@@ -913,38 +913,6 @@ const prepareAssetFromBuffer = async (
     metadataFile,
   };
 };
-const uploadPreparedAssetToOss = async (prepared: PreparedAsset) => {
-  try {
-    const putUrlResp = await getUploadOssPutUrl({
-      blob_type: toOssBlobType(prepared.asset.mediaType),
-      ext: prepared.originalExtension,
-      content_type: getAssetContentType(
-        prepared.asset.mediaType,
-        prepared.originalExtension,
-      ),
-      ttl: 3600,
-    });
-    const putUrlData = putUrlResp?.data ?? putUrlResp;
-    if (!putUrlData?.put_url) {
-      return;
-    }
-
-    const uploadResp = await fetch(putUrlData.put_url, {
-      method: "PUT",
-      body: prepared.originalBuffer,
-      headers: putUrlData.headers || {},
-    });
-    if (uploadResp.ok && putUrlData.access_url) {
-      prepared.asset.ossUrl = putUrlData.access_url as string;
-      return;
-    }
-
-    console.warn("[assetStorage] OSS PUT 失败:", uploadResp.status);
-  } catch (ossError) {
-    console.warn("[assetStorage] 上传 OSS 失败，仅保存本地:", ossError);
-  }
-};
-
 
 const savePreparedAssetFiles = async (
   basePath: string,
@@ -973,7 +941,6 @@ const savePreparedAssetFiles = async (
   } catch (ossError) {
     console.warn("[assetStorage] 上传 OSS 失败，仅保存本地:", ossError);
   }
-  await uploadPreparedAssetToOss(prepared);
   if (prepared.coverFile && prepared.coverBuffer) {
     const coverResult = await window.storage.saveMedia(
       basePath,
