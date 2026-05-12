@@ -26,6 +26,12 @@ export type StoryboardSnippet = {
 
 export type StoryboardAssetKind = "role" | "scene" | "prop" | "audio";
 
+export type StoryboardAgentStep =
+  | "script"
+  | "assets"
+  | "shots"
+  | "video-edit";
+
 export type StoryboardAssetItem = {
   id: string;
   kind: StoryboardAssetKind;
@@ -59,6 +65,10 @@ export type StoryboardShot = {
     url?: string;
     localPath?: string;
   };
+  videoEdit?: {
+    confirmedMaterial?: string;
+    prompt?: string;
+  };
   videoStatus: "idle" | "generating" | "ready" | "failed";
 };
 
@@ -69,6 +79,7 @@ export type StoryboardAgentData = {
   maxShots: number;
   splitAssist: string;
   scriptContent: string;
+  unlockedStep: StoryboardAgentStep;
   assets: Record<StoryboardAssetKind, StoryboardAssetItem[]>;
   shots: StoryboardShot[];
   updatedAt: number;
@@ -93,6 +104,7 @@ export const createEmptyAgentData = (): StoryboardAgentData => ({
   maxShots: 20,
   splitAssist: "",
   scriptContent: "",
+  unlockedStep: "script",
   assets: emptyAssets(),
   shots: [],
   updatedAt: Date.now(),
