@@ -3,6 +3,7 @@ import {
   ASSET_SUPPORTED_TYPES_LABEL,
   getAssetMediaTypeByFileName,
 } from "shared/constants/mediaTypes";
+import type { AssetDiskFileInfo, AssetDiskProjectInfo } from "shared/types/storage";
 
 export type AssetScope = "project" | "canvas" | "public";
 export type AssetMediaType = "image" | "video" | "audio";
@@ -32,7 +33,7 @@ export type AssetRecord = {
   folderId?: string;
   folderName?: string;
   source?: {
-    type: "canvas" | "upload";
+    type: "canvas" | "upload" | "disk";
     projectId?: string;
     nodeId?: string;
   };
@@ -82,6 +83,8 @@ export type AssetMediaRef = {
 };
 
 const ASSET_INDEX_PATH = "assets/index.json";
+const ASSET_CACHE_DIR = ".jike-assets-cache";
+const ASSET_THUMBNAIL_DIR = `${ASSET_CACHE_DIR}/thumbnails`;
 export const DEFAULT_ASSET_FOLDER_ID = "unassigned";
 export const DEFAULT_ASSET_FOLDER_NAME = "未归档资产";
 
@@ -92,6 +95,34 @@ const categoryLabels: Record<AssetCategory, string> = {
   image: "图片",
   video: "视频",
   audio: "音频",
+};
+
+const diskCategoryAliases: Record<string, AssetCategory> = {
+  role: "role",
+  roles: "role",
+  character: "role",
+  characters: "role",
+  person: "role",
+  people: "role",
+  "人物": "role",
+  "角色": "role",
+  scene: "scene",
+  scenes: "scene",
+  "场景": "scene",
+  prop: "prop",
+  props: "prop",
+  object: "prop",
+  objects: "prop",
+  "道具": "prop",
+  audio: "audio",
+  audios: "audio",
+  sound: "audio",
+  sounds: "audio",
+  voice: "audio",
+  voices: "audio",
+  "音频": "audio",
+  "音效": "audio",
+  "音色": "audio",
 };
 
 const mediaTypeExtensions: Record<AssetMediaType, string> = {
@@ -125,6 +156,29 @@ const normalizeRelativePath = (value: string) =>
   value.replace(/\\/g, "/").replace(/^\/+/, "");
 
 const hasFileExtension = (fileName: string) => /\.[a-z0-9]+$/i.test(fileName);
+
+const createStableId = (value: string) => {
+  let hash = 5381;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 33) ^ value.charCodeAt(index);
+  }
+  return (hash >>> 0).toString(36);
+};
+
+const getFileNameWithoutExtension = (fileName: string) =>
+  fileName.replace(/\.[^.]+$/, "");
+
+const getDiskCategory = (categoryName: string, mediaType: AssetMediaType) => {
+  const normalized = categoryName.trim().toLowerCase();
+  return (
+    diskCategoryAliases[categoryName.trim()] ||
+    diskCategoryAliases[normalized] ||
+    (mediaType === "audio" ? "audio" : "prop")
+  );
+};
+
+const getCacheThumbnailPath = (assetId: string) =>
+  `${ASSET_THUMBNAIL_DIR}/${assetId}.${ASSET_THUMBNAIL_EXTENSION}`;
 
 const isAssetMediaType = (value: unknown): value is AssetMediaType =>
   value === "image" || value === "video" || value === "audio";
@@ -214,6 +268,11 @@ export const getAssetFileUrl = (
 
 export const getAssetDisplayUrl = (asset: AssetRecord, basePath: string) =>
   getAssetFileUrl(basePath, asset.coverUrl || asset.fileUrl);
+
+export const getAssetOriginalDisplayUrl = (
+  asset: AssetRecord,
+  basePath: string,
+) => getAssetFileUrl(basePath, asset.fileUrl || asset.originalFile);
 
 const inferExtension = (
   fileName: string | undefined,
@@ -333,6 +392,47 @@ const createImageThumbnail = async (
   }
 };
 
+const ensureDiskThumbnail = async (
+  basePath: string,
+  assetId: string,
+  relativePath: string,
+  mediaType: AssetMediaType,
+) => {
+  if (mediaType !== "image") return undefined;
+
+  const thumbnailPath = getCacheThumbnailPath(assetId);
+  if (await window.storage.mediaExists(basePath, thumbnailPath)) {
+    return thumbnailPath;
+  }
+
+  const sourceResult = await window.storage.readRawFile(basePath, relativePath);
+  if (!sourceResult.success || !sourceResult.data) return undefined;
+
+  const thumbnailBuffer = await createImageThumbnail(
+    toArrayBuffer(new Uint8Array(sourceResult.data)),
+  );
+  if (!thumbnailBuffer) return undefined;
+
+  const saveResult = await window.storage.writeRawFile(
+    basePath,
+    thumbnailPath,
+    thumbnailBuffer,
+  );
+  return saveResult.success ? thumbnailPath : undefined;
+};
+
+const getExistingDiskThumbnail = async (
+  basePath: string,
+  assetId: string,
+  mediaType: AssetMediaType,
+) => {
+  if (mediaType !== "image") return undefined;
+  const thumbnailPath = getCacheThumbnailPath(assetId);
+  return (await window.storage.mediaExists(basePath, thumbnailPath))
+    ? thumbnailPath
+    : undefined;
+};
+
 const readTextFile = async (basePath: string, relativePath: string) => {
   const result = await window.storage.readMedia(basePath, relativePath);
   if (!result.success || !result.data) return null;
@@ -395,6 +495,115 @@ export const readAssetIndex = async (basePath: string): Promise<AssetIndex> => {
   } catch {
     return { version: 1, folders: [], assets: [] };
   }
+};
+
+export const readDiskAssetIndex = async (
+  basePath: string,
+): Promise<AssetIndex> => {
+  if (!window.storage?.scanAssetLibrary || !basePath) {
+    return { version: 1, folders: [], assets: [] };
+  }
+
+  const result = await window.storage.scanAssetLibrary(basePath);
+  if (!result.success || !result.files) {
+    return { version: 1, folders: [], assets: [] };
+  }
+
+  const folders = new Map<string, AssetFolder>();
+  const assets: AssetRecord[] = [];
+
+  for (const project of (result.projects || []) as AssetDiskProjectInfo[]) {
+    const folderId = `disk_folder_${createStableId(project.name)}`;
+    folders.set(folderId, {
+      id: folderId,
+      name: project.name,
+      sourceName: project.name,
+      createdAt: new Date(project.createdAt || Date.now()).toISOString(),
+      updatedAt: new Date(project.modifiedAt || Date.now()).toISOString(),
+    });
+  }
+
+  for (const file of result.files as AssetDiskFileInfo[]) {
+    const mediaType = getAssetMediaTypeByFileName(file.name);
+    if (!mediaType) continue;
+
+    const category = getDiskCategory(file.categoryName, mediaType);
+    const assetId = `disk_${createStableId(file.relativePath)}`;
+    const folderId = `disk_folder_${createStableId(file.projectName)}`;
+    const updatedAt = new Date(file.modifiedAt || Date.now()).toISOString();
+    const coverFile = await getExistingDiskThumbnail(
+      basePath,
+      assetId,
+      mediaType,
+    );
+    if (!coverFile && mediaType === "image") {
+      void ensureDiskThumbnail(basePath, assetId, file.relativePath, mediaType);
+    }
+
+    folders.set(folderId, {
+      id: folderId,
+      name: file.projectName,
+      sourceName: file.projectName,
+      createdAt: updatedAt,
+      updatedAt,
+    });
+
+    assets.push({
+      id: assetId,
+      name: getFileNameWithoutExtension(file.name),
+      scope: "project",
+      category,
+      mediaType,
+      fileUrl: file.relativePath,
+      coverUrl: coverFile || (mediaType === "image" ? file.relativePath : undefined),
+      originalFile: file.relativePath,
+      coverFile,
+      metadataFile: "",
+      folderId,
+      folderName: file.projectName,
+      source: { type: "disk" },
+      createdAt: updatedAt,
+      updatedAt,
+      tags: [],
+    });
+  }
+
+  return {
+    version: 1,
+    folders: Array.from(folders.values()),
+    assets,
+  };
+};
+
+export const readCombinedAssetIndex = async (
+  basePath: string,
+): Promise<AssetIndex> => {
+  const [legacyIndex, diskIndex] = await Promise.all([
+    readAssetIndex(basePath),
+    readDiskAssetIndex(basePath),
+  ]);
+
+  const folderMap = new Map<string, AssetFolder>();
+  for (const folder of legacyIndex.folders) {
+    folderMap.set(folder.id, folder);
+  }
+  for (const folder of diskIndex.folders) {
+    folderMap.set(folder.id, folder);
+  }
+
+  const assetMap = new Map<string, AssetRecord>();
+  for (const asset of legacyIndex.assets) {
+    assetMap.set(asset.id, asset);
+  }
+  for (const asset of diskIndex.assets) {
+    assetMap.set(asset.id, asset);
+  }
+
+  return {
+    version: 1,
+    folders: Array.from(folderMap.values()),
+    assets: Array.from(assetMap.values()),
+  };
 };
 
 export const writeAssetIndex = async (basePath: string, index: AssetIndex) => {

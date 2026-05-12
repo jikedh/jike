@@ -25,6 +25,32 @@ const MEDIA_FOLDERS = [
   "audio",
 ];
 
+const ASSET_CACHE_DIR = ".jike-assets-cache";
+const INTERNAL_ASSET_DIR = "assets";
+const SUPPORTED_ASSET_EXTENSIONS = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+  ".mp4",
+  ".webm",
+  ".mov",
+  ".mp3",
+  ".wav",
+  ".m4a",
+  ".aac",
+  ".ogg",
+]);
+
+const getExtension = (fileName: string) => {
+  const index = fileName.lastIndexOf(".");
+  return index >= 0 ? fileName.slice(index).toLowerCase() : "";
+};
+
+const normalizeAssetRelativePath = (...parts: string[]) =>
+  parts.join("/").replace(/\\/g, "/").replace(/^\/+/, "");
+
 const safeReadJson = (filePath: string): any => {
   try {
     if (!existsSync(filePath)) return null;
@@ -535,6 +561,79 @@ export function registerStorageHandlers(): void {
     },
   );
 
+  ipcMain.handle("storage:scanAssetLibrary", async (_, basePath: string) => {
+    try {
+      if (!basePath || !existsSync(basePath)) {
+        return { success: true, files: [] };
+      }
+
+      const projects: any[] = [];
+      const files: any[] = [];
+      const projectEntries = readdirSync(basePath, { withFileTypes: true });
+
+      for (const projectEntry of projectEntries) {
+        if (!projectEntry.isDirectory()) continue;
+        if (
+          projectEntry.name === ASSET_CACHE_DIR ||
+          projectEntry.name === INTERNAL_ASSET_DIR ||
+          projectEntry.name.startsWith(".")
+        ) {
+          continue;
+        }
+
+        const projectName = projectEntry.name;
+        const projectDir = join(basePath, projectName);
+        const projectStat = statSync(projectDir);
+        projects.push({
+          name: projectName,
+          relativePath: projectName,
+          createdAt: projectStat.birthtimeMs,
+          modifiedAt: projectStat.mtimeMs,
+        });
+        const categoryEntries = readdirSync(projectDir, { withFileTypes: true });
+
+        for (const categoryEntry of categoryEntries) {
+          if (!categoryEntry.isDirectory()) continue;
+          if (categoryEntry.name.startsWith(".")) continue;
+
+          const categoryName = categoryEntry.name;
+          const categoryDir = join(projectDir, categoryName);
+          const mediaEntries = readdirSync(categoryDir, {
+            withFileTypes: true,
+          });
+
+          for (const mediaEntry of mediaEntries) {
+            if (!mediaEntry.isFile()) continue;
+            if (!SUPPORTED_ASSET_EXTENSIONS.has(getExtension(mediaEntry.name))) {
+              continue;
+            }
+
+            const mediaPath = join(categoryDir, mediaEntry.name);
+            const stat = statSync(mediaPath);
+            files.push({
+              projectName,
+              categoryName,
+              name: mediaEntry.name,
+              relativePath: normalizeAssetRelativePath(
+                projectName,
+                categoryName,
+                mediaEntry.name,
+              ),
+              size: stat.size,
+              modifiedAt: stat.mtimeMs,
+            });
+          }
+        }
+      }
+
+      files.sort((a, b) => (b.modifiedAt || 0) - (a.modifiedAt || 0));
+      projects.sort((a, b) => (b.modifiedAt || 0) - (a.modifiedAt || 0));
+      return { success: true, projects, files };
+    } catch (error: any) {
+      return { success: false, error: error.message, projects: [], files: [] };
+    }
+  });
+
   ipcMain.handle(
     "storage:deleteRawPath",
     async (_, basePath: string, relativePath: string) => {
@@ -550,6 +649,53 @@ export function registerStorageHandlers(): void {
           rmSync(absPath, { recursive: true, force: true });
         }
 
+        return { success: true };
+      } catch (error: any) {
+        return { success: false, error: error.message };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "storage:renameRawPath",
+    async (
+      _,
+      basePath: string,
+      oldRelativePath: string,
+      newRelativePath: string,
+    ) => {
+      try {
+        const normalize = (value: string) =>
+          value.replace(/\\/g, "/").replace(/^\/+/, "");
+        const oldNormalized = normalize(oldRelativePath);
+        const newNormalized = normalize(newRelativePath);
+        const oldParts = oldNormalized.split("/").filter(Boolean);
+        const newParts = newNormalized.split("/").filter(Boolean);
+        if (
+          !basePath ||
+          oldParts.length === 0 ||
+          newParts.length === 0 ||
+          oldParts.includes("..") ||
+          newParts.includes("..")
+        ) {
+          return { success: false, error: "Invalid basePath or relativePath" };
+        }
+
+        const oldAbsPath = join(basePath, oldNormalized);
+        const newAbsPath = join(basePath, newNormalized);
+        if (!existsSync(oldAbsPath)) {
+          return { success: false, error: "Source path not found" };
+        }
+        if (existsSync(newAbsPath)) {
+          return { success: false, error: "Target path already exists" };
+        }
+
+        const newAbsDir = dirname(newAbsPath);
+        if (!existsSync(newAbsDir)) {
+          mkdirSync(newAbsDir, { recursive: true });
+        }
+
+        renameSync(oldAbsPath, newAbsPath);
         return { success: true };
       } catch (error: any) {
         return { success: false, error: error.message };

@@ -6,6 +6,22 @@ export type FileInfo = {
   modifiedAt: number;
 };
 
+export type AssetDiskFileInfo = {
+  projectName: string;
+  categoryName: string;
+  name: string;
+  relativePath: string;
+  size: number;
+  modifiedAt: number;
+};
+
+export type AssetDiskProjectInfo = {
+  name: string;
+  relativePath: string;
+  createdAt: number;
+  modifiedAt: number;
+};
+
 export type StorageResult<T = unknown> = {
   success: boolean;
   error?: string;
@@ -49,9 +65,22 @@ export type StorageApi = {
     basePath: string,
     relativePath: string,
   ) => Promise<StorageResult<{ data: Buffer | null }>>;
+  scanAssetLibrary: (
+    basePath: string,
+  ) => Promise<
+    StorageResult<{
+      projects?: AssetDiskProjectInfo[];
+      files?: AssetDiskFileInfo[];
+    }>
+  >;
   deleteRawPath?: (
     basePath: string,
     relativePath: string,
+  ) => Promise<StorageResult>;
+  renameRawPath?: (
+    basePath: string,
+    oldRelativePath: string,
+    newRelativePath: string,
   ) => Promise<StorageResult>;
   listMedia: (
     basePath: string,
