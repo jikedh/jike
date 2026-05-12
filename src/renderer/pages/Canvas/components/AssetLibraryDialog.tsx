@@ -19,7 +19,7 @@ import {
   type AssetRecord,
   type AssetScope,
   createAssetFolderId,
-  createAssetFromBuffer,
+  createAssetsFromBuffers,
   deleteAssetFolderById,
   deleteAssetsById,
   readAssetIndex,
@@ -220,6 +220,7 @@ const AssetPreviewPane = ({
               src={displayUrl}
               alt={asset.name}
               className="max-h-full max-w-full object-contain"
+              decoding="async"
             />
           ) : asset.mediaType === "video" ? (
             <video
@@ -301,6 +302,10 @@ export const AssetLibraryDialog = ({
   } | null>(null);
   const [folderContextMenu, setFolderContextMenu] = useState<{
     folder: AssetFolder;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [blankContextMenu, setBlankContextMenu] = useState<{
     x: number;
     y: number;
   } | null>(null);
@@ -434,11 +439,12 @@ export const AssetLibraryDialog = ({
   }, [activeScope, visibleScopes]);
 
   useEffect(() => {
-    if (!contextMenu && !folderContextMenu) return;
+    if (!contextMenu && !folderContextMenu && !blankContextMenu) return;
 
     const closeMenu = () => {
       setContextMenu(null);
       setFolderContextMenu(null);
+      setBlankContextMenu(null);
     };
     window.addEventListener("pointerdown", closeMenu);
     window.addEventListener("keydown", closeMenu);
@@ -446,7 +452,7 @@ export const AssetLibraryDialog = ({
       window.removeEventListener("pointerdown", closeMenu);
       window.removeEventListener("keydown", closeMenu);
     };
-  }, [contextMenu, folderContextMenu]);
+  }, [blankContextMenu, contextMenu, folderContextMenu]);
 
   const filteredAssets = useMemo(() => {
     if (activeScope === "public") return [];
@@ -484,13 +490,17 @@ export const AssetLibraryDialog = ({
     () => listedAssets.filter((asset) => selectedIds.includes(asset.id)),
     [listedAssets, selectedIds],
   );
+  const projectAssetCountMap = useMemo(() => {
+    const countMap = new Map<string, number>();
+    for (const asset of projectAssets) {
+      if (asset.scope !== "project" || !asset.folderId) continue;
+      countMap.set(asset.folderId, (countMap.get(asset.folderId) || 0) + 1);
+    }
+    return countMap;
+  }, [projectAssets]);
   const getProjectAssetCount = useCallback(
-    (targetFolderId: string) =>
-      projectAssets.filter(
-        (asset) =>
-          asset.scope === "project" && asset.folderId === targetFolderId,
-      ).length,
-    [projectAssets],
+    (targetFolderId: string) => projectAssetCountMap.get(targetFolderId) || 0,
+    [projectAssetCountMap],
   );
   const isCurrentPageAllSelected =
     pageAssets.length > 0 &&
@@ -507,6 +517,17 @@ export const AssetLibraryDialog = ({
       return Array.from(new Set([...current, ...pageAssetIds]));
     });
   }, [pageAssets]);
+
+  const openCreateProjectDialog = useCallback(() => {
+    setContextMenu(null);
+    setFolderContextMenu(null);
+    setBlankContextMenu(null);
+    setAssetNameDialogMode("create-folder");
+    setRenamingFolder(null);
+    setRenamingAsset(null);
+    setCreateProjectName("");
+    setCreateProjectOpen(true);
+  }, []);
 
   const handleDownloadAssets = useCallback(async () => {
     if (selectedAssets.length === 0 || downloading) return;
@@ -563,6 +584,7 @@ export const AssetLibraryDialog = ({
 
       setLoading(true);
       try {
+        const inputs: Parameters<typeof createAssetsFromBuffers>[0] = [];
         for (const file of files) {
           const mediaType = getAssetMediaType(file);
           const category = getImportCategory(file);
@@ -572,7 +594,7 @@ export const AssetLibraryDialog = ({
             continue;
           }
 
-          await createAssetFromBuffer({
+          inputs.push({
             basePath,
             name: file.name.replace(/\.[^.]+$/, ""),
             scope: "project",
@@ -584,7 +606,11 @@ export const AssetLibraryDialog = ({
             folderName,
             source: { type: "upload" },
           });
-          importedCount += 1;
+        }
+
+        if (inputs.length > 0) {
+          const assets = await createAssetsFromBuffers(inputs);
+          importedCount = assets.length;
         }
 
         if (importedCount === 0) {
@@ -640,6 +666,7 @@ export const AssetLibraryDialog = ({
 
       setLoading(true);
       try {
+        const inputs: Parameters<typeof createAssetsFromBuffers>[0] = [];
         for (const file of files) {
           const mediaType = getAssetMediaType(file);
           if (!mediaType || !isCategoryMediaAllowed(activeCategory, mediaType)) {
@@ -647,7 +674,7 @@ export const AssetLibraryDialog = ({
             continue;
           }
 
-          await createAssetFromBuffer({
+          inputs.push({
             basePath,
             name: file.name.replace(/\.[^.]+$/, ""),
             scope: "project",
@@ -659,7 +686,11 @@ export const AssetLibraryDialog = ({
             folderName: activeProjectOption.name,
             source: { type: "upload" },
           });
-          importedCount += 1;
+        }
+
+        if (inputs.length > 0) {
+          const assets = await createAssetsFromBuffers(inputs);
+          importedCount = assets.length;
         }
 
         if (importedCount === 0) {
@@ -1064,7 +1095,21 @@ export const AssetLibraryDialog = ({
         <div className="flex min-h-0 flex-1 gap-5 overflow-hidden px-6 py-6">
           <div className="asset-library-scrollbar min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
             {isProjectRoot ? (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-5">
+              <div
+                role="list"
+                aria-label="asset projects"
+                className="grid min-h-full grid-cols-[repeat(auto-fill,minmax(150px,1fr))] content-start gap-5"
+                onContextMenu={(event) => {
+                  if (event.currentTarget !== event.target) return;
+                  event.preventDefault();
+                  setContextMenu(null);
+                  setFolderContextMenu(null);
+                  setBlankContextMenu({
+                    x: event.clientX,
+                    y: event.clientY,
+                  });
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => folderInputRef.current?.click()}
@@ -1079,29 +1124,6 @@ export const AssetLibraryDialog = ({
                     </div>
                     <div className="mt-1 text-xs text-white/40">
                       角色 / 场景 / 道具 / 音效
-                    </div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAssetNameDialogMode("create-folder");
-                    setRenamingFolder(null);
-                    setRenamingAsset(null);
-                    setCreateProjectName("");
-                    setCreateProjectOpen(true);
-                  }}
-                  className="group flex aspect-[4/3] flex-col justify-between rounded-md border border-dashed border-white/15 bg-white/[0.03] p-4 text-left text-white/55 transition-colors hover:border-[#B43FEB]/70 hover:bg-[#B43FEB]/10 hover:text-white"
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[#B43FEB]/15 text-[#d486ff]">
-                    <IconPlus size={24} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="truncate text-sm text-white/88">
-                      新建资产项目
-                    </div>
-                    <div className="mt-1 text-xs text-white/40">
-                      创建空资产项目
                     </div>
                   </div>
                 </button>
@@ -1198,14 +1220,24 @@ export const AssetLibraryDialog = ({
                                 src={displayUrl}
                                 alt={asset.name}
                                 className="h-full w-full object-cover"
+                                loading="lazy"
+                                decoding="async"
+                                draggable={false}
+                              />
+                            ) : asset.mediaType === "video" && asset.coverUrl ? (
+                              <img
+                                src={displayUrl}
+                                alt={asset.name}
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                                decoding="async"
                                 draggable={false}
                               />
                             ) : asset.mediaType === "video" ? (
-                              <video
-                                src={displayUrl}
-                                className="h-full w-full object-cover"
-                                muted
-                              />
+                              <div className="flex h-full w-full flex-col items-center justify-center text-white/55">
+                                <IconVideo size={30} />
+                                <span className="mt-2 text-xs">Video</span>
+                              </div>
                             ) : (
                               <div className="flex h-full w-full flex-col items-center justify-center text-white/55">
                                 <IconMusic size={30} />
@@ -1396,6 +1428,23 @@ export const AssetLibraryDialog = ({
             }}
           >
             {"\u5220\u9664"}
+          </button>
+        </div>
+      ) : null}
+
+      {blankContextMenu ? (
+        <div
+          className="fixed z-[90] w-36 overflow-hidden rounded-lg border border-white/10 bg-[#121214] p-1 text-sm text-white shadow-2xl"
+          style={{ left: blankContextMenu.x, top: blankContextMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-white/80 hover:bg-[#B43FEB]/10 hover:text-white"
+            onClick={openCreateProjectDialog}
+          >
+            <IconPlus size={15} />
+            {"\u65b0\u5efa\u8d44\u4ea7\u9879\u76ee"}
           </button>
         </div>
       ) : null}

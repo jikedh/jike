@@ -63,6 +63,15 @@ export type CreateAssetInput = {
   source?: AssetRecord["source"];
 };
 
+type PreparedAsset = {
+  asset: AssetRecord;
+  originalFile: string;
+  originalBuffer: ArrayBuffer;
+  coverFile?: string;
+  coverBuffer?: ArrayBuffer;
+  metadataFile: string;
+};
+
 export type AssetMediaRef = {
   url?: string;
   remoteUrl?: string;
@@ -90,6 +99,11 @@ const mediaTypeExtensions: Record<AssetMediaType, string> = {
   video: "mp4",
   audio: "mp3",
 };
+
+const ASSET_THUMBNAIL_SIZE = 320;
+const ASSET_THUMBNAIL_QUALITY = 0.78;
+const ASSET_THUMBNAIL_EXTENSION = "webp";
+const ASSET_THUMBNAIL_MIME = "image/webp";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -256,6 +270,69 @@ const getAssetFolder = (input: {
   ].join("/");
 };
 
+const blobToArrayBuffer = (blob: Blob) =>
+  blob.arrayBuffer().then((buffer) => buffer.slice(0));
+
+const canvasToBlob = (
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality: number,
+) =>
+  new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, type, quality);
+  });
+
+const createImageThumbnail = async (
+  buffer: ArrayBuffer,
+): Promise<ArrayBuffer | null> => {
+  if (typeof document === "undefined") return null;
+
+  const objectUrl = URL.createObjectURL(new Blob([buffer]));
+  const image = new Image();
+  image.decoding = "async";
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("图片缩略图生成失败"));
+      image.src = objectUrl;
+    });
+
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+    if (!sourceWidth || !sourceHeight) return null;
+
+    const scale = Math.min(
+      ASSET_THUMBNAIL_SIZE / sourceWidth,
+      ASSET_THUMBNAIL_SIZE / sourceHeight,
+      1,
+    );
+    const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+    const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+    const blob =
+      (await canvasToBlob(
+        canvas,
+        ASSET_THUMBNAIL_MIME,
+        ASSET_THUMBNAIL_QUALITY,
+      )) ||
+      (await canvasToBlob(canvas, "image/jpeg", ASSET_THUMBNAIL_QUALITY));
+    return blob ? blobToArrayBuffer(blob) : null;
+  } catch (error) {
+    console.warn("[assetStorage] create thumbnail failed", error);
+    return null;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
+
 const readTextFile = async (basePath: string, relativePath: string) => {
   const result = await window.storage.readMedia(basePath, relativePath);
   if (!result.success || !result.data) return null;
@@ -406,9 +483,9 @@ const isCategoryMediaCompatible = (
   return category === mediaType;
 };
 
-export const createAssetFromBuffer = async (
+const prepareAssetFromBuffer = async (
   input: CreateAssetInput,
-): Promise<AssetRecord> => {
+): Promise<PreparedAsset> => {
   const supportedMediaType = getAssetMediaTypeByFileName(input.fileName);
   if (!supportedMediaType) {
     throw new Error(`不支持的资产类型。支持${ASSET_SUPPORTED_TYPES_LABEL}`);
@@ -440,7 +517,15 @@ export const createAssetFromBuffer = async (
   });
   const originalFile = `${folder}/original.${extension}`;
   const metadataFile = `${folder}/metadata.json`;
-  const coverFile = input.mediaType === "image" ? originalFile : undefined;
+  const thumbnailBuffer =
+    input.mediaType === "image"
+      ? await createImageThumbnail(input.buffer)
+      : null;
+  const coverFile = thumbnailBuffer
+    ? `${folder}/cover.${ASSET_THUMBNAIL_EXTENSION}`
+    : input.mediaType === "image"
+      ? originalFile
+      : undefined;
 
   const asset: AssetRecord = {
     id,
@@ -462,38 +547,113 @@ export const createAssetFromBuffer = async (
     tags: [],
   };
 
-  const saveResult = await window.storage.saveMedia(
-    input.basePath,
+  return {
+    asset,
     originalFile,
-    input.buffer,
+    originalBuffer: input.buffer,
+    coverFile: thumbnailBuffer ? coverFile : undefined,
+    coverBuffer: thumbnailBuffer || undefined,
+    metadataFile,
+  };
+};
+
+const savePreparedAssetFiles = async (
+  basePath: string,
+  prepared: PreparedAsset,
+) => {
+  const saveResult = await window.storage.saveMedia(
+    basePath,
+    prepared.originalFile,
+    prepared.originalBuffer,
   );
   if (!saveResult.success) {
     throw new Error(saveResult.error || "保存资产文件失败");
   }
 
-  await writeTextFile(
-    input.basePath,
-    metadataFile,
-    JSON.stringify(asset, null, 2),
-  );
+  if (prepared.coverFile && prepared.coverBuffer) {
+    const coverResult = await window.storage.saveMedia(
+      basePath,
+      prepared.coverFile,
+      prepared.coverBuffer,
+    );
+    if (!coverResult.success) {
+      throw new Error(coverResult.error || "保存资产缩略图失败");
+    }
+  }
 
-  const index = await readAssetIndex(input.basePath);
+  await writeTextFile(
+    basePath,
+    prepared.metadataFile,
+    JSON.stringify(prepared.asset, null, 2),
+  );
+};
+
+const mergeAssetsIntoIndex = (
+  index: AssetIndex,
+  assets: AssetRecord[],
+): AssetIndex => {
   const folderMap = new Map(index.folders.map((item) => [item.id, item]));
-  if (input.scope === "project" && folderId && folderName) {
-    const existingFolder = folderMap.get(folderId);
-    folderMap.set(folderId, {
-      id: folderId,
-      name: folderName,
+
+  for (const asset of assets) {
+    if (asset.scope !== "project" || !asset.folderId || !asset.folderName) {
+      continue;
+    }
+    const existingFolder = folderMap.get(asset.folderId);
+    folderMap.set(asset.folderId, {
+      id: asset.folderId,
+      name: asset.folderName,
       sourceName: existingFolder?.sourceName,
-      createdAt: existingFolder?.createdAt || now,
-      updatedAt: now,
+      createdAt: existingFolder?.createdAt || asset.createdAt,
+      updatedAt: asset.updatedAt,
     });
   }
-  await writeAssetIndex(input.basePath, {
+
+  const newAssetIds = new Set(assets.map((asset) => asset.id));
+  return {
     version: 1,
     folders: Array.from(folderMap.values()),
-    assets: [asset, ...index.assets.filter((item) => item.id !== id)],
-  });
+    assets: [
+      ...assets,
+      ...index.assets.filter((item) => !newAssetIds.has(item.id)),
+    ],
+  };
+};
+
+export const createAssetsFromBuffers = async (
+  inputs: CreateAssetInput[],
+): Promise<AssetRecord[]> => {
+  if (inputs.length === 0) return [];
+
+  const basePath = inputs[0].basePath;
+  if (!basePath || inputs.some((input) => input.basePath !== basePath)) {
+    throw new Error("批量创建资产需要使用同一个资产库路径");
+  }
+
+  const preparedAssets: PreparedAsset[] = [];
+  for (const input of inputs) {
+    preparedAssets.push(await prepareAssetFromBuffer(input));
+  }
+
+  for (const prepared of preparedAssets) {
+    await savePreparedAssetFiles(basePath, prepared);
+  }
+
+  const index = await readAssetIndex(basePath);
+  await writeAssetIndex(
+    basePath,
+    mergeAssetsIntoIndex(
+      index,
+      preparedAssets.map((prepared) => prepared.asset),
+    ),
+  );
+
+  return preparedAssets.map((prepared) => prepared.asset);
+};
+
+export const createAssetFromBuffer = async (
+  input: CreateAssetInput,
+): Promise<AssetRecord> => {
+  const [asset] = await createAssetsFromBuffers([input]);
 
   return asset;
 };
