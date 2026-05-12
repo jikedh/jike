@@ -30,3 +30,6 @@ release
 resources/python
 resources/flow2api-main
 agent.md
+findings.md
+progress.md
+task_plan.md

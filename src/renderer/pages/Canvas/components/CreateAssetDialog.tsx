@@ -1,6 +1,7 @@
 import { IconMusic, IconPhoto, IconVideo, IconX } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import {
+  type AssetFolder,
   type AssetCategory,
   type AssetMediaRef,
   type AssetMediaType,
@@ -8,6 +9,7 @@ import {
   DEFAULT_ASSET_FOLDER_NAME,
   createAssetFromMediaRef,
   getAssetFileUrl,
+  readAssetIndex,
 } from "service/assetStorage";
 import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
@@ -54,6 +56,8 @@ export const CreateAssetDialog = ({
 }: CreateAssetDialogProps) => {
   const [name, setName] = useState("");
   const [category, setCategory] = useState<AssetCategory>("image");
+  const [folderId, setFolderId] = useState(DEFAULT_ASSET_FOLDER_ID);
+  const [assetFolders, setAssetFolders] = useState<AssetFolder[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -61,6 +65,53 @@ export const CreateAssetDialog = ({
     setName(request.name || "未命名资产");
     setCategory(getDefaultCategory(request.mediaType));
   }, [open, request]);
+
+  useEffect(() => {
+    if (!open || !basePath) return;
+
+    let cancelled = false;
+    const loadFolders = async () => {
+      try {
+        const index = await readAssetIndex(basePath);
+        const folders =
+          index.folders.length > 0
+            ? index.folders
+            : [
+                {
+                  id: DEFAULT_ASSET_FOLDER_ID,
+                  name: DEFAULT_ASSET_FOLDER_NAME,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                },
+              ];
+        if (cancelled) return;
+        setAssetFolders(folders);
+        setFolderId((current) =>
+          folders.some((folder) => folder.id === current)
+            ? current
+            : folders[0]?.id || DEFAULT_ASSET_FOLDER_ID,
+        );
+      } catch (error) {
+        console.error("[CreateAssetDialog] load folders failed", error);
+        if (!cancelled) {
+          setAssetFolders([
+            {
+              id: DEFAULT_ASSET_FOLDER_ID,
+              name: DEFAULT_ASSET_FOLDER_NAME,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ]);
+          setFolderId(DEFAULT_ASSET_FOLDER_ID);
+        }
+      }
+    };
+
+    void loadFolders();
+    return () => {
+      cancelled = true;
+    };
+  }, [basePath, open]);
 
   const previewUrl = useMemo(() => {
     if (!request) return "";
@@ -83,6 +134,11 @@ export const CreateAssetDialog = ({
       toast.warning("请输入资产名称");
       return;
     }
+    const selectedFolder = assetFolders.find((folder) => folder.id === folderId);
+    if (!selectedFolder) {
+      toast.warning("请选择资产文件夹");
+      return;
+    }
 
     try {
       setSaving(true);
@@ -94,8 +150,8 @@ export const CreateAssetDialog = ({
         mediaType: request.mediaType,
         mediaRef: request.mediaRef,
         projectId: request.projectId || undefined,
-        folderId: DEFAULT_ASSET_FOLDER_ID,
-        folderName: DEFAULT_ASSET_FOLDER_NAME,
+        folderId: selectedFolder.id,
+        folderName: selectedFolder.name,
         nodeId: request.nodeId,
       });
       toast.success("资产已创建");
@@ -165,6 +221,27 @@ export const CreateAssetDialog = ({
                 onChange={(event) => setName(event.target.value)}
                 className="h-10 w-full rounded-md border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-[#B43FEB]/70"
               />
+            </label>
+
+            <label className="block">
+              <div className="mb-2 text-xs text-white/50">
+                资产文件夹 <span className="text-red-400">*</span>
+              </div>
+              <select
+                value={folderId}
+                onChange={(event) => setFolderId(event.target.value)}
+                className="h-10 w-full rounded-md border border-white/10 bg-black/25 px-3 text-sm text-white outline-none focus:border-[#B43FEB]/70"
+              >
+                {assetFolders.map((folder) => (
+                  <option
+                    key={folder.id}
+                    value={folder.id}
+                    className="bg-[#171717] text-white"
+                  >
+                    {folder.name}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label className="block">

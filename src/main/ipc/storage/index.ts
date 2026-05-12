@@ -486,6 +486,78 @@ export function registerStorageHandlers(): void {
   );
 
   ipcMain.handle(
+    "storage:writeRawFile",
+    async (_, basePath: string, relativePath: string, buffer: ArrayBuffer) => {
+      try {
+        const normalized = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+        const parts = normalized.split("/").filter(Boolean);
+        if (!basePath || parts.length === 0 || parts.includes("..")) {
+          return { success: false, error: "Invalid basePath or relativePath" };
+        }
+
+        const absPath = join(basePath, normalized);
+        const absDir = dirname(absPath);
+        if (!existsSync(absDir)) {
+          mkdirSync(absDir, { recursive: true });
+        }
+
+        writeFileSync(absPath, Buffer.from(buffer));
+        return { success: true, path: normalized };
+      } catch (error: any) {
+        return { success: false, error: error.message };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "storage:readRawFile",
+    async (_, basePath: string, relativePath: string) => {
+      try {
+        const normalized = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+        const parts = normalized.split("/").filter(Boolean);
+        if (!basePath || parts.length === 0 || parts.includes("..")) {
+          return {
+            success: false,
+            error: "Invalid basePath or relativePath",
+            data: null,
+          };
+        }
+
+        const absPath = join(basePath, normalized);
+        if (!existsSync(absPath)) {
+          return { success: false, error: "File not found", data: null };
+        }
+
+        return { success: true, data: readFileSync(absPath) };
+      } catch (error: any) {
+        return { success: false, error: error.message, data: null };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "storage:deleteRawPath",
+    async (_, basePath: string, relativePath: string) => {
+      try {
+        const normalized = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+        const parts = normalized.split("/").filter(Boolean);
+        if (!basePath || parts.length === 0 || parts.includes("..")) {
+          return { success: false, error: "Invalid basePath or relativePath" };
+        }
+
+        const absPath = join(basePath, normalized);
+        if (existsSync(absPath)) {
+          rmSync(absPath, { recursive: true, force: true });
+        }
+
+        return { success: true };
+      } catch (error: any) {
+        return { success: false, error: error.message };
+      }
+    },
+  );
+
+  ipcMain.handle(
     "storage:listMedia",
     async (_, basePath: string, projectName: string, mediaType: string) => {
       try {

@@ -5,6 +5,7 @@ import {
   IconFolder,
   IconMusic,
   IconPhoto,
+  IconPlus,
   IconTrash,
   IconUpload,
   IconVideo,
@@ -18,19 +19,27 @@ import {
   type AssetRecord,
   type AssetScope,
   createAssetFolderId,
-  createAssetFromBuffer,
+  createAssetsFromBuffers,
   deleteAssetFolderById,
   deleteAssetsById,
   readAssetIndex,
   getAssetCategoryLabel,
   getAssetDisplayUrl,
+  renameAsset,
+  renameAssetFolder,
+  upsertAssetFolder,
 } from "service/assetStorage";
 import {
   CANVAS_ASSET_DRAG_MIME,
   CANVAS_ASSET_DRAG_TYPE,
   type CanvasAssetDragPayload,
 } from "shared/constants/canvasDrag";
-import { getAssetMediaType } from "shared/constants/mediaTypes";
+import {
+  SUPPORTED_ASSET_AUDIO_EXTENSIONS,
+  SUPPORTED_ASSET_IMAGE_EXTENSIONS,
+  SUPPORTED_ASSET_VIDEO_EXTENSIONS,
+  getAssetMediaType,
+} from "shared/constants/mediaTypes";
 import type { AllNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
@@ -39,6 +48,7 @@ import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { downloadAssets } from "../utils/assetDownload";
 import {
   buildCanvasMediaAssets,
+  renameCanvasMediaAssetInNodes,
   removeCanvasMediaAssetsFromNodes,
 } from "../utils/canvasMediaAssets";
 
@@ -56,7 +66,10 @@ type AssetLibraryDialogProps = {
     clientPosition: { x: number; y: number },
   ) => void;
   variant?: "dialog" | "page";
+  hidePreviewPane?: boolean;
 };
+
+type AssetNameDialogMode = "create-folder" | "rename-folder" | "rename-asset";
 
 const scopes: Array<{ id: AssetScope; label: string }> = [
   { id: "project", label: "项目资产" },
@@ -137,6 +150,19 @@ const isCategoryMediaAllowed = (
   return category === mediaType;
 };
 
+const getCategoryUploadAccept = (category: AssetCategory) =>
+  category === "audio"
+    ? SUPPORTED_ASSET_AUDIO_EXTENSIONS.join(",")
+    : [
+        ...SUPPORTED_ASSET_IMAGE_EXTENSIONS,
+        ...SUPPORTED_ASSET_VIDEO_EXTENSIONS,
+      ].join(",");
+
+const getCategoryUploadHint = (category: AssetCategory) =>
+  category === "audio"
+    ? "支持 mp3/wav/m4a/aac/ogg"
+    : "支持 jpg/jpeg/png/webp/gif/mp4/webm/mov";
+
 const getAssetIcon = (mediaType: AssetMediaType) => {
   if (mediaType === "video") return <IconVideo size={16} />;
   if (mediaType === "audio") return <IconMusic size={16} />;
@@ -194,6 +220,7 @@ const AssetPreviewPane = ({
               src={displayUrl}
               alt={asset.name}
               className="max-h-full max-w-full object-contain"
+              decoding="async"
             />
           ) : asset.mediaType === "video" ? (
             <video
@@ -258,6 +285,7 @@ export const AssetLibraryDialog = ({
   onUseMany,
   onDropAsset,
   variant = "dialog",
+  hidePreviewPane = false,
 }: AssetLibraryDialogProps) => {
   const [activeScope, setActiveScope] = useState<AssetScope>("project");
   const [activeCategory, setActiveCategory] = useState<AssetCategory>("image");
@@ -277,16 +305,28 @@ export const AssetLibraryDialog = ({
     x: number;
     y: number;
   } | null>(null);
+  const [blankContextMenu, setBlankContextMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     assets: AssetRecord[];
     folder?: AssetFolder;
     message: string;
   } | null>(null);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [createProjectName, setCreateProjectName] = useState("");
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [assetNameDialogMode, setAssetNameDialogMode] =
+    useState<AssetNameDialogMode>("create-folder");
+  const [renamingFolder, setRenamingFolder] = useState<AssetFolder | null>(null);
+  const [renamingAsset, setRenamingAsset] = useState<AssetRecord | null>(null);
   const [previewAsset, setPreviewAsset] = useState<AssetRecord | null>(null);
   const [activeProjectAssetId, setActiveProjectAssetId] = useState<
     string | null
   >(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
+  const assetUploadInputRef = useRef<HTMLInputElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const isPageVariant = variant === "page";
   const allowInsert = !isPageVariant && Boolean(onUse);
@@ -319,6 +359,8 @@ export const AssetLibraryDialog = ({
   const isProjectRoot = activeScope === "project" && !activeProjectAssetId;
   const activeCategories =
     activeScope === "project" ? projectCategories : canvasCategories;
+  const canUploadToProjectCategory =
+    activeScope === "project" && Boolean(activeProjectAssetId);
   const listedAssets =
     activeScope === "canvas"
       ? canvasAssets
@@ -397,11 +439,12 @@ export const AssetLibraryDialog = ({
   }, [activeScope, visibleScopes]);
 
   useEffect(() => {
-    if (!contextMenu && !folderContextMenu) return;
+    if (!contextMenu && !folderContextMenu && !blankContextMenu) return;
 
     const closeMenu = () => {
       setContextMenu(null);
       setFolderContextMenu(null);
+      setBlankContextMenu(null);
     };
     window.addEventListener("pointerdown", closeMenu);
     window.addEventListener("keydown", closeMenu);
@@ -409,7 +452,7 @@ export const AssetLibraryDialog = ({
       window.removeEventListener("pointerdown", closeMenu);
       window.removeEventListener("keydown", closeMenu);
     };
-  }, [contextMenu, folderContextMenu]);
+  }, [blankContextMenu, contextMenu, folderContextMenu]);
 
   const filteredAssets = useMemo(() => {
     if (activeScope === "public") return [];
@@ -447,13 +490,17 @@ export const AssetLibraryDialog = ({
     () => listedAssets.filter((asset) => selectedIds.includes(asset.id)),
     [listedAssets, selectedIds],
   );
+  const projectAssetCountMap = useMemo(() => {
+    const countMap = new Map<string, number>();
+    for (const asset of projectAssets) {
+      if (asset.scope !== "project" || !asset.folderId) continue;
+      countMap.set(asset.folderId, (countMap.get(asset.folderId) || 0) + 1);
+    }
+    return countMap;
+  }, [projectAssets]);
   const getProjectAssetCount = useCallback(
-    (targetFolderId: string) =>
-      projectAssets.filter(
-        (asset) =>
-          asset.scope === "project" && asset.folderId === targetFolderId,
-      ).length,
-    [projectAssets],
+    (targetFolderId: string) => projectAssetCountMap.get(targetFolderId) || 0,
+    [projectAssetCountMap],
   );
   const isCurrentPageAllSelected =
     pageAssets.length > 0 &&
@@ -470,6 +517,17 @@ export const AssetLibraryDialog = ({
       return Array.from(new Set([...current, ...pageAssetIds]));
     });
   }, [pageAssets]);
+
+  const openCreateProjectDialog = useCallback(() => {
+    setContextMenu(null);
+    setFolderContextMenu(null);
+    setBlankContextMenu(null);
+    setAssetNameDialogMode("create-folder");
+    setRenamingFolder(null);
+    setRenamingAsset(null);
+    setCreateProjectName("");
+    setCreateProjectOpen(true);
+  }, []);
 
   const handleDownloadAssets = useCallback(async () => {
     if (selectedAssets.length === 0 || downloading) return;
@@ -518,7 +576,7 @@ export const AssetLibraryDialog = ({
 
       const firstRelativePath = getFileRelativePath(files[0]);
       const folderName =
-        firstRelativePath.split("/").filter(Boolean)[0] || "未命名资产文件夹";
+        firstRelativePath.split("/").filter(Boolean)[0] || "未命名资产项目";
       const folderId = createAssetFolderId();
       const now = new Date().toISOString();
       let importedCount = 0;
@@ -526,6 +584,7 @@ export const AssetLibraryDialog = ({
 
       setLoading(true);
       try {
+        const inputs: Parameters<typeof createAssetsFromBuffers>[0] = [];
         for (const file of files) {
           const mediaType = getAssetMediaType(file);
           const category = getImportCategory(file);
@@ -535,7 +594,7 @@ export const AssetLibraryDialog = ({
             continue;
           }
 
-          await createAssetFromBuffer({
+          inputs.push({
             basePath,
             name: file.name.replace(/\.[^.]+$/, ""),
             scope: "project",
@@ -547,7 +606,11 @@ export const AssetLibraryDialog = ({
             folderName,
             source: { type: "upload" },
           });
-          importedCount += 1;
+        }
+
+        if (inputs.length > 0) {
+          const assets = await createAssetsFromBuffers(inputs);
+          importedCount = assets.length;
         }
 
         if (importedCount === 0) {
@@ -583,6 +646,184 @@ export const AssetLibraryDialog = ({
     },
     [basePath, reloadAssets],
   );
+
+  const handleUploadProjectAssets = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.target.files ?? []);
+      event.target.value = "";
+      if (
+        files.length === 0 ||
+        !basePath ||
+        activeScope !== "project" ||
+        !activeProjectAssetId ||
+        !activeProjectOption
+      ) {
+        return;
+      }
+
+      let importedCount = 0;
+      let skippedCount = 0;
+
+      setLoading(true);
+      try {
+        const inputs: Parameters<typeof createAssetsFromBuffers>[0] = [];
+        for (const file of files) {
+          const mediaType = getAssetMediaType(file);
+          if (!mediaType || !isCategoryMediaAllowed(activeCategory, mediaType)) {
+            skippedCount += 1;
+            continue;
+          }
+
+          inputs.push({
+            basePath,
+            name: file.name.replace(/\.[^.]+$/, ""),
+            scope: "project",
+            category: activeCategory,
+            mediaType,
+            fileName: file.name,
+            buffer: await file.arrayBuffer(),
+            folderId: activeProjectAssetId,
+            folderName: activeProjectOption.name,
+            source: { type: "upload" },
+          });
+        }
+
+        if (inputs.length > 0) {
+          const assets = await createAssetsFromBuffers(inputs);
+          importedCount = assets.length;
+        }
+
+        if (importedCount === 0) {
+          toast.warning(
+            `未上传资产。${getAssetCategoryLabel(activeCategory)}${getCategoryUploadHint(activeCategory)}`,
+          );
+          return;
+        }
+
+        await reloadAssets();
+        toast.success(
+          skippedCount > 0
+            ? `已上传 ${importedCount} 个资产，跳过 ${skippedCount} 个文件`
+            : `已上传 ${importedCount} 个资产`,
+        );
+      } catch (error) {
+        console.error("[AssetLibrary] upload project assets failed", error);
+        toast.error(error instanceof Error ? error.message : "上传项目资产失败");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [
+      activeCategory,
+      activeProjectAssetId,
+      activeProjectOption,
+      activeScope,
+      basePath,
+      reloadAssets,
+    ],
+  );
+
+  const handleCreateAssetProject = useCallback(async () => {
+    if (!basePath || creatingProject) return;
+    const name = createProjectName.trim();
+    if (!name) {
+      toast.warning(
+        assetNameDialogMode === "rename-asset"
+          ? "请输入资产名称"
+          : "请输入资产项目名称",
+      );
+      return;
+    }
+
+    setCreatingProject(true);
+    try {
+      if (assetNameDialogMode === "create-folder") {
+        const now = new Date().toISOString();
+        const folder: AssetFolder = {
+          id: createAssetFolderId(),
+          name,
+          sourceName: name,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await upsertAssetFolder(basePath, folder);
+        setAssetFolders((current) => [
+          folder,
+          ...current.filter((item) => item.id !== folder.id),
+        ]);
+        setActiveProjectAssetId(folder.id);
+        toast.success("资产项目已创建");
+        await reloadAssets();
+      } else if (assetNameDialogMode === "rename-folder" && renamingFolder) {
+        const folder = await renameAssetFolder(basePath, renamingFolder.id, name);
+        setAssetFolders((current) =>
+          current.map((item) => (item.id === folder.id ? folder : item)),
+        );
+        setProjectAssets((current) =>
+          current.map((asset) =>
+            asset.scope === "project" && asset.folderId === folder.id
+              ? { ...asset, folderName: folder.name, updatedAt: folder.updatedAt }
+              : asset,
+          ),
+        );
+        toast.success("资产项目已重命名");
+        await reloadAssets();
+      } else if (assetNameDialogMode === "rename-asset" && renamingAsset) {
+        if (renamingAsset.scope === "canvas") {
+          const store = useCanvasFlowStore.getState();
+          const result = renameCanvasMediaAssetInNodes(
+            store.nodes,
+            renamingAsset,
+            name,
+          );
+          if (result.renamedCount === 0) {
+            throw new Error("未找到可重命名的画布资产");
+          }
+          store.setNodes(result.nodes);
+          store.requestHistorySave();
+          store.saveGraph();
+          setPreviewAsset((current) =>
+            current?.id === renamingAsset.id ? { ...current, name } : current,
+          );
+        } else {
+          const asset = await renameAsset(basePath, renamingAsset.id, name);
+          setProjectAssets((current) =>
+            current.map((item) => (item.id === asset.id ? asset : item)),
+          );
+          setPreviewAsset((current) =>
+            current?.id === asset.id ? asset : current,
+          );
+          await reloadAssets();
+        }
+        toast.success("资产已重命名");
+      }
+
+      setCreateProjectName("");
+      setCreateProjectOpen(false);
+      setRenamingFolder(null);
+      setRenamingAsset(null);
+    } catch (error) {
+      console.error("[AssetLibrary] submit asset name failed", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : assetNameDialogMode === "create-folder"
+            ? "创建资产项目失败"
+            : "重命名失败",
+      );
+    } finally {
+      setCreatingProject(false);
+    }
+  }, [
+    assetNameDialogMode,
+    basePath,
+    createProjectName,
+    creatingProject,
+    reloadAssets,
+    renamingAsset,
+    renamingFolder,
+  ]);
 
   const toggleSelected = useCallback((assetId: string) => {
     setSelectedIds((current) =>
@@ -719,7 +960,7 @@ export const AssetLibraryDialog = ({
     <div
       role={isPageVariant ? "region" : "dialog"}
       aria-modal={isPageVariant ? undefined : true}
-      aria-label="资产库"
+      aria-label="asset library"
       tabIndex={isPageVariant ? undefined : -1}
       className={cn(
         isPageVariant
@@ -828,21 +1069,47 @@ export const AssetLibraryDialog = ({
                 ))
               : null}
           </div>
-          <div className="text-xs text-white/35">
-            {activeScope === "public"
-              ? "公共资产接口待接入"
-              : isProjectRoot
-                ? `${projectOptions.length} 个文件夹`
-              : isCanvasScope
-                ? "当前画布媒体"
-              : `${filteredAssets.length} 个资产`}
+          <div className="flex items-center gap-3">
+            {canUploadToProjectCategory ? (
+              <button
+                type="button"
+                onClick={() => assetUploadInputRef.current?.click()}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-medium text-white/72 transition-colors hover:border-[#B43FEB]/50 hover:bg-[#B43FEB]/10 hover:text-white"
+              >
+                <IconUpload size={14} />
+                上传{getAssetCategoryLabel(activeCategory)}
+              </button>
+            ) : null}
+            <div className="text-xs text-white/35">
+              {activeScope === "public"
+                ? "公共资产接口待接入"
+                : isProjectRoot
+                  ? String(projectOptions.length) + " 个项目"
+                  : isCanvasScope
+                    ? "当前画布媒体"
+                    : String(filteredAssets.length) + " 个资产"}
+            </div>
           </div>
         </div>
 
         <div className="flex min-h-0 flex-1 gap-5 overflow-hidden px-6 py-6">
-          <div className="min-w-0 flex-1 overflow-auto">
+          <div className="asset-library-scrollbar min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
             {isProjectRoot ? (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-5">
+              <div
+                role="list"
+                aria-label="asset projects"
+                className="grid min-h-full grid-cols-[repeat(auto-fill,minmax(150px,1fr))] content-start gap-5"
+                onContextMenu={(event) => {
+                  if (event.currentTarget !== event.target) return;
+                  event.preventDefault();
+                  setContextMenu(null);
+                  setFolderContextMenu(null);
+                  setBlankContextMenu({
+                    x: event.clientX,
+                    y: event.clientY,
+                  });
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => folderInputRef.current?.click()}
@@ -853,7 +1120,7 @@ export const AssetLibraryDialog = ({
                   </div>
                   <div className="min-w-0">
                     <div className="truncate text-sm text-white/88">
-                      导入文件夹
+                      导入资产
                     </div>
                     <div className="mt-1 text-xs text-white/40">
                       角色 / 场景 / 道具 / 音效
@@ -953,14 +1220,24 @@ export const AssetLibraryDialog = ({
                                 src={displayUrl}
                                 alt={asset.name}
                                 className="h-full w-full object-cover"
+                                loading="lazy"
+                                decoding="async"
+                                draggable={false}
+                              />
+                            ) : asset.mediaType === "video" && asset.coverUrl ? (
+                              <img
+                                src={displayUrl}
+                                alt={asset.name}
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                                decoding="async"
                                 draggable={false}
                               />
                             ) : asset.mediaType === "video" ? (
-                              <video
-                                src={displayUrl}
-                                className="h-full w-full object-cover"
-                                muted
-                              />
+                              <div className="flex h-full w-full flex-col items-center justify-center text-white/55">
+                                <IconVideo size={30} />
+                                <span className="mt-2 text-xs">Video</span>
+                              </div>
                             ) : (
                               <div className="flex h-full w-full flex-col items-center justify-center text-white/55">
                                 <IconMusic size={30} />
@@ -992,7 +1269,7 @@ export const AssetLibraryDialog = ({
               </div>
             )}
           </div>
-          {isPageVariant ? (
+          {isPageVariant && !hidePreviewPane ? (
             <AssetPreviewPane asset={activePreviewAsset} basePath={basePath} />
           ) : null}
         </div>
@@ -1021,7 +1298,7 @@ export const AssetLibraryDialog = ({
               >
                 &gt;
               </button>
-              <span className="ml-3">{PAGE_SIZE}条/页</span>
+              <span className="ml-3">{PAGE_SIZE}{"\u6761/\u9875"}</span>
               <span>{getAssetCategoryLabel(activeCategory)}</span>
             </div>
           ) : (
@@ -1052,6 +1329,14 @@ export const AssetLibraryDialog = ({
           className="hidden"
           onChange={handleImportFolder}
         />
+        <input
+          ref={assetUploadInputRef}
+          type="file"
+          multiple
+          accept={getCategoryUploadAccept(activeCategory)}
+          className="hidden"
+          onChange={handleUploadProjectAssets}
+        />
       </div>
       {contextMenu ? (
         <div
@@ -1068,9 +1353,24 @@ export const AssetLibraryDialog = ({
                 setContextMenu(null);
               }}
             >
-              插入画布
+              {"\u63d2\u5165\u753b\u5e03"}
             </button>
           ) : null}
+          <button
+            type="button"
+            className="flex w-full items-center rounded-md px-3 py-2 text-left text-white/80 hover:bg-[#B43FEB]/10 hover:text-white"
+            onClick={() => {
+              const asset = contextMenu.asset;
+              setContextMenu(null);
+              setAssetNameDialogMode("rename-asset");
+              setRenamingAsset(asset);
+              setRenamingFolder(null);
+              setCreateProjectName(asset.name);
+              setCreateProjectOpen(true);
+            }}
+          >
+            {"\u91cd\u547d\u540d"}
+          </button>
           <button
             type="button"
             className="flex w-full items-center rounded-md px-3 py-2 text-left text-white/80 hover:bg-[#B43FEB]/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
@@ -1081,7 +1381,7 @@ export const AssetLibraryDialog = ({
               void handleDownloadSingleAsset(asset);
             }}
           >
-            下载
+            {"\u4e0b\u8f7d"}
           </button>
           <button
             type="button"
@@ -1092,7 +1392,7 @@ export const AssetLibraryDialog = ({
               void handleDeleteAssets([asset]);
             }}
           >
-            删除
+            {"\u5220\u9664"}
           </button>
         </div>
       ) : null}
@@ -1105,6 +1405,21 @@ export const AssetLibraryDialog = ({
         >
           <button
             type="button"
+            className="flex w-full items-center rounded-md px-3 py-2 text-left text-white/80 hover:bg-[#B43FEB]/10 hover:text-white"
+            onClick={() => {
+              const folder = folderContextMenu.folder;
+              setFolderContextMenu(null);
+              setAssetNameDialogMode("rename-folder");
+              setRenamingFolder(folder);
+              setRenamingAsset(null);
+              setCreateProjectName(folder.name);
+              setCreateProjectOpen(true);
+            }}
+          >
+            {"\u91cd\u547d\u540d"}
+          </button>
+          <button
+            type="button"
             className="flex w-full items-center rounded-md px-3 py-2 text-left text-red-300 hover:bg-red-500/15 hover:text-red-200"
             onClick={() => {
               const folder = folderContextMenu.folder;
@@ -1112,8 +1427,77 @@ export const AssetLibraryDialog = ({
               handleDeleteFolder(folder);
             }}
           >
-            删除
+            {"\u5220\u9664"}
           </button>
+        </div>
+      ) : null}
+
+      {blankContextMenu ? (
+        <div
+          className="fixed z-[90] w-36 overflow-hidden rounded-lg border border-white/10 bg-[#121214] p-1 text-sm text-white shadow-2xl"
+          style={{ left: blankContextMenu.x, top: blankContextMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-white/80 hover:bg-[#B43FEB]/10 hover:text-white"
+            onClick={openCreateProjectDialog}
+          >
+            <IconPlus size={15} />
+            {"\u65b0\u5efa\u8d44\u4ea7\u9879\u76ee"}
+          </button>
+        </div>
+      ) : null}
+
+      {createProjectOpen ? (
+        <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/40">
+          <div className="w-[min(420px,90vw)] rounded-xl border border-white/10 bg-[#171717] p-5 text-white shadow-2xl">
+            <div className="text-sm font-medium">
+              {assetNameDialogMode === "create-folder"
+                ? "\u65b0\u5efa\u8d44\u4ea7\u9879\u76ee"
+                : assetNameDialogMode === "rename-folder"
+                  ? "\u91cd\u547d\u540d\u8d44\u4ea7\u9879\u76ee"
+                  : "\u91cd\u547d\u540d\u8d44\u4ea7"}
+            </div>
+            <input
+              value={createProjectName}
+              onChange={(event) => setCreateProjectName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  void handleCreateAssetProject();
+                }
+              }}
+              placeholder={
+                assetNameDialogMode === "create-folder"
+                  ? "\u8d44\u4ea7\u9879\u76ee\u540d\u79f0"
+                  : "\u8d44\u4ea7\u540d\u79f0"
+              }
+              className="mt-4 h-10 w-full rounded-md border border-white/10 bg-black/30 px-3 text-sm outline-none focus:border-[#B43FEB]/70"
+              autoFocus
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  setCreateProjectOpen(false);
+                  setCreateProjectName("");
+                  setRenamingFolder(null);
+                  setRenamingAsset(null);
+                  setAssetNameDialogMode("create-folder");
+                }}
+              >
+                {"\u53d6\u6d88"}
+              </Button>
+              <Button
+                size="sm"
+                variant="blue"
+                loading={creatingProject}
+                onClick={() => void handleCreateAssetProject()}
+              >
+                {assetNameDialogMode === "create-folder" ? "\u521b\u5efa" : "\u4fdd\u5b58"}
+              </Button>
+            </div>
+          </div>
         </div>
       ) : null}
 

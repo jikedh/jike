@@ -40,6 +40,19 @@ export type StorageApi = {
     basePath: string,
     relativePath: string,
   ) => Promise<StorageResult<{ data: Buffer | null }>>;
+  writeRawFile: (
+    basePath: string,
+    relativePath: string,
+    buffer: ArrayBuffer,
+  ) => Promise<StorageResult<{ path?: string }>>;
+  readRawFile: (
+    basePath: string,
+    relativePath: string,
+  ) => Promise<StorageResult<{ data: Buffer | null }>>;
+  deleteRawPath?: (
+    basePath: string,
+    relativePath: string,
+  ) => Promise<StorageResult>;
   listMedia: (
     basePath: string,
     projectName: string,
