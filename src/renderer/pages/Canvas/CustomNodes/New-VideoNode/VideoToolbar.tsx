@@ -1331,6 +1331,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
               }),
               "video",
               "mp4",
+              "去字幕",
             );
             updateNewVideoNodeData(targetNodeId, {
               status: GenerationStatus.COMPLETED,
@@ -1468,18 +1469,23 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         } as any);
 
         if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
+          const resultItem = await saveToolMediaUrlToProject(
+            projectId,
+            withVideoPosterFields({
+              url: accessUrl,
+              remoteUrl: accessUrl,
+              format: "mp4",
+            }),
+            "video",
+            "mp4",
+            "去字幕",
+          );
           updateNewVideoNodeData(newNodeId, {
             status: GenerationStatus.COMPLETED,
             progress: 100,
             result: {
               type: "video",
-              data: [
-                withVideoPosterFields({
-                  url: accessUrl,
-                  remoteUrl: accessUrl,
-                  format: "mp4",
-                }),
-              ],
+              data: [resultItem],
             },
             error: undefined,
           } as any);
