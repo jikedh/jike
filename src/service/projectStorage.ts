@@ -520,6 +520,7 @@ export const saveMediaFromUrl = async (
   url: string,
   mediaType: "image" | "video" | "audio" | "generate_image" | "generate_video",
   extension?: string,
+  fileNamePrefix?: string,
 ): Promise<MediaRef> => {
   const project = getProjectById(projectId);
   if (!project || !localStorageService.isAvailable()) {
@@ -532,7 +533,7 @@ export const saveMediaFromUrl = async (
       url,
       mediaType === "video" ? "mp4" : mediaType === "audio" ? "mp3" : "png",
     );
-  const fileName = generateSimpleFileName(ext);
+  const fileName = generateSimpleFileName(ext, fileNamePrefix);
 
   try {
     const downloadFnMap: Record<
@@ -574,13 +575,14 @@ export const saveMediaBuffer = async (
   buffer: ArrayBuffer,
   mediaType: "image" | "video" | "audio" | "generate_image" | "generate_video",
   extension: string = "png",
+  fileNamePrefix?: string,
 ): Promise<MediaRef> => {
   const project = getProjectById(projectId);
   if (!project || !localStorageService.isAvailable()) {
     return { url: "" };
   }
 
-  const fileName = generateSimpleFileName(extension);
+  const fileName = generateSimpleFileName(extension, fileNamePrefix);
 
   try {
     const saveFnMap: Record<
@@ -629,7 +631,7 @@ export const retryMediaUrl = async (
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
-      const response = await fetch(url, {
+      const _response = await fetch(url, {
         method: "HEAD",
         mode: "no-cors",
         signal: controller.signal,

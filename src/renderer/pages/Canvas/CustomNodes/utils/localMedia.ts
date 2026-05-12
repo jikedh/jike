@@ -22,6 +22,7 @@ export const saveToolMediaFileToProject = async <T extends { url: string }>(
   file: File,
   mediaType: MediaType,
   extension: string,
+  fileNamePrefix?: string,
 ): Promise<T & Pick<MediaRef, "remoteUrl" | "localName" | "localPath">> => {
   if (!projectId) {
     return item;
@@ -33,6 +34,7 @@ export const saveToolMediaFileToProject = async <T extends { url: string }>(
     buffer,
     mediaType,
     extension,
+    fileNamePrefix,
   );
   return mergeLocalMediaRef(item, localRef);
 };
@@ -42,6 +44,7 @@ export const saveToolMediaUrlToProject = async <T extends { url: string }>(
   item: T,
   mediaType: MediaType,
   extension?: string,
+  fileNamePrefix?: string,
 ): Promise<T & Pick<MediaRef, "remoteUrl" | "localName" | "localPath">> => {
   if (!projectId) {
     return item;
@@ -52,6 +55,7 @@ export const saveToolMediaUrlToProject = async <T extends { url: string }>(
     item.url,
     mediaType,
     extension,
+    fileNamePrefix,
   );
   return mergeLocalMediaRef(item, localRef);
 };

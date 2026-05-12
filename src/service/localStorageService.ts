@@ -486,9 +486,15 @@ export const generateFileName = (prefix: string, extension: string): string => {
   return `${prefix}_${timestamp}_${random}.${extension}`;
 };
 
-export const generateSimpleFileName = (extension: string): string => {
+export const generateSimpleFileName = (
+  extension: string,
+  prefix?: string,
+): string => {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 8);
+  if (prefix?.trim()) {
+    return generateFileName(prefix.trim(), extension);
+  }
   return `${timestamp}_${random}.${extension}`;
 };
 
