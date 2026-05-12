@@ -32,7 +32,13 @@ export type DownloadApi = {
 };
 
 export type VideoProcessingApi = {
-  trim: (request: { videoUrl: string; start: number; end: number }) => Promise<{
+  trim: (request: {
+    videoUrl: string;
+    start: number;
+    end: number;
+    authToken?: string;
+    backendBaseUrl?: string;
+  }) => Promise<{
     success: boolean;
     data?: {
       url: string;

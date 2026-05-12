@@ -3,16 +3,17 @@ import IceClient, {
   SubmitMediaProducingJobRequest,
 } from "@alicloud/ice20201109";
 import ffmpeg from "@ffmpeg-installer/ffmpeg";
-import OSS from "ali-oss";
 import { app } from "electron";
 import { spawn } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 export type VideoTrimRequest = {
   videoUrl: string;
   start: number;
   end: number;
+  authToken?: string;
+  backendBaseUrl?: string;
 };
 
 export type VideoTrimResult = {
@@ -28,8 +29,8 @@ type AliyunRuntimeConfig = {
   accessKeySecret: string;
   ossRegion: string;
   ossBucket: string;
-  imsRegionId: string;
-  imsEndpoint: string;
+  imsRegionId?: string;
+  imsEndpoint?: string;
 };
 
 const CLOUD_POLL_INTERVAL_MS = 5000;
@@ -46,7 +47,7 @@ const getEnvValue = (key: string) => {
   return process.env[key] || metaEnv[key] || "";
 };
 
-const getAliyunConfig = (): AliyunRuntimeConfig => {
+const getAliyunConfig = (): AliyunRuntimeConfig | null => {
   const accessKeyId = getEnvValue("VITE_OSS_ACCESS_KEY_ID");
   const accessKeySecret = getEnvValue("VITE_OSS_ACCESS_KEY_SECRET");
   const ossRegion = getEnvValue("VITE_OSS_REGION");
@@ -57,11 +58,7 @@ const getAliyunConfig = (): AliyunRuntimeConfig => {
     getEnvValue("VITE_IMS_ENDPOINT") || `ice.${imsRegionId}.aliyuncs.com`;
 
   if (!accessKeyId || !accessKeySecret || !ossRegion || !ossBucket) {
-    throw new Error("缺少阿里云 OSS 配置，无法上传裁剪后的视频");
-  }
-
-  if (!imsRegionId) {
-    throw new Error("缺少阿里云 IMS Region 配置");
+    return null;
   }
 
   return {
@@ -69,26 +66,23 @@ const getAliyunConfig = (): AliyunRuntimeConfig => {
     accessKeySecret,
     ossRegion,
     ossBucket,
-    imsRegionId,
-    imsEndpoint,
+    imsRegionId: imsRegionId || undefined,
+    imsEndpoint: imsEndpoint || undefined,
   };
 };
 
-const createOssClient = (config: AliyunRuntimeConfig) =>
-  new OSS({
-    region: config.ossRegion,
-    accessKeyId: config.accessKeyId,
-    accessKeySecret: config.accessKeySecret,
-    bucket: config.ossBucket,
-  });
+const createIceClient = (config: AliyunRuntimeConfig) => {
+  if (!config.imsRegionId || !config.imsEndpoint) {
+    throw new Error("缺少阿里云 IMS 配置，无法使用云端裁剪");
+  }
 
-const createIceClient = (config: AliyunRuntimeConfig) =>
-  new IceClient({
+  return new IceClient({
     accessKeyId: config.accessKeyId,
     accessKeySecret: config.accessKeySecret,
     regionId: config.imsRegionId,
     endpoint: config.imsEndpoint,
   } as any);
+};
 
 const createOutputObjectKey = () => {
   const random = Math.random().toString(36).slice(2, 8);
@@ -97,6 +91,71 @@ const createOutputObjectKey = () => {
 
 const createPublicOssUrl = (config: AliyunRuntimeConfig, objectKey: string) =>
   `https://${config.ossBucket}.${config.ossRegion}.aliyuncs.com/${objectKey}`;
+
+const resolveBackendBaseUrl = (override?: string) => {
+  const baseUrl = override || getEnvValue("VITE_JIKE_GO_BASE_URL");
+  return (baseUrl || "http://localhost:9181").replace(/\/$/, "");
+};
+
+const uploadLocalVideoToBackend = async (
+  buffer: Buffer,
+  fileName: string,
+  authToken: string,
+  backendBaseUrl: string,
+) => {
+  const url = `${backendBaseUrl}/v1/oss/upload`;
+  const formData = new FormData();
+  const contentType = "video/mp4";
+  const blob = new Blob([buffer], { type: contentType });
+  formData.append("file", blob, fileName);
+
+  const token = authToken.startsWith("Bearer ")
+    ? authToken
+    : `Bearer ${authToken}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    body: formData,
+    headers: {
+      Authorization: token,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `后端上传失败：${response.status} ${response.statusText}`,
+    );
+  }
+
+  const payload = await response.json().catch(() => null);
+  const data = payload?.data ?? payload;
+  const uploadedUrl = data?.url || data?.URL;
+  if (!uploadedUrl) {
+    throw new Error("后端未返回上传地址");
+  }
+
+  return uploadedUrl as string;
+};
+
+const uploadTrimmedVideo = async (options: {
+  buffer: Buffer;
+  filePath: string;
+  authToken?: string;
+  backendBaseUrl?: string;
+}) => {
+  const { buffer, filePath, authToken, backendBaseUrl } = options;
+
+  if (!authToken) {
+    throw new Error("缺少登录凭证，无法通过后端上传裁剪后的视频");
+  }
+
+  return uploadLocalVideoToBackend(
+    buffer,
+    basename(filePath),
+    authToken,
+    resolveBackendBaseUrl(backendBaseUrl),
+  );
+};
 
 const assertValidRange = ({ videoUrl, start, end }: VideoTrimRequest) => {
   if (!videoUrl) {
@@ -226,7 +285,7 @@ const runFfmpeg = (args: string[]) =>
       reject(
         new Error(
           Buffer.concat(stderr).toString("utf8").trim() ||
-            `ffmpeg 退出码 ${code}`,
+          `ffmpeg 退出码 ${code}`,
         ),
       );
     });
@@ -246,19 +305,8 @@ const downloadToTempFile = async (url: string, filePath: string) => {
   await writeFile(filePath, buffer);
 };
 
-const uploadLocalVideoToOss = async (
-  filePath: string,
-  config: AliyunRuntimeConfig,
-) => {
-  const objectKey = createOutputObjectKey();
-  const client = createOssClient(config);
-  const result = await client.put(objectKey, filePath);
-  return result.url || createPublicOssUrl(config, objectKey);
-};
-
 const trimVideoByFfmpeg = async (
   request: VideoTrimRequest,
-  config: AliyunRuntimeConfig,
 ): Promise<VideoTrimResult> => {
   const tempDir = join(app.getPath("temp"), "jike-video-trim", `${Date.now()}`);
   const inputPath = join(tempDir, "source-video");
@@ -309,7 +357,12 @@ const trimVideoByFfmpeg = async (
       throw new Error("ffmpeg 裁剪结果为空");
     }
 
-    const url = await uploadLocalVideoToOss(outputPath, config);
+    const url = await uploadTrimmedVideo({
+      buffer: data,
+      filePath: outputPath,
+      authToken: request.authToken,
+      backendBaseUrl: request.backendBaseUrl,
+    });
     return {
       url,
       format: "mp4",
@@ -332,14 +385,19 @@ export const videoProcessingService = {
     };
     const config = getAliyunConfig();
 
-    try {
-      return await trimVideoByCloud(normalizedRequest, config);
-    } catch (cloudError) {
-      console.warn("[video-processing] cloud trim failed, fallback to ffmpeg", {
-        message:
-          cloudError instanceof Error ? cloudError.message : String(cloudError),
-      });
-      return await trimVideoByFfmpeg(normalizedRequest, config);
+    if (config?.imsRegionId && config.imsEndpoint) {
+      try {
+        return await trimVideoByCloud(normalizedRequest, config);
+      } catch (cloudError) {
+        console.warn("[video-processing] cloud trim failed, fallback to ffmpeg", {
+          message:
+            cloudError instanceof Error
+              ? cloudError.message
+              : String(cloudError),
+        });
+      }
     }
+
+    return await trimVideoByFfmpeg(normalizedRequest);
   },
 };

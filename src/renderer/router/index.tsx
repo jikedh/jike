@@ -19,6 +19,7 @@ const ScriptPage = lazy(() => import("@/pages/Script"));
 const AssetsPage = lazy(() => import("@/pages/Assets"));
 const VoicePage = lazy(() => import("@/pages/Voice"));
 const VideoPage = lazy(() => import("@/pages/Video"));
+const UploadTestPage = lazy(() => import("@/pages/Video/UploadTest"));
 const SettingsPage = lazy(() => import("@/pages/Settings"));
 const PointsPage = lazy(() => import("@/pages/Points"));
 const LoginPage = lazy(() => import("@/pages/Login"));
@@ -113,6 +114,10 @@ const router = createHashRouter([
       {
         path: "/video",
         element: <VideoPage />,
+      },
+      {
+        path: "/video/upload-test",
+        element: <UploadTestPage />,
       },
       {
         path: "/settings",
