@@ -30,6 +30,11 @@ const getProjectStoragePath = () => {
 };
 
 const resolveAssetFileUrl = (asset: AssetRecord) => {
+  // 优先使用创建时上传的 OSS 公网 URL
+  if (asset.ossUrl) {
+    return asset.ossUrl;
+  }
+
   if (isAbsoluteMediaUrl(asset.fileUrl)) {
     return asset.fileUrl;
   }
