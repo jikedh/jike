@@ -1,10 +1,7 @@
 import { readMediaFromLocal } from "service/projectStorage";
-import {
-  ASSET_SUPPORTED_TYPES_LABEL,
-  getAssetMediaTypeByFileName,
-} from "shared/constants/mediaTypes";
+import { getAssetMediaTypeByFileName } from "shared/constants/mediaTypes";
 import type { AssetDiskFileInfo, AssetDiskProjectInfo } from "shared/types/storage";
-import { getUploadOssPutUrl } from "@/api/jikeGo";
+import { uploadFileToOSS } from "service/oss";
 
 export type AssetScope = "project" | "canvas" | "public";
 export type AssetMediaType = "image" | "video" | "audio";
@@ -26,7 +23,7 @@ export type AssetRecord = {
   category: AssetCategory;
   mediaType: AssetMediaType;
   fileUrl: string;
-  /** OSS 公网访问 URL，创建资产时上传后写入，优先用于画布节点 */
+  /** OSS 公网访问 URL，优先用于画布节点 */
   ossUrl?: string;
   coverUrl?: string;
   originalFile: string;
@@ -71,6 +68,8 @@ type PreparedAsset = {
   asset: AssetRecord;
   originalFile: string;
   originalBuffer: ArrayBuffer;
+  extension: string;
+  mediaType: AssetMediaType;
   coverFile?: string;
   coverBuffer?: ArrayBuffer;
   metadataFile: string;
@@ -88,6 +87,7 @@ export type AssetMediaRef = {
 const ASSET_INDEX_PATH = "assets/index.json";
 const ASSET_CACHE_DIR = ".jike-assets-cache";
 const ASSET_THUMBNAIL_DIR = `${ASSET_CACHE_DIR}/thumbnails`;
+const ASSET_OSS_CACHE_PATH = `${ASSET_CACHE_DIR}/oss-index.json`;
 export const DEFAULT_ASSET_FOLDER_ID = "unassigned";
 export const DEFAULT_ASSET_FOLDER_NAME = "未归档资产";
 
@@ -171,6 +171,37 @@ const createStableId = (value: string) => {
 const getFileNameWithoutExtension = (fileName: string) =>
   fileName.replace(/\.[^.]+$/, "");
 
+const getFileExtension = (fileName: string) =>
+  fileName.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "";
+
+const getAssetFileName = (asset: AssetRecord) => {
+  const sourcePath = asset.originalFile || asset.fileUrl || asset.name;
+  const fileName = sourcePath.split("/").pop() || asset.name || "asset";
+  return hasFileExtension(fileName)
+    ? fileName
+    : `${fileName}.${inferExtension(fileName, asset.mediaType)}`;
+};
+
+const getAssetMimeType = (asset: AssetRecord) => {
+  const extension = getFileExtension(getAssetFileName(asset));
+  const mimeTypeMap: Record<string, string> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+    gif: "image/gif",
+    mp4: "video/mp4",
+    webm: "video/webm",
+    mov: "video/quicktime",
+    mp3: "audio/mpeg",
+    wav: "audio/wav",
+    m4a: "audio/mp4",
+    aac: "audio/aac",
+    ogg: "audio/ogg",
+  };
+  return mimeTypeMap[extension] || `${asset.mediaType}/${extension || "octet-stream"}`;
+};
+
 const getDiskCategory = (categoryName: string, mediaType: AssetMediaType) => {
   const normalized = categoryName.trim().toLowerCase();
   return (
@@ -182,6 +213,16 @@ const getDiskCategory = (categoryName: string, mediaType: AssetMediaType) => {
 
 const getCacheThumbnailPath = (assetId: string) =>
   `${ASSET_THUMBNAIL_DIR}/${assetId}.${ASSET_THUMBNAIL_EXTENSION}`;
+
+const isAbsoluteMediaUrl = (value: string) =>
+  /^(https?:|file:|blob:|data:)/i.test(value.trim());
+
+const getAssetOssCacheKey = (asset: AssetRecord) =>
+  [
+    asset.source?.type || "index",
+    asset.originalFile || asset.fileUrl,
+    asset.updatedAt || "",
+  ].join("|");
 
 const isAssetMediaType = (value: unknown): value is AssetMediaType =>
   value === "image" || value === "video" || value === "audio";
@@ -276,6 +317,42 @@ export const getAssetOriginalDisplayUrl = (
   asset: AssetRecord,
   basePath: string,
 ) => getAssetFileUrl(basePath, asset.fileUrl || asset.originalFile);
+
+export const ensureAssetOssUrl = async (
+  basePath: string,
+  asset: AssetRecord,
+) => {
+  if (asset.ossUrl || isAbsoluteMediaUrl(asset.fileUrl)) {
+    return asset.ossUrl || asset.fileUrl;
+  }
+
+  const cacheKey = getAssetOssCacheKey(asset);
+  const cache = await readAssetOssCache(basePath);
+  if (cache[cacheKey]) {
+    return cache[cacheKey];
+  }
+
+  const relativePath = asset.originalFile || asset.fileUrl;
+  const result =
+    asset.source?.type === "disk"
+      ? await window.storage.readRawFile(basePath, relativePath)
+      : await window.storage.readMedia(basePath, relativePath);
+  if (!result.success || !result.data) {
+    throw new Error("读取资产文件失败，无法上传 OSS");
+  }
+
+  const file = new File([new Uint8Array(result.data)], getAssetFileName(asset), {
+    type: getAssetMimeType(asset),
+  });
+  const uploadResult = await uploadFileToOSS(file);
+  if (!uploadResult.url) {
+    throw new Error("上传资产到 OSS 失败");
+  }
+
+  cache[cacheKey] = uploadResult.url;
+  await writeAssetOssCache(basePath, cache);
+  return uploadResult.url;
+};
 
 const inferExtension = (
   fileName: string | undefined,
@@ -449,6 +526,41 @@ const writeTextFile = async (
 ) => {
   const bytes = textEncoder.encode(content);
   return window.storage.saveMedia(basePath, relativePath, toArrayBuffer(bytes));
+};
+
+const readRawTextFile = async (basePath: string, relativePath: string) => {
+  const result = await window.storage.readRawFile(basePath, relativePath);
+  if (!result.success || !result.data) return null;
+  return textDecoder.decode(new Uint8Array(result.data));
+};
+
+const writeRawTextFile = async (
+  basePath: string,
+  relativePath: string,
+  content: string,
+) => {
+  const bytes = textEncoder.encode(content);
+  return window.storage.writeRawFile(basePath, relativePath, toArrayBuffer(bytes));
+};
+
+const readAssetOssCache = async (basePath: string) => {
+  try {
+    const raw = await readRawTextFile(basePath, ASSET_OSS_CACHE_PATH);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, string>)
+      : {};
+  } catch {
+    return {};
+  }
+};
+
+const writeAssetOssCache = async (
+  basePath: string,
+  cache: Record<string, string>,
+) => {
+  await writeRawTextFile(basePath, ASSET_OSS_CACHE_PATH, JSON.stringify(cache, null, 2));
 };
 
 export const readAssetIndex = async (basePath: string): Promise<AssetIndex> => {
@@ -700,7 +812,7 @@ const prepareAssetFromBuffer = async (
 ): Promise<PreparedAsset> => {
   const supportedMediaType = getAssetMediaTypeByFileName(input.fileName);
   if (!supportedMediaType) {
-    throw new Error(`不支持的资产类型。支持${ASSET_SUPPORTED_TYPES_LABEL}`);
+    throw new Error("不支持的资产类型");
   }
   if (supportedMediaType !== input.mediaType) {
     throw new Error("资产文件类型与媒体类型不一致");
@@ -763,6 +875,8 @@ const prepareAssetFromBuffer = async (
     asset,
     originalFile,
     originalBuffer: input.buffer,
+    extension,
+    mediaType: input.mediaType,
     coverFile: thumbnailBuffer ? coverFile : undefined,
     coverBuffer: thumbnailBuffer || undefined,
     metadataFile,
@@ -782,31 +896,16 @@ const savePreparedAssetFiles = async (
     throw new Error(saveResult.error || "保存资产文件失败");
   }
 
-  // 上传到 OSS，获取公网 URL 存入 ossUrl 字段
+  // 上传到 OSS，获取公网 URL 存入 ossUrl 字段。
   try {
-    const ext = extension;
-    const blobTypeMap: Record<AssetMediaType, "image" | "video" | "audio"> = {
-      image: "image",
-      video: "video",
-      audio: "audio",
-    };
-    const putUrlResp = await getUploadOssPutUrl({
-      blob_type: blobTypeMap[input.mediaType],
-      ext,
-      ttl: 3600,
-    });
-    const putUrlData = putUrlResp?.data ?? putUrlResp;
-    if (putUrlData?.put_url) {
-      const uploadResp = await fetch(putUrlData.put_url, {
-        method: "PUT",
-        body: input.buffer,
-        headers: putUrlData.headers || {},
-      });
-      if (uploadResp.ok) {
-        asset.ossUrl = putUrlData.access_url as string;
-      } else {
-        console.warn("[assetStorage] OSS PUT 失败:", uploadResp.status);
-      }
+    const file = new File(
+      [prepared.originalBuffer],
+      getAssetFileName(prepared.asset),
+      { type: getAssetMimeType(prepared.asset) },
+    );
+    const uploadResult = await uploadFileToOSS(file);
+    if (uploadResult.url) {
+      prepared.asset.ossUrl = uploadResult.url;
     }
   } catch (ossError) {
     console.warn("[assetStorage] 上传 OSS 失败，仅保存本地:", ossError);

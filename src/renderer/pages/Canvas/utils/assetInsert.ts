@@ -1,5 +1,9 @@
 import type { AssetRecord } from "service/assetStorage";
-import { getAssetFileUrl, getAssetStoragePath } from "service/assetStorage";
+import {
+  ensureAssetOssUrl,
+  getAssetFileUrl,
+  getAssetStoragePath,
+} from "service/assetStorage";
 import { GenerationStatus } from "shared/constants/enum";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import {
@@ -30,7 +34,7 @@ const getProjectStoragePath = () => {
 };
 
 const resolveAssetFileUrl = (asset: AssetRecord) => {
-  // 优先使用创建时上传的 OSS 公网 URL
+  // 优先使用创建时已有的 OSS 公网 URL。
   if (asset.ossUrl) {
     return asset.ossUrl;
   }
@@ -45,6 +49,19 @@ const resolveAssetFileUrl = (asset: AssetRecord) => {
       : getAssetStoragePath();
 
   return getAssetFileUrl(basePath, asset.fileUrl);
+};
+
+const resolveAssetRemoteUrl = async (asset: AssetRecord) => {
+  if (asset.source?.type === "canvas") {
+    return resolveAssetFileUrl(asset);
+  }
+
+  const basePath = getAssetStoragePath();
+  if (!basePath) {
+    return resolveAssetFileUrl(asset);
+  }
+
+  return ensureAssetOssUrl(basePath, asset);
 };
 
 const getNodeLocalPath = (asset: AssetRecord) => {
@@ -81,7 +98,7 @@ export const insertAssetIntoCanvas = async (
   position: InsertPosition,
 ) => {
   const store = useCanvasFlowStore.getState();
-  const fileUrl = resolveAssetFileUrl(asset);
+  const fileUrl = await resolveAssetRemoteUrl(asset);
   const localPath = getNodeLocalPath(asset);
   const localName = getLocalName(
     localPath || asset.originalFile || asset.fileUrl,
