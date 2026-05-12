@@ -67,6 +67,8 @@ export type UploadOssPutUrlRequest = {
   blob_type: UploadOssBlobType;
   ext?: string;
   content_type?: string;
+  /** 预签名 URL 有效期（秒），默认 3600，最大 86400 */
+  ttl?: number;
 };
 
 export type UploadOssPutUrlResp = {
@@ -74,6 +76,8 @@ export type UploadOssPutUrlResp = {
   headers: Record<string, string>;
   access_url: string;
   key: string;
+  /** 实际签名有效期（秒） */
+  ttl?: number;
 };
 
 export type OssUploadResp = {
