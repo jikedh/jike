@@ -70,6 +70,7 @@ type PreparedAsset = {
   asset: AssetRecord;
   originalFile: string;
   originalBuffer: ArrayBuffer;
+  originalExtension: string;
   coverFile?: string;
   coverBuffer?: ArrayBuffer;
   metadataFile: string;
@@ -229,6 +230,35 @@ const inferExtension = (
   }
   return mediaTypeExtensions[mediaType];
 };
+
+const getAssetContentType = (
+  mediaType: AssetMediaType,
+  extension: string,
+): string => {
+  const normalizedExtension = extension.toLowerCase();
+  if (mediaType === "image") {
+    if (normalizedExtension === "jpg" || normalizedExtension === "jpeg") {
+      return "image/jpeg";
+    }
+    if (normalizedExtension === "webp") return "image/webp";
+    if (normalizedExtension === "gif") return "image/gif";
+    return "image/png";
+  }
+  if (mediaType === "video") {
+    if (normalizedExtension === "webm") return "video/webm";
+    if (normalizedExtension === "mov") return "video/quicktime";
+    return "video/mp4";
+  }
+  if (normalizedExtension === "wav") return "audio/wav";
+  if (normalizedExtension === "m4a") return "audio/mp4";
+  if (normalizedExtension === "aac") return "audio/aac";
+  if (normalizedExtension === "ogg") return "audio/ogg";
+  return "audio/mpeg";
+};
+
+const toOssBlobType = (
+  mediaType: AssetMediaType,
+): "image" | "video" | "audio" => mediaType;
 
 const createAssetId = () =>
   `asset_${new Date()
@@ -554,10 +584,43 @@ const prepareAssetFromBuffer = async (
     asset,
     originalFile,
     originalBuffer: input.buffer,
+    originalExtension: extension,
     coverFile: thumbnailBuffer ? coverFile : undefined,
     coverBuffer: thumbnailBuffer || undefined,
     metadataFile,
   };
+};
+
+const uploadPreparedAssetToOss = async (prepared: PreparedAsset) => {
+  try {
+    const putUrlResp = await getUploadOssPutUrl({
+      blob_type: toOssBlobType(prepared.asset.mediaType),
+      ext: prepared.originalExtension,
+      content_type: getAssetContentType(
+        prepared.asset.mediaType,
+        prepared.originalExtension,
+      ),
+      ttl: 3600,
+    });
+    const putUrlData = putUrlResp?.data ?? putUrlResp;
+    if (!putUrlData?.put_url) {
+      return;
+    }
+
+    const uploadResp = await fetch(putUrlData.put_url, {
+      method: "PUT",
+      body: prepared.originalBuffer,
+      headers: putUrlData.headers || {},
+    });
+    if (uploadResp.ok && putUrlData.access_url) {
+      prepared.asset.ossUrl = putUrlData.access_url as string;
+      return;
+    }
+
+    console.warn("[assetStorage] OSS PUT 失败:", uploadResp.status);
+  } catch (ossError) {
+    console.warn("[assetStorage] 上传 OSS 失败，仅保存本地:", ossError);
+  }
 };
 
 const savePreparedAssetFiles = async (
@@ -573,35 +636,8 @@ const savePreparedAssetFiles = async (
     throw new Error(saveResult.error || "保存资产文件失败");
   }
 
-  // 上传到 OSS，获取公网 URL 存入 ossUrl 字段
-  try {
-    const ext = extension;
-    const blobTypeMap: Record<AssetMediaType, "image" | "video" | "audio"> = {
-      image: "image",
-      video: "video",
-      audio: "audio",
-    };
-    const putUrlResp = await getUploadOssPutUrl({
-      blob_type: blobTypeMap[input.mediaType],
-      ext,
-      ttl: 3600,
-    });
-    const putUrlData = putUrlResp?.data ?? putUrlResp;
-    if (putUrlData?.put_url) {
-      const uploadResp = await fetch(putUrlData.put_url, {
-        method: "PUT",
-        body: input.buffer,
-        headers: putUrlData.headers || {},
-      });
-      if (uploadResp.ok) {
-        asset.ossUrl = putUrlData.access_url as string;
-      } else {
-        console.warn("[assetStorage] OSS PUT 失败:", uploadResp.status);
-      }
-    }
-  } catch (ossError) {
-    console.warn("[assetStorage] 上传 OSS 失败，仅保存本地:", ossError);
-  }
+  // 上传到 OSS，获取公网 URL 存入 ossUrl 字段；失败时保留本地资产作为回退。
+  await uploadPreparedAssetToOss(prepared);
 
   if (prepared.coverFile && prepared.coverBuffer) {
     const coverResult = await window.storage.saveMedia(
