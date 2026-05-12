@@ -3,6 +3,7 @@
   Bot,
   ChevronLeft,
   Clapperboard,
+  Download,
   FileImage,
   FolderOpen,
   ImagePlus,
@@ -27,6 +28,7 @@ import {
   splitScriptWithAgent,
   storyboardStorage,
   type StoryboardAgentData,
+  type StoryboardAgentStep,
   type StoryboardAssetItem,
   type StoryboardAssetKind,
   type StoryboardProject,
@@ -62,6 +64,54 @@ const assetKinds: Array<{ id: StoryboardAssetKind; label: string }> = [
   { id: "prop", label: "道具" },
   { id: "audio", label: "音效" },
 ];
+
+const storyAgentSteps: Array<{ id: StoryboardAgentStep; label: string }> = [
+  { id: "script", label: "输入剧本" },
+  { id: "assets", label: "资产详情" },
+  { id: "shots", label: "分镜管理" },
+  { id: "video-edit", label: "视频编辑" },
+];
+
+const stepOrder: Record<StoryboardAgentStep, number> = {
+  script: 0,
+  assets: 1,
+  shots: 2,
+  "video-edit": 3,
+};
+
+const isStepUnlocked = (
+  step: StoryboardAgentStep,
+  unlockedStep: StoryboardAgentStep,
+) => stepOrder[step] <= stepOrder[unlockedStep];
+
+const getLaterStep = (
+  current: StoryboardAgentStep,
+  next: StoryboardAgentStep,
+) => (stepOrder[next] > stepOrder[current] ? next : current);
+
+const normalizeAgentData = (
+  data: StoryboardAgentData,
+): StoryboardAgentData => {
+  const empty = createEmptyAgentData();
+  const inferredStep: StoryboardAgentStep = data.unlockedStep
+    ? data.unlockedStep
+    : data.shots?.some((shot) => shot.video?.url || shot.video?.localPath)
+      ? "video-edit"
+      : data.shots?.length
+        ? "shots"
+        : "script";
+
+  return {
+    ...empty,
+    ...data,
+    unlockedStep: inferredStep,
+    assets: {
+      ...empty.assets,
+      ...(data.assets || {}),
+    },
+    shots: data.shots || [],
+  };
+};
 
 const inputClass =
   "w-full rounded-lg border border-white/10 bg-black/45 px-3 py-2.5 text-sm text-white outline-none transition-all placeholder:text-white/25 focus:border-[#B43FEB] focus:ring-1 focus:ring-[#B43FEB]";
@@ -1082,7 +1132,7 @@ const StoryWorkspacePage = ({
   );
 };
 
-const AssetRow = ({
+const AssetColumnItem = ({
   item,
   index,
   onChange,
@@ -1098,27 +1148,32 @@ const AssetRow = ({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   return (
-    <tr className="border-b border-white/5 align-top">
-      <td className="w-14 px-3 py-3 text-center text-xs text-white/40">
-        {index + 1}
-      </td>
-      <td className="px-3 py-3">
+    <div className="rounded-lg border border-white/8 bg-black/25 p-3">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-xs text-white/35">#{index + 1}</span>
+        <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-white/45">
+          {item.status === "generating"
+            ? "生成中"
+            : item.status === "ready"
+              ? "已就绪"
+              : item.status === "failed"
+                ? "失败"
+                : "待处理"}
+        </span>
+      </div>
+      <div className="space-y-3">
         <input
           className={inputClass}
           value={item.name}
           placeholder="资产名称"
           onChange={(event) => onChange({ name: event.target.value })}
         />
-      </td>
-      <td className="px-3 py-3">
         <textarea
           className={`${textAreaClass} h-20`}
           value={item.prompt}
           placeholder="AI 生成提示词"
           onChange={(event) => onChange({ prompt: event.target.value })}
         />
-      </td>
-      <td className="px-3 py-3">
         <div className="flex flex-wrap gap-2">
           <input
             ref={inputRef}
@@ -1151,8 +1206,8 @@ const AssetRow = ({
         <div className="mt-2 text-xs text-white/35">
           {item.localPath || item.mediaUrl || "未绑定素材"}
         </div>
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 };
 
@@ -1168,6 +1223,8 @@ const StoryAgentPage = ({
   const [agent, setAgent] = useState<StoryboardAgentData>(
     createEmptyAgentData(),
   );
+  const [activeStep, setActiveStep] = useState<StoryboardAgentStep>("script");
+  const [editingShot, setEditingShot] = useState<StoryboardShot | null>(null);
   const [loading, setLoading] = useState(true);
   const [splitting, setSplitting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1222,7 +1279,12 @@ const StoryAgentPage = ({
     setLoading(true);
     storyboardStorage
       .loadAgentData(projectId, snippetId)
-      .then(setAgent)
+      .then((data) => {
+        const next = normalizeAgentData(data);
+        setAgent(next);
+        agentRef.current = next;
+        setActiveStep(next.unlockedStep);
+      })
       .finally(() => setLoading(false));
   }, [projectId, snippetId]);
 
@@ -1235,6 +1297,23 @@ const StoryAgentPage = ({
   };
 
   const persistCurrent = () => saveAgent(agent);
+
+  const saveAgentWithStep = async (
+    nextAgent: StoryboardAgentData,
+    nextStep: StoryboardAgentStep,
+  ) => {
+    const unlockedStep = getLaterStep(nextAgent.unlockedStep, nextStep);
+    const withStep = { ...nextAgent, unlockedStep };
+    await saveAgent(withStep);
+    setActiveStep(nextStep);
+  };
+
+  const selectStep = (step: StoryboardAgentStep) => {
+    if (!isStepUnlocked(step, agent.unlockedStep)) {
+      return;
+    }
+    setActiveStep(step);
+  };
 
   const addAsset = (kind: StoryboardAssetKind) => {
     patchAgent({
@@ -1426,7 +1505,7 @@ const StoryAgentPage = ({
         scriptContent: agent.scriptContent,
         defaults,
       });
-      await saveAgent({ ...agent, shots });
+      await saveAgentWithStep({ ...agent, shots }, "assets");
       toast.success(`已生成 ${shots.length} 条分镜`);
     } catch (error) {
       console.error("[Story] split script failed", error);
@@ -1434,6 +1513,14 @@ const StoryAgentPage = ({
     } finally {
       setSplitting(false);
     }
+  };
+
+  const proceedToShots = async () => {
+    await saveAgentWithStep(agent, "shots");
+  };
+
+  const proceedToVideoEdit = async () => {
+    await saveAgentWithStep(agent, "video-edit");
   };
 
   const updateShot = (id: string, patch: Partial<StoryboardShot>) => {
@@ -1573,6 +1660,63 @@ const StoryAgentPage = ({
     }
   };
 
+  const downloadShotVideo = async (shot: StoryboardShot) => {
+    if (!shot.video?.localPath && !shot.video?.url) {
+      toast.error("当前分镜还没有视频素材");
+      return;
+    }
+
+    try {
+      const defaultName = `shot-${shot.order}.mp4`;
+      if (shot.video.localPath) {
+        const buffer = await storyboardStorage.readBinary(shot.video.localPath);
+        if (!buffer) {
+          throw new Error("local video file not found");
+        }
+
+        if (window.storage?.saveBufferToFile) {
+          const result = await window.storage.saveBufferToFile(
+            defaultName,
+            buffer,
+          );
+          if (result.success) {
+            toast.success("视频已下载");
+          }
+          return;
+        }
+      }
+
+      const link = document.createElement("a");
+      link.href = shot.video.url || "";
+      link.download = defaultName;
+      link.target = "_blank";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error("[Story] download shot video failed", error);
+      toast.error("下载视频失败");
+    }
+  };
+
+  const deleteShotVideo = async (shot: StoryboardShot) => {
+    await saveShotPatch(shot.id, {
+      video: undefined,
+      videoStatus: "idle",
+      videoEdit: undefined,
+    });
+    toast.success("视频素材已删除");
+  };
+
+  const saveVideoEdit = async (
+    shotId: string,
+    videoEdit: NonNullable<StoryboardShot["videoEdit"]>,
+  ) => {
+    await saveShotPatch(shotId, { videoEdit });
+    setEditingShot(null);
+    toast.success("视频编辑信息已保存");
+  };
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-[#09090b] text-white/45">
@@ -1604,7 +1748,35 @@ const StoryAgentPage = ({
           }
         />
         <main className="min-h-0 flex-1 overflow-y-auto p-6">
-          <section className="rounded-xl border border-white/10 bg-[#111113] p-5">
+          <div className="mb-5 rounded-xl border border-white/10 bg-[#111113] p-2">
+            <div className="grid grid-cols-4 gap-2">
+              {storyAgentSteps.map((step) => {
+                const unlocked = isStepUnlocked(step.id, agent.unlockedStep);
+                const active = activeStep === step.id;
+                return (
+                  <button
+                    key={step.id}
+                    type="button"
+                    disabled={!unlocked}
+                    onClick={() => selectStep(step.id)}
+                    className={[
+                      "flex h-11 items-center justify-center rounded-lg text-sm font-medium transition-all",
+                      active
+                        ? "bg-[#B43FEB] text-white shadow-[0_8px_22px_rgba(180,63,235,0.28)]"
+                        : unlocked
+                          ? "bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white"
+                          : "cursor-not-allowed bg-black/25 text-white/22",
+                    ].join(" ")}
+                  >
+                    {step.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {activeStep === "script" ? (
+            <section className="rounded-xl border border-white/10 bg-[#111113] p-5">
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <h2 className="text-base font-medium text-white/90">
@@ -1616,7 +1788,7 @@ const StoryAgentPage = ({
               </div>
               <Button variant="blue" onClick={splitScript} loading={splitting}>
                 <WandSparkles size={15} />
-                下一步：拆分分镜
+                下一步
               </Button>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -1708,49 +1880,47 @@ const StoryAgentPage = ({
                 />
               </label>
             </div>
-          </section>
+            </section>
+          ) : null}
 
-          <section className="mt-5 rounded-xl border border-white/10 bg-[#111113] p-5">
-            <div className="mb-5">
-              <h2 className="text-base font-medium text-white/90">资产详情</h2>
-              <p className="mt-1 text-xs text-white/40">
-                角色、场景、道具、音效均支持本地上传和 AI 生成，生成结果回填当前行。
-              </p>
-            </div>
-            <div className="space-y-5">
-              {assetKinds.map((kind) => (
-                <div key={kind.id} className="rounded-lg border border-white/8">
-                  <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
-                    <h3 className="text-sm font-medium text-white/80">
-                      {kind.label}
-                    </h3>
-                    <Button size="sm" onClick={() => addAsset(kind.id)}>
-                      <Plus size={13} />
-                      新增{kind.label}
-                    </Button>
-                  </div>
-                  <table className="w-full table-fixed">
-                    <thead className="bg-black/25 text-xs text-white/40">
-                      <tr>
-                        <th className="w-14 px-3 py-2 text-center">序号</th>
-                        <th className="px-3 py-2 text-left">名称</th>
-                        <th className="px-3 py-2 text-left">提示词</th>
-                        <th className="px-3 py-2 text-left">资产</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+          {activeStep === "assets" ? (
+            <section className="rounded-xl border border-white/10 bg-[#111113] p-5">
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-medium text-white/90">
+                    资产详情
+                  </h2>
+                  <p className="mt-1 text-xs text-white/40">
+                    角色、场景、道具、音效按列管理，每列是独立资产列表。
+                  </p>
+                </div>
+                <Button variant="blue" onClick={proceedToShots}>
+                  下一步
+                </Button>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-4">
+                {assetKinds.map((kind) => (
+                  <div
+                    key={kind.id}
+                    className="flex min-h-[520px] flex-col rounded-lg border border-white/8 bg-black/20"
+                  >
+                    <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
+                      <h3 className="text-sm font-medium text-white/85">
+                        {kind.label}
+                      </h3>
+                      <Button size="sm" onClick={() => addAsset(kind.id)}>
+                        <Plus size={13} />
+                        新增
+                      </Button>
+                    </div>
+                    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
                       {agent.assets[kind.id].length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={4}
-                            className="px-4 py-8 text-center text-sm text-white/30"
-                          >
-                            暂无{kind.label}资产
-                          </td>
-                        </tr>
+                        <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-white/10 text-sm text-white/30">
+                          暂无{kind.label}资产
+                        </div>
                       ) : (
                         agent.assets[kind.id].map((item, index) => (
-                          <AssetRow
+                          <AssetColumnItem
                             key={item.id}
                             item={item}
                             index={index}
@@ -1766,14 +1936,15 @@ const StoryAgentPage = ({
                           />
                         ))
                       )}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
-            </div>
-          </section>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
-          <section className="mt-5 rounded-xl border border-white/10 bg-[#111113] p-5">
+          {activeStep === "shots" ? (
+            <section className="rounded-xl border border-white/10 bg-[#111113] p-5">
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <h2 className="text-base font-medium text-white/90">
@@ -1783,7 +1954,12 @@ const StoryAgentPage = ({
                   生成视频为图生视频，必须先绑定分镜图片。
                 </p>
               </div>
-              <Button onClick={persistCurrent}>保存分镜</Button>
+              <div className="flex gap-3">
+                <Button onClick={persistCurrent}>保存分镜</Button>
+                <Button variant="blue" onClick={proceedToVideoEdit}>
+                  下一步
+                </Button>
+              </div>
             </div>
             <div className="overflow-x-auto rounded-lg border border-white/8">
               <table className="min-w-[1180px] w-full table-fixed">
@@ -1823,10 +1999,226 @@ const StoryAgentPage = ({
                 </tbody>
               </table>
             </div>
-          </section>
+            </section>
+          ) : null}
+
+          {activeStep === "video-edit" ? (
+            <VideoEditTable
+              shots={agent.shots}
+              onDownload={(shot) => void downloadShotVideo(shot)}
+              onEdit={setEditingShot}
+              onDelete={(shot) => void deleteShotVideo(shot)}
+            />
+          ) : null}
+
+          {editingShot ? (
+            <VideoEditDrawer
+              shot={editingShot}
+              onClose={() => setEditingShot(null)}
+              onSave={(videoEdit) => void saveVideoEdit(editingShot.id, videoEdit)}
+            />
+          ) : null}
         </main>
       </div>
     </StoragePathGuard>
+  );
+};
+
+const getShotConfirmedMaterial = (shot: StoryboardShot) =>
+  shot.videoEdit?.confirmedMaterial ||
+  (shot.assetIds.length > 0 ? `已引用 ${shot.assetIds.length} 个资产` : "未确认素材");
+
+const getShotVideoText = (shot: StoryboardShot) =>
+  shot.video?.localPath ||
+  shot.video?.url ||
+  (shot.videoStatus === "generating"
+    ? "生成中"
+    : shot.videoStatus === "failed"
+      ? "生成失败"
+      : "未生成视频");
+
+const VideoEditTable = ({
+  shots,
+  onDownload,
+  onEdit,
+  onDelete,
+}: {
+  shots: StoryboardShot[];
+  onDownload: (shot: StoryboardShot) => void;
+  onEdit: (shot: StoryboardShot) => void;
+  onDelete: (shot: StoryboardShot) => void;
+}) => (
+  <section className="rounded-xl border border-white/10 bg-[#111113] p-5">
+    <div className="mb-5">
+      <h2 className="text-base font-medium text-white/90">视频编辑</h2>
+      <p className="mt-1 text-xs text-white/40">
+        汇总已生成的视频素材，支持下载、抽屉编辑和删除素材引用。
+      </p>
+    </div>
+    <div className="overflow-x-auto rounded-lg border border-white/8">
+      <table className="min-w-[980px] w-full table-fixed">
+        <thead className="bg-black/30 text-xs text-white/45">
+          <tr>
+            <th className="w-64 px-3 py-3 text-left">已确认素材</th>
+            <th className="w-80 px-3 py-3 text-left">视频素材</th>
+            <th className="px-3 py-3 text-left">分镜提示词</th>
+            <th className="w-56 px-3 py-3 text-left">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shots.length === 0 ? (
+            <tr>
+              <td colSpan={4} className="px-4 py-12 text-center text-sm text-white/30">
+                暂无分镜。请先完成剧本拆分。
+              </td>
+            </tr>
+          ) : (
+            shots.map((shot) => {
+              const hasVideo = Boolean(shot.video?.url || shot.video?.localPath);
+              return (
+                <tr key={shot.id} className="border-b border-white/5 align-top">
+                  <td className="px-3 py-3 text-sm text-white/70">
+                    <div className="rounded-lg border border-white/8 bg-black/25 p-3">
+                      <div className="mb-1 text-xs text-white/35">
+                        分镜 {shot.order}
+                      </div>
+                      {getShotConfirmedMaterial(shot)}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-xs text-white/50">
+                    <div className="line-clamp-3 rounded-lg border border-white/8 bg-black/25 p-3">
+                      {getShotVideoText(shot)}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-sm text-white/65">
+                    <div className="line-clamp-4 rounded-lg border border-white/8 bg-black/25 p-3 leading-6">
+                      {shot.videoEdit?.prompt || shot.prompt || "暂无提示词"}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => onDownload(shot)}
+                        disabled={!hasVideo}
+                      >
+                        <Download size={13} />
+                        下载
+                      </Button>
+                      <Button size="sm" variant="blue" onClick={() => onEdit(shot)}>
+                        <Pencil size={13} />
+                        编辑
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => onDelete(shot)}
+                        disabled={!hasVideo}
+                      >
+                        <Trash2 size={13} />
+                        删除
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  </section>
+);
+
+const VideoEditDrawer = ({
+  shot,
+  onClose,
+  onSave,
+}: {
+  shot: StoryboardShot;
+  onClose: () => void;
+  onSave: (videoEdit: NonNullable<StoryboardShot["videoEdit"]>) => void;
+}) => {
+  const [confirmedMaterial, setConfirmedMaterial] = useState(
+    getShotConfirmedMaterial(shot),
+  );
+  const [prompt, setPrompt] = useState(shot.videoEdit?.prompt || shot.prompt);
+
+  useEffect(() => {
+    setConfirmedMaterial(getShotConfirmedMaterial(shot));
+    setPrompt(shot.videoEdit?.prompt || shot.prompt);
+  }, [shot]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/55 backdrop-blur-sm">
+      <button
+        type="button"
+        aria-label="关闭视频编辑"
+        className="min-w-0 flex-1 cursor-default"
+        onClick={onClose}
+      />
+      <aside className="flex h-full w-[min(720px,100%)] flex-col border-l border-white/10 bg-[#101012] shadow-2xl">
+        <div className="flex h-16 items-center justify-between border-b border-white/5 px-5">
+          <div>
+            <h2 className="text-base font-medium text-white/90">
+              编辑分镜 {shot.order}
+            </h2>
+            <p className="mt-1 text-xs text-white/40">视频剪辑 / 组合信息</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+          <div className="overflow-hidden rounded-xl border border-white/8 bg-black/35">
+            {shot.video?.url ? (
+              <video
+                src={shot.video.url}
+                controls
+                className="aspect-video w-full bg-black object-contain"
+              />
+            ) : (
+              <div className="flex aspect-video items-center justify-center text-sm text-white/30">
+                暂无可预览视频
+              </div>
+            )}
+          </div>
+          <label className="block">
+            <span className="mb-2 block text-sm text-white/65">已确认素材</span>
+            <textarea
+              className={`${textAreaClass} h-28`}
+              value={confirmedMaterial}
+              onChange={(event) => setConfirmedMaterial(event.target.value)}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm text-white/65">
+              分镜提示词
+            </span>
+            <textarea
+              className={`${textAreaClass} h-44`}
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+            />
+          </label>
+          <div className="rounded-lg border border-white/8 bg-black/25 p-3 text-xs leading-5 text-white/45">
+            {shot.video?.localPath || shot.video?.url || "未生成视频素材"}
+          </div>
+        </div>
+        <div className="flex justify-end gap-3 border-t border-white/5 bg-black/20 p-5">
+          <Button onClick={onClose}>取消</Button>
+          <Button
+            variant="blue"
+            onClick={() => onSave({ confirmedMaterial, prompt })}
+          >
+            保存
+          </Button>
+        </div>
+      </aside>
+    </div>
   );
 };
 

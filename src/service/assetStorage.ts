@@ -4,6 +4,7 @@ import {
   getAssetMediaTypeByFileName,
 } from "shared/constants/mediaTypes";
 import type { AssetDiskFileInfo, AssetDiskProjectInfo } from "shared/types/storage";
+import { getUploadOssPutUrl } from "@/api/jikeGo";
 
 export type AssetScope = "project" | "canvas" | "public";
 export type AssetMediaType = "image" | "video" | "audio";
@@ -25,6 +26,8 @@ export type AssetRecord = {
   category: AssetCategory;
   mediaType: AssetMediaType;
   fileUrl: string;
+  /** OSS 公网访问 URL，创建资产时上传后写入，优先用于画布节点 */
+  ossUrl?: string;
   coverUrl?: string;
   originalFile: string;
   coverFile?: string;
@@ -214,7 +217,7 @@ const normalizeAssetRecord = (asset: AssetRecord): AssetRecord => {
   const mediaType = isAssetMediaType(asset.mediaType)
     ? asset.mediaType
     : getAssetMediaTypeByFileName(asset.originalFile || asset.fileUrl || "") ||
-      "image";
+    "image";
 
   return {
     ...asset,
@@ -658,10 +661,10 @@ export const renameAssetFolder = async (
   const nextAssets = index.assets.map((asset) =>
     asset.scope === "project" && asset.folderId === folderId
       ? {
-          ...asset,
-          folderName: nextName,
-          updatedAt: now,
-        }
+        ...asset,
+        folderName: nextName,
+        updatedAt: now,
+      }
       : asset,
   );
 
@@ -777,6 +780,36 @@ const savePreparedAssetFiles = async (
   );
   if (!saveResult.success) {
     throw new Error(saveResult.error || "保存资产文件失败");
+  }
+
+  // 上传到 OSS，获取公网 URL 存入 ossUrl 字段
+  try {
+    const ext = extension;
+    const blobTypeMap: Record<AssetMediaType, "image" | "video" | "audio"> = {
+      image: "image",
+      video: "video",
+      audio: "audio",
+    };
+    const putUrlResp = await getUploadOssPutUrl({
+      blob_type: blobTypeMap[input.mediaType],
+      ext,
+      ttl: 3600,
+    });
+    const putUrlData = putUrlResp?.data ?? putUrlResp;
+    if (putUrlData?.put_url) {
+      const uploadResp = await fetch(putUrlData.put_url, {
+        method: "PUT",
+        body: input.buffer,
+        headers: putUrlData.headers || {},
+      });
+      if (uploadResp.ok) {
+        asset.ossUrl = putUrlData.access_url as string;
+      } else {
+        console.warn("[assetStorage] OSS PUT 失败:", uploadResp.status);
+      }
+    }
+  } catch (ossError) {
+    console.warn("[assetStorage] 上传 OSS 失败，仅保存本地:", ossError);
   }
 
   if (prepared.coverFile && prepared.coverBuffer) {
