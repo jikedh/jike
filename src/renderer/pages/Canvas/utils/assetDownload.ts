@@ -5,6 +5,7 @@ type ZipEntry = {
   data: Uint8Array<ArrayBuffer>;
 };
 
+const ZIP_UTF8_FILENAME_FLAG = 1 << 11;
 const textEncoder = new TextEncoder();
 
 const crcTable = (() => {
@@ -183,7 +184,7 @@ const createZipBytes = (entries: ZipEntry[]) => {
     );
     writeUint32(localHeader, 0, 0x04034b50);
     writeUint16(localHeader, 4, 20);
-    writeUint16(localHeader, 6, 0);
+    writeUint16(localHeader, 6, ZIP_UTF8_FILENAME_FLAG);
     writeUint16(localHeader, 8, 0);
     writeUint16(localHeader, 10, 0);
     writeUint16(localHeader, 12, 0);
@@ -202,7 +203,7 @@ const createZipBytes = (entries: ZipEntry[]) => {
     writeUint32(centralHeader, 0, 0x02014b50);
     writeUint16(centralHeader, 4, 20);
     writeUint16(centralHeader, 6, 20);
-    writeUint16(centralHeader, 8, 0);
+    writeUint16(centralHeader, 8, ZIP_UTF8_FILENAME_FLAG);
     writeUint16(centralHeader, 10, 0);
     writeUint16(centralHeader, 12, 0);
     writeUint16(centralHeader, 14, 0);
