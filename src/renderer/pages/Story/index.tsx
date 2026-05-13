@@ -1,6 +1,7 @@
 ﻿import {
   BookOpenText,
   Bot,
+  ChevronDown,
   ChevronLeft,
   Clapperboard,
   Download,
@@ -23,11 +24,13 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
+  ensureAssetOssUrl,
   getAssetOriginalDisplayUrl,
   initializeAssetStorage,
+  readCombinedAssetIndex,
   type AssetRecord,
 } from "service/assetStorage";
-import { uploadFileToOSS } from "service/oss";
+import { copyVideoUrlToOss, uploadFileToOSS } from "service/oss";
 import {
   createEmptyAgentData,
   splitScriptWithAgent,
@@ -41,28 +44,86 @@ import {
   type StoryboardSnippet,
 } from "service/storyboardStorage";
 import { GenerationStatus } from "shared/constants/enum";
-import type { Seedance20Request } from "shared/types/detail/kuaizhi/Seedance-2.0";
+import {
+  ADOBE_GPT_IMAGE2_MODEL,
+  ADOBE_NANO_BANANA_PRO_MODEL,
+  GROK_IMAGE_EDIT_MODEL,
+  GROK_IMAGE_LITE_MODEL,
+  GROK_IMAGE_MODEL,
+  GROK_IMAGE_PRO_MODEL,
+  IMAGE_MODELS,
+  XIMU_GPT_IMAGE2_MODEL,
+  XIMU_GPT_IMAGE2_VIP_MODEL,
+  XIMU_NANO_BANANA2_MODEL,
+  XIMU_NANO_BANANA_PRO_MODEL,
+  getVisibleImageModels,
+  isAdobeImageGenerationModel,
+  isGrokImageGenerationModel,
+  isXimuGptImageGenerationModel,
+  isXimuImageGenerationModel,
+} from "shared/constants/ai-models";
+import {
+  buildXimuGptImageRequest,
+  buildXimuNanoBananaRequest,
+  collectXimuImageUrls,
+  extractXimuTaskId,
+  getXimuMessage,
+  getXimuResultPayload,
+  resolveXimuGptAspectRatio,
+  resolveXimuImageSize,
+  resolveXimuNanoBanana2AspectRatio,
+  resolveXimuNanoBananaProAspectRatio,
+  XIMU_TASK_FAILED_STATUSES,
+  XIMU_TASK_SUCCESS_STATUSES,
+} from "shared/types/detail/ximu";
 import { cn } from "shared/utils/utils";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
 import { toast } from "sonner";
 import {
+  createAdobe2ApiVideoGeneration,
+  createAdobe2ApiImageGeneration,
+  createDashscopeVideoSynthesis,
+  createGrok2ApiImageGeneration,
+  createGrok2ApiVideoGeneration,
   createImageGeneration,
   createLzVideoTask,
+  createXimuGptImageGeneration,
+  createXimuNanoBananaGeneration,
+  getXimuImageResult,
+  getDashscopeVideoTaskStatus,
   getImageTaskStatus,
   getLzVideoTaskStatus,
 } from "@/api/ai";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { AssetLibraryDialog } from "@/pages/Canvas/components/AssetLibraryDialog";
+import { AspectRatioIcon } from "@/pages/Canvas/CustomNodes/ImageNode/components/AspectRatioIcon";
+import {
+  type MentionItem,
+} from "@/pages/Canvas/CustomNodes/New-VideoNode/constants/mockData";
+import type { VideoGenerateRequest } from "@/pages/Canvas/CustomNodes/New-VideoNode/components/BottomParamsBar";
+import {
+  getFirstSupportedModeForModel,
+  getSupportedModesForModel,
+  type VideoModeKey,
+} from "@/pages/Canvas/CustomNodes/New-VideoNode/constants/videoModelCapabilities";
+import {
+  getVideoParamConfig,
+  normalizeVideoParams,
+  type VideoParamState,
+} from "@/pages/Canvas/CustomNodes/New-VideoNode/constants/videoParamConfigs";
+import { ReferenceThumbnails } from "@/pages/Canvas/CustomNodes/New-VideoNode/components/ReferenceThumbnails";
+import { VideoPromptEditor } from "@/pages/Canvas/CustomNodes/New-VideoNode/components/VideoPromptEditor";
+import { buildVideoApiRequest } from "@/pages/Canvas/CustomNodes/New-VideoNode/utils/buildVideoApiRequest";
+import { PROMPT_PANEL_STYLES } from "@/pages/Canvas/CustomNodes/shared/promptPanelStyles";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
-
-const stylePresets = [
-  { id: "cinematic-realism", label: "真人电影风格" },
-  { id: "oriental-fantasy", label: "东方奇幻" },
-  { id: "urban-suspense", label: "都市悬疑" },
-  { id: "warm-documentary", label: "温暖纪实" },
-  { id: "anime-drama", label: "动画剧集" },
-  { id: "cyberpunk", label: "赛博朋克" },
-];
 
 const assetKinds: Array<{ id: StoryboardAssetKind; label: string }> = [
   { id: "role", label: "角色" },
@@ -78,6 +139,14 @@ const storyAgentSteps: Array<{ id: StoryboardAgentStep; label: string }> = [
   { id: "assets", label: "资产详情" },
   { id: "shots", label: "分镜管理" },
   { id: "video-edit", label: "视频编辑" },
+];
+
+const scriptCategoryOptions = [
+  "解说漫",
+  "精品演绎剧",
+  "3d",
+  "2d",
+  "仿真人",
 ];
 
 const stepOrder: Record<StoryboardAgentStep, number> = {
@@ -113,6 +182,9 @@ const normalizeAgentData = (
     ...empty,
     ...data,
     unlockedStep: inferredStep,
+    promptPrefix: data.promptPrefix ?? empty.promptPrefix,
+    promptSuffix: data.promptSuffix ?? empty.promptSuffix,
+    scriptCategory: data.scriptCategory ?? empty.scriptCategory,
     assets: {
       ...empty.assets,
       ...(data.assets || {}),
@@ -126,6 +198,56 @@ const inputClass =
 
 const textAreaClass =
   "story-scrollbar-scope w-full resize-none rounded-lg border border-white/10 bg-black/45 px-3 py-2.5 text-sm leading-6 text-white outline-none transition-all placeholder:text-white/25 focus:border-[#B43FEB] focus:ring-1 focus:ring-[#B43FEB]";
+
+const storyVideoOptionButtonClass = (active: boolean, className?: string) =>
+  cn(
+    "rounded-lg border text-xs font-medium transition-all",
+    active
+      ? "border-[#B43FEB] bg-[#B43FEB]/10 text-[#E9C7FF]"
+      : "border-white/10 bg-white/[0.03] text-white/65 hover:border-white/20 hover:bg-white/[0.06] hover:text-white",
+    className,
+  );
+
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const buildPromptDraftHtml = (html?: string, text?: string) => {
+  if (html && html.trim() && html !== "<p></p>") {
+    return html;
+  }
+
+  const normalizedText = text?.trim();
+  if (!normalizedText) {
+    return "<p></p>";
+  }
+
+  return `<p>${escapeHtml(normalizedText).replace(/\n/g, "<br>")}</p>`;
+};
+
+type StoryImageModelOption = ReturnType<typeof getVisibleImageModels>[number];
+
+const getStoryImageModelOptionId = (
+  model: string | undefined,
+  platform: string | undefined,
+  fallbackModel: string | undefined,
+  options: StoryImageModelOption[],
+) => {
+  const exact = options.find(
+    (item) => item.model === model && item.platform === platform,
+  );
+  if (exact) return String(exact.id);
+
+  const byModel = options.find((item) => item.model === model);
+  if (byModel) return String(byModel.id);
+
+  const fallback = options.find((item) => item.model === fallbackModel);
+  return String(fallback?.id ?? options[0]?.id ?? IMAGE_MODELS[0]?.id ?? 7);
+};
 
 const formatTime = (timestamp: number) =>
   new Date(timestamp).toLocaleString("zh-CN", {
@@ -211,51 +333,251 @@ const createLibraryStoryboardAsset = (
   assetId: asset.id,
 });
 
-const clampVideoDuration = (value: number | undefined) => {
-  if (!Number.isFinite(value)) return 5;
-  return Math.min(Math.max(Number(value), 4), 15);
-};
-
-const normalizeSeedanceModel = (model: string | undefined) =>
-  model === "seedance-2.0-fast" ? "seedance-2.0-fast" : "seedance-2.0-pro";
-
-const normalizeSeedanceRatio = (
-  ratio: string | undefined,
-): NonNullable<Seedance20Request["ratio"]> => {
-  const allowed: Array<NonNullable<Seedance20Request["ratio"]>> = [
-    "16:9",
-    "4:3",
-    "1:1",
-    "3:4",
-    "9:16",
-    "21:9",
-    "adaptive",
-  ];
-  return allowed.includes(ratio as NonNullable<Seedance20Request["ratio"]>)
-    ? (ratio as NonNullable<Seedance20Request["ratio"]>)
-    : "16:9";
-};
-
-const buildStoryVideoRequest = (
-  shot: StoryboardShot,
-  imageUrl: string,
-): Seedance20Request => {
-  const model = normalizeSeedanceModel(shot.modelInfo.videoModel);
-  return {
-    model,
-    prompt: (shot.prompt || shot.script || "").trim(),
-    generation_type: "video",
-    input_type: "reference",
-    mode: model === "seedance-2.0-fast" ? "fast" : "pro",
-    images: [{ url: imageUrl, role: "reference_image" }],
-    resolution:
-      shot.modelInfo.resolution?.toLowerCase() === "480p" ? "480p" : "720p",
-    ratio: normalizeSeedanceRatio(shot.modelInfo.aspectRatio),
-    duration: clampVideoDuration(shot.modelInfo.duration),
-    generate_audio: false,
-    seed: -1,
-    web_search: false,
+const mergeIdentifiedAssets = (
+  currentAssets: StoryboardAgentData["assets"],
+  identifiedAssets: StoryboardAgentData["assets"],
+): StoryboardAgentData["assets"] => {
+  const nextAssets: StoryboardAgentData["assets"] = {
+    role: [...currentAssets.role],
+    scene: [...currentAssets.scene],
+    prop: [...currentAssets.prop],
+    audio: [...currentAssets.audio],
   };
+
+  for (const kind of ["role", "scene", "prop"] as const) {
+    const existingNames = new Set(
+      nextAssets[kind]
+        .map((item) => item.name.trim().toLowerCase())
+        .filter(Boolean),
+    );
+
+    for (const asset of identifiedAssets[kind]) {
+      const key = asset.name.trim().toLowerCase();
+      if (!key || existingNames.has(key)) continue;
+      nextAssets[kind].push(asset);
+      existingNames.add(key);
+    }
+  }
+
+  return nextAssets;
+};
+
+const normalizeAssetNameKey = (name: string) => name.trim().toLowerCase();
+
+const bindShotAssetIdsByName = (
+  shots: StoryboardShot[],
+  shotAssetNames: string[][],
+  assets: StoryboardAgentData["assets"],
+): StoryboardShot[] => {
+  const assetIdByName = new Map<string, string>();
+  for (const asset of [
+    ...assets.role,
+    ...assets.scene,
+    ...assets.prop,
+    ...assets.audio,
+  ]) {
+    const key = normalizeAssetNameKey(asset.name);
+    if (key && !assetIdByName.has(key)) {
+      assetIdByName.set(key, asset.id);
+    }
+  }
+
+  return shots.map((shot, index) => {
+    const nextAssetIds = new Set(shot.assetIds);
+    for (const name of shotAssetNames[index] || []) {
+      const assetId = assetIdByName.get(normalizeAssetNameKey(name));
+      if (assetId) nextAssetIds.add(assetId);
+    }
+    return {
+      ...shot,
+      assetIds: Array.from(nextAssetIds),
+    };
+  });
+};
+
+const getShotVideoParamState = (shot: StoryboardShot): VideoParamState =>
+  normalizeVideoParams(
+    shot.modelInfo.videoModel,
+    {
+      aspectRatio: shot.modelInfo.aspectRatio,
+      resolution: shot.modelInfo.resolution,
+      duration: shot.modelInfo.duration,
+    },
+    "image-to-video",
+  );
+
+const patchShotModelInfo = (
+  modelInfo: StoryboardShot["modelInfo"],
+  value: VideoParamState,
+): StoryboardShot["modelInfo"] => ({
+  ...modelInfo,
+  aspectRatio: value.aspectRatio || modelInfo.aspectRatio,
+  duration: value.duration,
+  resolution: value.resolution ?? modelInfo.resolution,
+});
+
+const isHttpUrl = (value: string | undefined) =>
+  Boolean(value?.match(/^https?:\/\//i));
+
+const videoModeKeys: VideoModeKey[] = [
+  "text-to-video",
+  "all-reference",
+  "image-to-video",
+  "video-edit",
+  "first-last-frame",
+];
+
+const toVideoModeKey = (value: string | undefined): VideoModeKey | undefined =>
+  videoModeKeys.includes(value as VideoModeKey)
+    ? (value as VideoModeKey)
+    : undefined;
+
+const isSeedanceVideoModel = (model: string | undefined) =>
+  model === "seedance-2.0-fast" || model === "seedance-2.0-pro";
+
+const resolveAdobeStoryImageModel = (model: string) => {
+  if (model === ADOBE_GPT_IMAGE2_MODEL) {
+    return "firefly-gpt-image-2k-1x1";
+  }
+  if (model === ADOBE_NANO_BANANA_PRO_MODEL) {
+    return "firefly-nano-banana-pro-2k-1x1";
+  }
+  return undefined;
+};
+
+const resolveXimuStoryImageModel = (model: string) => {
+  if (model === XIMU_GPT_IMAGE2_MODEL) return "gpt-image-2" as const;
+  if (model === XIMU_GPT_IMAGE2_VIP_MODEL) return "gpt-image-2-vip" as const;
+  if (model === XIMU_NANO_BANANA2_MODEL) return "nano-banana-2" as const;
+  if (model === XIMU_NANO_BANANA_PRO_MODEL) {
+    return "nano-banana-pro" as const;
+  }
+  return undefined;
+};
+
+const resolveGrokStoryImageModel = (model: string) => {
+  if (model === GROK_IMAGE_EDIT_MODEL) return "grok-imagine-image-pro";
+  if (model === GROK_IMAGE_LITE_MODEL) return "grok-imagine-image-lite";
+  if (model === GROK_IMAGE_MODEL) return "grok-imagine-image";
+  if (model === GROK_IMAGE_PRO_MODEL) return "grok-imagine-image-pro";
+  return undefined;
+};
+
+const getDirectImageUrl = (response: any) =>
+  response?.data?.[0]?.url ||
+  extractMarkdownMediaUrl(response?.choices?.[0]?.message?.content, "image") ||
+  "";
+
+const isAdobeVideoRequest = (payload: Record<string, unknown>) =>
+  typeof payload.model === "string" &&
+  (payload.model.startsWith("firefly-sora2-pro-") ||
+    payload.model.startsWith("firefly-veo31-") ||
+    payload.model.startsWith("firefly-veo31-fast-")) &&
+  Array.isArray(payload.messages);
+
+const isGrokVideoRequest = (payload: Record<string, unknown>) =>
+  payload.model === "grok-imagine-video" &&
+  Array.isArray(payload.messages) &&
+  typeof payload.video_config === "object" &&
+  payload.video_config !== null;
+
+const extractMarkdownMediaUrl = (content: unknown, kind: "image" | "video") => {
+  const text = Array.isArray(content)
+    ? content
+        .map((part) =>
+          typeof part === "string"
+            ? part
+            : typeof part?.text === "string"
+              ? part.text
+              : "",
+        )
+        .join("\n")
+    : String(content || "");
+  const urlPattern =
+    kind === "video"
+      ? "(?:https?:\\/\\/[^)\\s\"'<>]+\\/v1\\/files\\/video\\?id=[^)\\s\"'<>]+|https?:\\/\\/[^)\\s]+?\\.(?:mp4|webm|mov)(?:\\?[^)]*)?|\\/v1\\/files\\/video\\?id=[^)\\s\"'<>]+)"
+      : "https?:\\/\\/[^)\\s]+";
+  const htmlPattern =
+    kind === "video"
+      ? /<video[^>]+src=["']([^"']+)["']/i
+      : /<img[^>]+src=["']([^"']+)["']/i;
+  const htmlMatch = text.match(htmlPattern);
+  if (htmlMatch?.[1]) return htmlMatch[1];
+
+  const markdownPattern = new RegExp(
+    kind === "video"
+      ? `\\[.*?\\]\\((${urlPattern})\\)`
+      : `!\\[.*?\\]\\((${urlPattern})\\)`,
+    "i",
+  );
+  const markdownUrl = text.match(markdownPattern)?.[1];
+  if (markdownUrl) return markdownUrl;
+
+  const bareUrlPattern = new RegExp(
+    kind === "video"
+      ? `(${urlPattern})`
+      : "(https?:\\/\\/[^\\s\"'<>)]*)",
+    "i",
+  );
+  return text.match(bareUrlPattern)?.[1];
+};
+
+const normalizeGrok2ApiMediaUrl = async (url: string) => {
+  if (!url.startsWith("/v1/files/")) return url;
+
+  try {
+    const state = await window.grok2api?.getState();
+    if (state?.baseUrl) {
+      return `${state.baseUrl.replace(/\/+$/, "")}${url}`;
+    }
+  } catch (error) {
+    console.warn("[Story] get Grok2API media base url failed", error);
+  }
+
+  return url;
+};
+
+const pickStoryVideoMode = (
+  model: string,
+  referenceItems: MentionItem[],
+  preferredMode?: VideoModeKey,
+): VideoModeKey => {
+  const supportedModes = getSupportedModesForModel(model);
+  const hasReference = referenceItems.length > 0;
+  const hasImageReference = referenceItems.some((item) => item.type === "image");
+
+  if (preferredMode && supportedModes.includes(preferredMode)) {
+    if (preferredMode === "all-reference" && !hasReference) {
+      return supportedModes.includes("text-to-video")
+        ? "text-to-video"
+        : getFirstSupportedModeForModel(model, "all-reference");
+    }
+    if (preferredMode === "text-to-video" && hasReference) {
+      if (supportedModes.includes("all-reference")) return "all-reference";
+      if (hasImageReference && supportedModes.includes("image-to-video")) {
+        return "image-to-video";
+      }
+      return "text-to-video";
+    }
+    if (preferredMode === "image-to-video" && !hasImageReference) {
+      return supportedModes.includes("text-to-video")
+        ? "text-to-video"
+        : getFirstSupportedModeForModel(model, "all-reference");
+    }
+    return preferredMode;
+  }
+
+  if (hasReference && supportedModes.includes("all-reference")) {
+    return "all-reference";
+  }
+  if (hasImageReference && supportedModes.includes("image-to-video")) {
+    return "image-to-video";
+  }
+  if (!hasReference && supportedModes.includes("text-to-video")) {
+    return "text-to-video";
+  }
+
+  return getFirstSupportedModeForModel(model, "all-reference");
 };
 
 const isImageSuccessStatus = (status: unknown) =>
@@ -1196,33 +1518,57 @@ const StoryWorkspacePage = ({
 const AssetColumnItem = ({
   item,
   index,
+  imageModelOptions,
+  defaultImageModel,
   onChange,
   onUpload,
   onUseLibrary,
   onGenerate,
+  onDelete,
 }: {
   item: StoryboardAssetItem;
   index: number;
+  imageModelOptions: StoryImageModelOption[];
+  defaultImageModel?: string;
   onChange: (patch: Partial<StoryboardAssetItem>) => void;
   onUpload: (file: File) => void;
   onUseLibrary: () => void;
   onGenerate: () => void;
+  onDelete: () => void;
 }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const currentImageModelId = getStoryImageModelOptionId(
+    item.imageModel,
+    item.imagePlatform,
+    defaultImageModel,
+    imageModelOptions,
+  );
 
   return (
     <div className="rounded-lg border border-white/8 bg-black/25 p-3">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-xs text-white/35">#{index + 1}</span>
-        <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-white/45">
-          {item.status === "generating"
-            ? "生成中"
-            : item.status === "ready"
-              ? "已就绪"
-              : item.status === "failed"
-                ? "失败"
-                : "待处理"}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-white/45">
+            {item.status === "generating"
+              ? "生成中"
+              : item.status === "ready"
+                ? "已就绪"
+                : item.status === "failed"
+                  ? "失败"
+                  : "待处理"}
+          </span>
+          <Button
+            className="h-7 w-7 px-0 text-red-200 hover:bg-red-500/10 hover:text-red-100"
+            size="sm"
+            variant="ghost"
+            onClick={onDelete}
+            title="删除资产"
+            aria-label="删除资产"
+          >
+            <Trash2 size={13} />
+          </Button>
+        </div>
       </div>
       <div className="space-y-3">
         <StoryAssetPreview item={item} />
@@ -1238,6 +1584,61 @@ const AssetColumnItem = ({
           placeholder="AI 生成提示词"
           onChange={(event) => onChange({ prompt: event.target.value })}
         />
+        <div className="flex items-center gap-2">
+          <Select
+            value={currentImageModelId}
+            onValueChange={(value) => {
+              const selected = imageModelOptions.find(
+                (option) => option.id === Number(value),
+              );
+              if (!selected) return;
+              onChange({
+                imageModel: selected.model,
+                imagePlatform: selected.platform,
+              });
+            }}
+          >
+            <SelectTrigger
+              size="sm"
+              className={cn(
+                PROMPT_PANEL_STYLES.modelSelect,
+                "h-8 min-w-0 flex-1 px-3 text-xs",
+                "[&_[data-slot=select-value]]:block [&_[data-slot=select-value]]:truncate",
+              )}
+              title={
+                imageModelOptions.find(
+                  (option) => String(option.id) === currentImageModelId,
+                )?.name
+              }
+            >
+              <SelectValue placeholder="选择模型" />
+            </SelectTrigger>
+            <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
+              {imageModelOptions.map((option) => (
+                <SelectItem
+                  key={option.id}
+                  value={String(option.id)}
+                  className={PROMPT_PANEL_STYLES.modelSelectItem}
+                >
+                  {option.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            variant="blue"
+            onClick={onGenerate}
+            disabled={item.status === "generating"}
+          >
+            {item.status === "generating" ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <WandSparkles size={13} />
+            )}
+            AI 生成
+          </Button>
+        </div>
         <div className="flex flex-wrap gap-2">
           <input
             ref={inputRef}
@@ -1256,19 +1657,6 @@ const AssetColumnItem = ({
           <Button size="sm" onClick={onUseLibrary}>
             <FolderOpen size={13} />
             资产库上传
-          </Button>
-          <Button
-            size="sm"
-            variant="blue"
-            onClick={onGenerate}
-            disabled={item.status === "generating"}
-          >
-            {item.status === "generating" ? (
-              <Loader2 className="animate-spin" />
-            ) : (
-              <WandSparkles size={13} />
-            )}
-            AI 生成
           </Button>
         </div>
       </div>
@@ -1351,6 +1739,77 @@ const StoryAssetPreview = ({
   );
 };
 
+const ScriptCategoryCombobox = ({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const filteredOptions = scriptCategoryOptions.filter((category) =>
+    category.toLowerCase().includes(value.trim().toLowerCase()),
+  );
+  const optionsToShow =
+    filteredOptions.length > 0 ? filteredOptions : scriptCategoryOptions;
+
+  return (
+    <div
+      className="relative"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setOpen(false);
+        }
+      }}
+    >
+      <div className="relative">
+        <input
+          className={`${inputClass} pr-9`}
+          value={value}
+          onFocus={() => setOpen(true)}
+          onChange={(event) => {
+            onChange(event.target.value);
+            setOpen(true);
+          }}
+          placeholder="选择或输入剧本分类"
+        />
+        <button
+          type="button"
+          className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-white/45 transition-colors hover:bg-white/10 hover:text-white"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => setOpen((current) => !current)}
+          aria-label="展开剧本分类"
+        >
+          <ChevronDown size={15} />
+        </button>
+      </div>
+      {open ? (
+        <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-lg border border-white/10 bg-[#151517] p-1 shadow-xl">
+          {optionsToShow.map((category) => (
+            <button
+              key={category}
+              type="button"
+              className={cn(
+                "flex w-full items-center rounded-md px-3 py-2 text-left text-sm transition-colors",
+                value === category
+                  ? "bg-[#B43FEB]/15 text-[#E9C7FF]"
+                  : "text-white/70 hover:bg-white/[0.06] hover:text-white",
+              )}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(category);
+                setOpen(false);
+              }}
+            >
+              {category}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const StoryAgentPage = ({
   projectId,
   snippetId,
@@ -1365,6 +1824,9 @@ const StoryAgentPage = ({
   );
   const [activeStep, setActiveStep] = useState<StoryboardAgentStep>("script");
   const [editingShot, setEditingShot] = useState<StoryboardShot | null>(null);
+  const [editingShotModel, setEditingShotModel] = useState<StoryboardShot | null>(
+    null,
+  );
   const [selectingAssetShotId, setSelectingAssetShotId] = useState<string | null>(
     null,
   );
@@ -1400,6 +1862,20 @@ const StoryAgentPage = ({
       settings.defaultVideoDuration,
       settings.defaultNewVideoResolution,
       settings.defaultVideoResolution,
+    ],
+  );
+
+  const visibleImageModels = useMemo(
+    () =>
+      getVisibleImageModels(
+        settings.adobeChannelModelsEnabled,
+        settings.ximuChannelModelsEnabled,
+        settings.grokChannelModelsEnabled,
+      ),
+    [
+      settings.adobeChannelModelsEnabled,
+      settings.grokChannelModelsEnabled,
+      settings.ximuChannelModelsEnabled,
     ],
   );
 
@@ -1504,6 +1980,20 @@ const StoryAgentPage = ({
     });
   };
 
+  const deleteAsset = (kind: StoryboardAssetKind, id: string) => {
+    patchAgent({
+      assets: {
+        ...agent.assets,
+        [kind]: agent.assets[kind].filter((item) => item.id !== id),
+      },
+      shots: agent.shots.map((shot) => ({
+        ...shot,
+        assetIds: shot.assetIds.filter((assetId) => assetId !== id),
+      })),
+    });
+    toast.success("资产已删除");
+  };
+
   const saveAssetPatch = async (
     kind: StoryboardAssetKind,
     id: string,
@@ -1586,6 +2076,146 @@ const StoryAgentPage = ({
     throw new Error("image generation timeout");
   };
 
+  const waitForStoryXimuImageResult = async (taskId: string) => {
+    let lastStatus = "";
+    let lastMessage = "";
+
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      await wait(5000);
+      const response = await getXimuImageResult(taskId);
+      const payload = getXimuResultPayload(response);
+      const status = String(payload.status || response?.status || "").toLowerCase();
+      lastStatus = status || lastStatus;
+      lastMessage = getXimuMessage(response) || lastMessage;
+
+      if (XIMU_TASK_FAILED_STATUSES.includes(status as any)) {
+        throw new Error(lastMessage || "西牧生图失败");
+      }
+
+      const urls = collectXimuImageUrls(payload);
+      if (
+        urls.length > 0 &&
+        (!status || XIMU_TASK_SUCCESS_STATUSES.includes(status as any))
+      ) {
+        return urls[0];
+      }
+
+      if (XIMU_TASK_SUCCESS_STATUSES.includes(status as any)) {
+        throw new Error("西牧生图已完成，但没有返回图片地址");
+      }
+    }
+
+    throw new Error(
+      lastStatus
+        ? `西牧生图超时：${lastStatus}${lastMessage ? `，${lastMessage}` : ""}`
+        : "西牧生图超时",
+    );
+  };
+
+  const createStoryAssetImage = async (input: {
+    model: string;
+    prompt: string;
+  }) => {
+    if (isAdobeImageGenerationModel(input.model)) {
+      const adobeModel = resolveAdobeStoryImageModel(input.model);
+      if (!adobeModel) {
+        throw new Error("不支持的 Adobe 图片模型");
+      }
+      const response = await createAdobe2ApiImageGeneration({
+        model: adobeModel as any,
+        prompt: input.prompt,
+        response_format: "url",
+      });
+      const url = getDirectImageUrl(response);
+      if (!url) throw new Error("Adobe2API 未返回图片地址");
+      return url;
+    }
+
+    if (isXimuImageGenerationModel(input.model)) {
+      const ximuModel = resolveXimuStoryImageModel(input.model);
+      if (!ximuModel) {
+        throw new Error("不支持的西牧图片模型");
+      }
+      const cardCode = settings.ximuCardCode.trim();
+      if (!cardCode) {
+        throw new Error("请先在模型管理的西牧渠道填写卡密");
+      }
+      const request = isXimuGptImageGenerationModel(input.model)
+        ? buildXimuGptImageRequest({
+            model: ximuModel as any,
+            cardCode,
+            prompt: input.prompt,
+            aspectRatio: resolveXimuGptAspectRatio({
+              model: ximuModel as any,
+              size: "1:1",
+              resolution: "1K",
+            }),
+            urls: [],
+          })
+        : buildXimuNanoBananaRequest({
+            model: ximuModel as any,
+            cardCode,
+            prompt: input.prompt,
+            aspectRatio:
+              input.model === XIMU_NANO_BANANA2_MODEL
+                ? resolveXimuNanoBanana2AspectRatio("1:1")
+                : resolveXimuNanoBananaProAspectRatio("1:1"),
+            imageSize: resolveXimuImageSize("2K"),
+            urls: [],
+          });
+      const response = isXimuGptImageGenerationModel(input.model)
+        ? await createXimuGptImageGeneration(request as any)
+        : await createXimuNanoBananaGeneration(request as any);
+      const taskId = extractXimuTaskId(response);
+      if (!taskId) {
+        throw new Error("西牧渠道未返回任务 ID");
+      }
+      return waitForStoryXimuImageResult(taskId);
+    }
+
+    if (isGrokImageGenerationModel(input.model)) {
+      const grokModel = resolveGrokStoryImageModel(input.model);
+      if (!grokModel) {
+        throw new Error("不支持的 Grok 图片模型");
+      }
+      const response = await createGrok2ApiImageGeneration({
+        model: grokModel as any,
+        prompt: input.prompt,
+        n: 1,
+        size: "1024x1024",
+        response_format: "url",
+      });
+      const url = getDirectImageUrl(response);
+      if (!url) throw new Error("Grok2API 未返回图片地址");
+      return url;
+    }
+
+    const response: any = await createImageGeneration({
+      model: input.model,
+      prompt: input.prompt,
+      size: "1:1",
+      n: 1,
+      image_urls: [],
+      metadata: { resolution: "2K" },
+    } as any);
+    const taskId =
+      response?.data?.task_id ??
+      response?.result?.task_id ??
+      response?.task_id ??
+      response?.data?.taskId ??
+      response?.result?.taskId ??
+      response?.taskId ??
+      response?.data?.id ??
+      response?.result?.id ??
+      response?.id;
+
+    if (!taskId) {
+      throw new Error("image task id is empty");
+    }
+
+    return pollStoryImageTask(String(taskId));
+  };
+
   const generateAssetWithAi = async (
     kind: StoryboardAssetKind,
     id: string,
@@ -1604,30 +2234,13 @@ const StoryAgentPage = ({
 
     updateAsset(kind, id, { source: "ai", status: "generating" });
     try {
-      const response: any = await createImageGeneration({
-        model: settings.defaultImageModel || "doubao-seedream-5-0",
+      const imageUrl = await createStoryAssetImage({
+        model:
+          asset?.imageModel ||
+          settings.defaultImageModel ||
+          "doubao-seedream-5-0",
         prompt,
-        size: "1:1",
-        n: 1,
-        image_urls: [],
-        metadata: { resolution: "2K" },
-      } as any);
-      const taskId =
-        response?.data?.task_id ??
-        response?.result?.task_id ??
-        response?.task_id ??
-        response?.data?.taskId ??
-        response?.result?.taskId ??
-        response?.taskId ??
-        response?.data?.id ??
-        response?.result?.id ??
-        response?.id;
-
-      if (!taskId) {
-        throw new Error("image task id is empty");
-      }
-
-      const imageUrl = await pollStoryImageTask(String(taskId));
+      });
       await saveAssetPatch(kind, id, {
         source: "ai",
         status: "ready",
@@ -1654,20 +2267,33 @@ const StoryAgentPage = ({
 
     setSplitting(true);
     try {
-      const selectedStyle =
-        stylePresets.find((item) => item.id === agent.stylePreset)?.label ||
-        agent.stylePreset;
-      const shots = await splitScriptWithAgent({
+      const result = await splitScriptWithAgent({
         title: agent.scriptTitle,
-        style: selectedStyle,
-        customStyle: agent.customStyle,
+        promptPrefix: agent.promptPrefix,
+        promptSuffix: agent.promptSuffix,
+        scriptCategory: agent.scriptCategory,
         maxShots: agent.maxShots,
         splitAssist: agent.splitAssist,
         scriptContent: agent.scriptContent,
         defaults,
       });
-      await saveAgentWithStep({ ...agent, shots }, "assets");
-      toast.success(`已生成 ${shots.length} 条分镜`);
+      const nextAssets = mergeIdentifiedAssets(agent.assets, result.assets);
+      const nextShots = bindShotAssetIdsByName(
+        result.shots,
+        result.shotAssetNames,
+        nextAssets,
+      );
+      const identifiedCount =
+        result.assets.role.length +
+        result.assets.scene.length +
+        result.assets.prop.length;
+      await saveAgentWithStep(
+        { ...agent, shots: nextShots, assets: nextAssets },
+        "assets",
+      );
+      toast.success(
+        `已生成 ${nextShots.length} 条分镜，识别 ${identifiedCount} 个资产`,
+      );
     } catch (error) {
       console.error("[Story] split script failed", error);
       toast.error("拆分剧本失败");
@@ -1692,6 +2318,68 @@ const StoryAgentPage = ({
     });
   };
 
+  const removeAssetFromShot = (shotId: string, assetId: string) => {
+    updateShot(shotId, {
+      assetIds:
+        agent.shots
+          .find((shot) => shot.id === shotId)
+          ?.assetIds.filter((id) => id !== assetId) ?? [],
+    });
+  };
+
+  const applyShotModelSettings = (
+    shotId: string,
+    value: VideoParamState,
+    scope: "single" | "all",
+  ) => {
+    if (scope === "all") {
+      patchAgent({
+        shots: agent.shots.map((shot) => ({
+          ...shot,
+          modelInfo: patchShotModelInfo(
+            shot.modelInfo,
+            normalizeVideoParams(
+              shot.modelInfo.videoModel,
+              {
+                aspectRatio: value.aspectRatio,
+                resolution: value.resolution,
+                duration: value.duration,
+              },
+              "image-to-video",
+            ),
+          ),
+        })),
+      });
+      setEditingShotModel(null);
+      toast.success("已更新全部分镜设置");
+      return;
+    }
+
+    patchAgent({
+      shots: agent.shots.map((shot) =>
+        shot.id === shotId
+          ? {
+              ...shot,
+              modelInfo: patchShotModelInfo(
+                shot.modelInfo,
+                normalizeVideoParams(
+                  shot.modelInfo.videoModel,
+                  {
+                    aspectRatio: value.aspectRatio,
+                    resolution: value.resolution,
+                    duration: value.duration,
+                  },
+                  "image-to-video",
+                ),
+              ),
+            }
+          : shot,
+      ),
+    });
+    setEditingShotModel(null);
+    toast.success("已更新当前分镜设置");
+  };
+
   const saveShotPatch = async (
     id: string,
     patch: Partial<StoryboardShot>,
@@ -1706,67 +2394,82 @@ const StoryAgentPage = ({
     await saveAgent(nextAgent);
   };
 
-  const uploadShotImage = async (shotId: string, file: File) => {
-    const extension = getFileExtension(file, "png");
-    const localPath = `storyboard/projects/${projectId}/snippets/${snippetId}/images/${shotId}.${extension}`;
-    try {
-      await storyboardStorage.saveBinary(localPath, await file.arrayBuffer());
-      updateShot(shotId, { image: { localPath } });
-      toast.success("分镜图片已绑定");
-    } catch (error) {
-      console.error("[Story] upload shot image failed", error);
-      toast.error("上传分镜图片失败");
-    }
-  };
+  const ensureStoryboardLocalMediaOssUrl = async (
+    asset: StoryboardAssetItem,
+  ) => {
+    if (!asset.localPath) return "";
 
-  const generateVideo = (shot: StoryboardShot) => {
-    if (!shot.image?.localPath && !shot.image?.url) {
-      toast.error("请先为该分镜生成或选择图片");
-      return;
-    }
-
-    updateShot(shot.id, { videoStatus: "generating" });
-    window.setTimeout(() => {
-      updateShot(shot.id, {
-        videoStatus: "ready",
-        video: {
-          url: shot.video?.url,
-          localPath: shot.video?.localPath,
-        },
-      });
-      toast.success("图生视频结果已写回当前分镜行");
-    }, 700);
-  };
-
-  const ensureShotImageUrl = async (shot: StoryboardShot) => {
-    if (shot.image?.url) {
-      return shot.image.url;
-    }
-    if (!shot.image?.localPath) {
-      throw new Error("missing image");
-    }
-
-    const buffer = await storyboardStorage.readBinary(shot.image.localPath);
+    const buffer = await storyboardStorage.readBinary(asset.localPath);
     if (!buffer) {
-      throw new Error("image file not found");
+      throw new Error("asset file not found");
     }
 
-    const extension = getPathExtension(shot.image.localPath, "png");
-    const file = new File([buffer], `${shot.id}.${extension}`, {
-      type: getMimeTypeByPath(shot.image.localPath, "image/png"),
+    const mediaType = getStoryAssetMediaType(asset);
+    const fallbackExtension =
+      mediaType === "video" ? "mp4" : mediaType === "audio" ? "mp3" : "png";
+    const extension = getPathExtension(asset.localPath, fallbackExtension);
+    const file = new File([buffer], `${asset.id}.${extension}`, {
+      type: getMimeTypeByPath(asset.localPath),
     });
     const uploaded = await uploadFileToOSS(file);
     if (!uploaded.url) {
-      throw new Error("upload image to oss failed");
+      throw new Error("upload asset to oss failed");
     }
 
     return uploaded.url;
   };
 
-  const pollStoryVideoTask = async (taskId: string) => {
+  const buildShotReferenceItems = async (
+    selectedAssets: StoryboardAssetItem[],
+  ): Promise<MentionItem[]> => {
+    const assetIndex =
+      settings.assetStoragePath &&
+      selectedAssets.some((asset) => asset.assetId)
+        ? await readCombinedAssetIndex(settings.assetStoragePath)
+        : null;
+    const items: MentionItem[] = [];
+
+    for (const asset of selectedAssets) {
+      let url = isHttpUrl(asset.mediaUrl) ? asset.mediaUrl || "" : "";
+
+      if (!url && settings.assetStoragePath && asset.assetId && assetIndex) {
+        const libraryAsset = assetIndex.assets.find(
+          (item) => item.id === asset.assetId,
+        );
+        if (libraryAsset) {
+          url = await ensureAssetOssUrl(settings.assetStoragePath, libraryAsset);
+        }
+      }
+
+      if (!url && asset.localPath) {
+        url = await ensureStoryboardLocalMediaOssUrl(asset);
+      }
+
+      if (!isHttpUrl(url)) {
+        continue;
+      }
+
+      const mediaType = getStoryAssetMediaType(asset);
+      items.push({
+        id: asset.id,
+        mentionId: asset.id,
+        label: asset.name || "未命名资产",
+        value: url,
+        thumbnail: url,
+        url,
+        type: mediaType,
+      });
+    }
+
+    return items;
+  };
+
+  const pollStoryVideoTask = async (taskId: string, isSeedance20: boolean) => {
     for (let attempt = 0; attempt < 90; attempt += 1) {
       await wait(4000);
-      const response = await getLzVideoTaskStatus(taskId);
+      const response = isSeedance20
+        ? await getLzVideoTaskStatus(taskId)
+        : await getDashscopeVideoTaskStatus(taskId);
       const normalized = normalizeVideoTaskResponse(response);
 
       if (normalized.status === GenerationStatus.COMPLETED) {
@@ -1785,39 +2488,132 @@ const StoryAgentPage = ({
     throw new Error("video generation timeout");
   };
 
+  const createStoryVideoTask = async (
+    apiRequest: ReturnType<typeof buildVideoApiRequest>,
+    model: string,
+  ) => {
+    if (isAdobeVideoRequest(apiRequest as Record<string, unknown>)) {
+      const response = await createAdobe2ApiVideoGeneration(apiRequest as any);
+      const videoUrl = extractMarkdownMediaUrl(
+        response?.choices?.[0]?.message?.content,
+        "video",
+      );
+      if (!videoUrl) {
+        throw new Error("Adobe2API video url is empty");
+      }
+      return (await copyVideoUrlToOss(videoUrl)) || videoUrl;
+    }
+
+    if (isGrokVideoRequest(apiRequest as Record<string, unknown>)) {
+      const response = await createGrok2ApiVideoGeneration(apiRequest as any);
+      const rawVideoUrl = extractMarkdownMediaUrl(
+        response?.choices?.[0]?.message?.content,
+        "video",
+      );
+      const videoUrl = rawVideoUrl
+        ? await normalizeGrok2ApiMediaUrl(rawVideoUrl)
+        : "";
+      if (!videoUrl) {
+        throw new Error("Grok2API video url is empty");
+      }
+      return (await copyVideoUrlToOss(videoUrl)) || videoUrl;
+    }
+
+    const isSeedance20 = isSeedanceVideoModel(model);
+    const response: any = isSeedance20
+      ? await createLzVideoTask(apiRequest as any)
+      : await createDashscopeVideoSynthesis(apiRequest as any);
+    const taskId =
+      response?.data?.task_id ||
+      response?.output?.task_id ||
+      response?.task_id ||
+      response?.data?.taskId ||
+      response?.taskId;
+
+    if (!taskId) {
+      throw new Error("video task id is empty");
+    }
+
+    return pollStoryVideoTask(String(taskId), isSeedance20);
+  };
+
   const generateShotVideo = async (shot: StoryboardShot) => {
-    if (!shot.image?.localPath && !shot.image?.url) {
-      toast.error("请先为该分镜生成或选择图片");
+    const prompt = (shot.prompt || shot.script || "").trim();
+    if (!prompt) {
+      toast.error("请先填写分镜提示词");
       return;
     }
 
     updateShot(shot.id, { videoStatus: "generating" });
     try {
-      const imageUrl = await ensureShotImageUrl(shot);
-      const response = await createLzVideoTask(
-        buildStoryVideoRequest(shot, imageUrl),
+      const assetMap = new Map(
+        [
+          ...agent.assets.role,
+          ...agent.assets.scene,
+          ...agent.assets.prop,
+          ...agent.assets.audio,
+        ].map((asset) => [asset.id, asset]),
       );
-      const taskId =
-        response?.data?.task_id ||
-        response?.task_id ||
-        response?.data?.taskId ||
-        response?.taskId;
+      const selectedAssets = shot.assetIds
+        .map((id) => assetMap.get(id))
+        .filter(Boolean) as StoryboardAssetItem[];
+      const referenceItems = await buildShotReferenceItems(selectedAssets);
+      const mode = pickStoryVideoMode(
+        shot.modelInfo.videoModel,
+        referenceItems,
+        toVideoModeKey(settings.defaultNewVideoMode),
+      );
+      const generationReferenceItems =
+        mode === "text-to-video"
+          ? []
+          : mode === "image-to-video"
+            ? referenceItems.filter((item) => item.type === "image").slice(0, 1)
+            : referenceItems;
 
-      if (!taskId) {
-        throw new Error("video task id is empty");
+      if (mode === "all-reference" && generationReferenceItems.length === 0) {
+        toast.error("全能参考模式需要至少一个可用资产素材");
+        await saveShotPatch(shot.id, { videoStatus: "idle" });
+        return;
       }
 
-      const videoUrl = await pollStoryVideoTask(String(taskId));
+      if (mode === "image-to-video" && generationReferenceItems.length === 0) {
+        toast.error("当前模型需要至少一个图片资产素材");
+        await saveShotPatch(shot.id, { videoStatus: "idle" });
+        return;
+      }
+
+      const params = normalizeVideoParams(
+        shot.modelInfo.videoModel,
+        {
+          aspectRatio: shot.modelInfo.aspectRatio,
+          resolution: shot.modelInfo.resolution,
+          duration: shot.modelInfo.duration,
+          generateAudio: settings.defaultNewVideoGenerateAudio,
+          promptExtend: settings.defaultNewVideoPromptExtend,
+        },
+        mode,
+      );
+      const request: VideoGenerateRequest = {
+        model: shot.modelInfo.videoModel,
+        params,
+        prompt,
+        referenceItems: generationReferenceItems,
+        mode,
+      };
+      const apiRequest = buildVideoApiRequest(request);
+      const videoUrl = await createStoryVideoTask(
+        apiRequest,
+        shot.modelInfo.videoModel,
+      );
       await saveShotPatch(shot.id, {
         videoStatus: "ready",
-        image: { ...shot.image, url: imageUrl },
         video: { url: videoUrl },
       });
-      toast.success("图生视频结果已写回当前分镜行");
+      toast.success("生成视频结果已写回当前分镜行");
     } catch (error) {
       console.error("[Story] generate shot video failed", error);
       await saveShotPatch(shot.id, { videoStatus: "failed" });
-      toast.error("图生视频失败，请检查图片和模型配置");
+      toast.error("生成视频失败，请检查提示词、资产和模型配置");
     }
   };
 
@@ -2100,37 +2896,6 @@ const StoryAgentPage = ({
               </label>
               <label>
                 <span className="mb-2 block text-sm text-white/65">
-                  作品风格
-                </span>
-                <select
-                  className={inputClass}
-                  value={agent.stylePreset}
-                  onChange={(event) =>
-                    patchAgent({ stylePreset: event.target.value })
-                  }
-                >
-                  {stylePresets.map((style) => (
-                    <option key={style.id} value={style.id}>
-                      {style.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span className="mb-2 block text-sm text-white/65">
-                  自定义风格
-                </span>
-                <input
-                  className={inputClass}
-                  value={agent.customStyle}
-                  onChange={(event) =>
-                    patchAgent({ customStyle: event.target.value })
-                  }
-                  placeholder="可叠加到每个分镜提示词"
-                />
-              </label>
-              <label>
-                <span className="mb-2 block text-sm text-white/65">
                   剧本最大分镜数
                 </span>
                 <input
@@ -2144,6 +2909,41 @@ const StoryAgentPage = ({
                       maxShots: Math.max(1, Number(event.target.value) || 1),
                     })
                   }
+                />
+              </label>
+              <label>
+                <span className="mb-2 block text-sm text-white/65">
+                  提示词前缀
+                </span>
+                <input
+                  className={inputClass}
+                  value={agent.promptPrefix}
+                  onChange={(event) =>
+                    patchAgent({ promptPrefix: event.target.value })
+                  }
+                  placeholder="默认：全程无字幕"
+                />
+              </label>
+              <label>
+                <span className="mb-2 block text-sm text-white/65">
+                  提示词后缀
+                </span>
+                <input
+                  className={inputClass}
+                  value={agent.promptSuffix}
+                  onChange={(event) =>
+                    patchAgent({ promptSuffix: event.target.value })
+                  }
+                  placeholder="默认：现实写实风格"
+                />
+              </label>
+              <label className="col-span-2">
+                <span className="mb-2 block text-sm text-white/65">
+                  剧本分类
+                </span>
+                <ScriptCategoryCombobox
+                  value={agent.scriptCategory}
+                  onChange={(scriptCategory) => patchAgent({ scriptCategory })}
                 />
               </label>
               <label className="col-span-2">
@@ -2217,6 +3017,8 @@ const StoryAgentPage = ({
                             key={item.id}
                             item={item}
                             index={index}
+                            imageModelOptions={visibleImageModels}
+                            defaultImageModel={settings.defaultImageModel}
                             onChange={(patch) =>
                               updateAsset(kind.id, item.id, patch)
                             }
@@ -2229,6 +3031,7 @@ const StoryAgentPage = ({
                             onGenerate={() =>
                               void generateAssetWithAi(kind.id, item.id)
                             }
+                            onDelete={() => deleteAsset(kind.id, item.id)}
                           />
                         ))
                       )}
@@ -2247,7 +3050,7 @@ const StoryAgentPage = ({
                   分镜管理
                 </h2>
                 <p className="mt-1 text-xs text-white/40">
-                  生成视频为图生视频，必须先绑定分镜图片。
+                  生成视频直接使用当前分镜提示词和已选资产作为参考素材。
                 </p>
               </div>
               <div className="flex gap-3">
@@ -2276,7 +3079,7 @@ const StoryAgentPage = ({
                         colSpan={6}
                         className="px-4 py-12 text-center text-sm text-white/30"
                       >
-                        暂无分镜。填写剧本后点击“下一步：拆分分镜”。
+                        暂无分镜。填写剧本后点击“下一步”。
                       </td>
                     </tr>
                   ) : (
@@ -2289,9 +3092,10 @@ const StoryAgentPage = ({
                           .filter(Boolean) as StoryboardAssetItem[]}
                         onChange={(patch) => updateShot(shot.id, patch)}
                         onSelectAssets={() => openAssetLibraryForShot(shot.id)}
-                        onUploadImage={(file) =>
-                          void uploadShotImage(shot.id, file)
+                        onRemoveAsset={(assetId) =>
+                          removeAssetFromShot(shot.id, assetId)
                         }
+                        onEditModelInfo={() => setEditingShotModel(shot)}
                         onGenerateVideo={() => void generateShotVideo(shot)}
                       />
                     ))
@@ -2316,6 +3120,19 @@ const StoryAgentPage = ({
               shot={editingShot}
               onClose={() => setEditingShot(null)}
               onSave={(videoEdit) => void saveVideoEdit(editingShot.id, videoEdit)}
+            />
+          ) : null}
+
+          {editingShotModel ? (
+            <ShotModelSettingsDialog
+              shot={editingShotModel}
+              onClose={() => setEditingShotModel(null)}
+              onApplySingle={(value) =>
+                applyShotModelSettings(editingShotModel.id, value, "single")
+              }
+              onApplyAll={(value) =>
+                applyShotModelSettings(editingShotModel.id, value, "all")
+              }
             />
           ) : null}
 
@@ -2353,15 +3170,6 @@ const StoryAgentPage = ({
 const getShotConfirmedMaterial = (shot: StoryboardShot) =>
   shot.videoEdit?.confirmedMaterial ||
   (shot.assetIds.length > 0 ? `已引用 ${shot.assetIds.length} 个资产` : "未确认素材");
-
-const getShotVideoText = (shot: StoryboardShot) =>
-  shot.video?.localPath ||
-  shot.video?.url ||
-  (shot.videoStatus === "generating"
-    ? "生成中"
-    : shot.videoStatus === "failed"
-      ? "生成失败"
-      : "未生成视频");
 
 const VideoEditTable = ({
   shots,
@@ -2412,8 +3220,8 @@ const VideoEditTable = ({
                     </div>
                   </td>
                   <td className="px-3 py-3 text-xs text-white/50">
-                    <div className="line-clamp-3 rounded-lg border border-white/8 bg-black/25 p-3">
-                      {getShotVideoText(shot)}
+                    <div className="rounded-lg border border-white/8 bg-black/25 p-3">
+                      <ShotVideoPreview shot={shot} />
                     </div>
                   </td>
                   <td className="px-3 py-3 text-sm text-white/65">
@@ -2548,23 +3356,360 @@ const VideoEditDrawer = ({
   );
 };
 
+const ShotModelSettingsDialog = ({
+  shot,
+  onClose,
+  onApplySingle,
+  onApplyAll,
+}: {
+  shot: StoryboardShot;
+  onClose: () => void;
+  onApplySingle: (value: VideoParamState) => void;
+  onApplyAll: (value: VideoParamState) => void;
+}) => {
+  const config = getVideoParamConfig(shot.modelInfo.videoModel, "image-to-video");
+  const [value, setValue] = useState<VideoParamState>(() => getShotVideoParamState(shot));
+
+  useEffect(() => {
+    setValue(getShotVideoParamState(shot));
+  }, [shot]);
+
+  const patchValue = (patch: Partial<VideoParamState>) => {
+    setValue((current) => ({ ...current, ...patch }));
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <button
+        type="button"
+        aria-label="关闭模型设置"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+      />
+      <div className="relative z-10 w-[min(520px,92vw)] overflow-hidden rounded-2xl border border-white/10 bg-[#101012] shadow-2xl">
+        <div className="flex items-start justify-between border-b border-white/8 px-5 py-4">
+          <div>
+            <h3 className="text-base font-medium text-white/90">
+              分镜 {shot.order} 模型设置
+            </h3>
+            <p className="mt-1 text-xs text-white/40">
+              调整比例、分辨率与时长
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="space-y-5 px-5 py-5">
+          {config.aspectRatios ? (
+            <section className="space-y-2">
+              <div className="text-xs font-medium text-white/55">比例</div>
+              <div className="grid grid-cols-5 gap-2">
+                {config.aspectRatios.map((option) => {
+                  const active = value.aspectRatio === option.value;
+                  const isAuto = option.value === "adaptive";
+
+                  return (
+                    <button
+                      key={String(option.value)}
+                      type="button"
+                      onClick={() =>
+                        patchValue({ aspectRatio: String(option.value) })
+                      }
+                      className={storyVideoOptionButtonClass(
+                        active,
+                        "flex h-[54px] flex-col items-center justify-center gap-1 px-2",
+                      )}
+                    >
+                      {isAuto ? (
+                        <span
+                          className={cn(
+                            "h-3 w-3 rounded-[2px] border",
+                            active ? "border-[#B43FEB]" : "border-white/45",
+                          )}
+                        />
+                      ) : (
+                        <AspectRatioIcon
+                          ratio={String(option.value)}
+                          size={18}
+                          active={active}
+                        />
+                      )}
+                      <span>{option.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          {config.qualityGroup?.key === "resolution" ? (
+            <section className="space-y-2">
+              <div className="text-xs font-medium text-white/55">分辨率</div>
+              <div className="grid grid-cols-3 gap-2">
+                {config.qualityGroup.options.map((option) => {
+                  const active = value.resolution === option.value;
+                  return (
+                    <button
+                      key={String(option.value)}
+                      type="button"
+                      onClick={() =>
+                        patchValue({
+                          resolution: String(option.value),
+                          quality: undefined,
+                        })
+                      }
+                      className={storyVideoOptionButtonClass(active, "h-8 px-3")}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          <section className="space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-white/55">视频时长</span>
+              <span className="font-semibold text-[#D9B4FF]">{value.duration}s</span>
+            </div>
+
+            {config.duration.type === "slider" ? (
+              <div className="space-y-2">
+                <Slider
+                  value={[value.duration]}
+                  min={config.duration.min}
+                  max={config.duration.max}
+                  step={config.duration.step ?? 1}
+                  onValueChange={(values) => patchValue({ duration: values[0] })}
+                  className="[&_[data-slot=slider-range]]:bg-[#B43FEB] [&_[data-slot=slider-thumb]]:border-[#B43FEB]"
+                />
+                <div className="flex justify-between text-[11px] text-white/35">
+                  <span>{config.duration.min}s</span>
+                  <span>{config.duration.max}s</span>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {config.duration.options.map((option) => {
+                  const active = value.duration === Number(option.value);
+                  return (
+                    <button
+                      key={String(option.value)}
+                      type="button"
+                      onClick={() =>
+                        patchValue({ duration: Number(option.value) })
+                      }
+                      className={storyVideoOptionButtonClass(active, "h-8 px-3")}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
+
+        <div className="flex flex-wrap justify-end gap-3 border-t border-white/8 bg-black/20 px-5 py-4">
+          <Button onClick={onClose}>取消</Button>
+          <Button onClick={() => onApplySingle(value)}>仅修改此分镜设置</Button>
+          <Button variant="blue" onClick={() => onApplyAll(value)}>
+            修改全部分镜设置
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ShotPromptPanel = ({
+  shot,
+  selectedAssets,
+  onChange,
+  onRemoveAsset,
+}: {
+  shot: StoryboardShot;
+  selectedAssets: StoryboardAssetItem[];
+  onChange: (patch: Partial<StoryboardShot>) => void;
+  onRemoveAsset: (assetId: string) => void;
+}) => {
+  const [localPreviewUrls, setLocalPreviewUrls] = useState<Record<string, string>>(
+    {},
+  );
+  const previewKey = selectedAssets
+    .map((asset) => `${asset.id}:${asset.localPath || asset.mediaUrl || ""}`)
+    .join("|");
+
+  useEffect(() => {
+    let active = true;
+    const createdUrls: string[] = [];
+
+    const loadPreviews = async () => {
+      const pairs = await Promise.all(
+        selectedAssets.map(async (asset) => {
+          if (!asset.localPath) {
+            return [asset.id, ""] as const;
+          }
+          const url = await storyboardStorage.readObjectUrl(asset.localPath);
+          if (url) createdUrls.push(url);
+          return [asset.id, url || ""] as const;
+        }),
+      );
+
+      if (!active) {
+        createdUrls.forEach((url) => URL.revokeObjectURL(url));
+        return;
+      }
+
+      const next: Record<string, string> = {};
+      for (const [id, url] of pairs) {
+        if (url) next[id] = url;
+      }
+      setLocalPreviewUrls(next);
+    };
+
+    void loadPreviews();
+
+    return () => {
+      active = false;
+      createdUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [previewKey]);
+
+  const mentionItems = useMemo<MentionItem[]>(
+    () =>
+      selectedAssets.map((asset) => ({
+        id: asset.id,
+        mentionId: asset.id,
+        label: asset.name || "未命名资产",
+        value: asset.name || "未命名资产",
+        thumbnail: localPreviewUrls[asset.id] || asset.mediaUrl || "",
+        type: getStoryAssetMediaType(asset),
+      })),
+    [localPreviewUrls, selectedAssets],
+  );
+
+  return (
+    <div className="rounded-2xl border border-white/8 bg-[#1e1e20] p-3">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <span className="rounded-full border border-[#B43FEB]/30 bg-[#B43FEB]/10 px-2 py-1 text-[10px] font-medium text-[#E9C7FF]">
+          全能参考
+        </span>
+        <span className="text-[11px] text-white/35">
+          输入 @ 插入当前分镜资产
+        </span>
+      </div>
+
+      {mentionItems.length > 0 ? (
+        <div className="mb-3">
+          <ReferenceThumbnails
+            items={mentionItems}
+            onRemove={(item) => onRemoveAsset(item.id)}
+          />
+        </div>
+      ) : (
+        <div className="mb-3 rounded-xl border border-dashed border-white/10 bg-black/15 px-3 py-4 text-[11px] text-white/35">
+          先在左侧资产列为当前分镜选择参考资产
+        </div>
+      )}
+
+      <div
+        className={cn(
+          PROMPT_PANEL_STYLES.textAreaWrap,
+          "rounded-xl bg-white/[0.02]",
+        )}
+      >
+        <VideoPromptEditor
+          promptDraftHtml={buildPromptDraftHtml(
+            shot.promptDraftHtml,
+            shot.prompt,
+          )}
+          mentionItems={mentionItems}
+          onDraftChange={({ text, html }) =>
+            onChange({ prompt: text, promptDraftHtml: html })
+          }
+        />
+      </div>
+    </div>
+  );
+};
+
+const ShotVideoPreview = ({ shot }: { shot: StoryboardShot }) => {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const videoUrl = objectUrl || shot.video?.url || "";
+
+  useEffect(() => {
+    let active = true;
+    let nextUrl: string | null = null;
+
+    if (!shot.video?.localPath) {
+      setObjectUrl(null);
+      return;
+    }
+
+    storyboardStorage.readObjectUrl(shot.video.localPath).then((url) => {
+      if (!active) {
+        if (url) URL.revokeObjectURL(url);
+        return;
+      }
+      nextUrl = url;
+      setObjectUrl(url);
+    });
+
+    return () => {
+      active = false;
+      if (nextUrl) URL.revokeObjectURL(nextUrl);
+    };
+  }, [shot.video?.localPath]);
+
+  if (videoUrl) {
+    return (
+      <div className="overflow-hidden rounded-lg border border-white/8 bg-black">
+        <video
+          src={videoUrl}
+          controls
+          preload="metadata"
+          className="aspect-video w-full bg-black object-contain"
+        />
+        <div className="truncate border-t border-white/8 px-2 py-1.5 text-[10px] text-white/35">
+          {shot.video?.localPath || shot.video?.url}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex aspect-video flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/10 bg-black/25 text-xs text-white/35">
+      <Video size={18} />
+      未生成视频
+    </div>
+  );
+};
+
 const ShotRow = ({
   shot,
   selectedAssets,
   onChange,
   onSelectAssets,
-  onUploadImage,
+  onRemoveAsset,
+  onEditModelInfo,
   onGenerateVideo,
 }: {
   shot: StoryboardShot;
   selectedAssets: StoryboardAssetItem[];
   onChange: (patch: Partial<StoryboardShot>) => void;
   onSelectAssets: () => void;
-  onUploadImage: (file: File) => void;
+  onRemoveAsset: (assetId: string) => void;
+  onEditModelInfo: () => void;
   onGenerateVideo: () => void;
 }) => {
-  const imageInputRef = useRef<HTMLInputElement | null>(null);
-
   return (
     <tr className="border-b border-white/5 align-top">
       <td className="px-3 py-3 text-center text-sm text-white/45">
@@ -2585,7 +3730,7 @@ const ShotRow = ({
             selectedAssets.map((asset) => (
               <div
                 key={asset.id}
-                className="grid grid-cols-[56px_1fr] gap-2 rounded-md border border-white/8 bg-white/[0.03] p-2"
+                className="grid grid-cols-[56px_1fr_auto] gap-2 rounded-md border border-white/8 bg-white/[0.03] p-2"
               >
                 <StoryAssetPreview item={asset} compact />
                 <div className="min-w-0">
@@ -2602,6 +3747,16 @@ const ShotRow = ({
                           : "音效"}
                   </div>
                 </div>
+                <Button
+                  className="h-7 w-7 self-start px-0 text-red-200 hover:bg-red-500/10 hover:text-red-100"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onRemoveAsset(asset.id)}
+                  title="移除当前分镜资产"
+                  aria-label="移除当前分镜资产"
+                >
+                  <Trash2 size={13} />
+                </Button>
               </div>
             ))
           )}
@@ -2612,40 +3767,31 @@ const ShotRow = ({
         </Button>
       </td>
       <td className="px-3 py-3">
-        <textarea
-          className={`${textAreaClass} h-28`}
-          value={shot.prompt}
-          onChange={(event) => onChange({ prompt: event.target.value })}
+        <ShotPromptPanel
+          shot={shot}
+          selectedAssets={selectedAssets}
+          onChange={onChange}
+          onRemoveAsset={onRemoveAsset}
         />
       </td>
       <td className="px-3 py-3 text-xs text-white/55">
         <div className="space-y-2 rounded-lg border border-white/8 bg-black/25 p-3">
-          <div>图片：{shot.modelInfo.imageModel}</div>
           <div>视频：{shot.modelInfo.videoModel}</div>
           <div>
             {shot.modelInfo.aspectRatio} / {shot.modelInfo.duration}s /{" "}
             {shot.modelInfo.resolution || "默认分辨率"}
           </div>
+          <Button size="sm" onClick={onEditModelInfo}>
+            <Pencil size={13} />
+            设置参数
+          </Button>
         </div>
       </td>
       <td className="px-3 py-3">
-        <input
-          ref={imageInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) onUploadImage(file);
-          }}
-        />
-        <div className="mb-3 rounded-lg border border-white/8 bg-black/25 p-3 text-xs text-white/45">
-          <div className="flex items-center gap-2">
-            <FileImage size={14} />
-            {shot.image?.localPath || shot.image?.url || "未绑定图片"}
-          </div>
+        <div className="mb-3 space-y-2 rounded-lg border border-white/8 bg-black/25 p-3 text-xs text-white/45">
+          <ShotVideoPreview shot={shot} />
           {shot.videoStatus !== "idle" && (
-            <div className="mt-2 flex items-center gap-2 text-[#d8b6ff]">
+            <div className="flex items-center gap-2 text-[#d8b6ff]">
               <Video size={14} />
               {shot.videoStatus === "generating"
                 ? "视频生成中"
@@ -2656,10 +3802,6 @@ const ShotRow = ({
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => imageInputRef.current?.click()}>
-            <Upload size={13} />
-            绑定图片
-          </Button>
           <Button
             size="sm"
             variant="blue"
