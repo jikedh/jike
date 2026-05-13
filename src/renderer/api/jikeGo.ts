@@ -332,3 +332,60 @@ export function getUploadOssPutUrl(data: UploadOssPutUrlRequest): any {
     headers: getJikeGoAuthHeaders(),
   });
 }
+
+// ============== RunningHub 视频工作流 ==============
+
+export type RunningHubNodeInfo = {
+  nodeId: string;
+  fieldName: string;
+  fieldValue: string;
+};
+
+export type CreateRunningHubTaskRequest = {
+  workflowId: string;
+  instanceType?: string;
+  nodeInfoList: RunningHubNodeInfo[];
+};
+
+export type CreateRunningHubTaskResponse = {
+  taskId: string;
+  taskStatus: string;
+};
+
+export type PollRunningHubTaskRequest = {
+  taskId: string;
+};
+
+export type RunningHubOutputItem = {
+  fileUrl: string;
+  fileType: string;
+  taskCostTime: string;
+  nodeId: string;
+};
+
+export type PollRunningHubTaskResponse = {
+  taskStatus: string;
+  outputs: RunningHubOutputItem[];
+};
+
+// 创建 RunningHub 工作流任务
+export function createRunningHubTask(data: CreateRunningHubTaskRequest): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/runninghub/create",
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+// 轮询 RunningHub 任务状态和输出
+export function pollRunningHubTask(data: PollRunningHubTaskRequest): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/runninghub/poll",
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
