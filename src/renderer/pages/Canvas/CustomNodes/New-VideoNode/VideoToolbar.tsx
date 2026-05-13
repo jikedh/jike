@@ -1,6 +1,7 @@
 import {
   IconArrowBigLeftLines,
   IconArrowBigRightLines,
+  IconBolt,
   IconDownload,
   IconEraser,
   IconPlayerPauseFilled,
@@ -31,7 +32,7 @@ import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
 import Video from "yet-another-react-lightbox/plugins/video";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import { getVideoRemovalStatus, videoRemoval } from "@/api/ai";
-import { getUploadOssPutUrl } from "@/api/jikeGo";
+import { getUploadOssPutUrl, createRunningHubTask, pollRunningHubTask } from "@/api/jikeGo";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { Button } from "@/components/ui/button";
 import {
@@ -902,6 +903,7 @@ type ActionKey =
   | "snapshot"
   | "trim"
   | "removeCaptions"
+  | "videoEnhance"
   | "lastFrame";
 
 /**
@@ -956,6 +958,11 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         key: "removeCaptions" as const,
         label: "去字幕",
         icon: IconEraser,
+      },
+      {
+        key: "videoEnhance" as const,
+        label: "视频超清",
+        icon: IconBolt,
       },
       { key: "download" as const, label: "下载", icon: IconDownload },
       { key: "preview" as const, label: "放大查看", icon: IconZoomIn },
@@ -1151,6 +1158,16 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       }
       setActiveVideoTool({ nodeId, tool: "removeCaptions" });
       setIsSubtitlePanelOpen(true);
+      return;
+    }
+
+    if (actionKey === "videoEnhance") {
+      if (!currentVideoUrl) {
+        toast.info("暂无可用视频");
+        return;
+      }
+      setActiveVideoTool({ nodeId, tool: "videoEnhance" });
+      void handleVideoEnhance();
       return;
     }
   };
@@ -1375,6 +1392,190 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
     },
     [projectId, updateNewVideoNodeData],
   );
+
+  // ====== 视频超清轮询器 ======
+  const runningHubEnhancePollers: Record<string, number> = {};
+
+  const startRunningHubPolling = useCallback(
+    (taskId: string, targetNodeId: string) => {
+      const existing = runningHubEnhancePollers[targetNodeId];
+      if (existing) {
+        window.clearInterval(existing);
+      }
+
+      let timer = 0;
+      const clearPolling = () => {
+        if (timer) {
+          window.clearInterval(timer);
+        }
+        delete runningHubEnhancePollers[targetNodeId];
+      };
+
+      const poll = async () => {
+        try {
+          const targetExists = useCanvasFlowStore
+            .getState()
+            .nodes.some((node) => node.id === targetNodeId);
+          if (!targetExists) {
+            clearPolling();
+            return;
+          }
+
+          const response: any = await pollRunningHubTask({ taskId });
+          const status =
+            response?.data?.taskStatus ||
+            response?.taskStatus ||
+            "";
+          const outputs =
+            response?.data?.outputs ||
+            response?.outputs ||
+            [];
+
+          if (status === "SUCCESS") {
+            const firstOutput = outputs.find((o: any) =>
+              /\.(mp4|mov|webm)(\?|$)/i.test(o.fileUrl || ""),
+            ) || outputs[0];
+
+            if (firstOutput) {
+              const resultItem = await saveToolMediaUrlToProject(
+                projectId,
+                withVideoPosterFields({
+                  url: firstOutput.fileUrl,
+                  remoteUrl: firstOutput.fileUrl,
+                  format: "mp4",
+                }),
+                "video",
+                "mp4",
+                "视频超清",
+              );
+              updateNewVideoNodeData(targetNodeId, {
+                status: GenerationStatus.COMPLETED,
+                progress: 100,
+                result: {
+                  type: "video",
+                  data: [resultItem],
+                },
+                error: undefined,
+              } as any);
+              await useUserStore.getState().fetchBalanceInfo();
+            } else {
+              updateNewVideoNodeData(targetNodeId, {
+                status: GenerationStatus.COMPLETED,
+                progress: 100,
+                result: { type: "video", data: [] },
+                error: undefined,
+              } as any);
+            }
+            clearPolling();
+            return;
+          }
+
+          if (status === "FAILED") {
+            updateNewVideoNodeData(targetNodeId, {
+              status: GenerationStatus.FAILED,
+              progress: 0,
+              error: {
+                code: "RUNNINGHUB_FAILED",
+                message: "视频超清失败",
+              },
+            } as any);
+            clearPolling();
+            return;
+          }
+
+          updateNewVideoNodeData(targetNodeId, {
+            status: GenerationStatus.IN_PROGRESS,
+            progress: 50,
+          } as any);
+        } catch { }
+      };
+
+      timer = window.setInterval(() => {
+        void poll();
+      }, 5000);
+      runningHubEnhancePollers[targetNodeId] = timer;
+      void poll();
+    },
+    [projectId, updateNewVideoNodeData],
+  );
+
+  const handleVideoEnhance = useCallback(async () => {
+    if (!currentVideoUrl) return;
+
+    try {
+      const sourceNode = useCanvasFlowStore
+        .getState()
+        .nodes.find((n) => n.id === nodeId);
+      const basePosition = sourceNode?.position ?? { x: 0, y: 0 };
+      const outputIndex = useCanvasFlowStore
+        .getState()
+        .edges.filter((edge) => edge.source === nodeId).length;
+
+      const newNodeId = addNode("newVideo", {
+        x: basePosition.x - 390,
+        y:
+          basePosition.y +
+          (sourceNode?.height ?? 250) +
+          48 +
+          outputIndex * 298,
+      } as any);
+
+      updateNewVideoNodeData(newNodeId, {
+        badgeLabel: "视频超清",
+        nickname: "视频超清",
+        aspect_ratio: data.aspect_ratio,
+        status: GenerationStatus.IN_PROGRESS,
+        progress: 0,
+        result: { type: "video", data: [] },
+        error: undefined,
+      } as any);
+
+      window.setTimeout(() => {
+        onConnect({
+          source: nodeId,
+          sourceHandle: "output",
+          target: newNodeId,
+          targetHandle: "input",
+        });
+      }, 50);
+
+      // 使用 video-hp 工作流，node 15 为 video 输入节点
+      const response: any = await createRunningHubTask({
+        workflowId: "2005989768603320322",
+        instanceType: "plus",
+        nodeInfoList: [
+          {
+            nodeId: "15",
+            fieldName: "video",
+            fieldValue: currentVideoUrl,
+          },
+        ],
+      });
+
+      const taskId =
+        response?.data?.taskId || response?.taskId || "";
+      if (!taskId) {
+        updateNewVideoNodeData(newNodeId, {
+          status: GenerationStatus.FAILED,
+          error: { code: "NO_TASK_ID", message: "创建任务失败，未获取到 taskId" },
+        } as any);
+        return;
+      }
+
+      startRunningHubPolling(taskId, newNodeId);
+    } catch (error: any) {
+      toast.error(error?.message || "视频超清失败");
+    }
+  }, [
+    addNode,
+    currentVideoUrl,
+    data.aspect_ratio,
+    nodeId,
+    onConnect,
+    projectId,
+    startRunningHubPolling,
+    updateNewVideoNodeData,
+  ]);
 
   const handleSubmitRemoveCaptions = useCallback(
     async (rect: WuhenRect, requiredPoints: number) => {
