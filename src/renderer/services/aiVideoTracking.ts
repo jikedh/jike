@@ -15,6 +15,7 @@ export interface AIVideoTrackData {
   generatedVideoUrl?: string;
   status: "SUCCESS" | "FAIL" | "PENDING";
   timestamp: number;
+  scoreCost?: number;
 }
 
 type AIVideoTrackStatus = AIVideoTrackData["status"];
@@ -64,6 +65,7 @@ class AIVideoTrackingService {
           duration: trackData.duration,
           reference_image_url: trackData.referenceImageUrls,
           createTime: trackData.timestamp,
+          scoreCost: trackData.scoreCost,
         },
       });
 

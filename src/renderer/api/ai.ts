@@ -532,6 +532,7 @@ export async function createLzVideoTask(
     provider: "kuaizi",
     requestParams: data as unknown as Record<string, unknown>,
     status: taskId ? "PENDING" : "FAIL",
+    scoreCost,
   });
 
   return { ...responseData, ledgerBizId };
@@ -732,6 +733,7 @@ export async function createDashscopeVideoSynthesis(
     provider: "dashscope",
     requestParams: trackData,
     status: taskStatus === "FAILED" || !taskId ? "FAIL" : "PENDING",
+    scoreCost,
   });
 
   return { ...responseData, ledgerBizId };
