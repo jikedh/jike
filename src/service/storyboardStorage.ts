@@ -4,6 +4,8 @@ import { localStorageService } from "service/localStorageService";
 const STORYBOARD_ROOT = "storyboard";
 const STORYBOARD_INDEX_PATH = `${STORYBOARD_ROOT}/index.json`;
 const STORYBOARD_VERSION = 1;
+const DEFAULT_PROMPT_PREFIX = "全程无字幕";
+const DEFAULT_PROMPT_SUFFIX = "现实写实风格";
 
 export type StoryboardProject = {
   id: string;
@@ -43,6 +45,8 @@ export type StoryboardAssetItem = {
   mediaUrl?: string;
   localPath?: string;
   assetId?: string;
+  imageModel?: string;
+  imagePlatform?: string;
 };
 
 export type StoryboardShot = {
@@ -51,6 +55,7 @@ export type StoryboardShot = {
   script: string;
   assetIds: string[];
   prompt: string;
+  promptDraftHtml?: string;
   modelInfo: {
     imageModel: string;
     videoModel: string;
@@ -75,8 +80,11 @@ export type StoryboardShot = {
 
 export type StoryboardAgentData = {
   scriptTitle: string;
-  stylePreset: string;
-  customStyle: string;
+  promptPrefix: string;
+  promptSuffix: string;
+  scriptCategory: string;
+  stylePreset?: string;
+  customStyle?: string;
   maxShots: number;
   splitAssist: string;
   scriptContent: string;
@@ -84,6 +92,12 @@ export type StoryboardAgentData = {
   assets: Record<StoryboardAssetKind, StoryboardAssetItem[]>;
   shots: StoryboardShot[];
   updatedAt: number;
+};
+
+export type StoryboardAgentSplitResult = {
+  shots: StoryboardShot[];
+  assets: Record<StoryboardAssetKind, StoryboardAssetItem[]>;
+  shotAssetNames: string[][];
 };
 
 type StoryboardIndex = {
@@ -100,8 +114,9 @@ const emptyAssets = (): Record<StoryboardAssetKind, StoryboardAssetItem[]> => ({
 
 export const createEmptyAgentData = (): StoryboardAgentData => ({
   scriptTitle: "",
-  stylePreset: "cinematic-realism",
-  customStyle: "",
+  promptPrefix: DEFAULT_PROMPT_PREFIX,
+  promptSuffix: DEFAULT_PROMPT_SUFFIX,
+  scriptCategory: "解说漫",
   maxShots: 20,
   splitAssist: "",
   scriptContent: "",
@@ -460,15 +475,163 @@ const parseJsonBlock = (value: string) => {
   return fenced?.[1]?.trim() || trimmed;
 };
 
+const applyPromptAffixes = (prompt: string, prefix: string, suffix: string) =>
+  [prefix.trim(), prompt.trim(), suffix.trim()].filter(Boolean).join("，");
+
+const assetReferenceKeys: Record<"role" | "scene" | "prop", string[]> = {
+  role: ["role", "roles", "character", "characters", "角色", "人物"],
+  scene: ["scene", "scenes", "场景"],
+  prop: ["prop", "props", "道具"],
+};
+
+const createIdentifiedAsset = (
+  kind: StoryboardAssetKind,
+  value: unknown,
+): StoryboardAssetItem | null => {
+  const source =
+    typeof value === "string" ? { name: value, prompt: value } : value;
+  if (!source || typeof source !== "object") return null;
+
+  const record = source as {
+    name?: unknown;
+    prompt?: unknown;
+    description?: unknown;
+  };
+  const name = String(record.name || "").trim();
+  const prompt = String(record.prompt || record.description || name).trim();
+  if (!name) return null;
+
+  return {
+    id: createId(`asset_${kind}`),
+    kind,
+    name,
+    prompt,
+    source: "ai",
+    status: "idle",
+  };
+};
+
+const normalizeIdentifiedAssets = (
+  value: unknown,
+): Record<StoryboardAssetKind, StoryboardAssetItem[]> => {
+  const source = value && typeof value === "object" ? value : {};
+  const record = source as Record<string, unknown>;
+  const result = emptyAssets();
+
+  for (const kind of ["role", "scene", "prop"] as const) {
+    const list =
+      assetReferenceKeys[kind]
+        .map((key) => record[key])
+        .find((item): item is unknown[] => Array.isArray(item)) || [];
+    const seen = new Set<string>();
+    result[kind] = list
+      .map((item) => createIdentifiedAsset(kind, item))
+      .filter((item): item is StoryboardAssetItem => Boolean(item))
+      .filter((item) => {
+        const key = item.name.trim().toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }
+
+  return result;
+};
+
+type RawSplitShotItem = {
+  script?: string;
+  prompt?: string;
+  assets?: unknown;
+  assetRefs?: unknown;
+  assetNames?: unknown;
+  role?: unknown;
+  roles?: unknown;
+  scene?: unknown;
+  scenes?: unknown;
+  prop?: unknown;
+  props?: unknown;
+  角色?: unknown;
+  人物?: unknown;
+  场景?: unknown;
+  道具?: unknown;
+};
+
+const normalizeAssetNameList = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (typeof item === "string") return item.trim();
+      if (item && typeof item === "object") {
+        const record = item as { name?: unknown };
+        return String(record.name || "").trim();
+      }
+      return "";
+    })
+    .filter(Boolean);
+};
+
+const extractShotAssetNames = (item: RawSplitShotItem): string[] => {
+  const sources = [
+    item.assets,
+    item.assetRefs,
+    item.assetNames,
+    item,
+  ].filter((source) => source && typeof source === "object") as Array<
+    Record<string, unknown>
+  >;
+  const names: string[] = [];
+
+  for (const source of sources) {
+    for (const kind of ["role", "scene", "prop"] as const) {
+      const value = assetReferenceKeys[kind]
+        .map((key) => source[key])
+        .find((candidate) => Array.isArray(candidate));
+      names.push(...normalizeAssetNameList(value));
+    }
+  }
+
+  return Array.from(new Set(names.map((name) => name.trim()).filter(Boolean)));
+};
+
+const createShotsFromItems = (
+  items: RawSplitShotItem[],
+  input: {
+    maxShots: number;
+    promptPrefix: string;
+    promptSuffix: string;
+    defaults: StoryboardShot["modelInfo"];
+  },
+) =>
+  items.slice(0, input.maxShots).map((item, index) => ({
+    id: createId("shot"),
+    order: index + 1,
+    script: item.script || "",
+    assetIds: [],
+    prompt: applyPromptAffixes(
+      item.prompt || item.script || "",
+      input.promptPrefix,
+      input.promptSuffix,
+    ),
+    modelInfo: input.defaults,
+    videoStatus: "idle" as const,
+  }));
+
+const createShotAssetNamesFromItems = (
+  items: RawSplitShotItem[],
+  maxShots: number,
+) => items.slice(0, maxShots).map(extractShotAssetNames);
+
 export const splitScriptWithAgent = async (input: {
   title: string;
-  style: string;
-  customStyle: string;
+  promptPrefix: string;
+  promptSuffix: string;
+  scriptCategory: string;
   maxShots: number;
   splitAssist: string;
   scriptContent: string;
   defaults: StoryboardShot["modelInfo"];
-}): Promise<StoryboardShot[]> => {
+}): Promise<StoryboardAgentSplitResult> => {
   try {
     const response = await createChatCompletion({
       model: "deepseek-v3.2",
@@ -478,17 +641,19 @@ export const splitScriptWithAgent = async (input: {
         {
           role: "system",
           content:
-            "你是影视分镜导演。只输出 JSON 数组，不要 Markdown。每项包含 script 和 prompt 两个字段。",
+            "你是影视分镜导演。只输出 JSON，不要 Markdown。",
         },
         {
           role: "user",
           content: [
             `剧本标题：${input.title || "未命名剧本"}`,
-            `作品风格：${input.style}`,
-            input.customStyle ? `自定义风格：${input.customStyle}` : "",
+            input.promptPrefix ? `提示词前缀：${input.promptPrefix}` : "",
+            input.promptSuffix ? `提示词后缀：${input.promptSuffix}` : "",
+            input.scriptCategory ? `剧本分类：${input.scriptCategory}` : "",
             `最大分镜数：${input.maxShots}`,
             input.splitAssist ? `拆镜辅助词：${input.splitAssist}` : "",
-            "请把以下剧本拆成适合图生视频的一组分镜，每个分镜的 script 保留剧情内容，prompt 写成可用于生图/图生视频的中文提示词。",
+            "请返回对象：{ \"shots\": [{ \"script\": \"剧情内容\", \"prompt\": \"生图/图生视频提示词\", \"assets\": { \"role\": [\"本分镜涉及的角色名\"], \"scene\": [\"本分镜涉及的场景名\"], \"prop\": [\"本分镜涉及的道具名\"] } }], \"assets\": { \"role\": [{ \"name\": \"角色名\", \"prompt\": \"外观与性格描述\" }], \"scene\": [{ \"name\": \"场景名\", \"prompt\": \"环境描述\" }], \"prop\": [{ \"name\": \"道具名\", \"prompt\": \"外观用途描述\" }] } }。",
+            "shots 最多不超过最大分镜数。每条 shot.assets 只能引用全局 assets 中已有的名称。prompt 不需要自行重复提示词前缀和提示词后缀，系统会统一拼接。assets 只识别角色、场景、道具，不要输出音效。",
             input.scriptContent,
           ]
             .filter(Boolean)
@@ -502,21 +667,25 @@ export const splitScriptWithAgent = async (input: {
       response?.output_text ||
       response?.content ||
       "";
-    const parsed = JSON.parse(parseJsonBlock(String(content))) as Array<{
-      script?: string;
-      prompt?: string;
-    }>;
-    const items = Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(parseJsonBlock(String(content))) as
+      | RawSplitShotItem[]
+      | {
+          shots?: RawSplitShotItem[];
+          assets?: unknown;
+        };
+    const items = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed.shots)
+        ? parsed.shots
+        : [];
     if (items.length > 0) {
-      return items.slice(0, input.maxShots).map((item, index) => ({
-        id: createId("shot"),
-        order: index + 1,
-        script: item.script || "",
-        assetIds: [],
-        prompt: item.prompt || item.script || "",
-        modelInfo: input.defaults,
-        videoStatus: "idle",
-      }));
+      return {
+        shots: createShotsFromItems(items, input),
+        assets: normalizeIdentifiedAssets(
+          Array.isArray(parsed) ? undefined : parsed.assets,
+        ),
+        shotAssetNames: createShotAssetNamesFromItems(items, input.maxShots),
+      };
     }
   } catch (error) {
     console.warn("[storyboard] AI split failed, fallback to local split", error);
@@ -528,13 +697,12 @@ export const splitScriptWithAgent = async (input: {
     .filter(Boolean)
     .slice(0, Math.max(1, input.maxShots));
 
-  return parts.map((part, index) => ({
-    id: createId("shot"),
-    order: index + 1,
-    script: part,
-    assetIds: [],
-    prompt: `${input.customStyle || input.style}，${part}`,
-    modelInfo: input.defaults,
-    videoStatus: "idle",
-  }));
+  return {
+    shots: createShotsFromItems(
+      parts.map((part) => ({ script: part, prompt: part })),
+      input,
+    ),
+    assets: emptyAssets(),
+    shotAssetNames: parts.map(() => []),
+  };
 };
