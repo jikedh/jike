@@ -45,7 +45,9 @@ import {
   type VideoParamState,
 } from "./constants/videoParamConfigs";
 import { useModeAvailability } from "./hooks/useModeAvailability";
+import { useVideoGenerationAvailability } from "./hooks/useVideoGenerationAvailability";
 import { buildVideoApiRequest } from "./utils/buildVideoApiRequest";
+import { validateVideoGenerationCapability } from "./constants/videoModelGenerationCapabilities";
 
 interface VideoPromptPanelProps {
   nodeId: string;
@@ -595,7 +597,12 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     hasAnyReference: generationReferenceItems.length > 0,
     referenceAllImages,
   });
-
+  const generationAvailability = useVideoGenerationAvailability({
+    modelId: selectedModel,
+    mode: activeMode,
+    referenceItems: generationReferenceItems,
+    params: selectedParams,
+  });
   const currentModeEnabled = useMemo(() => {
     const state = modeStates.find((mode) => mode.key === activeMode);
     return state?.enabled ?? false;
@@ -1036,7 +1043,16 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       if (isGenerating) {
         return;
       }
-
+      const capabilityResult = validateVideoGenerationCapability({
+        modelId: request.model,
+        mode: request.mode,
+        referenceItems: generationReferenceItems,
+        params: request.params,
+      });
+      if (!capabilityResult.canGenerate) {
+        warning(capabilityResult.summaryReason ?? capabilityResult.reasons[0]);
+        return;
+      }
       const editorText = editorRef.current?.getPlainText() ?? request.prompt;
       const mergedPrompt = [...parentNoteContents, editorText]
         .map((content) => content.trim())
@@ -1047,103 +1063,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         warning("请输入提示词");
         return;
       }
-
-      if (
-        request.mode === "all-reference" &&
-        generationReferenceItems.length === 0
-      ) {
-        // 全能参考模式默认保持可选，但真正生成前必须至少有一个图片/视频/音频参考素材。
-        warning("全能参考模式需要至少上传或连接一个参考素材");
-        return;
-      }
-
-      if (request.model === "adobe-sora2-pro") {
-        const imageCount = generationReferenceItems.filter(
-          (item) => item.type === "image",
-        ).length;
-        const allImages =
-          generationReferenceItems.length === 0 ||
-          generationReferenceItems.every((item) => item.type === "image");
-        if (!allImages) {
-          warning("Sora2Pro（Adobe版本）仅支持图片参考素材");
-          return;
-        }
-        if (request.mode === "text-to-video" && imageCount > 0) {
-          warning("Sora2Pro（Adobe版本）文生视频请不要传参考图");
-          return;
-        }
-        if (request.mode !== "text-to-video" && imageCount < 1) {
-          warning("Sora2Pro（Adobe版本）图生视频请上传或连接 1 张参考图");
-          return;
-        }
-      }
-
-      if (
-        request.model === "adobe-veo31" ||
-        request.model === "adobe-veo31-fast"
-      ) {
-        const imageCount = generationReferenceItems.filter(
-          (item) => item.type === "image",
-        ).length;
-        const allImages =
-          generationReferenceItems.length === 0 ||
-          generationReferenceItems.every((item) => item.type === "image");
-
-        if (request.mode === "text-to-video" && generationReferenceItems.length > 0) {
-          warning("Veo3.1 文生视频请不要传参考图");
-          return;
-        }
-
-        if (request.mode === "image-to-video" && (imageCount !== 1 || !allImages)) {
-          warning("Veo3.1 图生视频需要且仅支持 1 张参考图");
-          return;
-        }
-
-        if (
-          request.mode === "first-last-frame" &&
-          (imageCount !== 2 || !allImages)
-        ) {
-          warning("Veo3.1 首尾帧需要且仅支持 2 张参考图");
-          return;
-        }
-
-        if (request.mode === "all-reference") {
-          if (request.model === "adobe-veo31-fast") {
-            warning("Veo3.1 Fast 不支持全能参考");
-            return;
-          }
-
-          if (imageCount < 1 || imageCount > 3 || !allImages) {
-            warning("该模型只支持1~3图片做为参考图");
-            return;
-          }
-        }
-      }
-
-      if (request.model === "happyhorse") {
-        const imageCount = generationReferenceItems.filter(
-          (item) => item.type === "image",
-        ).length;
-        const videoCount = generationReferenceItems.filter(
-          (item) => item.type === "video",
-        ).length;
-
-        if (request.mode === "all-reference" && imageCount === 0) {
-          warning("HappyHores 参考生视频需要至少 1 张参考图");
-          return;
-        }
-
-        if (request.mode === "image-to-video" && imageCount !== 1) {
-          warning("HappyHores 图生视频需要且仅支持 1 张首帧图");
-          return;
-        }
-
-        if (request.mode === "video-edit" && videoCount !== 1) {
-          warning("HappyHores 视频编辑需要且仅支持 1 个视频素材");
-          return;
-        }
-      }
-
       if (
         !(await validateBalanceBeforeGenerate({
           requiredPoints,
@@ -1254,7 +1173,12 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
           onGenerate={handleGenerate}
           onStop={handleStop}
           isGenerating={isGenerating}
-          disabled={isUploading}
+          disabled={isUploading || !generationAvailability.canGenerate}
+          disabledReason={
+            isUploading
+              ? "素材正在上传中，请稍后再生成"
+              : generationAvailability.summaryReason
+          }
           accessory={
             <>
               <PresetDropdown

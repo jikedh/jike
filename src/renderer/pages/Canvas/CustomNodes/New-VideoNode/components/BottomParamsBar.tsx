@@ -40,6 +40,7 @@ interface BottomParamsBarProps {
   onStop?: () => void;
   isGenerating?: boolean;
   disabled?: boolean;
+  disabledReason?: string;
   accessory?: ReactNode;
   modelOptions?: ModelOption[];
 }
@@ -56,6 +57,7 @@ export const BottomParamsBar = ({
   onStop,
   isGenerating = false,
   disabled = false,
+  disabledReason,
   accessory,
   modelOptions = VIDEO_MODEL_OPTIONS,
 }: BottomParamsBarProps) => {
@@ -113,7 +115,8 @@ export const BottomParamsBar = ({
           <Button
             unstyled
             onClick={handleClick}
-            disabled={disabled}
+            aria-disabled={disabled}
+            title={disabledReason}
             className={PROMPT_PANEL_STYLES.generateButton}
           >
             生成

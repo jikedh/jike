@@ -88,6 +88,7 @@ const CANVAS_POINTER_EXCLUSION_SELECTOR = [
   ".react-flow__edge",
   ".react-flow__handle",
   ".react-flow__connection",
+  ".react-flow__minimap",
   ".canvas-group-resize-handle",
   ".canvas-group-name-badge",
   ".canvas-batch-toolbar",
@@ -442,14 +443,14 @@ const applyNodeDragPreviewDom = (dragState: NodeDragPreviewState) => {
 };
 
 const DELETE_CONFIRM_NODE_LABEL: Partial<Record<AllNodeType["type"], string>> =
-  {
-    imageNode: "图片节点",
-    newVideoNode: "生成视频节点",
-    agentNode: "智能体节点",
-    textAgentNode: "文本智能体节点",
-    imageAgentNode: "图片智能体节点",
-    videoAgentNode: "视频智能体节点",
-  };
+{
+  imageNode: "图片节点",
+  newVideoNode: "生成视频节点",
+  agentNode: "智能体节点",
+  textAgentNode: "文本智能体节点",
+  imageAgentNode: "图片智能体节点",
+  videoAgentNode: "视频智能体节点",
+};
 
 const getCanvasNodeTypeFromFlowNode = (
   node: AllNodeType | undefined,
@@ -526,7 +527,7 @@ const isEditableEventTarget = (target: EventTarget | null) => {
 
 const scheduleIdleWork = (callback: () => void) => {
   if (typeof window === "undefined") {
-    return () => {};
+    return () => { };
   }
 
   if ("requestIdleCallback" in window) {
@@ -687,12 +688,12 @@ export const CanvasFlow = ({
   } | null>(null);
   const startHighPriorityViewportPanRef = useRef<
     | ((
-        event: React.PointerEvent<HTMLDivElement>,
-        options: { startedByRightButton: boolean },
-      ) => void)
+      event: React.PointerEvent<HTMLDivElement>,
+      options: { startedByRightButton: boolean },
+    ) => void)
     | null
   >(null);
-  const syncViewportStateNowRef = useRef<() => void>(() => {});
+  const syncViewportStateNowRef = useRef<() => void>(() => { });
   const [isSelectionBoxActive, setSelectionBoxActive] = useState(false);
   const selectionRectElementRef = useRef<HTMLDivElement | null>(null);
   const pendingManualSelectionRectRef = useRef<{
@@ -1097,10 +1098,10 @@ export const CanvasFlow = ({
         void handleFiles(
           files,
           mouseFlowPositionRef.current ??
-            screenToFlowPosition({
-              x: window.innerWidth / 2,
-              y: window.innerHeight / 2,
-            }),
+          screenToFlowPosition({
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2,
+          }),
         );
         return;
       }
@@ -1488,16 +1489,16 @@ export const CanvasFlow = ({
       const activeNodeDragState = nodeDragPreviewStateRef.current;
       const filteredChanges = activeNodeDragState
         ? nextChanges.filter((change) => {
-            if (
-              change.type === "position" &&
-              activeNodeDragState.nodeIdSet.has(change.id)
-            ) {
-              activeNodeDragState.queuedPositionChanges.set(change.id, change);
-              return false;
-            }
+          if (
+            change.type === "position" &&
+            activeNodeDragState.nodeIdSet.has(change.id)
+          ) {
+            activeNodeDragState.queuedPositionChanges.set(change.id, change);
+            return false;
+          }
 
-            return true;
-          })
+          return true;
+        })
         : nextChanges;
 
       if (filteredChanges.length === 0) {
@@ -1587,108 +1588,108 @@ export const CanvasFlow = ({
       const nodeElements =
         typeof document !== "undefined"
           ? (nodeIds
-              .map((nodeId) => {
-                const element = document.querySelector(
-                  `.react-flow__node[data-id="${CSS.escape(nodeId)}"]`,
-                ) as HTMLElement | null;
+            .map((nodeId) => {
+              const element = document.querySelector(
+                `.react-flow__node[data-id="${CSS.escape(nodeId)}"]`,
+              ) as HTMLElement | null;
 
-                if (!element) {
-                  return null;
-                }
+              if (!element) {
+                return null;
+              }
 
-                return {
-                  element,
-                  nodeId,
-                  originalTransform: element.style.transform,
-                };
-              })
-              .filter(Boolean) as NodeDragDomSnapshot[])
+              return {
+                element,
+                nodeId,
+                originalTransform: element.style.transform,
+              };
+            })
+            .filter(Boolean) as NodeDragDomSnapshot[])
           : [];
       const selectionElements =
         typeof document !== "undefined" && nodeIds.length > 1
           ? ([
-              document.querySelector(
-                ".react-flow__nodesselection",
-              ) as HTMLElement | null,
-              document.querySelector(
-                ".canvas-selection-bounds",
-              ) as HTMLElement | null,
-              ...Array.from(
-                document.querySelectorAll<HTMLElement>(".canvas-batch-toolbar"),
+            document.querySelector(
+              ".react-flow__nodesselection",
+            ) as HTMLElement | null,
+            document.querySelector(
+              ".canvas-selection-bounds",
+            ) as HTMLElement | null,
+            ...Array.from(
+              document.querySelectorAll<HTMLElement>(".canvas-batch-toolbar"),
+            ),
+            ...Array.from(
+              document.querySelectorAll<HTMLElement>(
+                ".canvas-multi-select-quick-create",
               ),
-              ...Array.from(
-                document.querySelectorAll<HTMLElement>(
-                  ".canvas-multi-select-quick-create",
-                ),
-              ),
-            ]
-              .filter(Boolean)
-              .map((element) => {
-                const elementInViewportPortal = Boolean(
-                  element.closest(".react-flow__viewport-portal"),
-                );
-                const elementUsesFlowTransform =
-                  elementInViewportPortal ||
-                  element.classList.contains("react-flow__nodesselection");
+            ),
+          ]
+            .filter(Boolean)
+            .map((element) => {
+              const elementInViewportPortal = Boolean(
+                element.closest(".react-flow__viewport-portal"),
+              );
+              const elementUsesFlowTransform =
+                elementInViewportPortal ||
+                element.classList.contains("react-flow__nodesselection");
 
-                return {
-                  element,
-                  originalTransform: element.style.transform,
-                  deltaScale: elementUsesFlowTransform ? 1 : viewport.zoom,
-                };
-              }) as NodeDragDomSnapshot[])
+              return {
+                element,
+                originalTransform: element.style.transform,
+                deltaScale: elementUsesFlowTransform ? 1 : viewport.zoom,
+              };
+            }) as NodeDragDomSnapshot[])
           : [];
       const connectedEdgePreviews =
         typeof document !== "undefined"
           ? (displayEdges
-              .filter((edge) => {
-                const sourceDragged = nodeIdSet.has(edge.source);
-                const targetDragged = nodeIdSet.has(edge.target);
-                return sourceDragged || targetDragged;
-              })
-              .map((edge) => {
-                const pathElements = getEdgePathElements(edge.id);
-                const pointsFromPath =
-                  getPreviewEdgePointsFromPathElements(pathElements);
-                const sourcePoint =
-                  pointsFromPath?.source ??
-                  getHandleCenterFlowPosition(
-                    edge.source,
-                    edge.sourceHandle ?? null,
-                    "source",
-                  );
-                const targetPoint =
-                  pointsFromPath?.target ??
-                  getHandleCenterFlowPosition(
-                    edge.target,
-                    edge.targetHandle ?? null,
-                    "target",
-                  );
+            .filter((edge) => {
+              const sourceDragged = nodeIdSet.has(edge.source);
+              const targetDragged = nodeIdSet.has(edge.target);
+              return sourceDragged || targetDragged;
+            })
+            .map((edge) => {
+              const pathElements = getEdgePathElements(edge.id);
+              const pointsFromPath =
+                getPreviewEdgePointsFromPathElements(pathElements);
+              const sourcePoint =
+                pointsFromPath?.source ??
+                getHandleCenterFlowPosition(
+                  edge.source,
+                  edge.sourceHandle ?? null,
+                  "source",
+                );
+              const targetPoint =
+                pointsFromPath?.target ??
+                getHandleCenterFlowPosition(
+                  edge.target,
+                  edge.targetHandle ?? null,
+                  "target",
+                );
 
-                if (pathElements.length === 0 || !sourcePoint || !targetPoint) {
-                  return null;
-                }
+              if (pathElements.length === 0 || !sourcePoint || !targetPoint) {
+                return null;
+              }
 
-                return {
-                  edgeId: edge.id,
-                  pathElements,
-                  originalPaths: pathElements.map(
-                    (pathElement) => pathElement.getAttribute("d") ?? "",
-                  ),
-                  pathElementsNeedRefresh: false,
-                  sourceMoves: nodeIdSet.has(edge.source),
-                  targetMoves: nodeIdSet.has(edge.target),
-                  sourceNodeId: edge.source,
-                  targetNodeId: edge.target,
-                  sourceHandleId: edge.sourceHandle ?? null,
-                  targetHandleId: edge.targetHandle ?? null,
-                  sourceX: sourcePoint.x,
-                  sourceY: sourcePoint.y,
-                  targetX: targetPoint.x,
-                  targetY: targetPoint.y,
-                };
-              })
-              .filter(Boolean) as GroupDragConnectedEdgeSnapshot[])
+              return {
+                edgeId: edge.id,
+                pathElements,
+                originalPaths: pathElements.map(
+                  (pathElement) => pathElement.getAttribute("d") ?? "",
+                ),
+                pathElementsNeedRefresh: false,
+                sourceMoves: nodeIdSet.has(edge.source),
+                targetMoves: nodeIdSet.has(edge.target),
+                sourceNodeId: edge.source,
+                targetNodeId: edge.target,
+                sourceHandleId: edge.sourceHandle ?? null,
+                targetHandleId: edge.targetHandle ?? null,
+                sourceX: sourcePoint.x,
+                sourceY: sourcePoint.y,
+                targetX: targetPoint.x,
+                targetY: targetPoint.y,
+              };
+            })
+            .filter(Boolean) as GroupDragConnectedEdgeSnapshot[])
           : [];
 
       return {
@@ -2080,12 +2081,12 @@ export const CanvasFlow = ({
       const overlapWidth = Math.max(
         0,
         Math.min(rect.right, selectionRect.right) -
-          Math.max(rect.left, selectionRect.left),
+        Math.max(rect.left, selectionRect.left),
       );
       const overlapHeight = Math.max(
         0,
         Math.min(rect.bottom, selectionRect.bottom) -
-          Math.max(rect.top, selectionRect.top),
+        Math.max(rect.top, selectionRect.top),
       );
       const overlapArea = overlapWidth * overlapHeight;
       const nodeArea = Math.max(1, rect.width * rect.height);
@@ -2308,27 +2309,27 @@ export const CanvasFlow = ({
       const groupFrameElement =
         typeof document !== "undefined"
           ? (document.querySelector(
-              `[data-canvas-group-frame-id="${CSS.escape(groupId)}"]`,
-            ) as HTMLElement | null)
+            `[data-canvas-group-frame-id="${CSS.escape(groupId)}"]`,
+          ) as HTMLElement | null)
           : null;
       const nodeElements =
         typeof document !== "undefined"
           ? (groupNodeIds
-              .map((nodeId) => {
-                const element = document.querySelector(
-                  `.react-flow__node[data-id="${CSS.escape(nodeId)}"]`,
-                ) as HTMLElement | null;
+            .map((nodeId) => {
+              const element = document.querySelector(
+                `.react-flow__node[data-id="${CSS.escape(nodeId)}"]`,
+              ) as HTMLElement | null;
 
-                if (!element) {
-                  return null;
-                }
+              if (!element) {
+                return null;
+              }
 
-                return {
-                  element,
-                  originalTransform: element.style.transform,
-                };
-              })
-              .filter(Boolean) as GroupDragDomSnapshot[])
+              return {
+                element,
+                originalTransform: element.style.transform,
+              };
+            })
+            .filter(Boolean) as GroupDragDomSnapshot[])
           : [];
       const getHandleCenter = (
         nodeId: string,
@@ -2353,54 +2354,54 @@ export const CanvasFlow = ({
       const connectedEdgePreviews =
         typeof document !== "undefined"
           ? (displayEdges
-              .filter((edge) => {
-                const sourceInGroup = groupNodeIdSet.has(edge.source);
-                const targetInGroup = groupNodeIdSet.has(edge.target);
-                return sourceInGroup || targetInGroup;
-              })
-              .map((edge) => {
-                const pathElements = getEdgePathElements(edge.id);
-                const pointsFromPath =
-                  getPreviewEdgePointsFromPathElements(pathElements);
-                const sourcePoint =
-                  pointsFromPath?.source ??
-                  getHandleCenter(
-                    edge.source,
-                    edge.sourceHandle ?? null,
-                    "source",
-                  );
-                const targetPoint =
-                  pointsFromPath?.target ??
-                  getHandleCenter(
-                    edge.target,
-                    edge.targetHandle ?? null,
-                    "target",
-                  );
+            .filter((edge) => {
+              const sourceInGroup = groupNodeIdSet.has(edge.source);
+              const targetInGroup = groupNodeIdSet.has(edge.target);
+              return sourceInGroup || targetInGroup;
+            })
+            .map((edge) => {
+              const pathElements = getEdgePathElements(edge.id);
+              const pointsFromPath =
+                getPreviewEdgePointsFromPathElements(pathElements);
+              const sourcePoint =
+                pointsFromPath?.source ??
+                getHandleCenter(
+                  edge.source,
+                  edge.sourceHandle ?? null,
+                  "source",
+                );
+              const targetPoint =
+                pointsFromPath?.target ??
+                getHandleCenter(
+                  edge.target,
+                  edge.targetHandle ?? null,
+                  "target",
+                );
 
-                if (pathElements.length === 0 || !sourcePoint || !targetPoint) {
-                  return null;
-                }
+              if (pathElements.length === 0 || !sourcePoint || !targetPoint) {
+                return null;
+              }
 
-                return {
-                  edgeId: edge.id,
-                  pathElements,
-                  originalPaths: pathElements.map(
-                    (pathElement) => pathElement.getAttribute("d") ?? "",
-                  ),
-                  pathElementsNeedRefresh: false,
-                  sourceMoves: groupNodeIdSet.has(edge.source),
-                  targetMoves: groupNodeIdSet.has(edge.target),
-                  sourceNodeId: edge.source,
-                  targetNodeId: edge.target,
-                  sourceHandleId: edge.sourceHandle ?? null,
-                  targetHandleId: edge.targetHandle ?? null,
-                  sourceX: sourcePoint.x,
-                  sourceY: sourcePoint.y,
-                  targetX: targetPoint.x,
-                  targetY: targetPoint.y,
-                };
-              })
-              .filter(Boolean) as GroupDragConnectedEdgeSnapshot[])
+              return {
+                edgeId: edge.id,
+                pathElements,
+                originalPaths: pathElements.map(
+                  (pathElement) => pathElement.getAttribute("d") ?? "",
+                ),
+                pathElementsNeedRefresh: false,
+                sourceMoves: groupNodeIdSet.has(edge.source),
+                targetMoves: groupNodeIdSet.has(edge.target),
+                sourceNodeId: edge.source,
+                targetNodeId: edge.target,
+                sourceHandleId: edge.sourceHandle ?? null,
+                targetHandleId: edge.targetHandle ?? null,
+                sourceX: sourcePoint.x,
+                sourceY: sourcePoint.y,
+                targetX: targetPoint.x,
+                targetY: targetPoint.y,
+              };
+            })
+            .filter(Boolean) as GroupDragConnectedEdgeSnapshot[])
           : [];
 
       groupDragStateRef.current = {
@@ -3220,14 +3221,14 @@ export const CanvasFlow = ({
       return cachedFrames.map((group) =>
         group.id === activeGroupDragId
           ? {
-              ...group,
-              ...sourceGroup,
-              bounds: previewDragFrame,
-              contentBounds:
-                cachedFrame?.contentBounds ??
-                sourceGroup.frame ??
-                previewDragFrame,
-            }
+            ...group,
+            ...sourceGroup,
+            bounds: previewDragFrame,
+            contentBounds:
+              cachedFrame?.contentBounds ??
+              sourceGroup.frame ??
+              previewDragFrame,
+          }
           : group,
       );
     }
@@ -3723,13 +3724,13 @@ export const CanvasFlow = ({
         startX: existingPanState.startedByRightButton
           ? existingPanState.startX
           : nativeEvent instanceof MouseEvent ||
-              nativeEvent instanceof PointerEvent
+            nativeEvent instanceof PointerEvent
             ? nativeEvent.clientX
             : 0,
         startY: existingPanState.startedByRightButton
           ? existingPanState.startY
           : nativeEvent instanceof MouseEvent ||
-              nativeEvent instanceof PointerEvent
+            nativeEvent instanceof PointerEvent
             ? nativeEvent.clientY
             : 0,
         moved: existingPanState.moved,
@@ -4996,10 +4997,10 @@ export const CanvasFlow = ({
               ) : null}
 
               {selectionRightCenterFlowPosition &&
-              multiSelectedCount >= 2 &&
-              !isSelectionBoxActive &&
-              !activeGroupDragId &&
-              !quickAddDragPreview.active ? (
+                multiSelectedCount >= 2 &&
+                !isSelectionBoxActive &&
+                !activeGroupDragId &&
+                !quickAddDragPreview.active ? (
                 <MultiSelectQuickCreate
                   visible
                   x={selectionRightCenterFlowPosition.x}
@@ -5031,9 +5032,9 @@ export const CanvasFlow = ({
           </ReactFlow>
 
           {quickCreateScreenPosition &&
-          !isSelectionBoxActive &&
-          !activeGroupDragId &&
-          !quickAddDragPreview.active ? (
+            !isSelectionBoxActive &&
+            !activeGroupDragId &&
+            !quickAddDragPreview.active ? (
             <MultiSelectQuickCreate
               visible
               x={quickCreateScreenPosition.x}
@@ -5043,8 +5044,8 @@ export const CanvasFlow = ({
           ) : null}
 
           {batchToolbarMode &&
-          batchToolbarScreenPosition &&
-          !isViewportInteracting ? (
+            batchToolbarScreenPosition &&
+            !isViewportInteracting ? (
             <CanvasBatchToolbar
               mode={batchToolbarMode}
               selectedCount={multiSelectedCount}
