@@ -10,6 +10,7 @@ const LOCAL_SETTINGS_KEY = "canvas-chat-settings";
 type GlobalSettings = {
   storagePath?: string;
   assetStoragePath?: string;
+  jianyingDraftsPath?: string;
 };
 
 const INITIAL_STATE: Pick<
@@ -44,6 +45,7 @@ const INITIAL_STATE: Pick<
   | "devToolsVisible"
   | "storagePath"
   | "assetStoragePath"
+  | "jianyingDraftsPath"
   | "ximuCardCode"
   | "adobeChannelModelsEnabled"
   | "ximuChannelModelsEnabled"
@@ -81,6 +83,7 @@ const INITIAL_STATE: Pick<
   devToolsVisible: false,
   storagePath: "",
   assetStoragePath: "",
+  jianyingDraftsPath: "",
   ximuCardCode: "",
   adobeChannelModelsEnabled: false,
   ximuChannelModelsEnabled: false,
@@ -101,6 +104,7 @@ const readLocalPersistedPaths = (): GlobalSettings => {
     return {
       storagePath: parsed.state?.storagePath || "",
       assetStoragePath: parsed.state?.assetStoragePath || "",
+      jianyingDraftsPath: parsed.state?.jianyingDraftsPath || "",
     };
   } catch {
     return {};
@@ -139,6 +143,7 @@ const writeGlobalSettingsPatch = (patch: GlobalSettings) => {
   writeGlobalSettings({
     storagePath: state.storagePath,
     assetStoragePath: state.assetStoragePath,
+    jianyingDraftsPath: state.jianyingDraftsPath,
     ...patch,
   });
 };
@@ -218,6 +223,10 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
         set({ assetStoragePath: path });
         writeGlobalSettingsPatch({ assetStoragePath: path });
       },
+      setJianyingDraftsPath: (path) => {
+        set({ jianyingDraftsPath: path });
+        writeGlobalSettingsPatch({ jianyingDraftsPath: path });
+      },
       setXimuCardCode: (cardCode) => set({ ximuCardCode: cardCode }),
       setAdobeChannelModelsEnabled: (enabled) =>
         set({ adobeChannelModelsEnabled: enabled }),
@@ -230,6 +239,7 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
         writeGlobalSettings({
           storagePath: INITIAL_STATE.storagePath,
           assetStoragePath: INITIAL_STATE.assetStoragePath,
+          jianyingDraftsPath: INITIAL_STATE.jianyingDraftsPath,
         });
       },
     }),
@@ -251,25 +261,34 @@ void (async () => {
       globalSettings.assetStoragePath ||
       state.assetStoragePath ||
       localSettings.assetStoragePath,
+    jianyingDraftsPath:
+      globalSettings.jianyingDraftsPath ||
+      state.jianyingDraftsPath ||
+      localSettings.jianyingDraftsPath,
   };
 
   const shouldUpdateState =
     (nextSettings.storagePath &&
       nextSettings.storagePath !== state.storagePath) ||
     (nextSettings.assetStoragePath &&
-      nextSettings.assetStoragePath !== state.assetStoragePath);
+      nextSettings.assetStoragePath !== state.assetStoragePath) ||
+    (nextSettings.jianyingDraftsPath &&
+      nextSettings.jianyingDraftsPath !== state.jianyingDraftsPath);
 
   if (shouldUpdateState) {
     useChatSettingsStore.setState({
       storagePath: nextSettings.storagePath || state.storagePath,
       assetStoragePath:
         nextSettings.assetStoragePath || state.assetStoragePath,
+      jianyingDraftsPath:
+        nextSettings.jianyingDraftsPath || state.jianyingDraftsPath,
     });
   }
 
   if (
     nextSettings.storagePath !== globalSettings.storagePath ||
-    nextSettings.assetStoragePath !== globalSettings.assetStoragePath
+    nextSettings.assetStoragePath !== globalSettings.assetStoragePath ||
+    nextSettings.jianyingDraftsPath !== globalSettings.jianyingDraftsPath
   ) {
     writeGlobalSettings(nextSettings);
   }

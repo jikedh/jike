@@ -5,14 +5,18 @@
   ChevronLeft,
   Clapperboard,
   Download,
+  Eraser,
   FileImage,
   FolderOpen,
   ImagePlus,
   Loader2,
   Music,
+  Pause,
   Pencil,
   Play,
   Plus,
+  SkipBack,
+  SkipForward,
   Sparkles,
   Trash2,
   Upload,
@@ -32,7 +36,10 @@ import {
 } from "service/assetStorage";
 import { copyVideoUrlToOss, uploadFileToOSS } from "service/oss";
 import {
+  DEFAULT_ASSET_SYSTEM_PROMPT,
+  DEFAULT_SPLIT_SYSTEM_PROMPT,
   createEmptyAgentData,
+  identifyAssetsWithAgent,
   splitScriptWithAgent,
   storyboardStorage,
   type StoryboardAgentData,
@@ -89,11 +96,15 @@ import {
   createLzVideoTask,
   createXimuGptImageGeneration,
   createXimuNanoBananaGeneration,
+  getVideoRemovalStatus,
   getXimuImageResult,
   getDashscopeVideoTaskStatus,
   getImageTaskStatus,
   getLzVideoTaskStatus,
+  videoRemoval,
 } from "@/api/ai";
+import { getUploadOssPutUrl } from "@/api/jikeGo";
+import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -103,8 +114,33 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { VideoPlayer } from "@/components/ui/video-player";
+import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import { AssetLibraryDialog } from "@/pages/Canvas/components/AssetLibraryDialog";
 import { AspectRatioIcon } from "@/pages/Canvas/CustomNodes/ImageNode/components/AspectRatioIcon";
+import {
+  GeminiParamsPanel,
+  GEMINI_RESOLUTIONS,
+  GEMINI_SIZES,
+  GROK_IMAGE_RESOLUTIONS,
+  GROK_IMAGE_SIZES,
+  NANO_BANANA_RESOLUTIONS,
+  NANO_BANANA_LOCAL_SIZES,
+} from "@/pages/Canvas/CustomNodes/ImageNode/components/GeminiParamsPanel";
+import {
+  ADOBE_GPTIMAGE2_SIZES,
+  GPTIMAGE2_SIZES,
+  GptImage2ParamsPanel,
+} from "@/pages/Canvas/CustomNodes/ImageNode/components/GptImage2ParamsPanel";
+import {
+  MIDJOURNEY_ASPECT_RATIOS,
+  MidjourneyParamsPanel,
+} from "@/pages/Canvas/CustomNodes/ImageNode/components/MidjourneyParamsPanel";
+import {
+  SEEDREAM_ASPECT_RATIOS,
+  SEEDREAM_RESOLUTIONS,
+  SeedreamParamsPanel,
+} from "@/pages/Canvas/CustomNodes/ImageNode/components/SeedreamParamsPanel";
 import {
   type MentionItem,
 } from "@/pages/Canvas/CustomNodes/New-VideoNode/constants/mockData";
@@ -121,9 +157,12 @@ import {
 } from "@/pages/Canvas/CustomNodes/New-VideoNode/constants/videoParamConfigs";
 import { ReferenceThumbnails } from "@/pages/Canvas/CustomNodes/New-VideoNode/components/ReferenceThumbnails";
 import { VideoPromptEditor } from "@/pages/Canvas/CustomNodes/New-VideoNode/components/VideoPromptEditor";
+import { VideoTimeline } from "@/pages/Canvas/CustomNodes/New-VideoNode/components/VideoTimeline";
 import { buildVideoApiRequest } from "@/pages/Canvas/CustomNodes/New-VideoNode/utils/buildVideoApiRequest";
 import { PROMPT_PANEL_STYLES } from "@/pages/Canvas/CustomNodes/shared/promptPanelStyles";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
+import { useUserStore } from "@/stores/useUserStore";
+import { formatDuration } from "shared/utils/getVideoDuration";
 
 const assetKinds: Array<{ id: StoryboardAssetKind; label: string }> = [
   { id: "role", label: "角色" },
@@ -156,6 +195,16 @@ const stepOrder: Record<StoryboardAgentStep, number> = {
   "video-edit": 3,
 };
 
+const STORY_SHOT_DEFAULT_VIDEO_MODEL = "seedance-2.0-pro";
+
+const shouldMigrateStoryShotVideoModel = (model: string | undefined) =>
+  typeof model === "string" && model.startsWith("kling/");
+
+const hasStoryShotVideoModelMigration = (data: StoryboardAgentData) =>
+  (data.shots || []).some((shot) =>
+    shouldMigrateStoryShotVideoModel(shot.modelInfo?.videoModel),
+  );
+
 const isStepUnlocked = (
   step: StoryboardAgentStep,
   unlockedStep: StoryboardAgentStep,
@@ -165,6 +214,167 @@ const getLaterStep = (
   current: StoryboardAgentStep,
   next: StoryboardAgentStep,
 ) => (stepOrder[next] > stepOrder[current] ? next : current);
+
+type StorySystemPromptTarget = "asset" | "split";
+type StoryNextConfirmTarget = "identify-assets" | "split-shots";
+
+type WuhenRect = {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+};
+
+type ViewportRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+type DragMode = "move" | "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
+const DEFAULT_FPS = 30;
+const FRAME_STEP_SECONDS = 1 / DEFAULT_FPS;
+const TIMELINE_STEP_MS = 100;
+const SUBTITLE_REMOVAL_POINTS_PER_SECOND = 0.5;
+const WUHEI_MAX_RECT_AREA = 480_000;
+
+const normalizeTaskStatus = (value?: string) => {
+  return String(value || "")
+    .trim()
+    .toUpperCase();
+};
+
+const extractTaskStatusInfo = (response: any) => {
+  const payload = response?.data ?? response;
+  const nested = payload?.data ?? {};
+  const output = payload?.output ?? {};
+
+  const taskStatus = normalizeTaskStatus(
+    nested?.task_status ??
+      nested?.status ??
+      payload?.task_status ??
+      payload?.status ??
+      output?.task_status,
+  );
+
+  const progressRaw = nested?.progress ?? payload?.progress ?? output?.progress;
+  const numericProgress = Number(progressRaw);
+  const progress = Number.isFinite(numericProgress)
+    ? Math.max(0, Math.min(100, numericProgress))
+    : 0;
+
+  const taskId =
+    nested?.task_id ??
+    nested?.id ??
+    payload?.task_id ??
+    payload?.id ??
+    output?.task_id ??
+    "";
+
+  return { taskStatus, progress, taskId };
+};
+
+const clamp = (value: number, minValue: number, maxValue: number) => {
+  return Math.min(maxValue, Math.max(minValue, value));
+};
+
+const computeContainedRect = (
+  container: ViewportRect,
+  mediaWidth: number,
+  mediaHeight: number,
+) => {
+  if (
+    !mediaWidth ||
+    !mediaHeight ||
+    container.width <= 0 ||
+    container.height <= 0
+  ) {
+    return { x: 0, y: 0, width: container.width, height: container.height };
+  }
+
+  const containerRatio = container.width / container.height;
+  const mediaRatio = mediaWidth / mediaHeight;
+
+  let width = container.width;
+  let height = container.height;
+
+  if (containerRatio > mediaRatio) {
+    height = container.height;
+    width = height * mediaRatio;
+  } else {
+    width = container.width;
+    height = width / mediaRatio;
+  }
+
+  const x = (container.width - width) / 2;
+  const y = (container.height - height) / 2;
+  return { x, y, width, height };
+};
+
+const buildDefaultSubtitleRect = (bounds: ViewportRect) => {
+  const width = Math.max(80, bounds.width * 0.8);
+  const height = Math.max(60, bounds.height * 0.22);
+  const x = clamp(
+    (bounds.width - width) / 2,
+    0,
+    Math.max(0, bounds.width - width),
+  );
+  const y = clamp(bounds.height * 0.72, 0, Math.max(0, bounds.height - height));
+  return { x, y, width, height };
+};
+
+const getViewportSize = () => {
+  if (typeof window === "undefined") {
+    return { width: 1280, height: 720 };
+  }
+  return { width: window.innerWidth, height: window.innerHeight };
+};
+
+const getFittedWorkspaceFrame = (
+  media: { width: number; height: number } | null,
+  maxWidth: number,
+  maxHeight: number,
+) => {
+  const safeMaxWidth = Math.max(280, maxWidth);
+  const safeMaxHeight = Math.max(200, maxHeight);
+  const containerRatio = media?.width && media?.height
+    ? media.width / media.height
+    : 16 / 9;
+
+  let width = safeMaxWidth;
+  let height = width / containerRatio;
+
+  if (height > safeMaxHeight) {
+    height = safeMaxHeight;
+    width = height * containerRatio;
+  }
+
+  return {
+    width: Math.max(220, Math.round(width)),
+    height: Math.max(140, Math.round(height)),
+  };
+};
+
+const migrateStoryShotVideoModels = (data: StoryboardAgentData) => {
+  let migrated = false;
+  const shots = (data.shots || []).map((shot) => {
+    if (!shouldMigrateStoryShotVideoModel(shot.modelInfo?.videoModel)) {
+      return shot;
+    }
+    migrated = true;
+    return {
+      ...shot,
+      modelInfo: {
+        ...shot.modelInfo,
+        videoModel: STORY_SHOT_DEFAULT_VIDEO_MODEL,
+      },
+    };
+  });
+
+  return migrated ? { ...data, shots } : data;
+};
 
 const normalizeAgentData = (
   data: StoryboardAgentData,
@@ -178,19 +388,21 @@ const normalizeAgentData = (
         ? "shots"
         : "script";
 
-  return {
+  return migrateStoryShotVideoModels({
     ...empty,
     ...data,
     unlockedStep: inferredStep,
     promptPrefix: data.promptPrefix ?? empty.promptPrefix,
     promptSuffix: data.promptSuffix ?? empty.promptSuffix,
     scriptCategory: data.scriptCategory ?? empty.scriptCategory,
+    assetSystemPrompt: data.assetSystemPrompt ?? empty.assetSystemPrompt,
+    splitSystemPrompt: data.splitSystemPrompt ?? empty.splitSystemPrompt,
     assets: {
       ...empty.assets,
       ...(data.assets || {}),
     },
     shots: data.shots || [],
-  };
+  });
 };
 
 const inputClass =
@@ -247,6 +459,225 @@ const getStoryImageModelOptionId = (
 
   const fallback = options.find((item) => item.model === fallbackModel);
   return String(fallback?.id ?? options[0]?.id ?? IMAGE_MODELS[0]?.id ?? 7);
+};
+
+const toOptionValueSet = (options: Array<{ value: string }>) =>
+  new Set(options.map((item) => item.value));
+
+const STORY_GPTIMAGE2_RESOLUTION_OPTIONS = [
+  { label: "1K", value: "1K", description: "标准" },
+  { label: "2K", value: "2K", description: "高清" },
+  { label: "4K", value: "4K", description: "超清" },
+];
+
+const STORY_XIMU_GPTIMAGE2_RESOLUTION_OPTIONS = [
+  { label: "1K", value: "1K", description: "标准" },
+];
+
+const STORY_XIMU_GPTIMAGE2_SIZE_VALUES = new Set([
+  "auto",
+  "1:1",
+  "3:2",
+  "2:3",
+  "16:9",
+  "9:16",
+  "5:4",
+  "4:5",
+  "4:3",
+  "3:4",
+  "21:9",
+  "9:21",
+  "1:3",
+  "3:1",
+  "2:1",
+  "1:2",
+]);
+
+const STORY_XIMU_NANO_BANANA_PRO_SIZE_VALUES = new Set([
+  "1:1",
+  "16:9",
+  "9:16",
+  "4:3",
+  "3:4",
+  "3:2",
+  "2:3",
+  "5:4",
+  "4:5",
+  "21:9",
+]);
+
+const STORY_XIMU_NANO_BANANA2_SIZE_VALUES = new Set([
+  ...STORY_XIMU_NANO_BANANA_PRO_SIZE_VALUES,
+  "1:4",
+  "4:1",
+  "1:8",
+  "8:1",
+]);
+
+const STORY_XIMU_GPTIMAGE2_SIZES = [
+  { label: "auto", value: "auto", description: "自动比例" },
+  ...GPTIMAGE2_SIZES.filter((item) =>
+    STORY_XIMU_GPTIMAGE2_SIZE_VALUES.has(item.value),
+  ),
+  { label: "1:3", value: "1:3", description: "竖向超长图" },
+  { label: "3:1", value: "3:1", description: "横向超宽图" },
+];
+
+const STORY_XIMU_NANO_BANANA_PRO_SIZES = GPTIMAGE2_SIZES.filter((item) =>
+  STORY_XIMU_NANO_BANANA_PRO_SIZE_VALUES.has(item.value),
+);
+
+const STORY_XIMU_NANO_BANANA2_SIZES = [
+  ...STORY_XIMU_NANO_BANANA_PRO_SIZES,
+  { label: "1:4", value: "1:4", description: "竖向超长图" },
+  { label: "4:1", value: "4:1", description: "横向超宽图" },
+  { label: "1:8", value: "1:8", description: "竖向极长图" },
+  { label: "8:1", value: "8:1", description: "横向极宽图" },
+];
+
+const STORY_SEEDREAM_SIZE_VALUES = toOptionValueSet(SEEDREAM_ASPECT_RATIOS);
+const STORY_SEEDREAM_RESOLUTION_VALUES = toOptionValueSet(SEEDREAM_RESOLUTIONS);
+const STORY_GEMINI_SIZE_VALUES = toOptionValueSet(GEMINI_SIZES);
+const STORY_GEMINI_RESOLUTION_VALUES = toOptionValueSet(GEMINI_RESOLUTIONS);
+const STORY_NANO_BANANA_LOCAL_SIZE_VALUES = toOptionValueSet(
+  NANO_BANANA_LOCAL_SIZES,
+);
+const STORY_NANO_BANANA_RESOLUTION_VALUES = toOptionValueSet(
+  NANO_BANANA_RESOLUTIONS,
+);
+const STORY_GROK_IMAGE_SIZE_VALUES = toOptionValueSet(GROK_IMAGE_SIZES);
+const STORY_GROK_IMAGE_RESOLUTION_VALUES = toOptionValueSet(
+  GROK_IMAGE_RESOLUTIONS,
+);
+const STORY_GPTIMAGE2_SIZE_VALUES = toOptionValueSet(GPTIMAGE2_SIZES);
+const STORY_ADOBE_GPTIMAGE2_SIZE_VALUES = toOptionValueSet(
+  ADOBE_GPTIMAGE2_SIZES,
+);
+const STORY_GPTIMAGE2_RESOLUTION_VALUES = new Set(["1K", "2K", "4K"]);
+const STORY_XIMU_GPTIMAGE2_RESOLUTION_VALUES = new Set(["1K"]);
+const STORY_MIDJOURNEY_SIZE_VALUES = toOptionValueSet(MIDJOURNEY_ASPECT_RATIOS);
+
+type StoryImageParamConfig = {
+  defaultAspectRatio: string;
+  defaultResolution?: string;
+  aspectRatioValues: Set<string>;
+  resolutionValues?: Set<string>;
+};
+
+const getStoryImageParamConfig = (model: string): StoryImageParamConfig => {
+  if (model === "doubao-seedream-5-0") {
+    return {
+      defaultAspectRatio: "1:1",
+      defaultResolution: "2K",
+      aspectRatioValues: STORY_SEEDREAM_SIZE_VALUES,
+      resolutionValues: STORY_SEEDREAM_RESOLUTION_VALUES,
+    };
+  }
+
+  if (model === "gemini-3-pro-image-preview") {
+    return {
+      defaultAspectRatio: "1:1",
+      defaultResolution: "2K",
+      aspectRatioValues: STORY_GEMINI_SIZE_VALUES,
+      resolutionValues: STORY_GEMINI_RESOLUTION_VALUES,
+    };
+  }
+
+  if (model === ADOBE_GPT_IMAGE2_MODEL) {
+    return {
+      defaultAspectRatio: "1:1",
+      defaultResolution: "2K",
+      aspectRatioValues: STORY_ADOBE_GPTIMAGE2_SIZE_VALUES,
+      resolutionValues: STORY_GPTIMAGE2_RESOLUTION_VALUES,
+    };
+  }
+
+  if (model === ADOBE_NANO_BANANA_PRO_MODEL) {
+    return {
+      defaultAspectRatio: "1:1",
+      defaultResolution: "2K",
+      aspectRatioValues: STORY_NANO_BANANA_LOCAL_SIZE_VALUES,
+      resolutionValues: STORY_NANO_BANANA_RESOLUTION_VALUES,
+    };
+  }
+
+  if (model === XIMU_GPT_IMAGE2_MODEL) {
+    return {
+      defaultAspectRatio: "auto",
+      defaultResolution: "1K",
+      aspectRatioValues: STORY_XIMU_GPTIMAGE2_SIZE_VALUES,
+      resolutionValues: STORY_XIMU_GPTIMAGE2_RESOLUTION_VALUES,
+    };
+  }
+
+  if (model === XIMU_GPT_IMAGE2_VIP_MODEL) {
+    return {
+      defaultAspectRatio: "auto",
+      defaultResolution: "2K",
+      aspectRatioValues: STORY_XIMU_GPTIMAGE2_SIZE_VALUES,
+      resolutionValues: STORY_GPTIMAGE2_RESOLUTION_VALUES,
+    };
+  }
+
+  if (model === XIMU_NANO_BANANA2_MODEL) {
+    return {
+      defaultAspectRatio: "1:1",
+      defaultResolution: "2K",
+      aspectRatioValues: STORY_XIMU_NANO_BANANA2_SIZE_VALUES,
+      resolutionValues: STORY_NANO_BANANA_RESOLUTION_VALUES,
+    };
+  }
+
+  if (model === XIMU_NANO_BANANA_PRO_MODEL) {
+    return {
+      defaultAspectRatio: "1:1",
+      defaultResolution: "2K",
+      aspectRatioValues: STORY_XIMU_NANO_BANANA_PRO_SIZE_VALUES,
+      resolutionValues: STORY_NANO_BANANA_RESOLUTION_VALUES,
+    };
+  }
+
+  if (isGrokImageGenerationModel(model)) {
+    return {
+      defaultAspectRatio: "1:1",
+      defaultResolution: "standard",
+      aspectRatioValues: STORY_GROK_IMAGE_SIZE_VALUES,
+      resolutionValues: STORY_GROK_IMAGE_RESOLUTION_VALUES,
+    };
+  }
+
+  if (model === "midjourney" || model === "midjourney-niji7") {
+    return {
+      defaultAspectRatio: "1:1",
+      aspectRatioValues: STORY_MIDJOURNEY_SIZE_VALUES,
+    };
+  }
+
+  return {
+    defaultAspectRatio: "1:1",
+    defaultResolution: "2K",
+    aspectRatioValues: STORY_GPTIMAGE2_SIZE_VALUES,
+    resolutionValues: STORY_GPTIMAGE2_RESOLUTION_VALUES,
+  };
+};
+
+const normalizeStoryImageParams = (
+  model: string,
+  params: { aspectRatio?: string; resolution?: string },
+) => {
+  const config = getStoryImageParamConfig(model);
+  const aspectRatio =
+    params.aspectRatio && config.aspectRatioValues.has(params.aspectRatio)
+      ? params.aspectRatio
+      : config.defaultAspectRatio;
+  const resolution =
+    params.resolution &&
+    config.resolutionValues &&
+    config.resolutionValues.has(params.resolution)
+      ? params.resolution
+      : config.defaultResolution;
+
+  return { aspectRatio, resolution };
 };
 
 const formatTime = (timestamp: number) =>
@@ -419,6 +850,309 @@ const patchShotModelInfo = (
 const isHttpUrl = (value: string | undefined) =>
   Boolean(value?.match(/^https?:\/\//i));
 
+type JianyingExportVideo = {
+  fileName: string;
+  absolutePath: string;
+  durationUs: number;
+};
+
+const textEncoder = new TextEncoder();
+
+const createJianyingId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+const sanitizeFileName = (value: string, fallback: string) => {
+  const sanitized = value
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
+    .replace(/\s+/g, " ")
+    .trim();
+  return sanitized || fallback;
+};
+
+const joinDraftRelativePath = (...parts: string[]) =>
+  parts
+    .map((part) => part.replace(/\\/g, "/").replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean)
+    .join("/");
+
+const toWindowsPath = (basePath: string, relativePath: string) =>
+  `${basePath.replace(/[\\/]+$/g, "")}\\${relativePath.replace(/\//g, "\\")}`;
+
+const getVideoExtension = (shot: StoryboardShot) => {
+  const source = shot.video?.localPath || shot.video?.url || "";
+  const cleanSource = source.split("?")[0]?.split("#")[0] || "";
+  const extension = cleanSource.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
+  return extension && extension.length <= 6 ? extension : "mp4";
+};
+
+const writeDraftTextFile = async (
+  basePath: string,
+  relativePath: string,
+  content: string,
+) => {
+  const bytes = textEncoder.encode(content);
+  const result = await window.storage?.writeRawFile?.(
+    basePath,
+    relativePath,
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+  );
+  if (!result?.success) {
+    throw new Error(result?.error || `写入 ${relativePath} 失败`);
+  }
+};
+
+const writeDraftJsonFile = (
+  basePath: string,
+  relativePath: string,
+  value: unknown,
+) => writeDraftTextFile(basePath, relativePath, JSON.stringify(value));
+
+const writeDraftBinaryFile = async (
+  basePath: string,
+  relativePath: string,
+  buffer: ArrayBuffer,
+) => {
+  const result = await window.storage?.writeRawFile?.(
+    basePath,
+    relativePath,
+    buffer,
+  );
+  if (!result?.success) {
+    throw new Error(result?.error || `写入 ${relativePath} 失败`);
+  }
+};
+
+const createJianyingVideoMaterial = (input: JianyingExportVideo) => {
+  const materialId = createJianyingId();
+  const speedId = createJianyingId();
+  const canvasId = createJianyingId();
+  const channelMappingId = createJianyingId();
+  const segmentId = createJianyingId();
+
+  return {
+    material: {
+      audio_fade: null,
+      category_name: "local",
+      crop: {
+        lower_left_x: 0,
+        lower_left_y: 1,
+        lower_right_x: 1,
+        lower_right_y: 1,
+        upper_left_x: 0,
+        upper_left_y: 0,
+        upper_right_x: 1,
+        upper_right_y: 0,
+      },
+      crop_ratio: "free",
+      crop_scale: 1,
+      duration: input.durationUs,
+      has_audio: true,
+      height: 0,
+      id: materialId,
+      local_material_id: materialId,
+      material_name: input.fileName,
+      path: input.absolutePath,
+      source_platform: 0,
+      type: "video",
+      width: 0,
+    },
+    speed: {
+      curve_speed: null,
+      id: speedId,
+      mode: 0,
+      speed: 1,
+      type: "speed",
+    },
+    canvas: {
+      album_image: "",
+      blur: 0,
+      color: "",
+      id: canvasId,
+      image: "",
+      image_id: "",
+      image_name: "",
+      source_platform: 0,
+      team_id: "",
+      type: "canvas_color",
+    },
+    channelMapping: {
+      audio_channel_mapping: 0,
+      id: channelMappingId,
+      is_config_open: false,
+      type: "none",
+    },
+    segment: {
+      clip: {
+        alpha: 1,
+        flip: { horizontal: false, vertical: false },
+        rotation: 0,
+        scale: { x: 1, y: 1 },
+        transform: { x: 0, y: 0 },
+      },
+      common_keyframes: [],
+      enable_adjust: true,
+      enable_color_curves: true,
+      enable_color_wheels: true,
+      enable_lut: true,
+      enable_smart_color_adjust: false,
+      extra_material_refs: [speedId, channelMappingId, canvasId],
+      group_id: "",
+      hdr_settings: { intensity: 1, mode: 1, nits: 1000 },
+      id: segmentId,
+      material_id: materialId,
+      render_index: 0,
+      reverse: false,
+      source_timerange: { duration: input.durationUs, start: 0 },
+      speed: 1,
+      target_timerange: { duration: input.durationUs, start: 0 },
+      template_id: "",
+      template_scene: "default",
+      track_attribute: 0,
+      track_render_index: 0,
+      visible: true,
+      volume: 1,
+    },
+    metaMaterial: {
+      create_time: Math.floor(Date.now() / 1000),
+      duration: input.durationUs,
+      extra_info: input.fileName,
+      file_Path: input.absolutePath,
+      height: 0,
+      id: materialId,
+      import_time: Math.floor(Date.now() / 1000),
+      import_time_ms: Date.now() * 1000,
+      md5: "",
+      metetype: "video",
+      roughcut_time_range: { duration: input.durationUs, start: 0 },
+      sub_time_range: { duration: -1, start: -1 },
+      type: 0,
+      width: 0,
+    },
+  };
+};
+
+const createJianyingDraftFiles = (input: {
+  draftId: string;
+  draftName: string;
+  draftPath: string;
+  draftsRootPath: string;
+  videos: JianyingExportVideo[];
+}) => {
+  const trackId = createJianyingId();
+  let cursor = 0;
+  const videoMaterials = input.videos.map((video) => {
+    const item = createJianyingVideoMaterial(video);
+    item.segment.target_timerange.start = cursor;
+    cursor += item.segment.target_timerange.duration;
+    return item;
+  });
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const nowUs = Date.now() * 1000;
+  const durationUs = videoMaterials.reduce(
+    (total, item) => total + item.segment.target_timerange.duration,
+    0,
+  );
+
+  const content = {
+    canvas_config: { height: 1080, ratio: "original", width: 1920 },
+    color_space: -1,
+    config: {
+      maintrack_adsorb: true,
+      material_save_mode: 0,
+      video_mute: false,
+    },
+    cover: null,
+    create_time: nowSeconds,
+    duration: durationUs,
+    fps: 30,
+    id: input.draftId,
+    keyframe_graph_list: [],
+    keyframes: {
+      adjusts: [],
+      audios: [],
+      effects: [],
+      filters: [],
+      handwrites: [],
+      stickers: [],
+      texts: [],
+      videos: [],
+    },
+    materials: {
+      audio_balances: [],
+      audio_effects: [],
+      audio_fades: [],
+      audios: [],
+      beats: [],
+      canvases: videoMaterials.map((item) => item.canvas),
+      chromas: [],
+      color_curves: [],
+      effects: [],
+      green_screens: [],
+      images: [],
+      masks: [],
+      material_animations: [],
+      placeholders: [],
+      primary_color_wheels: [],
+      sound_channel_mappings: videoMaterials.map((item) => item.channelMapping),
+      speeds: videoMaterials.map((item) => item.speed),
+      stickers: [],
+      tail_leaders: [],
+      text_templates: [],
+      texts: [],
+      transitions: [],
+      video_effects: [],
+      video_trackings: [],
+      videos: videoMaterials.map((item) => item.material),
+    },
+    name: input.draftName,
+    new_version: "75.0.0",
+    relationships: [],
+    source: "default",
+    static_cover_image_path: "",
+    tracks: [
+      {
+        attribute: 0,
+        flag: 0,
+        id: trackId,
+        is_default_name: true,
+        name: "",
+        segments: videoMaterials.map((item) => item.segment),
+        type: "video",
+      },
+    ],
+    update_time: nowSeconds,
+    version: 360000,
+  };
+
+  const meta = {
+    draft_cover: "",
+    draft_fold_path: input.draftPath.replace(/\\/g, "/"),
+    draft_id: input.draftId,
+    draft_materials: [
+      { type: 0, value: videoMaterials.map((item) => item.metaMaterial) },
+      { type: 1, value: [] },
+      { type: 2, value: [] },
+      { type: 3, value: [] },
+      { type: 6, value: [] },
+      { type: 7, value: [] },
+      { type: 8, value: [] },
+    ],
+    draft_name: input.draftName,
+    draft_new_version: "75.0.0",
+    draft_removable_storage_device: input.draftsRootPath.split(":")[0] || "",
+    draft_root_path: input.draftsRootPath.replace(/\//g, "\\"),
+    draft_timeline_materials_size_: input.videos.length,
+    tm_draft_create: nowUs,
+    tm_draft_modified: nowUs,
+    tm_duration: durationUs,
+  };
+
+  return { content, meta, durationUs, nowSeconds, nowUs };
+};
+
 const videoModeKeys: VideoModeKey[] = [
   "text-to-video",
   "all-reference",
@@ -435,12 +1169,38 @@ const toVideoModeKey = (value: string | undefined): VideoModeKey | undefined =>
 const isSeedanceVideoModel = (model: string | undefined) =>
   model === "seedance-2.0-fast" || model === "seedance-2.0-pro";
 
-const resolveAdobeStoryImageModel = (model: string) => {
+const toAdobeImageRatio = (
+  aspectRatio: string | undefined,
+  allowedValues: Set<string>,
+) => {
+  const normalized = aspectRatio && allowedValues.has(aspectRatio)
+    ? aspectRatio
+    : "1:1";
+  return normalized.replace(":", "x");
+};
+
+const toAdobeImageResolution = (resolution: string | undefined) => {
+  const normalized = (resolution || "2K").toLowerCase();
+  return ["1k", "2k", "4k"].includes(normalized) ? normalized : "2k";
+};
+
+const resolveAdobeStoryImageModel = (
+  model: string,
+  aspectRatio?: string,
+  resolution?: string,
+) => {
+  const adobeResolution = toAdobeImageResolution(resolution);
   if (model === ADOBE_GPT_IMAGE2_MODEL) {
-    return "firefly-gpt-image-2k-1x1";
+    return `firefly-gpt-image-${adobeResolution}-${toAdobeImageRatio(
+      aspectRatio,
+      STORY_ADOBE_GPTIMAGE2_SIZE_VALUES,
+    )}`;
   }
   if (model === ADOBE_NANO_BANANA_PRO_MODEL) {
-    return "firefly-nano-banana-pro-2k-1x1";
+    return `firefly-nano-banana-pro-${adobeResolution}-${toAdobeImageRatio(
+      aspectRatio,
+      STORY_NANO_BANANA_LOCAL_SIZE_VALUES,
+    )}`;
   }
   return undefined;
 };
@@ -1140,26 +1900,30 @@ const StoryProjectListPage = () => {
 const SnippetDialog = ({
   open,
   projectId,
+  snippet,
   onClose,
-  onCreated,
+  onSaved,
 }: {
   open: boolean;
   projectId: string;
+  snippet?: StoryboardSnippet | null;
   onClose: () => void;
-  onCreated: (snippet: StoryboardSnippet) => void;
+  onSaved: (snippet: StoryboardSnippet) => void;
 }) => {
   const [name, setName] = useState("");
-  const [count, setCount] = useState(1);
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setName("");
-      setCount(1);
       setDescription("");
+      return;
     }
-  }, [open]);
+
+    setName(snippet?.name || "");
+    setDescription(snippet?.description || "");
+  }, [open, snippet]);
 
   if (!open) return null;
 
@@ -1170,28 +1934,42 @@ const SnippetDialog = ({
     }
     setSaving(true);
     try {
-      const snippet = await storyboardStorage.createSnippet({
-        projectId,
-        name,
-        count,
-        description,
-      });
-      toast.success("片段已创建");
-      onCreated(snippet);
+      if (snippet) {
+        const nextSnippet: StoryboardSnippet = {
+          ...snippet,
+          name: name.trim(),
+          description: description.trim(),
+        };
+        await storyboardStorage.updateSnippet(nextSnippet);
+        toast.success("片段已更新");
+        onSaved(nextSnippet);
+      } else {
+        const created = await storyboardStorage.createSnippet({
+          projectId,
+          name,
+          description,
+        });
+        toast.success("片段已创建");
+        onSaved(created);
+      }
       onClose();
     } catch (error) {
-      console.error("[Story] create snippet failed", error);
-      toast.error("创建片段失败");
+      console.error("[Story] save snippet failed", error);
+      toast.error(snippet ? "更新片段失败" : "创建片段失败");
     } finally {
       setSaving(false);
     }
   };
 
+  const isEdit = Boolean(snippet);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#121214] shadow-2xl">
         <div className="border-b border-white/5 p-6">
-          <h2 className="text-lg font-semibold text-white/90">新建片段</h2>
+          <h2 className="text-lg font-semibold text-white/90">
+            {isEdit ? "编辑片段" : "新建片段"}
+          </h2>
         </div>
         <div className="space-y-5 p-6">
           <label className="block">
@@ -1201,18 +1979,6 @@ const SnippetDialog = ({
               onChange={(event) => setName(event.target.value)}
               className={inputClass}
               placeholder="例如：第 1 集 / 开场片段"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-2 block text-sm text-white/70">片段数量</span>
-            <input
-              type="number"
-              min={1}
-              value={count}
-              onChange={(event) =>
-                setCount(Math.max(1, Number(event.target.value) || 1))
-              }
-              className={inputClass}
             />
           </label>
           <label className="block">
@@ -1230,7 +1996,7 @@ const SnippetDialog = ({
             取消
           </Button>
           <Button variant="blue" onClick={save} loading={saving}>
-            创建片段
+            {isEdit ? "保存修改" : "创建片段"}
           </Button>
         </div>
       </div>
@@ -1243,6 +2009,12 @@ const StorySnippetListPage = ({ projectId }: { projectId: string }) => {
   const [project, setProject] = useState<StoryboardProject | null>(null);
   const [snippets, setSnippets] = useState<StoryboardSnippet[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingSnippet, setEditingSnippet] = useState<StoryboardSnippet | null>(
+    null,
+  );
+  const [snippetToDelete, setSnippetToDelete] =
+    useState<StoryboardSnippet | null>(null);
+  const [deletingSnippet, setDeletingSnippet] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -1266,6 +2038,45 @@ const StorySnippetListPage = ({ projectId }: { projectId: string }) => {
     void load();
   }, [load]);
 
+  const openCreateSnippetDialog = () => {
+    setEditingSnippet(null);
+    setDialogOpen(true);
+  };
+
+  const openEditSnippetDialog = (
+    event: React.MouseEvent,
+    snippet: StoryboardSnippet,
+  ) => {
+    event.stopPropagation();
+    setEditingSnippet(snippet);
+    setDialogOpen(true);
+  };
+
+  const openDeleteSnippetDialog = (
+    event: React.MouseEvent,
+    snippet: StoryboardSnippet,
+  ) => {
+    event.stopPropagation();
+    setSnippetToDelete(snippet);
+  };
+
+  const confirmDeleteSnippet = async () => {
+    if (!snippetToDelete) return;
+
+    setDeletingSnippet(true);
+    try {
+      await storyboardStorage.removeSnippet(projectId, snippetToDelete.id);
+      await load();
+      toast.success("片段已删除");
+    } catch (error) {
+      console.error("[Story] delete snippet failed", error);
+      toast.error("删除片段失败");
+    } finally {
+      setDeletingSnippet(false);
+      setSnippetToDelete(null);
+    }
+  };
+
   return (
     <StoragePathGuard>
       <div className="story-scrollbar-scope flex h-full flex-col overflow-hidden bg-[#09090b] text-white">
@@ -1274,7 +2085,7 @@ const StorySnippetListPage = ({ projectId }: { projectId: string }) => {
           icon={<Clapperboard size={20} />}
           backTo="/story"
           action={
-            <Button variant="blue" size="sm" onClick={() => setDialogOpen(true)}>
+            <Button variant="blue" size="sm" onClick={openCreateSnippetDialog}>
               <Plus size={15} />
               新建片段
             </Button>
@@ -1300,7 +2111,7 @@ const StorySnippetListPage = ({ projectId }: { projectId: string }) => {
                 className="mt-5"
                 variant="blue"
                 size="sm"
-                onClick={() => setDialogOpen(true)}
+                onClick={openCreateSnippetDialog}
               >
                 <Plus size={15} />
                 创建片段
@@ -1309,16 +2120,45 @@ const StorySnippetListPage = ({ projectId }: { projectId: string }) => {
           ) : (
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-3 2xl:grid-cols-4">
               {snippets.map((snippet) => (
-                <button
+                <div
                   key={snippet.id}
-                  type="button"
                   onClick={() =>
                     navigate(`/story/${projectId}/snippets/${snippet.id}/agent`)
                   }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      navigate(`/story/${projectId}/snippets/${snippet.id}/agent`);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                   className="group rounded-xl border border-white/5 bg-[#121214] p-5 text-left transition-all hover:border-[#B43FEB]/45 hover:bg-[#B43FEB]/5"
                 >
-                  <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-[#d8b6ff]">
-                    <Clapperboard size={22} />
+                  <div className="mb-5 flex items-start justify-between gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-[#d8b6ff]">
+                      <Clapperboard size={22} />
+                    </div>
+                    <div className="flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+                      <button
+                        type="button"
+                        onClick={(event) => openEditSnippetDialog(event, snippet)}
+                        className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-black/50 text-white/70 backdrop-blur-md transition-colors hover:bg-black/70 hover:text-white"
+                        title="编辑片段"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) =>
+                          openDeleteSnippetDialog(event, snippet)
+                        }
+                        className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-black/50 text-red-400/70 backdrop-blur-md transition-colors hover:bg-red-500/20 hover:text-red-400"
+                        title="删除片段"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <h3 className="truncate text-base font-medium text-white/90">
                     {snippet.name}
@@ -1327,10 +2167,9 @@ const StorySnippetListPage = ({ projectId }: { projectId: string }) => {
                     {snippet.description || "暂无片段说明"}
                   </p>
                   <div className="mt-5 flex items-center justify-between text-xs text-white/40">
-                    <span>{snippet.count} 个片段</span>
                     <span>{formatTime(snippet.updatedAt)}</span>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           )}
@@ -1338,11 +2177,66 @@ const StorySnippetListPage = ({ projectId }: { projectId: string }) => {
         <SnippetDialog
           open={dialogOpen}
           projectId={projectId}
-          onClose={() => setDialogOpen(false)}
-          onCreated={(snippet) =>
-            navigate(`/story/${projectId}/snippets/${snippet.id}/agent`)
-          }
+          snippet={editingSnippet}
+          onClose={() => {
+            setDialogOpen(false);
+            setEditingSnippet(null);
+          }}
+          onSaved={(snippet) => {
+            if (editingSnippet) {
+              void load();
+            } else {
+              navigate(`/story/${projectId}/snippets/${snippet.id}/agent`);
+            }
+          }}
         />
+        {snippetToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-[#121214] shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/5 p-5">
+                <h2 className="text-lg font-semibold text-white/90">
+                  删除片段
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => !deletingSnippet && setSnippetToDelete(null)}
+                  disabled={deletingSnippet}
+                  className="cursor-pointer text-white/50 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="p-5">
+                <p className="text-sm leading-6 text-white/60">
+                  确定要删除片段{" "}
+                  <span className="font-medium text-white">
+                    “{snippetToDelete.name}”
+                  </span>
+                  吗？删除后会移除该片段的剧本 Agent 数据和生成结果。
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-3 border-t border-white/5 bg-black/20 p-5">
+                <Button
+                  onClick={() => setSnippetToDelete(null)}
+                  disabled={deletingSnippet}
+                >
+                  取消
+                </Button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteSnippet}
+                  disabled={deletingSnippet}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg bg-red-500 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {deletingSnippet && (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  )}
+                  {deletingSnippet ? "删除中" : "删除"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </StoragePathGuard>
   );
@@ -1515,34 +2409,176 @@ const StoryWorkspacePage = ({
   );
 };
 
+const StoryAssetImageParamsControl = ({
+  item,
+  model,
+  defaultImageSize,
+  defaultImageResolution,
+  onChange,
+}: {
+  item: StoryboardAssetItem;
+  model: string;
+  defaultImageSize?: string;
+  defaultImageResolution?: string;
+  onChange: (patch: Partial<StoryboardAssetItem>) => void;
+}) => {
+  const params = normalizeStoryImageParams(model, {
+    aspectRatio: item.aspectRatio || defaultImageSize,
+    resolution: item.resolution || defaultImageResolution,
+  });
+
+  const updateAspectRatio = (aspectRatio: string) => {
+    onChange({ aspectRatio });
+  };
+  const updateResolution = (resolution: string) => {
+    onChange({ resolution });
+  };
+
+  if (model === "doubao-seedream-5-0") {
+    return (
+      <SeedreamParamsPanel
+        size={params.aspectRatio}
+        resolution={params.resolution || "2K"}
+        onSizeChange={updateAspectRatio}
+        onResolutionChange={updateResolution}
+      />
+    );
+  }
+
+  if (model === "gemini-3-pro-image-preview") {
+    return (
+      <GeminiParamsPanel
+        size={params.aspectRatio}
+        resolution={params.resolution || "2K"}
+        onSizeChange={updateAspectRatio}
+        onResolutionChange={updateResolution}
+      />
+    );
+  }
+
+  if (model === ADOBE_GPT_IMAGE2_MODEL || isXimuGptImageGenerationModel(model)) {
+    return (
+      <GptImage2ParamsPanel
+        size={params.aspectRatio}
+        resolution={params.resolution || "2K"}
+        sizeOptions={
+          model === ADOBE_GPT_IMAGE2_MODEL
+            ? ADOBE_GPTIMAGE2_SIZES
+            : STORY_XIMU_GPTIMAGE2_SIZES
+        }
+        resolutionOptions={
+          model === XIMU_GPT_IMAGE2_MODEL
+            ? STORY_XIMU_GPTIMAGE2_RESOLUTION_OPTIONS
+            : STORY_GPTIMAGE2_RESOLUTION_OPTIONS
+        }
+        onSizeChange={updateAspectRatio}
+        onResolutionChange={updateResolution}
+      />
+    );
+  }
+
+  if (
+    model === ADOBE_NANO_BANANA_PRO_MODEL ||
+    model === XIMU_NANO_BANANA2_MODEL ||
+    model === XIMU_NANO_BANANA_PRO_MODEL
+  ) {
+    return (
+      <GeminiParamsPanel
+        size={params.aspectRatio}
+        resolution={params.resolution || "2K"}
+        sizeOptions={
+          model === XIMU_NANO_BANANA2_MODEL
+            ? STORY_XIMU_NANO_BANANA2_SIZES
+            : model === XIMU_NANO_BANANA_PRO_MODEL
+              ? STORY_XIMU_NANO_BANANA_PRO_SIZES
+              : NANO_BANANA_LOCAL_SIZES
+        }
+        resolutionOptions={NANO_BANANA_RESOLUTIONS}
+        onSizeChange={updateAspectRatio}
+        onResolutionChange={updateResolution}
+      />
+    );
+  }
+
+  if (isGrokImageGenerationModel(model)) {
+    return (
+      <GeminiParamsPanel
+        size={params.aspectRatio}
+        resolution={params.resolution || "standard"}
+        sizeOptions={GROK_IMAGE_SIZES}
+        resolutionOptions={GROK_IMAGE_RESOLUTIONS}
+        onSizeChange={updateAspectRatio}
+        onResolutionChange={updateResolution}
+      />
+    );
+  }
+
+  if (model === "midjourney" || model === "midjourney-niji7") {
+    return (
+      <MidjourneyParamsPanel
+        size={params.aspectRatio}
+        onSizeChange={updateAspectRatio}
+      />
+    );
+  }
+
+  return (
+    <GptImage2ParamsPanel
+      size={params.aspectRatio}
+      resolution={params.resolution || "2K"}
+      onSizeChange={updateAspectRatio}
+      onResolutionChange={updateResolution}
+    />
+  );
+};
+
 const AssetColumnItem = ({
   item,
   index,
+  audioAssets = [],
   imageModelOptions,
   defaultImageModel,
+  defaultImageSize,
+  defaultImageResolution,
   onChange,
   onUpload,
   onUseLibrary,
+  onBindAudio,
+  onBindLocalAudio,
   onGenerate,
   onDelete,
 }: {
   item: StoryboardAssetItem;
   index: number;
+  audioAssets?: StoryboardAssetItem[];
   imageModelOptions: StoryImageModelOption[];
   defaultImageModel?: string;
+  defaultImageSize?: string;
+  defaultImageResolution?: string;
   onChange: (patch: Partial<StoryboardAssetItem>) => void;
   onUpload: (file: File) => void;
   onUseLibrary: () => void;
+  onBindAudio: () => void;
+  onBindLocalAudio: (file: File) => void;
   onGenerate: () => void;
   onDelete: () => void;
 }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const audioInputRef = useRef<HTMLInputElement | null>(null);
   const currentImageModelId = getStoryImageModelOptionId(
     item.imageModel,
     item.imagePlatform,
     defaultImageModel,
     imageModelOptions,
   );
+  const currentImageModel =
+    imageModelOptions.find((option) => String(option.id) === currentImageModelId)
+      ?.model ||
+    item.imageModel ||
+    defaultImageModel ||
+    "doubao-seedream-5-0";
+  const isAudioAsset = item.kind === "audio";
+  const boundAudioIds = item.audioAssetIds || [];
 
   return (
     <div className="rounded-lg border border-white/8 bg-black/25 p-3">
@@ -1581,64 +2617,81 @@ const AssetColumnItem = ({
         <textarea
           className={`${textAreaClass} h-20`}
           value={item.prompt}
-          placeholder="AI 生成提示词"
+          placeholder={isAudioAsset ? "音效描述" : "AI 生成提示词"}
           onChange={(event) => onChange({ prompt: event.target.value })}
         />
-        <div className="flex items-center gap-2">
-          <Select
-            value={currentImageModelId}
-            onValueChange={(value) => {
-              const selected = imageModelOptions.find(
-                (option) => option.id === Number(value),
-              );
-              if (!selected) return;
-              onChange({
-                imageModel: selected.model,
-                imagePlatform: selected.platform,
-              });
-            }}
-          >
-            <SelectTrigger
-              size="sm"
-              className={cn(
-                PROMPT_PANEL_STYLES.modelSelect,
-                "h-8 min-w-0 flex-1 px-3 text-xs",
-                "[&_[data-slot=select-value]]:block [&_[data-slot=select-value]]:truncate",
-              )}
-              title={
-                imageModelOptions.find(
-                  (option) => String(option.id) === currentImageModelId,
-                )?.name
-              }
-            >
-              <SelectValue placeholder="选择模型" />
-            </SelectTrigger>
-            <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
-              {imageModelOptions.map((option) => (
-                <SelectItem
-                  key={option.id}
-                  value={String(option.id)}
-                  className={PROMPT_PANEL_STYLES.modelSelectItem}
+        {!isAudioAsset ? (
+          <>
+            <StoryAssetImageParamsControl
+              item={item}
+              model={currentImageModel}
+              defaultImageSize={defaultImageSize}
+              defaultImageResolution={defaultImageResolution}
+              onChange={onChange}
+            />
+            <div className="flex items-center gap-2">
+              <Select
+                value={currentImageModelId}
+                onValueChange={(value) => {
+                  const selected = imageModelOptions.find(
+                    (option) => option.id === Number(value),
+                  );
+                  if (!selected) return;
+                  const nextParams = normalizeStoryImageParams(selected.model, {
+                    aspectRatio: item.aspectRatio || defaultImageSize,
+                    resolution: item.resolution || defaultImageResolution,
+                  });
+                  onChange({
+                    imageModel: selected.model,
+                    imagePlatform: selected.platform,
+                    aspectRatio: nextParams.aspectRatio,
+                    resolution: nextParams.resolution,
+                  });
+                }}
+              >
+                <SelectTrigger
+                  size="sm"
+                  className={cn(
+                    PROMPT_PANEL_STYLES.modelSelect,
+                    "h-8 min-w-0 flex-1 px-3 text-xs",
+                    "[&_[data-slot=select-value]]:block [&_[data-slot=select-value]]:truncate",
+                  )}
+                  title={
+                    imageModelOptions.find(
+                      (option) => String(option.id) === currentImageModelId,
+                    )?.name
+                  }
                 >
-                  {option.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            size="sm"
-            variant="blue"
-            onClick={onGenerate}
-            disabled={item.status === "generating"}
-          >
-            {item.status === "generating" ? (
-              <Loader2 className="animate-spin" />
-            ) : (
-              <WandSparkles size={13} />
-            )}
-            AI 生成
-          </Button>
-        </div>
+                  <SelectValue placeholder="选择模型" />
+                </SelectTrigger>
+                <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
+                  {imageModelOptions.map((option) => (
+                    <SelectItem
+                      key={option.id}
+                      value={String(option.id)}
+                      className={PROMPT_PANEL_STYLES.modelSelectItem}
+                    >
+                      {option.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                variant="blue"
+                onClick={onGenerate}
+                disabled={item.status === "generating"}
+              >
+                {item.status === "generating" ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <WandSparkles size={13} />
+                )}
+                AI 生成
+              </Button>
+            </div>
+          </>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           <input
             ref={inputRef}
@@ -1659,6 +2712,64 @@ const AssetColumnItem = ({
             资产库上传
           </Button>
         </div>
+        {!isAudioAsset ? (
+          <div className="rounded-lg border border-white/8 bg-black/25 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs text-white/55">
+                <Music size={13} />
+                绑定音效
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <input
+                  ref={audioInputRef}
+                  type="file"
+                  accept="audio/*"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) onBindLocalAudio(file);
+                    event.target.value = "";
+                  }}
+                />
+                <Button size="sm" onClick={onBindAudio}>
+                  <FolderOpen size={13} />
+                  资产库选择
+                </Button>
+                <Button size="sm" onClick={() => audioInputRef.current?.click()}>
+                  <Upload size={13} />
+                  本地选择
+                </Button>
+              </div>
+            </div>
+            {boundAudioIds.length === 0 ? (
+              <div className="text-[11px] text-white/30">
+                暂无已绑定音效。
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {boundAudioIds.map((audioId) => {
+                  const audio = audioAssets.find((item) => item.id === audioId);
+                  return (
+                    <button
+                      type="button"
+                      key={audioId}
+                      className="rounded-full border border-[#B43FEB]/50 bg-[#B43FEB]/18 px-2.5 py-1 text-[11px] text-[#E9C7FF] transition-colors hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-100"
+                      onClick={() =>
+                        onChange({
+                          audioAssetIds: boundAudioIds.filter(
+                            (id) => id !== audioId,
+                          ),
+                        })
+                      }
+                    >
+                      {audio?.name || "已绑定音效"}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -1672,8 +2783,11 @@ const StoryAssetPreview = ({
   compact?: boolean;
 }) => {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const mediaType = getStoryAssetMediaType(item);
   const previewUrl = objectUrl || item.mediaUrl || "";
+  const canOpenPreview =
+    !compact && Boolean(previewUrl) && (mediaType === "image" || mediaType === "video");
 
   useEffect(() => {
     let active = true;
@@ -1699,45 +2813,131 @@ const StoryAssetPreview = ({
     };
   }, [item.localPath]);
 
+  const previewContent =
+    previewUrl && mediaType === "image" ? (
+      <img
+        src={previewUrl}
+        alt={item.name || "资产预览"}
+        className="h-full w-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+    ) : previewUrl && mediaType === "video" ? (
+      compact ? (
+        <div className="flex h-full w-full items-center justify-center text-white/55">
+          <Video size={18} />
+        </div>
+      ) : (
+        <video
+          src={previewUrl}
+          className="h-full w-full object-cover"
+          muted
+          playsInline
+          preload="metadata"
+        />
+      )
+    ) : mediaType === "audio" ? (
+      <div className="flex w-full flex-col items-center gap-3 px-3 text-white/55">
+        <Music size={compact ? 18 : 24} />
+        {previewUrl && !compact ? (
+          <audio src={previewUrl} className="w-full" controls />
+        ) : null}
+      </div>
+    ) : (
+      <div className="flex flex-col items-center gap-2 text-xs text-white/35">
+        <FileImage size={24} />
+        未绑定预览
+      </div>
+    );
+
   return (
     <div
       className={cn(
-        "flex items-center justify-center overflow-hidden rounded-lg border border-white/8 bg-black/35",
+        "relative flex items-center justify-center overflow-hidden rounded-lg border border-white/8 bg-black/35",
         compact ? "h-12 w-14" : "aspect-video w-full",
       )}
     >
-      {previewUrl && mediaType === "image" ? (
-        <img
-          src={previewUrl}
-          alt={item.name || "资产预览"}
-          className="h-full w-full object-cover"
-          loading="lazy"
-          decoding="async"
-        />
-      ) : previewUrl && mediaType === "video" ? (
-        compact ? (
-          <div className="flex h-full w-full items-center justify-center text-white/55">
-            <Video size={18} />
-          </div>
-        ) : (
-          <video src={previewUrl} className="h-full w-full object-cover" controls />
-        )
-      ) : mediaType === "audio" ? (
-        <div className="flex w-full flex-col items-center gap-3 px-3 text-white/55">
-          <Music size={compact ? 18 : 24} />
-          {previewUrl && !compact ? (
-            <audio src={previewUrl} className="w-full" controls />
-          ) : null}
-        </div>
+      {canOpenPreview ? (
+        <button
+          type="button"
+          className="group h-full w-full cursor-zoom-in"
+          onClick={() => setPreviewOpen(true)}
+          aria-label="放大预览资产"
+          title="点击放大预览"
+        >
+          {previewContent}
+          <span className="pointer-events-none absolute bottom-2 right-2 rounded-md border border-white/10 bg-black/65 px-2 py-1 text-[11px] text-white/75 opacity-0 shadow-lg backdrop-blur transition-opacity group-hover:opacity-100">
+            点击放大
+          </span>
+        </button>
       ) : (
-        <div className="flex flex-col items-center gap-2 text-xs text-white/35">
-          <FileImage size={24} />
-          未绑定预览
-        </div>
+        previewContent
       )}
+      {previewOpen && canOpenPreview ? (
+        <StoryAssetPreviewDialog
+          title={item.name || "资产预览"}
+          mediaType={mediaType as "image" | "video"}
+          url={previewUrl}
+          onClose={() => setPreviewOpen(false)}
+        />
+      ) : null}
     </div>
   );
 };
+
+const StoryAssetPreviewDialog = ({
+  title,
+  mediaType,
+  url,
+  onClose,
+}: {
+  title: string;
+  mediaType: "image" | "video";
+  url: string;
+  onClose: () => void;
+}) => (
+  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-6 backdrop-blur-md">
+    <button
+      type="button"
+      aria-label="关闭预览"
+      className="absolute inset-0 cursor-zoom-out"
+      onClick={onClose}
+    />
+    <div className="relative z-10 flex max-h-[92vh] w-[min(1120px,94vw)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#101012] shadow-2xl">
+      <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
+        <div className="min-w-0 truncate text-sm font-medium text-white/85">
+          {title}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+          aria-label="关闭预览"
+        >
+          <X size={16} />
+        </button>
+      </div>
+      <div className="flex min-h-0 flex-1 items-center justify-center bg-black p-3">
+        {mediaType === "image" ? (
+          <img
+            src={url}
+            alt={title}
+            className="max-h-[82vh] max-w-full object-contain"
+            decoding="async"
+          />
+        ) : (
+          <video
+            src={url}
+            className="max-h-[82vh] max-w-full"
+            controls
+            autoPlay
+            playsInline
+          />
+        )}
+      </div>
+    </div>
+  </div>
+);
 
 const ScriptCategoryCombobox = ({
   value,
@@ -1810,6 +3010,699 @@ const ScriptCategoryCombobox = ({
   );
 };
 
+const StorySubtitleRemovalDialog = ({
+  shot,
+  open,
+  isSubmitting,
+  onClose,
+  onSubmit,
+}: {
+  shot: StoryboardShot;
+  open: boolean;
+  isSubmitting: boolean;
+  onClose: () => void;
+  onSubmit: (rect: WuhenRect, requiredPoints: number) => Promise<void> | void;
+}) => {
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const playButtonRef = useRef<HTMLButtonElement | null>(null);
+  const dragRef = useRef<{
+    mode: DragMode;
+    startX: number;
+    startY: number;
+    startRect: ViewportRect;
+  } | null>(null);
+  const { pointsEnabled, totalPoints, ensureEnoughPoints, refreshBalanceInfo } =
+    useGenerationPoints();
+
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [videoSize, setVideoSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  const [viewportSize, setViewportSize] = useState(getViewportSize);
+  const [containerSize, setContainerSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  const [videoBounds, setVideoBounds] = useState<ViewportRect | null>(null);
+  const [cropRect, setCropRect] = useState<ViewportRect | null>(null);
+
+  const videoUrl = objectUrl || shot.video?.url || "";
+  const workspaceFrame = useMemo(
+    () =>
+      getFittedWorkspaceFrame(
+        videoSize,
+        Math.min(viewportSize.width - 96, 960),
+        Math.min(viewportSize.height - 420, 560),
+      ),
+    [videoSize, viewportSize.height, viewportSize.width],
+  );
+  const dialogWidth = useMemo(
+    () =>
+      Math.max(
+        460,
+        Math.min(viewportSize.width - 32, workspaceFrame.width + 40),
+      ),
+    [viewportSize.width, workspaceFrame.width],
+  );
+  const requiredPoints = useMemo(() => {
+    if (!Number.isFinite(duration) || duration <= 0) {
+      return 0;
+    }
+    return Math.max(
+      1,
+      Math.ceil(duration * SUBTITLE_REMOVAL_POINTS_PER_SECOND),
+    );
+  }, [duration]);
+
+  useEffect(() => {
+    let active = true;
+    let nextUrl: string | null = null;
+
+    if (!shot.video?.localPath) {
+      setObjectUrl(null);
+      return;
+    }
+
+    storyboardStorage.readObjectUrl(shot.video.localPath).then((url) => {
+      if (!active) {
+        if (url) URL.revokeObjectURL(url);
+        return;
+      }
+      nextUrl = url;
+      setObjectUrl(url);
+    });
+
+    return () => {
+      active = false;
+      if (nextUrl) URL.revokeObjectURL(nextUrl);
+    };
+  }, [shot.video?.localPath]);
+
+  const seekTo = useCallback(
+    (time: number) => {
+      const video = videoRef.current;
+      if (!video) return;
+      const maxTime = Number.isFinite(video.duration)
+        ? video.duration
+        : duration;
+      const nextTime = clamp(time, 0, maxTime || 0);
+      video.currentTime = nextTime;
+      setCurrentTime(nextTime);
+    },
+    [duration],
+  );
+
+  const stepFrame = useCallback(
+    (direction: 1 | -1) => {
+      const video = videoRef.current;
+      if (!video) return;
+      if (!video.paused) {
+        video.pause();
+        setIsPlaying(false);
+      }
+      seekTo(video.currentTime + direction * FRAME_STEP_SECONDS);
+      if ("requestVideoFrameCallback" in HTMLVideoElement.prototype) {
+        video.requestVideoFrameCallback(() => {
+          setCurrentTime(video.currentTime);
+        });
+      }
+    },
+    [seekTo],
+  );
+
+  const togglePlayback = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      try {
+        await video.play();
+        setIsPlaying(true);
+      } catch {
+        setIsPlaying(false);
+      }
+      return;
+    }
+    video.pause();
+    setIsPlaying(false);
+  }, []);
+
+  const syncVideoBounds = useCallback(() => {
+    if (!viewportRef.current || !videoRef.current) return;
+
+    const viewport = viewportRef.current.getBoundingClientRect();
+    const container = {
+      x: 0,
+      y: 0,
+      width: viewport.width,
+      height: viewport.height,
+    };
+    setContainerSize({ width: viewport.width, height: viewport.height });
+
+    const contained = computeContainedRect(
+      container,
+      videoRef.current.videoWidth || 0,
+      videoRef.current.videoHeight || 0,
+    );
+    setVideoBounds(contained);
+
+    setCropRect((prev) => {
+      if (!prev) {
+        const initial = buildDefaultSubtitleRect(contained);
+        return {
+          x: contained.x + initial.x,
+          y: contained.y + initial.y,
+          width: initial.width,
+          height: initial.height,
+        };
+      }
+
+      if (!videoBounds || videoBounds.width <= 0 || videoBounds.height <= 0) {
+        const fallback = buildDefaultSubtitleRect(contained);
+        return {
+          x: contained.x + fallback.x,
+          y: contained.y + fallback.y,
+          width: fallback.width,
+          height: fallback.height,
+        };
+      }
+
+      const nx = (prev.x - videoBounds.x) / videoBounds.width;
+      const ny = (prev.y - videoBounds.y) / videoBounds.height;
+      const nw = prev.width / videoBounds.width;
+      const nh = prev.height / videoBounds.height;
+      const nextWidth = clamp(nw * contained.width, 24, contained.width);
+      const nextHeight = clamp(nh * contained.height, 24, contained.height);
+
+      return {
+        x: clamp(
+          contained.x + nx * contained.width,
+          contained.x,
+          contained.x + contained.width - nextWidth,
+        ),
+        y: clamp(
+          contained.y + ny * contained.height,
+          contained.y,
+          contained.y + contained.height - nextHeight,
+        ),
+        width: nextWidth,
+        height: nextHeight,
+      };
+    });
+  }, [videoBounds?.height, videoBounds?.width]);
+
+  const handlePointerMove = useCallback(
+    (event: PointerEvent) => {
+      const drag = dragRef.current;
+      if (!drag || !videoBounds) return;
+
+      const minSize = 24;
+      const dx = event.clientX - drag.startX;
+      const dy = event.clientY - drag.startY;
+      const start = drag.startRect;
+      const next: ViewportRect = { ...start };
+
+      if (drag.mode === "move") {
+        next.x = clamp(
+          start.x + dx,
+          videoBounds.x,
+          videoBounds.x + videoBounds.width - start.width,
+        );
+        next.y = clamp(
+          start.y + dy,
+          videoBounds.y,
+          videoBounds.y + videoBounds.height - start.height,
+        );
+        setCropRect(next);
+        return;
+      }
+
+      if (drag.mode.includes("e")) {
+        next.width = clamp(
+          start.width + dx,
+          minSize,
+          videoBounds.x + videoBounds.width - start.x,
+        );
+      }
+      if (drag.mode.includes("s")) {
+        next.height = clamp(
+          start.height + dy,
+          minSize,
+          videoBounds.y + videoBounds.height - start.y,
+        );
+      }
+      if (drag.mode.includes("w")) {
+        const nextX = clamp(
+          start.x + dx,
+          videoBounds.x,
+          start.x + start.width - minSize,
+        );
+        next.width = start.width - (nextX - start.x);
+        next.x = nextX;
+      }
+      if (drag.mode.includes("n")) {
+        const nextY = clamp(
+          start.y + dy,
+          videoBounds.y,
+          start.y + start.height - minSize,
+        );
+        next.height = start.height - (nextY - start.y);
+        next.y = nextY;
+      }
+
+      next.width = clamp(
+        next.width,
+        minSize,
+        videoBounds.x + videoBounds.width - next.x,
+      );
+      next.height = clamp(
+        next.height,
+        minSize,
+        videoBounds.y + videoBounds.height - next.y,
+      );
+      setCropRect(next);
+    },
+    [videoBounds],
+  );
+
+  const handlePointerUp = useCallback(() => {
+    dragRef.current = null;
+    window.removeEventListener("pointermove", handlePointerMove);
+    window.removeEventListener("pointerup", handlePointerUp);
+  }, [handlePointerMove]);
+
+  const startDrag = useCallback(
+    (mode: DragMode, event: React.PointerEvent<HTMLDivElement>) => {
+      if (!cropRect) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      dragRef.current = {
+        mode,
+        startX: event.clientX,
+        startY: event.clientY,
+        startRect: cropRect,
+      };
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
+    },
+    [cropRect, handlePointerMove, handlePointerUp],
+  );
+
+  useEffect(() => {
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [handlePointerMove, handlePointerUp]);
+
+  useEffect(() => {
+    if (!open) {
+      if (videoRef.current && !videoRef.current.paused) {
+        videoRef.current.pause();
+      }
+      setIsPlaying(false);
+      return;
+    }
+    setIsReady(false);
+    setVideoSize(null);
+    setVideoBounds(null);
+    setCropRect(null);
+    setDuration(0);
+    setCurrentTime(0);
+    setIsPlaying(false);
+  }, [open, videoUrl]);
+
+  useEffect(() => {
+    if (open) {
+      void refreshBalanceInfo();
+      const timer = window.setTimeout(() => {
+        playButtonRef.current?.focus();
+      }, 50);
+      return () => window.clearTimeout(timer);
+    }
+  }, [open, refreshBalanceInfo]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleResize = () => {
+      setViewportSize(getViewportSize());
+      syncVideoBounds();
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [open, syncVideoBounds]);
+
+  useEffect(() => {
+    if (!open) return;
+    const target = viewportRef.current;
+    if (!target) return;
+
+    let rafId = 0;
+    const schedule = () => {
+      if (rafId) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0;
+        syncVideoBounds();
+      });
+    };
+
+    schedule();
+    const observer = new ResizeObserver(() => {
+      schedule();
+    });
+    observer.observe(target);
+
+    return () => {
+      observer.disconnect();
+      if (rafId) window.cancelAnimationFrame(rafId);
+    };
+  }, [open, syncVideoBounds]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      if (event.code === "Space" || event.key === " ") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!isReady || isSubmitting) return;
+        void togglePlayback();
+        return;
+      }
+
+      if (target?.closest("[data-slot='slider']")) return;
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        seekTo(currentTime - TIMELINE_STEP_MS / 1000);
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        seekTo(currentTime + TIMELINE_STEP_MS / 1000);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentTime, isReady, isSubmitting, open, seekTo, togglePlayback]);
+
+  const handleSend = useCallback(async () => {
+    if (!videoBounds || !cropRect || !videoSize) return;
+
+    if (
+      !ensureEnoughPoints({
+        requiredPoints,
+        actionLabel: "去字幕",
+        warning: toast.warning,
+      })
+    ) {
+      return;
+    }
+
+    const scaleX = videoSize.width / videoBounds.width;
+    const scaleY = videoSize.height / videoBounds.height;
+    const rect: WuhenRect = {
+      x1: Math.round((cropRect.x - videoBounds.x) * scaleX),
+      y1: Math.round((cropRect.y - videoBounds.y) * scaleY),
+      x2: Math.round((cropRect.x - videoBounds.x + cropRect.width) * scaleX),
+      y2: Math.round((cropRect.y - videoBounds.y + cropRect.height) * scaleY),
+    };
+    const area = Math.max(0, rect.x2 - rect.x1) * Math.max(0, rect.y2 - rect.y1);
+    if (area > WUHEI_MAX_RECT_AREA) {
+      toast.warning(
+        `选区过大（${area}），无痕AI 限制面积 <= ${WUHEI_MAX_RECT_AREA} 像素`,
+      );
+      return;
+    }
+
+    await onSubmit(rect, requiredPoints);
+  }, [
+    cropRect,
+    ensureEnoughPoints,
+    onSubmit,
+    requiredPoints,
+    videoBounds,
+    videoSize,
+  ]);
+
+  if (!open) return null;
+
+  const handleConfig = [
+    { mode: "nw", className: "-left-2 -top-2 cursor-nwse-resize" },
+    { mode: "n", className: "left-1/2 -top-2 -translate-x-1/2 cursor-ns-resize" },
+    { mode: "ne", className: "-right-2 -top-2 cursor-nesw-resize" },
+    { mode: "e", className: "-right-2 top-1/2 -translate-y-1/2 cursor-ew-resize" },
+    { mode: "se", className: "-right-2 -bottom-2 cursor-nwse-resize" },
+    { mode: "s", className: "left-1/2 -bottom-2 -translate-x-1/2 cursor-ns-resize" },
+    { mode: "sw", className: "-left-2 -bottom-2 cursor-nesw-resize" },
+    { mode: "w", className: "-left-2 top-1/2 -translate-y-1/2 cursor-ew-resize" },
+  ] as const;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <button
+        type="button"
+        aria-label="关闭去字幕面板"
+        className="absolute inset-0 cursor-default"
+        onClick={() => {
+          if (!isSubmitting) onClose();
+        }}
+      />
+      <div
+        className="relative z-10 flex max-h-[92vh] max-w-[96vw] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#121214] text-white shadow-2xl"
+        style={{ width: `${dialogWidth}px` }}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-white/5 bg-[#18181b] px-5 py-4">
+          <h3 className="flex items-center gap-2 text-base font-medium text-white/90">
+            <Eraser size={18} />
+            去字幕
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-white/55 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col bg-[#18181b]">
+          <div className="flex min-h-0 flex-1 flex-col gap-5 p-5">
+            <div className="flex justify-center">
+              <div
+                ref={viewportRef}
+                className="relative overflow-hidden rounded-xl border border-white/8 bg-black"
+                style={{
+                  width: `${workspaceFrame.width}px`,
+                  height: `${workspaceFrame.height}px`,
+                }}
+              >
+                <VideoPlayer
+                  ref={videoRef}
+                  src={videoUrl}
+                  containerClassName="h-full w-full rounded-none bg-black"
+                  videoClassName="h-full w-full object-contain"
+                  showDefaultControls={false}
+                  playsInline
+                  preload="metadata"
+                  onLoadedMetadata={(event) => {
+                    const w = event.currentTarget.videoWidth || 0;
+                    const h = event.currentTarget.videoHeight || 0;
+                    setVideoSize({ width: w, height: h });
+                    setDuration(event.currentTarget.duration || 0);
+                    setCurrentTime(event.currentTarget.currentTime || 0);
+                    setIsReady(true);
+                    window.requestAnimationFrame(() => {
+                      window.requestAnimationFrame(() => {
+                        syncVideoBounds();
+                      });
+                    });
+                  }}
+                  onTimeUpdate={(event) => {
+                    setCurrentTime(event.currentTarget.currentTime || 0);
+                  }}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onEnded={() => setIsPlaying(false)}
+                />
+
+                {videoBounds && cropRect ? (
+                  <div
+                    className="absolute border border-white/90 bg-white/10 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]"
+                    style={{
+                      left: cropRect.x,
+                      top: cropRect.y,
+                      width: cropRect.width,
+                      height: cropRect.height,
+                    }}
+                    onPointerDown={(event) => startDrag("move", event)}
+                  >
+                    {handleConfig.map((item) => (
+                      <div
+                        key={item.mode}
+                        className={`absolute h-4 w-4 rounded-full border border-white bg-[#B43FEB] ${item.className}`}
+                        onPointerDown={(event) =>
+                          startDrag(item.mode as DragMode, event)
+                        }
+                      />
+                    ))}
+                  </div>
+                ) : null}
+
+                {containerSize && videoBounds ? (
+                  <>
+                    <div
+                      className="pointer-events-none absolute left-0 top-0 bg-black/55"
+                      style={{
+                        width: containerSize.width,
+                        height: Math.max(0, videoBounds.y),
+                      }}
+                    />
+                    <div
+                      className="pointer-events-none absolute left-0 bg-black/55"
+                      style={{
+                        top: videoBounds.y + videoBounds.height,
+                        width: containerSize.width,
+                        height: Math.max(
+                          0,
+                          containerSize.height -
+                            (videoBounds.y + videoBounds.height),
+                        ),
+                      }}
+                    />
+                    <div
+                      className="pointer-events-none absolute top-0 bg-black/55"
+                      style={{
+                        left: 0,
+                        top: videoBounds.y,
+                        width: Math.max(0, videoBounds.x),
+                        height: videoBounds.height,
+                      }}
+                    />
+                    <div
+                      className="pointer-events-none absolute top-0 bg-black/55"
+                      style={{
+                        left: videoBounds.x + videoBounds.width,
+                        top: videoBounds.y,
+                        width: Math.max(
+                          0,
+                          containerSize.width -
+                            (videoBounds.x + videoBounds.width),
+                        ),
+                        height: videoBounds.height,
+                      }}
+                    />
+                  </>
+                ) : null}
+              </div>
+            </div>
+
+            <VideoTimeline
+              disabled={!isReady || isSubmitting}
+              currentTimeMs={Math.round(currentTime * 1000)}
+              durationMs={Math.round(duration * 1000)}
+              stepMs={TIMELINE_STEP_MS}
+              onSeek={(nextTimeMs) => {
+                seekTo(nextTimeMs / 1000);
+              }}
+            />
+
+            <div className="flex items-center justify-center gap-4">
+              <button
+                type="button"
+                onClick={() => stepFrame(-1)}
+                disabled={!isReady || isSubmitting}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#27272a] text-white/75 hover:bg-[#3f3f46] hover:text-[#B43FEB] disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="快退"
+              >
+                <SkipBack size={18} />
+              </button>
+              <button
+                ref={playButtonRef}
+                type="button"
+                onClick={() => void togglePlayback()}
+                disabled={!isReady || isSubmitting}
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-[#B43FEB] text-white shadow-lg shadow-[#B43FEB]/20 hover:bg-[#B43FEB]/90 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={isPlaying ? "暂停" : "播放"}
+              >
+                {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+              </button>
+              <button
+                type="button"
+                onClick={() => stepFrame(1)}
+                disabled={!isReady || isSubmitting}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-[#27272a] text-white/75 hover:bg-[#3f3f46] hover:text-[#B43FEB] disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="快进"
+              >
+                <SkipForward size={18} />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-xs text-white/50">
+                {isReady
+                  ? `视频时长 ${formatDuration(duration)}（${Math.ceil(duration)} 秒）`
+                  : "读取视频时长中..."}
+                {pointsEnabled
+                  ? ` · 单价 ${SUBTITLE_REMOVAL_POINTS_PER_SECOND} 积分/秒`
+                  : ""}
+              </div>
+              {pointsEnabled ? (
+                <ModelPointsBadge
+                  totalPoints={totalPoints}
+                  requiredPoints={requiredPoints}
+                  title={
+                    isReady
+                      ? `预计消耗 ${requiredPoints} 积分（${SUBTITLE_REMOVAL_POINTS_PER_SECOND} 积分/秒，时长 ${formatDuration(duration)}），当前余额 ${totalPoints}`
+                      : `预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`
+                  }
+                />
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex shrink-0 justify-end gap-3 border-t border-white/5 bg-[#18181b] px-5 py-4">
+            <Button onClick={onClose} disabled={isSubmitting}>
+              取消
+            </Button>
+            <Button
+              variant="blue"
+              onClick={() => void handleSend()}
+              disabled={
+                !isReady ||
+                isSubmitting ||
+                (pointsEnabled && requiredPoints <= 0)
+              }
+            >
+              {isSubmitting ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Eraser size={14} />
+              )}
+              {isSubmitting ? "处理中..." : "发送并生成新视频"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const StoryAgentPage = ({
   projectId,
   snippetId,
@@ -1824,17 +3717,29 @@ const StoryAgentPage = ({
   );
   const [activeStep, setActiveStep] = useState<StoryboardAgentStep>("script");
   const [editingShot, setEditingShot] = useState<StoryboardShot | null>(null);
+  const [removingSubtitleShot, setRemovingSubtitleShot] =
+    useState<StoryboardShot | null>(null);
   const [editingShotModel, setEditingShotModel] = useState<StoryboardShot | null>(
     null,
   );
+  const [editingSystemPrompt, setEditingSystemPrompt] =
+    useState<StorySystemPromptTarget | null>(null);
+  const [nextConfirmTarget, setNextConfirmTarget] =
+    useState<StoryNextConfirmTarget | null>(null);
   const [selectingAssetShotId, setSelectingAssetShotId] = useState<string | null>(
     null,
   );
   const [selectingAssetDetailTarget, setSelectingAssetDetailTarget] =
     useState<{ kind: StoryboardAssetKind; id: string } | null>(null);
+  const [selectingAudioBindTarget, setSelectingAudioBindTarget] =
+    useState<{ kind: StoryboardAssetKind; id: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [splitting, setSplitting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [exportingJianying, setExportingJianying] = useState(false);
+  const [removingSubtitleShotId, setRemovingSubtitleShotId] = useState<
+    string | null
+  >(null);
   const agentRef = useRef(agent);
 
   useEffect(() => {
@@ -1844,7 +3749,7 @@ const StoryAgentPage = ({
   const defaults = useMemo<StoryboardShot["modelInfo"]>(
     () => ({
       imageModel: settings.defaultImageModel,
-      videoModel: settings.defaultNewVideoModel || settings.defaultVideoModel,
+      videoModel: STORY_SHOT_DEFAULT_VIDEO_MODEL,
       aspectRatio:
         settings.defaultNewVideoAspectRatio || settings.defaultVideoAspectRatio,
       duration:
@@ -1854,8 +3759,6 @@ const StoryAgentPage = ({
     }),
     [
       settings.defaultImageModel,
-      settings.defaultNewVideoModel,
-      settings.defaultVideoModel,
       settings.defaultNewVideoAspectRatio,
       settings.defaultVideoAspectRatio,
       settings.defaultNewVideoDuration,
@@ -1879,23 +3782,18 @@ const StoryAgentPage = ({
     ],
   );
 
-  const agentAssetMap = useMemo(() => {
-    const map = new Map<string, StoryboardAssetItem>();
-    for (const list of Object.values(agent.assets)) {
-      for (const item of list) {
-        map.set(item.id, item);
-      }
-    }
-    return map;
-  }, [agent.assets]);
-
   const saveAgent = useCallback(
     async (next: StoryboardAgentData) => {
-      agentRef.current = next;
-      setAgent(next);
+      const normalizedNext = migrateStoryShotVideoModels(next);
+      agentRef.current = normalizedNext;
+      setAgent(normalizedNext);
       setSaving(true);
       try {
-        await storyboardStorage.saveAgentData(projectId, snippetId, next);
+        await storyboardStorage.saveAgentData(
+          projectId,
+          snippetId,
+          normalizedNext,
+        );
       } catch (error) {
         console.error("[Story] save agent failed", error);
         toast.error("保存剧本 Agent 失败");
@@ -1911,10 +3809,14 @@ const StoryAgentPage = ({
     storyboardStorage
       .loadAgentData(projectId, snippetId)
       .then((data) => {
+        const needsMigration = hasStoryShotVideoModelMigration(data);
         const next = normalizeAgentData(data);
         setAgent(next);
         agentRef.current = next;
         setActiveStep(next.unlockedStep);
+        if (needsMigration) {
+          void storyboardStorage.saveAgentData(projectId, snippetId, next);
+        }
       })
       .finally(() => setLoading(false));
   }, [projectId, snippetId]);
@@ -1981,11 +3883,18 @@ const StoryAgentPage = ({
   };
 
   const deleteAsset = (kind: StoryboardAssetKind, id: string) => {
+    const nextAssets = {
+      ...agent.assets,
+      [kind]: agent.assets[kind].filter((item) => item.id !== id),
+    };
+    if (kind === "audio") {
+      nextAssets.role = nextAssets.role.map((item) => ({
+        ...item,
+        audioAssetIds: item.audioAssetIds?.filter((assetId) => assetId !== id),
+      }));
+    }
     patchAgent({
-      assets: {
-        ...agent.assets,
-        [kind]: agent.assets[kind].filter((item) => item.id !== id),
-      },
+      assets: nextAssets,
       shots: agent.shots.map((shot) => ({
         ...shot,
         assetIds: shot.assetIds.filter((assetId) => assetId !== id),
@@ -2115,9 +4024,15 @@ const StoryAgentPage = ({
   const createStoryAssetImage = async (input: {
     model: string;
     prompt: string;
+    aspectRatio: string;
+    resolution?: string;
   }) => {
     if (isAdobeImageGenerationModel(input.model)) {
-      const adobeModel = resolveAdobeStoryImageModel(input.model);
+      const adobeModel = resolveAdobeStoryImageModel(
+        input.model,
+        input.aspectRatio,
+        input.resolution,
+      );
       if (!adobeModel) {
         throw new Error("不支持的 Adobe 图片模型");
       }
@@ -2147,8 +4062,8 @@ const StoryAgentPage = ({
             prompt: input.prompt,
             aspectRatio: resolveXimuGptAspectRatio({
               model: ximuModel as any,
-              size: "1:1",
-              resolution: "1K",
+              size: input.aspectRatio,
+              resolution: input.resolution || "1K",
             }),
             urls: [],
           })
@@ -2158,9 +4073,9 @@ const StoryAgentPage = ({
             prompt: input.prompt,
             aspectRatio:
               input.model === XIMU_NANO_BANANA2_MODEL
-                ? resolveXimuNanoBanana2AspectRatio("1:1")
-                : resolveXimuNanoBananaProAspectRatio("1:1"),
-            imageSize: resolveXimuImageSize("2K"),
+                ? resolveXimuNanoBanana2AspectRatio(input.aspectRatio)
+                : resolveXimuNanoBananaProAspectRatio(input.aspectRatio),
+            imageSize: resolveXimuImageSize(input.resolution || "2K"),
             urls: [],
           });
       const response = isXimuGptImageGenerationModel(input.model)
@@ -2182,7 +4097,7 @@ const StoryAgentPage = ({
         model: grokModel as any,
         prompt: input.prompt,
         n: 1,
-        size: "1024x1024",
+        size: input.aspectRatio,
         response_format: "url",
       });
       const url = getDirectImageUrl(response);
@@ -2193,10 +4108,11 @@ const StoryAgentPage = ({
     const response: any = await createImageGeneration({
       model: input.model,
       prompt: input.prompt,
-      size: "1:1",
+      size: input.aspectRatio,
+      resolution: input.resolution,
       n: 1,
       image_urls: [],
-      metadata: { resolution: "2K" },
+      metadata: { resolution: input.resolution },
     } as any);
     const taskId =
       response?.data?.task_id ??
@@ -2226,7 +4142,11 @@ const StoryAgentPage = ({
     }
 
     const asset = agent.assets[kind].find((item) => item.id === id);
-    const prompt = (asset?.prompt || asset?.name || "").trim();
+    const assetName = (asset?.name || "").trim();
+    const assetPrompt = (asset?.prompt || "").trim();
+    const prompt = [assetName ? `资产名称：${assetName}` : "", assetPrompt]
+      .filter(Boolean)
+      .join("\n");
     if (!prompt) {
       toast.error("请先填写资产提示词");
       return;
@@ -2234,16 +4154,25 @@ const StoryAgentPage = ({
 
     updateAsset(kind, id, { source: "ai", status: "generating" });
     try {
+      const model =
+        asset?.imageModel ||
+        settings.defaultImageModel ||
+        "doubao-seedream-5-0";
+      const params = normalizeStoryImageParams(model, {
+        aspectRatio: asset?.aspectRatio || settings.defaultImageSize,
+        resolution: asset?.resolution || settings.defaultImageResolution,
+      });
       const imageUrl = await createStoryAssetImage({
-        model:
-          asset?.imageModel ||
-          settings.defaultImageModel ||
-          "doubao-seedream-5-0",
+        model,
         prompt,
+        aspectRatio: params.aspectRatio,
+        resolution: params.resolution,
       });
       await saveAssetPatch(kind, id, {
         source: "ai",
         status: "ready",
+        aspectRatio: params.aspectRatio,
+        resolution: params.resolution,
         mediaType: "image",
         mediaUrl: imageUrl,
       });
@@ -2255,7 +4184,48 @@ const StoryAgentPage = ({
     }
   };
 
-  const splitScript = async () => {
+  const identifyScriptAssets = async () => {
+    if (!agent.scriptTitle.trim()) {
+      toast.error("请先填写剧本标题");
+      return;
+    }
+    if (!agent.scriptContent.trim()) {
+      toast.error("请先输入剧本内容");
+      return;
+    }
+
+    setSplitting(true);
+    try {
+      const result = await identifyAssetsWithAgent({
+        title: agent.scriptTitle,
+        scriptCategory: agent.scriptCategory,
+        scriptContent: agent.scriptContent,
+        systemPrompt: agent.assetSystemPrompt,
+      });
+      const nextAssets = mergeIdentifiedAssets(agent.assets, result.assets);
+      const identifiedCount =
+        result.assets.role.length +
+        result.assets.scene.length +
+        result.assets.prop.length;
+      await saveAgentWithStep({ ...agent, assets: nextAssets }, "assets");
+      toast.success(`已识别 ${identifiedCount} 个资产`);
+    } catch (error) {
+      console.error("[Story] identify script assets failed", error);
+      toast.error("识别失败");
+    } finally {
+      setSplitting(false);
+    }
+  };
+
+  const requestIdentifyScriptAssets = () => {
+    if (isStepUnlocked("assets", agent.unlockedStep)) {
+      setNextConfirmTarget("identify-assets");
+      return;
+    }
+    void identifyScriptAssets();
+  };
+
+  const proceedToShots = async () => {
     if (!agent.scriptTitle.trim()) {
       toast.error("请先填写剧本标题");
       return;
@@ -2275,39 +4245,62 @@ const StoryAgentPage = ({
         maxShots: agent.maxShots,
         splitAssist: agent.splitAssist,
         scriptContent: agent.scriptContent,
+        systemPrompt: agent.splitSystemPrompt,
+        assets: agent.assets,
         defaults,
       });
-      const nextAssets = mergeIdentifiedAssets(agent.assets, result.assets);
       const nextShots = bindShotAssetIdsByName(
         result.shots,
         result.shotAssetNames,
-        nextAssets,
+        agent.assets,
       );
-      const identifiedCount =
-        result.assets.role.length +
-        result.assets.scene.length +
-        result.assets.prop.length;
-      await saveAgentWithStep(
-        { ...agent, shots: nextShots, assets: nextAssets },
-        "assets",
-      );
-      toast.success(
-        `已生成 ${nextShots.length} 条分镜，识别 ${identifiedCount} 个资产`,
-      );
+      await saveAgentWithStep({ ...agent, shots: nextShots }, "shots");
+      toast.success(`已生成 ${nextShots.length} 条分镜`);
     } catch (error) {
       console.error("[Story] split script failed", error);
-      toast.error("拆分剧本失败");
+      toast.error("拆分失败");
     } finally {
       setSplitting(false);
     }
   };
 
-  const proceedToShots = async () => {
-    await saveAgentWithStep(agent, "shots");
+  const requestProceedToShots = () => {
+    if (isStepUnlocked("shots", agent.unlockedStep)) {
+      setNextConfirmTarget("split-shots");
+      return;
+    }
+    void proceedToShots();
+  };
+
+  const confirmNextAction = () => {
+    const target = nextConfirmTarget;
+    setNextConfirmTarget(null);
+
+    if (target === "identify-assets") {
+      void identifyScriptAssets();
+      return;
+    }
+
+    if (target === "split-shots") {
+      void proceedToShots();
+    }
   };
 
   const proceedToVideoEdit = async () => {
     await saveAgentWithStep(agent, "video-edit");
+  };
+
+  const saveSystemPrompt = async (
+    target: StorySystemPromptTarget,
+    value: string,
+  ) => {
+    const nextAgent =
+      target === "asset"
+        ? { ...agent, assetSystemPrompt: value }
+        : { ...agent, splitSystemPrompt: value };
+    await saveAgent(nextAgent);
+    setEditingSystemPrompt(null);
+    toast.success("系统提示词已保存");
   };
 
   const updateShot = (id: string, patch: Partial<StoryboardShot>) => {
@@ -2464,6 +4457,35 @@ const StoryAgentPage = ({
     return items;
   };
 
+  const getShotAssetsWithBoundAudio = (
+    shot: StoryboardShot,
+  ): StoryboardAssetItem[] => {
+    const assetMap = new Map(
+      [
+        ...agent.assets.role,
+        ...agent.assets.scene,
+        ...agent.assets.prop,
+        ...agent.assets.audio,
+      ].map((asset) => [asset.id, asset]),
+    );
+    const selectedAssets = shot.assetIds
+      .map((id) => assetMap.get(id))
+      .filter(Boolean) as StoryboardAssetItem[];
+    const selectedAssetIds = new Set(selectedAssets.map((asset) => asset.id));
+
+    for (const asset of selectedAssets) {
+      for (const audioAssetId of asset.audioAssetIds || []) {
+        if (selectedAssetIds.has(audioAssetId)) continue;
+        const audioAsset = assetMap.get(audioAssetId);
+        if (!audioAsset) continue;
+        selectedAssets.push(audioAsset);
+        selectedAssetIds.add(audioAssetId);
+      }
+    }
+
+    return selectedAssets;
+  };
+
   const pollStoryVideoTask = async (taskId: string, isSeedance20: boolean) => {
     for (let attempt = 0; attempt < 90; attempt += 1) {
       await wait(4000);
@@ -2546,17 +4568,7 @@ const StoryAgentPage = ({
 
     updateShot(shot.id, { videoStatus: "generating" });
     try {
-      const assetMap = new Map(
-        [
-          ...agent.assets.role,
-          ...agent.assets.scene,
-          ...agent.assets.prop,
-          ...agent.assets.audio,
-        ].map((asset) => [asset.id, asset]),
-      );
-      const selectedAssets = shot.assetIds
-        .map((id) => assetMap.get(id))
-        .filter(Boolean) as StoryboardAssetItem[];
+      const selectedAssets = getShotAssetsWithBoundAudio(shot);
       const referenceItems = await buildShotReferenceItems(selectedAssets);
       const mode = pickStoryVideoMode(
         shot.modelInfo.videoModel,
@@ -2656,6 +4668,116 @@ const StoryAgentPage = ({
     }
   };
 
+  const resolveShotVideoUrl = async (shot: StoryboardShot) => {
+    if (shot.video?.url) return shot.video.url;
+    if (!shot.video?.localPath) return "";
+
+    const buffer = await storyboardStorage.readBinary(shot.video.localPath);
+    if (!buffer) {
+      throw new Error("local video file not found");
+    }
+
+    const extension = getPathExtension(shot.video.localPath, "mp4");
+    const file = new File([buffer], `shot-${shot.order}.${extension}`, {
+      type: getMimeTypeByPath(shot.video.localPath, "video/mp4"),
+    });
+    const uploaded = await uploadFileToOSS(file);
+    if (!uploaded.url) {
+      throw new Error("upload video to oss failed");
+    }
+    return uploaded.url;
+  };
+
+  const waitForSubtitleRemovalResult = async (
+    taskId: string,
+    shotId: string,
+    accessUrl: string,
+  ) => {
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      await wait(10000);
+      const response = await getVideoRemovalStatus(taskId);
+      const { taskStatus } = extractTaskStatusInfo(response);
+
+      if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
+        await saveShotPatch(shotId, {
+          videoStatus: "ready",
+          video: { url: accessUrl },
+        });
+        await useUserStore.getState().fetchBalanceInfo();
+        return;
+      }
+
+      if (["FAILED", "FAIL", "ERROR"].includes(taskStatus)) {
+        throw new Error("去字幕失败");
+      }
+    }
+
+    throw new Error("去字幕任务超时");
+  };
+
+  const removeShotSubtitles = async (
+    shot: StoryboardShot,
+    rect: WuhenRect,
+    _requiredPoints: number,
+  ) => {
+    if (removingSubtitleShotId) return;
+
+    setRemovingSubtitleShotId(shot.id);
+    await saveShotPatch(shot.id, { videoStatus: "generating" });
+    try {
+      const videoUrl = await resolveShotVideoUrl(shot);
+      if (!videoUrl) {
+        throw new Error("当前分镜还没有视频素材");
+      }
+
+      const putUrlResponse = await getUploadOssPutUrl({
+        blob_type: "video",
+        ext: "mp4",
+        content_type: "video/mp4",
+        ttl: 43200,
+      });
+      const target = putUrlResponse?.data ?? putUrlResponse;
+      const accessUrl =
+        target?.access_url || target?.put_url?.split("?")[0] || "";
+
+      if (!target?.put_url || !accessUrl) {
+        throw new Error("未获取到预签名上传地址");
+      }
+
+      const response: any = await videoRemoval({
+        video_url: videoUrl,
+        method: "sel_area",
+        rect,
+        upload_url: target.put_url,
+        upload_headers: target.headers,
+        model: "video_removal_std",
+      });
+      const { taskId, taskStatus } = extractTaskStatusInfo(response);
+
+      if (!taskId) {
+        throw new Error("创建去字幕任务失败");
+      }
+
+      setRemovingSubtitleShot(null);
+      if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
+        await saveShotPatch(shot.id, {
+          videoStatus: "ready",
+          video: { url: accessUrl },
+        });
+        await useUserStore.getState().fetchBalanceInfo();
+      } else {
+        await waitForSubtitleRemovalResult(taskId, shot.id, accessUrl);
+      }
+      toast.success("去字幕结果已写回当前分镜");
+    } catch (error) {
+      console.error("[Story] remove shot subtitles failed", error);
+      await saveShotPatch(shot.id, { videoStatus: "failed" });
+      toast.error(error instanceof Error ? error.message : "去字幕失败");
+    } finally {
+      setRemovingSubtitleShotId(null);
+    }
+  };
+
   const deleteShotVideo = async (shot: StoryboardShot) => {
     await saveShotPatch(shot.id, {
       video: undefined,
@@ -2663,6 +4785,313 @@ const StoryAgentPage = ({
       videoEdit: undefined,
     });
     toast.success("视频素材已删除");
+  };
+
+  const exportToJianying = async () => {
+    if (!settings.jianyingDraftsPath) {
+      toast.error("请先在设置的数据与版本中配置剪映草稿路径");
+      return;
+    }
+
+    const storage = window.storage;
+    if (!storage?.writeRawFile || !storage.downloadMedia) {
+      toast.error("当前环境不支持写入剪映草稿");
+      return;
+    }
+
+    const videoShots = agent.shots.filter(
+      (shot) => shot.video?.localPath || shot.video?.url,
+    );
+    if (videoShots.length === 0) {
+      toast.error("暂无可导出的已生成视频");
+      return;
+    }
+
+    setExportingJianying(true);
+    try {
+      const draftName = sanitizeFileName(
+        `${agent.scriptTitle || "剧本 Agent"}-${new Date()
+          .toLocaleString("zh-CN", {
+            hour12: false,
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+          .replace(/[/:]/g, "-")}`,
+        "剧本 Agent",
+      );
+      const draftId = createJianyingId().toUpperCase();
+      const draftRoot = draftName;
+      const resourcesRoot = joinDraftRelativePath(draftRoot, "Resources", "media");
+      const exportedVideos: JianyingExportVideo[] = [];
+
+      for (const shot of videoShots) {
+        const extension = getVideoExtension(shot);
+        const fileName = sanitizeFileName(
+          `shot-${String(shot.order).padStart(2, "0")}.${extension}`,
+          `${shot.id}.${extension}`,
+        );
+        const relativePath = joinDraftRelativePath(resourcesRoot, fileName);
+
+        if (shot.video?.localPath) {
+          const buffer = await storyboardStorage.readBinary(shot.video.localPath);
+          if (!buffer) {
+            throw new Error(`分镜 ${shot.order} 的本地视频不存在`);
+          }
+          await writeDraftBinaryFile(
+            settings.jianyingDraftsPath,
+            relativePath,
+            buffer,
+          );
+        } else if (shot.video?.url) {
+          const result = await storage.downloadMedia(
+            settings.jianyingDraftsPath,
+            shot.video.url,
+            relativePath,
+          );
+          if (!result.success) {
+            throw new Error(result.error || `下载分镜 ${shot.order} 视频失败`);
+          }
+        }
+
+        exportedVideos.push({
+          fileName,
+          absolutePath: toWindowsPath(settings.jianyingDraftsPath, relativePath),
+          durationUs: Math.max(1, shot.modelInfo.duration || 5) * 1_000_000,
+        });
+      }
+
+      const draftPath = toWindowsPath(settings.jianyingDraftsPath, draftRoot);
+      const { content, meta, nowSeconds, nowUs } = createJianyingDraftFiles({
+        draftId,
+        draftName,
+        draftPath,
+        draftsRootPath: settings.jianyingDraftsPath,
+        videos: exportedVideos,
+      });
+
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(draftRoot, "draft_content.json"),
+        content,
+      );
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(
+          draftRoot,
+          "Timelines",
+          draftId,
+          "draft_content.json",
+        ),
+        content,
+      );
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(draftRoot, "draft_meta_info.json"),
+        meta,
+      );
+      await writeDraftTextFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(draftRoot, "draft_settings"),
+        `[General]\ncloud_last_modify_platform=windows\ndraft_create_time=${nowSeconds}\ndraft_last_edit_time=${nowSeconds}\nreal_edit_seconds=0\nreal_edit_keys=1\n`,
+      );
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(draftRoot, "draft_agency_config.json"),
+        {
+          is_auto_agency_enabled: false,
+          is_auto_agency_popup: false,
+          is_single_agency_mode: false,
+          marterials: null,
+          use_converter: false,
+          video_resolution: 1080,
+        },
+      );
+      await writeDraftTextFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(draftRoot, "draft_biz_config.json"),
+        "",
+      );
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(draftRoot, "draft_virtual_store.json"),
+        { draft_materials: [], draft_virtual_store: [] },
+      );
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(draftRoot, "attachment_editing.json"),
+        { editing_draft: { version: "1.0.0" } },
+      );
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(
+          draftRoot,
+          "Timelines",
+          draftId,
+          "attachment_editing.json",
+        ),
+        { editing_draft: { version: "1.0.0" } },
+      );
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(draftRoot, "attachment_pc_common.json"),
+        {
+          ai_packaging_infos: [],
+          commercial_music_category_ids: [],
+          pc_feature_flag: 0,
+          recognize_tasks: [],
+          template_item_infos: [],
+          unlock_template_ids: [],
+        },
+      );
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(
+          draftRoot,
+          "Timelines",
+          draftId,
+          "attachment_pc_common.json",
+        ),
+        {
+          ai_packaging_infos: [],
+          commercial_music_category_ids: [],
+          pc_feature_flag: 0,
+          recognize_tasks: [],
+          template_item_infos: [],
+          unlock_template_ids: [],
+        },
+      );
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(draftRoot, "performance_opt_info.json"),
+        { manual_cancle_precombine_segs: null, need_auto_precombine_segs: null },
+      );
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(draftRoot, "timeline_layout.json"),
+        {
+          activeTimeline: draftId,
+          dockItems: [
+            {
+              dockIndex: 0,
+              ratio: 1,
+              timelineIds: [draftId],
+              timelineNames: ["时间线 1"],
+            },
+          ],
+          layoutOrientation: 1,
+        },
+      );
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(draftRoot, "Timelines", "project.json"),
+        {
+          config: {
+            color_space: -1,
+            render_index_track_mode_on: false,
+            use_float_render: false,
+          },
+          create_time: nowUs,
+          id: createJianyingId().toUpperCase(),
+          main_timeline_id: draftId,
+          timelines: [
+            {
+              create_time: nowUs,
+              id: draftId,
+              is_marked_delete: false,
+              name: "时间线 1",
+              update_time: nowUs,
+            },
+          ],
+          update_time: nowUs,
+          version: 0,
+        },
+      );
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(
+          draftRoot,
+          "common_attachment",
+          "attachment_pc_timeline.json",
+        ),
+        {
+          reference_lines_config: {
+            horizontal_lines: [],
+            is_lock: false,
+            is_visible: false,
+            vertical_lines: [],
+          },
+          safe_area_type: 0,
+        },
+      );
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(
+          draftRoot,
+          "Timelines",
+          draftId,
+          "common_attachment",
+          "attachment_pc_timeline.json",
+        ),
+        {
+          reference_lines_config: {
+            horizontal_lines: [],
+            is_lock: false,
+            is_visible: false,
+            vertical_lines: [],
+          },
+          safe_area_type: 0,
+        },
+      );
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(
+          draftRoot,
+          "common_attachment",
+          "attachment_script_video.json",
+        ),
+        {
+          script_video: {
+            attachment_valid: false,
+            language: "",
+            parts: [],
+            sync_subtitle: false,
+            version: "1.0.0",
+          },
+        },
+      );
+      await writeDraftJsonFile(
+        settings.jianyingDraftsPath,
+        joinDraftRelativePath(
+          draftRoot,
+          "Timelines",
+          draftId,
+          "common_attachment",
+          "attachment_script_video.json",
+        ),
+        {
+          script_video: {
+            attachment_valid: false,
+            language: "",
+            parts: [],
+            sync_subtitle: false,
+            version: "1.0.0",
+          },
+        },
+      );
+
+      toast.success(
+        `已导出 ${exportedVideos.length} 个视频到剪映草稿：${draftName}`,
+      );
+    } catch (error) {
+      console.error("[Story] export Jianying draft failed", error);
+      toast.error(
+        error instanceof Error ? error.message : "导出剪映草稿失败",
+      );
+    } finally {
+      setExportingJianying(false);
+    }
   };
 
   const saveVideoEdit = async (
@@ -2680,6 +5109,7 @@ const StoryAgentPage = ({
       return;
     }
     setSelectingAssetDetailTarget(null);
+    setSelectingAudioBindTarget(null);
     setSelectingAssetShotId(shotId);
   };
 
@@ -2692,20 +5122,34 @@ const StoryAgentPage = ({
       return;
     }
     setSelectingAssetShotId(null);
+    setSelectingAudioBindTarget(null);
     setSelectingAssetDetailTarget({ kind, id });
+  };
+
+  const openAssetLibraryForAudioBind = (
+    kind: StoryboardAssetKind,
+    id: string,
+  ) => {
+    if (!settings.assetStoragePath) {
+      toast.error("请先在资源管理中设置资产库路径");
+      return;
+    }
+    setSelectingAssetShotId(null);
+    setSelectingAssetDetailTarget(null);
+    setSelectingAudioBindTarget({ kind, id });
   };
 
   const handleUseAssetDetailLibraryAssets = async (assets: AssetRecord[]) => {
     if (!selectingAssetDetailTarget || assets.length === 0) return;
 
+    const currentAgent = agentRef.current;
+    const { kind, id } = selectingAssetDetailTarget;
     const usableAssets = assets.filter((asset) => asset.mediaType !== "audio");
     if (usableAssets.length === 0) {
-      toast.error("资产详情仅支持图片或视频资产");
+      toast.error("角色、场景和道具仅支持图片或视频资产");
       return;
     }
 
-    const currentAgent = agentRef.current;
-    const { kind, id } = selectingAssetDetailTarget;
     const currentList = currentAgent.assets[kind] || [];
     const targetIndex = currentList.findIndex((item) => item.id === id);
 
@@ -2755,6 +5199,119 @@ const StoryAgentPage = ({
     });
     setSelectingAssetDetailTarget(null);
     toast.success(`已导入 ${usableAssets.length} 个资产`);
+  };
+
+  const handleBindAudioAssets = async (assets: AssetRecord[]) => {
+    if (!selectingAudioBindTarget || assets.length === 0) return;
+
+    const audioRecords = assets.filter((asset) => asset.mediaType === "audio");
+    if (audioRecords.length === 0) {
+      toast.error("请选择音频资产");
+      return;
+    }
+
+    const currentAgent = agentRef.current;
+    const { kind, id } = selectingAudioBindTarget;
+    const targetList = currentAgent.assets[kind] || [];
+    const target = targetList.find((item) => item.id === id);
+
+    if (!target) {
+      setSelectingAudioBindTarget(null);
+      toast.error("当前资产项不存在");
+      return;
+    }
+
+    const nextAudioAssets = [...currentAgent.assets.audio];
+    const boundIds = new Set<string>(target.audioAssetIds || []);
+
+    for (const asset of audioRecords) {
+      const existing = nextAudioAssets.find((item) => item.assetId === asset.id);
+      if (existing) {
+        boundIds.add(existing.id);
+        continue;
+      }
+
+      const item = createLibraryStoryboardAsset(
+        asset,
+        "audio",
+        settings.assetStoragePath,
+      );
+      nextAudioAssets.push(item);
+      boundIds.add(item.id);
+    }
+
+    await saveAgent({
+      ...currentAgent,
+      assets: {
+        ...currentAgent.assets,
+        audio: nextAudioAssets,
+        [kind]: targetList.map((item) =>
+          item.id === id
+            ? { ...item, audioAssetIds: Array.from(boundIds) }
+            : item,
+        ),
+      },
+    });
+    setSelectingAudioBindTarget(null);
+    toast.success(`已绑定 ${audioRecords.length} 个音效`);
+  };
+
+  const bindLocalAudioAsset = async (
+    kind: StoryboardAssetKind,
+    id: string,
+    file: File,
+  ) => {
+    if (getMediaTypeFromFile(file) !== "audio") {
+      toast.error("请选择音频文件");
+      return;
+    }
+
+    const currentAgent = agentRef.current;
+    const targetList = currentAgent.assets[kind] || [];
+    const target = targetList.find((item) => item.id === id);
+
+    if (!target) {
+      toast.error("当前资产项不存在");
+      return;
+    }
+
+    const audioId = createId("asset_audio");
+    const extension = getFileExtension(file, "mp3");
+    const localPath = `storyboard/projects/${projectId}/snippets/${snippetId}/assets/audio/${audioId}.${extension}`;
+
+    try {
+      await storyboardStorage.saveBinary(localPath, await file.arrayBuffer());
+      const audioItem: StoryboardAssetItem = {
+        id: audioId,
+        kind: "audio",
+        name: file.name,
+        prompt: "",
+        source: "upload",
+        status: "ready",
+        mediaType: "audio",
+        localPath,
+      };
+      const nextAudioAssetIds = Array.from(
+        new Set([...(target.audioAssetIds || []), audioId]),
+      );
+
+      await saveAgent({
+        ...currentAgent,
+        assets: {
+          ...currentAgent.assets,
+          audio: [...currentAgent.assets.audio, audioItem],
+          [kind]: targetList.map((item) =>
+            item.id === id
+              ? { ...item, audioAssetIds: nextAudioAssetIds }
+              : item,
+          ),
+        },
+      });
+      toast.success("本地音效已绑定");
+    } catch (error) {
+      console.error("[Story] bind local audio failed", error);
+      toast.error("绑定本地音效失败");
+    }
   };
 
   const handleUseLibraryAssets = async (assets: AssetRecord[]) => {
@@ -2872,13 +5429,23 @@ const StoryAgentPage = ({
                   输入剧本
                 </h2>
                 <p className="mt-1 text-xs text-white/40">
-                  填写剧本信息后，点击下一步调用大模型拆分生成分镜表格。
+                  填写剧本信息后，点击下一步调用大模型识别角色、场景和道具。
                 </p>
               </div>
-              <Button variant="blue" onClick={splitScript} loading={splitting}>
-                <WandSparkles size={15} />
-                下一步
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button onClick={() => setEditingSystemPrompt("asset")}>
+                  <Bot size={15} />
+                  系统提示词
+                </Button>
+                <Button
+                  variant="blue"
+                  onClick={requestIdentifyScriptAssets}
+                  loading={splitting}
+                >
+                  <WandSparkles size={15} />
+                  下一步
+                </Button>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <label>
@@ -2921,7 +5488,6 @@ const StoryAgentPage = ({
                   onChange={(event) =>
                     patchAgent({ promptPrefix: event.target.value })
                   }
-                  placeholder="默认：全程无字幕"
                 />
               </label>
               <label>
@@ -2934,7 +5500,6 @@ const StoryAgentPage = ({
                   onChange={(event) =>
                     patchAgent({ promptSuffix: event.target.value })
                   }
-                  placeholder="默认：现实写实风格"
                 />
               </label>
               <label className="col-span-2">
@@ -2984,14 +5549,25 @@ const StoryAgentPage = ({
                     资产详情
                   </h2>
                   <p className="mt-1 text-xs text-white/40">
-                    角色、场景、道具按列管理，每列是独立资产列表。
+                    角色、场景、道具按列管理，点击下一步调用大模型拆分分镜。
                   </p>
                 </div>
-                <Button variant="blue" onClick={proceedToShots}>
-                  下一步
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button onClick={() => setEditingSystemPrompt("split")}>
+                    <Bot size={15} />
+                    系统提示词
+                  </Button>
+                  <Button
+                    variant="blue"
+                    onClick={requestProceedToShots}
+                    loading={splitting}
+                  >
+                  <WandSparkles size={15} />
+                    下一步
+                  </Button>
+                </div>
               </div>
-              <div className="grid gap-4 lg:grid-cols-3">
+                <div className="grid gap-4 lg:grid-cols-3">
                 {assetDetailKinds.map((kind) => (
                   <div
                     key={kind.id}
@@ -3018,7 +5594,10 @@ const StoryAgentPage = ({
                             item={item}
                             index={index}
                             imageModelOptions={visibleImageModels}
+                            audioAssets={agent.assets.audio}
                             defaultImageModel={settings.defaultImageModel}
+                            defaultImageSize={settings.defaultImageSize}
+                            defaultImageResolution={settings.defaultImageResolution}
                             onChange={(patch) =>
                               updateAsset(kind.id, item.id, patch)
                             }
@@ -3027,6 +5606,12 @@ const StoryAgentPage = ({
                             }
                             onUseLibrary={() =>
                               openAssetLibraryForAssetDetail(kind.id, item.id)
+                            }
+                            onBindAudio={() =>
+                              openAssetLibraryForAudioBind(kind.id, item.id)
+                            }
+                            onBindLocalAudio={(file) =>
+                              void bindLocalAudioAsset(kind.id, item.id, file)
                             }
                             onGenerate={() =>
                               void generateAssetWithAi(kind.id, item.id)
@@ -3060,9 +5645,9 @@ const StoryAgentPage = ({
                 </Button>
               </div>
             </div>
-            <div className="overflow-x-auto rounded-lg border border-white/8">
+            <div className="max-h-[calc(100vh-260px)] overflow-auto rounded-lg border border-white/8">
               <table className="min-w-[1180px] w-full table-fixed">
-                <thead className="bg-black/30 text-xs text-white/45">
+                <thead className="sticky top-0 z-10 bg-[#171719] text-xs text-white/45">
                   <tr>
                     <th className="w-16 px-3 py-3 text-center">序号</th>
                     <th className="w-72 px-3 py-3 text-left">剧本</th>
@@ -3087,9 +5672,7 @@ const StoryAgentPage = ({
                       <ShotRow
                         key={shot.id}
                         shot={shot}
-                        selectedAssets={shot.assetIds
-                          .map((id) => agentAssetMap.get(id))
-                          .filter(Boolean) as StoryboardAssetItem[]}
+                        selectedAssets={getShotAssetsWithBoundAudio(shot)}
                         onChange={(patch) => updateShot(shot.id, patch)}
                         onSelectAssets={() => openAssetLibraryForShot(shot.id)}
                         onRemoveAsset={(assetId) =>
@@ -3109,7 +5692,11 @@ const StoryAgentPage = ({
           {activeStep === "video-edit" ? (
             <VideoEditTable
               shots={agent.shots}
+              exporting={exportingJianying}
+              removingSubtitleShotId={removingSubtitleShotId}
+              onExport={() => void exportToJianying()}
               onDownload={(shot) => void downloadShotVideo(shot)}
+              onRemoveSubtitles={setRemovingSubtitleShot}
               onEdit={setEditingShot}
               onDelete={(shot) => void deleteShotVideo(shot)}
             />
@@ -3120,6 +5707,39 @@ const StoryAgentPage = ({
               shot={editingShot}
               onClose={() => setEditingShot(null)}
               onSave={(videoEdit) => void saveVideoEdit(editingShot.id, videoEdit)}
+            />
+          ) : null}
+
+          {nextConfirmTarget ? (
+            <StoryNextConfirmDialog
+              target={nextConfirmTarget}
+              running={splitting}
+              onCancel={() => setNextConfirmTarget(null)}
+              onConfirm={confirmNextAction}
+            />
+          ) : null}
+
+          {editingSystemPrompt ? (
+            <SystemPromptDialog
+              title={
+                editingSystemPrompt === "asset"
+                  ? "资产识别系统提示词"
+                  : "分镜拆分系统提示词"
+              }
+              value={
+                editingSystemPrompt === "asset"
+                  ? agent.assetSystemPrompt
+                  : agent.splitSystemPrompt
+              }
+              defaultValue={
+                editingSystemPrompt === "asset"
+                  ? DEFAULT_ASSET_SYSTEM_PROMPT
+                  : DEFAULT_SPLIT_SYSTEM_PROMPT
+              }
+              onClose={() => setEditingSystemPrompt(null)}
+              onSave={(value) =>
+                void saveSystemPrompt(editingSystemPrompt, value)
+              }
             />
           ) : null}
 
@@ -3136,6 +5756,18 @@ const StoryAgentPage = ({
             />
           ) : null}
 
+          {removingSubtitleShot ? (
+            <StorySubtitleRemovalDialog
+              open
+              shot={removingSubtitleShot}
+              isSubmitting={removingSubtitleShotId === removingSubtitleShot.id}
+              onClose={() => setRemovingSubtitleShot(null)}
+              onSubmit={(rect, requiredPoints) =>
+                removeShotSubtitles(removingSubtitleShot, rect, requiredPoints)
+              }
+            />
+          ) : null}
+
           {selectingAssetDetailTarget && settings.assetStoragePath ? (
             <AssetLibraryDialog
               open
@@ -3147,6 +5779,19 @@ const StoryAgentPage = ({
               onUseMany={(assets) =>
                 void handleUseAssetDetailLibraryAssets(assets)
               }
+            />
+          ) : null}
+
+          {selectingAudioBindTarget && settings.assetStoragePath ? (
+            <AssetLibraryDialog
+              open
+              basePath={settings.assetStoragePath}
+              projectId={null}
+              nodes={[]}
+              onClose={() => setSelectingAudioBindTarget(null)}
+              onUse={(asset) => void handleBindAudioAssets([asset])}
+              onUseMany={(assets) => void handleBindAudioAssets(assets)}
+              hidePreviewPane
             />
           ) : null}
 
@@ -3173,21 +5818,35 @@ const getShotConfirmedMaterial = (shot: StoryboardShot) =>
 
 const VideoEditTable = ({
   shots,
+  exporting,
+  removingSubtitleShotId,
+  onExport,
   onDownload,
+  onRemoveSubtitles,
   onEdit,
   onDelete,
 }: {
   shots: StoryboardShot[];
+  exporting: boolean;
+  removingSubtitleShotId: string | null;
+  onExport: () => void;
   onDownload: (shot: StoryboardShot) => void;
+  onRemoveSubtitles: (shot: StoryboardShot) => void;
   onEdit: (shot: StoryboardShot) => void;
   onDelete: (shot: StoryboardShot) => void;
 }) => (
   <section className="rounded-xl border border-white/10 bg-[#111113] p-5">
-    <div className="mb-5">
-      <h2 className="text-base font-medium text-white/90">视频编辑</h2>
-      <p className="mt-1 text-xs text-white/40">
-        汇总已生成的视频素材，支持下载、抽屉编辑和删除素材引用。
-      </p>
+    <div className="mb-5 flex items-start justify-between gap-3">
+      <div>
+        <h2 className="text-base font-medium text-white/90">视频编辑</h2>
+        <p className="mt-1 text-xs text-white/40">
+          汇总已生成的视频素材，支持下载、抽屉编辑和删除素材引用。
+        </p>
+      </div>
+      <Button size="sm" variant="blue" onClick={onExport} disabled={exporting}>
+        {exporting ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+        导出到剪映
+      </Button>
     </div>
     <div className="overflow-x-auto rounded-lg border border-white/8">
       <table className="min-w-[980px] w-full table-fixed">
@@ -3245,6 +5904,18 @@ const VideoEditTable = ({
                       </Button>
                       <Button
                         size="sm"
+                        onClick={() => onRemoveSubtitles(shot)}
+                        disabled={!hasVideo || removingSubtitleShotId === shot.id}
+                      >
+                        {removingSubtitleShotId === shot.id ? (
+                          <Loader2 className="animate-spin" />
+                        ) : (
+                          <Eraser size={13} />
+                        )}
+                        去字幕
+                      </Button>
+                      <Button
+                        size="sm"
                         onClick={() => onDelete(shot)}
                         disabled={!hasVideo}
                       >
@@ -3262,6 +5933,126 @@ const VideoEditTable = ({
     </div>
   </section>
 );
+
+const StoryNextConfirmDialog = ({
+  target,
+  running,
+  onCancel,
+  onConfirm,
+}: {
+  target: StoryNextConfirmTarget;
+  running: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) => {
+  const isIdentify = target === "identify-assets";
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <button
+        type="button"
+        aria-label="取消操作"
+        className="absolute inset-0 cursor-default"
+        onClick={() => {
+          if (!running) onCancel();
+        }}
+      />
+      <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-[#121214] shadow-2xl">
+        <div className="flex items-center justify-between border-b border-white/5 p-5">
+          <h2 className="text-lg font-semibold text-white/90">
+            {isIdentify ? "重新识别资产" : "重新拆分分镜"}
+          </h2>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={running}
+            className="cursor-pointer text-white/50 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="p-5">
+          <p className="text-sm leading-6 text-white/60">
+            {isIdentify
+              ? "当前片段已经识别过资产。确认后会再次调用大模型识别角色、场景和道具，并把新识别到的资产合并到资产详情。"
+              : "当前片段已经拆分过分镜。确认后会再次调用大模型拆分分镜，并用新的分镜结果替换当前分镜列表。"}
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-white/5 bg-black/20 p-5">
+          <Button onClick={onCancel} disabled={running}>
+            取消
+          </Button>
+          <Button variant="blue" onClick={onConfirm} loading={running}>
+            确认
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SystemPromptDialog = ({
+  title,
+  value,
+  defaultValue,
+  onClose,
+  onSave,
+}: {
+  title: string;
+  value: string;
+  defaultValue: string;
+  onClose: () => void;
+  onSave: (value: string) => void;
+}) => {
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <button
+        type="button"
+        aria-label="关闭系统提示词"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+      />
+      <div className="relative z-10 flex h-[min(620px,86vh)] w-[min(760px,94vw)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#101012] shadow-2xl">
+        <div className="flex items-start justify-between border-b border-white/8 px-5 py-4">
+          <div>
+            <h3 className="text-base font-medium text-white/90">{title}</h3>
+            <p className="mt-1 text-xs text-white/40">
+              保存后会用于当前步骤的下一次 AI 调用。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 p-5">
+          <textarea
+            className={`${textAreaClass} h-full`}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+        </div>
+        <div className="flex justify-between gap-3 border-t border-white/5 bg-black/20 p-5">
+          <Button onClick={() => setDraft(defaultValue)}>恢复默认</Button>
+          <div className="flex gap-3">
+            <Button onClick={onClose}>取消</Button>
+            <Button variant="blue" onClick={() => onSave(draft)}>
+              保存
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const VideoEditDrawer = ({
   shot,
@@ -3611,7 +6402,11 @@ const ShotPromptPanel = ({
         <div className="mb-3">
           <ReferenceThumbnails
             items={mentionItems}
-            onRemove={(item) => onRemoveAsset(item.id)}
+            onRemove={(item) => {
+              if (shot.assetIds.includes(item.id)) {
+                onRemoveAsset(item.id);
+              }
+            }}
           />
         </div>
       ) : (
@@ -3747,16 +6542,22 @@ const ShotRow = ({
                           : "音效"}
                   </div>
                 </div>
-                <Button
-                  className="h-7 w-7 self-start px-0 text-red-200 hover:bg-red-500/10 hover:text-red-100"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => onRemoveAsset(asset.id)}
-                  title="移除当前分镜资产"
-                  aria-label="移除当前分镜资产"
-                >
-                  <Trash2 size={13} />
-                </Button>
+                {shot.assetIds.includes(asset.id) ? (
+                  <Button
+                    className="h-7 w-7 self-start px-0 text-red-200 hover:bg-red-500/10 hover:text-red-100"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onRemoveAsset(asset.id)}
+                    title="移除当前分镜资产"
+                    aria-label="移除当前分镜资产"
+                  >
+                    <Trash2 size={13} />
+                  </Button>
+                ) : (
+                  <span className="self-start rounded-full border border-[#B43FEB]/20 bg-[#B43FEB]/10 px-2 py-1 text-[10px] text-[#E9C7FF]">
+                    绑定音效
+                  </span>
+                )}
               </div>
             ))
           )}

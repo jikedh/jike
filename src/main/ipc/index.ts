@@ -1,4 +1,5 @@
 export { registerDebugHandlers } from "./debug";
+export { registerDatabaseHandlers } from "./database";
 export { registerDownloadHandlers } from "./download";
 export { registerAdobe2ApiHandlers } from "./adobe2api";
 export { registerGrok2ApiHandlers } from "./grok2api";

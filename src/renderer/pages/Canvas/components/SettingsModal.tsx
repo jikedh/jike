@@ -171,6 +171,7 @@ export const SettingsModal = ({
     edgeAnimationEnabled,
     storagePath,
     assetStoragePath,
+    jianyingDraftsPath,
     ximuCardCode,
     adobeChannelModelsEnabled,
     ximuChannelModelsEnabled,
@@ -185,6 +186,7 @@ export const SettingsModal = ({
     setEdgeAnimationEnabled,
     setStoragePath,
     setAssetStoragePath,
+    setJianyingDraftsPath,
     setXimuCardCode,
     setAdobeChannelModelsEnabled,
     setXimuChannelModelsEnabled,
@@ -589,6 +591,20 @@ export const SettingsModal = ({
     if (selectedPath && selectedPath !== assetStoragePath) {
       setAssetStoragePath(selectedPath);
       success("资产存储路径已更新");
+    }
+  };
+
+  const handleSelectJianyingDraftsPath = async () => {
+    if (!window.storage) {
+      error("存储功能不可用");
+      return;
+    }
+
+    const selectedPath = await window.storage.selectDirectory();
+
+    if (selectedPath && selectedPath !== jianyingDraftsPath) {
+      setJianyingDraftsPath(selectedPath);
+      success("剪映草稿路径已更新");
     }
   };
 
@@ -1599,6 +1615,27 @@ export const SettingsModal = ({
                             size="sm"
                             variant="blue"
                             onClick={handleSelectAssetStoragePath}
+                          >
+                            <IconFolder size={14} />
+                            选择路径
+                          </Button>
+                        </div>
+                      </section>
+                      <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                        <div className="mb-3 text-sm font-medium text-white/80">
+                          剪映草稿路径
+                        </div>
+                        <div className="text-xs text-white/40 mb-3">
+                          导出到剪映时会在此目录下创建剪映草稿工程
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-sm text-white/60 truncate">
+                            {jianyingDraftsPath || "未设置"}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="blue"
+                            onClick={handleSelectJianyingDraftsPath}
                           >
                             <IconFolder size={14} />
                             选择路径

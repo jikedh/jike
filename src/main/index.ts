@@ -17,6 +17,7 @@ import icon from "../../resources/icon.png?asset";
 // 导入 IPC handlers
 import {
   registerDebugHandlers,
+  registerDatabaseHandlers,
   registerDownloadHandlers,
   registerAdobe2ApiHandlers,
   registerGrok2ApiHandlers,
@@ -125,6 +126,7 @@ function createWindow(): void {
 
   // 注册 IPC handlers
   registerStorageHandlers();
+  registerDatabaseHandlers();
   registerDebugHandlers();
   registerDownloadHandlers();
   registerAdobe2ApiHandlers();

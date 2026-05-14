@@ -82,7 +82,6 @@ class AppStore {
 
     // 存储数据
     ipcMainService.on("app:dbStore:set", (event, { key, value }) => {
-      console.log("value: ", key, value);
       this.set(key, value);
     });
 
