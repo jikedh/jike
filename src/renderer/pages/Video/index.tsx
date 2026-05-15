@@ -10,8 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getVideoRemovalStatus, videoRemoval } from "@/api/ai";
 import {
+  createRhartImageG2ImageToImage,
+  createRhartImageG2OfficialImageToImage,
   createRhartImageG2OfficialTextToImage,
   createRhartImageG2TextToImage,
+  createRhartImageNProEdit,
+  createRhartImageNProOfficialEdit,
   createRhartImageNProOfficialTextToImage,
   createRhartImageNProTextToImage,
   createRunningHubTask,
@@ -362,6 +366,7 @@ export default function VideoPage() {
       {/* ========== RunningHub 工作流 Demo ========== */}
       <RunningHubWorkflowDemo />
       <RunningHubTextToImageDemo />
+      <RunningHubImageToImageDemo />
     </div>
   );
 }
@@ -781,6 +786,169 @@ function RunningHubTextToImageDemo() {
   );
 }
 
+// RunningHub 图生图/编辑 V2 Demo 组件
+function RunningHubImageToImageDemo() {
+  const [forms, setForms] = useState(() =>
+    RHART_IMAGE_TO_IMAGE_TASKS.reduce((data, task) => ({
+      ...data,
+      [task.key]: {
+        prompt: task.defaultPrompt,
+        imageUrlsText: task.defaultImageUrls.join("\n"),
+        aspectRatio: task.defaultAspectRatio,
+        resolution: task.defaultResolution,
+        quality: task.defaultQuality || "medium",
+      },
+    }), {} as Record<string, { prompt: string; imageUrlsText: string; aspectRatio: string; resolution: string; quality: string }>),
+  );
+  const [states, setStates] = useState({} as Record<string, { loading?: boolean; taskId?: string; status?: string; error?: string; results?: any[] }>);
+  const updateForm = (key: string, field: "prompt" | "imageUrlsText" | "aspectRatio" | "resolution" | "quality", value: string) => {
+    setForms((current) => ({
+      ...current,
+      [key]: { ...current[key], [field]: value },
+    }));
+  };
+  const updateState = (key: string, value: Record<string, any>) => {
+    setStates((current) => ({
+      ...current,
+      [key]: { ...current[key], ...value },
+    }));
+  };
+  const handleSubmit = async (task: (typeof RHART_IMAGE_TO_IMAGE_TASKS)[number]) => {
+    const form = forms[task.key];
+    const imageUrls = form.imageUrlsText.split(/\r?\n/).map((url) => url.trim()).filter(Boolean);
+    if (!form.prompt.trim()) {
+      updateState(task.key, { error: "请输入 prompt" });
+      return;
+    }
+    if (imageUrls.length === 0) {
+      updateState(task.key, { error: "请输入至少 1 个图片 URL" });
+      return;
+    }
+    updateState(task.key, { loading: true, taskId: "", status: "", error: "", results: [] });
+    try {
+      const response: any = await task.submit({
+        prompt: form.prompt.trim(),
+        imageUrls,
+        aspectRatio: form.aspectRatio,
+        resolution: form.resolution,
+        ...(task.hasQuality ? { quality: form.quality } : {}),
+      });
+      const data = response?.data ?? response;
+      if (!data?.taskId) {
+        updateState(task.key, { loading: false, error: "未获取到 taskId: " + JSON.stringify(response) });
+        return;
+      }
+      updateState(task.key, { taskId: data.taskId, status: data.status || "QUEUED", results: data.results || [] });
+      await pollV2Task(task.key, data.taskId);
+    } catch (err: any) {
+      updateState(task.key, { loading: false, error: "提交失败: " + (err?.message || JSON.stringify(err)) });
+    }
+  };
+  const pollV2Task = async (key: string, id: string) => {
+    const maxAttempts = 60;
+    let attempts = 0;
+    const poll = async () => {
+      attempts++;
+      try {
+        const response: any = await queryRunningHubV2Task({ taskId: id });
+        const data = response?.data ?? response;
+        const status = data?.status || "";
+        updateState(key, { status, results: data?.results || [] });
+        if (status === "SUCCESS" || status === "FAILED") {
+          updateState(key, {
+            loading: false,
+            error: status === "FAILED" ? data?.errorMessage || "任务生成失败" : "",
+          });
+          return;
+        }
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 5000);
+        } else {
+          updateState(key, { loading: false, error: "达到最大轮询次数" });
+        }
+      } catch (err: any) {
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 5000);
+          return;
+        }
+        updateState(key, { loading: false, error: "查询失败: " + (err?.message || JSON.stringify(err)) });
+      }
+    };
+    await poll();
+  };
+  return (
+    <div className="max-w-5xl space-y-4 mt-8 pt-8 border-t border-white/10">
+      <h2 className="text-xl font-bold mb-4">RunningHub 图生图/编辑 V2 Demo</h2>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {RHART_IMAGE_TO_IMAGE_TASKS.map((task) => {
+          const form = forms[task.key];
+          const state = states[task.key] || {};
+          const imageResults = (state.results || []).filter((item) => item?.url);
+          return (
+            <div key={task.key} className="space-y-3 p-4 bg-white/5 border-white/10 rounded-lg">
+              <h3 className="font-semibold text-white">{task.title}</h3>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">参考图片 URL（每行一个，最多 10 个）</label>
+                <textarea
+                  value={form.imageUrlsText}
+                  onChange={(e) => updateForm(task.key, "imageUrlsText", e.target.value)}
+                  className="w-full min-h-20 rounded-md bg-white/5 border-white/10 text-white px-3 py-2 text-sm outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Prompt</label>
+                <textarea
+                  value={form.prompt}
+                  onChange={(e) => updateForm(task.key, "prompt", e.target.value)}
+                  className="w-full min-h-28 rounded-md bg-white/5 border-white/10 text-white px-3 py-2 text-sm outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">比例</label>
+                  <select value={form.aspectRatio} onChange={(e) => updateForm(task.key, "aspectRatio", e.target.value)} className="w-full rounded-md bg-[#151d] border-white/10 text-white px-2 py-2 text-sm">
+                    {RHART_IMAGE_ASPECT_RATIOS.map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">分辨率</label>
+                  <select value={form.resolution} onChange={(e) => updateForm(task.key, "resolution", e.target.value)} className="w-full rounded-md bg-[#151d] border-white/10 text-white px-2 py-2 text-sm">
+                    {RHART_IMAGE_RESOLUTIONS.map((resolution) => <option key={resolution} value={resolution}>{resolution}</option>)}
+                  </select>
+                </div>
+                {task.hasQuality && (
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">质量</label>
+                    <select value={form.quality} onChange={(e) => updateForm(task.key, "quality", e.target.value)} className="w-full rounded-md bg-[#151d] border-white/10 text-white px-2 py-2 text-sm">
+                      {RHART_IMAGE_QUALITIES.map((quality) => <option key={quality} value={quality}>{quality}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+              <Button onClick={() => handleSubmit(task)} disabled={state.loading} variant="blue">
+                {state.loading ? "生成中..." : "提交图生图任务"}
+              </Button>
+              {state.taskId && <p className="text-sm text-gray-400 break-all">任务ID: {state.taskId}</p>}
+              {state.status && <p className="text-sm text-gray-400">状态: <span className={state.status === "SUCCESS" ? "text-green-400" : state.status === "FAILED" ? "text-red-400" : "text-yellow-400"}>{state.status}</span></p>}
+              {state.error && <p className="text-sm text-red-400 bg-red-900/20 p-2 rounded">{state.error}</p>}
+              {imageResults.length > 0 && (
+                <div className="grid grid-cols-1 gap-3">
+                  {imageResults.map((item, index) => (
+                    <div key={`${item.url}-${index}`} className="bg-black/20 rounded-lg p-3">
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-xs break-all block mb-2">{item.url}</a>
+                      <img src={item.url} alt="RunningHub 图生图结果" className="w-full rounded-lg" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const RHART_IMAGE_TASKS = [
   {
     key: "g2",
@@ -823,3 +991,46 @@ const RHART_IMAGE_TASKS = [
 const RHART_IMAGE_ASPECT_RATIOS = ["1:1", "3:2", "2:3", "5:4", "4:5", "16:9", "9:16", "21:9", "3:4", "4:3", "9:21"];
 const RHART_IMAGE_RESOLUTIONS = ["1k", "2k", "4k"];
 const RHART_IMAGE_QUALITIES = ["low", "medium", "high"];
+const RHART_IMAGE_TO_IMAGE_TASKS = [
+  {
+    key: "g2",
+    title: "全能图片G-2.0-图生图-低价渠道版",
+    defaultPrompt: "在马克杯的正中央，添加一个精致的几何风格狐狸 Logo，Logo 下方清晰地印着文字 \"Wild Fox\"。请保持原图的光影结构和陶瓷质感完全不变。然后生成一张产品介绍说明书。",
+    defaultImageUrls: [],
+    defaultAspectRatio: "16:9",
+    defaultResolution: "1k",
+    hasQuality: false,
+    submit: createRhartImageG2ImageToImage,
+  },
+  {
+    key: "g2-official",
+    title: "全能图片G-2-图生图-官方稳定版",
+    defaultPrompt: "将这个客厅彻底改造为植物园温室风格。把原有的沙发替换成复古的绿色天鹅绒材质，墙面变成做旧的红砖墙。保持房间原本的物理空间大小、门窗位置以及家具摆放结构完全不变。",
+    defaultImageUrls: [],
+    defaultAspectRatio: "16:9",
+    defaultResolution: "2k",
+    defaultQuality: "medium",
+    hasQuality: true,
+    submit: createRhartImageG2OfficialImageToImage,
+  },
+  {
+    key: "n-pro",
+    title: "全能图片PRO-图生图-低价渠道版",
+    defaultPrompt: "基于原图风格，将主体替换为一只年迈慈祥的猴子奶奶，她穿着格子围裙，正用香蕉制作晚餐。环境保持不变，风格为手绘水彩插画，色彩柔和，细节丰富。",
+    defaultImageUrls: [],
+    defaultAspectRatio: "3:4",
+    defaultResolution: "1k",
+    hasQuality: false,
+    submit: createRhartImageNProEdit,
+  },
+  {
+    key: "n-pro-official",
+    title: "全能图片PRO-图生图-官方稳定版",
+    defaultPrompt: "海边沙滩变成夏日祭典现场：猴子戴着纸折小帽，小香蕉插着蜡烛当作生日蛋糕，周围有彩旗、西瓜、贝壳风铃。风格欢乐卡通，色彩缤纷。",
+    defaultImageUrls: [],
+    defaultAspectRatio: "3:4",
+    defaultResolution: "1k",
+    hasQuality: false,
+    submit: createRhartImageNProOfficialEdit,
+  },
+];

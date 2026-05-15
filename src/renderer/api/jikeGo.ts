@@ -373,6 +373,9 @@ export type RunningHubTextToImageRequest = {
   resolution?: string;
   quality?: string;
 };
+export type RunningHubImageToImageRequest = RunningHubTextToImageRequest & {
+  imageUrls: string[];
+};
 export type QueryRunningHubV2TaskRequest = {
   taskId: string;
 };
@@ -411,6 +414,18 @@ export function createRhartImageNProTextToImage(data: RunningHubTextToImageReque
 export function createRhartImageNProOfficialTextToImage(data: RunningHubTextToImageRequest): any {
   return createRunningHubV2TextToImage("/v1/runninghub/rhart-image-n-pro-official/text-to-image", data);
 }
+export function createRhartImageG2ImageToImage(data: RunningHubImageToImageRequest): any {
+  return createRunningHubV2ImageToImage("/v1/runninghub/rhart-image-g-2/image-to-image", data);
+}
+export function createRhartImageG2OfficialImageToImage(data: RunningHubImageToImageRequest): any {
+  return createRunningHubV2ImageToImage("/v1/runninghub/rhart-image-g-2-official/image-to-image", data);
+}
+export function createRhartImageNProEdit(data: RunningHubImageToImageRequest): any {
+  return createRunningHubV2ImageToImage("/v1/runninghub/rhart-image-n-pro/edit", data);
+}
+export function createRhartImageNProOfficialEdit(data: RunningHubImageToImageRequest): any {
+  return createRunningHubV2ImageToImage("/v1/runninghub/rhart-image-n-pro-official/edit", data);
+}
 export function queryRunningHubV2Task(data: QueryRunningHubV2TaskRequest): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
@@ -421,6 +436,15 @@ export function queryRunningHubV2Task(data: QueryRunningHubV2TaskRequest): any {
   });
 }
 function createRunningHubV2TextToImage(url: string, data: RunningHubTextToImageRequest): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url,
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+function createRunningHubV2ImageToImage(url: string, data: RunningHubImageToImageRequest): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url,
