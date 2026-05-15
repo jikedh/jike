@@ -367,6 +367,15 @@ export type PollRunningHubTaskResponse = {
   taskStatus: string;
   outputs: RunningHubOutputItem[];
 };
+export type RunningHubTextToImageRequest = {
+  prompt: string;
+  aspectRatio?: string;
+  resolution?: string;
+  quality?: string;
+};
+export type QueryRunningHubV2TaskRequest = {
+  taskId: string;
+};
 
 // 创建 RunningHub 工作流任务
 export function createRunningHubTask(data: CreateRunningHubTaskRequest): any {
@@ -384,6 +393,37 @@ export function pollRunningHubTask(data: PollRunningHubTaskRequest): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/v1/runninghub/poll",
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+export function createRhartImageG2TextToImage(data: RunningHubTextToImageRequest): any {
+  return createRunningHubV2TextToImage("/v1/runninghub/rhart-image-g-2/text-to-image", data);
+}
+export function createRhartImageG2OfficialTextToImage(data: RunningHubTextToImageRequest): any {
+  return createRunningHubV2TextToImage("/v1/runninghub/rhart-image-g-2-official/text-to-image", data);
+}
+export function createRhartImageNProTextToImage(data: RunningHubTextToImageRequest): any {
+  return createRunningHubV2TextToImage("/v1/runninghub/rhart-image-n-pro/text-to-image", data);
+}
+export function createRhartImageNProOfficialTextToImage(data: RunningHubTextToImageRequest): any {
+  return createRunningHubV2TextToImage("/v1/runninghub/rhart-image-n-pro-official/text-to-image", data);
+}
+export function queryRunningHubV2Task(data: QueryRunningHubV2TaskRequest): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/runninghub/query",
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+function createRunningHubV2TextToImage(url: string, data: RunningHubTextToImageRequest): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url,
     method: "post",
     data,
     headers: getJikeGoAuthHeaders(),
