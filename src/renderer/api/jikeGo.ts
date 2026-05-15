@@ -420,6 +420,12 @@ export function createRhartImageG2ImageToImage(data: RunningHubImageToImageReque
 export function createRhartImageG2OfficialImageToImage(data: RunningHubImageToImageRequest): any {
   return createRunningHubV2ImageToImage("/v1/runninghub/rhart-image-g-2-official/image-to-image", data);
 }
+export function createRhartImageNProImageToImage(data: RunningHubImageToImageRequest): any {
+  return createRunningHubV2ImageToImage("/v1/runninghub/rhart-image-n-pro/image-to-image", data);
+}
+export function createRhartImageNProOfficialImageToImage(data: RunningHubImageToImageRequest): any {
+  return createRunningHubV2ImageToImage("/v1/runninghub/rhart-image-n-pro-official/image-to-image", data);
+}
 export function createRhartImageNProEdit(data: RunningHubImageToImageRequest): any {
   return createRunningHubV2ImageToImage("/v1/runninghub/rhart-image-n-pro/edit", data);
 }
