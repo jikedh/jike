@@ -137,6 +137,9 @@ export const NANO_BANANA_LOCAL_PLATFORM = "google_local_gemini";
 export const ADOBE2API_PLATFORM = "adobe2api";
 export const ADOBE_GPT_IMAGE2_MODEL = "gpt-image-2-adobe";
 export const ADOBE_NANO_BANANA_PRO_MODEL = "nano-banana-pro-adobe";
+export const RUNNINGHUB_PLATFORM = "runninghub";
+export const RUNNINGHUB_GPT_IMAGE2_MODEL = "runninghub-gpt-image-2";
+export const RUNNINGHUB_NANO_BANANA_PRO_MODEL = "runninghub-nano-banana-pro";
 export const XIMU_PLATFORM = "ximu";
 export const XIMU_GPT_IMAGE2_MODEL = "gpt-image-2-ximu";
 export const XIMU_GPT_IMAGE2_VIP_MODEL = "gpt-image-2-vip-ximu";
@@ -187,6 +190,18 @@ export const IMAGE_MODELS = [
     name: "Nano Banana Pro（Adobe版本）",
     model: ADOBE_NANO_BANANA_PRO_MODEL,
     platform: ADOBE2API_PLATFORM,
+  },
+  {
+    id: 19,
+    name: "GPT-Image-2（RunningHub版本）",
+    model: RUNNINGHUB_GPT_IMAGE2_MODEL,
+    platform: RUNNINGHUB_PLATFORM,
+  },
+  {
+    id: 20,
+    name: "Nano Banana Pro（RunningHub版本）",
+    model: RUNNINGHUB_NANO_BANANA_PRO_MODEL,
+    platform: RUNNINGHUB_PLATFORM,
   },
   {
     id: 11,
@@ -260,6 +275,10 @@ export const GROK_IMAGE_MODEL_IDS = new Set([
   GROK_IMAGE_PRO_MODEL,
   GROK_IMAGE_EDIT_MODEL,
 ]);
+export const RUNNINGHUB_IMAGE_MODEL_IDS = new Set([
+  RUNNINGHUB_GPT_IMAGE2_MODEL,
+  RUNNINGHUB_NANO_BANANA_PRO_MODEL,
+]);
 export const XIMU_MODEL_PURCHASE_URL = "https://pay.ldxp.cn/shop/HNGFW0MA";
 
 export const isAdobeImageGenerationModel = (model?: string) =>
@@ -270,6 +289,9 @@ export const isXimuImageGenerationModel = (model?: string) =>
 
 export const isGrokImageGenerationModel = (model?: string) =>
   Boolean(model && GROK_IMAGE_MODEL_IDS.has(model));
+
+export const isRunningHubImageGenerationModel = (model?: string) =>
+  Boolean(model && RUNNINGHUB_IMAGE_MODEL_IDS.has(model));
 
 export const isXimuGptImageGenerationModel = (model?: string) =>
   model === XIMU_GPT_IMAGE2_MODEL || model === XIMU_GPT_IMAGE2_VIP_MODEL;
@@ -323,6 +345,8 @@ export const GENERATION_SCORE_COST_MAP: Record<string, number> = {
   [XIMU_GPT_IMAGE2_VIP_MODEL]: 0,
   [XIMU_NANO_BANANA2_MODEL]: 0,
   [XIMU_NANO_BANANA_PRO_MODEL]: 0,
+  [RUNNINGHUB_GPT_IMAGE2_MODEL]: 0,
+  [RUNNINGHUB_NANO_BANANA_PRO_MODEL]: 0,
   [GROK_IMAGE_LITE_MODEL]: 0,
   [GROK_IMAGE_MODEL]: 0,
   [GROK_IMAGE_PRO_MODEL]: 0,
@@ -385,8 +409,8 @@ export const VIDEO_GENERATION_MODES = [
 ];
 
 /**
- * 画布聊天模型配置。
- * 说明：当前只开放 deepseek-v3.2，后续新增模型仅需追加配置项。
+ * 画布聊天模型配置.
+ * 说明：当前只开放 deepseek-v3.2，后续新增模型仅需追加配置项.
  */
 export const CANVAS_CHAT_MODELS = [
   {

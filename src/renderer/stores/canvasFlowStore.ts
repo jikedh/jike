@@ -19,10 +19,13 @@ import {
   getVisibleImageModels,
   isAdobeImageGenerationModel,
   isGrokImageGenerationModel,
+  isRunningHubImageGenerationModel,
   isXimuGptImageGenerationModel,
   isXimuImageGenerationModel,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
+  RUNNINGHUB_GPT_IMAGE2_MODEL,
+  RUNNINGHUB_NANO_BANANA_PRO_MODEL,
   XIMU_GPT_IMAGE2_VIP_MODEL,
   XIMU_GPT_IMAGE2_MODEL,
   XIMU_NANO_BANANA2_MODEL,
@@ -142,6 +145,15 @@ import {
 } from "@/api/ai";
 import {
   confirmDesktopProxyScore,
+  createRhartImageG2ImageToImage,
+  createRhartImageG2OfficialImageToImage,
+  createRhartImageG2OfficialTextToImage,
+  createRhartImageG2TextToImage,
+  createRhartImageNProImageToImage,
+  createRhartImageNProOfficialImageToImage,
+  createRhartImageNProOfficialTextToImage,
+  createRhartImageNProTextToImage,
+  queryRunningHubV2Task,
   refundDesktopProxyScore,
 } from "@/api/jikeGo";
 import {
@@ -195,9 +207,9 @@ const normalizeCanvasGroups = (
           group.layoutOrigin ??
           (frame
             ? {
-                x: frame.x,
-                y: frame.y,
-              }
+              x: frame.x,
+              y: frame.y,
+            }
             : undefined),
         frame: frame ?? undefined,
       };
@@ -521,6 +533,182 @@ const waitForXimuImageResult = async (taskId: string) => {
       ? `西牧生图超时，请稍后重试（最后状态：${lastStatus}${lastMessage ? `，${lastMessage}` : ""}）`
       : "西牧生图超时，请稍后重试",
   );
+};
+
+type RunningHubImageRoute = {
+  model: "gpt-image-2" | "nano-banana-pro";
+  textToImage: (data: {
+    prompt: string;
+    aspectRatio?: string;
+    resolution?: string;
+    quality?: string;
+  }) => any;
+  imageToImage: (data: {
+    prompt: string;
+    imageUrls: string[];
+    aspectRatio?: string;
+    resolution?: string;
+    quality?: string;
+  }) => any;
+};
+const resolveRunningHubImageRoutes = (model?: string) => {
+  if (model === RUNNINGHUB_GPT_IMAGE2_MODEL) {
+    return {
+      lowCost: {
+        model: "gpt-image-2",
+        textToImage: createRhartImageG2TextToImage,
+        imageToImage: createRhartImageG2ImageToImage,
+      },
+      official: {
+        model: "gpt-image-2",
+        textToImage: createRhartImageG2OfficialTextToImage,
+        imageToImage: createRhartImageG2OfficialImageToImage,
+      },
+    } as const;
+  }
+  if (model === RUNNINGHUB_NANO_BANANA_PRO_MODEL) {
+    return {
+      lowCost: {
+        model: "nano-banana-pro",
+        textToImage: createRhartImageNProTextToImage,
+        imageToImage: createRhartImageNProImageToImage,
+      },
+      official: {
+        model: "nano-banana-pro",
+        textToImage: createRhartImageNProOfficialTextToImage,
+        imageToImage: createRhartImageNProOfficialImageToImage,
+      },
+    } as const;
+  }
+  return undefined;
+};
+const normalizeRunningHubResolution = (resolution?: string) =>
+  (resolution || "1k").toLowerCase();
+const buildRunningHubImageRequest = ({
+  prompt,
+  imageUrls,
+  size,
+  resolution,
+  route,
+}: {
+  prompt?: string;
+  imageUrls: string[];
+  size?: string;
+  resolution?: string;
+  route: RunningHubImageRoute;
+}) => {
+  const baseRequest = {
+    prompt: prompt || "",
+    aspectRatio: size || "1:1",
+    resolution: normalizeRunningHubResolution(resolution),
+    ...(route.model === "gpt-image-2" ? { quality: "medium" } : {}),
+  };
+  return imageUrls.length > 0
+    ? { ...baseRequest, imageUrls: imageUrls.slice(0, 10) }
+    : baseRequest;
+};
+const extractRunningHubImageUrl = (response: any) => {
+  const data = response?.data ?? response;
+  const directUrl = data?.url || data?.imageUrl || data?.fileUrl;
+  if (directUrl) {
+    return directUrl;
+  }
+  const firstResult = Array.isArray(data?.results) ? data.results[0] : undefined;
+  return firstResult?.url || firstResult?.fileUrl || firstResult?.imageUrl;
+};
+const waitForRunningHubV2ImageResult = async (taskId: string) => {
+  const startedAt = Date.now();
+  let lastStatus = "";
+  let lastMessage = "";
+  while (Date.now() - startedAt < IMAGE_TIMEOUT) {
+    const response = await queryRunningHubV2Task({ taskId });
+    const data = response?.data ?? response;
+    const status = String(data?.status || "").toUpperCase();
+    lastStatus = status || lastStatus;
+    lastMessage = data?.errorMessage || data?.message || lastMessage;
+    const resultUrl = extractRunningHubImageUrl(data);
+    if (resultUrl && (status === "SUCCESS" || !status)) {
+      return resultUrl;
+    }
+    if (status === "FAILED") {
+      throw new Error(lastMessage || "RunningHub 生图失败");
+    }
+    await wait(5000);
+  }
+  throw new Error(
+    lastStatus
+      ? `RunningHub 生图超时，请稍后重试（最后状态：${lastStatus}${lastMessage ? `，${lastMessage}` : ""}）`
+      : "RunningHub 生图超时，请稍后重试",
+  );
+};
+const submitRunningHubImageTask = async ({
+  route,
+  prompt,
+  imageUrls,
+  size,
+  resolution,
+}: {
+  route: RunningHubImageRoute;
+  prompt?: string;
+  imageUrls: string[];
+  size?: string;
+  resolution?: string;
+}) => {
+  const request = buildRunningHubImageRequest({
+    route,
+    prompt,
+    imageUrls,
+    size,
+    resolution,
+  });
+  const response = imageUrls.length > 0
+    ? await route.imageToImage(request as any)
+    : await route.textToImage(request);
+  const data = response?.data ?? response;
+  const immediateUrl = extractRunningHubImageUrl(data);
+  if (immediateUrl) {
+    return immediateUrl;
+  }
+  if (!data?.taskId) {
+    throw new Error("RunningHub 未返回任务 ID");
+  }
+  return waitForRunningHubV2ImageResult(data.taskId);
+};
+const generateRunningHubImageWithFallback = async ({
+  model,
+  prompt,
+  imageUrls,
+  size,
+  resolution,
+}: {
+  model?: string;
+  prompt?: string;
+  imageUrls: string[];
+  size?: string;
+  resolution?: string;
+}) => {
+  const routes = resolveRunningHubImageRoutes(model);
+  if (!routes) {
+    throw new Error("未知 RunningHub 图片模型");
+  }
+  try {
+    return await submitRunningHubImageTask({
+      route: routes.lowCost,
+      prompt,
+      imageUrls,
+      size,
+      resolution,
+    });
+  } catch (lowCostError) {
+    console.warn("RunningHub 低价渠道生成失败，切换官方稳定版:", lowCostError);
+    return submitRunningHubImageTask({
+      route: routes.official,
+      prompt,
+      imageUrls,
+      size,
+      resolution,
+    });
+  }
 };
 
 const extractMarkdownMediaUrl = (content: unknown, kind: "image" | "video") => {
@@ -1284,6 +1472,7 @@ const pollMjImageGeneration = async (
 
             // 更新已完成数量
             const completedCount = (data.completedCount ?? 0) + 1;
+            // 判断是否所有任务都已完成
             const allCompleted = completedCount >= totalTaskCount;
 
             return {
@@ -1601,11 +1790,20 @@ const pollVideoTaskGeneration = async (
               existingData,
               processedResultData,
             );
+            const failedCount = (
+              (data.metadata?.failedTasks as unknown[]) ?? []
+            ).length;
+            const completedCount = mergedData.length + failedCount;
+            const completed = completedCount >= totalTasks;
 
             return {
               ...data,
-              status: GenerationStatus.COMPLETED,
-              progress: 100,
+              status: completed
+                ? GenerationStatus.COMPLETED
+                : GenerationStatus.IN_PROGRESS,
+              progress: completed
+                ? 100
+                : Math.min(99, Math.round((completedCount / totalTasks) * 100)),
               task_id: normalizedTaskId,
               result: {
                 type: "video",
@@ -1785,33 +1983,19 @@ const pollNewVideoGeneration = async ({
           }
 
           setState((state) => ({
-            nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
-              const failedTasks = [
-                ...((data.metadata?.failedTasks as unknown[]) ?? []),
-                normalizedTaskId,
-              ];
-              const completedCount =
-                (data.result?.data?.length ?? 0) + failedTasks.length;
-              return {
-                ...data,
-                status:
-                  completedCount >= totalTasks && !data.result?.data?.length
-                    ? GenerationStatus.FAILED
-                    : data.status,
-                metadata: {
-                  ...data.metadata,
-                  failedTasks,
-                },
-                error: {
-                  code: "VIDEO_MISSING_URL",
-                  message: "任务已完成但未返回视频地址，请稍后重试",
-                },
-              };
-            }),
+            nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
+              ...data,
+              status: GenerationStatus.FAILED,
+              progress: normalized.progress,
+              task_id: normalizedTaskId,
+              error: {
+                code: "VIDEO_MISSING_URL",
+                message: "任务已完成但未返回视频地址，请稍后重试",
+              },
+            })),
           }));
-          if (ledgerBizId) {
-            refundDesktopProxyScore(ledgerBizId, "video completed but missing result URL").catch(() => { });
-          }
+
+          stopVideoPollingInternal(nodeId);
           await updateVideoTrackFinalStatus(
             normalizedTaskId,
             "FAIL",
@@ -1908,65 +2092,42 @@ const pollNewVideoGeneration = async ({
             };
           }),
         }));
-
-        const updatedNode = getState().nodes.find((node) => node.id === nodeId);
-        if ((updatedNode?.data as any)?.status === GenerationStatus.COMPLETED) {
-          saveCurrentCanvasToHistory();
-          if (useChatSettingsStore.getState().autoSaveEnabled) {
-            getState().saveGraph();
-          }
-          // 多任务都收敛后清理轮询控制器，避免后续停止/重新生成时拿到旧控制器。
-          stopVideoPollingInternal(nodeId);
-          // 确认积分扣减
-          if (ledgerBizId) {
-            confirmDesktopProxyScore(ledgerBizId).catch(() => { });
-          }
-          await refreshBalanceAfterGeneration({
-            scene: "video",
-            nodeId,
-            taskId: normalizedTaskId,
-            model: (updatedNode?.data as NewVideoGenerationNode)?.model,
-            requiredPoints: (updatedNode?.data as NewVideoGenerationNode)
-              ?.requiredPoints,
-          });
+        saveCurrentCanvasToHistory();
+        if (useChatSettingsStore.getState().autoSaveEnabled) {
+          getState().saveGraph();
         }
+
+        stopVideoPollingInternal(nodeId);
         await updateVideoTrackFinalStatus(
           normalizedTaskId,
           "SUCCESS",
           undefined,
           processedResultData[0]?.url,
         );
+
+        await refreshBalanceAfterGeneration({
+          scene: "video",
+          nodeId,
+          taskId: normalizedTaskId,
+          model: (currentNode.data as NewVideoGenerationNode)?.model,
+          requiredPoints: (currentNode.data as NewVideoGenerationNode)
+            ?.requiredPoints,
+        });
         return;
       }
 
       if (normalized.status === GenerationStatus.FAILED) {
         setState((state) => ({
-          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
-            const failedTasks = [
-              ...((data.metadata?.failedTasks as unknown[]) ?? []),
-              normalizedTaskId,
-            ];
-            const successCount = data.result?.data?.length ?? 0;
-            const completedCount = successCount + failedTasks.length;
-            const allDone = completedCount >= totalTasks;
-
-            return {
-              ...data,
-              // 失败时无论之前是否有成功视频，都应显示失败状态
-              status: GenerationStatus.FAILED,
-              progress: allDone ? 100 : Math.round((completedCount / totalTasks) * 100),
-              metadata: {
-                ...data.metadata,
-                failedTasks,
-              },
-              // 失败时无论之前是否有成功视频，都应设置错误信息
-              error: {
-                code: "VIDEO_FAILED",
-                message:
-                  normalized.errorMessage || "生成失败，请稍后再试",
-              },
-            };
-          }),
+          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
+            ...data,
+            status: GenerationStatus.FAILED,
+            progress: normalized.progress,
+            task_id: normalizedTaskId,
+            error: {
+              code: "VIDEO_FAILED",
+              message: normalized.errorMessage || "生成失败，请稍后再试",
+            },
+          })),
         }));
         const failedNode = getState().nodes.find((node) => node.id === nodeId);
         const failedStatus = (failedNode?.data as any)?.status;
@@ -2326,7 +2487,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         return;
       }
 
-      // 恢复节点运行时状态时仅使用远程媒体 URL，避免本地文件生成 blob URL。
+      // 恢复节点运行时状态时仅使用远程媒体 URL，避免本地文件生成 blob URL.
       const hydratedNodes = await hydrateCanvasNodesForRuntime(data.nodes);
       const processedNodes: AllNodeType[] = hydratedNodes.map((node) => {
         const runtimeSafeData = resetNodeDataRuntimeState(
@@ -2608,12 +2769,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                     visibleNewVideoModelIds.has(defaultNewVideoModel ?? "")
                     ? defaultNewVideoModel
                     : isAdobeVideoGenerationModel(newNode.data.model) &&
-                        !visibleNewVideoModelIds.has(newNode.data.model)
+                      !visibleNewVideoModelIds.has(newNode.data.model)
                       ? "seedance-2.0-pro"
-                    : isGrokVideoGenerationModel(newNode.data.model) &&
+                      : isGrokVideoGenerationModel(newNode.data.model) &&
                         !visibleNewVideoModelIds.has(newNode.data.model)
-                      ? "seedance-2.0-pro"
-                    : newNode.data.model,
+                        ? "seedance-2.0-pro"
+                        : newNode.data.model,
                   aspect_ratio:
                     defaultNewVideoAspectRatio || newNode.data.aspect_ratio,
                   duration: defaultNewVideoDuration || newNode.data.duration,
@@ -3288,14 +3449,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      * 更新图片节点数据（局部 patch）
      */
     updateImageNodeData: (nodeId, patch) => {
-      set((state) => {
-        return {
-          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            ...patch,
-          })),
-        };
-      });
+      set((state) => ({
+        nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+          ...data,
+          ...patch,
+        })),
+      }));
     },
 
     /**
@@ -3365,7 +3524,95 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
           taskId = response.result;
         } else {
-          // 非 Midjourney 模型：创建图片生成任务，获取 task_id 后启动轮询
+          // 非 Midjourney 模型：先检查是否为 RunningHub 渠道（低价->官方回退）
+          const payloadOriginalModel = payload.originalModel ?? payload.model;
+          if (isRunningHubImageGenerationModel(payloadOriginalModel)) {
+            // RunningHub 直接生成（可能返回立即地址或 taskId）
+            set((state) => ({
+              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+                ...data,
+                status: GenerationStatus.IN_PROGRESS,
+                progress: 0,
+              })),
+            }));
+
+            try {
+              const resultUrl = await generateRunningHubImageWithFallback({
+                model: payloadOriginalModel,
+                prompt: payload.prompt,
+                imageUrls: Array.isArray(payload.image_urls) ? payload.image_urls : [],
+                size: payload.size,
+                resolution: payload.resolution,
+              });
+
+              const ossUrl = await mirrorGeneratedImageUrlToOss(resultUrl);
+              const projectId = get().projectId;
+              let resultItem = {
+                url: ossUrl,
+                remoteUrl: ossUrl,
+                ...(ossUrl === resultUrl ? {} : { originalUrl: resultUrl }),
+              } as any;
+
+              if (projectId) {
+                try {
+                  const fileName = await saveGeneratedImageToLocal(
+                    projectId,
+                    ossUrl,
+                    extractExtensionFromUrl(resultUrl, "png"),
+                  );
+                  if (fileName) {
+                    resultItem.localName = fileName;
+                    resultItem.localPath = getLocalFilePath(
+                      projectId,
+                      "generate_image",
+                      fileName,
+                    );
+                  }
+                } catch (saveError) {
+                  console.error("[startImageGeneration] 保存 RunningHub 图片到本地失败:", saveError);
+                }
+              }
+
+              set((state) => ({
+                nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+                  const existingData = data.result?.data ?? [];
+                  const mergedData = appendMediaSequences(existingData, [resultItem]);
+                  return {
+                    ...data,
+                    status: GenerationStatus.COMPLETED,
+                    progress: 100,
+                    result: { type: "image", data: mergedData },
+                    error: undefined,
+                  };
+                }),
+              }));
+              saveCurrentCanvasToHistory();
+              if (useChatSettingsStore.getState().autoSaveEnabled) {
+                get().saveGraph();
+              }
+              await refreshBalanceAfterGeneration({
+                scene: "image",
+                nodeId,
+                model: payloadOriginalModel,
+                requiredPoints: payload.requiredPoints,
+              });
+
+              // 调整 pending count
+              const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
+              if (remaining <= 0) pendingTaskCounts.delete(nodeId);
+              else pendingTaskCounts.set(nodeId, remaining);
+
+              return;
+            } catch (rhError) {
+              console.error("[startImageGeneration] RunningHub 生图失败:", rhError);
+              const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
+              if (remaining <= 0) pendingTaskCounts.delete(nodeId);
+              else pendingTaskCounts.set(nodeId, remaining);
+              throw rhError;
+            }
+          }
+
+          // 非 RunningHub：创建图片生成任务，获取 task_id 后启动轮询
           const response: any = await createImageGeneration(payload, scoreCost);
           ledgerBizId = response?.ledgerBizId;
 
@@ -3941,6 +4188,101 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           return;
         }
 
+        // RunningHub 渠道（低价 -> 官方回退）
+        if (isRunningHubImageGenerationModel(originalModel)) {
+          set((state) => ({
+            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+              ...data,
+              status: GenerationStatus.IN_PROGRESS,
+              progress: 0,
+            })),
+          }));
+
+          try {
+            const resultUrl = await generateRunningHubImageWithFallback({
+              model: originalModel,
+              prompt,
+              imageUrls,
+              size,
+              resolution,
+            });
+
+            const ossUrl = await mirrorGeneratedImageUrlToOss(resultUrl);
+            const projectId = get().projectId;
+            let resultItem: {
+              url: string;
+              remoteUrl: string;
+              originalUrl?: string;
+              localName?: string;
+              localPath?: string;
+            } = {
+              url: ossUrl,
+              remoteUrl: ossUrl,
+              ...(ossUrl === resultUrl ? {} : { originalUrl: resultUrl }),
+            };
+
+            if (projectId) {
+              try {
+                const fileName = await saveGeneratedImageToLocal(
+                  projectId,
+                  ossUrl,
+                  extractExtensionFromUrl(resultUrl, "png"),
+                );
+
+                if (fileName) {
+                  resultItem = {
+                    ...resultItem,
+                    localName: fileName,
+                    localPath: getLocalFilePath(
+                      projectId,
+                      "generate_image",
+                      fileName,
+                    ),
+                  };
+                }
+              } catch (saveError) {
+                console.error(
+                  "[startGeminiPro2Generation] 保存 RunningHub 图片到本地失败:",
+                  saveError,
+                );
+              }
+            }
+
+            set((state) => ({
+              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+                const existingData = data.result?.data ?? [];
+                const mergedData = appendMediaSequences(existingData, [
+                  resultItem,
+                ]);
+                return {
+                  ...data,
+                  status: GenerationStatus.COMPLETED,
+                  progress: 100,
+                  result: {
+                    type: "image",
+                    data: mergedData,
+                  },
+                  error: undefined,
+                };
+              }),
+            }));
+            saveCurrentCanvasToHistory();
+            if (useChatSettingsStore.getState().autoSaveEnabled) {
+              get().saveGraph();
+            }
+            await refreshBalanceAfterGeneration({
+              scene: "image",
+              nodeId,
+              model: originalModel,
+              requiredPoints: payload.requiredPoints,
+            });
+            return;
+          } catch (rhError) {
+            console.error("[startGeminiPro2Generation] RunningHub 生图失败:", rhError);
+            throw rhError;
+          }
+        }
+
         // 1. 构造请求体
         // 注意：text 和 fileData 不能同时存在于同一个 part，必须拆成独立的 part。
         // 参考图直接把 URL 交给 adobe2api，由服务端自行拉取，避免前端先转 Base64。
@@ -4167,7 +4509,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         // 先将提示词回填到子图的文本输入区域
         get().updateImageNodeData(newId, {
           model: sourceData.model,
-          originalModel: sourceData.originalModel,
+          originalModel: sourceData.originalModel ?? sourceData.model,
           platform: sourceData.platform,
           size: sourceData.size,
           resolution: sourceData.resolution,
@@ -4666,9 +5008,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           set((state) => ({
             nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
               const existingData = data.result?.data ?? [];
-              const mergedData = appendMediaSequences(existingData, [
-                resultItem,
-              ]);
+              const mergedData = appendMediaSequences(
+                existingData,
+                [
+                  resultItem,
+                ],
+              );
               return {
                 ...data,
                 task_id: response?.id,
@@ -4774,9 +5119,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           set((state) => ({
             nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
               const existingData = data.result?.data ?? [];
-              const mergedData = appendMediaSequences(existingData, [
-                resultItem,
-              ]);
+              const mergedData = appendMediaSequences(
+                existingData,
+                [
+                  resultItem,
+                ],
+              );
               return {
                 ...data,
                 task_id: response?.id,
