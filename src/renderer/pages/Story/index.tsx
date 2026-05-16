@@ -44,12 +44,15 @@ import {
   storyboardStorage,
   type StoryboardAgentData,
   type StoryboardAgentStep,
+  type StoryboardAssets,
   type StoryboardAssetItem,
   type StoryboardAssetKind,
+  type StoryboardAssetMediaItem,
   type StoryboardProject,
   type StoryboardShot,
   type StoryboardSnippet,
 } from "service/storyboardStorage";
+import { Switch } from "@/components/ui/switch";
 import { GenerationStatus } from "shared/constants/enum";
 import {
   ADOBE_GPT_IMAGE2_MODEL,
@@ -397,6 +400,12 @@ const normalizeAgentData = (
     scriptCategory: data.scriptCategory ?? empty.scriptCategory,
     assetSystemPrompt: data.assetSystemPrompt ?? empty.assetSystemPrompt,
     splitSystemPrompt: data.splitSystemPrompt ?? empty.splitSystemPrompt,
+    roleAssetPromptAffixEnabled:
+      data.roleAssetPromptAffixEnabled ?? empty.roleAssetPromptAffixEnabled,
+    roleAssetPromptPrefix:
+      data.roleAssetPromptPrefix ?? empty.roleAssetPromptPrefix,
+    roleAssetPromptSuffix:
+      data.roleAssetPromptSuffix ?? empty.roleAssetPromptSuffix,
     assets: {
       ...empty.assets,
       ...(data.assets || {}),
@@ -691,6 +700,8 @@ const formatTime = (timestamp: number) =>
 const createId = (prefix: string) =>
   `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
+const createAssetMediaId = (prefix = "asset_media") => createId(prefix);
+
 const getFileExtension = (file: File, fallback: string) =>
   file.name.split(".").pop()?.toLowerCase() || fallback;
 
@@ -723,6 +734,131 @@ const getStoryAssetMediaType = (
   return "image";
 };
 
+const syncAssetPrimaryMediaFields = (
+  asset: StoryboardAssetItem,
+  primary?: StoryboardAssetMediaItem,
+): StoryboardAssetItem => ({
+  ...asset,
+  source: primary?.source ?? asset.source,
+  status: primary ? "ready" : asset.status,
+  mediaType: primary?.mediaType ?? asset.mediaType,
+  mediaUrl: primary?.mediaUrl,
+  localPath: primary?.localPath,
+  assetId: primary?.assetId,
+  primaryMediaId: primary?.id,
+});
+
+const createMediaItemFromAssetFields = (
+  asset: StoryboardAssetItem,
+): StoryboardAssetMediaItem | null => {
+  if (!asset.mediaUrl && !asset.localPath && !asset.assetId) return null;
+  return {
+    id: asset.primaryMediaId || `legacy_media_${asset.id}`,
+    source: asset.source,
+    mediaType: asset.mediaType ?? getStoryAssetMediaType(asset),
+    mediaUrl: asset.mediaUrl,
+    localPath: asset.localPath,
+    assetId: asset.assetId,
+    name: asset.name,
+    createdAt: Date.now(),
+  };
+};
+
+const getAssetMediaItems = (
+  asset: StoryboardAssetItem,
+): StoryboardAssetMediaItem[] => {
+  const items = [...(asset.mediaItems || [])];
+  const legacyItem = createMediaItemFromAssetFields(asset);
+  if (legacyItem && !items.some((item) => item.id === legacyItem.id)) {
+    items.unshift(legacyItem);
+  }
+
+  if (items.length <= 1) return items;
+
+  const primaryId = asset.primaryMediaId || items[0]?.id;
+  const primaryIndex = items.findIndex((item) => item.id === primaryId);
+  if (primaryIndex <= 0) return items;
+
+  const next = [...items];
+  const [primary] = next.splice(primaryIndex, 1);
+  next.unshift(primary);
+  return next;
+};
+
+const getPrimaryAssetMediaItem = (
+  asset: StoryboardAssetItem,
+): StoryboardAssetMediaItem | undefined => getAssetMediaItems(asset)[0];
+
+const appendAssetMediaItem = (
+  asset: StoryboardAssetItem,
+  item: StoryboardAssetMediaItem,
+): StoryboardAssetItem => {
+  const existing = getAssetMediaItems(asset).filter((current) => {
+    if (item.assetId && current.assetId === item.assetId) return false;
+    if (item.mediaUrl && current.mediaUrl === item.mediaUrl) return false;
+    if (item.localPath && current.localPath === item.localPath) return false;
+    return current.id !== item.id;
+  });
+  const mediaItems = [item, ...existing];
+  return syncAssetPrimaryMediaFields(
+    {
+      ...asset,
+      mediaItems,
+    },
+    item,
+  );
+};
+
+const setAssetPrimaryMedia = (
+  asset: StoryboardAssetItem,
+  mediaId: string,
+): StoryboardAssetItem => {
+  const items = getAssetMediaItems(asset);
+  const targetIndex = items.findIndex((item) => item.id === mediaId);
+  if (targetIndex < 0) return asset;
+
+  const nextItems = [...items];
+  const [primary] = nextItems.splice(targetIndex, 1);
+  nextItems.unshift(primary);
+  return syncAssetPrimaryMediaFields(
+    {
+      ...asset,
+      mediaItems: nextItems,
+    },
+    primary,
+  );
+};
+
+const deleteAssetMediaItem = (
+  asset: StoryboardAssetItem,
+  mediaId: string,
+): StoryboardAssetItem => {
+  const mediaItems = getAssetMediaItems(asset).filter((item) => item.id !== mediaId);
+  const primary = mediaItems[0];
+
+  if (!primary) {
+    return {
+      ...asset,
+      source: "upload",
+      status: "idle",
+      mediaType: undefined,
+      mediaUrl: undefined,
+      localPath: undefined,
+      assetId: undefined,
+      mediaItems: [],
+      primaryMediaId: undefined,
+    };
+  }
+
+  return syncAssetPrimaryMediaFields(
+    {
+      ...asset,
+      mediaItems,
+    },
+    primary,
+  );
+};
+
 const getMediaTypeFromFile = (
   file: File,
 ): NonNullable<StoryboardAssetItem["mediaType"]> => {
@@ -751,24 +887,39 @@ const createLibraryStoryboardAsset = (
   asset: AssetRecord,
   kind: StoryboardAssetKind,
   assetStoragePath: string,
-): StoryboardAssetItem => ({
-  id: createId(`library_${kind}`),
-  kind,
-  name: asset.name,
-  prompt: "",
-  source: "library",
-  status: "ready",
-  mediaType: asset.mediaType,
-  mediaUrl: asset.ossUrl || getAssetOriginalDisplayUrl(asset, assetStoragePath),
-  localPath: undefined,
-  assetId: asset.id,
-});
+): StoryboardAssetItem => {
+  const mediaItem: StoryboardAssetMediaItem = {
+    id: createAssetMediaId("library_media"),
+    source: "library",
+    mediaType: asset.mediaType,
+    mediaUrl: asset.ossUrl || getAssetOriginalDisplayUrl(asset, assetStoragePath),
+    localPath: undefined,
+    assetId: asset.id,
+    name: asset.name,
+    createdAt: Date.now(),
+  };
+
+  return {
+    id: createId(`library_${kind}`),
+    kind,
+    name: asset.name,
+    prompt: "",
+    source: "library",
+    status: "ready",
+    mediaType: mediaItem.mediaType,
+    mediaUrl: mediaItem.mediaUrl,
+    localPath: mediaItem.localPath,
+    assetId: mediaItem.assetId,
+    mediaItems: [mediaItem],
+    primaryMediaId: mediaItem.id,
+  };
+};
 
 const mergeIdentifiedAssets = (
-  currentAssets: StoryboardAgentData["assets"],
-  identifiedAssets: StoryboardAgentData["assets"],
-): StoryboardAgentData["assets"] => {
-  const nextAssets: StoryboardAgentData["assets"] = {
+  currentAssets: StoryboardAssets,
+  identifiedAssets: StoryboardAssets,
+): StoryboardAssets => {
+  const nextAssets: StoryboardAssets = {
     role: [...currentAssets.role],
     scene: [...currentAssets.scene],
     prop: [...currentAssets.prop],
@@ -784,7 +935,15 @@ const mergeIdentifiedAssets = (
 
     for (const asset of identifiedAssets[kind]) {
       const key = asset.name.trim().toLowerCase();
-      if (!key || existingNames.has(key)) continue;
+      if (!key) continue;
+      if (existingNames.has(key)) {
+        nextAssets[kind] = nextAssets[kind].map((item) =>
+          item.name.trim().toLowerCase() === key && !item.prompt.trim()
+            ? { ...item, prompt: asset.prompt }
+            : item,
+        );
+        continue;
+      }
       nextAssets[kind].push(asset);
       existingNames.add(key);
     }
@@ -798,7 +957,7 @@ const normalizeAssetNameKey = (name: string) => name.trim().toLowerCase();
 const bindShotAssetIdsByName = (
   shots: StoryboardShot[],
   shotAssetNames: string[][],
-  assets: StoryboardAgentData["assets"],
+  assets: StoryboardAssets,
 ): StoryboardShot[] => {
   const assetIdByName = new Map<string, string>();
   for (const asset of [
@@ -1368,6 +1527,21 @@ const extractImageTaskUrl = (response: any) => {
       )
       .find(Boolean) || ""
   );
+};
+
+const getImageExtensionFromUrl = (url: string, fallback = "png") => {
+  try {
+    const extension = new URL(url).pathname.split(".").pop()?.toLowerCase();
+    if (
+      extension &&
+      ["jpg", "jpeg", "png", "webp", "gif"].includes(extension)
+    ) {
+      return extension;
+    }
+  } catch {
+    // Ignore malformed model URLs and use the fallback extension.
+  }
+  return fallback;
 };
 
 const StoryHeader = ({
@@ -2545,6 +2719,8 @@ const AssetColumnItem = ({
   onUseLibrary,
   onBindAudio,
   onBindLocalAudio,
+  onSetPrimaryMedia,
+  onDeleteMedia,
   onGenerate,
   onDelete,
 }: {
@@ -2560,6 +2736,8 @@ const AssetColumnItem = ({
   onUseLibrary: () => void;
   onBindAudio: () => void;
   onBindLocalAudio: (file: File) => void;
+  onSetPrimaryMedia: (mediaId: string) => void;
+  onDeleteMedia: (mediaId: string) => void;
   onGenerate: () => void;
   onDelete: () => void;
 }) => {
@@ -2607,7 +2785,11 @@ const AssetColumnItem = ({
         </div>
       </div>
       <div className="space-y-3">
-        <StoryAssetPreview item={item} />
+        <StoryAssetPreview
+          item={item}
+          onSetPrimaryMedia={onSetPrimaryMedia}
+          onDeleteMedia={onDeleteMedia}
+        />
         <input
           className={inputClass}
           value={item.name}
@@ -2778,27 +2960,45 @@ const AssetColumnItem = ({
 const StoryAssetPreview = ({
   item,
   compact = false,
+  onSetPrimaryMedia,
+  onDeleteMedia,
 }: {
   item: StoryboardAssetItem;
   compact?: boolean;
+  onSetPrimaryMedia?: (mediaId: string) => void;
+  onDeleteMedia?: (mediaId: string) => void;
 }) => {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [variantObjectUrls, setVariantObjectUrls] = useState<Record<string, string>>(
+    {},
+  );
   const [previewOpen, setPreviewOpen] = useState(false);
-  const mediaType = getStoryAssetMediaType(item);
-  const previewUrl = objectUrl || item.mediaUrl || "";
+  const mediaItems = getAssetMediaItems(item);
+  const primaryMedia = mediaItems[0];
+  const previewSource = primaryMedia
+    ? {
+        kind: item.kind,
+        mediaType: primaryMedia.mediaType,
+        mediaUrl: primaryMedia.mediaUrl,
+        localPath: primaryMedia.localPath,
+      }
+    : item;
+  const mediaType = getStoryAssetMediaType(previewSource);
+  const previewUrl = objectUrl || primaryMedia?.mediaUrl || item.mediaUrl || "";
   const canOpenPreview =
     !compact && Boolean(previewUrl) && (mediaType === "image" || mediaType === "video");
 
   useEffect(() => {
     let active = true;
     let nextUrl: string | null = null;
+    const primaryLocalPath = primaryMedia?.localPath || item.localPath;
 
-    if (!item.localPath) {
+    if (!primaryLocalPath) {
       setObjectUrl(null);
       return;
     }
 
-    storyboardStorage.readObjectUrl(item.localPath).then((url) => {
+    storyboardStorage.readObjectUrl(primaryLocalPath).then((url) => {
       if (!active) {
         if (url) URL.revokeObjectURL(url);
         return;
@@ -2811,7 +3011,51 @@ const StoryAssetPreview = ({
       active = false;
       if (nextUrl) URL.revokeObjectURL(nextUrl);
     };
-  }, [item.localPath]);
+  }, [item.localPath, primaryMedia?.localPath]);
+
+  useEffect(() => {
+    if (compact || mediaItems.length <= 1) {
+      setVariantObjectUrls({});
+      return;
+    }
+
+    let active = true;
+    const createdUrls: string[] = [];
+
+    const loadVariantUrls = async () => {
+      const pairs = await Promise.all(
+        mediaItems.map(async (media) => {
+          if (!media.localPath) return [media.id, ""] as const;
+          const url = await storyboardStorage.readObjectUrl(media.localPath);
+          if (url) createdUrls.push(url);
+          return [media.id, url || ""] as const;
+        }),
+      );
+
+      if (!active) {
+        createdUrls.forEach((url) => URL.revokeObjectURL(url));
+        return;
+      }
+
+      const next: Record<string, string> = {};
+      for (const [id, url] of pairs) {
+        if (url) next[id] = url;
+      }
+      setVariantObjectUrls(next);
+    };
+
+    void loadVariantUrls();
+
+    return () => {
+      active = false;
+      createdUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [
+    compact,
+    mediaItems
+      .map((media) => `${media.id}:${media.localPath || media.mediaUrl || ""}`)
+      .join("|"),
+  ]);
 
   const previewContent =
     previewUrl && mediaType === "image" ? (
@@ -2850,13 +3094,27 @@ const StoryAssetPreview = ({
       </div>
     );
 
-  return (
+  const previewFrame = (
     <div
       className={cn(
         "relative flex items-center justify-center overflow-hidden rounded-lg border border-white/8 bg-black/35",
         compact ? "h-12 w-14" : "aspect-video w-full",
       )}
     >
+      {primaryMedia && onDeleteMedia && !compact ? (
+        <button
+          type="button"
+          className="absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-md border border-red-300/25 bg-black/70 text-red-100 shadow-lg backdrop-blur transition-colors hover:border-red-300/45 hover:bg-red-500/25"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDeleteMedia(primaryMedia.id);
+          }}
+          title="删除本张图片"
+          aria-label="删除本张图片"
+        >
+          <Trash2 size={13} />
+        </button>
+      ) : null}
       {canOpenPreview ? (
         <button
           type="button"
@@ -2880,6 +3138,88 @@ const StoryAssetPreview = ({
           url={previewUrl}
           onClose={() => setPreviewOpen(false)}
         />
+      ) : null}
+    </div>
+  );
+
+  if (compact) return previewFrame;
+
+  return (
+    <div className="space-y-2">
+      {previewFrame}
+      {mediaItems.length > 1 ? (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {mediaItems.map((media, index) => {
+            const thumbUrl = variantObjectUrls[media.id] || media.mediaUrl || "";
+            const thumbMediaType = getStoryAssetMediaType({
+              kind: item.kind,
+              mediaType: media.mediaType,
+              mediaUrl: media.mediaUrl,
+              localPath: media.localPath,
+            });
+            const isPrimary = index === 0;
+            return (
+              <div
+                key={media.id}
+                className={cn(
+                  "relative h-12 w-16 shrink-0 overflow-hidden rounded-md border bg-black/40 transition-colors",
+                  isPrimary
+                    ? "border-[#B43FEB] ring-1 ring-[#B43FEB]/60"
+                    : "border-white/10 hover:border-white/35",
+                )}
+              >
+                <button
+                  type="button"
+                  className="block h-full w-full"
+                  onClick={() => onSetPrimaryMedia?.(media.id)}
+                  title={isPrimary ? "当前主图" : "设为主图"}
+                  aria-label={isPrimary ? "当前主图" : "设为主图"}
+                >
+                  {thumbUrl && thumbMediaType === "image" ? (
+                    <img
+                      src={thumbUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  ) : thumbUrl && thumbMediaType === "video" ? (
+                    <video
+                      src={thumbUrl}
+                      className="h-full w-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-white/35">
+                      <FileImage size={16} />
+                    </div>
+                  )}
+                </button>
+                {isPrimary ? (
+                  <span className="absolute bottom-1 left-1 rounded bg-[#B43FEB]/90 px-1.5 py-0.5 text-[9px] text-white">
+                    主图
+                  </span>
+                ) : null}
+                {onDeleteMedia ? (
+                  <button
+                    type="button"
+                    className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded border border-red-300/25 bg-black/70 text-red-100 shadow transition-colors hover:border-red-300/45 hover:bg-red-500/25"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDeleteMedia(media.id);
+                    }}
+                    title="删除本张图片"
+                    aria-label="删除本张图片"
+                  >
+                    <Trash2 size={10} />
+                  </button>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
       ) : null}
     </div>
   );
@@ -3724,8 +4064,10 @@ const StoryAgentPage = ({
   );
   const [editingSystemPrompt, setEditingSystemPrompt] =
     useState<StorySystemPromptTarget | null>(null);
+  const [editingRolePromptAffix, setEditingRolePromptAffix] = useState(false);
   const [nextConfirmTarget, setNextConfirmTarget] =
     useState<StoryNextConfirmTarget | null>(null);
+  const [roleGenerateConfirmOpen, setRoleGenerateConfirmOpen] = useState(false);
   const [selectingAssetShotId, setSelectingAssetShotId] = useState<string | null>(
     null,
   );
@@ -3737,6 +4079,7 @@ const StoryAgentPage = ({
   const [splitting, setSplitting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exportingJianying, setExportingJianying] = useState(false);
+  const [generatingAllRoles, setGeneratingAllRoles] = useState(false);
   const [removingSubtitleShotId, setRemovingSubtitleShotId] = useState<
     string | null
   >(null);
@@ -3789,6 +4132,10 @@ const StoryAgentPage = ({
       setAgent(normalizedNext);
       setSaving(true);
       try {
+        await storyboardStorage.saveProjectAssets(
+          projectId,
+          normalizedNext.assets,
+        );
         await storyboardStorage.saveAgentData(
           projectId,
           snippetId,
@@ -3805,20 +4152,38 @@ const StoryAgentPage = ({
   );
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-    storyboardStorage
-      .loadAgentData(projectId, snippetId)
-      .then((data) => {
+
+    const loadAgent = async () => {
+      try {
+        const sharedAssets = await storyboardStorage.ensureProjectAssets(projectId);
+        const data = await storyboardStorage.loadAgentData(projectId, snippetId);
         const needsMigration = hasStoryShotVideoModelMigration(data);
-        const next = normalizeAgentData(data);
+        const next = normalizeAgentData({
+          ...data,
+          assets: sharedAssets,
+        });
+        if (cancelled) return;
         setAgent(next);
         agentRef.current = next;
         setActiveStep(next.unlockedStep);
         if (needsMigration) {
           void storyboardStorage.saveAgentData(projectId, snippetId, next);
         }
-      })
-      .finally(() => setLoading(false));
+      } catch (error) {
+        console.error("[Story] load agent failed", error);
+        toast.error("读取剧本 Agent 失败");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void loadAgent();
+
+    return () => {
+      cancelled = true;
+    };
   }, [projectId, snippetId]);
 
   const patchAgent = (patch: Partial<StoryboardAgentData>) => {
@@ -3882,6 +4247,62 @@ const StoryAgentPage = ({
     });
   };
 
+  const patchAssetState = (
+    kind: StoryboardAssetKind,
+    id: string,
+    patch: Partial<StoryboardAssetItem>,
+  ) => {
+    setAgent((current) => {
+      const next = {
+        ...current,
+        assets: {
+          ...current.assets,
+          [kind]: current.assets[kind].map((item) =>
+            item.id === id ? { ...item, ...patch } : item,
+          ),
+        },
+      };
+      agentRef.current = next;
+      return next;
+    });
+  };
+
+  const setAssetPrimaryMediaById = (
+    kind: StoryboardAssetKind,
+    id: string,
+    mediaId: string,
+  ) => {
+    const currentAgent = agentRef.current;
+    const nextAssets = {
+      ...currentAgent.assets,
+      [kind]: currentAgent.assets[kind].map((item) =>
+        item.id === id ? setAssetPrimaryMedia(item, mediaId) : item,
+      ),
+    };
+    void saveAgent({
+      ...currentAgent,
+      assets: nextAssets,
+    });
+  };
+
+  const deleteAssetMediaById = (
+    kind: StoryboardAssetKind,
+    id: string,
+    mediaId: string,
+  ) => {
+    const currentAgent = agentRef.current;
+    const nextAssets = {
+      ...currentAgent.assets,
+      [kind]: currentAgent.assets[kind].map((item) =>
+        item.id === id ? deleteAssetMediaItem(item, mediaId) : item,
+      ),
+    };
+    void saveAgent({
+      ...currentAgent,
+      assets: nextAssets,
+    });
+  };
+
   const deleteAsset = (kind: StoryboardAssetKind, id: string) => {
     const nextAssets = {
       ...agent.assets,
@@ -3927,15 +4348,38 @@ const StoryAgentPage = ({
     file: File,
   ) => {
     const extension = getFileExtension(file, kind === "audio" ? "mp3" : "png");
-    const localPath = `storyboard/projects/${projectId}/snippets/${snippetId}/assets/${kind}/${id}.${extension}`;
+    const mediaId = createAssetMediaId("upload_media");
+    const localPath = `storyboard/projects/${projectId}/assets/${kind}/${mediaId}.${extension}`;
     try {
       await storyboardStorage.saveBinary(localPath, await file.arrayBuffer());
-      updateAsset(kind, id, {
-        name: agent.assets[kind].find((item) => item.id === id)?.name || file.name,
+      const currentAgent = agentRef.current;
+      const currentList = currentAgent.assets[kind] || [];
+      const target = currentList.find((item) => item.id === id);
+      if (!target) {
+        if (showToast) toast.error("当前资产项不存在");
+        return false;
+      }
+      const mediaItem: StoryboardAssetMediaItem = {
+        id: mediaId,
         source: "upload",
-        status: "ready",
         mediaType: getMediaTypeFromFile(file),
         localPath,
+        name: file.name,
+        createdAt: Date.now(),
+      };
+      const nextAsset = appendAssetMediaItem(
+        {
+          ...target,
+          name: target.name || file.name,
+        },
+        mediaItem,
+      );
+      await saveAgent({
+        ...currentAgent,
+        assets: {
+          ...currentAgent.assets,
+          [kind]: currentList.map((item) => (item.id === id ? nextAsset : item)),
+        },
       });
       toast.success("资产已上传");
     } catch (error) {
@@ -4132,27 +4576,90 @@ const StoryAgentPage = ({
     return pollStoryImageTask(String(taskId));
   };
 
-  const generateAssetWithAi = async (
+  const saveStoryAssetImageUrlToLocal = async (
     kind: StoryboardAssetKind,
-    id: string,
+    mediaId: string,
+    imageUrl: string,
   ) => {
-    if (kind === "audio") {
-      toast.error("音效 AI 生成暂未接入音频模型，请先使用本地上传");
-      return;
+    if (!window.download?.imageAsBuffer) {
+      return undefined;
     }
 
-    const asset = agent.assets[kind].find((item) => item.id === id);
-    const assetName = (asset?.name || "").trim();
-    const assetPrompt = (asset?.prompt || "").trim();
-    const prompt = [assetName ? `资产名称：${assetName}` : "", assetPrompt]
+    const extension = getImageExtensionFromUrl(imageUrl, "png");
+    const localPath = `storyboard/projects/${projectId}/assets/${kind}/${mediaId}.${extension}`;
+    try {
+      const result = await window.download.imageAsBuffer(imageUrl);
+      if (!result.success || !result.data) {
+        console.warn(
+          "[Story] download generated asset image failed",
+          result.error,
+        );
+        return undefined;
+      }
+      const bytes = result.data;
+      const buffer = bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      ) as ArrayBuffer;
+      await storyboardStorage.saveBinary(localPath, buffer);
+      return localPath;
+    } catch (error) {
+      console.warn("[Story] save generated asset image to local failed", error);
+      return undefined;
+    }
+  };
+
+  const buildAssetGenerationPrompt = (
+    kind: StoryboardAssetKind,
+    asset: StoryboardAssetItem,
+    currentAgent: StoryboardAgentData,
+  ) => {
+    const assetName = (asset.name || "").trim();
+    const assetPrompt = (asset.prompt || "").trim();
+    const basePrompt = [
+      assetName ? `资产名称：${assetName}` : "",
+      assetPrompt,
+    ]
       .filter(Boolean)
       .join("\n");
-    if (!prompt) {
-      toast.error("请先填写资产提示词");
-      return;
+
+    if (kind !== "role" || !currentAgent.roleAssetPromptAffixEnabled) {
+      return basePrompt;
     }
 
-    updateAsset(kind, id, { source: "ai", status: "generating" });
+    return [
+      currentAgent.roleAssetPromptPrefix.trim(),
+      basePrompt,
+      currentAgent.roleAssetPromptSuffix.trim(),
+    ]
+      .filter(Boolean)
+      .join("\n");
+  };
+
+  const generateAssetWithAiInternal = async (
+    kind: StoryboardAssetKind,
+    id: string,
+    options: { showToast?: boolean } = {},
+  ) => {
+    const showToast = options.showToast ?? true;
+    if (kind === "audio") {
+      if (showToast) {
+        toast.error("音效 AI 生成暂未接入音频模型，请先使用本地上传");
+      }
+      return false;
+    }
+
+    const sourceAgent = agentRef.current;
+    const asset = sourceAgent.assets[kind].find((item) => item.id === id);
+    const prompt = asset
+      ? buildAssetGenerationPrompt(kind, asset, sourceAgent)
+      : "";
+    if (!prompt) {
+      if (showToast) toast.error("请先填写资产提示词");
+      return false;
+    }
+
+    patchAssetState(kind, id, { source: "ai", status: "generating" });
     try {
       const model =
         asset?.imageModel ||
@@ -4168,19 +4675,102 @@ const StoryAgentPage = ({
         aspectRatio: params.aspectRatio,
         resolution: params.resolution,
       });
-      await saveAssetPatch(kind, id, {
+      const currentAgent = agentRef.current;
+      const currentList = currentAgent.assets[kind] || [];
+      const target = currentList.find((item) => item.id === id);
+      if (!target) {
+        if (showToast) toast.error("当前资产项不存在");
+        return false;
+      }
+      const mediaId = createAssetMediaId("ai_media");
+      const localPath = await saveStoryAssetImageUrlToLocal(
+        kind,
+        mediaId,
+        imageUrl,
+      );
+      const mediaItem: StoryboardAssetMediaItem = {
+        id: mediaId,
         source: "ai",
-        status: "ready",
-        aspectRatio: params.aspectRatio,
-        resolution: params.resolution,
         mediaType: "image",
         mediaUrl: imageUrl,
+        localPath,
+        name: target.name,
+        createdAt: Date.now(),
+      };
+      const nextAsset = appendAssetMediaItem(
+        {
+          ...target,
+          source: "ai",
+          status: "ready",
+          aspectRatio: params.aspectRatio,
+          resolution: params.resolution,
+        },
+        mediaItem,
+      );
+      await saveAgent({
+        ...currentAgent,
+        assets: {
+          ...currentAgent.assets,
+          [kind]: currentList.map((item) => (item.id === id ? nextAsset : item)),
+        },
       });
-      toast.success("AI 资产生成结果已回填");
+      if (showToast) toast.success("AI 资产生成结果已回填");
+      return true;
     } catch (error) {
       console.error("[Story] generate asset failed", error);
       await saveAssetPatch(kind, id, { source: "ai", status: "failed" });
-      toast.error("AI 资产生成失败");
+      if (showToast) toast.error("AI 资产生成失败");
+      return false;
+    }
+  };
+
+  const generateAssetWithAi = async (
+    kind: StoryboardAssetKind,
+    id: string,
+  ) => {
+    await generateAssetWithAiInternal(kind, id);
+  };
+
+  const generateAllRoleAssets = async () => {
+    const roles = agentRef.current.assets.role;
+    if (roles.length === 0) {
+      toast.error("暂无角色资产");
+      return;
+    }
+
+    setGeneratingAllRoles(true);
+    try {
+      let successCount = 0;
+      let skippedCount = 0;
+      for (const role of roles) {
+        const latestRole = agentRef.current.assets.role.find(
+          (item) => item.id === role.id,
+        );
+        if (
+          !latestRole ||
+          !buildAssetGenerationPrompt("role", latestRole, agentRef.current)
+        ) {
+          skippedCount += 1;
+          continue;
+        }
+        const success = await generateAssetWithAiInternal("role", role.id, {
+          showToast: false,
+        });
+        if (success) successCount += 1;
+      }
+
+      if (successCount > 0) {
+        toast.success(
+          skippedCount > 0
+            ? `已生成 ${successCount} 个角色资产，跳过 ${skippedCount} 个空提示词角色`
+            : `已生成 ${successCount} 个角色资产`,
+        );
+      } else {
+        toast.error("没有可生成的角色资产");
+      }
+    } finally {
+      setGeneratingAllRoles(false);
+      setRoleGenerateConfirmOpen(false);
     }
   };
 
@@ -4423,26 +5013,42 @@ const StoryAgentPage = ({
     const items: MentionItem[] = [];
 
     for (const asset of selectedAssets) {
-      let url = isHttpUrl(asset.mediaUrl) ? asset.mediaUrl || "" : "";
+      const primaryMedia = getPrimaryAssetMediaItem(asset);
+      let url = isHttpUrl(primaryMedia?.mediaUrl)
+        ? primaryMedia?.mediaUrl || ""
+        : isHttpUrl(asset.mediaUrl)
+          ? asset.mediaUrl || ""
+          : "";
+      const libraryAssetId = primaryMedia?.assetId || asset.assetId;
+      const localPath = primaryMedia?.localPath || asset.localPath;
 
-      if (!url && settings.assetStoragePath && asset.assetId && assetIndex) {
+      if (!url && settings.assetStoragePath && libraryAssetId && assetIndex) {
         const libraryAsset = assetIndex.assets.find(
-          (item) => item.id === asset.assetId,
+          (item) => item.id === libraryAssetId,
         );
         if (libraryAsset) {
           url = await ensureAssetOssUrl(settings.assetStoragePath, libraryAsset);
         }
       }
 
-      if (!url && asset.localPath) {
-        url = await ensureStoryboardLocalMediaOssUrl(asset);
+      if (!url && localPath) {
+        url = await ensureStoryboardLocalMediaOssUrl({
+          ...asset,
+          localPath,
+          mediaType: primaryMedia?.mediaType || asset.mediaType,
+        });
       }
 
       if (!isHttpUrl(url)) {
         continue;
       }
 
-      const mediaType = getStoryAssetMediaType(asset);
+      const mediaType = getStoryAssetMediaType({
+        ...asset,
+        mediaType: primaryMedia?.mediaType || asset.mediaType,
+        mediaUrl: primaryMedia?.mediaUrl || asset.mediaUrl,
+        localPath,
+      });
       items.push({
         id: asset.id,
         mentionId: asset.id,
@@ -5159,36 +5765,29 @@ const StoryAgentPage = ({
       return;
     }
 
-    const nextList = [...currentList];
-    const firstAsset = usableAssets[0];
-    const firstItem = createLibraryStoryboardAsset(
-      firstAsset,
-      kind,
-      settings.assetStoragePath,
-    );
-    nextList[targetIndex] = {
-      ...nextList[targetIndex],
-      ...firstItem,
-      id,
-      kind,
-    };
+    const target = currentList[targetIndex];
+    let nextTarget = target;
 
-    const existingAssetIds = new Set(
-      nextList
-        .map((item) => item.assetId)
-        .filter((assetId): assetId is string => Boolean(assetId)),
-    );
-
-    for (const asset of usableAssets.slice(1)) {
-      if (existingAssetIds.has(asset.id)) continue;
-      const item = createLibraryStoryboardAsset(
+    for (const asset of usableAssets) {
+      const libraryItem = createLibraryStoryboardAsset(
         asset,
         kind,
         settings.assetStoragePath,
       );
-      nextList.push(item);
-      existingAssetIds.add(asset.id);
+      const mediaItem = getPrimaryAssetMediaItem(libraryItem);
+      if (!mediaItem) continue;
+      nextTarget = appendAssetMediaItem(
+        {
+          ...nextTarget,
+          name: nextTarget.name || asset.name,
+        },
+        mediaItem,
+      );
     }
+
+    const nextList = currentList.map((item) =>
+      item.id === id ? nextTarget : item,
+    );
 
     await saveAgent({
       ...currentAgent,
@@ -5277,7 +5876,7 @@ const StoryAgentPage = ({
 
     const audioId = createId("asset_audio");
     const extension = getFileExtension(file, "mp3");
-    const localPath = `storyboard/projects/${projectId}/snippets/${snippetId}/assets/audio/${audioId}.${extension}`;
+    const localPath = `storyboard/projects/${projectId}/assets/audio/${audioId}.${extension}`;
 
     try {
       await storyboardStorage.saveBinary(localPath, await file.arrayBuffer());
@@ -5573,14 +6172,40 @@ const StoryAgentPage = ({
                     key={kind.id}
                     className="flex min-h-[520px] flex-col rounded-lg border border-white/8 bg-black/20"
                   >
-                    <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3 border-b border-white/5 px-4 py-3">
                       <h3 className="text-sm font-medium text-white/85">
                         {kind.label}
                       </h3>
-                      <Button size="sm" onClick={() => addAsset(kind.id)}>
-                        <Plus size={13} />
-                        新增
-                      </Button>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {kind.id === "role" ? (
+                          <>
+                            <Button
+                              size="sm"
+                              onClick={() => setEditingRolePromptAffix(true)}
+                            >
+                              <Pencil size={13} />
+                              提示词前后缀
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="blue"
+                              onClick={() => setRoleGenerateConfirmOpen(true)}
+                              disabled={generatingAllRoles}
+                            >
+                              {generatingAllRoles ? (
+                                <Loader2 className="animate-spin" />
+                              ) : (
+                                <WandSparkles size={13} />
+                              )}
+                              统一生成
+                            </Button>
+                          </>
+                        ) : null}
+                        <Button size="sm" onClick={() => addAsset(kind.id)}>
+                          <Plus size={13} />
+                          新增
+                        </Button>
+                      </div>
                     </div>
                     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
                       {agent.assets[kind.id].length === 0 ? (
@@ -5612,6 +6237,12 @@ const StoryAgentPage = ({
                             }
                             onBindLocalAudio={(file) =>
                               void bindLocalAudioAsset(kind.id, item.id, file)
+                            }
+                            onSetPrimaryMedia={(mediaId) =>
+                              setAssetPrimaryMediaById(kind.id, item.id, mediaId)
+                            }
+                            onDeleteMedia={(mediaId) =>
+                              deleteAssetMediaById(kind.id, item.id, mediaId)
                             }
                             onGenerate={() =>
                               void generateAssetWithAi(kind.id, item.id)
@@ -5740,6 +6371,35 @@ const StoryAgentPage = ({
               onSave={(value) =>
                 void saveSystemPrompt(editingSystemPrompt, value)
               }
+            />
+          ) : null}
+
+          {editingRolePromptAffix ? (
+            <RolePromptAffixDialog
+              enabled={agent.roleAssetPromptAffixEnabled}
+              prefix={agent.roleAssetPromptPrefix}
+              suffix={agent.roleAssetPromptSuffix}
+              onClose={() => setEditingRolePromptAffix(false)}
+              onSave={(value) => {
+                void saveAgent({
+                  ...agentRef.current,
+                  roleAssetPromptAffixEnabled: value.enabled,
+                  roleAssetPromptPrefix: value.prefix,
+                  roleAssetPromptSuffix: value.suffix,
+                });
+                setEditingRolePromptAffix(false);
+              }}
+            />
+          ) : null}
+
+          {roleGenerateConfirmOpen ? (
+            <RoleGenerateConfirmDialog
+              count={agent.assets.role.length}
+              running={generatingAllRoles}
+              onCancel={() => {
+                if (!generatingAllRoles) setRoleGenerateConfirmOpen(false);
+              }}
+              onConfirm={() => void generateAllRoleAssets()}
             />
           ) : null}
 
@@ -6053,6 +6713,159 @@ const SystemPromptDialog = ({
     </div>
   );
 };
+
+const RolePromptAffixDialog = ({
+  enabled,
+  prefix,
+  suffix,
+  onClose,
+  onSave,
+}: {
+  enabled: boolean;
+  prefix: string;
+  suffix: string;
+  onClose: () => void;
+  onSave: (value: { enabled: boolean; prefix: string; suffix: string }) => void;
+}) => {
+  const [draftEnabled, setDraftEnabled] = useState(enabled);
+  const [draftPrefix, setDraftPrefix] = useState(prefix);
+  const [draftSuffix, setDraftSuffix] = useState(suffix);
+
+  useEffect(() => {
+    setDraftEnabled(enabled);
+    setDraftPrefix(prefix);
+    setDraftSuffix(suffix);
+  }, [enabled, prefix, suffix]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <button
+        type="button"
+        aria-label="关闭提示词前后缀"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+      />
+      <div className="relative z-10 flex w-[min(680px,94vw)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#101012] shadow-2xl">
+        <div className="flex items-start justify-between border-b border-white/8 px-5 py-4">
+          <div>
+            <h3 className="text-base font-medium text-white/90">
+              角色提示词前后缀
+            </h3>
+            <p className="mt-1 text-xs text-white/40">
+              开启后，仅作用于角色资产的 AI 生图提示词。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div className="space-y-4 p-5">
+          <label className="flex items-center justify-between rounded-lg border border-white/8 bg-black/25 px-4 py-3">
+            <span className="text-sm text-white/75">启用前后缀</span>
+            <Switch
+              checked={draftEnabled}
+              onCheckedChange={setDraftEnabled}
+              className="data-[state=checked]:bg-[#B43FEB] data-[state=unchecked]:bg-white/20"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm text-white/65">提示词前缀</span>
+            <textarea
+              className={`${textAreaClass} h-28`}
+              value={draftPrefix}
+              onChange={(event) => setDraftPrefix(event.target.value)}
+              placeholder="例如：统一角色设定、画风、服装要求"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm text-white/65">提示词后缀</span>
+            <textarea
+              className={`${textAreaClass} h-28`}
+              value={draftSuffix}
+              onChange={(event) => setDraftSuffix(event.target.value)}
+              placeholder="例如：统一镜头质感、构图、无文字要求"
+            />
+          </label>
+        </div>
+        <div className="flex justify-end gap-3 border-t border-white/5 bg-black/20 p-5">
+          <Button onClick={onClose}>取消</Button>
+          <Button
+            variant="blue"
+            onClick={() =>
+              onSave({
+                enabled: draftEnabled,
+                prefix: draftPrefix,
+                suffix: draftSuffix,
+              })
+            }
+          >
+            保存
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const RoleGenerateConfirmDialog = ({
+  count,
+  running,
+  onCancel,
+  onConfirm,
+}: {
+  count: number;
+  running: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <button
+      type="button"
+      aria-label="取消统一生成"
+      className="absolute inset-0 cursor-default"
+      onClick={() => {
+        if (!running) onCancel();
+      }}
+    />
+    <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-[#121214] shadow-2xl">
+      <div className="flex items-center justify-between border-b border-white/5 p-5">
+        <h2 className="text-lg font-semibold text-white/90">
+          统一生成角色资产
+        </h2>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={running}
+          className="cursor-pointer text-white/50 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+      <div className="p-5">
+        <p className="text-sm leading-6 text-white/60">
+          确认后会依次为当前角色列的 {count} 个资产调用 AI 生图，并把生成结果追加为候选图。
+        </p>
+      </div>
+      <div className="flex items-center justify-end gap-3 border-t border-white/5 bg-black/20 p-5">
+        <Button onClick={onCancel} disabled={running}>
+          取消
+        </Button>
+        <Button
+          variant="blue"
+          onClick={onConfirm}
+          loading={running}
+          disabled={count === 0}
+        >
+          确认生成
+        </Button>
+      </div>
+    </div>
+  </div>
+);
 
 const VideoEditDrawer = ({
   shot,

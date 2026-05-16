@@ -54,6 +54,17 @@ export type StoryboardAgentStep =
   | "shots"
   | "video-edit";
 
+export type StoryboardAssetMediaItem = {
+  id: string;
+  source: "upload" | "ai" | "library";
+  mediaType?: "image" | "video" | "audio";
+  mediaUrl?: string;
+  localPath?: string;
+  assetId?: string;
+  name?: string;
+  createdAt: number;
+};
+
 export type StoryboardAssetItem = {
   id: string;
   kind: StoryboardAssetKind;
@@ -65,6 +76,8 @@ export type StoryboardAssetItem = {
   mediaUrl?: string;
   localPath?: string;
   assetId?: string;
+  mediaItems?: StoryboardAssetMediaItem[];
+  primaryMediaId?: string;
   imageModel?: string;
   imagePlatform?: string;
   aspectRatio?: string;
@@ -113,6 +126,9 @@ export type StoryboardAgentData = {
   scriptContent: string;
   assetSystemPrompt: string;
   splitSystemPrompt: string;
+  roleAssetPromptAffixEnabled: boolean;
+  roleAssetPromptPrefix: string;
+  roleAssetPromptSuffix: string;
   unlockedStep: StoryboardAgentStep;
   assets: Record<StoryboardAssetKind, StoryboardAssetItem[]>;
   shots: StoryboardShot[];
@@ -129,12 +145,14 @@ export type StoryboardAgentAssetResult = {
   assets: Record<StoryboardAssetKind, StoryboardAssetItem[]>;
 };
 
+export type StoryboardAssets = Record<StoryboardAssetKind, StoryboardAssetItem[]>;
+
 type StoryboardIndex = {
   version: number;
   projects: StoryboardProject[];
 };
 
-const emptyAssets = (): Record<StoryboardAssetKind, StoryboardAssetItem[]> => ({
+const emptyAssets = (): StoryboardAssets => ({
   role: [],
   scene: [],
   prop: [],
@@ -151,6 +169,9 @@ export const createEmptyAgentData = (): StoryboardAgentData => ({
   scriptContent: "",
   assetSystemPrompt: DEFAULT_ASSET_SYSTEM_PROMPT,
   splitSystemPrompt: DEFAULT_SPLIT_SYSTEM_PROMPT,
+  roleAssetPromptAffixEnabled: false,
+  roleAssetPromptPrefix: "",
+  roleAssetPromptSuffix: "",
   unlockedStep: "script",
   assets: emptyAssets(),
   shots: [],
@@ -300,6 +321,258 @@ const projectPath = (projectId: string, fileName: string) =>
 const snippetPath = (projectId: string, snippetId: string, fileName: string) =>
   `${STORYBOARD_ROOT}/projects/${projectId}/snippets/${snippetId}/${fileName}`;
 
+const normalizeAssetNameKey = (asset: StoryboardAssetItem) =>
+  `${asset.kind}:${asset.name.trim().toLowerCase() || asset.id}`;
+
+const normalizeAssets = (assets?: Partial<StoryboardAssets>): StoryboardAssets => ({
+  role: [...(assets?.role || [])],
+  scene: [...(assets?.scene || [])],
+  prop: [...(assets?.prop || [])],
+  audio: [...(assets?.audio || [])],
+});
+
+const createLegacyMediaItem = (
+  asset: StoryboardAssetItem,
+): StoryboardAssetMediaItem | null => {
+  if (!asset.mediaUrl && !asset.localPath && !asset.assetId) return null;
+  return {
+    id: asset.primaryMediaId || `legacy_media_${asset.id}`,
+    source: asset.source,
+    mediaType: asset.mediaType,
+    mediaUrl: asset.mediaUrl,
+    localPath: asset.localPath,
+    assetId: asset.assetId,
+    name: asset.name,
+    createdAt: Date.now(),
+  };
+};
+
+const mergeMediaItems = (
+  current: StoryboardAssetItem,
+  incoming: StoryboardAssetItem,
+) => {
+  const items = [...(current.mediaItems || [])];
+  const currentLegacyItem = createLegacyMediaItem(current);
+  const incomingLegacyItem = createLegacyMediaItem(incoming);
+
+  if (currentLegacyItem && !items.some((item) => item.id === currentLegacyItem.id)) {
+    items.unshift(currentLegacyItem);
+  }
+
+  for (const item of [
+    ...(incoming.mediaItems || []),
+    ...(incomingLegacyItem ? [incomingLegacyItem] : []),
+  ]) {
+    const exists = items.some((currentItem) => {
+      if (item.assetId && currentItem.assetId === item.assetId) return true;
+      if (item.mediaUrl && currentItem.mediaUrl === item.mediaUrl) return true;
+      if (item.localPath && currentItem.localPath === item.localPath) return true;
+      return currentItem.id === item.id;
+    });
+    if (!exists) items.push(item);
+  }
+  return items;
+};
+
+const mergeAssetItem = (
+  current: StoryboardAssetItem,
+  incoming: StoryboardAssetItem,
+): StoryboardAssetItem => {
+  const mediaItems = mergeMediaItems(current, incoming);
+  return {
+    ...current,
+    prompt: current.prompt || incoming.prompt,
+    source: current.source || incoming.source,
+    status: current.status === "idle" ? incoming.status : current.status,
+    mediaType: current.mediaType || incoming.mediaType,
+    mediaUrl: current.mediaUrl || incoming.mediaUrl,
+    localPath: current.localPath || incoming.localPath,
+    assetId: current.assetId || incoming.assetId,
+    mediaItems: mediaItems.length > 0 ? mediaItems : current.mediaItems,
+    primaryMediaId: current.primaryMediaId || incoming.primaryMediaId,
+    imageModel: current.imageModel || incoming.imageModel,
+    imagePlatform: current.imagePlatform || incoming.imagePlatform,
+    aspectRatio: current.aspectRatio || incoming.aspectRatio,
+    resolution: current.resolution || incoming.resolution,
+    audioAssetIds: Array.from(
+      new Set([
+        ...(current.audioAssetIds || []),
+        ...(incoming.audioAssetIds || []),
+      ]),
+    ),
+  };
+};
+
+const mergeAssets = (
+  currentAssets: StoryboardAssets,
+  incomingAssets?: Partial<StoryboardAssets>,
+) => {
+  const nextAssets = normalizeAssets(currentAssets);
+  const idMap = new Map<string, string>();
+
+  for (const kind of ["role", "scene", "prop", "audio"] as const) {
+    const existingIndexByName = new Map<string, number>();
+    nextAssets[kind].forEach((asset, index) => {
+      existingIndexByName.set(normalizeAssetNameKey(asset), index);
+      idMap.set(asset.id, asset.id);
+    });
+
+    for (const asset of incomingAssets?.[kind] || []) {
+      const key = normalizeAssetNameKey(asset);
+      const existingIndex = existingIndexByName.get(key);
+      if (existingIndex === undefined) {
+        nextAssets[kind].push(asset);
+        existingIndexByName.set(key, nextAssets[kind].length - 1);
+        idMap.set(asset.id, asset.id);
+        continue;
+      }
+
+      const existing = nextAssets[kind][existingIndex];
+      nextAssets[kind][existingIndex] = mergeAssetItem(existing, asset);
+      idMap.set(asset.id, existing.id);
+    }
+  }
+
+  return { assets: nextAssets, idMap };
+};
+
+const remapAssetIds = (ids: string[] | undefined, idMap: Map<string, string>) =>
+  Array.from(new Set((ids || []).map((id) => idMap.get(id) || id)));
+
+const remapAgentAssetReferences = (
+  agent: StoryboardAgentData,
+  sharedAssets: StoryboardAssets,
+  idMap: Map<string, string>,
+): StoryboardAgentData => ({
+  ...agent,
+  assets: sharedAssets,
+  shots: (agent.shots || []).map((shot) => ({
+    ...shot,
+    assetIds: remapAssetIds(shot.assetIds, idMap),
+  })),
+});
+
+const remapSharedAssetReferences = (
+  assets: StoryboardAssets,
+  idMap: Map<string, string>,
+): StoryboardAssets => ({
+  ...assets,
+  role: assets.role.map((asset) => ({
+    ...asset,
+    audioAssetIds: remapAssetIds(asset.audioAssetIds, idMap),
+  })),
+  scene: assets.scene.map((asset) => ({
+    ...asset,
+    audioAssetIds: remapAssetIds(asset.audioAssetIds, idMap),
+  })),
+  prop: assets.prop.map((asset) => ({
+    ...asset,
+    audioAssetIds: remapAssetIds(asset.audioAssetIds, idMap),
+  })),
+});
+
+const isLegacySnippetAssetPath = (projectId: string, localPath?: string) =>
+  Boolean(
+    localPath?.startsWith(`${STORYBOARD_ROOT}/projects/${projectId}/snippets/`) &&
+      localPath.includes("/assets/"),
+  );
+
+const getPathExtension = (path: string, fallback: string) =>
+  path.split("?")[0].split("#")[0].split(".").pop()?.toLowerCase() || fallback;
+
+const getAssetFileFallbackExtension = (
+  mediaType?: StoryboardAssetItem["mediaType"],
+) => {
+  if (mediaType === "video") return "mp4";
+  if (mediaType === "audio") return "mp3";
+  return "png";
+};
+
+const migrateProjectAssetLocalPaths = async (
+  projectId: string,
+  assets: StoryboardAssets,
+): Promise<{ assets: StoryboardAssets; changed: boolean }> => {
+  let changed = false;
+  const copiedPathMap = new Map<string, string>();
+
+  const copyLegacyPath = async (
+    localPath: string | undefined,
+    kind: StoryboardAssetKind,
+    id: string,
+    mediaType?: StoryboardAssetItem["mediaType"],
+  ) => {
+    if (!isLegacySnippetAssetPath(projectId, localPath) || !localPath) {
+      return localPath;
+    }
+
+    const cachedPath = copiedPathMap.get(localPath);
+    if (cachedPath) return cachedPath;
+
+    const readResult = await readStorageFile(localPath);
+    const buffer = readResult.success ? normalizeBuffer(readResult.data) : null;
+    if (!buffer) {
+      console.warn("[storyboard] legacy asset file missing", localPath);
+      return localPath;
+    }
+
+    const extension = getPathExtension(
+      localPath,
+      getAssetFileFallbackExtension(mediaType),
+    );
+    const nextPath = `${STORYBOARD_ROOT}/projects/${projectId}/assets/${kind}/${id}.${extension}`;
+    const writeResult = await writeStorageFile(nextPath, buffer);
+    if (!writeResult.success) {
+      console.warn(
+        "[storyboard] migrate legacy asset file failed",
+        localPath,
+        writeResult.error,
+      );
+      return localPath;
+    }
+
+    const migratedPath = writeResult.path || nextPath;
+    copiedPathMap.set(localPath, migratedPath);
+    changed = true;
+    return migratedPath;
+  };
+
+  const nextAssets = normalizeAssets();
+  for (const kind of ["role", "scene", "prop", "audio"] as const) {
+    nextAssets[kind] = await Promise.all(
+      assets[kind].map(async (asset) => {
+        const mediaItems = asset.mediaItems
+          ? await Promise.all(
+              asset.mediaItems.map(async (item) => ({
+                ...item,
+                localPath: await copyLegacyPath(
+                  item.localPath,
+                  kind,
+                  item.id,
+                  item.mediaType,
+                ),
+              })),
+            )
+          : asset.mediaItems;
+
+        const localPath = await copyLegacyPath(
+          asset.localPath,
+          kind,
+          asset.primaryMediaId || asset.id,
+          asset.mediaType,
+        );
+
+        return {
+          ...asset,
+          localPath,
+          mediaItems,
+        };
+      }),
+    );
+  }
+
+  return { assets: nextAssets, changed };
+};
+
 export const storyboardStorage = {
   hasStoragePath: () => Boolean(localStorageService.getStoragePath()),
 
@@ -342,6 +615,7 @@ export const storyboardStorage = {
     }
 
     await writeJson(projectPath(project.id, "project.json"), project);
+    await writeJson(projectPath(project.id, "assets.json"), emptyAssets());
 
     const index = await readIndex();
     index.projects = [project, ...index.projects];
@@ -451,6 +725,73 @@ export const storyboardStorage = {
     if (project) {
       await this.updateProject(project);
     }
+  },
+
+  async loadProjectAssets(projectId: string): Promise<StoryboardAssets> {
+    const assets = await readJson<Partial<StoryboardAssets>>(
+      projectPath(projectId, "assets.json"),
+    );
+    return normalizeAssets(assets || emptyAssets());
+  },
+
+  async saveProjectAssets(
+    projectId: string,
+    assets: StoryboardAssets,
+  ): Promise<void> {
+    const migrated = await migrateProjectAssetLocalPaths(
+      projectId,
+      normalizeAssets(assets),
+    );
+    await writeJson(projectPath(projectId, "assets.json"), migrated.assets);
+  },
+
+  async ensureProjectAssets(projectId: string): Promise<StoryboardAssets> {
+    const existing = await readJson<Partial<StoryboardAssets>>(
+      projectPath(projectId, "assets.json"),
+    );
+    if (existing) {
+      const migrated = await migrateProjectAssetLocalPaths(
+        projectId,
+        normalizeAssets(existing),
+      );
+      if (migrated.changed) {
+        await writeJson(projectPath(projectId, "assets.json"), migrated.assets);
+      }
+      return migrated.assets;
+    }
+
+    const snippets = await this.listSnippets(projectId);
+    const loadedAgents: Array<{
+      snippetId: string;
+      agent: StoryboardAgentData;
+    }> = [];
+    let sharedAssets = emptyAssets();
+    const globalIdMap = new Map<string, string>();
+
+    for (const snippet of snippets) {
+      const agent = await this.loadAgentData(projectId, snippet.id);
+      loadedAgents.push({ snippetId: snippet.id, agent });
+      const merged = mergeAssets(sharedAssets, agent.assets);
+      sharedAssets = merged.assets;
+      for (const [fromId, toId] of merged.idMap) {
+        globalIdMap.set(fromId, toId);
+      }
+    }
+
+    sharedAssets = remapSharedAssetReferences(sharedAssets, globalIdMap);
+    const migrated = await migrateProjectAssetLocalPaths(projectId, sharedAssets);
+    sharedAssets = migrated.assets;
+    await this.saveProjectAssets(projectId, sharedAssets);
+
+    for (const { snippetId, agent } of loadedAgents) {
+      await this.saveAgentData(
+        projectId,
+        snippetId,
+        remapAgentAssetReferences(agent, sharedAssets, globalIdMap),
+      );
+    }
+
+    return sharedAssets;
   },
 
   async loadAgentData(
