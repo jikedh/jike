@@ -149,8 +149,8 @@ import {
   createRhartImageG2OfficialImageToImage,
   createRhartImageG2OfficialTextToImage,
   createRhartImageG2TextToImage,
-  createRhartImageNProImageToImage,
-  createRhartImageNProOfficialImageToImage,
+  createRhartImageNProEdit,
+  createRhartImageNProOfficialEdit,
   createRhartImageNProOfficialTextToImage,
   createRhartImageNProTextToImage,
   queryRunningHubV2Task,
@@ -571,12 +571,12 @@ const resolveRunningHubImageRoutes = (model?: string) => {
       lowCost: {
         model: "nano-banana-pro",
         textToImage: createRhartImageNProTextToImage,
-        imageToImage: createRhartImageNProImageToImage,
+        imageToImage: createRhartImageNProEdit,
       },
       official: {
         model: "nano-banana-pro",
         textToImage: createRhartImageNProOfficialTextToImage,
-        imageToImage: createRhartImageNProOfficialImageToImage,
+        imageToImage: createRhartImageNProOfficialEdit,
       },
     } as const;
   }
