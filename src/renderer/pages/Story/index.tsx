@@ -402,6 +402,8 @@ const normalizeAgentData = (
     splitSystemPrompt: data.splitSystemPrompt ?? empty.splitSystemPrompt,
     roleAssetPromptAffixEnabled:
       data.roleAssetPromptAffixEnabled ?? empty.roleAssetPromptAffixEnabled,
+    shotPromptAffixEnabled:
+      data.shotPromptAffixEnabled ?? empty.shotPromptAffixEnabled,
     roleAssetPromptPrefix:
       data.roleAssetPromptPrefix ?? empty.roleAssetPromptPrefix,
     roleAssetPromptSuffix:
@@ -4138,6 +4140,7 @@ const StoryAgentPage = ({
   const [editingSystemPrompt, setEditingSystemPrompt] =
     useState<StorySystemPromptTarget | null>(null);
   const [editingRolePromptAffix, setEditingRolePromptAffix] = useState(false);
+  const [editingShotPromptAffix, setEditingShotPromptAffix] = useState(false);
   const [nextConfirmTarget, setNextConfirmTarget] =
     useState<StoryNextConfirmTarget | null>(null);
   const [roleGenerateConfirmOpen, setRoleGenerateConfirmOpen] = useState(false);
@@ -4223,8 +4226,45 @@ const StoryAgentPage = ({
     },
     [projectId, snippetId],
   );
-
+  const saveAgentSilently = useCallback(
+    async (next: StoryboardAgentData) => {
+      const normalizedNext = migrateStoryShotVideoModels(next);
+      try {
+        setSaving(true);
+        await storyboardStorage.saveProjectAssets(
+          projectId,
+          normalizedNext.assets,
+        );
+        await storyboardStorage.saveAgentData(
+          projectId,
+          snippetId,
+          normalizedNext,
+        );
+      } catch (error) {
+        console.error("[Story] auto save agent failed", error);
+        toast.error("自动保存剧本 Agent 失败");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [projectId, snippetId],
+  );
+  const skipAutoSaveRef = useRef(true);
   useEffect(() => {
+    if (loading) {
+      return;
+    }
+    if (skipAutoSaveRef.current) {
+      skipAutoSaveRef.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void saveAgentSilently(agentRef.current);
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [agent, loading, saveAgentSilently]);
+  useEffect(() => {
+    skipAutoSaveRef.current = true;
     let cancelled = false;
     setLoading(true);
 
@@ -4798,11 +4838,11 @@ const StoryAgentPage = ({
       return;
     }
 
+    setRoleGenerateConfirmOpen(false);
     setGeneratingAllRoles(true);
     try {
-      let successCount = 0;
       let skippedCount = 0;
-      for (const role of roles) {
+      const generateTasks = roles.flatMap((role) => {
         const latestRole = agentRef.current.assets.role.find(
           (item) => item.id === role.id,
         );
@@ -4811,13 +4851,16 @@ const StoryAgentPage = ({
           !buildAssetGenerationPrompt("role", latestRole, agentRef.current)
         ) {
           skippedCount += 1;
-          continue;
+          return [];
         }
-        const success = await generateAssetWithAiInternal("role", role.id, {
-          showToast: false,
-        });
-        if (success) successCount += 1;
-      }
+        return [
+          generateAssetWithAiInternal("role", role.id, {
+            showToast: false,
+          }),
+        ];
+      });
+      const results = await Promise.all(generateTasks);
+      const successCount = results.filter(Boolean).length;
 
       if (successCount > 0) {
         toast.success(
@@ -4830,7 +4873,6 @@ const StoryAgentPage = ({
       }
     } finally {
       setGeneratingAllRoles(false);
-      setRoleGenerateConfirmOpen(false);
     }
   };
 
@@ -5226,11 +5268,15 @@ const StoryAgentPage = ({
   };
 
   const generateShotVideo = async (shot: StoryboardShot) => {
-    const prompt = (shot.prompt || shot.script || "").trim();
-    if (!prompt) {
+    const basePrompt = (shot.prompt || shot.script || "").trim();
+    if (!basePrompt) {
       toast.error("请先填写分镜提示词");
       return;
     }
+    const useAffix = Boolean(agent.shotPromptAffixEnabled);
+    const prefix = useAffix ? (agent.promptPrefix || "").trim() : "";
+    const suffix = useAffix ? (agent.promptSuffix || "").trim() : "";
+    const prompt = `${prefix}${prefix && " "}${basePrompt}${suffix && " "}${suffix}`.replace(/\s+/g, " ").trim();
 
     updateShot(shot.id, { videoStatus: "generating" });
     try {
@@ -6137,30 +6183,6 @@ const StoryAgentPage = ({
                   }
                 />
               </label>
-              <label>
-                <span className="mb-2 block text-sm text-white/65">
-                  提示词前缀
-                </span>
-                <input
-                  className={inputClass}
-                  value={agent.promptPrefix}
-                  onChange={(event) =>
-                    patchAgent({ promptPrefix: event.target.value })
-                  }
-                />
-              </label>
-              <label>
-                <span className="mb-2 block text-sm text-white/65">
-                  提示词后缀
-                </span>
-                <input
-                  className={inputClass}
-                  value={agent.promptSuffix}
-                  onChange={(event) =>
-                    patchAgent({ promptSuffix: event.target.value })
-                  }
-                />
-              </label>
               <label className="col-span-2">
                 <span className="mb-2 block text-sm text-white/65">
                   剧本分类
@@ -6330,6 +6352,10 @@ const StoryAgentPage = ({
                 </p>
               </div>
               <div className="flex gap-3">
+                <Button onClick={() => setEditingShotPromptAffix(true)}>
+                  <Pencil size={13} />
+                  提示词前后缀
+                </Button>
                 <Button onClick={persistCurrent}>保存分镜</Button>
                 <Button variant="blue" onClick={proceedToVideoEdit}>
                   下一步
@@ -6448,6 +6474,24 @@ const StoryAgentPage = ({
                   roleAssetPromptSuffix: value.suffix,
                 });
                 setEditingRolePromptAffix(false);
+              }}
+            />
+          ) : null}
+
+          {editingShotPromptAffix ? (
+            <ShotPromptAffixDialog
+              enabled={agent.shotPromptAffixEnabled ?? false}
+              prefix={agent.promptPrefix}
+              suffix={agent.promptSuffix}
+              onClose={() => setEditingShotPromptAffix(false)}
+              onSave={(value) => {
+                void saveAgent({
+                  ...agentRef.current,
+                  shotPromptAffixEnabled: value.enabled,
+                  promptPrefix: value.prefix,
+                  promptSuffix: value.suffix,
+                });
+                setEditingShotPromptAffix(false);
               }}
             />
           ) : null}
@@ -6848,6 +6892,101 @@ const RolePromptAffixDialog = ({
               value={draftSuffix}
               onChange={(event) => setDraftSuffix(event.target.value)}
               placeholder="例如：统一镜头质感、构图、无文字要求"
+            />
+          </label>
+        </div>
+        <div className="flex justify-end gap-3 border-t border-white/5 bg-black/20 p-5">
+          <Button onClick={onClose}>取消</Button>
+          <Button
+            variant="blue"
+            onClick={() =>
+              onSave({
+                enabled: draftEnabled,
+                prefix: draftPrefix,
+                suffix: draftSuffix,
+              })
+            }
+          >
+            保存
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ShotPromptAffixDialog = ({
+  enabled,
+  prefix,
+  suffix,
+  onClose,
+  onSave,
+}: {
+  enabled: boolean;
+  prefix: string;
+  suffix: string;
+  onClose: () => void;
+  onSave: (value: { enabled: boolean; prefix: string; suffix: string }) => void;
+}) => {
+  const [draftEnabled, setDraftEnabled] = useState(enabled);
+  const [draftPrefix, setDraftPrefix] = useState(prefix);
+  const [draftSuffix, setDraftSuffix] = useState(suffix);
+
+  useEffect(() => {
+    setDraftEnabled(enabled);
+    setDraftPrefix(prefix);
+    setDraftSuffix(suffix);
+  }, [enabled, prefix, suffix]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <button
+        type="button"
+        aria-label="关闭提示词前后缀"
+        className="absolute inset-0 cursor-default"
+        onClick={onClose}
+      />
+      <div className="relative z-10 flex w-[min(680px,94vw)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#101012] shadow-2xl">
+        <div className="flex items-start justify-between border-b border-white/8 px-5 py-4">
+          <div>
+            <h3 className="text-base font-medium text-white/90">分镜提示词前后缀</h3>
+            <p className="mt-1 text-xs text-white/40">
+              保存分镜时，会将前缀和后缀追加到每条分镜提示词。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-white/55 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div className="space-y-4 p-5">
+          <label className="flex items-center justify-between rounded-lg border border-white/8 bg-black/25 px-4 py-3">
+            <span className="text-sm text-white/75">启用前后缀</span>
+            <Switch
+              checked={draftEnabled}
+              onCheckedChange={setDraftEnabled}
+              className="data-[state=checked]:bg-[#B43FEB] data-[state=unchecked]:bg-white/20"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm text-white/65">提示词前缀</span>
+            <textarea
+              className={`${textAreaClass} h-28`}
+              value={draftPrefix}
+              onChange={(event) => setDraftPrefix(event.target.value)}
+              placeholder="例如：统一镜头画风、光影、人物设定"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm text-white/65">提示词后缀</span>
+            <textarea
+              className={`${textAreaClass} h-28`}
+              value={draftSuffix}
+              onChange={(event) => setDraftSuffix(event.target.value)}
+              placeholder="例如：保持简洁、避免文字、聚焦场景氛围"
             />
           </label>
         </div>

@@ -116,6 +116,7 @@ export type StoryboardShot = {
 
 export type StoryboardAgentData = {
   scriptTitle: string;
+  shotPromptAffixEnabled?: boolean;
   promptPrefix: string;
   promptSuffix: string;
   scriptCategory: string;
@@ -161,6 +162,7 @@ const emptyAssets = (): StoryboardAssets => ({
 
 export const createEmptyAgentData = (): StoryboardAgentData => ({
   scriptTitle: "",
+  shotPromptAffixEnabled: false,
   promptPrefix: DEFAULT_PROMPT_PREFIX,
   promptSuffix: DEFAULT_PROMPT_SUFFIX,
   scriptCategory: "解说漫",
