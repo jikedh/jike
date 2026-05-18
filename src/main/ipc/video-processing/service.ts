@@ -106,7 +106,11 @@ const uploadLocalVideoToBackend = async (
   const url = `${backendBaseUrl}/v1/oss/upload`;
   const formData = new FormData();
   const contentType = "video/mp4";
-  const blob = new Blob([buffer], { type: contentType });
+  const arrayBuffer = buffer.buffer.slice(
+    buffer.byteOffset,
+    buffer.byteOffset + buffer.byteLength,
+  ) as ArrayBuffer;
+  const blob = new Blob([arrayBuffer], { type: contentType });
   formData.append("file", blob, fileName);
 
   const token = authToken.startsWith("Bearer ")

@@ -232,13 +232,19 @@ const grok2ApiRequest = async <T = any>(
 
   await applyGrok2ApiAuth(nextConfig);
 
+  const headerRecord = {
+    ...DEFAULT_HEADERS,
+    ...toHeaderRecord(nextConfig.headers),
+  };
+  if (typeof FormData !== "undefined" && nextConfig.data instanceof FormData) {
+    delete headerRecord["Content-Type"];
+    delete headerRecord["content-type"];
+  }
+
   const finalConfig: AxiosRequestConfig = {
     ...nextConfig,
     timeout: nextConfig.timeout ?? REQUEST_TIMEOUT,
-    headers: {
-      ...DEFAULT_HEADERS,
-      ...toHeaderRecord(nextConfig.headers),
-    },
+    headers: headerRecord,
   };
 
   return await axios(finalConfig).then((response) => response.data);

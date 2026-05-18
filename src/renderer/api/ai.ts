@@ -310,6 +310,46 @@ export function createGrok2ApiChatImageEditGeneration(
   });
 }
 
+async function fetchImageFileFromUrl(imageUrl: string): Promise<File> {
+  const response = await fetch(imageUrl);
+  if (!response.ok) {
+    throw new Error(`无法加载参考图: HTTP ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const mimeType = blob.type || "image/png";
+  const ext = mimeType.split("/")[1] || "png";
+  return new File([blob], `reference-${Date.now()}.${ext}`, { type: mimeType });
+}
+
+export async function createGrok2ApiImageEditGeneration(data: {
+  model: "grok-imagine-image-edit";
+  prompt: string;
+  imageUrls: string[];
+  n?: 1 | 2;
+  size?: "1024x1024";
+  response_format?: "url" | "b64_json";
+}) {
+  const formData = new FormData();
+  formData.append("model", data.model);
+  formData.append("prompt", data.prompt);
+  formData.append("n", String(data.n ?? 1));
+  formData.append("size", data.size ?? "1024x1024");
+  formData.append("response_format", data.response_format ?? "url");
+
+  const files = await Promise.all(
+    data.imageUrls.slice(0, 5).map((imageUrl) => fetchImageFileFromUrl(imageUrl)),
+  );
+  files.forEach((file) => formData.append("image[]", file));
+
+  return grok2ApiRequest<Grok2ApiImageGenerationResponse>({
+    url: "/v1/images/edits",
+    method: "post",
+    data: formData,
+    timeout: 900000,
+  });
+}
+
 export function createGrok2ApiVideoGeneration(
   data: Grok2ApiVideoGenerationRequest,
 ) {

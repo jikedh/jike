@@ -129,6 +129,7 @@ import {
   createAdobe2ApiVideoGeneration,
   createDashscopeVideoSynthesis,
   createGrok2ApiChatImageEditGeneration,
+  createGrok2ApiImageEditGeneration,
   createGrok2ApiImageGeneration,
   createGrok2ApiVideoGeneration,
   createImageGeneration,
@@ -1794,7 +1795,11 @@ const pollVideoTaskGeneration = async (
               (data.metadata?.failedTasks as unknown[]) ?? []
             ).length;
             const completedCount = mergedData.length + failedCount;
-            const completed = completedCount >= totalTasks;
+            const totalTaskCount = Math.max(
+              1,
+              ((data.metadata?.tasks as unknown[]) ?? [normalizedTaskId]).length,
+            );
+            const completed = completedCount >= totalTaskCount;
 
             return {
               ...data,
@@ -1803,7 +1808,10 @@ const pollVideoTaskGeneration = async (
                 : GenerationStatus.IN_PROGRESS,
               progress: completed
                 ? 100
-                : Math.min(99, Math.round((completedCount / totalTasks) * 100)),
+                : Math.min(
+                    99,
+                    Math.round((completedCount / totalTaskCount) * 100),
+                  ),
               task_id: normalizedTaskId,
               result: {
                 type: "video",
@@ -4070,122 +4078,101 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           }));
 
           const grokReferenceUrls = imageUrls.filter(Boolean).slice(0, 7);
-          const response =
+          if (
             grokImageModel === "grok-imagine-image-edit" &&
-              grokReferenceUrls.length > 0
-              ? await createGrok2ApiChatImageEditGeneration({
-                model: "grok-imagine-image-edit",
-                stream: false,
-                messages: [
-                  {
-                    role: "user",
-                    content: [
-                      { type: "text", text: prompt || "" },
-                      ...grokReferenceUrls.map((url) => ({
-                        type: "image_url" as const,
-                        image_url: { url },
-                      })),
-                    ],
-                  },
-                ],
-                image_config: {
-                  n: 1,
-                  size: "1024x1024",
-                  response_format: "url",
-                },
-              })
-              : await createGrok2ApiImageGeneration({
-                model:
-                  grokImageModel === "grok-imagine-image-edit"
-                    ? "grok-imagine-image-pro"
-                    : grokImageModel,
-                prompt: prompt || "",
-                n: 1,
-                size: resolveGrokImageSize(size),
-                response_format: "url",
-              });
+            grokReferenceUrls.length > 0
+          ) {
+            const response = await createGrok2ApiImageEditGeneration({
+              model: "grok-imagine-image-edit",
+              prompt: prompt || "",
+              imageUrls: grokReferenceUrls,
+              n: 1,
+              size: "1024x1024",
+              response_format: "url",
+            });
 
-          const responseAny = response as any;
-          const responseUrl =
-            responseAny?.data?.[0]?.url ??
-            extractMarkdownMediaUrl(
-              responseAny?.choices?.[0]?.message?.content,
-              "image",
-            );
-          if (!responseUrl) {
-            throw new Error("Grok2API 未返回图片地址");
-          }
-
-          const ossUrl = await mirrorGeneratedImageUrlToOss(responseUrl);
-          const projectId = get().projectId;
-          let resultItem: {
-            url: string;
-            remoteUrl: string;
-            originalUrl?: string;
-            localName?: string;
-            localPath?: string;
-          } = {
-            url: ossUrl,
-            remoteUrl: ossUrl,
-            ...(ossUrl === responseUrl ? {} : { originalUrl: responseUrl }),
-          };
-
-          if (projectId) {
-            try {
-              const fileName = await saveGeneratedImageToLocal(
-                projectId,
-                ossUrl,
-                extractExtensionFromUrl(responseUrl, "png"),
+            const responseAny = response as any;
+            const responseUrl =
+              responseAny?.data?.[0]?.url ??
+              extractMarkdownMediaUrl(
+                responseAny?.choices?.[0]?.message?.content,
+                "image",
               );
-
-              if (fileName) {
-                resultItem = {
-                  ...resultItem,
-                  localName: fileName,
-                  localPath: getLocalFilePath(
-                    projectId,
-                    "generate_image",
-                    fileName,
-                  ),
-                };
-              }
-            } catch (saveError) {
-              console.error(
-                "[startGeminiPro2Generation] 保存 Grok 图片到本地失败:",
-                saveError,
-              );
+            if (!responseUrl) {
+              throw new Error("Grok2API 未返回图片地址");
             }
-          }
 
-          set((state) => ({
-            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-              const existingData = data.result?.data ?? [];
-              const mergedData = appendMediaSequences(existingData, [
-                resultItem,
-              ]);
-              return {
-                ...data,
-                status: GenerationStatus.COMPLETED,
-                progress: 100,
-                result: {
-                  type: "image",
-                  data: mergedData,
-                },
-                error: undefined,
-              };
-            }),
-          }));
-          saveCurrentCanvasToHistory();
-          if (useChatSettingsStore.getState().autoSaveEnabled) {
-            get().saveGraph();
+            const ossUrl = await mirrorGeneratedImageUrlToOss(responseUrl);
+            const projectId = get().projectId;
+            let resultItem: {
+              url: string;
+              remoteUrl: string;
+              originalUrl?: string;
+              localName?: string;
+              localPath?: string;
+            } = {
+              url: ossUrl,
+              remoteUrl: ossUrl,
+              ...(ossUrl === responseUrl ? {} : { originalUrl: responseUrl }),
+            };
+
+            if (projectId) {
+              try {
+                const fileName = await saveGeneratedImageToLocal(
+                  projectId,
+                  ossUrl,
+                  extractExtensionFromUrl(responseUrl, "png"),
+                );
+
+                if (fileName) {
+                  resultItem = {
+                    ...resultItem,
+                    localName: fileName,
+                    localPath: getLocalFilePath(
+                      projectId,
+                      "generate_image",
+                      fileName,
+                    ),
+                  };
+                }
+              } catch (saveError) {
+                console.error(
+                  "[startGeminiPro2Generation] 保存 Grok 图片到本地失败:",
+                  saveError,
+                );
+              }
+            }
+
+            set((state) => ({
+              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+                const existingData = data.result?.data ?? [];
+                const mergedData = appendMediaSequences(existingData, [
+                  resultItem,
+                ]);
+                return {
+                  ...data,
+                  status: GenerationStatus.COMPLETED,
+                  progress: 100,
+                  result: {
+                    type: "image",
+                    data: mergedData,
+                  },
+                  error: undefined,
+                };
+              }),
+            }));
+            saveCurrentCanvasToHistory();
+            if (useChatSettingsStore.getState().autoSaveEnabled) {
+              get().saveGraph();
+            }
+            await refreshBalanceAfterGeneration({
+              scene: "image",
+              nodeId,
+              model: originalModel,
+              requiredPoints: payload.requiredPoints,
+            });
+            return;
           }
-          await refreshBalanceAfterGeneration({
-            scene: "image",
-            nodeId,
-            model: originalModel,
-            requiredPoints: payload.requiredPoints,
-          });
-          return;
         }
 
         // RunningHub 渠道（低价 -> 官方回退）

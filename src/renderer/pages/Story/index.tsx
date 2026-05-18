@@ -1382,10 +1382,43 @@ const resolveGrokStoryImageModel = (model: string) => {
   return undefined;
 };
 
-const getDirectImageUrl = (response: any) =>
-  response?.data?.[0]?.url ||
-  extractMarkdownMediaUrl(response?.choices?.[0]?.message?.content, "image") ||
-  "";
+const resolveGrokStoryImageSize = (aspectRatio: string) =>
+  (
+    {
+      "16:9": "1280x720",
+      "9:16": "720x1280",
+      "3:2": "1792x1024",
+      "2:3": "1024x1792",
+      "1:1": "1024x1024",
+    } as const
+  )[aspectRatio] ?? "1024x1024";
+
+const isDataImageUrl = (value: string) => /^data:image\/[^;]+;base64,/i.test(value);
+
+const looksLikeBase64Image = (value: string) => {
+  const compact = value.trim();
+  return (
+    compact.length > 128 &&
+    /^[A-Za-z0-9+/]+={0,2}$/.test(compact) &&
+    compact.length % 4 === 0
+  );
+};
+
+const normalizeInlineImageSource = (value: string) => {
+  const trimmed = value.trim();
+  if (isDataImageUrl(trimmed)) return trimmed;
+  if (looksLikeBase64Image(trimmed)) return `data:image/png;base64,${trimmed}`;
+  return trimmed;
+};
+
+const getDirectImageUrl = (response: any) => {
+  const direct =
+    response?.data?.[0]?.url ||
+    response?.data?.[0]?.b64_json ||
+    extractMarkdownMediaUrl(response?.choices?.[0]?.message?.content, "image") ||
+    "";
+  return typeof direct === "string" ? normalizeInlineImageSource(direct) : "";
+};
 
 const isAdobeVideoRequest = (payload: Record<string, unknown>) =>
   typeof payload.model === "string" &&
@@ -1518,18 +1551,26 @@ const extractImageTaskUrl = (response: any) => {
     response?.images ??
     [];
   const items = Array.isArray(rawData) ? rawData : [rawData];
-  return (
+  const imageSource =
     items
       .map((item: any) =>
         typeof item === "string"
           ? item
           : item?.url || item?.image_url || item?.imageUrl || item?.b64_json,
       )
-      .find(Boolean) || ""
-  );
+      .find(Boolean) || "";
+  return typeof imageSource === "string"
+    ? normalizeInlineImageSource(imageSource)
+    : "";
 };
 
 const getImageExtensionFromUrl = (url: string, fallback = "png") => {
+  const dataMime = url.match(/^data:image\/([^;]+);base64,/i)?.[1]?.toLowerCase();
+  if (dataMime) {
+    if (dataMime === "jpeg") return "jpg";
+    if (["jpg", "png", "webp", "gif"].includes(dataMime)) return dataMime;
+  }
+
   try {
     const extension = new URL(url).pathname.split(".").pop()?.toLowerCase();
     if (
@@ -1542,6 +1583,38 @@ const getImageExtensionFromUrl = (url: string, fallback = "png") => {
     // Ignore malformed model URLs and use the fallback extension.
   }
   return fallback;
+};
+
+const imageSourceToArrayBuffer = async (imageSource: string) => {
+  const normalized = normalizeInlineImageSource(imageSource);
+  const dataMatch = normalized.match(/^data:image\/[^;]+;base64,(.+)$/i);
+  if (dataMatch?.[1]) {
+    const binary = window.atob(dataMatch[1]);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return bytes.buffer;
+  }
+
+  if (!window.download?.imageAsBuffer) {
+    return null;
+  }
+
+  const result = await window.download.imageAsBuffer(normalized);
+  if (!result.success || !result.data) {
+    console.warn(
+      "[Story] download generated asset image failed",
+      result.error,
+    );
+    return null;
+  }
+
+  const bytes = result.data;
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer;
 };
 
 const StoryHeader = ({
@@ -4356,7 +4429,7 @@ const StoryAgentPage = ({
       const currentList = currentAgent.assets[kind] || [];
       const target = currentList.find((item) => item.id === id);
       if (!target) {
-        if (showToast) toast.error("当前资产项不存在");
+        toast.error("当前资产项不存在");
         return false;
       }
       const mediaItem: StoryboardAssetMediaItem = {
@@ -4541,7 +4614,7 @@ const StoryAgentPage = ({
         model: grokModel as any,
         prompt: input.prompt,
         n: 1,
-        size: input.aspectRatio,
+        size: resolveGrokStoryImageSize(input.aspectRatio),
         response_format: "url",
       });
       const url = getDirectImageUrl(response);
@@ -4581,26 +4654,13 @@ const StoryAgentPage = ({
     mediaId: string,
     imageUrl: string,
   ) => {
-    if (!window.download?.imageAsBuffer) {
-      return undefined;
-    }
-
     const extension = getImageExtensionFromUrl(imageUrl, "png");
     const localPath = `storyboard/projects/${projectId}/assets/${kind}/${mediaId}.${extension}`;
     try {
-      const result = await window.download.imageAsBuffer(imageUrl);
-      if (!result.success || !result.data) {
-        console.warn(
-          "[Story] download generated asset image failed",
-          result.error,
-        );
+      const buffer = await imageSourceToArrayBuffer(imageUrl);
+      if (!buffer) {
         return undefined;
       }
-      const bytes = result.data;
-      const buffer = bytes.buffer.slice(
-        bytes.byteOffset,
-        bytes.byteOffset + bytes.byteLength,
-      ) as ArrayBuffer;
       await storyboardStorage.saveBinary(localPath, buffer);
       return localPath;
     } catch (error) {
@@ -4692,7 +4752,7 @@ const StoryAgentPage = ({
         id: mediaId,
         source: "ai",
         mediaType: "image",
-        mediaUrl: imageUrl,
+        mediaUrl: isDataImageUrl(imageUrl) && localPath ? undefined : imageUrl,
         localPath,
         name: target.name,
         createdAt: Date.now(),
