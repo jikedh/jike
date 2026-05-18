@@ -25,7 +25,9 @@
   X,
 } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+import debounce from "lodash/debounce";
+import { FixedSizeList as List } from "react-window";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ensureAssetOssUrl,
@@ -1026,10 +1028,13 @@ const createJianyingId = () =>
 
 const sanitizeFileName = (value: string, fallback: string) => {
   const sanitized = value
-    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
+    .replace(/[<>:"/\\|?*]/g, "_")
     .replace(/\s+/g, " ")
     .trim();
-  return sanitized || fallback;
+  const cleaned = Array.from(sanitized)
+    .map((ch) => (ch.charCodeAt(0) < 32 ? "_" : ch))
+    .join("");
+  return cleaned || fallback;
 };
 
 const joinDraftRelativePath = (...parts: string[]) =>
@@ -1631,6 +1636,7 @@ const StoryHeader = ({
   backTo?: string;
 }) => {
   const navigate = useNavigate();
+
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/5 px-6">
@@ -2781,7 +2787,50 @@ const StoryAssetImageParamsControl = ({
   );
 };
 
-const AssetColumnItem = ({
+const VirtualList = ({
+  items,
+  itemHeight = 240,
+  overscan = 3,
+  renderItem,
+}: {
+  items: any[];
+  itemHeight?: number;
+  overscan?: number;
+  renderItem: (item: any, index: number) => React.ReactNode;
+}) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [height, setHeight] = useState(400);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onResize = () => setHeight(el.clientHeight || 400);
+    onResize();
+    const ro = new ResizeObserver(onResize);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div ref={containerRef} className="min-h-0 flex-1">
+      <List
+        height={height}
+        itemCount={items.length}
+        itemSize={itemHeight}
+        width="100%"
+        overscanCount={overscan}
+      >
+        {({ index, style }) => (
+          <div style={style} key={items[index]?.id}>
+            {renderItem(items[index], index)}
+          </div>
+        )}
+      </List>
+    </div>
+  );
+};
+
+const AssetColumnItem = memo(({
   item,
   index,
   audioAssets = [],
@@ -2818,6 +2867,18 @@ const AssetColumnItem = ({
 }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
+  const [draftPrompt, setDraftPrompt] = useState(item.prompt || "");
+  const promptTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setDraftPrompt(item.prompt || "");
+  }, [item.prompt]);
+
+  useEffect(() => {
+    return () => {
+      if (promptTimerRef.current) window.clearTimeout(promptTimerRef.current);
+    };
+  }, []);
   const currentImageModelId = getStoryImageModelOptionId(
     item.imageModel,
     item.imagePlatform,
@@ -2873,9 +2934,17 @@ const AssetColumnItem = ({
         />
         <textarea
           className={`${textAreaClass} h-20`}
-          value={item.prompt}
+          value={draftPrompt}
           placeholder={isAudioAsset ? "音效描述" : "AI 生成提示词"}
-          onChange={(event) => onChange({ prompt: event.target.value })}
+          onChange={(event) => {
+            const value = event.target.value;
+            setDraftPrompt(value);
+            if (promptTimerRef.current) window.clearTimeout(promptTimerRef.current);
+            promptTimerRef.current = window.setTimeout(() => {
+              onChange({ prompt: value });
+              promptTimerRef.current = null;
+            }, 800);
+          }}
         />
         {!isAudioAsset ? (
           <>
@@ -3030,7 +3099,40 @@ const AssetColumnItem = ({
       </div>
     </div>
   );
-};
+}, (prev, next) => {
+  const p = prev.item as StoryboardAssetItem;
+  const n = next.item as StoryboardAssetItem;
+  if (p.id !== n.id) return false;
+  if (p.name !== n.name) return false;
+  if (p.prompt !== n.prompt) return false;
+  if (p.status !== n.status) return false;
+  if (p.imageModel !== n.imageModel) return false;
+  if (p.aspectRatio !== n.aspectRatio) return false;
+  if (p.resolution !== n.resolution) return false;
+  if (p.mediaType !== n.mediaType) return false;
+  if (p.mediaUrl !== n.mediaUrl) return false;
+  if (p.localPath !== n.localPath) return false;
+  if (p.primaryMediaId !== n.primaryMediaId) return false;
+  if ((p.audioAssetIds || []).length !== (n.audioAssetIds || []).length) return false;
+  const pMediaItems = p.mediaItems || [];
+  const nMediaItems = n.mediaItems || [];
+  if (pMediaItems.length !== nMediaItems.length) return false;
+  for (let i = 0; i < pMediaItems.length; i += 1) {
+    const pItem = pMediaItems[i];
+    const nItem = nMediaItems[i];
+    if (pItem.id !== nItem.id) return false;
+    if (pItem.mediaUrl !== nItem.mediaUrl) return false;
+    if (pItem.localPath !== nItem.localPath) return false;
+    if (pItem.mediaType !== nItem.mediaType) return false;
+  }
+  if (prev.index !== next.index) return false;
+  if (prev.defaultImageModel !== next.defaultImageModel) return false;
+  if (prev.defaultImageSize !== next.defaultImageSize) return false;
+  if (prev.defaultImageResolution !== next.defaultImageResolution) return false;
+  if (prev.imageModelOptions !== next.imageModelOptions) return false;
+  if (prev.audioAssets !== next.audioAssets) return false;
+  return true;
+});
 
 const StoryAssetPreview = ({
   item,
@@ -3371,6 +3473,8 @@ const ScriptCategoryCombobox = ({
   return (
     <div
       className="relative"
+      tabIndex={-1}
+      role="group"
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) {
           setOpen(false);
@@ -4125,7 +4229,6 @@ const StoryAgentPage = ({
   projectId: string;
   snippetId: string;
 }) => {
-  const navigate = useNavigate();
   const settings = useChatSettingsStore();
   const [agent, setAgent] = useState<StoryboardAgentData>(
     createEmptyAgentData(),
@@ -4164,6 +4267,8 @@ const StoryAgentPage = ({
   useEffect(() => {
     agentRef.current = agent;
   }, [agent]);
+
+  const assetCallbacksRef = useRef<Record<string, any>>({});
 
   const defaults = useMemo<StoryboardShot["modelInfo"]>(
     () => ({
@@ -4250,18 +4355,22 @@ const StoryAgentPage = ({
     [projectId, snippetId],
   );
   const skipAutoSaveRef = useRef(true);
+  const saveAgentDebouncedRef = useRef<any>(null);
   useEffect(() => {
-    if (loading) {
-      return;
+    if (!saveAgentDebouncedRef.current) {
+      saveAgentDebouncedRef.current = debounce((next: StoryboardAgentData) => {
+        void saveAgentSilently(next);
+      }, 1000);
     }
+    if (loading) return;
     if (skipAutoSaveRef.current) {
       skipAutoSaveRef.current = false;
       return;
     }
-    const timer = window.setTimeout(() => {
-      void saveAgentSilently(agentRef.current);
-    }, 600);
-    return () => window.clearTimeout(timer);
+    saveAgentDebouncedRef.current(agentRef.current);
+    return () => {
+      saveAgentDebouncedRef.current?.cancel?.();
+    };
   }, [agent, loading, saveAgentSilently]);
   useEffect(() => {
     skipAutoSaveRef.current = true;
@@ -4299,13 +4408,13 @@ const StoryAgentPage = ({
     };
   }, [projectId, snippetId]);
 
-  const patchAgent = (patch: Partial<StoryboardAgentData>) => {
+  const patchAgent = useCallback((patch: Partial<StoryboardAgentData>) => {
     setAgent((current) => {
       const next = { ...current, ...patch };
       agentRef.current = next;
       return next;
     });
-  };
+  }, []);
 
   const persistCurrent = () => saveAgent(agent);
 
@@ -4345,20 +4454,28 @@ const StoryAgentPage = ({
     });
   };
 
-  const updateAsset = (
-    kind: StoryboardAssetKind,
-    id: string,
-    patch: Partial<StoryboardAssetItem>,
-  ) => {
-    patchAgent({
-      assets: {
-        ...agent.assets,
-        [kind]: agent.assets[kind].map((item) =>
-          item.id === id ? { ...item, ...patch } : item,
-        ),
-      },
-    });
-  };
+  const updateAsset = useCallback(
+    (
+      kind: StoryboardAssetKind,
+      id: string,
+      patch: Partial<StoryboardAssetItem>,
+    ) => {
+      setAgent((current) => {
+        const next = {
+          ...current,
+          assets: {
+            ...current.assets,
+            [kind]: current.assets[kind].map((item) =>
+              item.id === id ? { ...item, ...patch } : item,
+            ),
+          },
+        } as StoryboardAgentData;
+        agentRef.current = next;
+        return next;
+      });
+    },
+    [],
+  );
 
   const patchAssetState = (
     kind: StoryboardAssetKind,
@@ -4499,14 +4616,6 @@ const StoryAgentPage = ({
       console.error("[Story] upload asset failed", error);
       toast.error("上传资产失败");
     }
-  };
-
-  const generateAsset = async (kind: StoryboardAssetKind, id: string) => {
-    updateAsset(kind, id, { source: "ai", status: "generating" });
-    window.setTimeout(() => {
-      updateAsset(kind, id, { status: "ready", source: "ai" });
-      toast.success("AI 资产生成结果已回填");
-    }, 600);
   };
 
   const pollStoryImageTask = async (taskId: string) => {
@@ -6289,50 +6398,106 @@ const StoryAgentPage = ({
                         </Button>
                       </div>
                     </div>
-                    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
-                      {agent.assets[kind.id].length === 0 ? (
-                        <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-white/10 text-sm text-white/30">
-                          暂无{kind.label}资产
-                        </div>
-                      ) : (
-                        agent.assets[kind.id].map((item, index) => (
-                          <AssetColumnItem
-                            key={item.id}
-                            item={item}
-                            index={index}
-                            imageModelOptions={visibleImageModels}
-                            audioAssets={agent.assets.audio}
-                            defaultImageModel={settings.defaultImageModel}
-                            defaultImageSize={settings.defaultImageSize}
-                            defaultImageResolution={settings.defaultImageResolution}
-                            onChange={(patch) =>
-                              updateAsset(kind.id, item.id, patch)
-                            }
-                            onUpload={(file) =>
-                              void uploadAsset(kind.id, item.id, file)
-                            }
-                            onUseLibrary={() =>
-                              openAssetLibraryForAssetDetail(kind.id, item.id)
-                            }
-                            onBindAudio={() =>
-                              openAssetLibraryForAudioBind(kind.id, item.id)
-                            }
-                            onBindLocalAudio={(file) =>
-                              void bindLocalAudioAsset(kind.id, item.id, file)
-                            }
-                            onSetPrimaryMedia={(mediaId) =>
-                              setAssetPrimaryMediaById(kind.id, item.id, mediaId)
-                            }
-                            onDeleteMedia={(mediaId) =>
-                              deleteAssetMediaById(kind.id, item.id, mediaId)
-                            }
-                            onGenerate={() =>
-                              void generateAssetWithAi(kind.id, item.id)
-                            }
-                            onDelete={() => deleteAsset(kind.id, item.id)}
-                          />
-                        ))
-                      )}
+                    <div className="min-h-0 flex-1 overflow-auto p-3">
+                      {(() => {
+                        const assetList = agent.assets[kind.id] || [];
+                        if (assetList.length === 0) {
+                          return (
+                            <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-white/10 text-sm text-white/30">
+                              暂无{kind.label}资产
+                            </div>
+                          );
+                        }
+
+                        if (assetList.length > 24) {
+                          return (
+                            <VirtualList
+                              items={assetList}
+                              itemHeight={220}
+                              renderItem={(item: StoryboardAssetItem, index: number) => {
+                                let cb = assetCallbacksRef.current[item.id];
+                                if (!cb) {
+                                  cb = {
+                                    onChange: (patch: Partial<StoryboardAssetItem>) => updateAsset(kind.id, item.id, patch),
+                                    onUpload: (file: File) => void uploadAsset(kind.id, item.id, file),
+                                    onUseLibrary: () => openAssetLibraryForAssetDetail(kind.id, item.id),
+                                    onBindAudio: () => openAssetLibraryForAudioBind(kind.id, item.id),
+                                    onBindLocalAudio: (file: File) => void bindLocalAudioAsset(kind.id, item.id, file),
+                                    onSetPrimaryMedia: (mediaId: string) => setAssetPrimaryMediaById(kind.id, item.id, mediaId),
+                                    onDeleteMedia: (mediaId: string) => deleteAssetMediaById(kind.id, item.id, mediaId),
+                                    onGenerate: () => void generateAssetWithAi(kind.id, item.id),
+                                    onDelete: () => deleteAsset(kind.id, item.id),
+                                  };
+                                  assetCallbacksRef.current[item.id] = cb;
+                                }
+                                return (
+                                  <div className="p-1">
+                                    <AssetColumnItem
+                                      key={item.id}
+                                      item={item}
+                                      index={index}
+                                      imageModelOptions={visibleImageModels}
+                                      audioAssets={agent.assets.audio}
+                                      defaultImageModel={settings.defaultImageModel}
+                                      defaultImageSize={settings.defaultImageSize}
+                                      defaultImageResolution={settings.defaultImageResolution}
+                                      onChange={cb.onChange}
+                                      onUpload={cb.onUpload}
+                                      onUseLibrary={cb.onUseLibrary}
+                                      onBindAudio={cb.onBindAudio}
+                                      onBindLocalAudio={cb.onBindLocalAudio}
+                                      onSetPrimaryMedia={cb.onSetPrimaryMedia}
+                                      onDeleteMedia={cb.onDeleteMedia}
+                                      onGenerate={cb.onGenerate}
+                                      onDelete={cb.onDelete}
+                                    />
+                                  </div>
+                                );
+                              }}
+                            />
+                          );
+                        }
+
+                        return assetList.map((item, index) => {
+                          let cb = assetCallbacksRef.current[item.id];
+                          if (!cb) {
+                            cb = {
+                              onChange: (patch: Partial<StoryboardAssetItem>) => updateAsset(kind.id, item.id, patch),
+                              onUpload: (file: File) => void uploadAsset(kind.id, item.id, file),
+                              onUseLibrary: () => openAssetLibraryForAssetDetail(kind.id, item.id),
+                              onBindAudio: () => openAssetLibraryForAudioBind(kind.id, item.id),
+                              onBindLocalAudio: (file: File) => void bindLocalAudioAsset(kind.id, item.id, file),
+                              onSetPrimaryMedia: (mediaId: string) => setAssetPrimaryMediaById(kind.id, item.id, mediaId),
+                              onDeleteMedia: (mediaId: string) => deleteAssetMediaById(kind.id, item.id, mediaId),
+                              onGenerate: () => void generateAssetWithAi(kind.id, item.id),
+                              onDelete: () => deleteAsset(kind.id, item.id),
+                            };
+                            assetCallbacksRef.current[item.id] = cb;
+                          }
+                          return (
+                            <div key={item.id} className="mb-3">
+                              <AssetColumnItem
+                                item={item}
+                                index={index}
+                                imageModelOptions={visibleImageModels}
+                                audioAssets={agent.assets.audio}
+                                defaultImageModel={settings.defaultImageModel}
+                                defaultImageSize={settings.defaultImageSize}
+                                defaultImageResolution={settings.defaultImageResolution}
+                                onChange={cb.onChange}
+                                onUpload={cb.onUpload}
+                                onUseLibrary={cb.onUseLibrary}
+                                onBindAudio={cb.onBindAudio}
+                                onBindLocalAudio={cb.onBindLocalAudio}
+                                onSetPrimaryMedia={cb.onSetPrimaryMedia}
+                                onDeleteMedia={cb.onDeleteMedia}
+                                onGenerate={cb.onGenerate}
+                                onDelete={cb.onDelete}
+                              />
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   </div>
                 ))}
