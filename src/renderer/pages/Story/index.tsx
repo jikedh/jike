@@ -36,7 +36,7 @@ import {
   readCombinedAssetIndex,
   type AssetRecord,
 } from "service/assetStorage";
-import { copyVideoUrlToOss, uploadFileToOSS } from "service/oss";
+import { copyVideoUrlToOss, uploadFileToOSS, generateImageUrl } from "service/oss";
 import {
   DEFAULT_ASSET_SYSTEM_PROMPT,
   DEFAULT_SPLIT_SYSTEM_PROMPT,
@@ -737,6 +737,16 @@ const getStoryAssetMediaType = (
   if (["mp3", "wav", "m4a", "aac", "ogg"].includes(extension || "")) return "audio";
   return "image";
 };
+
+const isAliyunOssUrl = (value: string | undefined) =>
+  Boolean(value?.includes(".aliyuncs.com/"));
+
+const getOssImageThumbnailUrl = (url: string) =>
+  generateImageUrl(url, [
+    { type: "resize", width: 256 },
+    { type: "format", format: "webp" },
+    { type: "ignore-error", value: 1 },
+  ]);
 
 const syncAssetPrimaryMediaFields = (
   asset: StoryboardAssetItem,
@@ -3137,11 +3147,13 @@ const AssetColumnItem = memo(({
 const StoryAssetPreview = ({
   item,
   compact = false,
+  preferRemoteMediaUrl = false,
   onSetPrimaryMedia,
   onDeleteMedia,
 }: {
   item: StoryboardAssetItem;
   compact?: boolean;
+  preferRemoteMediaUrl?: boolean;
   onSetPrimaryMedia?: (mediaId: string) => void;
   onDeleteMedia?: (mediaId: string) => void;
 }) => {
@@ -3161,7 +3173,25 @@ const StoryAssetPreview = ({
       }
     : item;
   const mediaType = getStoryAssetMediaType(previewSource);
-  const previewUrl = objectUrl || primaryMedia?.mediaUrl || item.mediaUrl || "";
+  const remotePreviewUrl = primaryMedia?.mediaUrl || item.mediaUrl || "";
+  const shouldUseRemoteThumbnail =
+    mediaType === "image" &&
+    isAliyunOssUrl(remotePreviewUrl) &&
+    (preferRemoteMediaUrl || !objectUrl);
+  // 稳定 OSS 图片优先走远程缩略图；第三方临时链接仍优先本地，避免过期或 404。
+  const previewUrl =
+    shouldUseRemoteThumbnail && remotePreviewUrl
+      ? remotePreviewUrl
+      : objectUrl || remotePreviewUrl;
+  let displayUrl = previewUrl;
+  if (shouldUseRemoteThumbnail && remotePreviewUrl) {
+    try {
+      displayUrl = getOssImageThumbnailUrl(remotePreviewUrl);
+    } catch {
+      // ignore
+    }
+  }
+
   const canOpenPreview =
     !compact && Boolean(previewUrl) && (mediaType === "image" || mediaType === "video");
 
@@ -3235,22 +3265,22 @@ const StoryAssetPreview = ({
   ]);
 
   const previewContent =
-    previewUrl && mediaType === "image" ? (
+    displayUrl && mediaType === "image" ? (
       <img
-        src={previewUrl}
+        src={displayUrl}
         alt={item.name || "资产预览"}
         className="h-full w-full object-cover"
         loading="lazy"
         decoding="async"
       />
-    ) : previewUrl && mediaType === "video" ? (
+    ) : displayUrl && mediaType === "video" ? (
       compact ? (
         <div className="flex h-full w-full items-center justify-center text-white/55">
           <Video size={18} />
         </div>
       ) : (
         <video
-          src={previewUrl}
+          src={displayUrl}
           className="h-full w-full object-cover"
           muted
           playsInline
@@ -3327,13 +3357,26 @@ const StoryAssetPreview = ({
       {mediaItems.length > 1 ? (
         <div className="flex gap-2 overflow-x-auto pb-1">
           {mediaItems.map((media, index) => {
-            const thumbUrl = variantObjectUrls[media.id] || media.mediaUrl || "";
+            const localThumbUrl = variantObjectUrls[media.id] || "";
+            const remoteThumbUrl = media.mediaUrl || "";
             const thumbMediaType = getStoryAssetMediaType({
               kind: item.kind,
               mediaType: media.mediaType,
               mediaUrl: media.mediaUrl,
               localPath: media.localPath,
             });
+            const shouldUseRemoteThumb =
+              thumbMediaType === "image" && isAliyunOssUrl(remoteThumbUrl);
+            let thumbUrl = shouldUseRemoteThumb
+              ? remoteThumbUrl
+              : localThumbUrl || remoteThumbUrl;
+            if (shouldUseRemoteThumb && remoteThumbUrl) {
+              try {
+                thumbUrl = getOssImageThumbnailUrl(remoteThumbUrl);
+              } catch {
+                // fallback noop
+              }
+            }
             const isPrimary = index === 0;
             return (
               <div
@@ -4589,14 +4632,28 @@ const StoryAgentPage = ({
         toast.error("当前资产项不存在");
         return false;
       }
+      // 上传到 OSS（如果可行），并把 OSS 地址写入 mediaUrl
+      let ossUrl = "";
+      try {
+        ossUrl = await ensureStoryboardLocalMediaOssUrl({
+          ...target,
+          localPath,
+          mediaType: getMediaTypeFromFile(file),
+        } as StoryboardAssetItem);
+      } catch (e) {
+        console.warn("[Story] ensureStoryboardLocalMediaOssUrl failed", e);
+      }
+
       const mediaItem: StoryboardAssetMediaItem = {
         id: mediaId,
         source: "upload",
         mediaType: getMediaTypeFromFile(file),
         localPath,
+        mediaUrl: ossUrl || undefined,
         name: file.name,
         createdAt: Date.now(),
       };
+
       const nextAsset = appendAssetMediaItem(
         {
           ...target,
@@ -4604,6 +4661,7 @@ const StoryAgentPage = ({
         },
         mediaItem,
       );
+
       await saveAgent({
         ...currentAgent,
         assets: {
@@ -4611,6 +4669,7 @@ const StoryAgentPage = ({
           [kind]: currentList.map((item) => (item.id === id ? nextAsset : item)),
         },
       });
+
       toast.success("资产已上传");
     } catch (error) {
       console.error("[Story] upload asset failed", error);
@@ -4897,15 +4956,53 @@ const StoryAgentPage = ({
         mediaId,
         imageUrl,
       );
+
+      // 统一处理：优先使用 OSS 地址，否则上传到 OSS
+      let ossUrl: string | undefined = undefined;
+      // 如果 imageUrl 已经是 OSS，则直接使用
+      if (imageUrl && imageUrl.includes(".aliyuncs.com/")) {
+        ossUrl = imageUrl;
+      }
+
+      // 若未是 OSS，则尝试使用本地文件上传到 OSS
+      if (!ossUrl && localPath) {
+        try {
+          ossUrl = await ensureStoryboardLocalMediaOssUrl({
+            ...target,
+            localPath,
+            mediaType: "image",
+          } as StoryboardAssetItem);
+        } catch (err) {
+          console.warn("[Story] ensureStoryboardLocalMediaOssUrl failed", err);
+        }
+      }
+
+      // 如果仍然没有 OSS 地址且 imageUrl 为远程可访问地址，尝试抓取并上传
+      if (!ossUrl && imageUrl && isHttpUrl(imageUrl)) {
+        try {
+          const res = await fetch(imageUrl);
+          if (res.ok) {
+            const blob = await res.blob();
+            const ext = blob.type.split("/")[1] || "png";
+            const file = new File([blob], `${mediaId}.${ext}`);
+            const uploaded = await uploadFileToOSS(file);
+            if (uploaded.url) ossUrl = uploaded.url;
+          }
+        } catch (e) {
+          console.warn("[Story] fetch-and-upload image failed", e);
+        }
+      }
+
       const mediaItem: StoryboardAssetMediaItem = {
         id: mediaId,
         source: "ai",
         mediaType: "image",
-        mediaUrl: isDataImageUrl(imageUrl) && localPath ? undefined : imageUrl,
+        mediaUrl: ossUrl ?? (isDataImageUrl(imageUrl) && localPath ? undefined : imageUrl),
         localPath,
         name: target.name,
         createdAt: Date.now(),
       };
+
       const nextAsset = appendAssetMediaItem(
         {
           ...target,
@@ -4916,6 +5013,7 @@ const StoryAgentPage = ({
         },
         mediaItem,
       );
+
       await saveAgent({
         ...currentAgent,
         assets: {
@@ -4923,6 +5021,7 @@ const StoryAgentPage = ({
           [kind]: currentList.map((item) => (item.id === id ? nextAsset : item)),
         },
       });
+
       if (showToast) toast.success("AI 资产生成结果已回填");
       return true;
     } catch (error) {
@@ -6035,23 +6134,29 @@ const StoryAgentPage = ({
       return;
     }
 
+    // 单音效：只取第一个
+    const asset = audioRecords[0];
     const nextAudioAssets = [...currentAgent.assets.audio];
-    const boundIds = new Set<string>(target.audioAssetIds || []);
 
-    for (const asset of audioRecords) {
-      const existing = nextAudioAssets.find((item) => item.assetId === asset.id);
-      if (existing) {
-        boundIds.add(existing.id);
-        continue;
-      }
+    const existing = nextAudioAssets.find((item) => item.assetId === asset.id);
+    let boundId: string;
 
+    if (existing) {
+      boundId = existing.id;
+    } else {
       const item = createLibraryStoryboardAsset(
         asset,
         "audio",
         settings.assetStoragePath,
       );
       nextAudioAssets.push(item);
-      boundIds.add(item.id);
+      boundId = item.id;
+    }
+
+    // 命名为 "{资产名}的音效"
+    const boundAudio = nextAudioAssets.find((item) => item.id === boundId);
+    if (boundAudio) {
+      boundAudio.name = `${target.name || "资产"}的音效`;
     }
 
     await saveAgent({
@@ -6061,13 +6166,13 @@ const StoryAgentPage = ({
         audio: nextAudioAssets,
         [kind]: targetList.map((item) =>
           item.id === id
-            ? { ...item, audioAssetIds: Array.from(boundIds) }
+            ? { ...item, audioAssetIds: [boundId] }
             : item,
         ),
       },
     });
     setSelectingAudioBindTarget(null);
-    toast.success(`已绑定 ${audioRecords.length} 个音效`);
+    toast.success("音效已绑定");
   };
 
   const bindLocalAudioAsset = async (
@@ -6095,19 +6200,19 @@ const StoryAgentPage = ({
 
     try {
       await storyboardStorage.saveBinary(localPath, await file.arrayBuffer());
+      const audioName = `${target.name || "资产"}的音效`;
       const audioItem: StoryboardAssetItem = {
         id: audioId,
         kind: "audio",
-        name: file.name,
+        name: audioName,
         prompt: "",
         source: "upload",
         status: "ready",
         mediaType: "audio",
         localPath,
       };
-      const nextAudioAssetIds = Array.from(
-        new Set([...(target.audioAssetIds || []), audioId]),
-      );
+      // 单音效：替换旧绑定
+      const nextAudioAssetIds = [audioId];
 
       await saveAgent({
         ...currentAgent,
@@ -7558,7 +7663,7 @@ const ShotPromptPanel = ({
         mentionId: asset.id,
         label: asset.name || "未命名资产",
         value: asset.name || "未命名资产",
-        thumbnail: localPreviewUrls[asset.id] || asset.mediaUrl || "",
+        thumbnail: asset.mediaUrl || localPreviewUrls[asset.id] || "",
         type: getStoryAssetMediaType(asset),
       })),
     [localPreviewUrls, selectedAssets],
@@ -7704,7 +7809,7 @@ const ShotRow = ({
                 key={asset.id}
                 className="grid grid-cols-[56px_1fr_auto] gap-2 rounded-md border border-white/8 bg-white/[0.03] p-2"
               >
-                <StoryAssetPreview item={asset} compact />
+                <StoryAssetPreview item={asset} compact preferRemoteMediaUrl />
                 <div className="min-w-0">
                   <div className="truncate text-xs text-white/75">
                     {asset.name || "未命名资产"}
