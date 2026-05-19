@@ -23,10 +23,12 @@ import {
   registerGrok2ApiHandlers,
   registerStorageHandlers,
   registerTrackingHandlers,
+  registerTrayHandlers,
   registerVideoProcessingHandlers,
 } from "./ipc";
 import { adobe2ApiService } from "./ipc/adobe2api/service";
 import { grok2ApiService } from "./ipc/grok2api/service";
+import { createTray, destroyTray, isTrayActive, setTrayMainWindow } from "./ipc/tray/service";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -48,13 +50,13 @@ function setupAutoUpdater(): void {
 
   autoUpdater.autoDownload = true;
 
-  autoUpdater.on("checking-for-update", () => {});
+  autoUpdater.on("checking-for-update", () => { });
 
-  autoUpdater.on("update-available", (info) => {});
+  autoUpdater.on("update-available", (info) => { });
 
-  autoUpdater.on("update-not-available", () => {});
+  autoUpdater.on("update-not-available", () => { });
 
-  autoUpdater.on("download-progress", (progress) => {});
+  autoUpdater.on("download-progress", (progress) => { });
 
   autoUpdater.on("update-downloaded", async (info) => {
     if (!mainWindow) {
@@ -132,7 +134,11 @@ function createWindow(): void {
   registerAdobe2ApiHandlers();
   registerGrok2ApiHandlers();
   registerTrackingHandlers();
+  registerTrayHandlers();
   registerVideoProcessingHandlers();
+
+  createTray();
+  setTrayMainWindow(mainWindow);
 }
 
 app.on("second-instance", () => {
@@ -164,7 +170,13 @@ if (gotSingleInstanceLock) {
 }
 
 app.on("window-all-closed", () => {
+  // 当托盘存在时，关闭窗口不退出应用（托盘菜单提供退出入口）
+  if (isTrayActive()) return;
   void adobe2ApiService.stop();
   void grok2ApiService.stop();
   app.quit();
+});
+
+app.on("before-quit", () => {
+  destroyTray();
 });
