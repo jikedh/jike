@@ -133,7 +133,7 @@ export const SidebarCeBianLan = () => {
     {
       id: "model-settings",
       icon: <PanelRightOpen size={24} />,
-      label: "模型管理(Test)",
+      label: "模型管理",
       path: "/settings",
     },
   ];

@@ -32,10 +32,10 @@ export default function VideoPage() {
         <div className="text-center space-y-3">
           <h1 className="text-3xl font-bold">短片合成功能正在开发中</h1>
           <p className="text-sm text-gray-500">更多短片合成能力即将上线</p>
-          <div>各种Demo页面被放到了这里</div>
+          {/* <div>各种Demo页面被放到了这里</div> */}
         </div>
       </div>
-      <div className="border-t border-white/10 pt-6">
+      {/* <div className="border-t border-white/10 pt-6">
         <div className="flex flex-wrap gap-3 justify-center">
           {DEMO_LINKS.map((item) => (
             <Button key={item.path} onClick={() => navigate(item.path)} variant="blue">
@@ -43,7 +43,7 @@ export default function VideoPage() {
             </Button>
           ))}
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }
