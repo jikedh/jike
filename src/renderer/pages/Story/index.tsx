@@ -118,7 +118,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
 import { VideoPlayer } from "@/components/ui/video-player";
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import { AssetLibraryDialog } from "@/pages/Canvas/components/AssetLibraryDialog";
@@ -4320,7 +4319,7 @@ const StoryAgentPage = ({
       aspectRatio:
         settings.defaultNewVideoAspectRatio || settings.defaultVideoAspectRatio,
       duration:
-        settings.defaultNewVideoDuration || settings.defaultVideoDuration || 5,
+        settings.defaultNewVideoDuration || settings.defaultVideoDuration || 15,
       resolution:
         settings.defaultNewVideoResolution || settings.defaultVideoResolution,
     }),
@@ -4460,6 +4459,106 @@ const StoryAgentPage = ({
   }, []);
 
   const persistCurrent = () => saveAgent(agent);
+
+  // 生成自动资产说明区块（图片/音色），插入提示词最前面
+  // 匹配纯文本和 HTML 中的自动资产说明区块
+  const AUTO_DESC_BLOCK_RE = /^\[自动资产说明\][\s\S]*?\[\/自动资产说明\]\n*/;
+  const AUTO_DESC_HTML_BLOCK_RE = /\[自动资产说明\][\s\S]*?\[\/自动资产说明\](?:<br>)?/;
+
+  /**
+   * 为单个分镜生成自动资产说明并更新 prompt / promptDraftHtml
+   * HTML 中生成与 @ 一致的全量 span 结构，Tiptap 可直接解析
+   */
+  const applyAutoDescToShot = (
+    shot: StoryboardShot,
+    allAssets: StoryboardAssets,
+  ): StoryboardShot => {
+    // 收集 assets 完整信息
+    const assetInfoMap = new Map<
+      string,
+      { id: string; name: string; thumbnail: string; kind: string }
+    >();
+    for (const kind of ["role", "scene", "prop", "audio"] as const) {
+      for (const item of allAssets[kind] || []) {
+        if (!item.name) continue;
+        const primary = getPrimaryAssetMediaItem(item);
+        const thumbnail = primary?.mediaUrl || item.mediaUrl || "";
+        const isAudio = kind === "audio" || item.mediaType === "audio";
+        assetInfoMap.set(item.id, {
+          id: item.id,
+          name: item.name.trim(),
+          thumbnail,
+          kind: isAudio ? "audio" : "image",
+        });
+      }
+    }
+
+    const mentionPairs = shot.assetIds
+      .map((id) => assetInfoMap.get(id))
+      .filter(Boolean) as {
+      id: string;
+      name: string;
+      thumbnail: string;
+      kind: string;
+    }[];
+
+    // 剥离旧区块
+    const basePrompt = shot.prompt.replace(AUTO_DESC_BLOCK_RE, "");
+    const baseHtml = (shot.promptDraftHtml || "").replace(
+      AUTO_DESC_HTML_BLOCK_RE,
+      "",
+    );
+
+    if (mentionPairs.length === 0) {
+      if (basePrompt === shot.prompt && baseHtml === (shot.promptDraftHtml || ""))
+        return shot;
+      return {
+        ...shot,
+        prompt: basePrompt,
+        promptDraftHtml: baseHtml || undefined,
+      };
+    }
+
+    // 纯文本
+    const textBlock = `[自动资产说明]\n${mentionPairs.map((m) => `@${m.name}`).join("\n")}\n[/自动资产说明]\n`;
+    const nextPrompt = `${textBlock}${basePrompt}`;
+
+    // HTML 区块（与 Tiptap Mention renderHTML 完全一致）
+    const mentionHtmlLines = mentionPairs.map((m) => {
+      const dataAttrs = [
+        `data-type="mention"`,
+        `data-id="${m.id}"`,
+        `data-label="${m.name}"`,
+        `data-mention-suggestion-char="@"`,
+        `data-mention-id="${m.id}"`,
+        `data-mention-label="${m.name}"`,
+        `data-mention-kind="${m.kind}"`,
+        m.thumbnail ? `data-thumbnail="${m.thumbnail}"` : "",
+        `contenteditable="false"`,
+        `draggable="true"`,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      let innerHtml: string;
+      if (m.kind === "audio") {
+        innerHtml = `🎵 ${m.name}`;
+      } else if (m.thumbnail) {
+        innerHtml = `<img class="video-node-mention-pill__thumbnail" src="${m.thumbnail}" alt="${m.name}" draggable="false"><span class="video-node-mention-pill__label">${m.name}</span>`;
+      } else {
+        innerHtml = m.name;
+      }
+
+      return `<span class="video-node-mention-pill" ${dataAttrs}>${innerHtml}</span>`;
+    });
+
+    const htmlBlock = `[自动资产说明]<br>${mentionHtmlLines.map((line, i) => `${line}是${mentionPairs[i].name}`).join("<br>")}<br>[/自动资产说明]<br>`;
+    const nextHtml = `${htmlBlock}${baseHtml}`;
+
+    if (nextPrompt === shot.prompt && nextHtml === (shot.promptDraftHtml || ""))
+      return shot;
+    return { ...shot, prompt: nextPrompt, promptDraftHtml: nextHtml };
+  };
 
   const saveAgentWithStep = async (
     nextAgent: StoryboardAgentData,
@@ -5212,11 +5311,15 @@ const StoryAgentPage = ({
   };
 
   const removeAssetFromShot = (shotId: string, assetId: string) => {
-    updateShot(shotId, {
-      assetIds:
-        agent.shots
-          .find((shot) => shot.id === shotId)
-          ?.assetIds.filter((id) => id !== assetId) ?? [],
+    const shot = agent.shots.find((s) => s.id === shotId);
+    if (!shot) return;
+    const nextAssetIds = shot.assetIds.filter((id) => id !== assetId);
+    const nextShot = applyAutoDescToShot(
+      { ...shot, assetIds: nextAssetIds },
+      agent.assets,
+    );
+    patchAgent({
+      shots: agent.shots.map((s) => (s.id === shotId ? nextShot : s)),
     });
   };
 
@@ -6267,14 +6370,14 @@ const StoryAgentPage = ({
     const nextAgent = {
       ...currentAgent,
       assets: nextAssets,
-      shots: currentAgent.shots.map((shot) =>
-        shot.id === selectingAssetShotId
-          ? {
-              ...shot,
-              assetIds: Array.from(new Set([...shot.assetIds, ...selectedIds])),
-            }
-          : shot,
-      ),
+      shots: currentAgent.shots.map((shot) => {
+        if (shot.id !== selectingAssetShotId) return shot;
+        const withAssetIds = {
+          ...shot,
+          assetIds: Array.from(new Set([...shot.assetIds, ...selectedIds])),
+        };
+        return applyAutoDescToShot(withAssetIds, nextAssets);
+      }),
     };
 
     await saveAgent(nextAgent);
@@ -7441,14 +7544,20 @@ const ShotModelSettingsDialog = ({
   onApplyAll: (value: VideoParamState) => void;
 }) => {
   const config = getVideoParamConfig(shot.modelInfo.videoModel, "image-to-video");
-  const [value, setValue] = useState<VideoParamState>(() => getShotVideoParamState(shot));
+  const [value, setValue] = useState<VideoParamState>(() => ({
+    ...getShotVideoParamState(shot),
+    duration: 15,
+  }));
 
   useEffect(() => {
-    setValue(getShotVideoParamState(shot));
+    setValue((current) => ({
+      ...getShotVideoParamState(shot),
+      duration: 15,
+    }));
   }, [shot]);
 
   const patchValue = (patch: Partial<VideoParamState>) => {
-    setValue((current) => ({ ...current, ...patch }));
+    setValue((current) => ({ ...current, ...patch, duration: 15 }));
   };
 
   return (
@@ -7550,43 +7659,14 @@ const ShotModelSettingsDialog = ({
           <section className="space-y-2">
             <div className="flex items-center justify-between text-xs">
               <span className="font-medium text-white/55">视频时长</span>
-              <span className="font-semibold text-[#D9B4FF]">{value.duration}s</span>
+              <span className="font-semibold text-[#D9B4FF]">15s（固定）</span>
             </div>
 
-            {config.duration.type === "slider" ? (
-              <div className="space-y-2">
-                <Slider
-                  value={[value.duration]}
-                  min={config.duration.min}
-                  max={config.duration.max}
-                  step={config.duration.step ?? 1}
-                  onValueChange={(values) => patchValue({ duration: values[0] })}
-                  className="[&_[data-slot=slider-range]]:bg-[#B43FEB] [&_[data-slot=slider-thumb]]:border-[#B43FEB]"
-                />
-                <div className="flex justify-between text-[11px] text-white/35">
-                  <span>{config.duration.min}s</span>
-                  <span>{config.duration.max}s</span>
-                </div>
+            {config.duration ? (
+              <div className="flex h-8 items-center rounded-lg border border-white/8 bg-black/25 px-3 text-sm text-white/60">
+                15 秒（固定）
               </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-2">
-                {config.duration.options.map((option) => {
-                  const active = value.duration === Number(option.value);
-                  return (
-                    <button
-                      key={String(option.value)}
-                      type="button"
-                      onClick={() =>
-                        patchValue({ duration: Number(option.value) })
-                      }
-                      className={storyVideoOptionButtonClass(active, "h-8 px-3")}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            ) : null}
           </section>
         </div>
 
@@ -7681,7 +7761,7 @@ const ShotPromptPanel = ({
       </div>
 
       {mentionItems.length > 0 ? (
-        <div className="mb-3">
+        <div className="mb-3 overflow-x-auto">
           <ReferenceThumbnails
             items={mentionItems}
             onRemove={(item) => {
