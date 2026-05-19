@@ -1,15 +1,14 @@
 import { useState } from "react";
-import {
-  setJikeingToken,
-  setJikeingUserId,
-  setJikeingUserInfo,
-} from "shared/utils/utils";
+// import {
+//   setJikeingToken,
+//   setJikeingUserId,
+//   setJikeingUserInfo,
+// } from "shared/utils";
+import type { DesktopProxyPlatform, OssBlobType } from "shared/types/api/jikeGo";
 import {
   createDesktopChatCompletions,
   createDesktopProxyTask,
-  type DesktopProxyPlatform,
   getOssPutUrl,
-  type OssBlobType,
   getDigitalCaptcha,
   getJikeGoUserInfo,
   getSceneQrcode,
@@ -21,7 +20,7 @@ import {
   updateJikeGoUserInfo,
   uploadOssFile,
 } from "@/api/jikeGo";
-
+import { setJikeingToken, setJikeingUserId, setJikeingUserInfo } from "shared/utils/utils";
 const DESKTOP_PROXY_POLL_INTERVAL = 5000;
 const DESKTOP_PROXY_MAX_POLL_COUNT = 60;
 
