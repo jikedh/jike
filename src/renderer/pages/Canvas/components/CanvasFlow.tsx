@@ -5023,7 +5023,7 @@ export const CanvasFlow = ({
                 pannable
                 zoomable
                 position="bottom-left"
-                style={{ left: "16px", bottom: "92px" }}
+                style={{ left: "16px", bottom: "72px" }}
                 nodeStrokeWidth={0}
                 nodeColor="#B43FEB"
                 maskColor="rgba(0,0,0,0.5)"
