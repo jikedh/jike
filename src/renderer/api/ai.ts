@@ -162,10 +162,6 @@ function getSeedance20Model(data: Seedance20Request): string {
   return data.mode === "fast" ? "seedance-2.0-fast" : "seedance-2.0-pro";
 }
 
-function unwrapDesktopProxyData(response: any) {
-  return response?.data ?? response;
-}
-
 /**
  * 从代理响应中提取 ledgerBizId（积分预扣凭证）
  * 当 scoreCost > 0 时，后端返回 {upstream, ledgerBizId} 结构
@@ -242,8 +238,7 @@ export async function createImageGeneration(
     scoreSourceLabel: data.model,
   });
 
-  const rawData = unwrapDesktopProxyData(response);
-  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
+  const { responseData, ledgerBizId } = extractLedgerBizId(response);
   return ledgerBizId ? { ...responseData, ledgerBizId } : responseData;
 }
 
@@ -406,7 +401,7 @@ export async function getImageTaskStatus(id: string) {
     method: "GET",
   });
 
-  return unwrapDesktopProxyData(response);
+  return response;
 }
 
 // ===================== 聊天相关 =====================
@@ -427,7 +422,7 @@ export async function createChatCompletion(data: any, signal?: AbortSignal) {
   }
 
   const response = await createDesktopChatCompletions(desktopData, signal);
-  return unwrapDesktopProxyData(response);
+  return response;
 }
 
 function extractChatCompletionText(response: any): string {
@@ -519,8 +514,7 @@ export async function submitMjImagine(
     scoreSourceLabel: "Midjourney",
   });
 
-  const rawData = unwrapDesktopProxyData(response);
-  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
+  const { responseData, ledgerBizId } = extractLedgerBizId(response);
   return ledgerBizId ? { ...responseData, ledgerBizId } : responseData;
 }
 
@@ -532,7 +526,7 @@ export async function fetchMjTask(id: string) {
     method: "GET",
   });
 
-  return unwrapDesktopProxyData(response);
+  return response;
 }
 
 // ===================== 快手 AI 视频相关 =====================
@@ -553,8 +547,7 @@ export async function createLzVideoTask(
     scoreSource: "kuaizi",
     scoreSourceLabel: "快手可灵",
   });
-  const rawData = unwrapDesktopProxyData(response);
-  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
+  const { responseData, ledgerBizId } = extractLedgerBizId(response);
   const taskId =
     responseData?.data?.task_id ??
     responseData?.task_id ??
@@ -587,7 +580,7 @@ export async function getLzVideoTaskStatus(taskId: string) {
     body: { task_id: taskId },
   });
 
-  return unwrapDesktopProxyData(response);
+  return response;
 }
 
 // ===================== 极景二维码登录相关 =====================
@@ -666,8 +659,7 @@ export async function generateGeminiContent(
     signal,
   );
 
-  const rawData = unwrapDesktopProxyData(response);
-  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
+  const { responseData, ledgerBizId } = extractLedgerBizId(response);
   return ledgerBizId ? { ...responseData, ledgerBizId } : responseData;
 }
 
@@ -714,7 +706,7 @@ export async function createDashscopeChatCompletion(
     signal,
   );
 
-  return unwrapDesktopProxyData(response);
+  return response;
 }
 
 // ===================== 阿里云百炼视频生成相关 =====================
@@ -743,8 +735,7 @@ export async function createDashscopeVideoSynthesis(
     scoreSource: "dashscope",
     scoreSourceLabel: "阿里云百炼",
   });
-  const rawData = unwrapDesktopProxyData(response);
-  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
+  const { responseData, ledgerBizId } = extractLedgerBizId(response);
 
   const trackData = data as unknown as Record<string, unknown>;
   const trackResponse = responseData as {
@@ -791,7 +782,7 @@ export async function getDashscopeVideoTaskStatus(taskId: string) {
     method: "GET",
   });
 
-  return unwrapDesktopProxyData(response);
+  return response;
 }
 
 // ===================== 无痕 AI 视频消除相关 =====================
