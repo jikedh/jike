@@ -1071,6 +1071,9 @@ export const identifyAssetsWithAgent = async (input: {
       ],
     });
     const rawContent =
+      response?.data?.choices?.[0]?.message?.content ||
+      response?.data?.output_text ||
+      response?.data?.content ||
       response?.choices?.[0]?.message?.content ||
       response?.output_text ||
       response?.content ||
@@ -1141,9 +1144,9 @@ export const splitScriptWithAgent = async (input: {
     });
 
     const content =
-      response?.choices?.[0]?.message?.content ||
-      response?.output_text ||
-      response?.content ||
+      response?.data?.choices?.[0]?.message?.content ||
+      response?.data?.output_text ||
+      response?.data?.content ||
       "";
     const parsed = JSON.parse(parseJsonBlock(String(content))) as
       | RawSplitShotItem[]
