@@ -243,6 +243,7 @@ const FRAME_STEP_SECONDS = 1 / DEFAULT_FPS;
 const TIMELINE_STEP_MS = 100;
 const SUBTITLE_REMOVAL_POINTS_PER_SECOND = 0.5;
 const WUHEI_MAX_RECT_AREA = 480_000;
+const STORY_ASSET_GENERATION_TIMEOUT_MS = 180_000;
 
 const normalizeTaskStatus = (value?: string) => {
   return String(value || "")
@@ -713,6 +714,18 @@ const getPathExtension = (path: string, fallback: string) =>
 
 const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
+const withTimeout = async <T,>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+) =>
+  Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    }),
+  ]);
+
 const getMimeTypeByPath = (path: string, fallback = "application/octet-stream") => {
   const extension = path.split(".").pop()?.toLowerCase();
   if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
@@ -739,6 +752,9 @@ const getStoryAssetMediaType = (
 
 const isAliyunOssUrl = (value: string | undefined) =>
   Boolean(value?.includes(".aliyuncs.com/"));
+
+const isBlobUrl = (value: string | undefined) =>
+  Boolean(value?.startsWith("blob:"));
 
 const getOssImageThumbnailUrl = (url: string) =>
   generateImageUrl(url, [
@@ -1611,6 +1627,14 @@ const imageSourceToArrayBuffer = async (imageSource: string) => {
       bytes[index] = binary.charCodeAt(index);
     }
     return bytes.buffer;
+  }
+
+  if (normalized.startsWith("blob:")) {
+    const response = await fetch(normalized);
+    if (!response.ok) {
+      return null;
+    }
+    return response.arrayBuffer();
   }
 
   if (!window.download?.imageAsBuffer) {
@@ -3114,6 +3138,9 @@ const StoryAssetPreview = ({
   onDeleteMedia?: (mediaId: string) => void;
 }) => {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [failedPreviewUrls, setFailedPreviewUrls] = useState<Record<string, true>>(
+    {},
+  );
   const [variantObjectUrls, setVariantObjectUrls] = useState<Record<string, string>>(
     {},
   );
@@ -3129,7 +3156,10 @@ const StoryAssetPreview = ({
       }
     : item;
   const mediaType = getStoryAssetMediaType(previewSource);
-  const remotePreviewUrl = primaryMedia?.mediaUrl || item.mediaUrl || "";
+  const storedRemotePreviewUrl = primaryMedia?.mediaUrl || item.mediaUrl || "";
+  const remotePreviewUrl = isBlobUrl(storedRemotePreviewUrl)
+    ? ""
+    : storedRemotePreviewUrl;
   const shouldUseRemoteThumbnail =
     mediaType === "image" &&
     isAliyunOssUrl(remotePreviewUrl) &&
@@ -3146,6 +3176,14 @@ const StoryAssetPreview = ({
     } catch {
       // ignore
     }
+  }
+  if (displayUrl && failedPreviewUrls[displayUrl]) {
+    displayUrl =
+      displayUrl !== remotePreviewUrl && remotePreviewUrl && !failedPreviewUrls[remotePreviewUrl]
+        ? remotePreviewUrl
+        : objectUrl && !failedPreviewUrls[objectUrl]
+          ? objectUrl
+          : "";
   }
 
   const canOpenPreview =
@@ -3228,6 +3266,9 @@ const StoryAssetPreview = ({
         className="h-full w-full object-cover"
         loading="lazy"
         decoding="async"
+        onError={() => {
+          setFailedPreviewUrls((current) => ({ ...current, [displayUrl]: true }));
+        }}
       />
     ) : displayUrl && mediaType === "video" ? (
       compact ? (
@@ -3314,7 +3355,7 @@ const StoryAssetPreview = ({
         <div className="flex gap-2 overflow-x-auto pb-1">
           {mediaItems.map((media, index) => {
             const localThumbUrl = variantObjectUrls[media.id] || "";
-            const remoteThumbUrl = media.mediaUrl || "";
+            const remoteThumbUrl = isBlobUrl(media.mediaUrl) ? "" : media.mediaUrl || "";
             const thumbMediaType = getStoryAssetMediaType({
               kind: item.kind,
               mediaType: media.mediaType,
@@ -4260,6 +4301,9 @@ const StoryAgentPage = ({
   const [exportingJianying, setExportingJianying] = useState(false);
   const [bulkGeneratingKind, setBulkGeneratingKind] =
     useState<StoryboardAssetKind | null>(null);
+  const [assetGenerationError, setAssetGenerationError] = useState<string | null>(
+    null,
+  );
   const [removingSubtitleShotId, setRemovingSubtitleShotId] = useState<
     string | null
   >(null);
@@ -4356,8 +4400,8 @@ const StoryAgentPage = ({
   const saveAgentDebouncedRef = useRef<any>(null);
   useEffect(() => {
     if (!saveAgentDebouncedRef.current) {
-      saveAgentDebouncedRef.current = debounce((next: StoryboardAgentData) => {
-        void saveAgentSilently(next);
+      saveAgentDebouncedRef.current = debounce(() => {
+        void saveAgentSilently(agentRef.current);
       }, 1000);
     }
     if (loading) return;
@@ -4365,7 +4409,7 @@ const StoryAgentPage = ({
       skipAutoSaveRef.current = false;
       return;
     }
-    saveAgentDebouncedRef.current(agentRef.current);
+    saveAgentDebouncedRef.current();
     return () => {
       saveAgentDebouncedRef.current?.cancel?.();
     };
@@ -4730,11 +4774,13 @@ const StoryAgentPage = ({
         mediaItem,
       );
 
+      const latestAgent = agentRef.current;
+      const latestList = latestAgent.assets[kind] || [];
       await saveAgent({
-        ...currentAgent,
+        ...latestAgent,
         assets: {
-          ...currentAgent.assets,
-          [kind]: currentList.map((item) => (item.id === id ? nextAsset : item)),
+          ...latestAgent.assets,
+          [kind]: latestList.map((item) => (item.id === id ? nextAsset : item)),
         },
       });
 
@@ -5005,16 +5051,21 @@ const StoryAgentPage = ({
         aspectRatio: asset?.aspectRatio || settings.defaultImageSize,
         resolution: asset?.resolution || settings.defaultImageResolution,
       });
-      const imageUrl = await createStoryAssetImage({
-        model,
-        prompt,
-        aspectRatio: params.aspectRatio,
-        resolution: params.resolution,
-      });
+      const imageUrl = await withTimeout(
+        createStoryAssetImage({
+          model,
+          prompt,
+          aspectRatio: params.aspectRatio,
+          resolution: params.resolution,
+        }),
+        STORY_ASSET_GENERATION_TIMEOUT_MS,
+        "AI 资产生成超时，请稍后重试",
+      );
       const currentAgent = agentRef.current;
       const currentList = currentAgent.assets[kind] || [];
       const target = currentList.find((item) => item.id === id);
       if (!target) {
+        await saveAssetPatch(kind, id, { source: "ai", status: "failed" });
         if (showToast) toast.error("当前资产项不存在");
         return false;
       }
@@ -5065,28 +5116,34 @@ const StoryAgentPage = ({
         id: mediaId,
         source: "ai",
         mediaType: "image",
-        mediaUrl: ossUrl ?? (isDataImageUrl(imageUrl) && localPath ? undefined : imageUrl),
+        mediaUrl:
+          ossUrl ??
+          (isHttpUrl(imageUrl) && !imageUrl.startsWith("blob:") ? imageUrl : undefined),
         localPath,
         name: target.name,
         createdAt: Date.now(),
       };
 
-      const nextAsset = appendAssetMediaItem(
-        {
-          ...target,
-          source: "ai",
-          status: "ready",
-          aspectRatio: params.aspectRatio,
-          resolution: params.resolution,
-        },
-        mediaItem,
-      );
-
+      const latestAgent = agentRef.current;
+      const latestList = latestAgent.assets[kind] || [];
       await saveAgent({
-        ...currentAgent,
+        ...latestAgent,
         assets: {
-          ...currentAgent.assets,
-          [kind]: currentList.map((item) => (item.id === id ? nextAsset : item)),
+          ...latestAgent.assets,
+          [kind]: latestList.map((item) =>
+            item.id === id
+              ? appendAssetMediaItem(
+                  {
+                    ...item,
+                    source: "ai",
+                    status: "ready",
+                    aspectRatio: params.aspectRatio,
+                    resolution: params.resolution,
+                  },
+                  mediaItem,
+                )
+              : item,
+          ),
         },
       });
 
@@ -5094,8 +5151,18 @@ const StoryAgentPage = ({
       return true;
     } catch (error) {
       console.error("[Story] generate asset failed", error);
-      await saveAssetPatch(kind, id, { source: "ai", status: "failed" });
-      if (showToast) toast.error("AI 资产生成失败");
+      const message =
+        error instanceof Error ? error.message : "AI 资产生成失败";
+      patchAssetState(kind, id, { source: "ai", status: "failed" });
+      try {
+        await saveAssetPatch(kind, id, { source: "ai", status: "failed" });
+      } catch (saveError) {
+        console.warn("[Story] save failed asset status failed", saveError);
+      }
+      if (showToast) {
+        toast.error(message);
+        setAssetGenerationError(message);
+      }
       return false;
     }
   };
@@ -6855,6 +6922,13 @@ const StoryAgentPage = ({
             />
           ) : null}
 
+          {assetGenerationError ? (
+            <AssetGenerationErrorDialog
+              message={assetGenerationError}
+              onClose={() => setAssetGenerationError(null)}
+            />
+          ) : null}
+
           {editingShotModel ? (
             <ShotModelSettingsDialog
               shot={editingShotModel}
@@ -7410,6 +7484,43 @@ const AssetGenerateConfirmDialog = ({
           disabled={count === 0}
         >
           确认生成
+        </Button>
+      </div>
+    </div>
+  </div>
+);
+
+const AssetGenerationErrorDialog = ({
+  message,
+  onClose,
+}: {
+  message: string;
+  onClose: () => void;
+}) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <button
+      type="button"
+      aria-label="关闭生成失败提示"
+      className="absolute inset-0 cursor-default"
+      onClick={onClose}
+    />
+    <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-red-400/20 bg-[#121214] shadow-2xl">
+      <div className="flex items-center justify-between border-b border-white/5 p-5">
+        <h2 className="text-lg font-semibold text-white/90">AI 资产生成失败</h2>
+        <button
+          type="button"
+          onClick={onClose}
+          className="cursor-pointer text-white/50 transition-colors hover:text-white"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+      <div className="p-5">
+        <p className="text-sm leading-6 text-white/65">{message}</p>
+      </div>
+      <div className="flex items-center justify-end border-t border-white/5 bg-black/20 p-5">
+        <Button variant="blue" onClick={onClose}>
+          知道了
         </Button>
       </div>
     </div>
