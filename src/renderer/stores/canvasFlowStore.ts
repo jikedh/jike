@@ -224,14 +224,12 @@ type NewVideoResultItem = NonNullable<NewVideoGenerationNode["result"]>[
 
 const normalizeVideoResultItemForPersistence = (item: NewVideoResultItem) => {
   const remoteUrl = getRemoteMediaUrl(item);
-
   return withVideoPosterFields({
     ...item,
     ...(remoteUrl ? { url: remoteUrl } : {}),
     ...(remoteUrl ? { remoteUrl } : {}),
   });
 };
-
 export const normalizeCanvasNodesForPersistence = (
   nodes: AllNodeType[],
 ): AllNodeType[] =>
@@ -1809,9 +1807,9 @@ const pollVideoTaskGeneration = async (
               progress: completed
                 ? 100
                 : Math.min(
-                    99,
-                    Math.round((completedCount / totalTaskCount) * 100),
-                  ),
+                  99,
+                  Math.round((completedCount / totalTaskCount) * 100),
+                ),
               task_id: normalizedTaskId,
               result: {
                 type: "video",
@@ -2407,7 +2405,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     setHighlightedSourceNodeIds: (highlightedSourceNodeIds) =>
       set({ highlightedSourceNodeIds }),
     setNodeIdCounters: (nodeIdCounters) => set({ nodeIdCounters }),
-    setHydrated: (hydrated) => set({ hydrated }),
     setProjectId: (projectId) => set({ projectId }),
     setPanoramaViewer: (panoramaViewer) => set({ panoramaViewer }),
     setAnnotationWorkspace: (annotationWorkspace) =>
@@ -2421,6 +2418,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     },
     setGroups: (groups) => set({ groups }),
     setSelectedGroupId: (selectedGroupId) => set({ selectedGroupId }),
+    setHydrated: (hydrated) => set({ hydrated }),
 
     // ==================== 持久化方法实现 ====================
 
@@ -3569,12 +3567,15 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                     extractExtensionFromUrl(resultUrl, "png"),
                   );
                   if (fileName) {
-                    resultItem.localName = fileName;
-                    resultItem.localPath = getLocalFilePath(
-                      projectId,
-                      "generate_image",
-                      fileName,
-                    );
+                    resultItem = {
+                      ...resultItem,
+                      localName: fileName,
+                      localPath: getLocalFilePath(
+                        projectId,
+                        "generate_image",
+                        fileName,
+                      ),
+                    };
                   }
                 } catch (saveError) {
                   console.error("[startImageGeneration] 保存 RunningHub 图片到本地失败:", saveError);
@@ -4238,9 +4239,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             set((state) => ({
               nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
                 const existingData = data.result?.data ?? [];
-                const mergedData = appendMediaSequences(existingData, [
-                  resultItem,
-                ]);
+                const mergedData = appendMediaSequences(
+                  existingData,
+                  [
+                    resultItem,
+                  ],
+                );
                 return {
                   ...data,
                   status: GenerationStatus.COMPLETED,

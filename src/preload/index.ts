@@ -51,6 +51,15 @@ export type VideoProcessingApi = {
   }>;
 };
 
+export type NotificationApi = {
+  show: (payload: {
+    title?: string;
+    body?: string;
+    whenWindowFocused?: boolean;
+  }) => Promise<{ success: boolean; skipped?: boolean; error?: string }>;
+  isSupported: () => Promise<boolean>;
+};
+
 const storageApi: StorageApi = {
   selectDirectory: () => ipcRenderer.invoke("storage:selectDirectory"),
   ensureProject: (basePath, projectName) =>
@@ -152,6 +161,11 @@ const videoProcessingApi: VideoProcessingApi = {
   trim: (request) => ipcRenderer.invoke("video-processing:trim", request),
 };
 
+const notificationApi: NotificationApi = {
+  show: (payload) => ipcRenderer.invoke("notification:show", payload),
+  isSupported: () => ipcRenderer.invoke("notification:isSupported"),
+};
+
 const adobe2Api: Adobe2Api = {
   getState: () => ipcRenderer.invoke("adobe2api:getState"),
   start: () => ipcRenderer.invoke("adobe2api:start"),
@@ -222,6 +236,7 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld("debug", debugApi);
     contextBridge.exposeInMainWorld("download", downloadApi);
     contextBridge.exposeInMainWorld("videoProcessing", videoProcessingApi);
+    contextBridge.exposeInMainWorld("notification", notificationApi);
     contextBridge.exposeInMainWorld("adobe2api", adobe2Api);
     contextBridge.exposeInMainWorld("grok2api", grok2Api);
     contextBridge.exposeInMainWorld("tracking", trackingApi);
@@ -239,6 +254,8 @@ if (process.contextIsolated) {
   window.download = downloadApi;
   // @ts-ignore (define in dts)
   window.videoProcessing = videoProcessingApi;
+  // @ts-ignore (define in dts)
+  window.notification = notificationApi;
   // @ts-ignore (define in dts)
   window.adobe2api = adobe2Api;
   // @ts-ignore (define in dts)

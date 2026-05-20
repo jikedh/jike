@@ -50,6 +50,15 @@ export type VideoProcessingApi = {
   }>;
 };
 
+export type NotificationApi = {
+  show: (payload: {
+    title?: string;
+    body?: string;
+    whenWindowFocused?: boolean;
+  }) => Promise<{ success: boolean; skipped?: boolean; error?: string }>;
+  isSupported: () => Promise<boolean>;
+};
+
 export interface AIVideoTrackData {
   userId: string;
   userUuid?: string;
@@ -85,6 +94,7 @@ declare global {
     debug: DebugApi;
     download: DownloadApi;
     videoProcessing: VideoProcessingApi;
+    notification: NotificationApi;
     adobe2api: Adobe2Api;
     grok2api: Grok2Api;
     tracking: TrackingApi;

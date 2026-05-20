@@ -25,6 +25,7 @@ import {
   registerTrackingHandlers,
   registerTrayHandlers,
   registerVideoProcessingHandlers,
+  registerNotificationHandlers,
 } from "./ipc";
 import { adobe2ApiService } from "./ipc/adobe2api/service";
 import { grok2ApiService } from "./ipc/grok2api/service";
@@ -136,6 +137,7 @@ function createWindow(): void {
   registerTrackingHandlers();
   registerTrayHandlers();
   registerVideoProcessingHandlers();
+  registerNotificationHandlers();
 
   createTray();
   setTrayMainWindow(mainWindow);

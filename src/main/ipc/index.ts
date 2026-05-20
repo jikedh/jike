@@ -7,3 +7,4 @@ export { registerStorageHandlers } from "./storage";
 export { registerTrackingHandlers } from "./tracking";
 export { registerTrayHandlers } from "./tray";
 export { registerVideoProcessingHandlers } from "./video-processing";
+export { registerNotificationHandlers } from "./notification";

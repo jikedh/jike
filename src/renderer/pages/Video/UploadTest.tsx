@@ -5,10 +5,11 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import type { UploadOssBlobType, UploadOssPutUrlResp } from "shared/types/api/jikeGo";
 import {
   getUploadOssPutUrl,
   uploadOssFile,
+  type UploadOssBlobType,
+  type UploadOssPutUrlResp,
 } from "@/api/jikeGo";
 
 // 文件类型配置
