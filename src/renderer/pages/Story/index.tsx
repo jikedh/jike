@@ -199,6 +199,7 @@ const stepOrder: Record<StoryboardAgentStep, number> = {
 };
 
 const STORY_SHOT_DEFAULT_VIDEO_MODEL = "seedance-2.0-pro";
+const STORY_SHOT_FIXED_DURATION = 15;
 
 const shouldMigrateStoryShotVideoModel = (model: string | undefined) =>
   typeof model === "string" && model.startsWith("kling/");
@@ -1003,7 +1004,7 @@ const getShotVideoParamState = (shot: StoryboardShot): VideoParamState =>
     {
       aspectRatio: shot.modelInfo.aspectRatio,
       resolution: shot.modelInfo.resolution,
-      duration: shot.modelInfo.duration,
+      duration: STORY_SHOT_FIXED_DURATION,
     },
     "image-to-video",
   );
@@ -1014,7 +1015,7 @@ const patchShotModelInfo = (
 ): StoryboardShot["modelInfo"] => ({
   ...modelInfo,
   aspectRatio: value.aspectRatio || modelInfo.aspectRatio,
-  duration: value.duration,
+  duration: STORY_SHOT_FIXED_DURATION,
   resolution: value.resolution ?? modelInfo.resolution,
 });
 
@@ -4276,8 +4277,7 @@ const StoryAgentPage = ({
       videoModel: STORY_SHOT_DEFAULT_VIDEO_MODEL,
       aspectRatio:
         settings.defaultNewVideoAspectRatio || settings.defaultVideoAspectRatio,
-      duration:
-        settings.defaultNewVideoDuration || settings.defaultVideoDuration || 15,
+      duration: STORY_SHOT_FIXED_DURATION,
       resolution:
         settings.defaultNewVideoResolution || settings.defaultVideoResolution,
     }),
@@ -4285,8 +4285,6 @@ const StoryAgentPage = ({
       settings.defaultImageModel,
       settings.defaultNewVideoAspectRatio,
       settings.defaultVideoAspectRatio,
-      settings.defaultNewVideoDuration,
-      settings.defaultVideoDuration,
       settings.defaultNewVideoResolution,
       settings.defaultVideoResolution,
     ],
@@ -5328,7 +5326,7 @@ const StoryAgentPage = ({
               {
                 aspectRatio: value.aspectRatio,
                 resolution: value.resolution,
-                duration: value.duration,
+                duration: STORY_SHOT_FIXED_DURATION,
               },
               "image-to-video",
             ),
@@ -5352,7 +5350,7 @@ const StoryAgentPage = ({
                   {
                     aspectRatio: value.aspectRatio,
                     resolution: value.resolution,
-                    duration: value.duration,
+                    duration: STORY_SHOT_FIXED_DURATION,
                   },
                   "image-to-video",
                 ),
@@ -5626,7 +5624,7 @@ const StoryAgentPage = ({
         {
           aspectRatio: refreshedShot.modelInfo.aspectRatio,
           resolution: refreshedShot.modelInfo.resolution,
-          duration: refreshedShot.modelInfo.duration,
+          duration: STORY_SHOT_FIXED_DURATION,
           generateAudio: settings.defaultNewVideoGenerateAudio,
           promptExtend: settings.defaultNewVideoPromptExtend,
         },
@@ -5885,7 +5883,7 @@ const StoryAgentPage = ({
         exportedVideos.push({
           fileName,
           absolutePath: toWindowsPath(settings.jianyingDraftsPath, relativePath),
-          durationUs: Math.max(1, shot.modelInfo.duration || 5) * 1_000_000,
+          durationUs: STORY_SHOT_FIXED_DURATION * 1_000_000,
         });
       }
 
@@ -7920,7 +7918,7 @@ const ShotRow = ({
         <div className="space-y-2 rounded-lg border border-white/8 bg-black/25 p-3">
           <div>视频：{shot.modelInfo.videoModel}</div>
           <div>
-            {shot.modelInfo.aspectRatio} / {shot.modelInfo.duration}s /{" "}
+            {shot.modelInfo.aspectRatio} / {STORY_SHOT_FIXED_DURATION}s /{" "}
             {shot.modelInfo.resolution || "默认分辨率"}
           </div>
           <Button size="sm" onClick={onEditModelInfo}>
