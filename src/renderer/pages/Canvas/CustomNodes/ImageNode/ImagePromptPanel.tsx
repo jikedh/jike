@@ -1,10 +1,13 @@
+import { arrayMove } from "@dnd-kit/sortable";
 import { IconUpload, IconX } from "@tabler/icons-react";
 import Mention from "@tiptap/extension-mention";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type { ChangeEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toChineseNumber } from "shared/utils/utils";
 import { uploadFileToOSS } from "service/oss";
+import { ImageReferenceThumbnails } from "./components/ImageReferenceThumbnails";
 import {
   ADOBE_GPT_IMAGE2_MODEL,
   ADOBE_NANO_BANANA_PRO_MODEL,
@@ -543,10 +546,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const disableBuiltInSuggestion = {
     items: () => [],
     render: () => ({
-      onStart: () => {},
-      onUpdate: () => {},
+      onStart: () => { },
+      onUpdate: () => { },
       onKeyDown: () => false,
-      onExit: () => {},
+      onExit: () => { },
     }),
   };
 
@@ -660,23 +663,23 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       "c-1": "4:3", // 角色参考图
       "c-2":
         isNanoBananaLocalModel ||
-        isAdobeNanoBananaProModel ||
-        isXimuNanoBananaModel
+          isAdobeNanoBananaProModel ||
+          isXimuNanoBananaModel
           ? "16:9"
           : "21:9", // 角色三视图
       "c-3": "16:9", // 多宫格电影分镜
       "c-4":
         isNanoBananaLocalModel ||
-        isAdobeNanoBananaProModel ||
-        isXimuNanoBananaModel
+          isAdobeNanoBananaProModel ||
+          isXimuNanoBananaModel
           ? "16:9"
           : "21:9", // VR图
     };
     const commandSize = commandSizeMap[selected.id];
     const targetSize =
       commandSize &&
-      supportedImageParams &&
-      !supportedImageParams.sizes.has(commandSize)
+        supportedImageParams &&
+        !supportedImageParams.sizes.has(commandSize)
         ? supportedImageParams.defaultSize
         : commandSize;
     if (targetSize) {
@@ -688,19 +691,19 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       "c-3": isSeedreamModel ? "2K" : "1K", // 多宫格电影分镜
       "c-4":
         isNanoBananaLocalModel ||
-        isAdobeNanoBananaProModel ||
-        isXimuNanoBananaModel ||
-        isGptImage2Model ||
-        isAdobeGptImage2Model ||
-        isXimuGptImage2Model
+          isAdobeNanoBananaProModel ||
+          isXimuNanoBananaModel ||
+          isGptImage2Model ||
+          isAdobeGptImage2Model ||
+          isXimuGptImage2Model
           ? "4K"
           : "3K",
     };
     const commandResolution = commandResolutionMap[selected.id];
     const targetResolution =
       commandResolution &&
-      supportedImageParams?.resolutions &&
-      !supportedImageParams.resolutions.has(commandResolution)
+        supportedImageParams?.resolutions &&
+        !supportedImageParams.resolutions.has(commandResolution)
         ? supportedImageParams.defaultResolution
         : commandResolution;
     if (targetResolution) {
@@ -876,6 +879,138 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         .map((node) => (node?.data as NoteNodeData).content?.trim())
         .filter((content): content is string => Boolean(content));
     }),
+  );
+
+  // 构建参考图列表：区分本地上传图片和父节点图片
+  const localReferenceImageItems = useMemo(() => {
+    const parentUrlCounts = new Map<string, number>();
+    parentImageNodes.forEach((item) => {
+      parentUrlCounts.set(item.url, (parentUrlCounts.get(item.url) ?? 0) + 1);
+    });
+
+    return (referenceImageUrls ?? []).flatMap((url, index) => {
+      const count = parentUrlCounts.get(url) ?? 0;
+      if (count > 0) {
+        parentUrlCounts.set(url, count - 1);
+        return [];
+      }
+      return [{ url, index }];
+    });
+  }, [parentImageNodes, referenceImageUrls]);
+
+  const localReferenceImageUrls = useMemo(
+    () => localReferenceImageItems.map((item) => item.url),
+    [localReferenceImageItems],
+  );
+
+  const localReferenceImageIndexes = useMemo(
+    () => localReferenceImageItems.map((item) => item.index),
+    [localReferenceImageItems],
+  );
+
+  // 生成参考图 items（用于 ImageReferenceThumbnails）
+  const generationReferenceItems = useMemo(() => {
+    const items: Array<{
+      id: string;
+      url: string;
+      label?: string;
+      thumbnail?: string;
+      isLocalImage?: boolean;
+    }> = [];
+
+    // 本地上传的图片
+    localReferenceImageUrls.forEach((url, index) => {
+      const label = `图片${toChineseNumber(index + 1)}`;
+      items.push({
+        id: `local-image-${localReferenceImageIndexes[index]}-${url}`,
+        url,
+        label,
+        thumbnail: url,
+        isLocalImage: true,
+      });
+    });
+
+    // 父节点图片
+    parentImageNodes.forEach((node) => {
+      items.push({
+        id: `parent-image-${node.id}`,
+        url: node.url,
+        label: node.fileName || node.relativePath?.split("/").pop() || "参考图",
+        thumbnail: node.url,
+        isLocalImage: false,
+      });
+    });
+
+    return items;
+  }, [localReferenceImageUrls, localReferenceImageIndexes, parentImageNodes]);
+
+  // 参考图排序
+  const handleReferenceReorder = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      if (fromIndex === toIndex) return;
+
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= generationReferenceItems.length ||
+        toIndex >= generationReferenceItems.length
+      ) {
+        return;
+      }
+
+      const nextItems = arrayMove(generationReferenceItems, fromIndex, toIndex);
+      const nextUrls = nextItems.map((item) => item.url);
+
+      updateImageNodeData(nodeId, {
+        image_urls: nextUrls,
+      });
+    },
+    [generationReferenceItems, nodeId, updateImageNodeData],
+  );
+
+  // 参考图删除
+  const handleReferenceRemove = useCallback(
+    (item: (typeof generationReferenceItems)[number]) => {
+      if (item.isLocalImage) {
+        // 本地上传的图片：从 image_urls 中移除
+        const localIndex = localReferenceImageUrls.findIndex(
+          (url, idx) =>
+            item.id === `local-image-${localReferenceImageIndexes[idx]}-${url}`,
+        );
+        if (localIndex >= 0) {
+          const urlToRemove = localReferenceImageUrls[localIndex];
+          updateImageNodeData(nodeId, {
+            image_urls: referenceImageUrls.filter((url) => url !== urlToRemove),
+          });
+        }
+      } else {
+        // 父节点图片：断开连接
+        const nodeIdToDisconnect = item.id.replace("parent-image-", "");
+        handleDisconnectNode(nodeIdToDisconnect);
+      }
+    },
+    [
+      generationReferenceItems,
+      handleDisconnectNode,
+      localReferenceImageIndexes,
+      localReferenceImageUrls,
+      nodeId,
+      referenceImageUrls,
+      updateImageNodeData,
+    ],
+  );
+
+  // 参考图 hover 状态变化
+  const handleReferenceHoverChange = useCallback(
+    (item: (typeof generationReferenceItems)[number], isHovering: boolean) => {
+      if (item.isLocalImage) {
+        return;
+      }
+
+      const parentNodeId = item.id.replace("parent-image-", "");
+      setReferenceHoverHighlight(parentNodeId, nodeId, isHovering);
+    },
+    [nodeId],
   );
 
   useEffect(() => {
@@ -1467,43 +1602,15 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             onChange={handleFileChange}
           />
 
-          {/* 参考图（上传 + 父节点结果） */}
-          {referenceImageUrls.map((url, index) => {
-            const parentNode = parentImageNodes.find(
-              (item) => item.url === url,
-            );
-            return (
-              <ReferenceItemWrapper
-                key={`${url}-${index}`}
-                onDisconnect={
-                  parentNode
-                    ? () => handleDisconnectNode(parentNode.id)
-                    : undefined
-                }
-                onMouseEnter={() => {
-                  if (!parentNode) {
-                    return;
-                  }
-
-                  setReferenceHoverHighlight(parentNode.id, nodeId, true);
-                }}
-                onMouseLeave={() => {
-                  if (!parentNode) {
-                    return;
-                  }
-
-                  setReferenceHoverHighlight(parentNode.id, nodeId, false);
-                }}
-              >
-                <img
-                  src={url}
-                  alt="参考图"
-                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
-                  loading="lazy"
-                />
-              </ReferenceItemWrapper>
-            );
-          })}
+          {/* 参考图列表（支持拖拽排序、hover 预览、删除） */}
+          {generationReferenceItems.length > 0 && (
+            <ImageReferenceThumbnails
+              items={generationReferenceItems}
+              onReorder={handleReferenceReorder}
+              onRemove={handleReferenceRemove}
+              onHoverChange={handleReferenceHoverChange}
+            />
+          )}
         </div>
         {/* 建议面板 */}
         {activeMode && suggestionItems.length > 0 && (
@@ -1582,7 +1689,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                     ? XIMU_NANO_BANANA2_SIZE_VALUES
                     : selectedModel?.model === XIMU_NANO_BANANA_PRO_MODEL
                       ? XIMU_NANO_BANANA_PRO_SIZE_VALUES
-                    : NANO_BANANA_SIZE_VALUES
+                      : NANO_BANANA_SIZE_VALUES
                 ).has(size);
               const shouldResetXimuGptSize =
                 isXimuGptImageGenerationModel(selectedModel?.model) &&
@@ -1605,7 +1712,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                     ? "auto"
                     : shouldResetGrokSize
                       ? "1:1"
-                  : undefined,
+                      : undefined,
                 resolution: shouldResetXimuGptResolution
                   ? "1K"
                   : shouldResetGrokResolution
@@ -1773,7 +1880,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                   ? XIMU_NANO_BANANA2_SIZES
                   : isXimuNanoBananaProModel
                     ? XIMU_NANO_BANANA_PRO_SIZES
-                  : NANO_BANANA_LOCAL_SIZES
+                    : NANO_BANANA_LOCAL_SIZES
               }
               resolutionOptions={NANO_BANANA_RESOLUTIONS}
               onSizeChange={(value) => {
