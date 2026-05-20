@@ -10,6 +10,7 @@ import { CinematicProjectLoader } from "@/components/CinematicProjectLoader";
 import { useCanvasChat } from "@/hooks/useCanvasChat";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
+import { notifyCompletedGenerationDiff } from "@/utils/generationNotification";
 import { CanvasChatToolbar } from "./components/CanvasChatToolbar";
 import { CanvasFlow } from "./components/CanvasFlow";
 import { CanvasSidebar } from "./components/CanvasSidebar";
@@ -118,6 +119,12 @@ const CanvasPage = () => {
   const hydrated = useCanvasFlowStore((state) => state.hydrated);
   const currentProjectId = useCanvasFlowStore((state) => state.projectId);
   const nodes = useCanvasFlowStore((state) => state.nodes);
+  const previousNodesRef = useRef<AllNodeType[]>(nodes);
+
+  useEffect(() => {
+    notifyCompletedGenerationDiff(previousNodesRef.current, nodes);
+    previousNodesRef.current = nodes;
+  }, [nodes]);
 
   useEffect(() => {
     if (!projectId) {
