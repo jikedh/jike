@@ -381,6 +381,35 @@ const migrateStoryShotVideoModels = (data: StoryboardAgentData) => {
   return migrated ? { ...data, shots } : data;
 };
 
+const isLegacyDefaultSplitSystemPrompt = (value?: string) => {
+  if (!value) return false;
+  const isPreviousAssetReferenceDefault =
+    value.includes("每条 item.prompt 必须严格写成这种正文结构") &&
+    value.includes("资产引用行规则") &&
+    (value.includes("该段对应的原文剧情/台词摘要") ||
+      value.includes("该序号段对应的原文剧本文字") ||
+      value.includes("@图片1"));
+
+  return (
+    isPreviousAssetReferenceDefault ||
+    (value.includes("最终只输出分镜正文。格式如下：分镜1：0–2s") &&
+      value.includes("每条 shturl.cc/T 只能引用用户提供的可用资产中的名称") &&
+      value.includes("只输出 JSON 对象，不要 Markdown、表格、标题、解释或总结") &&
+      !value.includes("序号N") &&
+      !value.includes("资产引用行"))
+  );
+};
+
+const migrateStoryDefaultPrompts = (data: StoryboardAgentData) => {
+  if (!isLegacyDefaultSplitSystemPrompt(data.splitSystemPrompt)) {
+    return data;
+  }
+  return {
+    ...data,
+    splitSystemPrompt: DEFAULT_SPLIT_SYSTEM_PROMPT,
+  };
+};
+
 const normalizeAgentData = (
   data: StoryboardAgentData,
 ): StoryboardAgentData => {
@@ -393,7 +422,7 @@ const normalizeAgentData = (
         ? "shots"
         : "script";
 
-  return migrateStoryShotVideoModels({
+  return migrateStoryDefaultPrompts(migrateStoryShotVideoModels({
     ...empty,
     ...data,
     unlockedStep: inferredStep,
@@ -415,7 +444,7 @@ const normalizeAgentData = (
       ...(data.assets || {}),
     },
     shots: data.shots || [],
-  });
+  }));
 };
 
 const inputClass =
@@ -441,6 +470,17 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+const isStoryAssetMentionLabel = (label: string, assets: StoryboardAssets) => {
+  const normalized = label.trim().toLowerCase();
+  if (!normalized) return false;
+  return [
+    ...assets.role,
+    ...assets.scene,
+    ...assets.prop,
+    ...assets.audio,
+  ].some((asset) => asset.name.trim().toLowerCase() === normalized);
+};
+
 const buildPromptDraftHtml = (html?: string, text?: string) => {
   if (html && html.trim() && html !== "<p></p>") {
     return html;
@@ -452,6 +492,84 @@ const buildPromptDraftHtml = (html?: string, text?: string) => {
   }
 
   return `<p>${escapeHtml(normalizedText).replace(/\n/g, "<br>")}</p>`;
+};
+
+const buildStoryPromptDraftHtml = (
+  html: string | undefined,
+  text: string | undefined,
+  assets: StoryboardAssets,
+) => {
+  const normalizedText = text?.trim();
+  if (!normalizedText) return "<p></p>";
+
+  if (html && html.trim() && html !== "<p></p>") {
+    const htmlHasMention = /data-mention-id=/.test(html);
+    const textHasStoryAssetMention = Array.from(
+      normalizedText.matchAll(/@([^\s，,。；;：:\n]+)/g),
+    ).some((match) => isStoryAssetMentionLabel(match[1] || "", assets));
+
+    if (htmlHasMention || !textHasStoryAssetMention) {
+      return html;
+    }
+  }
+
+  const assetByName = new Map<string, StoryboardAssetItem>();
+  for (const asset of [
+    ...assets.role,
+    ...assets.scene,
+    ...assets.prop,
+    ...assets.audio,
+  ]) {
+    const key = asset.name.trim().toLowerCase();
+    if (key && !assetByName.has(key)) {
+      assetByName.set(key, asset);
+    }
+  }
+
+  const createMentionHtml = (asset: StoryboardAssetItem) => {
+    const primary = getPrimaryAssetMediaItem(asset);
+    const mediaType = getStoryAssetMediaType({
+      kind: asset.kind,
+      mediaType: primary?.mediaType || asset.mediaType,
+      localPath: primary?.localPath || asset.localPath,
+      mediaUrl: primary?.mediaUrl || asset.mediaUrl,
+    });
+    const thumbnail = primary?.mediaUrl || asset.mediaUrl || "";
+    const mentionKind = mediaType === "audio" ? "audio" : mediaType === "video" ? "video" : "image";
+    const safeName = escapeHtml(asset.name);
+    const safeId = escapeHtml(asset.id);
+    const safeThumbnail = escapeHtml(thumbnail);
+
+    const thumbnailHtml =
+      mentionKind === "audio"
+        ? `<span class="video-node-mention-pill__audio-icon">♪</span>`
+        : safeThumbnail
+          ? `<img class="video-node-mention-pill__thumbnail" src="${safeThumbnail}" alt="${safeName}" draggable="false">`
+          : "";
+
+    return `<span class="video-node-mention-pill" data-type="mention" data-mention-id="${safeId}" data-mention-label="${safeName}" data-mention-kind="${mentionKind}"${safeThumbnail ? ` data-thumbnail="${safeThumbnail}"` : ""} contenteditable="false" draggable="true">${thumbnailHtml}<span class="video-node-mention-pill__label">${safeName}</span></span>`;
+  };
+
+  const lines = normalizedText.split(/\r?\n/).map((line) => {
+    const chunks: string[] = [];
+    let lastIndex = 0;
+
+    for (const match of line.matchAll(/@([^\s，,。；;：:\n]+)/g)) {
+      const index = match.index ?? 0;
+      const label = match[1] || "";
+      const asset = assetByName.get(label.trim().toLowerCase());
+      if (!asset) continue;
+
+      chunks.push(escapeHtml(line.slice(lastIndex, index)));
+      chunks.push(createMentionHtml(asset));
+      lastIndex = index + match[0].length;
+    }
+
+    chunks.push(escapeHtml(line.slice(lastIndex)));
+    return chunks.join("");
+  });
+
+  return `<p>${lines.join("<br>")}</p>`;
 };
 
 type StoryImageModelOption = ReturnType<typeof getVisibleImageModels>[number];
@@ -4424,16 +4542,34 @@ const StoryAgentPage = ({
         const sharedAssets = await storyboardStorage.ensureProjectAssets(projectId);
         const data = await storyboardStorage.loadAgentData(projectId, snippetId);
         const needsMigration = hasStoryShotVideoModelMigration(data);
+        const needsPromptMigration = isLegacyDefaultSplitSystemPrompt(
+          data.splitSystemPrompt,
+        );
         const next = normalizeAgentData({
           ...data,
           assets: sharedAssets,
         });
+        const migratedShots = next.shots.map((shot) =>
+          applyAutoDescToShot(shot, next.assets),
+        );
+        const needsShotPromptMigration = migratedShots.some(
+          (shot, index) =>
+            shot.prompt !== next.shots[index]?.prompt ||
+            shot.promptDraftHtml !== next.shots[index]?.promptDraftHtml,
+        );
+        const nextWithPromptAssets = needsShotPromptMigration
+          ? { ...next, shots: migratedShots }
+          : next;
         if (cancelled) return;
-        setAgent(next);
-        agentRef.current = next;
-        setActiveStep(next.unlockedStep);
-        if (needsMigration) {
-          void storyboardStorage.saveAgentData(projectId, snippetId, next);
+        setAgent(nextWithPromptAssets);
+        agentRef.current = nextWithPromptAssets;
+        setActiveStep(nextWithPromptAssets.unlockedStep);
+        if (needsMigration || needsPromptMigration || needsShotPromptMigration) {
+          void storyboardStorage.saveAgentData(
+            projectId,
+            snippetId,
+            nextWithPromptAssets,
+          );
         }
       } catch (error) {
         console.error("[Story] load agent failed", error);
@@ -4464,57 +4600,148 @@ const StoryAgentPage = ({
   // 匹配纯文本和 HTML 中的自动资产说明区块
   const AUTO_DESC_BLOCK_RE = /^\[自动资产说明\][\s\S]*?\[\/自动资产说明\]\n*/;
   const AUTO_DESC_HTML_BLOCK_RE = /\[自动资产说明\][\s\S]*?\[\/自动资产说明\](?:<br>)?/;
+  const GENERATED_ASSET_REF_RE = /@?(?:图片|视频|音频)\d+/;
+  const SHOT_TITLE_RE = /^序号\d+[:：]\s*$/;
+
+  const stripGeneratedAssetReferenceLine = (
+    value: string,
+    allAssets: StoryboardAssets,
+  ) => {
+    const withoutLegacyBlock = value.replace(AUTO_DESC_BLOCK_RE, "");
+    const lines = withoutLegacyBlock.split(/\r?\n/);
+    const titleIndex = lines.findIndex((line) => SHOT_TITLE_RE.test(line.trim()));
+    if (titleIndex >= 0) {
+      lines.splice(titleIndex, 1);
+    }
+
+    let referenceLineIndex = titleIndex >= 0 ? titleIndex : 0;
+
+    while (
+      referenceLineIndex < lines.length &&
+      !lines[referenceLineIndex].trim()
+    ) {
+      referenceLineIndex += 1;
+    }
+
+    const referenceLine = lines[referenceLineIndex] || "";
+    const hasGeneratedRef = GENERATED_ASSET_REF_RE.test(referenceLine);
+    const hasRealAssetRef = Array.from(
+      referenceLine.matchAll(/@([^\s，,。；;：:\n]+)/g),
+    ).some((match) => isStoryAssetMentionLabel(match[1] || "", allAssets));
+
+    if (hasGeneratedRef || hasRealAssetRef) {
+      lines.splice(referenceLineIndex, 1);
+    }
+
+    return lines.join("\n").replace(/^\s+/, "");
+  };
+
+  const insertAssetReferenceLine = (
+    prompt: string,
+    referenceLine: string,
+    allAssets: StoryboardAssets,
+  ) => {
+    const cleanPrompt = stripGeneratedAssetReferenceLine(prompt, allAssets);
+    return `${referenceLine}${
+      cleanPrompt.trim() ? `\n\n${cleanPrompt.trimStart()}` : ""
+    }`;
+  };
+
+  const buildAssetReferenceLine = (
+    shot: StoryboardShot,
+    allAssets: StoryboardAssets,
+  ) => {
+    const assetMap = new Map(
+      [
+        ...allAssets.role,
+        ...allAssets.scene,
+        ...allAssets.prop,
+        ...allAssets.audio,
+      ].map((asset) => [asset.id, asset]),
+    );
+    const selectedIdSet = new Set<string>();
+    const selectedAssets: StoryboardAssetItem[] = [];
+
+    const addAssetById = (id: string | undefined) => {
+      if (!id || selectedIdSet.has(id)) return;
+      const asset = assetMap.get(id);
+      if (!asset) return;
+      selectedIdSet.add(id);
+      selectedAssets.push(asset);
+    };
+
+    shot.assetIds.forEach(addAssetById);
+    selectedAssets.forEach((asset) => {
+      for (const audioAssetId of asset.audioAssetIds || []) {
+        addAssetById(audioAssetId);
+      }
+    });
+
+    const audioOwnerById = new Map<string, StoryboardAssetItem>();
+    for (const asset of selectedAssets) {
+      if (asset.kind === "audio") continue;
+      for (const audioAssetId of asset.audioAssetIds || []) {
+        if (!audioOwnerById.has(audioAssetId)) {
+          audioOwnerById.set(audioAssetId, asset);
+        }
+      }
+    }
+
+    const sceneCount = selectedAssets.filter((asset) => asset.kind === "scene")
+      .length;
+
+    const orderedAssets = [
+      ...selectedAssets.filter((asset) => asset.kind === "role"),
+      ...selectedAssets.filter((asset) => asset.kind === "audio"),
+      ...selectedAssets.filter((asset) => asset.kind === "scene"),
+      ...selectedAssets.filter((asset) => asset.kind === "prop"),
+      ...selectedAssets.filter(
+        (asset) =>
+          asset.kind !== "role" &&
+          asset.kind !== "audio" &&
+          asset.kind !== "scene" &&
+          asset.kind !== "prop",
+      ),
+    ];
+
+    return orderedAssets
+      .map((asset) => {
+        if (asset.kind === "audio") {
+          const owner = audioOwnerById.get(asset.id);
+          const subject = owner?.name
+            ? `${owner.name}的声音`
+            : asset.name || "声音";
+          return `${subject}是@${asset.name}`;
+        }
+
+        if (asset.kind === "scene") {
+          const subject = sceneCount === 1 ? "场景" : asset.name || "场景";
+          return `${subject}是@${asset.name}`;
+        }
+
+        const subject = asset.name || "资产";
+        return `${subject}是@${asset.name}`;
+      })
+      .filter(Boolean)
+      .join("，");
+  };
 
   /**
    * 为单个分镜生成自动资产说明并更新 prompt / promptDraftHtml
-   * HTML 中生成与 @ 一致的全量 span 结构，Tiptap 可直接解析
+   * 采用“序号 + 资产引用行 + 分镜正文”的结构，便于模型理解参考素材顺序。
    */
   const applyAutoDescToShot = (
     shot: StoryboardShot,
     allAssets: StoryboardAssets,
   ): StoryboardShot => {
-    // 收集 assets 完整信息
-    const assetInfoMap = new Map<
-      string,
-      { id: string; name: string; thumbnail: string; kind: string }
-    >();
-    for (const kind of ["role", "scene", "prop", "audio"] as const) {
-      for (const item of allAssets[kind] || []) {
-        if (!item.name) continue;
-        const primary = getPrimaryAssetMediaItem(item);
-        const thumbnail = primary?.mediaUrl || item.mediaUrl || "";
-        const isAudio = kind === "audio" || item.mediaType === "audio";
-        assetInfoMap.set(item.id, {
-          id: item.id,
-          name: item.name.trim(),
-          thumbnail,
-          kind: isAudio ? "audio" : "image",
-        });
-      }
-    }
+    const referenceLine = buildAssetReferenceLine(shot, allAssets);
 
-    const mentionPairs = shot.assetIds
-      .map((id) => assetInfoMap.get(id))
-      .filter(Boolean) as {
-      id: string;
-      name: string;
-      thumbnail: string;
-      kind: string;
-    }[];
-
-    // 剥离旧区块
-    const basePrompt = shot.prompt.replace(AUTO_DESC_BLOCK_RE, "");
-    const cleanedHtml = (shot.promptDraftHtml || "").replace(
-      AUTO_DESC_HTML_BLOCK_RE,
-      "",
-    );
-    const baseHtml = cleanedHtml.trim()
-      ? cleanedHtml
-      : buildPromptDraftHtml(undefined, basePrompt);
-
-    if (mentionPairs.length === 0) {
-      if (basePrompt === shot.prompt && baseHtml === (shot.promptDraftHtml || ""))
+    if (!referenceLine) {
+      const basePrompt = shot.prompt.replace(AUTO_DESC_BLOCK_RE, "");
+      const baseHtml = buildStoryPromptDraftHtml(undefined, basePrompt, allAssets);
+      if (basePrompt === shot.prompt && baseHtml === (shot.promptDraftHtml || "")) {
         return shot;
+      }
       return {
         ...shot,
         prompt: basePrompt,
@@ -4522,41 +4749,12 @@ const StoryAgentPage = ({
       };
     }
 
-    // 纯文本
-    const textBlock = `[自动资产说明]\n${mentionPairs.map((m) => `@${m.name}`).join("\n")}\n[/自动资产说明]\n`;
-    const nextPrompt = `${textBlock}${basePrompt}`;
-
-    // HTML 区块（与 Tiptap Mention renderHTML 完全一致）
-    const mentionHtmlLines = mentionPairs.map((m) => {
-      const dataAttrs = [
-        `data-type="mention"`,
-        `data-id="${m.id}"`,
-        `data-label="${m.name}"`,
-        `data-mention-suggestion-char="@"`,
-        `data-mention-id="${m.id}"`,
-        `data-mention-label="${m.name}"`,
-        `data-mention-kind="${m.kind}"`,
-        m.thumbnail ? `data-thumbnail="${m.thumbnail}"` : "",
-        `contenteditable="false"`,
-        `draggable="true"`,
-      ]
-        .filter(Boolean)
-        .join(" ");
-
-      let innerHtml: string;
-      if (m.kind === "audio") {
-        innerHtml = `🎵 ${m.name}`;
-      } else if (m.thumbnail) {
-        innerHtml = `<img class="video-node-mention-pill__thumbnail" src="${m.thumbnail}" alt="${m.name}" draggable="false"><span class="video-node-mention-pill__label">${m.name}</span>`;
-      } else {
-        innerHtml = m.name;
-      }
-
-      return `<span class="video-node-mention-pill" ${dataAttrs}>${innerHtml}</span>`;
-    });
-
-    const htmlBlock = `[自动资产说明]<br>${mentionHtmlLines.map((line, i) => `${line}是${mentionPairs[i].name}`).join("<br>")}<br>[/自动资产说明]<br>`;
-    const nextHtml = `${htmlBlock}${baseHtml}`;
+    const nextPrompt = insertAssetReferenceLine(
+      shot.prompt,
+      referenceLine,
+      allAssets,
+    );
+    const nextHtml = buildStoryPromptDraftHtml(undefined, nextPrompt, allAssets);
 
     if (nextPrompt === shot.prompt && nextHtml === (shot.promptDraftHtml || ""))
       return shot;
@@ -7872,9 +8070,15 @@ const ShotPromptPanel = ({
         )}
       >
         <VideoPromptEditor
-          promptDraftHtml={buildPromptDraftHtml(
+          promptDraftHtml={buildStoryPromptDraftHtml(
             shot.promptDraftHtml,
             shot.prompt,
+            {
+              role: selectedAssets.filter((asset) => asset.kind === "role"),
+              scene: selectedAssets.filter((asset) => asset.kind === "scene"),
+              prop: selectedAssets.filter((asset) => asset.kind === "prop"),
+              audio: selectedAssets.filter((asset) => asset.kind === "audio"),
+            },
           )}
           mentionItems={mentionItems}
           onDraftChange={({ text, html }) =>
