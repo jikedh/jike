@@ -5568,7 +5568,18 @@ const StoryAgentPage = ({
   };
 
   const generateShotVideo = async (shot: StoryboardShot) => {
-    const basePrompt = (shot.prompt || shot.script || "").trim();
+    const refreshedShot = applyAutoDescToShot(shot, agentRef.current.assets);
+    if (
+      refreshedShot.prompt !== shot.prompt ||
+      refreshedShot.promptDraftHtml !== shot.promptDraftHtml
+    ) {
+      updateShot(shot.id, {
+        prompt: refreshedShot.prompt,
+        promptDraftHtml: refreshedShot.promptDraftHtml,
+      });
+    }
+
+    const basePrompt = (refreshedShot.prompt || refreshedShot.script || "").trim();
     if (!basePrompt) {
       toast.error("请先填写分镜提示词");
       return;
@@ -5578,12 +5589,16 @@ const StoryAgentPage = ({
     const suffix = useAffix ? (agent.promptSuffix || "").trim() : "";
     const prompt = `${prefix}${prefix && " "}${basePrompt}${suffix && " "}${suffix}`.replace(/\s+/g, " ").trim();
 
-    updateShot(shot.id, { videoStatus: "generating" });
+    await saveShotPatch(shot.id, {
+      prompt: refreshedShot.prompt,
+      promptDraftHtml: refreshedShot.promptDraftHtml,
+      videoStatus: "generating",
+    });
     try {
-      const selectedAssets = getShotAssetsWithBoundAudio(shot);
+      const selectedAssets = getShotAssetsWithBoundAudio(refreshedShot);
       const referenceItems = await buildShotReferenceItems(selectedAssets);
       const mode = pickStoryVideoMode(
-        shot.modelInfo.videoModel,
+        refreshedShot.modelInfo.videoModel,
         referenceItems,
         toVideoModeKey(settings.defaultNewVideoMode),
       );
@@ -5607,18 +5622,18 @@ const StoryAgentPage = ({
       }
 
       const params = normalizeVideoParams(
-        shot.modelInfo.videoModel,
+        refreshedShot.modelInfo.videoModel,
         {
-          aspectRatio: shot.modelInfo.aspectRatio,
-          resolution: shot.modelInfo.resolution,
-          duration: shot.modelInfo.duration,
+          aspectRatio: refreshedShot.modelInfo.aspectRatio,
+          resolution: refreshedShot.modelInfo.resolution,
+          duration: refreshedShot.modelInfo.duration,
           generateAudio: settings.defaultNewVideoGenerateAudio,
           promptExtend: settings.defaultNewVideoPromptExtend,
         },
         mode,
       );
       const request: VideoGenerateRequest = {
-        model: shot.modelInfo.videoModel,
+        model: refreshedShot.modelInfo.videoModel,
         params,
         prompt,
         referenceItems: generationReferenceItems,
@@ -5627,7 +5642,7 @@ const StoryAgentPage = ({
       const apiRequest = buildVideoApiRequest(request);
       const videoUrl = await createStoryVideoTask(
         apiRequest,
-        shot.modelInfo.videoModel,
+        refreshedShot.modelInfo.videoModel,
       );
       await saveShotPatch(shot.id, {
         videoStatus: "ready",
