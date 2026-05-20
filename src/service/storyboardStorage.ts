@@ -38,7 +38,7 @@ export const DEFAULT_SPLIT_SYSTEM_PROMPT =
     "必须追踪重要道具状态：廊柱、卧房门、血迹、火把、三座别庄、马鞭、玉镯、珠翠、珍珠、碎瓷片、酒壶、鸩酒、桌案；每个道具必须连续：谁持有、放在哪里、是否移动、是否损坏、是否被看见、是否成为爆点；禁止道具凭空出现、凭空消失",
     "最终执行要求：1.直接输出分镜正文；2.每个即梦段落控制在10–15秒；3.每段必须有4–7个分镜，15秒段落优先5–6个分镜；4.只输出“分镜X：时间段 + 自然语言画面描述”；5.每个分镜开头必须写清景别、视角、运镜；6.大部分镜头优先使用固定镜头；7.每个镜头必须写清人物在场景里的合理位置关系；8.需要时写清前景、中景、远景；不需要时不强行写；9.不反复解释角色穿什么；10.不输出生成段落标题、变量统筹、场景设定、听觉设计、段尾衔接；11.不在正文中写“无音乐、无字幕、无画面文字”；12.默认为真人短剧实拍质感，不出现3D、动漫、国漫、CG、渲染等词；13.保证原文台词、VO、OS一字不改；14.不新增原文没有的台词；15.保证人物、道具、动作、情绪连续；16.爆点台词必须同步切反应；17.禁止解释，禁止分析，禁止询问，直接输出最终分镜",
     "每条 shturl.cc/T 只能引用用户提供的可用资产中的名称，不能新增未列入可用资产的角色、场景、道具名称。禁止输出音效资产。",
-    "只输出 JSON 对象，不要 Markdown、表格、标题、解释或总结。结构必须是：{ \"shots\": [{ \"script\": \"该镜头对应的原文剧情/台词摘要\", \"prompt\": \"镜号001；景别：...；运镜：...；时长：...s；画面内容：...；台词/音效：...；画面备注：...\", \"assets\": { \"role\": [\"本镜头涉及的角色名\"], \"scene\": [\"本镜头涉及的场景名\"], \"prop\": [\"本镜头涉及的道具名\"] } }] }。"
+    "只输出 JSON 对象，不要 Markdown、表格、标题、解释或总结。结构必须是：{ \"shots\": [{ \"script\": \"该镜头对应的原文剧情/台词摘要\", \"prompt\": \"分镜1：0–2s 景别：...，视角：...，运镜：...。画面自然语言描述：...。\", \"assets\": { \"role\": [\"本镜头涉及的角色名\"], \"scene\": [\"本镜头涉及的场景名\"], \"prop\": [\"本镜头涉及的道具名\"] } }] }。"
   ].join("\n");
 
 export type StoryboardProject = {
@@ -876,8 +876,22 @@ const parseJsonBlock = (value: string) => {
   return fenced?.[1]?.trim() || trimmed;
 };
 
-const applyPromptAffixes = (prompt: string, prefix: string, suffix: string) =>
-  [prefix.trim(), prompt.trim(), suffix.trim()].filter(Boolean).join("，");
+const extractChatCompletionContent = (response: any) => {
+  const payload = response?.data ?? response;
+  const nestedPayload = payload?.data ?? {};
+  return (
+    nestedPayload?.choices?.[0]?.message?.content ||
+    nestedPayload?.output_text ||
+    nestedPayload?.content ||
+    payload?.choices?.[0]?.message?.content ||
+    payload?.output_text ||
+    payload?.content ||
+    response?.choices?.[0]?.message?.content ||
+    response?.output_text ||
+    response?.content ||
+    ""
+  );
+};
 
 const assetReferenceKeys: Record<"role" | "scene" | "prop", string[]> = {
   role: ["role", "roles", "character", "characters", "角色", "人物"],
@@ -999,8 +1013,6 @@ const createShotsFromItems = (
   items: RawSplitShotItem[],
   input: {
     maxShots: number;
-    promptPrefix: string;
-    promptSuffix: string;
     defaults: StoryboardShot["modelInfo"];
   },
 ) =>
@@ -1009,11 +1021,7 @@ const createShotsFromItems = (
     order: index + 1,
     script: item.script || "",
     assetIds: [],
-    prompt: applyPromptAffixes(
-      item.prompt || item.script || "",
-      input.promptPrefix,
-      input.promptSuffix,
-    ),
+    prompt: String(item.prompt || item.script || "").trim(),
     modelInfo: input.defaults,
     videoStatus: "idle" as const,
   }));
@@ -1070,14 +1078,7 @@ export const identifyAssetsWithAgent = async (input: {
         },
       ],
     });
-    const rawContent =
-      response?.data?.choices?.[0]?.message?.content ||
-      response?.data?.output_text ||
-      response?.data?.content ||
-      response?.choices?.[0]?.message?.content ||
-      response?.output_text ||
-      response?.content ||
-      "";
+    const rawContent = extractChatCompletionContent(response);
     const content = rawContent?.trim() || "";
     if (!content) {
       throw new Error("AI 返回内容为空，请检查网络或 API 配置");
@@ -1127,14 +1128,12 @@ export const splitScriptWithAgent = async (input: {
           role: "user",
           content: [
             `剧本标题：${input.title || "未命名剧本"}`,
-            input.promptPrefix ? `提示词前缀：${input.promptPrefix}` : "",
-            input.promptSuffix ? `提示词后缀：${input.promptSuffix}` : "",
             input.scriptCategory ? `剧本分类：${input.scriptCategory}` : "",
             `最大分镜数：${input.maxShots}`,
             input.splitAssist ? `拆镜辅助词：${input.splitAssist}` : "",
             `可用资产：${JSON.stringify(serializeAssetsForPrompt(input.assets))}`,
             "请返回对象：{ \"shots\": [{ \"script\": \"剧情内容\", \"prompt\": \"生图/图生视频提示词\", \"assets\": { \"role\": [\"本分镜涉及的角色名\"], \"scene\": [\"本分镜涉及的场景名\"], \"prop\": [\"本分镜涉及的道具名\"] } }] }。",
-            "shots 最多不超过最大分镜数。每条 shot.assets 只能引用可用资产中已有的名称。prompt 不需要自行重复提示词前缀和提示词后缀，系统会统一拼接。不要输出音效。",
+            "shots 最多不超过最大分镜数。每条 shot.assets 只能引用可用资产中已有的名称。prompt 不需要自行重复提示词前缀和提示词后缀，系统只会在点击生成视频时临时拼接。不要输出音效。",
             input.scriptContent,
           ]
             .filter(Boolean)
@@ -1143,11 +1142,10 @@ export const splitScriptWithAgent = async (input: {
       ],
     });
 
-    const content =
-      response?.data?.choices?.[0]?.message?.content ||
-      response?.data?.output_text ||
-      response?.data?.content ||
-      "";
+    const content = extractChatCompletionContent(response);
+    if (!String(content).trim()) {
+      throw new Error("AI 返回内容为空，请检查网络或 API 配置");
+    }
     const parsed = JSON.parse(parseJsonBlock(String(content))) as
       | RawSplitShotItem[]
       | {
