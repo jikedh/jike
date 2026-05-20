@@ -38,7 +38,6 @@ export type {
   UploadOssPutUrlResp,
 } from "shared/types/api/jikeGo";
 
-// 健康检查
 export function healthCheck(): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
@@ -47,7 +46,7 @@ export function healthCheck(): any {
   });
 }
 
-// 桌面代理健康检查
+// 健康检查
 export function desktopProxyHealthCheck(): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
@@ -57,10 +56,10 @@ export function desktopProxyHealthCheck(): any {
 }
 
 // 创建桌面代理任务
-export async function createDesktopProxyTask(
+export function createDesktopProxyTask(
   data: DesktopProxyRequest,
   signal?: AbortSignal,
-): Promise<any> {
+): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/desktop/v1/ai/generation/proxy",
@@ -114,7 +113,7 @@ export function refundDesktopProxyScore(
 }
 
 // 查询桌面代理任务状态
-export async function queryDesktopProxyTask(data: DesktopProxyRequest): Promise<any> {
+export function queryDesktopProxyTask(data: DesktopProxyRequest): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/desktop/v1/ai/task/query",
@@ -124,11 +123,11 @@ export async function queryDesktopProxyTask(data: DesktopProxyRequest): Promise<
   });
 }
 
-// 桌面聊天
-export async function createDesktopChatCompletions(
+// 聊天用的接口
+export function createDesktopChatCompletions(
   data: DesktopChatCompletionsRequest,
   signal?: AbortSignal,
-): Promise<any> {
+): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/desktop/v1/ai/chat/completions",
@@ -139,7 +138,6 @@ export async function createDesktopChatCompletions(
   });
 }
 
-// 获取数字验证码
 export function getDigitalCaptcha(): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
@@ -149,7 +147,6 @@ export function getDigitalCaptcha(): any {
   });
 }
 
-// 注册（用户名密码）
 export function registerByUsername(data: {
   username: string;
   password: string;
@@ -164,7 +161,6 @@ export function registerByUsername(data: {
   });
 }
 
-// 登录（用户名密码）
 export function loginByUsername(data: {
   username: string;
   password: string;
@@ -179,7 +175,6 @@ export function loginByUsername(data: {
   });
 }
 
-// 获取场景二维码
 export function getSceneQrcode(): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
@@ -188,7 +183,6 @@ export function getSceneQrcode(): any {
   });
 }
 
-// 查询场景状态
 export function querySceneStatus(sceneId: string): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
@@ -198,7 +192,6 @@ export function querySceneStatus(sceneId: string): any {
   });
 }
 
-// 获取用户信息
 export function getJikeGoUserInfo(): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
@@ -208,7 +201,6 @@ export function getJikeGoUserInfo(): any {
   });
 }
 
-// 更新用户信息
 export function updateJikeGoUserInfo(data: {
   nickname: string;
   avatar: string;
@@ -222,7 +214,6 @@ export function updateJikeGoUserInfo(data: {
   });
 }
 
-// 获取积分余额
 export function getJikeGoScoreBalance(): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
@@ -232,7 +223,6 @@ export function getJikeGoScoreBalance(): any {
   });
 }
 
-// 获取积分记录
 export function getJikeGoScoreRecords(params?: {
   page?: number;
   pageSize?: number;
@@ -246,7 +236,6 @@ export function getJikeGoScoreRecords(params?: {
   });
 }
 
-// 获取积分交易记录
 export function getJikeGoScoreTransactions(params?: {
   page?: number;
   pageSize?: number;
@@ -260,7 +249,6 @@ export function getJikeGoScoreTransactions(params?: {
   });
 }
 
-// 获取 OSS 上传地址
 export function getOssPutUrl(data: OssPutUrlRequest): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
@@ -271,7 +259,6 @@ export function getOssPutUrl(data: OssPutUrlRequest): any {
   });
 }
 
-// 上传文件到 OSS
 export function uploadOssFile(file: File): any {
   const formData = new FormData();
   formData.append("file", file);
@@ -285,7 +272,7 @@ export function uploadOssFile(file: File): any {
   });
 }
 
-// 获取 OSS 预签名上传地址
+// UploadOss 预签名上传：获取预签名 PUT URL
 export function getUploadOssPutUrl(data: UploadOssPutUrlRequest): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
@@ -320,121 +307,58 @@ export function pollRunningHubTask(data: PollRunningHubTaskRequest): any {
   });
 }
 
-// Rhart Image G2 文生图
 export function createRhartImageG2TextToImage(data: RunningHubTextToImageRequest): any {
-  return jikeingService({
-    baseURL: JIKE_GO_BASE_URL,
-    url: "/v1/runninghub/rhart-image-g-2/text-to-image",
-    method: "post",
-    data,
-    headers: getJikeGoAuthHeaders(),
-  });
+  return createRunningHubV2TextToImage("/v1/runninghub/rhart-image-g-2/text-to-image", data);
 }
-
-// Rhart Image G2 官方文生图
 export function createRhartImageG2OfficialTextToImage(data: RunningHubTextToImageRequest): any {
-  return jikeingService({
-    baseURL: JIKE_GO_BASE_URL,
-    url: "/v1/runninghub/rhart-image-g-2-official/text-to-image",
-    method: "post",
-    data,
-    headers: getJikeGoAuthHeaders(),
-  });
+  return createRunningHubV2TextToImage("/v1/runninghub/rhart-image-g-2-official/text-to-image", data);
 }
-
-// Rhart Image N Pro 文生图
 export function createRhartImageNProTextToImage(data: RunningHubTextToImageRequest): any {
-  return jikeingService({
-    baseURL: JIKE_GO_BASE_URL,
-    url: "/v1/runninghub/rhart-image-n-pro/text-to-image",
-    method: "post",
-    data,
-    headers: getJikeGoAuthHeaders(),
-  });
+  return createRunningHubV2TextToImage("/v1/runninghub/rhart-image-n-pro/text-to-image", data);
 }
-
-// Rhart Image N Pro 官方文生图
 export function createRhartImageNProOfficialTextToImage(data: RunningHubTextToImageRequest): any {
-  return jikeingService({
-    baseURL: JIKE_GO_BASE_URL,
-    url: "/v1/runninghub/rhart-image-n-pro-official/text-to-image",
-    method: "post",
-    data,
-    headers: getJikeGoAuthHeaders(),
-  });
+  return createRunningHubV2TextToImage("/v1/runninghub/rhart-image-n-pro-official/text-to-image", data);
 }
-
-// Rhart Image G2 图生图
 export function createRhartImageG2ImageToImage(data: RunningHubImageToImageRequest): any {
-  return jikeingService({
-    baseURL: JIKE_GO_BASE_URL,
-    url: "/v1/runninghub/rhart-image-g-2/image-to-image",
-    method: "post",
-    data,
-    headers: getJikeGoAuthHeaders(),
-  });
+  return createRunningHubV2ImageToImage("/v1/runninghub/rhart-image-g-2/image-to-image", data);
 }
-
-// Rhart Image G2 官方图生图
 export function createRhartImageG2OfficialImageToImage(data: RunningHubImageToImageRequest): any {
-  return jikeingService({
-    baseURL: JIKE_GO_BASE_URL,
-    url: "/v1/runninghub/rhart-image-g-2-official/image-to-image",
-    method: "post",
-    data,
-    headers: getJikeGoAuthHeaders(),
-  });
+  return createRunningHubV2ImageToImage("/v1/runninghub/rhart-image-g-2-official/image-to-image", data);
 }
-
-// Rhart Image N Pro 图生图
 export function createRhartImageNProImageToImage(data: RunningHubImageToImageRequest): any {
-  return jikeingService({
-    baseURL: JIKE_GO_BASE_URL,
-    url: "/v1/runninghub/rhart-image-n-pro/image-to-image",
-    method: "post",
-    data,
-    headers: getJikeGoAuthHeaders(),
-  });
+  return createRunningHubV2ImageToImage("/v1/runninghub/rhart-image-n-pro/image-to-image", data);
 }
-
-// Rhart Image N Pro 官方图生图
 export function createRhartImageNProOfficialImageToImage(data: RunningHubImageToImageRequest): any {
-  return jikeingService({
-    baseURL: JIKE_GO_BASE_URL,
-    url: "/v1/runninghub/rhart-image-n-pro-official/image-to-image",
-    method: "post",
-    data,
-    headers: getJikeGoAuthHeaders(),
-  });
+  return createRunningHubV2ImageToImage("/v1/runninghub/rhart-image-n-pro-official/image-to-image", data);
 }
-
-// Rhart Image N Pro 编辑
 export function createRhartImageNProEdit(data: RunningHubImageToImageRequest): any {
-  return jikeingService({
-    baseURL: JIKE_GO_BASE_URL,
-    url: "/v1/runninghub/rhart-image-n-pro/edit",
-    method: "post",
-    data,
-    headers: getJikeGoAuthHeaders(),
-  });
+  return createRunningHubV2ImageToImage("/v1/runninghub/rhart-image-n-pro/edit", data);
 }
-
-// Rhart Image N Pro 官方编辑
 export function createRhartImageNProOfficialEdit(data: RunningHubImageToImageRequest): any {
-  return jikeingService({
-    baseURL: JIKE_GO_BASE_URL,
-    url: "/v1/runninghub/rhart-image-n-pro-official/edit",
-    method: "post",
-    data,
-    headers: getJikeGoAuthHeaders(),
-  });
+  return createRunningHubV2ImageToImage("/v1/runninghub/rhart-image-n-pro-official/edit", data);
 }
-
-// 查询 RunningHub V2 任务状态
 export function queryRunningHubV2Task(data: QueryRunningHubV2TaskRequest): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/v1/runninghub/query",
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+function createRunningHubV2TextToImage(url: string, data: RunningHubTextToImageRequest): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url,
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+function createRunningHubV2ImageToImage(url: string, data: RunningHubImageToImageRequest): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url,
     method: "post",
     data,
     headers: getJikeGoAuthHeaders(),
