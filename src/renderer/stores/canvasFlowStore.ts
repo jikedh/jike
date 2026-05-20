@@ -2418,6 +2418,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     },
     setGroups: (groups) => set({ groups }),
     setSelectedGroupId: (selectedGroupId) => set({ selectedGroupId }),
+    setHydrated: (hydrated) => set({ hydrated }),
 
     // ==================== 持久化方法实现 ====================
 
