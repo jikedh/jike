@@ -27,7 +27,6 @@
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import debounce from "lodash/debounce";
-import { FixedSizeList as List } from "react-window";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ensureAssetOssUrl,
@@ -2796,49 +2795,6 @@ const StoryAssetImageParamsControl = ({
   );
 };
 
-const VirtualList = ({
-  items,
-  itemHeight = 240,
-  overscan = 3,
-  renderItem,
-}: {
-  items: any[];
-  itemHeight?: number;
-  overscan?: number;
-  renderItem: (item: any, index: number) => React.ReactNode;
-}) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [height, setHeight] = useState(400);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const onResize = () => setHeight(el.clientHeight || 400);
-    onResize();
-    const ro = new ResizeObserver(onResize);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  return (
-    <div ref={containerRef} className="min-h-0 flex-1">
-      <List
-        height={height}
-        itemCount={items.length}
-        itemSize={itemHeight}
-        width="100%"
-        overscanCount={overscan}
-      >
-        {({ index, style }) => (
-          <div style={style} key={items[index]?.id}>
-            {renderItem(items[index], index)}
-          </div>
-        )}
-      </List>
-    </div>
-  );
-};
-
 const AssetColumnItem = memo(({
   item,
   index,
@@ -4288,7 +4244,8 @@ const StoryAgentPage = ({
   const [editingShotPromptAffix, setEditingShotPromptAffix] = useState(false);
   const [nextConfirmTarget, setNextConfirmTarget] =
     useState<StoryNextConfirmTarget | null>(null);
-  const [roleGenerateConfirmOpen, setRoleGenerateConfirmOpen] = useState(false);
+  const [bulkGenerateConfirmKind, setBulkGenerateConfirmKind] =
+    useState<StoryboardAssetKind | null>(null);
   const [selectingAssetShotId, setSelectingAssetShotId] = useState<string | null>(
     null,
   );
@@ -4300,7 +4257,8 @@ const StoryAgentPage = ({
   const [splitting, setSplitting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exportingJianying, setExportingJianying] = useState(false);
-  const [generatingAllRoles, setGeneratingAllRoles] = useState(false);
+  const [bulkGeneratingKind, setBulkGeneratingKind] =
+    useState<StoryboardAssetKind | null>(null);
   const [removingSubtitleShotId, setRemovingSubtitleShotId] = useState<
     string | null
   >(null);
@@ -4504,10 +4462,13 @@ const StoryAgentPage = ({
 
     // 剥离旧区块
     const basePrompt = shot.prompt.replace(AUTO_DESC_BLOCK_RE, "");
-    const baseHtml = (shot.promptDraftHtml || "").replace(
+    const cleanedHtml = (shot.promptDraftHtml || "").replace(
       AUTO_DESC_HTML_BLOCK_RE,
       "",
     );
+    const baseHtml = cleanedHtml.trim()
+      ? cleanedHtml
+      : buildPromptDraftHtml(undefined, basePrompt);
 
     if (mentionPairs.length === 0) {
       if (basePrompt === shot.prompt && baseHtml === (shot.promptDraftHtml || ""))
@@ -4515,7 +4476,7 @@ const StoryAgentPage = ({
       return {
         ...shot,
         prompt: basePrompt,
-        promptDraftHtml: baseHtml || undefined,
+        promptDraftHtml: baseHtml === "<p></p>" ? undefined : baseHtml,
       };
     }
 
@@ -4676,22 +4637,32 @@ const StoryAgentPage = ({
   };
 
   const deleteAsset = (kind: StoryboardAssetKind, id: string) => {
+    const currentAgent = agentRef.current;
     const nextAssets = {
-      ...agent.assets,
-      [kind]: agent.assets[kind].filter((item) => item.id !== id),
+      ...currentAgent.assets,
+      [kind]: currentAgent.assets[kind].filter((item) => item.id !== id),
     };
     if (kind === "audio") {
-      nextAssets.role = nextAssets.role.map((item) => ({
-        ...item,
-        audioAssetIds: item.audioAssetIds?.filter((assetId) => assetId !== id),
-      }));
+      for (const assetKind of ["role", "scene", "prop"] as const) {
+        nextAssets[assetKind] = nextAssets[assetKind].map((item) => ({
+          ...item,
+          audioAssetIds: item.audioAssetIds?.filter((assetId) => assetId !== id),
+        }));
+      }
     }
-    patchAgent({
+    delete assetCallbacksRef.current[id];
+    void saveAgent({
+      ...currentAgent,
       assets: nextAssets,
-      shots: agent.shots.map((shot) => ({
-        ...shot,
-        assetIds: shot.assetIds.filter((assetId) => assetId !== id),
-      })),
+      shots: currentAgent.shots.map((shot) =>
+        applyAutoDescToShot(
+          {
+            ...shot,
+            assetIds: shot.assetIds.filter((assetId) => assetId !== id),
+          },
+          nextAssets,
+        ),
+      ),
     });
     toast.success("资产已删除");
   };
@@ -5138,48 +5109,49 @@ const StoryAgentPage = ({
     await generateAssetWithAiInternal(kind, id);
   };
 
-  const generateAllRoleAssets = async () => {
-    const roles = agentRef.current.assets.role;
-    if (roles.length === 0) {
-      toast.error("暂无角色资产");
+  const generateAllAssets = async (kind: StoryboardAssetKind) => {
+    const items = agentRef.current.assets[kind];
+    if (items.length === 0) {
+      toast.error(`暂无${assetKinds.find((item) => item.id === kind)?.label || "资产"}资产`);
       return;
     }
 
-    setRoleGenerateConfirmOpen(false);
-    setGeneratingAllRoles(true);
+    setBulkGenerateConfirmKind(null);
+    setBulkGeneratingKind(kind);
     try {
       let skippedCount = 0;
-      const generateTasks = roles.flatMap((role) => {
-        const latestRole = agentRef.current.assets.role.find(
-          (item) => item.id === role.id,
+      const generateTasks = items.flatMap((asset) => {
+        const latestAsset = agentRef.current.assets[kind].find(
+          (item) => item.id === asset.id,
         );
         if (
-          !latestRole ||
-          !buildAssetGenerationPrompt("role", latestRole, agentRef.current)
+          !latestAsset ||
+          !buildAssetGenerationPrompt(kind, latestAsset, agentRef.current)
         ) {
           skippedCount += 1;
           return [];
         }
         return [
-          generateAssetWithAiInternal("role", role.id, {
+          generateAssetWithAiInternal(kind, asset.id, {
             showToast: false,
           }),
         ];
       });
       const results = await Promise.all(generateTasks);
       const successCount = results.filter(Boolean).length;
+      const kindLabel = assetKinds.find((item) => item.id === kind)?.label || "资产";
 
       if (successCount > 0) {
         toast.success(
           skippedCount > 0
-            ? `已生成 ${successCount} 个角色资产，跳过 ${skippedCount} 个空提示词角色`
-            : `已生成 ${successCount} 个角色资产`,
+            ? `已生成 ${successCount} 个${kindLabel}资产，跳过 ${skippedCount} 个空提示词${kindLabel}`
+            : `已生成 ${successCount} 个${kindLabel}资产`,
         );
       } else {
-        toast.error("没有可生成的角色资产");
+        toast.error(`没有可生成的${kindLabel}资产`);
       }
     } finally {
-      setGeneratingAllRoles(false);
+      setBulkGeneratingKind(null);
     }
   };
 
@@ -5308,6 +5280,23 @@ const StoryAgentPage = ({
         shot.id === id ? { ...shot, ...patch } : shot,
       ),
     });
+  };
+
+  const refreshAllShotAssetDescriptions = async () => {
+    const currentAgent = agentRef.current;
+    if (currentAgent.shots.length === 0) {
+      toast.error("暂无可更新的分镜");
+      return;
+    }
+
+    const nextAgent = {
+      ...currentAgent,
+      shots: currentAgent.shots.map((shot) =>
+        applyAutoDescToShot(shot, currentAgent.assets),
+      ),
+    };
+    await saveAgent(nextAgent);
+    toast.success("已更新全部分镜资产说明");
   };
 
   const removeAssetFromShot = (shotId: string, assetId: string) => {
@@ -6577,28 +6566,43 @@ const StoryAgentPage = ({
                       </h3>
                       <div className="flex flex-wrap justify-end gap-2">
                         {kind.id === "role" ? (
-                          <>
-                            <Button
-                              size="sm"
-                              onClick={() => setEditingRolePromptAffix(true)}
-                            >
-                              <Pencil size={13} />
-                              提示词前后缀
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="blue"
-                              onClick={() => setRoleGenerateConfirmOpen(true)}
-                              disabled={generatingAllRoles}
-                            >
-                              {generatingAllRoles ? (
-                                <Loader2 className="animate-spin" />
-                              ) : (
-                                <WandSparkles size={13} />
-                              )}
-                              统一生成
-                            </Button>
-                          </>
+                          <Button
+                            size="sm"
+                            onClick={() => setEditingRolePromptAffix(true)}
+                          >
+                            <Pencil size={13} />
+                            提示词前后缀
+                          </Button>
+                        ) : null}
+                        {kind.id === "scene" || kind.id === "prop" ? (
+                          <Button
+                            size="sm"
+                            variant="blue"
+                            onClick={() => setBulkGenerateConfirmKind(kind.id)}
+                            disabled={bulkGeneratingKind === kind.id}
+                          >
+                            {bulkGeneratingKind === kind.id ? (
+                              <Loader2 className="animate-spin" />
+                            ) : (
+                              <WandSparkles size={13} />
+                            )}
+                            统一生成
+                          </Button>
+                        ) : null}
+                        {kind.id === "role" ? (
+                          <Button
+                            size="sm"
+                            variant="blue"
+                            onClick={() => setBulkGenerateConfirmKind(kind.id)}
+                            disabled={bulkGeneratingKind === kind.id}
+                          >
+                            {bulkGeneratingKind === kind.id ? (
+                              <Loader2 className="animate-spin" />
+                            ) : (
+                              <WandSparkles size={13} />
+                            )}
+                            统一生成
+                          </Button>
                         ) : null}
                         <Button size="sm" onClick={() => addAsset(kind.id)}>
                           <Plus size={13} />
@@ -6614,55 +6618,6 @@ const StoryAgentPage = ({
                             <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-white/10 text-sm text-white/30">
                               暂无{kind.label}资产
                             </div>
-                          );
-                        }
-
-                        if (assetList.length > 24) {
-                          return (
-                            <VirtualList
-                              items={assetList}
-                              itemHeight={220}
-                              renderItem={(item: StoryboardAssetItem, index: number) => {
-                                let cb = assetCallbacksRef.current[item.id];
-                                if (!cb) {
-                                  cb = {
-                                    onChange: (patch: Partial<StoryboardAssetItem>) => updateAsset(kind.id, item.id, patch),
-                                    onUpload: (file: File) => void uploadAsset(kind.id, item.id, file),
-                                    onUseLibrary: () => openAssetLibraryForAssetDetail(kind.id, item.id),
-                                    onBindAudio: () => openAssetLibraryForAudioBind(kind.id, item.id),
-                                    onBindLocalAudio: (file: File) => void bindLocalAudioAsset(kind.id, item.id, file),
-                                    onSetPrimaryMedia: (mediaId: string) => setAssetPrimaryMediaById(kind.id, item.id, mediaId),
-                                    onDeleteMedia: (mediaId: string) => deleteAssetMediaById(kind.id, item.id, mediaId),
-                                    onGenerate: () => void generateAssetWithAi(kind.id, item.id),
-                                    onDelete: () => deleteAsset(kind.id, item.id),
-                                  };
-                                  assetCallbacksRef.current[item.id] = cb;
-                                }
-                                return (
-                                  <div className="p-1">
-                                    <AssetColumnItem
-                                      key={item.id}
-                                      item={item}
-                                      index={index}
-                                      imageModelOptions={visibleImageModels}
-                                      audioAssets={agent.assets.audio}
-                                      defaultImageModel={settings.defaultImageModel}
-                                      defaultImageSize={settings.defaultImageSize}
-                                      defaultImageResolution={settings.defaultImageResolution}
-                                      onChange={cb.onChange}
-                                      onUpload={cb.onUpload}
-                                      onUseLibrary={cb.onUseLibrary}
-                                      onBindAudio={cb.onBindAudio}
-                                      onBindLocalAudio={cb.onBindLocalAudio}
-                                      onSetPrimaryMedia={cb.onSetPrimaryMedia}
-                                      onDeleteMedia={cb.onDeleteMedia}
-                                      onGenerate={cb.onGenerate}
-                                      onDelete={cb.onDelete}
-                                    />
-                                  </div>
-                                );
-                              }}
-                            />
                           );
                         }
 
@@ -6725,6 +6680,10 @@ const StoryAgentPage = ({
                 </p>
               </div>
               <div className="flex gap-3">
+                <Button onClick={() => void refreshAllShotAssetDescriptions()}>
+                  <WandSparkles size={13} />
+                  更新资产说明
+                </Button>
                 <Button onClick={() => setEditingShotPromptAffix(true)}>
                   <Pencil size={13} />
                   提示词前后缀
@@ -6869,14 +6828,17 @@ const StoryAgentPage = ({
             />
           ) : null}
 
-          {roleGenerateConfirmOpen ? (
-            <RoleGenerateConfirmDialog
-              count={agent.assets.role.length}
-              running={generatingAllRoles}
+          {bulkGenerateConfirmKind ? (
+            <AssetGenerateConfirmDialog
+              kind={bulkGenerateConfirmKind}
+              count={agent.assets[bulkGenerateConfirmKind].length}
+              running={bulkGeneratingKind === bulkGenerateConfirmKind}
               onCancel={() => {
-                if (!generatingAllRoles) setRoleGenerateConfirmOpen(false);
+                if (bulkGeneratingKind !== bulkGenerateConfirmKind) {
+                  setBulkGenerateConfirmKind(null);
+                }
               }}
-              onConfirm={() => void generateAllRoleAssets()}
+              onConfirm={() => void generateAllAssets(bulkGenerateConfirmKind)}
             />
           ) : null}
 
@@ -7383,12 +7345,14 @@ const ShotPromptAffixDialog = ({
   );
 };
 
-const RoleGenerateConfirmDialog = ({
+const AssetGenerateConfirmDialog = ({
+  kind,
   count,
   running,
   onCancel,
   onConfirm,
 }: {
+  kind: StoryboardAssetKind;
   count: number;
   running: boolean;
   onCancel: () => void;
@@ -7406,7 +7370,7 @@ const RoleGenerateConfirmDialog = ({
     <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-[#121214] shadow-2xl">
       <div className="flex items-center justify-between border-b border-white/5 p-5">
         <h2 className="text-lg font-semibold text-white/90">
-          统一生成角色资产
+          统一生成{assetKinds.find((item) => item.id === kind)?.label || "资产"}资产
         </h2>
         <button
           type="button"
@@ -7419,7 +7383,7 @@ const RoleGenerateConfirmDialog = ({
       </div>
       <div className="p-5">
         <p className="text-sm leading-6 text-white/60">
-          确认后会依次为当前角色列的 {count} 个资产调用 AI 生图，并把生成结果追加为候选图。
+          确认后会依次为当前{assetKinds.find((item) => item.id === kind)?.label || "资产"}列的 {count} 个资产调用 AI 生图，并把生成结果追加为候选图。
         </p>
       </div>
       <div className="flex items-center justify-end gap-3 border-t border-white/5 bg-black/20 p-5">
