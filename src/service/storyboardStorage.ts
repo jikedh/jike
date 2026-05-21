@@ -6,6 +6,8 @@ const STORYBOARD_INDEX_PATH = `${STORYBOARD_ROOT}/index.json`;
 const STORYBOARD_VERSION = 1;
 const DEFAULT_PROMPT_PREFIX = "";
 const DEFAULT_PROMPT_SUFFIX = "";
+export const ASSET_SYSTEM_PROMPT_OUTPUT_REQUIREMENT =
+  '只输出 JSON 对象，结构必须是：{ "assets": { "role": [{ "name": "角色名", "prompt": "角色定位、外观/身份/戏份说明" }], "scene": [{ "name": "场景名", "prompt": "室内/室外/虚拟属性与核心剧情简述" }], "prop": [{ "name": "道具名", "prompt": "道具类别、外观用途、出现/使用场景" }] } }。';
 export const DEFAULT_ASSET_SYSTEM_PROMPT =
   [
     "你是专业的剧本内容解析分析师，负责接收单集完整剧本正文，严格识别、梳理并归类剧本内所有可用于视觉生产的核心资产。",
@@ -14,8 +16,36 @@ export const DEFAULT_ASSET_SYSTEM_PROMPT =
     "场景识别范围：所有剧情发生地点和环境，包括固定实景、临时户外、室内空间、虚拟场景、过渡场景，以及剧本中标注的所有场景切换。prompt 中说明室内/室外/虚拟属性和该场景的核心剧情功能。",
     "道具识别范围：所有具象实物，包括人物穿戴物、手持物、场景陈设、饮食、交通工具、电子设备、武器、生活用品、装饰摆件、一次性使用道具等。排除抽象概念、情绪、剧情设定、天气、声音特效等非实物内容。",
     "禁止删减任何原文出现的有效元素；禁止主观修改名称，尽量沿用剧本原文叫法；禁止合并关键元素导致信息丢失；禁止输出多余话术、铺垫、总结、Markdown。",
-    "只输出 JSON 对象，结构必须是：{ \"assets\": { \"role\": [{ \"name\": \"角色名\", \"prompt\": \"角色定位、外观/身份/戏份说明\" }], \"scene\": [{ \"name\": \"场景名\", \"prompt\": \"室内/室外/虚拟属性与核心剧情简述\" }], \"prop\": [{ \"name\": \"道具名\", \"prompt\": \"道具类别、外观用途、出现/使用场景\" }] } }。",
   ].join("\n");
+const buildAssetSystemPrompt = (systemPrompt: string) => {
+  const trimmedPrompt = systemPrompt.trim();
+  if (!trimmedPrompt) {
+    return `${DEFAULT_ASSET_SYSTEM_PROMPT}\n${ASSET_SYSTEM_PROMPT_OUTPUT_REQUIREMENT}`;
+  }
+
+  const outputRequirement = ASSET_SYSTEM_PROMPT_OUTPUT_REQUIREMENT.trim();
+  if (trimmedPrompt.endsWith(outputRequirement)) {
+    return trimmedPrompt;
+  }
+
+  return `${trimmedPrompt}\n${outputRequirement}`;
+};
+
+export const getAssetSystemPromptForDisplay = (systemPrompt: string) => {
+  const trimmedPrompt = systemPrompt.trim();
+  if (!trimmedPrompt) return DEFAULT_ASSET_SYSTEM_PROMPT;
+
+  const outputRequirement = ASSET_SYSTEM_PROMPT_OUTPUT_REQUIREMENT.trim();
+  if (!trimmedPrompt.endsWith(outputRequirement)) {
+    return trimmedPrompt;
+  }
+
+  return trimmedPrompt.slice(0, -outputRequirement.length).trimEnd();
+};
+export const SPLIT_SYSTEM_PROMPT_OUTPUT_REQUIREMENT = [
+  "每条 shturl.cc/T 只能引用用户提供的可用资产中的名称，不能新增未列入可用资产的角色、场景、道具名称。禁止输出音效资产。",
+  '只输出 JSON 对象，不要 Markdown、表格、标题、解释或总结。结构必须是：{ "shots": [{ "script": "该镜头对应的原文剧情/台词摘要", "prompt": "分镜1：0–2s 景别：...，视角：...，运镜：...。画面自然语言描述：...", "assets": { "role": ["本镜头涉及的角色名"], "scene": ["本镜头涉及的场景名"], "prop": ["本镜头涉及的道具名"] } }] }。',
+].join("\n");
 export const DEFAULT_SPLIT_SYSTEM_PROMPT =
   [
     "你是一位爆款竖屏真人短剧导演、高级分镜师、AI视频提示词导演。",
@@ -37,9 +67,32 @@ export const DEFAULT_SPLIT_SYSTEM_PROMPT =
     "虽然最终不显示段落说明，但生成时必须保证连续：上一分镜的人物位置，下一分镜必须接得上；上一分镜的前景人物，下一分镜不能突然消失；上一分镜手中道具，下一分镜必须保持状态；上一分镜视线方向，下一分镜可以自然承接；场景切换必须明确，不要让观众误解为空间跳变；跨分镜台词和VO必须声音连续；不能用黑屏、空镜、水印、字幕凑时长",
     "必须追踪重要道具状态：廊柱、卧房门、血迹、火把、三座别庄、马鞭、玉镯、珠翠、珍珠、碎瓷片、酒壶、鸩酒、桌案；每个道具必须连续：谁持有、放在哪里、是否移动、是否损坏、是否被看见、是否成为爆点；禁止道具凭空出现、凭空消失",
     "最终执行要求：1.直接输出分镜正文；2.每个即梦段落控制在10–15秒；3.每段必须有4–7个分镜，15秒段落优先5–6个分镜；4.只输出“分镜X：时间段 + 自然语言画面描述”；5.每个分镜开头必须写清景别、视角、运镜；6.大部分镜头优先使用固定镜头；7.每个镜头必须写清人物在场景里的合理位置关系；8.需要时写清前景、中景、远景；不需要时不强行写；9.不反复解释角色穿什么；10.不输出生成段落标题、变量统筹、场景设定、听觉设计、段尾衔接；11.不在正文中写“无音乐、无字幕、无画面文字”；12.默认为真人短剧实拍质感，不出现3D、动漫、国漫、CG、渲染等词；13.保证原文台词、VO、OS一字不改；14.不新增原文没有的台词；15.保证人物、道具、动作、情绪连续；16.爆点台词必须同步切反应；17.禁止解释，禁止分析，禁止询问，直接输出最终分镜",
-    "每条 shturl.cc/T 只能引用用户提供的可用资产中的名称，不能新增未列入可用资产的角色、场景、道具名称。禁止输出音效资产。",
-    "只输出 JSON 对象，不要 Markdown、表格、标题、解释或总结。结构必须是：{ \"shots\": [{ \"script\": \"该镜头对应的原文剧情/台词摘要\", \"prompt\": \"分镜1：0–2s 景别：...，视角：...，运镜：...。画面自然语言描述：...。\", \"assets\": { \"role\": [\"本镜头涉及的角色名\"], \"scene\": [\"本镜头涉及的场景名\"], \"prop\": [\"本镜头涉及的道具名\"] } }] }。"
   ].join("\n");
+const buildSplitSystemPrompt = (systemPrompt: string) => {
+  const trimmedPrompt = systemPrompt.trim();
+  if (!trimmedPrompt) {
+    return `${DEFAULT_SPLIT_SYSTEM_PROMPT}\n${SPLIT_SYSTEM_PROMPT_OUTPUT_REQUIREMENT}`;
+  }
+
+  const outputRequirement = SPLIT_SYSTEM_PROMPT_OUTPUT_REQUIREMENT.trim();
+  if (trimmedPrompt.endsWith(outputRequirement)) {
+    return trimmedPrompt;
+  }
+
+  return `${trimmedPrompt}\n${outputRequirement}`;
+};
+
+export const getSplitSystemPromptForDisplay = (systemPrompt: string) => {
+  const trimmedPrompt = systemPrompt.trim();
+  if (!trimmedPrompt) return DEFAULT_SPLIT_SYSTEM_PROMPT;
+
+  const outputRequirement = SPLIT_SYSTEM_PROMPT_OUTPUT_REQUIREMENT.trim();
+  if (!trimmedPrompt.endsWith(outputRequirement)) {
+    return trimmedPrompt;
+  }
+
+  return trimmedPrompt.slice(0, -outputRequirement.length).trimEnd();
+};
 
 export type StoryboardProject = {
   id: string;
@@ -1062,7 +1115,9 @@ export const identifyAssetsWithAgent = async (input: {
       messages: [
         {
           role: "system",
-          content: input.systemPrompt || DEFAULT_ASSET_SYSTEM_PROMPT,
+          content: buildAssetSystemPrompt(
+            input.systemPrompt || DEFAULT_ASSET_SYSTEM_PROMPT,
+          ),
         },
         {
           role: "user",
@@ -1122,7 +1177,9 @@ export const splitScriptWithAgent = async (input: {
       messages: [
         {
           role: "system",
-          content: input.systemPrompt || DEFAULT_SPLIT_SYSTEM_PROMPT,
+          content: buildSplitSystemPrompt(
+            input.systemPrompt || DEFAULT_SPLIT_SYSTEM_PROMPT,
+          ),
         },
         {
           role: "user",

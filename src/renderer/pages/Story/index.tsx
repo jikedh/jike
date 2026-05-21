@@ -40,6 +40,8 @@ import {
   DEFAULT_ASSET_SYSTEM_PROMPT,
   DEFAULT_SPLIT_SYSTEM_PROMPT,
   createEmptyAgentData,
+  getAssetSystemPromptForDisplay,
+  getSplitSystemPromptForDisplay,
   identifyAssetsWithAgent,
   splitScriptWithAgent,
   storyboardStorage,
@@ -400,8 +402,12 @@ const normalizeAgentData = (
     promptPrefix: data.promptPrefix ?? empty.promptPrefix,
     promptSuffix: data.promptSuffix ?? empty.promptSuffix,
     scriptCategory: data.scriptCategory ?? empty.scriptCategory,
-    assetSystemPrompt: data.assetSystemPrompt ?? empty.assetSystemPrompt,
-    splitSystemPrompt: data.splitSystemPrompt ?? empty.splitSystemPrompt,
+    assetSystemPrompt: getAssetSystemPromptForDisplay(
+      data.assetSystemPrompt ?? empty.assetSystemPrompt,
+    ),
+    splitSystemPrompt: getSplitSystemPromptForDisplay(
+      data.splitSystemPrompt ?? empty.splitSystemPrompt,
+    ),
     roleAssetPromptAffixEnabled:
       data.roleAssetPromptAffixEnabled ?? empty.roleAssetPromptAffixEnabled,
     shotPromptAffixEnabled:
@@ -5236,7 +5242,7 @@ const StoryAgentPage = ({
         title: agent.scriptTitle,
         scriptCategory: agent.scriptCategory,
         scriptContent: agent.scriptContent,
-        systemPrompt: agent.assetSystemPrompt,
+        systemPrompt: getAssetSystemPromptForDisplay(agent.assetSystemPrompt),
       });
       const nextAssets = mergeIdentifiedAssets(agent.assets, result.assets);
       const identifiedCount =
@@ -5281,7 +5287,7 @@ const StoryAgentPage = ({
         maxShots: agent.maxShots,
         splitAssist: agent.splitAssist,
         scriptContent: agent.scriptContent,
-        systemPrompt: agent.splitSystemPrompt,
+        systemPrompt: getSplitSystemPromptForDisplay(agent.splitSystemPrompt),
         assets: agent.assets,
         defaults,
       });
@@ -5332,8 +5338,8 @@ const StoryAgentPage = ({
   ) => {
     const nextAgent =
       target === "asset"
-        ? { ...agent, assetSystemPrompt: value }
-        : { ...agent, splitSystemPrompt: value };
+        ? { ...agent, assetSystemPrompt: getAssetSystemPromptForDisplay(value) }
+        : { ...agent, splitSystemPrompt: getSplitSystemPromptForDisplay(value) };
     await saveAgent(nextAgent);
     setEditingSystemPrompt(null);
     toast.success("系统提示词已保存");
@@ -6857,8 +6863,8 @@ const StoryAgentPage = ({
               }
               value={
                 editingSystemPrompt === "asset"
-                  ? agent.assetSystemPrompt
-                  : agent.splitSystemPrompt
+                  ? getAssetSystemPromptForDisplay(agent.assetSystemPrompt)
+                  : getSplitSystemPromptForDisplay(agent.splitSystemPrompt)
               }
               defaultValue={
                 editingSystemPrompt === "asset"
