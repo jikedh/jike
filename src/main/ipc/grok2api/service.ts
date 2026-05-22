@@ -289,16 +289,38 @@ export class Grok2ApiService {
       return venvPython;
     }
 
+    const embeddedPython =
+      process.platform === "win32"
+        ? join(this.resolveEmbeddedPythonRoot(), "python.exe")
+        : join(this.resolveEmbeddedPythonRoot(), "bin", "python3");
+    if (existsSync(embeddedPython)) {
+      return embeddedPython;
+    }
+
     return process.platform === "win32" ? "python" : "python3";
   }
 
+  private resolveEmbeddedPythonRoot(): string {
+    return app.isPackaged
+      ? join(process.resourcesPath, "python")
+      : join(process.cwd(), "resources", "python");
+  }
+
   private resolveBundledCaBundle(grokRoot: string): string | null {
+    const embeddedPythonRoot = this.resolveEmbeddedPythonRoot();
     const candidates =
       process.platform === "win32"
         ? [
             join(
               grokRoot,
               ".venv",
+              "Lib",
+              "site-packages",
+              "certifi",
+              "cacert.pem",
+            ),
+            join(
+              embeddedPythonRoot,
               "Lib",
               "site-packages",
               "certifi",
@@ -415,6 +437,7 @@ export class Grok2ApiService {
         : {}),
       PYTHONIOENCODING: "utf-8",
       PYTHONUTF8: "1",
+      PYTHONNOUSERSITE: "1",
       PYTHONPATH: pythonPath,
     };
   }
@@ -677,6 +700,9 @@ export class Grok2ApiService {
         join(entry.cwd, "app", "main.py"),
       )}`,
       `pythonCommand=${entry.command} exists=${existsSync(entry.command)}`,
+      `embeddedPythonRoot=${this.resolveEmbeddedPythonRoot()} exists=${existsSync(
+        this.resolveEmbeddedPythonRoot(),
+      )}`,
       `caBundle=${this.resolveRuntimeCaBundle(entry.cwd) ?? ""}`,
       `runtimeDir=${this.runtimeDir}`,
       `dataDir=${this.dataDir}`,
@@ -888,7 +914,7 @@ export class Grok2ApiService {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeoutMs) {
       if (!this.child || this.child.exitCode !== null) {
-        throw new Error("Grok2API start failed");
+        throw new Error(this.state.lastError || "Grok2API start failed");
       }
 
       if (this.state.status === "error") {
@@ -898,7 +924,7 @@ export class Grok2ApiService {
       try {
         await fetchJson(this.state.healthUrl, this.state.apiKey);
         if (!this.child || this.child.exitCode !== null) {
-          throw new Error("Grok2API start failed");
+          throw new Error(this.state.lastError || "Grok2API start failed");
         }
         return;
       } catch {

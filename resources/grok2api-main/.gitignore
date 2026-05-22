@@ -23,6 +23,7 @@ MANIFEST
 
 # Virtual Environment
 .venv/
+.jike-grok2api-python-ready
 venv/
 ENV/
 env/

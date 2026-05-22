@@ -8,8 +8,10 @@ const root = resolve(__dirname, "..");
 
 const steps = [
   ["prepare-adobe2api-python.mjs", "prepare embedded Python"],
+  ["prepare-grok2api-python.mjs", "prepare Grok2API Python dependencies"],
   ["check-adobe2api-resources.mjs", "check Adobe2API resources"],
   ["check-adobe2api-python.mjs", "check embedded Python"],
+  ["check-grok2api-python.mjs", "check Grok2API Python dependencies"],
 ];
 
 export default async function beforePack() {

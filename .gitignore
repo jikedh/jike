@@ -29,6 +29,7 @@ out
 release
 resources/python
 resources/flow2api-main
+resources/grok2api-main/.jike-grok2api-python-ready
 agent.md
 findings.md
 progress.md
