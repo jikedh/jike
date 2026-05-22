@@ -132,6 +132,8 @@ import {
   createGrok2ApiImageEditGeneration,
   createGrok2ApiImageGeneration,
   createGrok2ApiVideoGeneration,
+  createKuaiziHappyHorseVideoTask,
+  createKuaiziKlingVideoTask,
   createImageGeneration,
   createXimuGptImageGeneration,
   createXimuNanoBananaGeneration,
@@ -141,6 +143,8 @@ import {
   getDashscopeVideoTaskStatus,
   getImageTaskStatus,
   getLzVideoTaskStatus,
+  getKuaiziHappyHorseVideoTaskStatus,
+  getKuaiziKlingVideoTaskStatus,
   getXimuImageResult,
   submitMjImagine,
 } from "@/api/ai";
@@ -208,9 +212,9 @@ const normalizeCanvasGroups = (
           group.layoutOrigin ??
           (frame
             ? {
-              x: frame.x,
-              y: frame.y,
-            }
+                x: frame.x,
+                y: frame.y,
+              }
             : undefined),
         frame: frame ?? undefined,
       };
@@ -218,9 +222,9 @@ const normalizeCanvasGroups = (
     .filter((group) => group.nodeIds.length > 0 || Boolean(group.frame));
 };
 
-type NewVideoResultItem = NonNullable<NewVideoGenerationNode["result"]>[
-  "data"
-][number];
+type NewVideoResultItem = NonNullable<
+  NewVideoGenerationNode["result"]
+>["data"][number];
 
 const normalizeVideoResultItemForPersistence = (item: NewVideoResultItem) => {
   const remoteUrl = getRemoteMediaUrl(item);
@@ -288,8 +292,8 @@ const removeNodeIdsFromGroups = (
       nodeIds: group.nodeIds.filter((nodeId) => !removedNodeIdSet.has(nodeId)),
       gridLayoutOrder: group.gridLayoutOrder
         ? group.gridLayoutOrder.filter(
-          (nodeId) => !removedNodeIdSet.has(nodeId),
-        )
+            (nodeId) => !removedNodeIdSet.has(nodeId),
+          )
         : group.gridLayoutOrder,
       layoutOrigin: group.layoutOrigin,
       frame: group.frame,
@@ -487,13 +491,13 @@ const resolveGrokImageModel = (model?: string) => {
 
 const resolveGrokImageSize = (size?: string) =>
   (
-    {
+    ({
       "16:9": "1280x720",
       "9:16": "720x1280",
       "3:2": "1792x1024",
       "2:3": "1024x1792",
       "1:1": "1024x1024",
-    } as const
+    }) as const
   )[size || ""] ?? "1024x1024";
 
 const waitForXimuImageResult = async (taskId: string) => {
@@ -504,7 +508,9 @@ const waitForXimuImageResult = async (taskId: string) => {
   while (Date.now() - startedAt < IMAGE_TIMEOUT) {
     const response = await getXimuImageResult(taskId);
     const payload = getXimuResultPayload(response);
-    const status = String(payload.status || response?.status || "").toLowerCase();
+    const status = String(
+      payload.status || response?.status || "",
+    ).toLowerCase();
     lastStatus = status || lastStatus;
     lastMessage = getXimuMessage(response) || lastMessage;
 
@@ -612,7 +618,9 @@ const extractRunningHubImageUrl = (response: any) => {
   if (directUrl) {
     return directUrl;
   }
-  const firstResult = Array.isArray(data?.results) ? data.results[0] : undefined;
+  const firstResult = Array.isArray(data?.results)
+    ? data.results[0]
+    : undefined;
   return firstResult?.url || firstResult?.fileUrl || firstResult?.imageUrl;
 };
 const waitForRunningHubV2ImageResult = async (taskId: string) => {
@@ -660,9 +668,10 @@ const submitRunningHubImageTask = async ({
     size,
     resolution,
   });
-  const response = imageUrls.length > 0
-    ? await route.imageToImage(request as any)
-    : await route.textToImage(request);
+  const response =
+    imageUrls.length > 0
+      ? await route.imageToImage(request as any)
+      : await route.textToImage(request);
   const data = response?.data ?? response;
   const immediateUrl = extractRunningHubImageUrl(data);
   if (immediateUrl) {
@@ -713,14 +722,14 @@ const generateRunningHubImageWithFallback = async ({
 const extractMarkdownMediaUrl = (content: unknown, kind: "image" | "video") => {
   const text = Array.isArray(content)
     ? content
-      .map((part) =>
-        typeof part === "string"
-          ? part
-          : typeof part?.text === "string"
-            ? part.text
-            : "",
-      )
-      .join("\n")
+        .map((part) =>
+          typeof part === "string"
+            ? part
+            : typeof part?.text === "string"
+              ? part.text
+              : "",
+        )
+        .join("\n")
     : String(content || "");
   const urlPattern =
     kind === "video"
@@ -747,9 +756,7 @@ const extractMarkdownMediaUrl = (content: unknown, kind: "image" | "video") => {
   }
 
   const bareUrlPattern = new RegExp(
-    kind === "video"
-      ? `(${urlPattern})`
-      : "(https?:\\/\\/[^\\s\"'<>)]*)",
+    kind === "video" ? `(${urlPattern})` : "(https?:\\/\\/[^\\s\"'<>)]*)",
     "i",
   );
   return text.match(bareUrlPattern)?.[1];
@@ -815,7 +822,8 @@ const mirrorGeneratedImageUrlToOss = async (url: string) => {
 };
 
 const isXimuSupportedReferenceUrl = (url: string) =>
-  /^https?:\/\//i.test(url) || /^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(url);
+  /^https?:\/\//i.test(url) ||
+  /^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(url);
 
 const getImageMimeTypeFromPath = (path: string) => {
   const normalizedPath = path.split("?")[0].split("#")[0].toLowerCase();
@@ -943,10 +951,7 @@ export const hydrateCanvasNodesForRuntime = async (
         };
       }
 
-      if (
-        node.type === "newVideoNode" &&
-        node.data?.result?.data
-      ) {
+      if (node.type === "newVideoNode" && node.data?.result?.data) {
         const processedData = node.data.result.data.map((item: any) =>
           hydrateMediaForRuntime(item),
         );
@@ -1022,8 +1027,8 @@ const pollImageGeneration = async (
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const completedCount = (data.completedCount ?? 0) + 1;
             const allCompleted = completedCount >= totalTaskCount;
-            const successCount = data.result?.data?.filter((item) => item?.url)
-              .length ?? 0;
+            const successCount =
+              data.result?.data?.filter((item) => item?.url).length ?? 0;
             const hasSuccessfulImages = successCount > 0;
 
             if (allCompleted && hasSuccessfulImages) {
@@ -1040,7 +1045,8 @@ const pollImageGeneration = async (
                   : allCompleted
                     ? GenerationStatus.FAILED
                     : GenerationStatus.IN_PROGRESS,
-              progress: allCompleted && hasSuccessfulImages ? 100 : data.progress,
+              progress:
+                allCompleted && hasSuccessfulImages ? 100 : data.progress,
               error: {
                 code: "TIMEOUT",
                 message: "图片生成超时，请稍后再试",
@@ -1055,7 +1061,11 @@ const pollImageGeneration = async (
           );
         }
         if (ledgerBizId) {
-          refundDesktopProxyScore(ledgerBizId, "image generation timeout", "image").catch(() => { });
+          refundDesktopProxyScore(
+            ledgerBizId,
+            "image generation timeout",
+            "image",
+          ).catch(() => {});
         }
         return;
       }
@@ -1098,11 +1108,11 @@ const pollImageGeneration = async (
 
       const progressValue = Number(
         responseData?.progress ??
-        responseData?.result?.progress ??
-        response?.data?.progress ??
-        response?.result?.progress ??
-        response?.progress ??
-        50,
+          responseData?.result?.progress ??
+          response?.data?.progress ??
+          response?.result?.progress ??
+          response?.progress ??
+          50,
       );
 
       // 成功状态：小写 completed 或大写 SUCCESS/SUCCEEDED/COMPLETED
@@ -1195,7 +1205,7 @@ const pollImageGeneration = async (
         }
 
         if (ledgerBizId) {
-          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
+          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => {});
         }
 
         await refreshBalanceAfterGeneration({
@@ -1225,8 +1235,8 @@ const pollImageGeneration = async (
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const completedCount = (data.completedCount ?? 0) + 1;
             const allCompleted = completedCount >= totalTaskCount;
-            const successCount = data.result?.data?.filter((item) => item?.url)
-              .length ?? 0;
+            const successCount =
+              data.result?.data?.filter((item) => item?.url).length ?? 0;
             const hasSuccessfulImages = successCount > 0;
             const message =
               response?.message ||
@@ -1275,7 +1285,11 @@ const pollImageGeneration = async (
           pendingTaskCounts.delete(nodeId);
         }
         if (ledgerBizId) {
-          refundDesktopProxyScore(ledgerBizId, "image generation failed", "image").catch(() => { });
+          refundDesktopProxyScore(
+            ledgerBizId,
+            "image generation failed",
+            "image",
+          ).catch(() => {});
         }
         return;
       }
@@ -1317,7 +1331,9 @@ const pollImageGeneration = async (
       getState().saveGraph();
     }
     if (ledgerBizId) {
-      refundDesktopProxyScore(ledgerBizId, "image poll error", "image").catch(() => { });
+      refundDesktopProxyScore(ledgerBizId, "image poll error", "image").catch(
+        () => {},
+      );
     }
   }
 };
@@ -1360,8 +1376,8 @@ const pollMjImageGeneration = async (
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const completedCount = (data.completedCount ?? 0) + 1;
             const allCompleted = completedCount >= totalTaskCount;
-            const successCount = data.result?.data?.filter((item) => item?.url)
-              .length ?? 0;
+            const successCount =
+              data.result?.data?.filter((item) => item?.url).length ?? 0;
             const hasSuccessfulImages = successCount > 0;
 
             if (allCompleted && hasSuccessfulImages) {
@@ -1378,7 +1394,8 @@ const pollMjImageGeneration = async (
                   : allCompleted
                     ? GenerationStatus.FAILED
                     : GenerationStatus.IN_PROGRESS,
-              progress: allCompleted && hasSuccessfulImages ? 100 : data.progress,
+              progress:
+                allCompleted && hasSuccessfulImages ? 100 : data.progress,
               error: {
                 code: "TIMEOUT",
                 message: "图片生成超时，请稍后再试",
@@ -1393,7 +1410,11 @@ const pollMjImageGeneration = async (
           );
         }
         if (ledgerBizId) {
-          refundDesktopProxyScore(ledgerBizId, "midjourney image generation timeout", "image").catch(() => { });
+          refundDesktopProxyScore(
+            ledgerBizId,
+            "midjourney image generation timeout",
+            "image",
+          ).catch(() => {});
         }
         return;
       }
@@ -1503,7 +1524,7 @@ const pollMjImageGeneration = async (
         }
 
         if (ledgerBizId) {
-          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
+          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => {});
         }
 
         await refreshBalanceAfterGeneration({
@@ -1526,8 +1547,8 @@ const pollMjImageGeneration = async (
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const completedCount = (data.completedCount ?? 0) + 1;
             const allCompleted = completedCount >= totalTaskCount;
-            const successCount = data.result?.data?.filter((item) => item?.url)
-              .length ?? 0;
+            const successCount =
+              data.result?.data?.filter((item) => item?.url).length ?? 0;
             const hasSuccessfulImages = successCount > 0;
             const message =
               response.failReason ||
@@ -1548,7 +1569,8 @@ const pollMjImageGeneration = async (
                   : allCompleted
                     ? GenerationStatus.FAILED
                     : GenerationStatus.IN_PROGRESS,
-              progress: allCompleted && hasSuccessfulImages ? 100 : progressValue,
+              progress:
+                allCompleted && hasSuccessfulImages ? 100 : progressValue,
               error: {
                 code: "MJ_ERROR",
                 message,
@@ -1576,7 +1598,11 @@ const pollMjImageGeneration = async (
           pendingTaskCounts.delete(nodeId);
         }
         if (ledgerBizId) {
-          refundDesktopProxyScore(ledgerBizId, "midjourney image generation failed", "image").catch(() => { });
+          refundDesktopProxyScore(
+            ledgerBizId,
+            "midjourney image generation failed",
+            "image",
+          ).catch(() => {});
         }
         return;
       }
@@ -1615,7 +1641,11 @@ const pollMjImageGeneration = async (
       getState().saveGraph();
     }
     if (ledgerBizId) {
-      refundDesktopProxyScore(ledgerBizId, "midjourney image poll error", "image").catch(() => { });
+      refundDesktopProxyScore(
+        ledgerBizId,
+        "midjourney image poll error",
+        "image",
+      ).catch(() => {});
     }
   }
 };
@@ -1795,7 +1825,8 @@ const pollVideoTaskGeneration = async (
             const completedCount = mergedData.length + failedCount;
             const totalTaskCount = Math.max(
               1,
-              ((data.metadata?.tasks as unknown[]) ?? [normalizedTaskId]).length,
+              ((data.metadata?.tasks as unknown[]) ?? [normalizedTaskId])
+                .length,
             );
             const completed = completedCount >= totalTaskCount;
 
@@ -1807,9 +1838,9 @@ const pollVideoTaskGeneration = async (
               progress: completed
                 ? 100
                 : Math.min(
-                  99,
-                  Math.round((completedCount / totalTaskCount) * 100),
-                ),
+                    99,
+                    Math.round((completedCount / totalTaskCount) * 100),
+                  ),
               task_id: normalizedTaskId,
               result: {
                 type: "video",
@@ -1920,6 +1951,7 @@ const pollNewVideoGeneration = async ({
   taskIndex,
   totalTasks,
   ledgerBizId,
+  videoProvider,
 }: {
   taskId: string;
   nodeId: string;
@@ -1932,6 +1964,7 @@ const pollNewVideoGeneration = async ({
   taskIndex: number;
   totalTasks: number;
   ledgerBizId?: string;
+  videoProvider?: "seedance" | "kuaizi" | "dashscope";
 }) => {
   const startTime = Date.now();
   let missingResultUrlStartTime: number | null = null;
@@ -1953,7 +1986,10 @@ const pollNewVideoGeneration = async ({
           })),
         }));
         if (ledgerBizId) {
-          refundDesktopProxyScore(ledgerBizId, "video generation timeout").catch(() => { });
+          refundDesktopProxyScore(
+            ledgerBizId,
+            "video generation timeout",
+          ).catch(() => {});
         }
         await updateVideoTrackFinalStatus(
           taskId,
@@ -1963,14 +1999,21 @@ const pollNewVideoGeneration = async ({
         return;
       }
 
-      const response: any = isSeedance20
-        ? await getLzVideoTaskStatus(taskId)
-        : await getDashscopeVideoTaskStatus(taskId);
-
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
       if (!currentNode || currentNode.type !== "newVideoNode") {
         return;
       }
+
+      const response: any =
+        videoProvider === "seedance"
+          ? await getLzVideoTaskStatus(taskId)
+          : videoProvider === "kuaizi"
+            ? currentNode.data.model === "happyhorse-1.0-r2v"
+              ? await getKuaiziHappyHorseVideoTaskStatus(taskId)
+              : await getKuaiziKlingVideoTaskStatus(taskId)
+            : isSeedance20
+              ? await getLzVideoTaskStatus(taskId)
+              : await getDashscopeVideoTaskStatus(taskId);
 
       const normalized = normalizeVideoTaskResponse(response);
       const normalizedTaskId = normalized.taskId ?? taskId;
@@ -2144,7 +2187,10 @@ const pollNewVideoGeneration = async ({
           stopVideoPollingInternal(nodeId);
           // 退还积分
           if (ledgerBizId) {
-            refundDesktopProxyScore(ledgerBizId, normalized.errorMessage || "video generation failed").catch(() => { });
+            refundDesktopProxyScore(
+              ledgerBizId,
+              normalized.errorMessage || "video generation failed",
+            ).catch(() => {});
           }
         }
         await updateVideoTrackFinalStatus(
@@ -2185,7 +2231,9 @@ const pollNewVideoGeneration = async ({
       })),
     }));
     if (ledgerBizId) {
-      refundDesktopProxyScore(ledgerBizId, serverMessage || "poll error").catch(() => { });
+      refundDesktopProxyScore(ledgerBizId, serverMessage || "poll error").catch(
+        () => {},
+      );
     }
     await updateVideoTrackFinalStatus(
       taskId,
@@ -2496,10 +2544,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       // 恢复节点运行时状态时仅使用远程媒体 URL，避免本地文件生成 blob URL.
       const hydratedNodes = await hydrateCanvasNodesForRuntime(data.nodes);
       const processedNodes: AllNodeType[] = hydratedNodes.map((node) => {
-        const runtimeSafeData = resetNodeDataRuntimeState(
-          node.type,
-          node.data,
-        );
+        const runtimeSafeData = resetNodeDataRuntimeState(node.type, node.data);
 
         if (runtimeSafeData !== node.data) {
           return {
@@ -2594,7 +2639,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           return;
         }
 
-        const persistedReadyNodes = normalizeCanvasNodesForPersistence(data.nodes);
+        const persistedReadyNodes = normalizeCanvasNodesForPersistence(
+          data.nodes,
+        );
 
         set({
           nodes: persistedReadyNodes,
@@ -2733,78 +2780,81 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const finalNode =
         newNode.type === "audioNode"
           ? {
-            ...newNode,
-            data: {
-              ...newNode.data,
-              nickname: getAudioNicknameByNodeId(nextId),
-            },
-          }
-          : newNode.type === "imageNode"
-            ? {
               ...newNode,
               data: {
                 ...newNode.data,
-                model: isDefaultHiddenChannelImageModel
-                  ? newNode.data.model
-                  : defaultImageModel || newNode.data.model,
-                platform: isDefaultHiddenChannelImageModel
-                  ? newNode.data.platform
-                  : defaultImagePlatform || newNode.data.platform,
-                size: defaultImageSize || newNode.data.size,
-                resolution: defaultImageResolution || newNode.data.resolution,
+                nickname: getAudioNicknameByNodeId(nextId),
               },
             }
-            : newNode.type === "newVideoNode"
-              ? {
+          : newNode.type === "imageNode"
+            ? {
                 ...newNode,
                 data: {
                   ...newNode.data,
-                  // 新版视频只沿用新版模型的记忆，避免老版默认模型把新版下拉框顶成空值。
-                  model: [
-                    "seedance-2.0-fast",
-                    "seedance-2.0-pro",
-                    "wanxiang",
-                    "vidu-q3-pro",
-                    "vidu",
-                    "pixverse",
-                    "happyhorse",
-                    "adobe-sora2-pro",
-                    "grok-imagine-video",
-                    "keling",
-                  ].includes(defaultNewVideoModel ?? "") &&
-                    visibleNewVideoModelIds.has(defaultNewVideoModel ?? "")
-                    ? defaultNewVideoModel
-                    : isAdobeVideoGenerationModel(newNode.data.model) &&
-                      !visibleNewVideoModelIds.has(newNode.data.model)
-                      ? "seedance-2.0-pro"
-                      : isGrokVideoGenerationModel(newNode.data.model) &&
-                        !visibleNewVideoModelIds.has(newNode.data.model)
-                        ? "seedance-2.0-pro"
-                        : newNode.data.model,
-                  aspect_ratio:
-                    defaultNewVideoAspectRatio || newNode.data.aspect_ratio,
-                  duration: defaultNewVideoDuration || newNode.data.duration,
-                  metadata: {
-                    ...(newNode.data.metadata ?? {}),
-                    params: {
-                      ...(newNode.data.metadata?.params as
-                        | Record<string, unknown>
-                        | undefined),
-                      aspectRatio:
-                        defaultNewVideoAspectRatio ||
-                        newNode.data.aspect_ratio,
-                      duration:
-                        defaultNewVideoDuration || newNode.data.duration,
-                      resolution: defaultNewVideoResolution,
-                      generateAudio: defaultNewVideoGenerateAudio,
-                      promptExtend: defaultNewVideoPromptExtend,
-                    },
-                    ...(defaultNewVideoMode !== undefined
-                      ? { mode: defaultNewVideoMode }
-                      : {}),
-                  },
+                  model: isDefaultHiddenChannelImageModel
+                    ? newNode.data.model
+                    : defaultImageModel || newNode.data.model,
+                  platform: isDefaultHiddenChannelImageModel
+                    ? newNode.data.platform
+                    : defaultImagePlatform || newNode.data.platform,
+                  size: defaultImageSize || newNode.data.size,
+                  resolution: defaultImageResolution || newNode.data.resolution,
                 },
               }
+            : newNode.type === "newVideoNode"
+              ? {
+                  ...newNode,
+                  data: {
+                    ...newNode.data,
+                    // 新版视频只沿用新版模型的记忆，避免老版默认模型把新版下拉框顶成空值。
+                    model:
+                      [
+                        "seedance-2.0-fast",
+                        "seedance-2.0-pro",
+                        "wanxiang",
+                        "vidu-q3-pro",
+                        "vidu",
+                        "pixverse",
+                        "happyhorse",
+                        "happyhorse-1.0-r2v",
+                        "adobe-sora2-pro",
+                        "grok-imagine-video",
+                        "keling",
+                        "kling-v3-omni",
+                      ].includes(defaultNewVideoModel ?? "") &&
+                      visibleNewVideoModelIds.has(defaultNewVideoModel ?? "")
+                        ? defaultNewVideoModel
+                        : isAdobeVideoGenerationModel(newNode.data.model) &&
+                            !visibleNewVideoModelIds.has(newNode.data.model)
+                          ? "seedance-2.0-pro"
+                          : isGrokVideoGenerationModel(newNode.data.model) &&
+                              !visibleNewVideoModelIds.has(newNode.data.model)
+                            ? "seedance-2.0-pro"
+                            : newNode.data.model,
+                    aspect_ratio:
+                      defaultNewVideoAspectRatio || newNode.data.aspect_ratio,
+                    duration: defaultNewVideoDuration || newNode.data.duration,
+                    metadata: {
+                      ...(newNode.data.metadata ?? {}),
+                      params: {
+                        ...(newNode.data.metadata?.params as
+                          | Record<string, unknown>
+                          | undefined),
+                        aspectRatio:
+                          defaultNewVideoAspectRatio ||
+                          newNode.data.aspect_ratio,
+                        duration:
+                          defaultNewVideoDuration || newNode.data.duration,
+                        resolution: defaultNewVideoResolution,
+                        generateAudio: defaultNewVideoGenerateAudio,
+                        promptExtend: defaultNewVideoPromptExtend,
+                      },
+                      ...(defaultNewVideoMode !== undefined
+                        ? { mode: defaultNewVideoMode }
+                        : {}),
+                    },
+                  },
+                }
               : newNode;
 
       set((state) => ({
@@ -2990,9 +3040,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       if (targetNode?.type === "imageNode") {
         stopImagePollingInternal(nodeId);
       }
-      if (
-        targetNode?.type === "newVideoNode"
-      ) {
+      if (targetNode?.type === "newVideoNode") {
         stopVideoPollingInternal(nodeId);
       }
 
@@ -3022,9 +3070,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               edges: nextEdges,
               groups: nextGroups,
               selectedGroupId:
-                nextGroups.find(
-                  (group) => group.id === state.selectedGroupId,
-                )?.id ?? null,
+                nextGroups.find((group) => group.id === state.selectedGroupId)
+                  ?.id ?? null,
               ...buildReferenceHighlightState(
                 state.referenceHoverRefCounts,
                 nextEdges,
@@ -3071,10 +3118,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     createGroup: (nodeIds: string[]) => {
       const state = get();
       const existingNodeIds = new Set(state.nodes.map((node) => node.id));
-      const normalizedNodeIds = normalizeGroupNodeIds(
-        nodeIds,
-        existingNodeIds,
-      );
+      const normalizedNodeIds = normalizeGroupNodeIds(nodeIds, existingNodeIds);
 
       const ungroupedNodeIds = normalizedNodeIds.filter((nodeId) => {
         return !state.groups.some((group) => group.nodeIds.includes(nodeId));
@@ -3093,9 +3137,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         createdAt: Date.now(),
         layoutOrigin: layoutBounds
           ? {
-            x: layoutBounds.x,
-            y: layoutBounds.y,
-          }
+              x: layoutBounds.x,
+              y: layoutBounds.y,
+            }
           : undefined,
         frame: layoutBounds ?? undefined,
       };
@@ -3131,9 +3175,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         groups: state.groups.map((group) =>
           group.id === groupId
             ? {
-              ...group,
-              name: nextName,
-            }
+                ...group,
+                name: nextName,
+              }
             : group,
         ),
       }));
@@ -3149,13 +3193,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         groups: state.groups.map((group) =>
           group.id === groupId
             ? {
-              ...group,
-              frame,
-              layoutOrigin: {
-                x: frame.x,
-                y: frame.y,
-              },
-            }
+                ...group,
+                frame,
+                layoutOrigin: {
+                  x: frame.x,
+                  y: frame.y,
+                },
+              }
             : group,
         ),
       }));
@@ -3194,7 +3238,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             return true;
           }
 
-          const frame = group.frame ?? getGroupBounds(state.nodes, group.nodeIds, 18);
+          const frame =
+            group.frame ?? getGroupBounds(state.nodes, group.nodeIds, 18);
           if (!frame) {
             return false;
           }
@@ -3312,9 +3357,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         {
           anchor: currentBounds
             ? {
-              x: currentBounds.x,
-              y: currentBounds.y,
-            }
+                x: currentBounds.x,
+                y: currentBounds.y,
+              }
             : group.layoutOrigin,
         },
       );
@@ -3325,27 +3370,29 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       set((current) => ({
         nodes: layoutResult.nextNodes,
-        groups: normalizeCanvasGroups(current.groups, layoutResult.nextNodes).map(
-          (item) =>
-            item.id === groupId
-              ? {
+        groups: normalizeCanvasGroups(
+          current.groups,
+          layoutResult.nextNodes,
+        ).map((item) =>
+          item.id === groupId
+            ? {
                 ...item,
                 layoutOrigin: layoutResult.bounds
                   ? {
-                    x: layoutResult.bounds.x,
-                    y: layoutResult.bounds.y,
-                  }
+                      x: layoutResult.bounds.x,
+                      y: layoutResult.bounds.y,
+                    }
                   : item.layoutOrigin,
                 frame: layoutResult.bounds
                   ? {
-                    x: layoutResult.bounds.x,
-                    y: layoutResult.bounds.y,
-                    width: layoutResult.bounds.width,
-                    height: layoutResult.bounds.height,
-                  }
+                      x: layoutResult.bounds.x,
+                      y: layoutResult.bounds.y,
+                      width: layoutResult.bounds.width,
+                      height: layoutResult.bounds.height,
+                    }
                   : item.frame,
               }
-              : item,
+            : item,
         ),
       }));
 
@@ -3370,9 +3417,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           preferredOrderNodeIds: group.gridLayoutOrder,
           anchor: currentBounds
             ? {
-              x: currentBounds.x,
-              y: currentBounds.y,
-            }
+                x: currentBounds.x,
+                y: currentBounds.y,
+              }
             : group.layoutOrigin,
         },
       );
@@ -3386,28 +3433,30 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       set((current) => ({
         nodes: layoutResult.nextNodes,
-        groups: normalizeCanvasGroups(current.groups, layoutResult.nextNodes).map(
-          (item) =>
-            item.id === groupId
-              ? {
+        groups: normalizeCanvasGroups(
+          current.groups,
+          layoutResult.nextNodes,
+        ).map((item) =>
+          item.id === groupId
+            ? {
                 ...item,
                 gridLayoutOrder: layoutResult.orderedNodeIds,
                 layoutOrigin: layoutResult.bounds
                   ? {
-                    x: layoutResult.bounds.x,
-                    y: layoutResult.bounds.y,
-                  }
+                      x: layoutResult.bounds.x,
+                      y: layoutResult.bounds.y,
+                    }
                   : item.layoutOrigin,
                 frame: layoutResult.bounds
                   ? {
-                    x: layoutResult.bounds.x,
-                    y: layoutResult.bounds.y,
-                    width: layoutResult.bounds.width,
-                    height: layoutResult.bounds.height,
-                  }
+                      x: layoutResult.bounds.x,
+                      y: layoutResult.bounds.y,
+                      width: layoutResult.bounds.width,
+                      height: layoutResult.bounds.height,
+                    }
                   : item.frame,
               }
-              : item,
+            : item,
         ),
       }));
 
@@ -3428,25 +3477,25 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           item.id !== groupId
             ? item
             : {
-              ...item,
-              layoutOrigin: {
-                x:
-                  (item.layoutOrigin?.x ??
-                    getGroupBounds(current.nodes, item.nodeIds, 24)?.x ??
-                    0) + offset.x,
-                y:
-                  (item.layoutOrigin?.y ??
-                    getGroupBounds(current.nodes, item.nodeIds, 24)?.y ??
-                    0) + offset.y,
+                ...item,
+                layoutOrigin: {
+                  x:
+                    (item.layoutOrigin?.x ??
+                      getGroupBounds(current.nodes, item.nodeIds, 24)?.x ??
+                      0) + offset.x,
+                  y:
+                    (item.layoutOrigin?.y ??
+                      getGroupBounds(current.nodes, item.nodeIds, 24)?.y ??
+                      0) + offset.y,
+                },
+                frame: item.frame
+                  ? {
+                      ...item.frame,
+                      x: item.frame.x + offset.x,
+                      y: item.frame.y + offset.y,
+                    }
+                  : undefined,
               },
-              frame: item.frame
-                ? {
-                  ...item.frame,
-                  x: item.frame.x + offset.x,
-                  y: item.frame.y + offset.y,
-                }
-                : undefined,
-            },
         ),
       }));
     },
@@ -3517,13 +3566,20 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           });
 
           // Midjourney 模型使用 zeakai API
-          const response = await submitMjImagine({ prompt: finalPrompt }, scoreCost);
+          const response = await submitMjImagine(
+            { prompt: finalPrompt },
+            scoreCost,
+          );
           ledgerBizId = response?.ledgerBizId;
 
           // code === 1 表示提交成功
           if (response.code !== 1) {
             if (ledgerBizId) {
-              refundDesktopProxyScore(ledgerBizId, response.description || "midjourney task creation failed", "image").catch(() => { });
+              refundDesktopProxyScore(
+                ledgerBizId,
+                response.description || "midjourney task creation failed",
+                "image",
+              ).catch(() => {});
             }
             throw new Error(response.description || "Midjourney 任务提交失败");
           }
@@ -3546,7 +3602,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               const resultUrl = await generateRunningHubImageWithFallback({
                 model: payloadOriginalModel,
                 prompt: payload.prompt,
-                imageUrls: Array.isArray(payload.image_urls) ? payload.image_urls : [],
+                imageUrls: Array.isArray(payload.image_urls)
+                  ? payload.image_urls
+                  : [],
                 size: payload.size,
                 resolution: payload.resolution,
               });
@@ -3578,14 +3636,19 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                     };
                   }
                 } catch (saveError) {
-                  console.error("[startImageGeneration] 保存 RunningHub 图片到本地失败:", saveError);
+                  console.error(
+                    "[startImageGeneration] 保存 RunningHub 图片到本地失败:",
+                    saveError,
+                  );
                 }
               }
 
               set((state) => ({
                 nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
                   const existingData = data.result?.data ?? [];
-                  const mergedData = appendMediaSequences(existingData, [resultItem]);
+                  const mergedData = appendMediaSequences(existingData, [
+                    resultItem,
+                  ]);
                   return {
                     ...data,
                     status: GenerationStatus.COMPLETED,
@@ -3613,7 +3676,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
               return;
             } catch (rhError) {
-              console.error("[startImageGeneration] RunningHub 生图失败:", rhError);
+              console.error(
+                "[startImageGeneration] RunningHub 生图失败:",
+                rhError,
+              );
               const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
               if (remaining <= 0) pendingTaskCounts.delete(nodeId);
               else pendingTaskCounts.set(nodeId, remaining);
@@ -3639,7 +3705,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
           if (!taskId) {
             if (ledgerBizId) {
-              refundDesktopProxyScore(ledgerBizId, "image task creation failed: no task_id", "image").catch(() => { });
+              refundDesktopProxyScore(
+                ledgerBizId,
+                "image task creation failed: no task_id",
+                "image",
+              ).catch(() => {});
             }
             throw new Error("未返回任务 ID，请稍后再试");
           }
@@ -3647,7 +3717,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         if (!taskId) {
           if (ledgerBizId) {
-            refundDesktopProxyScore(ledgerBizId, "image task creation failed: empty task_id", "image").catch(() => { });
+            refundDesktopProxyScore(
+              ledgerBizId,
+              "image task creation failed: empty task_id",
+              "image",
+            ).catch(() => {});
           }
           throw new Error("任务 ID 为空");
         }
@@ -3814,39 +3888,39 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             gptImageUrls.length > 0
               ? originalModel === ADOBE_GPT_IMAGE2_MODEL
                 ? await createAdobe2ApiGptImageToImageGeneration(
-                  buildFireflyGptImageToImageRequest({
-                    model: adobeImageModel as any,
-                    prompt,
-                    imageUrls: gptImageUrls,
-                  }),
-                )
+                    buildFireflyGptImageToImageRequest({
+                      model: adobeImageModel as any,
+                      prompt,
+                      imageUrls: gptImageUrls,
+                    }),
+                  )
                 : await createAdobe2ApiChatImageGeneration({
-                  model: adobeImageModel as any,
-                  messages: [
-                    {
-                      role: "user" as const,
-                      content: [
-                        { type: "text" as const, text: prompt || "" },
-                        ...imageUrls.map((url: string) => ({
-                          type: "image_url" as const,
-                          image_url: { url },
-                        })),
-                      ],
-                    },
-                  ],
-                })
-              : await createAdobe2ApiImageGeneration(
-                originalModel === ADOBE_GPT_IMAGE2_MODEL
-                  ? buildFireflyGptText2ImageRequest({
                     model: adobeImageModel as any,
-                    prompt,
+                    messages: [
+                      {
+                        role: "user" as const,
+                        content: [
+                          { type: "text" as const, text: prompt || "" },
+                          ...imageUrls.map((url: string) => ({
+                            type: "image_url" as const,
+                            image_url: { url },
+                          })),
+                        ],
+                      },
+                    ],
                   })
-                  : {
-                    model: adobeImageModel as any,
-                    prompt: prompt || "",
-                    response_format: "url",
-                  },
-              );
+              : await createAdobe2ApiImageGeneration(
+                  originalModel === ADOBE_GPT_IMAGE2_MODEL
+                    ? buildFireflyGptText2ImageRequest({
+                        model: adobeImageModel as any,
+                        prompt,
+                      })
+                    : {
+                        model: adobeImageModel as any,
+                        prompt: prompt || "",
+                        response_format: "url",
+                      },
+                );
 
           const responseAny = response as any;
           const responseUrl =
@@ -3947,9 +4021,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           }));
 
           const ximuReferenceUrls = await normalizeXimuReferenceUrls(imageUrls);
-          const request =
-            isXimuGptImageGenerationModel(originalModel)
-              ? buildXimuGptImageRequest({
+          const request = isXimuGptImageGenerationModel(originalModel)
+            ? buildXimuGptImageRequest({
                 model: ximuImageModel as any,
                 cardCode: ximuCardCode,
                 prompt,
@@ -3960,7 +4033,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                 }),
                 urls: ximuReferenceUrls,
               })
-              : buildXimuNanoBananaRequest({
+            : buildXimuNanoBananaRequest({
                 model: ximuImageModel as any,
                 cardCode: ximuCardCode,
                 prompt,
@@ -3974,10 +4047,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
           let submitResponse;
           try {
-            submitResponse =
-              isXimuGptImageGenerationModel(originalModel)
-                ? await createXimuGptImageGeneration(request as any)
-                : await createXimuNanoBananaGeneration(request as any);
+            submitResponse = isXimuGptImageGenerationModel(originalModel)
+              ? await createXimuGptImageGeneration(request as any)
+              : await createXimuNanoBananaGeneration(request as any);
           } catch (submitError) {
             throw new Error(
               getXimuRequestErrorText(submitError, "西牧提交生图失败"),
@@ -4239,12 +4311,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             set((state) => ({
               nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
                 const existingData = data.result?.data ?? [];
-                const mergedData = appendMediaSequences(
-                  existingData,
-                  [
-                    resultItem,
-                  ],
-                );
+                const mergedData = appendMediaSequences(existingData, [
+                  resultItem,
+                ]);
                 return {
                   ...data,
                   status: GenerationStatus.COMPLETED,
@@ -4269,7 +4338,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             });
             return;
           } catch (rhError) {
-            console.error("[startGeminiPro2Generation] RunningHub 生图失败:", rhError);
+            console.error(
+              "[startGeminiPro2Generation] RunningHub 生图失败:",
+              rhError,
+            );
             throw rhError;
           }
         }
@@ -4384,7 +4456,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         }
 
         if (ledgerBizId) {
-          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
+          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => {});
         }
 
         await refreshBalanceAfterGeneration({
@@ -4420,7 +4492,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           get().saveGraph();
         }
         if (ledgerBizId) {
-          refundDesktopProxyScore(ledgerBizId, rawServerMessage || "gemini image generation failed", "image").catch(() => { });
+          refundDesktopProxyScore(
+            ledgerBizId,
+            rawServerMessage || "gemini image generation failed",
+            "image",
+          ).catch(() => {});
         }
         throw startError;
       }
@@ -4586,9 +4662,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         saveCurrentCanvasToHistory();
 
         const targetNodeType =
-          nodeType === "newVideoNode"
-            ? "newVideo"
-            : "image";
+          nodeType === "newVideoNode" ? "newVideo" : "image";
         const validItems = (
           shouldSeparateGeneratingNewVideo
             ? resultData.slice(0, 1)
@@ -4600,13 +4674,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const sourceVisualSize =
           nodeType === "imageNode"
             ? getNodeSizeByAspectRatio(
-              (sourceData as ImageGenerationNode).size ?? "4:3",
-              250,
-            )
+                (sourceData as ImageGenerationNode).size ?? "4:3",
+                250,
+              )
             : getNodeSizeByAspectRatio(
-              (sourceData as NewVideoGenerationNode).aspect_ratio ?? "16:9",
-              250,
-            );
+                (sourceData as NewVideoGenerationNode).aspect_ratio ?? "16:9",
+                250,
+              );
         const verticalGap = 32;
         const baseY =
           sourceNode.position.y + sourceVisualSize.height + verticalGap;
@@ -4616,59 +4690,59 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const resolvedItems =
           targetNodeType === "image"
             ? await Promise.all(
-              validItems.map(async (item) => {
-                const imageUrl = item.remoteUrl || item.url;
-                let aspectRatio = sourceData.size ?? "4:3";
+                validItems.map(async (item) => {
+                  const imageUrl = item.remoteUrl || item.url;
+                  let aspectRatio = sourceData.size ?? "4:3";
 
-                if (imageUrl) {
-                  try {
-                    const { width, height } =
-                      await getImageDimensions(imageUrl);
-                    aspectRatio = getClosestAspectRatio(width, height);
-                  } catch (error) {
-                    console.warn(
-                      "[separateToNodes] 获取图片比例失败，使用回退比例:",
-                      error,
-                    );
+                  if (imageUrl) {
+                    try {
+                      const { width, height } =
+                        await getImageDimensions(imageUrl);
+                      aspectRatio = getClosestAspectRatio(width, height);
+                    } catch (error) {
+                      console.warn(
+                        "[separateToNodes] 获取图片比例失败，使用回退比例:",
+                        error,
+                      );
+                    }
                   }
-                }
 
-                const nodeSize = getNodeSizeByAspectRatio(aspectRatio, 250);
+                  const nodeSize = getNodeSizeByAspectRatio(aspectRatio, 250);
 
-                return {
-                  item,
-                  aspectRatio,
-                  nodeSize,
-                };
-              }),
-            )
+                  return {
+                    item,
+                    aspectRatio,
+                    nodeSize,
+                  };
+                }),
+              )
             : await Promise.all(
-              validItems.map(async (item) => {
-                const videoUrl = item.remoteUrl || item.url;
-                let aspectRatio =
-                  (sourceData as NewVideoGenerationNode).aspect_ratio ??
-                  "16:9";
+                validItems.map(async (item) => {
+                  const videoUrl = item.remoteUrl || item.url;
+                  let aspectRatio =
+                    (sourceData as NewVideoGenerationNode).aspect_ratio ??
+                    "16:9";
 
-                if (videoUrl) {
-                  try {
-                    const { width, height } =
-                      await getVideoDimensions(videoUrl);
-                    aspectRatio = getClosestAspectRatio(width, height);
-                  } catch (error) {
-                    console.warn(
-                      "[separateToNodes] 获取视频比例失败，使用回退比例:",
-                      error,
-                    );
+                  if (videoUrl) {
+                    try {
+                      const { width, height } =
+                        await getVideoDimensions(videoUrl);
+                      aspectRatio = getClosestAspectRatio(width, height);
+                    } catch (error) {
+                      console.warn(
+                        "[separateToNodes] 获取视频比例失败，使用回退比例:",
+                        error,
+                      );
+                    }
                   }
-                }
 
-                return {
-                  item,
-                  aspectRatio,
-                  nodeSize: getNodeSizeByAspectRatio(aspectRatio, 250),
-                };
-              }),
-            );
+                  return {
+                    item,
+                    aspectRatio,
+                    nodeSize: getNodeSizeByAspectRatio(aspectRatio, 250),
+                  };
+                }),
+              );
 
         const latestState = get();
         const latestSourceNode = latestState.nodes.find(
@@ -4690,40 +4764,40 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             const finalNode =
               targetNodeType === "newVideo"
                 ? {
-                  ...baseNode,
-                  width: nodeSize.width,
-                  height: nodeSize.height,
-                  data: {
-                    ...baseNode.data,
-                    aspect_ratio: aspectRatio,
-                    status: GenerationStatus.COMPLETED,
-                    progress: 100,
-                    result: {
-                      type: "video",
-                      data: [
-                        {
-                          ...item,
-                          format: item.format ?? "mp4",
-                        },
-                      ],
+                    ...baseNode,
+                    width: nodeSize.width,
+                    height: nodeSize.height,
+                    data: {
+                      ...baseNode.data,
+                      aspect_ratio: aspectRatio,
+                      status: GenerationStatus.COMPLETED,
+                      progress: 100,
+                      result: {
+                        type: "video",
+                        data: [
+                          {
+                            ...item,
+                            format: item.format ?? "mp4",
+                          },
+                        ],
+                      },
                     },
-                  },
-                }
+                  }
                 : {
-                  ...baseNode,
-                  width: nodeSize.width,
-                  height: nodeSize.height,
-                  data: {
-                    ...baseNode.data,
-                    status: GenerationStatus.COMPLETED,
-                    progress: 100,
-                    size: aspectRatio,
-                    result: {
-                      type: "image",
-                      data: [{ ...item }],
+                    ...baseNode,
+                    width: nodeSize.width,
+                    height: nodeSize.height,
+                    data: {
+                      ...baseNode.data,
+                      status: GenerationStatus.COMPLETED,
+                      progress: 100,
+                      size: aspectRatio,
+                      result: {
+                        type: "image",
+                        data: [{ ...item }],
+                      },
                     },
-                  },
-                };
+                  };
 
             currentX += nodeSize.width + gap;
             return finalNode as AllNodeType;
@@ -4747,11 +4821,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                     data: shouldSeparateGeneratingNewVideo
                       ? []
                       : [
-                        {
-                          ...(resultData[0] as any),
-                          format: (resultData[0] as any)?.format ?? "mp4",
-                        },
-                      ],
+                          {
+                            ...(resultData[0] as any),
+                            format: (resultData[0] as any)?.format ?? "mp4",
+                          },
+                        ],
                   },
                 },
               } as AllNodeType;
@@ -4950,10 +5024,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             throw new Error("Adobe2API 未返回视频地址");
           }
 
-          let resultItem: { url: string; format: string;[key: string]: any } = {
-            url: videoUrl,
-            format: "mp4",
-          };
+          let resultItem: { url: string; format: string; [key: string]: any } =
+            {
+              url: videoUrl,
+              format: "mp4",
+            };
           const projectId = get().projectId;
           if (projectId) {
             try {
@@ -4999,12 +5074,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           set((state) => ({
             nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
               const existingData = data.result?.data ?? [];
-              const mergedData = appendMediaSequences(
-                existingData,
-                [
-                  resultItem,
-                ],
-              );
+              const mergedData = appendMediaSequences(existingData, [
+                resultItem,
+              ]);
               return {
                 ...data,
                 task_id: response?.id,
@@ -5061,10 +5133,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             throw new Error("Grok2API 未返回视频地址");
           }
 
-          let resultItem: { url: string; format: string;[key: string]: any } = {
-            url: videoUrl,
-            format: "mp4",
-          };
+          let resultItem: { url: string; format: string; [key: string]: any } =
+            {
+              url: videoUrl,
+              format: "mp4",
+            };
           const projectId = get().projectId;
           if (projectId) {
             try {
@@ -5110,12 +5183,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           set((state) => ({
             nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
               const existingData = data.result?.data ?? [];
-              const mergedData = appendMediaSequences(
-                existingData,
-                [
-                  resultItem,
-                ],
-              );
+              const mergedData = appendMediaSequences(existingData, [
+                resultItem,
+              ]);
               return {
                 ...data,
                 task_id: response?.id,
@@ -5149,20 +5219,42 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         }
 
         const createTask = async () => {
-          const response: any = isSeedance20
-            ? await createLzVideoTask(requestPayload, requiredPoints)
-            : await createDashscopeVideoSynthesis(requestPayload, requiredPoints);
+          let response: any;
+          if (model === "happyhorse-1.0-r2v") {
+            response = await createKuaiziHappyHorseVideoTask(
+              requestPayload,
+              requiredPoints,
+            );
+          } else if (model === "kling-v3-omni") {
+            response = await createKuaiziKlingVideoTask(
+              requestPayload,
+              requiredPoints,
+            );
+          } else if (isSeedance20) {
+            response = await createLzVideoTask(requestPayload, requiredPoints);
+          } else {
+            response = await createDashscopeVideoSynthesis(
+              requestPayload,
+              requiredPoints,
+            );
+          }
           const taskId = response?.data?.task_id ?? response?.output?.task_id;
 
           if (!taskId) {
             // 创建失败时，如果有 ledgerBizId 需要退款
             if (response?.ledgerBizId) {
-              refundDesktopProxyScore(response.ledgerBizId, "task creation failed: no task_id").catch(() => { });
+              refundDesktopProxyScore(
+                response.ledgerBizId,
+                "task creation failed: no task_id",
+              ).catch(() => {});
             }
             throw new Error("任务 ID 为空");
           }
 
-          return { taskId: taskId as string, ledgerBizId: response?.ledgerBizId as string | undefined };
+          return {
+            taskId: taskId as string,
+            ledgerBizId: response?.ledgerBizId as string | undefined,
+          };
         };
 
         const taskResults = await Promise.all(
@@ -5199,6 +5291,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             taskIndex: index,
             totalTasks,
             ledgerBizId,
+            videoProvider:
+              model === "happyhorse-1.0-r2v" || model === "kling-v3-omni"
+                ? "kuaizi"
+                : isSeedance20
+                  ? "seedance"
+                  : "dashscope",
           });
         });
       } catch (startError) {
@@ -5271,9 +5369,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         ) {
           if (node.type === "imageNode") {
             imageNodesToStop.push(node.id);
-          } else if (
-            node.type === "newVideoNode"
-          ) {
+          } else if (node.type === "newVideoNode") {
             videoNodesToStop.push(node.id);
           }
         }
@@ -5300,9 +5396,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                   error: { message: "任务已取消" },
                 },
               };
-            } else if (
-              node.type === "newVideoNode"
-            ) {
+            } else if (node.type === "newVideoNode") {
               return {
                 ...node,
                 data: {
@@ -5365,7 +5459,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
      * 拖动过程中不会调用此方法，只有拖动结束或其他变更时才调用。
      */
     onNodesChange: (changes) => {
-      const hasSelectChange = changes.some((change) => change.type === "select");
+      const hasSelectChange = changes.some(
+        (change) => change.type === "select",
+      );
       const hasFinalPositionChange = changes.some(
         (change) => change.type === "position" && !change.dragging,
       );
@@ -5377,17 +5473,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const nextGroups =
           hasFinalPositionChange || hasAddOrRemove
             ? normalizeCanvasGroups(state.groups, nextNodes).map((group) => {
-              const bounds = getGroupBounds(nextNodes, group.nodeIds, 24);
-              return {
-                ...group,
-                layoutOrigin: bounds
-                  ? {
-                    x: bounds.x,
-                    y: bounds.y,
-                  }
-                  : group.layoutOrigin,
-              };
-            })
+                const bounds = getGroupBounds(nextNodes, group.nodeIds, 24);
+                return {
+                  ...group,
+                  layoutOrigin: bounds
+                    ? {
+                        x: bounds.x,
+                        y: bounds.y,
+                      }
+                    : group.layoutOrigin,
+                };
+              })
             : state.groups;
         // 计算选中节点数量，避免在 ImageNode 等组件中 O(n²) 遍历
         const selectedCount = nextNodes.filter((n) => n.selected).length;
@@ -5456,9 +5552,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const sourceNode = nodes.find((n) => n.id === connection.source);
       const targetNode = nodes.find((n) => n.id === connection.target);
 
-      if (
-        targetNode?.type === "newVideoNode"
-      ) {
+      if (targetNode?.type === "newVideoNode") {
         const allowedSourceTypes = [
           "noteNode",
           "imageNode",

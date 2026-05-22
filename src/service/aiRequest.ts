@@ -80,12 +80,11 @@ function applyAdobe2ApiHeaders(
   headerRecord["x-api-key"] = apiKey;
 }
 
-async function applyAdobe2ApiAuth(reqConfig: AxiosRequestConfig): Promise<void> {
+async function applyAdobe2ApiAuth(
+  reqConfig: AxiosRequestConfig,
+): Promise<void> {
   const adobe2ApiState = await getAdobe2ApiState();
-  if (
-    !adobe2ApiState?.baseUrl ||
-    !adobe2ApiState.apiKey
-  ) {
+  if (!adobe2ApiState?.baseUrl || !adobe2ApiState.apiKey) {
     return;
   }
 
@@ -155,7 +154,10 @@ const createService = (
       const baseURL = reqConfig.baseURL || config.getBaseURL();
       reqConfig.baseURL = baseURL;
 
-      if (typeof FormData !== "undefined" && reqConfig.data instanceof FormData) {
+      if (
+        typeof FormData !== "undefined" &&
+        reqConfig.data instanceof FormData
+      ) {
         delete reqConfig.headers["Content-Type"];
         delete reqConfig.headers["content-type"];
       }
@@ -262,10 +264,24 @@ const wuhenRequest = async <T = any>(
   return await wuhenService.request(config);
 };
 
-const ximuRequest = async <T = any>(
+const ximuRequest = async <T = any>(config: AxiosRequestConfig): Promise<T> => {
+  return await ximuService.request(config);
+};
+
+const kuaiziOpenApiRequest = async <T = any>(
   config: AxiosRequestConfig,
 ): Promise<T> => {
-  return await ximuService.request(config);
+  const finalConfig: AxiosRequestConfig = {
+    ...config,
+    baseURL: config.baseURL || "https://aiopenapi.kuaizi.cn",
+    timeout: config.timeout ?? REQUEST_TIMEOUT,
+    headers: {
+      ...DEFAULT_HEADERS,
+      ...toHeaderRecord(config.headers),
+    },
+  };
+
+  return await axios(finalConfig).then((response) => response.data);
 };
 
 export {
@@ -276,10 +292,7 @@ export {
   getAdobe2ApiState,
   grok2ApiRequest,
   getGrok2ApiState,
+  kuaiziOpenApiRequest,
   SKIP_AUTH_HEADER,
 };
-export {
-  jikeingRequest,
-  wuhenRequest,
-  ximuRequest,
-};
+export { jikeingRequest, wuhenRequest, ximuRequest };

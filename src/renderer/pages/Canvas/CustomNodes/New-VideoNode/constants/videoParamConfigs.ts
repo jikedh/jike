@@ -135,6 +135,22 @@ const duration4_5_10 = {
   ],
 };
 
+const duration5_6 = {
+  type: "buttons" as const,
+  options: [
+    { label: "5s", value: 5 },
+    { label: "6s", value: 6 },
+  ],
+};
+
+const duration5_10 = {
+  type: "buttons" as const,
+  options: [
+    { label: "5s", value: 5 },
+    { label: "10s", value: 10 },
+  ],
+};
+
 const adobeSora2ProConfig = (mode: VideoModeKey): VideoParamConfig => ({
   modelId: "adobe-sora2-pro",
   mode,
@@ -328,6 +344,45 @@ const happyHorseConfig = (mode: VideoModeKey): VideoParamConfig => ({
   },
 });
 
+const kuaiziHappyHorseR2vConfig = (): VideoParamConfig => ({
+  modelId: "happyhorse-1.0-r2v",
+  mode: "all-reference",
+  aspectRatios: squareRatios,
+  qualityGroup: {
+    key: "resolution",
+    label: "Resolution",
+    options: happyHorseResolutions,
+  },
+  duration: duration5_6,
+  defaults: {
+    aspectRatio: "16:9",
+    resolution: "1080P",
+    duration: 5,
+    generateAudio: false,
+  },
+});
+
+const kuaiziKlingOmniConfig = (): VideoParamConfig => ({
+  modelId: "kling-v3-omni",
+  mode: "all-reference",
+  aspectRatios: squareRatios,
+  qualityGroup: {
+    key: "quality",
+    label: "Mode",
+    options: [
+      { label: "Std", value: "std" },
+      { label: "Pro", value: "pro" },
+    ],
+  },
+  duration: duration5_10,
+  defaults: {
+    aspectRatio: "16:9",
+    quality: "std",
+    duration: 5,
+    generateAudio: false,
+  },
+});
+
 export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
   "seedance-2.0-fast": seedance20Config("seedance-2.0-fast", "fast"),
   "seedance-2.0-pro": seedance20Config("seedance-2.0-pro", "pro"),
@@ -390,6 +445,8 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
   [byModeKey("happyhorse", "image-to-video")]:
     happyHorseConfig("image-to-video"),
   [byModeKey("happyhorse", "video-edit")]: happyHorseConfig("video-edit"),
+  [byModeKey("happyhorse-1.0-r2v", "all-reference")]:
+    kuaiziHappyHorseR2vConfig(),
   // Vidu Q2 仅保留历史兼容配置，新 UI 不再展示。
   [byModeKey("vidu-q2-fast", "image-to-video")]: {
     modelId: "vidu-q2-fast",
@@ -573,6 +630,7 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
       generateAudio: false,
     },
   },
+  [byModeKey("kling-v3-omni", "all-reference")]: kuaiziKlingOmniConfig(),
 };
 
 export const getVideoParamConfig = (modelId: string, mode?: VideoModeKey) =>

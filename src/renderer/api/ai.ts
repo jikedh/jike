@@ -4,6 +4,7 @@ import {
   getAdobe2ApiState,
   grok2ApiRequest,
   jikeingService,
+  kuaiziOpenApiRequest,
   ximuRequest,
   wuhenRequest,
 } from "service/aiRequest";
@@ -12,9 +13,7 @@ import {
   createDesktopProxyTask,
   queryDesktopProxyTask,
 } from "./jikeGo";
-import {
-  BailianVideoGenerationRequest,
-} from "shared/types/detail/Bailian/video";
+import { BailianVideoGenerationRequest } from "shared/types/detail/Bailian/video";
 import { Seedance20Request } from "shared/types/detail/kuaizhi/Seedance-2.0";
 import type {
   Adobe2ApiVideoGenerationRequest,
@@ -126,7 +125,9 @@ function extractDurationSeconds(data: unknown): number | undefined {
   }
   if (typeof duration === "string" && duration.trim()) {
     const parsedDuration = Number(duration);
-    return Number.isFinite(parsedDuration) ? Math.trunc(parsedDuration) : undefined;
+    return Number.isFinite(parsedDuration)
+      ? Math.trunc(parsedDuration)
+      : undefined;
   }
   return undefined;
 }
@@ -175,7 +176,10 @@ function extractLedgerBizId(data: any): {
   ledgerBizId: string | undefined;
 } {
   if (data?.upstream && data?.ledgerBizId) {
-    return { responseData: data.upstream, ledgerBizId: String(data.ledgerBizId) };
+    return {
+      responseData: data.upstream,
+      ledgerBizId: String(data.ledgerBizId),
+    };
   }
   return { responseData: data, ledgerBizId: undefined };
 }
@@ -338,7 +342,9 @@ export async function createGrok2ApiImageEditGeneration(data: {
   formData.append("response_format", data.response_format ?? "url");
 
   const files = await Promise.all(
-    data.imageUrls.slice(0, 5).map((imageUrl) => fetchImageFileFromUrl(imageUrl)),
+    data.imageUrls
+      .slice(0, 5)
+      .map((imageUrl) => fetchImageFileFromUrl(imageUrl)),
   );
   files.forEach((file) => formData.append("image[]", file));
 
@@ -370,9 +376,7 @@ export function createXimuGptImageGeneration(data: XimuGptImageRequest) {
   });
 }
 
-export function createXimuNanoBananaGeneration(
-  data: XimuNanoBananaRequest,
-) {
+export function createXimuNanoBananaGeneration(data: XimuNanoBananaRequest) {
   return ximuRequest<XimuTaskSubmitResponse>({
     url: "/api/draw/nano-banana",
     method: "post",
@@ -884,5 +888,163 @@ export async function getVideoRemovalStatus(
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+async function createKuaiziOpenPlatformVideoTask({
+  data,
+  upstreamPath,
+  scoreCost,
+  scoreModel,
+  scoreSourceLabel,
+}: {
+  data: BailianVideoGenerationRequest;
+  upstreamPath: string;
+  scoreCost?: number;
+  scoreModel: string;
+  scoreSourceLabel: string;
+}) {
+  const response = await createDesktopProxyTask({
+    platform: "kuaizi",
+    upstreamPath,
+    method: "POST",
+    body: data,
+    scoreCost,
+    scoreBizType: "video",
+    scoreModel,
+    scoreSource: "kuaizi",
+    scoreSourceLabel,
+  });
+  const rawData = unwrapDesktopProxyData(response);
+  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
+  const taskId =
+    responseData?.data?.task_id ??
+    responseData?.output?.task_id ??
+    responseData?.task_id ??
+    "";
+  const taskStatus =
+    responseData?.data?.task_status ??
+    responseData?.output?.task_status ??
+    responseData?.task_status;
+
+  await aiVideoTrackingService.track({
+    apiName: upstreamPath,
+    model: scoreModel,
+    taskId,
+    prompt: extractPrompt(data),
+    duration: extractDurationSeconds(data),
+    referenceImageUrls: extractReferenceImageUrls(data),
+    provider: "kuaizi",
+    requestParams: data as unknown as Record<string, unknown>,
+    status: taskStatus === "FAILED" || !taskId ? "FAIL" : "PENDING",
+    scoreCost,
+  });
+
+  return { ...responseData, ledgerBizId };
+}
+
+export async function createKuaiziHappyHorseVideoTask(
+  data: any,
+  scoreCost?: number,
+) {
+  const apiName = "/ai-open-platform-api/v1/happyhorse/video/task/create";
+  const response = await kuaiziOpenApiRequest({
+    url: apiName,
+    method: "post",
+    headers: {
+      Apikey: "kz-XyWCfLd8q784ybb6PVo6OuDb2rkRJ8ShiCZNcvnus0",
+    },
+    data,
+    timeout: 900000,
+  });
+
+  const taskId =
+    response?.data?.task_id ??
+    response?.output?.task_id ??
+    response?.task_id ??
+    "";
+  const taskStatus =
+    response?.data?.task_status ??
+    response?.output?.task_status ??
+    response?.task_status;
+
+  await aiVideoTrackingService.track({
+    apiName,
+    model: "happyhorse-1.0-r2v",
+    taskId,
+    prompt: extractPrompt(data),
+    duration: extractDurationSeconds(data),
+    referenceImageUrls: extractReferenceImageUrls(data),
+    provider: "kuaizi",
+    requestParams: data as Record<string, unknown>,
+    status: taskStatus === "FAILED" || !taskId ? "FAIL" : "PENDING",
+    scoreCost,
+  });
+
+  return response;
+}
+
+export async function createKuaiziKlingVideoTask(
+  data: any,
+  scoreCost?: number,
+) {
+  const apiName = "/ai-open-platform-api/v1/kling/video/task/create";
+  const response = await kuaiziOpenApiRequest({
+    url: apiName,
+    method: "post",
+    headers: {
+      Apikey: "kz-XyWCfLd8q784ybb6PVo6OuDb2rkRJ8ShiCZNcvnus0",
+    },
+    data,
+    timeout: 900000,
+  });
+
+  const taskId =
+    response?.data?.task_id ??
+    response?.output?.task_id ??
+    response?.task_id ??
+    "";
+  const taskStatus =
+    response?.data?.task_status ??
+    response?.output?.task_status ??
+    response?.task_status;
+
+  await aiVideoTrackingService.track({
+    apiName,
+    model: "kling-v3-omni",
+    taskId,
+    prompt: extractPrompt(data),
+    duration: extractDurationSeconds(data),
+    referenceImageUrls: extractReferenceImageUrls(data),
+    provider: "kuaizi",
+    requestParams: data as Record<string, unknown>,
+    status: taskStatus === "FAILED" || !taskId ? "FAIL" : "PENDING",
+    scoreCost,
+  });
+
+  return response;
+}
+
+export async function getKuaiziHappyHorseVideoTaskStatus(taskId: string) {
+  return kuaiziOpenApiRequest({
+    url: "/ai-open-platform-api/v1/happyhorse/video/task/status",
+    method: "post",
+    headers: {
+      Apikey: "kz-XyWCfLd8q784ybb6PVo6OuDb2rkRJ8ShiCZNcvnus0",
+    },
+    data: { task_id: taskId },
+    timeout: 900000,
+  });
+}
+
+export async function getKuaiziKlingVideoTaskStatus(taskId: string) {
+  return kuaiziOpenApiRequest({
+    url: "/ai-open-platform-api/v1/kling/video/task/status",
+    method: "post",
+    headers: {
+      Apikey: "kz-XyWCfLd8q784ybb6PVo6OuDb2rkRJ8ShiCZNcvnus0",
+    },
+    data: { task_id: taskId },
+    timeout: 900000,
   });
 }

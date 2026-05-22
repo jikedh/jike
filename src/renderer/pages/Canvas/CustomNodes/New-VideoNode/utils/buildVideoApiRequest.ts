@@ -27,6 +27,8 @@ export type NewVideoApiRequest =
   | Seedance20Request
   | BailianVideoGenerationRequest
   | ViduQ3Image2VideoRequest
+  | KuaiziHappyHorseVideoRequest
+  | KuaiziKlingOmniVideoRequest
   | Adobe2ApiVideoGenerationRequest
   | Grok2ApiVideoGenerationRequest;
 
@@ -125,13 +127,13 @@ const getAdobeVideoRatioSuffix = (request: VideoGenerateRequest) =>
 
 const getGrokVideoSize = (request: VideoGenerateRequest) =>
   (
-    {
+    ({
       "16:9": "1280x720",
       "9:16": "720x1280",
       "1:1": "1024x1024",
       "3:2": "1792x1024",
       "2:3": "1024x1792",
-    } as const
+    }) as const
   )[getRatio(request)] ?? "1280x720";
 
 const getGrokVideoResolution = (request: VideoGenerateRequest) =>
@@ -176,7 +178,11 @@ const buildAdobeSora2ProRequest = (
   request: VideoGenerateRequest,
 ): Sora2ProVideoRequest => {
   const image = getImages(request)[0];
-  const duration = pickDuration(request.params.duration, [4, 8, 12] as const, 4);
+  const duration = pickDuration(
+    request.params.duration,
+    [4, 8, 12] as const,
+    4,
+  );
   const model =
     `firefly-sora2-pro-${duration}s-${getAdobeVideoRatioSuffix(request)}` as const;
 
@@ -809,6 +815,61 @@ const buildKelingRequest = (
   };
 };
 
+type KuaiziKlingOmniVideoRequest = {
+  model: "kling-v3-omni";
+  prompt: string;
+  kling_mode: "std" | "pro";
+  aspect_ratio: "16:9" | "9:16" | "1:1";
+  duration: 5 | 10;
+  generate_audio: false;
+  images?: Array<{
+    url: string;
+    role: "reference_image";
+  }>;
+};
+
+type KuaiziHappyHorseVideoRequest = {
+  model: "happyhorse-1.0-r2v";
+  prompt: string;
+  resolution: "720P" | "1080P";
+  ratio: "16:9" | "9:16" | "1:1";
+  duration: 5 | 6;
+  media: Array<{
+    type: "reference_image";
+    url: string;
+  }>;
+};
+
+const buildKuaiziKlingOmniRequest = (
+  request: VideoGenerateRequest,
+): KuaiziKlingOmniVideoRequest => {
+  const images = getImages(request);
+  const ratio = isOneOf(
+    getRatio(request),
+    ["16:9", "9:16", "1:1"] as const,
+    "16:9",
+  );
+  const duration = pickDuration(request.params.duration, [5, 10] as const, 5);
+  const mode = isOneOf(request.params.quality, ["std", "pro"] as const, "std");
+
+  const referenceImages: KuaiziKlingOmniVideoRequest["images"] = images
+    .slice(0, 7)
+    .map((url) => ({
+      url,
+      role: "reference_image" as const,
+    }));
+
+  return {
+    model: "kling-v3-omni",
+    prompt: getPrompt(request.prompt),
+    kling_mode: mode,
+    aspect_ratio: ratio,
+    duration,
+    generate_audio: false,
+    ...(referenceImages.length > 0 ? { images: referenceImages } : {}),
+  };
+};
+
 const buildHappyHorseRequest = (request: VideoGenerateRequest) => {
   const images = getImages(request);
   const videos = getVideos(request);
@@ -890,6 +951,29 @@ const buildHappyHorseRequest = (request: VideoGenerateRequest) => {
   } satisfies BailianVideoGenerationRequest;
 };
 
+const buildKuaiziHappyHorseRequest = (request: VideoGenerateRequest) => {
+  const images = getImages(request);
+  const ratio = isOneOf(
+    getRatio(request),
+    ["16:9", "9:16", "1:1"] as const,
+    "16:9",
+  );
+  const resolution = getHappyHorseResolution(request);
+  const duration = pickDuration(request.params.duration, [5, 6] as const, 5);
+
+  return {
+    model: "happyhorse-1.0-r2v",
+    prompt: getPrompt(request.prompt),
+    resolution,
+    ratio,
+    duration,
+    media: images.slice(0, 9).map((url) => ({
+      type: "reference_image" as const,
+      url,
+    })),
+  } satisfies KuaiziHappyHorseVideoRequest;
+};
+
 export const buildVideoApiRequest = (
   request: VideoGenerateRequest,
 ): NewVideoApiRequest => {
@@ -919,6 +1003,8 @@ export const buildVideoApiRequest = (
       return buildPixverseRequest(request);
     case "happyhorse":
       return buildHappyHorseRequest(request);
+    case "happyhorse-1.0-r2v":
+      return buildKuaiziHappyHorseRequest(request);
     case "adobe-sora2-pro":
       return buildAdobeSora2ProRequest(request);
     case "grok-imagine-video":
@@ -928,6 +1014,8 @@ export const buildVideoApiRequest = (
       return buildAdobeVeo31Request(request);
     case "keling":
       return buildKelingRequest(request);
+    case "kling-v3-omni":
+      return buildKuaiziKlingOmniRequest(request);
     default:
       return buildSeedanceRequest(request);
   }

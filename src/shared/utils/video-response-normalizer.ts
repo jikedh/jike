@@ -13,6 +13,15 @@ const wan27I2vStatusMap: Record<string, GenerationStatus> = {
   FAILED: GenerationStatus.FAILED,
 };
 
+const kuaiziVideoStatusMap: Record<string, GenerationStatus> = {
+  PENDING: GenerationStatus.QUEUED,
+  RUNNING: GenerationStatus.IN_PROGRESS,
+  SUCCEEDED: GenerationStatus.COMPLETED,
+  FAILED: GenerationStatus.FAILED,
+  CANCELED: GenerationStatus.FAILED,
+  UNKNOWN: GenerationStatus.IN_PROGRESS,
+};
+
 const extractSeedance20VideoItems = (response: any) => {
   const resultUrl = response?.data?.video_url;
   if (!resultUrl) {
@@ -29,6 +38,28 @@ const extractSeedance20VideoItems = (response: any) => {
 
 const extractWan27I2vVideoItems = (response: any) => {
   const output = response?.output ?? {};
+  const resultUrls = [
+    output.video_url,
+    output.watermark_video_url,
+    output.url,
+    ...(Array.isArray(output.video_urls) ? output.video_urls : []),
+    ...(Array.isArray(output.results)
+      ? output.results.map((item: any) => item?.video_url ?? item?.url)
+      : []),
+  ].filter((url): url is string => typeof url === "string" && url.length > 0);
+
+  if (resultUrls.length === 0) {
+    return [];
+  }
+
+  return Array.from(new Set(resultUrls)).map((url) => ({
+    url,
+    format: "mp4",
+  }));
+};
+
+const extractKuaiziVideoItems = (response: any) => {
+  const output = response?.output ?? response?.data ?? {};
   const resultUrls = [
     output.video_url,
     output.watermark_video_url,
@@ -75,7 +106,51 @@ const isWan27I2vResponse = (response: any): boolean => {
   return response?.output?.task_status !== undefined;
 };
 
+const isKuaiziResponse = (response: any): boolean =>
+  response?.output?.task_status !== undefined ||
+  response?.data?.task_status !== undefined;
+
 export const normalizeVideoTaskResponse = (response: any) => {
+  if (isKuaiziResponse(response)) {
+    const rawStatus = String(
+      response?.output?.task_status ?? response?.data?.task_status ?? "",
+    ).toUpperCase();
+    const taskId =
+      response?.output?.task_id ?? response?.data?.task_id ?? response?.task_id;
+    const progress = rawStatus === "SUCCEEDED" ? 100 : 0;
+    const videoItems = extractKuaiziVideoItems(response);
+
+    if (rawStatus === "SUCCEEDED") {
+      return {
+        status: GenerationStatus.COMPLETED,
+        progress: 100,
+        taskId,
+        videoItems,
+        missingResultUrl: videoItems.length === 0,
+        errorMessage: undefined,
+      };
+    }
+
+    if (rawStatus === "FAILED" || rawStatus === "CANCELED") {
+      return {
+        status: GenerationStatus.FAILED,
+        progress,
+        taskId,
+        videoItems: [],
+        missingResultUrl: false,
+        errorMessage: getErrorMessage(response, "生成失败，请稍后再试"),
+      };
+    }
+
+    return {
+      status: kuaiziVideoStatusMap[rawStatus] ?? GenerationStatus.IN_PROGRESS,
+      progress,
+      taskId,
+      videoItems,
+      missingResultUrl: false,
+      errorMessage: undefined,
+    };
+  }
   // wan2.7-i2v 响应格式
   if (isWan27I2vResponse(response)) {
     const rawStatus = response?.output?.task_status;
