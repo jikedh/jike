@@ -388,8 +388,8 @@ export function createXimuNanoBananaGeneration(data: XimuNanoBananaRequest) {
 export function getXimuImageResult(id: string) {
   return ximuRequest<XimuTaskResultResponse>({
     url: "/api/draw/result",
-    method: "post",
-    data: { id },
+    method: "get",
+    params: { id },
     timeout: 900000,
   });
 }
