@@ -27,6 +27,13 @@ export type StorageResult<T = unknown> = {
   error?: string;
 } & T;
 
+export type StoryboardAssetsPackageResult = StorageResult<{
+  assets?: unknown;
+  path?: string;
+  canceled?: boolean;
+  copiedMediaCount?: number;
+}>;
+
 export type StorageApi = {
   selectDirectory: () => Promise<string | null>;
   ensureProject: (
@@ -126,6 +133,15 @@ export type StorageApi = {
   ) => Promise<
     StorageResult<{ path?: string; projectName?: string; canceled?: boolean }>
   >;
+  exportStoryboardAssets: (
+    basePath: string,
+    projectId: string,
+    assets: unknown,
+  ) => Promise<StoryboardAssetsPackageResult>;
+  importStoryboardAssetsPackage: (
+    basePath: string,
+    projectId: string,
+  ) => Promise<StoryboardAssetsPackageResult>;
   getDefaultPath: () => Promise<string>;
 
   // Legacy aliases retained for compatibility while the renderer migrates.

@@ -1,5 +1,5 @@
 import type { XimuBaseImageRequest } from "../../common";
-import { normalizeXimuUrls } from "../../common";
+import { normalizeXimuImages } from "../../common";
 
 export type XimuNanoBananaModel = "nano-banana-2" | "nano-banana-pro";
 
@@ -35,7 +35,8 @@ export interface BuildXimuNanoBananaRequestOptions {
   aspectRatio?: XimuNanoBananaAspectRatio;
   imageSize?: XimuImageSize;
   urls?: readonly string[];
-  shutProgress?: boolean;
+  images?: readonly string[];
+  replyType?: XimuNanoBananaRequest["replyType"];
 }
 
 export const XIMU_NANO_BANANA_PRO_ASPECT_RATIOS = [
@@ -104,7 +105,8 @@ export function buildXimuNanoBananaRequest({
   aspectRatio = "auto",
   imageSize = "1K",
   urls,
-  shutProgress = false,
+  images,
+  replyType = "async",
 }: BuildXimuNanoBananaRequestOptions): XimuNanoBananaRequest {
   return {
     model,
@@ -112,7 +114,7 @@ export function buildXimuNanoBananaRequest({
     prompt: prompt || "",
     aspectRatio,
     imageSize,
-    urls: normalizeXimuUrls(urls),
-    shutProgress,
+    images: normalizeXimuImages(images || urls),
+    replyType,
   };
 }

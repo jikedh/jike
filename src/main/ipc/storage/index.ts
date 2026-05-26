@@ -11,7 +11,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "fs";
-import { basename, dirname, join } from "path";
+import { basename, dirname, extname, join } from "path";
 
 const CANVAS_FILE = "canvas.json";
 const PROJECT_META_FILE = "project.json";
@@ -230,6 +230,136 @@ const copyDirectoryRecursive = (srcDir: string, destDir: string) => {
       copyFileSync(srcPath, destPath);
     }
   }
+};
+
+const getUniqueDirectoryName = (basePath: string, preferredName: string) => {
+  const normalizedName = preferredName.trim() || "export";
+  if (!existsSync(join(basePath, normalizedName))) {
+    return normalizedName;
+  }
+
+  let counter = 1;
+  let candidate = `${normalizedName}-${counter}`;
+  while (existsSync(join(basePath, candidate))) {
+    counter += 1;
+    candidate = `${normalizedName}-${counter}`;
+  }
+  return candidate;
+};
+
+const STORYBOARD_ASSETS_PACKAGE_FILE = "story-assets.json";
+const STORYBOARD_ASSETS_PACKAGE_VERSION = 1;
+
+const sanitizeFileSegment = (value: string, fallback: string) => {
+  const cleaned = value
+    .trim()
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
+    .replace(/\s+/g, " ")
+    .slice(0, 80);
+  return cleaned || fallback;
+};
+
+const normalizeSafeRelativePath = (relativePath: string) => {
+  const normalized = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length === 0 || parts.includes("..")) return null;
+  return normalized;
+};
+
+const copyStoryboardAssetMediaForExport = (
+  basePath: string,
+  exportDir: string,
+  localPath: unknown,
+  mediaPathMap: Map<string, string>,
+) => {
+  if (typeof localPath !== "string") return localPath;
+
+  const normalized = normalizeSafeRelativePath(localPath);
+  if (!normalized) return localPath;
+
+  const cached = mediaPathMap.get(normalized);
+  if (cached) return cached;
+
+  const sourcePath = join(basePath, normalized);
+  if (!existsSync(sourcePath) || !statSync(sourcePath).isFile()) {
+    return localPath;
+  }
+
+  const extension = extname(normalized) || ".bin";
+  const fileName = `${mediaPathMap.size + 1}-${sanitizeFileSegment(
+    basename(normalized, extension),
+    "asset",
+  )}${extension}`;
+  const packagePath = normalizeAssetRelativePath("media", fileName);
+  const destPath = join(exportDir, packagePath);
+  mkdirSync(dirname(destPath), { recursive: true });
+  copyFileSync(sourcePath, destPath);
+  mediaPathMap.set(normalized, packagePath);
+  return packagePath;
+};
+
+const copyStoryboardAssetMediaForImport = (
+  basePath: string,
+  packageDir: string,
+  projectId: string,
+  importId: string,
+  localPath: unknown,
+  mediaPathMap: Map<string, string>,
+) => {
+  if (typeof localPath !== "string") return localPath;
+
+  const normalized = normalizeSafeRelativePath(localPath);
+  if (!normalized) return localPath;
+
+  const cached = mediaPathMap.get(normalized);
+  if (cached) return cached;
+
+  const sourcePath = join(packageDir, normalized);
+  if (!existsSync(sourcePath) || !statSync(sourcePath).isFile()) {
+    return localPath;
+  }
+
+  const extension = extname(normalized) || ".bin";
+  const fileName = `${mediaPathMap.size + 1}-${sanitizeFileSegment(
+    basename(normalized, extension),
+    "asset",
+  )}${extension}`;
+  const targetPath = normalizeAssetRelativePath(
+    "storyboard",
+    "projects",
+    projectId,
+    "assets",
+    "imported",
+    importId,
+    fileName,
+  );
+  const destPath = join(basePath, targetPath);
+  mkdirSync(dirname(destPath), { recursive: true });
+  copyFileSync(sourcePath, destPath);
+  mediaPathMap.set(normalized, targetPath);
+  return targetPath;
+};
+
+const rewriteStoryboardAssetLocalPaths = (
+  value: any,
+  rewrite: (localPath: unknown) => unknown,
+): any => {
+  if (Array.isArray(value)) {
+    return value.map((item) => rewriteStoryboardAssetLocalPaths(item, rewrite));
+  }
+
+  if (value && typeof value === "object") {
+    const next: Record<string, any> = {};
+    for (const [key, item] of Object.entries(value)) {
+      next[key] =
+        key === "localPath"
+          ? rewrite(item)
+          : rewriteStoryboardAssetLocalPaths(item, rewrite);
+    }
+    return next;
+  }
+
+  return value;
 };
 
 const getUniqueProjectName = (basePath: string, preferredName: string) => {
@@ -1137,6 +1267,122 @@ export function registerStorageHandlers(): void {
       return { success: false, error: error.message };
     }
   });
+
+  ipcMain.handle(
+    "storage:exportStoryboardAssets",
+    async (_, basePath: string, projectId: string, assets: any) => {
+      try {
+        if (!basePath || !projectId || !assets) {
+          return { success: false, error: "Missing basePath, projectId or assets" };
+        }
+
+        const result = await dialog.showOpenDialog({
+          properties: ["openDirectory", "createDirectory"],
+          title: "选择资产详情导出位置",
+        });
+
+        if (result.canceled || result.filePaths.length === 0) {
+          return { success: false, canceled: true };
+        }
+
+        const exportBasePath = result.filePaths[0];
+        const defaultName = `story-assets-${new Date()
+          .toISOString()
+          .slice(0, 10)}`;
+        const exportDir = join(
+          exportBasePath,
+          getUniqueDirectoryName(exportBasePath, defaultName),
+        );
+        mkdirSync(exportDir, { recursive: true });
+
+        const mediaPathMap = new Map<string, string>();
+        const packagedAssets = rewriteStoryboardAssetLocalPaths(
+          assets,
+          (localPath) =>
+            copyStoryboardAssetMediaForExport(
+              basePath,
+              exportDir,
+              localPath,
+              mediaPathMap,
+            ),
+        );
+
+        safeWriteJson(join(exportDir, STORYBOARD_ASSETS_PACKAGE_FILE), {
+          version: STORYBOARD_ASSETS_PACKAGE_VERSION,
+          type: "jike-storyboard-assets",
+          exportedAt: Date.now(),
+          assets: packagedAssets,
+        });
+
+        return {
+          success: true,
+          path: exportDir,
+          copiedMediaCount: mediaPathMap.size,
+        };
+      } catch (error: any) {
+        return { success: false, error: error.message };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "storage:importStoryboardAssetsPackage",
+    async (_, basePath: string, projectId: string) => {
+      try {
+        if (!basePath || !projectId) {
+          return { success: false, error: "Missing basePath or projectId" };
+        }
+
+        const result = await dialog.showOpenDialog({
+          properties: ["openDirectory"],
+          title: "选择要导入的资产详情包",
+        });
+
+        if (result.canceled || result.filePaths.length === 0) {
+          return { success: false, canceled: true };
+        }
+
+        const packageDir = result.filePaths[0];
+        const packagePath = join(packageDir, STORYBOARD_ASSETS_PACKAGE_FILE);
+        const packageData = safeReadJson(packagePath);
+
+        if (
+          !packageData ||
+          packageData.type !== "jike-storyboard-assets" ||
+          !packageData.assets
+        ) {
+          return {
+            success: false,
+            error: "所选文件夹不是有效的资产详情包",
+          };
+        }
+
+        const importId = `import_${Date.now()}`;
+        const mediaPathMap = new Map<string, string>();
+        const importedAssets = rewriteStoryboardAssetLocalPaths(
+          packageData.assets,
+          (localPath) =>
+            copyStoryboardAssetMediaForImport(
+              basePath,
+              packageDir,
+              projectId,
+              importId,
+              localPath,
+              mediaPathMap,
+            ),
+        );
+
+        return {
+          success: true,
+          assets: importedAssets,
+          path: packageDir,
+          copiedMediaCount: mediaPathMap.size,
+        };
+      } catch (error: any) {
+        return { success: false, error: error.message };
+      }
+    },
+  );
 
   ipcMain.handle(
     "storage:mediaExists",

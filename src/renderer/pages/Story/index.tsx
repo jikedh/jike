@@ -1105,6 +1105,100 @@ const mergeIdentifiedAssets = (
   return nextAssets;
 };
 
+const cloneImportedStoryboardAssets = (
+  currentAssets: StoryboardAssets,
+  importedAssets: Partial<StoryboardAssets>,
+): { assets: StoryboardAssets; importedCount: number } => {
+  const nextAssets: StoryboardAssets = {
+    role: [...currentAssets.role],
+    scene: [...currentAssets.scene],
+    prop: [...currentAssets.prop],
+    audio: [...currentAssets.audio],
+  };
+  const nameKeysByKind = new Map<StoryboardAssetKind, Set<string>>();
+  const idMap = new Map<string, string>();
+  const importedAssetIds = new Set<string>();
+  let importedCount = 0;
+
+  const createUniqueName = (kind: StoryboardAssetKind, name: string) => {
+    const baseName = name.trim() || "未命名资产";
+    const existingKeys =
+      nameKeysByKind.get(kind) ||
+      new Set(
+        nextAssets[kind]
+          .map((item) => item.name.trim().toLowerCase())
+          .filter(Boolean),
+      );
+    nameKeysByKind.set(kind, existingKeys);
+
+    let nextName = baseName;
+    let index = 1;
+    while (existingKeys.has(nextName.trim().toLowerCase())) {
+      nextName =
+        index === 1 ? `${baseName}（导入）` : `${baseName}（导入 ${index}）`;
+      index += 1;
+    }
+    existingKeys.add(nextName.trim().toLowerCase());
+    return nextName;
+  };
+
+  for (const kind of ["audio", "role", "scene", "prop"] as const) {
+    for (const asset of importedAssets[kind] || []) {
+      const nextId = createId(`asset_${kind}`);
+      idMap.set(asset.id, nextId);
+      importedAssetIds.add(nextId);
+      const mediaIdMap = new Map<string, string>();
+      const mediaItems = (asset.mediaItems || []).map((item) => {
+        const nextMediaId = createAssetMediaId();
+        mediaIdMap.set(item.id, nextMediaId);
+        return {
+          ...item,
+          id: nextMediaId,
+          createdAt: Date.now(),
+        };
+      });
+      const primaryMediaId = asset.primaryMediaId
+        ? mediaIdMap.get(asset.primaryMediaId)
+        : undefined;
+      const primaryMediaItem = primaryMediaId
+        ? mediaItems.find((item) => item.id === primaryMediaId)
+        : undefined;
+
+      nextAssets[kind].push({
+        ...asset,
+        id: nextId,
+        kind,
+        name: createUniqueName(kind, asset.name),
+        localPath: primaryMediaItem?.localPath || asset.localPath,
+        mediaUrl: primaryMediaItem?.mediaUrl || asset.mediaUrl,
+        assetId: primaryMediaItem?.assetId || asset.assetId,
+        mediaItems,
+        primaryMediaId,
+        audioAssetIds: asset.audioAssetIds,
+      });
+      importedCount += 1;
+    }
+  }
+
+  for (const kind of ["role", "scene", "prop"] as const) {
+    nextAssets[kind] = nextAssets[kind].map((asset) => {
+      if (!importedAssetIds.has(asset.id) || !asset.audioAssetIds?.length) {
+        return asset;
+      }
+      return {
+        ...asset,
+        audioAssetIds: Array.from(
+          new Set(
+            asset.audioAssetIds.map((id) => idMap.get(id) || id).filter(Boolean),
+          ),
+        ),
+      };
+    });
+  }
+
+  return { assets: nextAssets, importedCount };
+};
+
 const normalizeAssetNameKey = (name: string) => name.trim().toLowerCase();
 
 const bindShotAssetIdsByName = (
@@ -4422,6 +4516,8 @@ const StoryAgentPage = ({
   const [loading, setLoading] = useState(true);
   const [splitting, setSplitting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [exportingStoryAssets, setExportingStoryAssets] = useState(false);
+  const [importingStoryAssets, setImportingStoryAssets] = useState(false);
   const [exportingJianying, setExportingJianying] = useState(false);
   const [bulkGeneratingKind, setBulkGeneratingKind] =
     useState<StoryboardAssetKind | null>(null);
@@ -4520,6 +4616,87 @@ const StoryAgentPage = ({
     },
     [projectId, snippetId],
   );
+
+  const exportStoryAssets = useCallback(async () => {
+    if (!window.storage?.exportStoryboardAssets) {
+      toast.error("当前版本不支持资产详情导出");
+      return;
+    }
+    if (!settings.storagePath) {
+      toast.error("请先设置项目存储路径");
+      return;
+    }
+
+    setExportingStoryAssets(true);
+    try {
+      const result = await window.storage.exportStoryboardAssets(
+        settings.storagePath,
+        projectId,
+        agentRef.current.assets,
+      );
+      if (result.canceled) return;
+      if (!result.success) {
+        toast.error(result.error || "导出资产详情失败");
+        return;
+      }
+      toast.success(
+        result.copiedMediaCount
+          ? `已导出资产详情和 ${result.copiedMediaCount} 个媒体文件`
+          : "已导出资产详情",
+      );
+    } catch (error) {
+      console.error("[Story] export assets failed", error);
+      toast.error(error instanceof Error ? error.message : "导出资产详情失败");
+    } finally {
+      setExportingStoryAssets(false);
+    }
+  }, [projectId, settings.storagePath]);
+
+  const importStoryAssets = useCallback(async () => {
+    if (!window.storage?.importStoryboardAssetsPackage) {
+      toast.error("当前版本不支持资产详情导入");
+      return;
+    }
+    if (!settings.storagePath) {
+      toast.error("请先设置项目存储路径");
+      return;
+    }
+
+    setImportingStoryAssets(true);
+    try {
+      const result = await window.storage.importStoryboardAssetsPackage(
+        settings.storagePath,
+        projectId,
+      );
+      if (result.canceled) return;
+      if (!result.success || !result.assets) {
+        toast.error(result.error || "导入资产详情失败");
+        return;
+      }
+
+      const currentAgent = agentRef.current;
+      const { assets, importedCount } = cloneImportedStoryboardAssets(
+        currentAgent.assets,
+        result.assets as Partial<StoryboardAssets>,
+      );
+      if (importedCount === 0) {
+        toast.error("导入包中没有可导入的资产");
+        return;
+      }
+
+      await saveAgent({
+        ...currentAgent,
+        assets,
+      });
+      toast.success(`已导入 ${importedCount} 个资产，现有资产未覆盖`);
+    } catch (error) {
+      console.error("[Story] import assets failed", error);
+      toast.error(error instanceof Error ? error.message : "导入资产详情失败");
+    } finally {
+      setImportingStoryAssets(false);
+    }
+  }, [projectId, saveAgent, settings.storagePath]);
+
   const skipAutoSaveRef = useRef(true);
   const saveAgentDebouncedRef = useRef<any>(null);
   useEffect(() => {
@@ -6824,6 +7001,20 @@ const StoryAgentPage = ({
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => void importStoryAssets()}
+                    loading={importingStoryAssets}
+                  >
+                    <Upload size={15} />
+                    导入资产
+                  </Button>
+                  <Button
+                    onClick={() => void exportStoryAssets()}
+                    loading={exportingStoryAssets}
+                  >
+                    <Download size={15} />
+                    导出资产
+                  </Button>
                   <Button onClick={() => setEditingSystemPrompt("split")}>
                     <Bot size={15} />
                     系统提示词

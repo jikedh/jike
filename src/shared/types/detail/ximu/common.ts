@@ -9,8 +9,8 @@ export type XimuTaskStatus =
 export interface XimuBaseImageRequest {
   cardCode: string;
   prompt: string;
-  urls: string[];
-  shutProgress: boolean;
+  images: string[];
+  replyType: "json" | "stream" | "async";
 }
 
 export interface XimuTaskSubmitPayload {
@@ -84,6 +84,8 @@ export const XIMU_TASK_FAILED_STATUSES = ["failed"] as const;
 
 export const normalizeXimuUrls = (urls?: readonly string[]) =>
   Array.from(new Set((urls ?? []).map((url) => url.trim()).filter(Boolean)));
+
+export const normalizeXimuImages = normalizeXimuUrls;
 
 export const extractXimuTaskId = (response: XimuTaskSubmitResponse) => {
   const payload = response?.data ?? response;

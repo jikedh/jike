@@ -2,13 +2,11 @@ export type {
   BuildXimuGptImageRequestOptions,
   XimuGptImageAspectRatio,
   XimuGptImageModel,
-  XimuGptImageQuality,
   XimuGptImageRequest,
 } from "./gpt-image/gpt-image-2";
 export {
   buildXimuGptImageRequest,
   resolveXimuGptAspectRatio,
-  XIMU_GPT_IMAGE_ASPECT_RATIOS,
 } from "./gpt-image/gpt-image-2";
 
 export type {

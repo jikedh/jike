@@ -44,6 +44,7 @@ export const getAssetSystemPromptForDisplay = (systemPrompt: string) => {
 };
 export const SPLIT_SYSTEM_PROMPT_OUTPUT_REQUIREMENT = [
   "每条 shturl.cc/T 只能引用用户提供的可用资产中的名称，不能新增未列入可用资产的角色、场景、道具名称。禁止输出音效资产。",
+  "剧本分镜拆分规则：若单个分镜内容过长，可在剧本中添加空行，空行视为下一个分镜的开始，按空行分割为多个独立分镜。",
   '只输出 JSON 对象，不要 Markdown、表格、标题、解释或总结。结构必须是：{ "shots": [{ "script": "该镜头对应的原文剧情/台词摘要", "prompt": "分镜1：0–2s 景别：...，视角：...，运镜：...。画面自然语言描述：...", "assets": { "role": ["本镜头涉及的角色名"], "scene": ["本镜头涉及的场景名"], "prop": ["本镜头涉及的道具名"] } }] }。',
 ].join("\n");
 export const DEFAULT_SPLIT_SYSTEM_PROMPT =
