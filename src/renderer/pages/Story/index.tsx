@@ -202,6 +202,47 @@ const stepOrder: Record<StoryboardAgentStep, number> = {
 
 const STORY_SHOT_DEFAULT_VIDEO_MODEL = "seedance-2.0-pro";
 const STORY_SHOT_FIXED_DURATION = 15;
+const STORY_ASSET_GENERATION_EVENT = "story-asset-generation-complete";
+
+type StoryAssetGenerationEventDetail = {
+  projectId: string;
+  snippetId: string;
+  kind: StoryboardAssetKind;
+  id: string;
+  asset: StoryboardAssetItem;
+};
+
+const storyAssetGenerationResultCache = new Map<
+  string,
+  StoryAssetGenerationEventDetail
+>();
+
+const getStoryAssetGenerationCacheKey = (
+  projectId: string,
+  snippetId: string,
+  kind: StoryboardAssetKind,
+  id: string,
+) => `${projectId}:${snippetId}:${kind}:${id}`;
+
+const publishStoryAssetGenerationResult = (
+  detail: StoryAssetGenerationEventDetail,
+) => {
+  storyAssetGenerationResultCache.set(
+    getStoryAssetGenerationCacheKey(
+      detail.projectId,
+      detail.snippetId,
+      detail.kind,
+      detail.id,
+    ),
+    detail,
+  );
+  window.dispatchEvent(
+    new CustomEvent<StoryAssetGenerationEventDetail>(
+      STORY_ASSET_GENERATION_EVENT,
+      { detail },
+    ),
+  );
+};
 
 const shouldMigrateStoryShotVideoModel = (model: string | undefined) =>
   typeof model === "string" && model.startsWith("kling/");
@@ -1198,6 +1239,36 @@ const cloneImportedStoryboardAssets = (
 
   return { assets: nextAssets, importedCount };
 };
+
+const applyCompletedStoryAsset = (
+  agent: StoryboardAgentData,
+  kind: StoryboardAssetKind,
+  completedAsset: StoryboardAssetItem,
+): StoryboardAgentData => ({
+  ...agent,
+  assets: {
+    ...agent.assets,
+    [kind]: agent.assets[kind].map((item) =>
+      item.id === completedAsset.id
+        ? {
+            ...item,
+            source: completedAsset.source,
+            status: completedAsset.status,
+            mediaType: completedAsset.mediaType,
+            mediaUrl: completedAsset.mediaUrl,
+            localPath: completedAsset.localPath,
+            assetId: completedAsset.assetId,
+            mediaItems: completedAsset.mediaItems,
+            primaryMediaId: completedAsset.primaryMediaId,
+            imageModel: completedAsset.imageModel,
+            imagePlatform: completedAsset.imagePlatform,
+            aspectRatio: completedAsset.aspectRatio,
+            resolution: completedAsset.resolution,
+          }
+        : item,
+    ),
+  },
+});
 
 const normalizeAssetNameKey = (name: string) => name.trim().toLowerCase();
 
@@ -4769,6 +4840,47 @@ const StoryAgentPage = ({
     };
   }, [projectId, snippetId]);
 
+  useEffect(() => {
+    const applyCompletedAsset = (detail: StoryAssetGenerationEventDetail) => {
+      if (detail.projectId !== projectId || detail.snippetId !== snippetId) {
+        return;
+      }
+
+      setAgent((current) => {
+        const exists = current.assets[detail.kind]?.some(
+          (item) => item.id === detail.id,
+        );
+        if (!exists) return current;
+
+        const next = applyCompletedStoryAsset(
+          current,
+          detail.kind,
+          detail.asset,
+        );
+        agentRef.current = next;
+        return next;
+      });
+    };
+
+    const handleCompletedAsset = (event: Event) => {
+      applyCompletedAsset(
+        (event as CustomEvent<StoryAssetGenerationEventDetail>).detail,
+      );
+    };
+
+    window.addEventListener(STORY_ASSET_GENERATION_EVENT, handleCompletedAsset);
+    for (const detail of storyAssetGenerationResultCache.values()) {
+      applyCompletedAsset(detail);
+    }
+
+    return () => {
+      window.removeEventListener(
+        STORY_ASSET_GENERATION_EVENT,
+        handleCompletedAsset,
+      );
+    };
+  }, [projectId, snippetId]);
+
   const patchAgent = useCallback((patch: Partial<StoryboardAgentData>) => {
     setAgent((current) => {
       const next = { ...current, ...patch };
@@ -5424,6 +5536,11 @@ const StoryAgentPage = ({
 
     patchAssetState(kind, id, { source: "ai", status: "generating" });
     try {
+      await saveAssetPatch(kind, id, { source: "ai", status: "generating" });
+    } catch (saveError) {
+      console.warn("[Story] save generating asset status failed", saveError);
+    }
+    try {
       const model =
         asset?.imageModel ||
         settings.defaultImageModel ||
@@ -5507,26 +5624,39 @@ const StoryAgentPage = ({
 
       const latestAgent = agentRef.current;
       const latestList = latestAgent.assets[kind] || [];
+      let completedAsset: StoryboardAssetItem | null = null;
+      const nextList = latestList.map((item) => {
+        if (item.id !== id) return item;
+        completedAsset = appendAssetMediaItem(
+          {
+            ...item,
+            source: "ai",
+            status: "ready",
+            aspectRatio: params.aspectRatio,
+            resolution: params.resolution,
+          },
+          mediaItem,
+        );
+        return completedAsset;
+      });
+
       await saveAgent({
         ...latestAgent,
         assets: {
           ...latestAgent.assets,
-          [kind]: latestList.map((item) =>
-            item.id === id
-              ? appendAssetMediaItem(
-                  {
-                    ...item,
-                    source: "ai",
-                    status: "ready",
-                    aspectRatio: params.aspectRatio,
-                    resolution: params.resolution,
-                  },
-                  mediaItem,
-                )
-              : item,
-          ),
+          [kind]: nextList,
         },
       });
+
+      if (completedAsset) {
+        publishStoryAssetGenerationResult({
+          projectId,
+          snippetId,
+          kind,
+          id,
+          asset: completedAsset,
+        });
+      }
 
       if (showToast) toast.success("AI 资产生成结果已回填");
       return true;
@@ -5537,6 +5667,18 @@ const StoryAgentPage = ({
       patchAssetState(kind, id, { source: "ai", status: "failed" });
       try {
         await saveAssetPatch(kind, id, { source: "ai", status: "failed" });
+        const failedAsset = agentRef.current.assets[kind]?.find(
+          (item) => item.id === id,
+        );
+        if (failedAsset) {
+          publishStoryAssetGenerationResult({
+            projectId,
+            snippetId,
+            kind,
+            id,
+            asset: failedAsset,
+          });
+        }
       } catch (saveError) {
         console.warn("[Story] save failed asset status failed", saveError);
       }
@@ -5555,11 +5697,50 @@ const StoryAgentPage = ({
     await generateAssetWithAiInternal(kind, id);
   };
 
-  const generateAllAssets = async (kind: StoryboardAssetKind) => {
-    const items = agentRef.current.assets[kind];
+  const generateAllAssets = async (
+    kind: StoryboardAssetKind,
+    imageModelOptionId?: string,
+  ) => {
+    let items = agentRef.current.assets[kind];
     if (items.length === 0) {
       toast.error(`暂无${assetKinds.find((item) => item.id === kind)?.label || "资产"}资产`);
       return;
+    }
+
+    if (kind !== "audio" && imageModelOptionId) {
+      const selected = visibleImageModels.find(
+        (option) => String(option.id) === imageModelOptionId,
+      );
+      if (!selected) {
+        toast.error("请选择有效的生图模型");
+        return;
+      }
+
+      const nextAgent = agentRef.current;
+      const nextAssets = {
+        ...nextAgent.assets,
+        [kind]: nextAgent.assets[kind].map((asset) => {
+          const nextParams = normalizeStoryImageParams(selected.model, {
+            aspectRatio: asset.aspectRatio || settings.defaultImageSize,
+            resolution: asset.resolution || settings.defaultImageResolution,
+          });
+          return {
+            ...asset,
+            imageModel: selected.model,
+            imagePlatform: selected.platform,
+            aspectRatio: nextParams.aspectRatio,
+            resolution: nextParams.resolution,
+          };
+        }),
+      };
+      const updatedAgent = {
+        ...nextAgent,
+        assets: nextAssets,
+      };
+      agentRef.current = updatedAgent;
+      setAgent(updatedAgent);
+      void saveAgentSilently(updatedAgent);
+      items = updatedAgent.assets[kind];
     }
 
     setBulkGenerateConfirmKind(null);
@@ -7307,13 +7488,18 @@ const StoryAgentPage = ({
             <AssetGenerateConfirmDialog
               kind={bulkGenerateConfirmKind}
               count={agent.assets[bulkGenerateConfirmKind].length}
+              assets={agent.assets[bulkGenerateConfirmKind]}
+              imageModelOptions={visibleImageModels}
+              defaultImageModel={settings.defaultImageModel}
               running={bulkGeneratingKind === bulkGenerateConfirmKind}
               onCancel={() => {
                 if (bulkGeneratingKind !== bulkGenerateConfirmKind) {
                   setBulkGenerateConfirmKind(null);
                 }
               }}
-              onConfirm={() => void generateAllAssets(bulkGenerateConfirmKind)}
+              onConfirm={(imageModelOptionId) =>
+                void generateAllAssets(bulkGenerateConfirmKind, imageModelOptionId)
+              }
             />
           ) : null}
 
@@ -7830,60 +8016,128 @@ const ShotPromptAffixDialog = ({
 const AssetGenerateConfirmDialog = ({
   kind,
   count,
+  assets,
+  imageModelOptions,
+  defaultImageModel,
   running,
   onCancel,
   onConfirm,
 }: {
   kind: StoryboardAssetKind;
   count: number;
+  assets: StoryboardAssetItem[];
+  imageModelOptions: StoryImageModelOption[];
+  defaultImageModel?: string;
   running: boolean;
   onCancel: () => void;
-  onConfirm: () => void;
-}) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-    <button
-      type="button"
-      aria-label="取消统一生成"
-      className="absolute inset-0 cursor-default"
-      onClick={() => {
-        if (!running) onCancel();
-      }}
-    />
-    <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-[#121214] shadow-2xl">
-      <div className="flex items-center justify-between border-b border-white/5 p-5">
-        <h2 className="text-lg font-semibold text-white/90">
-          统一生成{assetKinds.find((item) => item.id === kind)?.label || "资产"}资产
-        </h2>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={running}
-          className="cursor-pointer text-white/50 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-      <div className="p-5">
-        <p className="text-sm leading-6 text-white/60">
-          确认后会依次为当前{assetKinds.find((item) => item.id === kind)?.label || "资产"}列的 {count} 个资产调用 AI 生图，并把生成结果追加为候选图。
-        </p>
-      </div>
-      <div className="flex items-center justify-end gap-3 border-t border-white/5 bg-black/20 p-5">
-        <Button onClick={onCancel} disabled={running}>
-          取消
-        </Button>
-        <Button
-          variant="blue"
-          onClick={onConfirm}
-          loading={running}
-          disabled={count === 0}
-        >
-          确认生成
-        </Button>
+  onConfirm: (imageModelOptionId?: string) => void;
+}) => {
+  const [selectedImageModelId, setSelectedImageModelId] = useState(() =>
+    kind === "audio"
+      ? ""
+      : getStoryImageModelOptionId(
+          assets[0]?.imageModel,
+          assets[0]?.imagePlatform,
+          defaultImageModel,
+          imageModelOptions,
+        ),
+  );
+  const kindLabel = assetKinds.find((item) => item.id === kind)?.label || "资产";
+  const selectedModelName = imageModelOptions.find(
+    (option) => String(option.id) === selectedImageModelId,
+  )?.name;
+
+  useEffect(() => {
+    if (kind === "audio") return;
+    setSelectedImageModelId(
+      getStoryImageModelOptionId(
+        assets[0]?.imageModel,
+        assets[0]?.imagePlatform,
+        defaultImageModel,
+        imageModelOptions,
+      ),
+    );
+  }, [assets, defaultImageModel, imageModelOptions, kind]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <button
+        type="button"
+        aria-label="取消统一生成"
+        className="absolute inset-0 cursor-default"
+        onClick={() => {
+          if (!running) onCancel();
+        }}
+      />
+      <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-[#121214] shadow-2xl">
+        <div className="flex items-center justify-between border-b border-white/5 p-5">
+          <h2 className="text-lg font-semibold text-white/90">
+            统一生成{kindLabel}资产
+          </h2>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={running}
+            className="cursor-pointer text-white/50 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="space-y-4 p-5">
+          <p className="text-sm leading-6 text-white/60">
+            确认后会把当前{kindLabel}列的生图模型统一改为所选模型，并为 {count} 个资产调用 AI 生图，生成结果会追加为候选图。
+          </p>
+          {kind !== "audio" ? (
+            <label className="block">
+              <span className="mb-2 block text-xs text-white/45">生图模型</span>
+              <Select
+                value={selectedImageModelId}
+                onValueChange={setSelectedImageModelId}
+                disabled={running}
+              >
+                <SelectTrigger
+                  size="sm"
+                  className={cn(
+                    PROMPT_PANEL_STYLES.modelSelect,
+                    "h-9 min-w-0 px-3 text-xs",
+                    "[&_[data-slot=select-value]]:block [&_[data-slot=select-value]]:truncate",
+                  )}
+                  title={selectedModelName}
+                >
+                  <SelectValue placeholder="选择模型" />
+                </SelectTrigger>
+                <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
+                  {imageModelOptions.map((option) => (
+                    <SelectItem
+                      key={option.id}
+                      value={String(option.id)}
+                      className={PROMPT_PANEL_STYLES.modelSelectItem}
+                    >
+                      {option.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+          ) : null}
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-white/5 bg-black/20 p-5">
+          <Button onClick={onCancel} disabled={running}>
+            取消
+          </Button>
+          <Button
+            variant="blue"
+            onClick={() => onConfirm(selectedImageModelId)}
+            loading={running}
+            disabled={count === 0 || (kind !== "audio" && !selectedImageModelId)}
+          >
+            确认生成
+          </Button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const AssetGenerationErrorDialog = ({
   message,

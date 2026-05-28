@@ -25,6 +25,7 @@ dist-ssr
 dist
 build
 out
+.codegraph
 *.log*
 release
 resources/python
