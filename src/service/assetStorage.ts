@@ -317,7 +317,7 @@ export const getAssetDisplayUrl = (asset: AssetRecord, basePath: string) =>
 export const getAssetOriginalDisplayUrl = (
   asset: AssetRecord,
   basePath: string,
-) => getAssetFileUrl(basePath, asset.fileUrl || asset.originalFile);
+) => getAssetFileUrl(basePath, asset.originalFile || asset.fileUrl);
 
 export const ensureAssetOssUrl = async (
   basePath: string,

@@ -82,6 +82,9 @@ const getDisplayUrl = (item: MediaItem) => {
   return localPath || "";
 };
 
+const getCoverUrl = (item: MediaItem) =>
+  item.thumbnailUrl || item.posterUrl || item.coverUrl || "";
+
 const getDedupKey = (item: MediaItem) => {
   const localPath = item.localPath || item.relativePath;
   if (localPath) return `local:${normalizePath(localPath).toLowerCase()}`;
@@ -157,6 +160,9 @@ const buildMediaAssets = (
 
       const name = getFileName(item, nodeName || mediaType);
       const now = new Date().toISOString();
+      const coverUrl = mediaType === "video" ? getCoverUrl(item) : "";
+      const fileUrl =
+        mediaType === "video" ? sourcePath || displayUrl : displayUrl || sourcePath;
 
       assets.push({
         id: `${idPrefix}-${projectId || "unknown"}-${mediaType}-${assets.length}`,
@@ -164,8 +170,9 @@ const buildMediaAssets = (
         scope,
         category: mediaType,
         mediaType,
-        fileUrl: displayUrl || sourcePath,
-        originalFile: sourcePath || displayUrl,
+        fileUrl,
+        originalFile: sourcePath || fileUrl,
+        ...(coverUrl ? { coverUrl } : {}),
         metadataFile: "",
         projectId: projectId || undefined,
         source: {
