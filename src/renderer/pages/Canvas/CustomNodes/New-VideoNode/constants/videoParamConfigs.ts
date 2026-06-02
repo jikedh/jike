@@ -148,6 +148,7 @@ const duration5_10 = {
   options: [
     { label: "5s", value: 5 },
     { label: "10s", value: 10 },
+    { label: "15s", value: 15 },
   ],
 };
 

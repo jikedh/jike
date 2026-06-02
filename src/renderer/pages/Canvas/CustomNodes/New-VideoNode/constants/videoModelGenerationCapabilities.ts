@@ -210,7 +210,7 @@ export const VIDEO_MODEL_GENERATION_CAPABILITIES: Record<
           requireAnyReference: true,
         },
         params: {
-          duration: [5, 10],
+          duration: [5, 10, 15],
           ratio: ["16:9", "9:16", "1:1"],
           generateAudio: false,
         },

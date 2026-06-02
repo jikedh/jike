@@ -820,7 +820,7 @@ type KuaiziKlingOmniVideoRequest = {
   prompt: string;
   kling_mode: "std" | "pro";
   aspect_ratio: "16:9" | "9:16" | "1:1";
-  duration: 5 | 10;
+  duration: 5 | 10 | 15;
   generate_audio: false;
   images?: Array<{
     url: string;
@@ -849,7 +849,7 @@ const buildKuaiziKlingOmniRequest = (
     ["16:9", "9:16", "1:1"] as const,
     "16:9",
   );
-  const duration = pickDuration(request.params.duration, [5, 10] as const, 5);
+  const duration = pickDuration(request.params.duration, [5, 10, 15] as const, 5);
   const mode = isOneOf(request.params.quality, ["std", "pro"] as const, "std");
 
   const referenceImages: KuaiziKlingOmniVideoRequest["images"] = images
