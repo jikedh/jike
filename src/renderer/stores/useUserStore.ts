@@ -146,9 +146,6 @@ export const useUserStore = create<UserStoreType>((set, get) => ({
 
   canCreateProject: () => {
     const state = get();
-    if (state.loginStatus !== 1) {
-      return false;
-    }
-    return state.vipLevel >= 3;
+    return state.loginStatus === 1;
   },
 }));
