@@ -373,6 +373,7 @@ const kuaiziKlingOmniConfig = (): VideoParamConfig => ({
     options: [
       { label: "Std", value: "std" },
       { label: "Pro", value: "pro" },
+      { label: "4K", value: "4k" },
     ],
   },
   duration: duration5_10,
