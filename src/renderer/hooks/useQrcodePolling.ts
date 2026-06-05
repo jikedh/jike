@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { type LoginResponse } from "shared/types/jikeing";
 import { setJikeingToken, setJikeingUserId } from "shared/utils/utils";
-import { querySceneStatus } from "@/api/ai";
+import { querySceneStatus } from "@/api/jikeGo";
 
 // 轮询配置常量
 const POLLING_INTERVAL = 2000;

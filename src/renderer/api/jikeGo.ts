@@ -225,6 +225,20 @@ export function loginByUsername(data: {
   });
 }
 
+export function resetPassword(data: {
+  username: string;
+  password: string;
+  captcha_id: string;
+  captcha_answer: string;
+}): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/user/reset-password",
+    method: "post",
+    data,
+  });
+}
+
 export function getSceneQrcode(): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
