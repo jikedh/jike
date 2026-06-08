@@ -51,10 +51,13 @@ import {
   GEMINI_RESOLUTIONS,
   GEMINI_SIZES,
   GeminiParamsPanel,
+  GROK_IMAGE_RESOLUTIONS,
+  GROK_IMAGE_SIZES,
   NANO_BANANA_LOCAL_SIZES,
   NANO_BANANA_RESOLUTIONS,
 } from "./components/GeminiParamsPanel";
 import {
+  ADOBE_GPTIMAGE2_SIZES,
   GPTIMAGE2_SIZES,
   GptImage2ParamsPanel,
 } from "./components/GptImage2ParamsPanel";
@@ -127,6 +130,9 @@ const GEMINI_SIZE_VALUES = toOptionValueSet(GEMINI_SIZES);
 const GEMINI_RESOLUTION_VALUES = toOptionValueSet(GEMINI_RESOLUTIONS);
 const NANO_BANANA_RESOLUTION_VALUES = toOptionValueSet(NANO_BANANA_RESOLUTIONS);
 const GPTIMAGE2_SIZE_VALUES = toOptionValueSet(GPTIMAGE2_SIZES);
+const ADOBE_GPTIMAGE2_SIZE_VALUES = toOptionValueSet(ADOBE_GPTIMAGE2_SIZES);
+const GROK_IMAGE_SIZE_VALUES = toOptionValueSet(GROK_IMAGE_SIZES);
+const GROK_IMAGE_RESOLUTION_VALUES = toOptionValueSet(GROK_IMAGE_RESOLUTIONS);
 const GPTIMAGE2_RESOLUTION_VALUES = new Set(["1K", "2K", "4K"]);
 const XIMU_GPTIMAGE2_RESOLUTION_VALUES = new Set(["1K"]);
 const GPTIMAGE2_RESOLUTION_OPTIONS = [
@@ -342,6 +348,13 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const isXimuNanoBananaModel = isXimuNanoBananaGenerationModel(model);
   const isXimuImageModel = isXimuImageGenerationModel(model);
   const isGptImage2Model = model === "gpt-image-2";
+  const isAdobeGptImage2Model = model.startsWith("firefly-gpt-image-");
+  const isAdobeNanoBananaProModel = model.startsWith(
+    "firefly-nano-banana-pro-",
+  );
+  const isAdobeImageModel =
+    isAdobeGptImage2Model || isAdobeNanoBananaProModel;
+  const isGrokImageModel = model.startsWith("grok-") && model.includes("image");
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
   const isLocalGeminiDirectModel =
