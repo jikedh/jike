@@ -2,15 +2,12 @@ import {
   IconBolt,
   IconBook,
   IconDownload,
-  IconFolder,
-  IconPlayerPlay,
-  IconRestore,
-  IconRotateClockwise,
   IconExternalLink,
+  IconFolder,
+  IconRestore,
   IconUpload,
   IconX,
 } from "@tabler/icons-react";
-import { getXimuCardBalance } from "@/api/ai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   defaultPresets,
@@ -21,21 +18,16 @@ import {
 import { clearProjectList } from "service/projectStorage";
 import {
   CANVAS_CHAT_MODELS,
-  GROK_IMAGE_EDIT_MODEL,
-  GROK_IMAGE_LITE_MODEL,
-  GROK_IMAGE_MODEL,
-  GROK_IMAGE_PRO_MODEL,
   XIMU_MODEL_PURCHASE_URL,
 } from "shared/constants/ai-models";
 import {
   CANVAS_CHAT_PERSONAS,
   NO_CHAT_PERSONA_ID,
 } from "shared/constants/chat-personas";
-import type { Adobe2ApiState } from "shared/types/adobe2api";
-import type { Grok2ApiState } from "shared/types/grok2api";
 import { cn } from "shared/utils/utils";
+import { getXimuCardBalance } from "@/api/ai";
+import { ModelSelector } from "@/components/ModelSelector";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -44,6 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   Modal,
   ModalContent,
@@ -57,7 +50,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ModelSelector } from "@/components/ModelSelector";
 import { Switch } from "@/components/ui/switch";
 import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
@@ -118,39 +110,6 @@ const normalizeXimuBalanceValue = (value: unknown): string | null => {
   return null;
 };
 
-const getGrok2ApiBridge = () => {
-  if (window.grok2api) {
-    return window.grok2api;
-  }
-
-  const ipcRenderer = (window as any).electron?.ipcRenderer;
-  const invoke =
-    typeof ipcRenderer?.invoke === "function"
-      ? ipcRenderer.invoke.bind(ipcRenderer)
-      : null;
-  if (!invoke) {
-    return null;
-  }
-
-  return {
-    getState: () => invoke("grok2api:getState"),
-    start: () => invoke("grok2api:start"),
-    stop: () => invoke("grok2api:stop"),
-    restart: () => invoke("grok2api:restart"),
-    openAdminWindow: () => invoke("grok2api:openAdminWindow"),
-    updateSettings: (patch: any) => invoke("grok2api:updateSettings", patch),
-    getLogs: (limit?: number) => invoke("grok2api:getLogs", limit),
-  };
-};
-
-const getGrok2ApiBridgeOrThrow = () => {
-  const bridge = getGrok2ApiBridge();
-  if (!bridge) {
-    throw new Error("Grok2API 控制接口未加载，请重启应用后再试");
-  }
-  return bridge;
-};
-
 export const SettingsModal = ({
   open,
   onClose,
@@ -173,9 +132,7 @@ export const SettingsModal = ({
     assetStoragePath,
     jianyingDraftsPath,
     ximuCardCode,
-    adobeChannelModelsEnabled,
     ximuChannelModelsEnabled,
-    grokChannelModelsEnabled,
     setDefaultModel,
     setDefaultPersonaId,
     setAutoSaveEnabled,
@@ -188,9 +145,7 @@ export const SettingsModal = ({
     setAssetStoragePath,
     setJianyingDraftsPath,
     setXimuCardCode,
-    setAdobeChannelModelsEnabled,
     setXimuChannelModelsEnabled,
-    setGrokChannelModelsEnabled,
     resetToDefault,
   } = useChatSettingsStore();
   const { success, error } = useMessage();
@@ -218,19 +173,6 @@ export const SettingsModal = ({
     content: "",
     type: "general" as "general" | "image" | "video",
   });
-  const [adobeState, setAdobeState] = useState<Adobe2ApiState | null>(null);
-  const [adobeBusyAction, setAdobeBusyAction] = useState<
-    "start" | "stop" | "restart" | null
-  >(null);
-  const [adobeError, setAdobeError] = useState<string | null>(null);
-  const [grokState, setGrokState] = useState<Grok2ApiState | null>(null);
-  const [grokBusyAction, setGrokBusyAction] = useState<
-    "start" | "stop" | "restart" | null
-  >(null);
-  const [grokError, setGrokError] = useState<string | null>(null);
-  const [activeModelChannel, setActiveModelChannel] = useState<
-    "adobe" | "ximu" | "grok"
-  >("adobe");
   const [ximuCardInput, setXimuCardInput] = useState(ximuCardCode);
   const [ximuBalanceText, setXimuBalanceText] = useState<string | null>(null);
   const [ximuBusy, setXimuBusy] = useState(false);
@@ -249,64 +191,6 @@ export const SettingsModal = ({
     if (!open) return;
     presetsService.save(presets);
   }, [open, presets]);
-
-  useEffect(() => {
-    if (!open || activeSection !== "local-gemini") return;
-
-    let cancelled = false;
-    const refreshAdobeState = async () => {
-      try {
-        const next = await window.adobe2api.getState();
-        if (!cancelled) {
-          setAdobeState(next);
-          setAdobeError(null);
-        }
-      } catch (err: any) {
-        if (!cancelled) {
-          setAdobeError(err?.message || "读取 Adobe2API 状态失败");
-        }
-      }
-    };
-
-    void refreshAdobeState();
-    const timer = window.setInterval(() => {
-      void refreshAdobeState();
-    }, 3000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [activeSection, open]);
-
-  useEffect(() => {
-    if (!open || activeSection !== "local-gemini") return;
-
-    let cancelled = false;
-    const refreshGrokState = async () => {
-      try {
-        const next = await getGrok2ApiBridgeOrThrow().getState();
-        if (!cancelled) {
-          setGrokState(next);
-          setGrokError(null);
-        }
-      } catch (err: any) {
-        if (!cancelled) {
-          setGrokError(err?.message || "读取 Grok2API 状态失败");
-        }
-      }
-    };
-
-    void refreshGrokState();
-    const timer = window.setInterval(() => {
-      void refreshGrokState();
-    }, 3000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [activeSection, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -344,75 +228,6 @@ export const SettingsModal = ({
       setXimuError(err?.message || "西牧卡密余额查询失败");
     } finally {
       setXimuBusy(false);
-    }
-  };
-
-  const runAdobeAction = async (action: "start" | "stop" | "restart") => {
-    try {
-      setAdobeBusyAction(action);
-      setAdobeError(null);
-      const next =
-        action === "start"
-          ? await window.adobe2api.start()
-          : action === "stop"
-            ? await window.adobe2api.stop()
-            : await window.adobe2api.restart();
-      setAdobeState(next);
-    } catch (err: any) {
-      setAdobeError(err?.message || "Adobe2API 操作失败");
-      try {
-        setAdobeState(await window.adobe2api.getState());
-      } catch {}
-    } finally {
-      setAdobeBusyAction(null);
-    }
-  };
-
-  const openAdobeAdminWindow = async () => {
-    try {
-      setAdobeBusyAction("start");
-      setAdobeError(null);
-      const next = await window.adobe2api.openAdminWindow();
-      setAdobeState(next);
-    } catch (err: any) {
-      setAdobeError(err?.message || "打开 Adobe2API 管理后台失败");
-    } finally {
-      setAdobeBusyAction(null);
-    }
-  };
-
-  const runGrokAction = async (action: "start" | "stop" | "restart") => {
-    try {
-      setGrokBusyAction(action);
-      setGrokError(null);
-      const grok2api = getGrok2ApiBridgeOrThrow();
-      const next =
-        action === "start"
-          ? await grok2api.start()
-          : action === "stop"
-            ? await grok2api.stop()
-            : await grok2api.restart();
-      setGrokState(next);
-    } catch (err: any) {
-      setGrokError(err?.message || "Grok2API 操作失败");
-      try {
-        setGrokState(await getGrok2ApiBridgeOrThrow().getState());
-      } catch {}
-    } finally {
-      setGrokBusyAction(null);
-    }
-  };
-
-  const openGrokAdminWindow = async () => {
-    try {
-      setGrokBusyAction("start");
-      setGrokError(null);
-      const next = await getGrok2ApiBridgeOrThrow().openAdminWindow();
-      setGrokState(next);
-    } catch (err: any) {
-      setGrokError(err?.message || "打开 Grok2API 管理后台失败");
-    } finally {
-      setGrokBusyAction(null);
     }
   };
 
@@ -473,11 +288,11 @@ export const SettingsModal = ({
         [formData.type]: prev[formData.type].map((p) =>
           p.id === editingId
             ? {
-                name: formData.name.trim(),
-                content: formData.content,
-                enabled: p.enabled,
-                id: editingId,
-              }
+              name: formData.name.trim(),
+              content: formData.content,
+              enabled: p.enabled,
+              id: editingId,
+            }
             : p,
         ),
       };
@@ -615,7 +430,7 @@ export const SettingsModal = ({
 
     return (
       sectionPlaceholderMap[
-        activeSection as keyof typeof sectionPlaceholderMap
+      activeSection as keyof typeof sectionPlaceholderMap
       ] ?? []
     );
   }, [activeSection]);
@@ -819,404 +634,96 @@ export const SettingsModal = ({
 
                   {activeSection === "local-gemini" && (
                     <section className="space-y-4">
-                      <div className="inline-flex rounded-xl border border-white/10 bg-black/30 p-1">
-                        {[
-                          { id: "adobe" as const, label: "adobe渠道" },
-                          { id: "ximu" as const, label: "西牧渠道" },
-                          { id: "grok" as const, label: "grok渠道" },
-                        ].map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className={cn(
-                              "rounded-lg px-4 py-2 text-sm transition-colors",
-                              activeModelChannel === item.id
-                                ? "bg-[#B43FEB]/20 text-[#E7B8FF]"
-                                : "text-white/55 hover:bg-white/5 hover:text-white/80",
-                            )}
-                            onClick={() => setActiveModelChannel(item.id)}
-                          >
-                            {item.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      {activeModelChannel === "ximu" && (
-                        <div className="space-y-4">
-                          <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div>
-                                <div className="text-sm font-medium text-white/80">
-                                  西牧渠道模型
-                                </div>
-                                <div className="mt-1 text-xs text-white/45">
-                                  开启后会在图片节点显示 GPT-Image-2（西牧渠道）、GPT-Image-2 VIP（西牧渠道）、Nano Banana 2（西牧渠道）和 Nano Banana Pro（西牧渠道）。
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  asChild
-                                  size="sm"
-                                  variant="blue"
-                                  ignoreTitleCase
-                                >
-                                  <a
-                                    href={XIMU_MODEL_PURCHASE_URL}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    <IconExternalLink size={14} />
-                                    购买卡密
-                                  </a>
-                                </Button>
-                                <Switch
-                                  checked={ximuChannelModelsEnabled}
-                                  onCheckedChange={setXimuChannelModelsEnabled}
-                                  aria-label="启用西牧渠道模型"
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
-                            <div className="mb-3">
-                              <div className="text-sm font-medium text-white/80">
-                                西牧渠道卡密
-                              </div>
-                              <div className="mt-1 text-xs text-white/45">
-                                用于西牧渠道的 GPT-Image-2、GPT-Image-2 VIP、Nano Banana 2 和 Nano Banana Pro 生图。
-                              </div>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Input
-                                type="password"
-                                value={ximuCardInput}
-                                placeholder="XIMU-XXXXXX-XXXXXX-XXXXXX"
-                                className="h-9 min-w-[320px] flex-1 border-white/10 bg-black/40 text-white placeholder:text-white/25"
-                                onChange={(event) => {
-                                  setXimuCardInput(event.target.value);
-                                  setXimuError(null);
-                                  setXimuBalanceText(null);
-                                }}
-                              />
-                              <Button
-                                size="sm"
-                                variant="blue"
-                                onClick={saveXimuCardCode}
-                                ignoreTitleCase
-                              >
-                                保存卡密
-                              </Button>
-                              <Button
-                                size="sm"
-                                loading={ximuBusy}
-                                onClick={() => void checkXimuBalance()}
-                                ignoreTitleCase
-                              >
-                                查询余额
-                              </Button>
-                            </div>
-
-                            {ximuBalanceText ? (
-                              <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
-                                {ximuBalanceText}
-                              </div>
-                            ) : null}
-                            {ximuError ? (
-                              <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
-                                {ximuError}
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      )}
-
-                      {activeModelChannel === "grok" && (
-                        <>
-                          <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div>
-                                <div className="text-sm font-medium text-white/80">
-                                  Grok 渠道模型
-                                </div>
-                                <div className="mt-1 text-xs text-white/45">
-                                  开启后会在图片节点显示 Grok Imagine 图片模型，并在视频节点显示 Grok Imagine Video（Grok渠道）。
-                                </div>
-                              </div>
-                              <Switch
-                                checked={grokChannelModelsEnabled}
-                                onCheckedChange={setGrokChannelModelsEnabled}
-                                aria-label="启用 Grok 渠道模型"
-                              />
-                            </div>
-
-                            <div className="mt-4 grid gap-3 md:grid-cols-2">
-                              <div className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-3">
-                                <div className="mb-2 text-xs font-medium text-white/65">
-                                  图片模型
-                                </div>
-                                <div className="space-y-1 text-xs text-white/45">
-                                  {[
-                                    GROK_IMAGE_LITE_MODEL,
-                                    GROK_IMAGE_MODEL,
-                                    GROK_IMAGE_PRO_MODEL,
-                                    `${GROK_IMAGE_EDIT_MODEL}（编辑模型）`,
-                                  ].map((model) => (
-                                    <div key={model}>{model}</div>
-                                  ))}
-                                </div>
-                              </div>
-                              <div className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-3">
-                                <div className="mb-2 text-xs font-medium text-white/65">
-                                  视频模型
-                                </div>
-                                <div className="text-xs text-white/45">
-                                  grok-imagine-video
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div>
-                                <div className="text-sm font-medium text-white/80">
-                                  本地 Grok2API 管理
-                                </div>
-                                <div className="mt-1 text-xs text-white/45">
-                                  {grokState?.baseUrl ||
-                                    "启动后会在这里加载 Grok2API 后台"}
-                                </div>
-                              </div>
-
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span
-                                  className={cn(
-                                    "rounded-full px-3 py-1 text-xs",
-                                    grokState?.status === "running" &&
-                                      "bg-emerald-500/15 text-emerald-200",
-                                    grokState?.status === "starting" &&
-                                      "bg-amber-500/15 text-amber-200",
-                                    grokState?.status === "error" &&
-                                      "bg-red-500/15 text-red-200",
-                                    (!grokState ||
-                                      grokState.status === "stopped") &&
-                                      "bg-white/10 text-white/55",
-                                  )}
-                                >
-                                  {grokState?.status === "running"
-                                    ? "运行中"
-                                    : grokState?.status === "starting"
-                                      ? "启动中"
-                                      : grokState?.status === "error"
-                                        ? "异常"
-                                        : "未启动"}
-                                </span>
-
-                                <Button
-                                  size="sm"
-                                  variant="blue"
-                                  loading={grokBusyAction === "start"}
-                                  disabled={
-                                    grokBusyAction !== null ||
-                                    grokState?.status === "running"
-                                  }
-                                  onClick={() => void runGrokAction("start")}
-                                  ignoreTitleCase
-                                >
-                                  <IconPlayerPlay size={14} />
-                                  启动服务
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  loading={grokBusyAction === "restart"}
-                                  disabled={grokBusyAction !== null}
-                                  onClick={() => void runGrokAction("restart")}
-                                  ignoreTitleCase
-                                >
-                                  <IconRotateClockwise size={14} />
-                                  重启
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  disabled={
-                                    grokBusyAction !== null ||
-                                    grokState?.status === "stopped"
-                                  }
-                                  onClick={() => void runGrokAction("stop")}
-                                  ignoreTitleCase
-                                >
-                                  停止
-                                </Button>
-                                {grokState?.status === "running" ? (
-                                  <Button
-                                    size="sm"
-                                    onClick={() => void openGrokAdminWindow()}
-                                    ignoreTitleCase
-                                  >
-                                    <IconExternalLink size={14} />
-                                    应用内打开
-                                  </Button>
-                                ) : null}
-                              </div>
-                            </div>
-
-                            <div className="mt-3 text-xs text-white/40">
-                              项目目录：{grokState?.resolvedProjectPath || "未设置"}
-                            </div>
-
-                            {grokError || grokState?.lastError ? (
-                              <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
-                                {grokError || grokState?.lastError}
-                              </div>
-                            ) : null}
-                          </div>
-
-                          <div className="overflow-hidden rounded-xl border border-white/5 bg-white">
-                            {grokState?.status === "running" ? (
-                              <iframe
-                                key={grokState.manageUrl}
-                                title="Grok2API 管理后台"
-                                src={grokState.manageUrl}
-                                className="h-[min(58vh,620px)] w-full bg-white"
-                              />
-                            ) : (
-                              <div className="flex h-[420px] items-center justify-center bg-black/30 text-sm text-white/45">
-                                启动本地服务后，这里会显示 Grok2API 账号管理后台。
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      )}
-
-                      {activeModelChannel === "adobe" && (
-                        <>
-                          <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <div className="text-sm font-medium text-white/80">
-                                  Adobe 渠道模型
-                                </div>
-                                <div className="mt-1 text-xs text-white/45">
-                                  开启后会在图片节点显示 GPT-Image-2（Adobe版本）、Nano Banana Pro（Adobe版本），并在视频节点显示 Sora2Pro（Adobe版本）。
-                                </div>
-                              </div>
-                              <Switch
-                                checked={adobeChannelModelsEnabled}
-                                onCheckedChange={setAdobeChannelModelsEnabled}
-                                aria-label="启用 Adobe 渠道模型"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                      <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
                             <div className="text-sm font-medium text-white/80">
-                              本地 Adobe2API 管理
+                              西牧渠道模型
                             </div>
                             <div className="mt-1 text-xs text-white/45">
-                              {adobeState?.baseUrl ||
-                                "启动后会在这里加载 Adobe2API 后台"}
+                              开启后会在图片节点显示
+                              GPT-Image-2（西牧渠道）、GPT-Image-2
+                              VIP（西牧渠道）、Nano Banana 2（西牧渠道）和 Nano
+                              Banana Pro（西牧渠道）。
                             </div>
                           </div>
-
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span
-                              className={cn(
-                                "rounded-full px-3 py-1 text-xs",
-                                adobeState?.status === "running" &&
-                                  "bg-emerald-500/15 text-emerald-200",
-                                adobeState?.status === "starting" &&
-                                  "bg-amber-500/15 text-amber-200",
-                                adobeState?.status === "error" &&
-                                  "bg-red-500/15 text-red-200",
-                                (!adobeState ||
-                                  adobeState.status === "stopped") &&
-                                  "bg-white/10 text-white/55",
-                              )}
-                            >
-                              {adobeState?.status === "running"
-                                ? "运行中"
-                                : adobeState?.status === "starting"
-                                  ? "启动中"
-                                  : adobeState?.status === "error"
-                                    ? "异常"
-                                    : "未启动"}
-                            </span>
-
+                          <div className="flex items-center gap-2">
                             <Button
+                              asChild
                               size="sm"
                               variant="blue"
-                              loading={adobeBusyAction === "start"}
-                              disabled={
-                                adobeBusyAction !== null ||
-                                adobeState?.status === "running"
-                              }
-                              onClick={() => void runAdobeAction("start")}
                               ignoreTitleCase
                             >
-                              <IconPlayerPlay size={14} />
-                              启动服务
-                            </Button>
-                            <Button
-                              size="sm"
-                              loading={adobeBusyAction === "restart"}
-                              disabled={adobeBusyAction !== null}
-                              onClick={() => void runAdobeAction("restart")}
-                              ignoreTitleCase
-                            >
-                              <IconRotateClockwise size={14} />
-                              重启
-                            </Button>
-                            <Button
-                              size="sm"
-                              disabled={
-                                adobeBusyAction !== null ||
-                                adobeState?.status === "stopped"
-                              }
-                              onClick={() => void runAdobeAction("stop")}
-                              ignoreTitleCase
-                            >
-                              停止
-                            </Button>
-                            {adobeState?.status === "running" ? (
-                              <Button
-                                size="sm"
-                                onClick={() => void openAdobeAdminWindow()}
-                                ignoreTitleCase
+                              <a
+                                href={XIMU_MODEL_PURCHASE_URL}
+                                target="_blank"
+                                rel="noreferrer"
                               >
                                 <IconExternalLink size={14} />
-                                应用内打开
-                              </Button>
-                            ) : null}
+                                购买卡密
+                              </a>
+                            </Button>
+                            <Switch
+                              checked={ximuChannelModelsEnabled}
+                              onCheckedChange={setXimuChannelModelsEnabled}
+                              aria-label="启用西牧渠道模型"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                        <div className="mb-3">
+                          <div className="text-sm font-medium text-white/80">
+                            西牧渠道卡密
+                          </div>
+                          <div className="mt-1 text-xs text-white/45">
+                            用于西牧渠道的 GPT-Image-2、GPT-Image-2 VIP、Nano
+                            Banana 2 和 Nano Banana Pro 生图。
                           </div>
                         </div>
 
-                        {adobeError || adobeState?.lastError ? (
-                          <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
-                            {adobeError || adobeState?.lastError}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Input
+                            type="password"
+                            value={ximuCardInput}
+                            placeholder="XIMU-XXXXXX-XXXXXX-XXXXXX"
+                            className="h-9 min-w-[320px] flex-1 border-white/10 bg-black/40 text-white placeholder:text-white/25"
+                            onChange={(event) => {
+                              setXimuCardInput(event.target.value);
+                              setXimuError(null);
+                              setXimuBalanceText(null);
+                            }}
+                          />
+                          <Button
+                            size="sm"
+                            variant="blue"
+                            onClick={saveXimuCardCode}
+                            ignoreTitleCase
+                          >
+                            保存卡密
+                          </Button>
+                          <Button
+                            size="sm"
+                            loading={ximuBusy}
+                            onClick={() => void checkXimuBalance()}
+                            ignoreTitleCase
+                          >
+                            查询余额
+                          </Button>
+                        </div>
+
+                        {ximuBalanceText ? (
+                          <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+                            {ximuBalanceText}
                           </div>
                         ) : null}
+                        {ximuError ? (
+                          <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-100">
+                            {ximuError}
                           </div>
-
-                          <div className="overflow-hidden rounded-xl border border-white/5 bg-white">
-                        {adobeState?.status === "running" ? (
-                          <iframe
-                            key={adobeState.loginUrl}
-                            title="Adobe2API 管理后台"
-                            src={adobeState.loginUrl}
-                            className="h-[min(58vh,620px)] w-full bg-white"
-                          />
-                        ) : (
-                          <div className="flex h-[420px] items-center justify-center bg-black/30 text-sm text-white/45">
-                            启动本地服务后，这里会显示 Adobe2API 登录和管理后台。
-                          </div>
-                        )}
-                          </div>
-                        </>
-                      )}
+                        ) : null}
+                      </div>
                     </section>
                   )}
 

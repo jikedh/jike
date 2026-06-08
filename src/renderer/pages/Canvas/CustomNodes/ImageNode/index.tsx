@@ -16,9 +16,6 @@ import {
 import { createPortal } from "react-dom";
 import { uploadFileToOSS } from "service/oss";
 import {
-  ADOBE_GPT_IMAGE2_MODEL,
-  ADOBE_NANO_BANANA_PRO_MODEL,
-  isGrokImageGenerationModel,
   isXimuImageGenerationModel,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
@@ -651,19 +648,11 @@ export const ImageNode = memo(
           const isNiji7Model = config.model === "midjourney-niji7";
           const isMidjourneyModel =
             config.model === "midjourney" || isNiji7Model;
-          const isAdobeImageModel =
-            config.model === ADOBE_GPT_IMAGE2_MODEL ||
-            config.model === ADOBE_NANO_BANANA_PRO_MODEL;
           const isXimuImageModel = isXimuImageGenerationModel(config.model);
-          const isGrokImageModel = isGrokImageGenerationModel(config.model);
           const isNanoBananaLocalModel =
             config.model === NANO_BANANA_LOCAL_MODEL &&
             config.platform === NANO_BANANA_LOCAL_PLATFORM;
-          const isLocalDirectModel =
-            isAdobeImageModel ||
-            isXimuImageModel ||
-            isGrokImageModel ||
-            isNanoBananaLocalModel;
+          const isLocalDirectModel = isXimuImageModel || isNanoBananaLocalModel;
           const backendModel = isNiji7Model ? "midjourney" : config.model;
           const size = config.size ?? data.size ?? "1:1";
           const resolution = config.resolution ?? data.resolution ?? "2K";

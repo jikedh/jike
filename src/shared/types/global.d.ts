@@ -1,6 +1,4 @@
 import { ElectronAPI } from "@electron-toolkit/preload";
-import type { Adobe2Api } from "shared/types/adobe2api";
-import type { Grok2Api } from "shared/types/grok2api";
 import type { StorageApi } from "shared/types/storage";
 
 declare global {
@@ -46,9 +44,7 @@ declare global {
         error?: string;
       }>;
     };
-    adobe2api: Adobe2Api;
-    grok2api: Grok2Api;
   }
 }
 
-export {};
+export { };

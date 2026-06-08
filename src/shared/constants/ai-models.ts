@@ -134,9 +134,6 @@ export const VIDEO_ASPECT_RATIOS = [
 /** 图片生成模型配置 */
 export const NANO_BANANA_LOCAL_MODEL = "nano-banana-pro-local-gemini";
 export const NANO_BANANA_LOCAL_PLATFORM = "google_local_gemini";
-export const ADOBE2API_PLATFORM = "adobe2api";
-export const ADOBE_GPT_IMAGE2_MODEL = "gpt-image-2-adobe";
-export const ADOBE_NANO_BANANA_PRO_MODEL = "nano-banana-pro-adobe";
 export const RUNNINGHUB_PLATFORM = "runninghub";
 export const RUNNINGHUB_GPT_IMAGE2_MODEL = "runninghub-gpt-image-2";
 export const RUNNINGHUB_NANO_BANANA_PRO_MODEL = "runninghub-nano-banana-pro";
@@ -145,12 +142,6 @@ export const XIMU_GPT_IMAGE2_MODEL = "gpt-image-2-ximu";
 export const XIMU_GPT_IMAGE2_VIP_MODEL = "gpt-image-2-vip-ximu";
 export const XIMU_NANO_BANANA2_MODEL = "nano-banana-2-ximu";
 export const XIMU_NANO_BANANA_PRO_MODEL = "nano-banana-pro-ximu";
-export const GROK2API_PLATFORM = "grok2api";
-export const GROK_IMAGE_LITE_MODEL = "grok-imagine-image-lite";
-export const GROK_IMAGE_MODEL = "grok-imagine-image";
-export const GROK_IMAGE_PRO_MODEL = "grok-imagine-image-pro";
-export const GROK_IMAGE_EDIT_MODEL = "grok-imagine-image-edit";
-
 export const IMAGE_MODELS = [
   // { id: 1, name: 'doubao-seedream-4-0', model: 'doubao-seedream-4-0', platform: 'Seedream' },
   // { id: 2, name: 'doubao-seedream-4-5', model: 'doubao-seedream-4-5', platform: 'Seedream' },
@@ -178,18 +169,6 @@ export const IMAGE_MODELS = [
     name: "Midjourney Niji7",
     model: "midjourney-niji7",
     platform: "midjourney",
-  },
-  {
-    id: 9,
-    name: "GPT-Image-2（Adobe版本）",
-    model: ADOBE_GPT_IMAGE2_MODEL,
-    platform: ADOBE2API_PLATFORM,
-  },
-  {
-    id: 10,
-    name: "Nano Banana Pro（Adobe版本）",
-    model: ADOBE_NANO_BANANA_PRO_MODEL,
-    platform: ADOBE2API_PLATFORM,
   },
   {
     id: 19,
@@ -227,30 +206,6 @@ export const IMAGE_MODELS = [
     model: XIMU_NANO_BANANA_PRO_MODEL,
     platform: XIMU_PLATFORM,
   },
-  {
-    id: 15,
-    name: "Grok Imagine Image Lite（Grok渠道）",
-    model: GROK_IMAGE_LITE_MODEL,
-    platform: GROK2API_PLATFORM,
-  },
-  {
-    id: 16,
-    name: "Grok Imagine Image（Grok渠道）",
-    model: GROK_IMAGE_MODEL,
-    platform: GROK2API_PLATFORM,
-  },
-  {
-    id: 17,
-    name: "Grok Imagine Image Pro（Grok渠道）",
-    model: GROK_IMAGE_PRO_MODEL,
-    platform: GROK2API_PLATFORM,
-  },
-  {
-    id: 18,
-    name: "Grok Imagine Image Edit（Grok渠道）",
-    model: GROK_IMAGE_EDIT_MODEL,
-    platform: GROK2API_PLATFORM,
-  },
   // {
   //   id: 10,
   //   name: "谷歌 Gemini 3 Pro 渠道二",
@@ -259,21 +214,11 @@ export const IMAGE_MODELS = [
   // },
 ];
 
-export const ADOBE_IMAGE_MODEL_IDS = new Set([
-  ADOBE_GPT_IMAGE2_MODEL,
-  ADOBE_NANO_BANANA_PRO_MODEL,
-]);
 export const XIMU_IMAGE_MODEL_IDS = new Set([
   XIMU_GPT_IMAGE2_MODEL,
   XIMU_GPT_IMAGE2_VIP_MODEL,
   XIMU_NANO_BANANA2_MODEL,
   XIMU_NANO_BANANA_PRO_MODEL,
-]);
-export const GROK_IMAGE_MODEL_IDS = new Set([
-  GROK_IMAGE_LITE_MODEL,
-  GROK_IMAGE_MODEL,
-  GROK_IMAGE_PRO_MODEL,
-  GROK_IMAGE_EDIT_MODEL,
 ]);
 export const RUNNINGHUB_IMAGE_MODEL_IDS = new Set([
   RUNNINGHUB_GPT_IMAGE2_MODEL,
@@ -281,14 +226,8 @@ export const RUNNINGHUB_IMAGE_MODEL_IDS = new Set([
 ]);
 export const XIMU_MODEL_PURCHASE_URL = "https://pay.ldxp.cn/shop/HNGFW0MA";
 
-export const isAdobeImageGenerationModel = (model?: string) =>
-  Boolean(model && ADOBE_IMAGE_MODEL_IDS.has(model));
-
 export const isXimuImageGenerationModel = (model?: string) =>
   Boolean(model && XIMU_IMAGE_MODEL_IDS.has(model));
-
-export const isGrokImageGenerationModel = (model?: string) =>
-  Boolean(model && GROK_IMAGE_MODEL_IDS.has(model));
 
 export const isRunningHubImageGenerationModel = (model?: string) =>
   Boolean(model && RUNNINGHUB_IMAGE_MODEL_IDS.has(model));
@@ -299,16 +238,10 @@ export const isXimuGptImageGenerationModel = (model?: string) =>
 export const isXimuNanoBananaGenerationModel = (model?: string) =>
   model === XIMU_NANO_BANANA2_MODEL || model === XIMU_NANO_BANANA_PRO_MODEL;
 
-export const getVisibleImageModels = (
-  adobeChannelModelsEnabled = false,
-  ximuChannelModelsEnabled = false,
-  grokChannelModelsEnabled = false,
-) =>
+export const getVisibleImageModels = (ximuChannelModelsEnabled = false) =>
   IMAGE_MODELS.filter(
     (item) =>
-      (adobeChannelModelsEnabled || !isAdobeImageGenerationModel(item.model)) &&
-      (ximuChannelModelsEnabled || !isXimuImageGenerationModel(item.model)) &&
-      (grokChannelModelsEnabled || !isGrokImageGenerationModel(item.model)),
+      ximuChannelModelsEnabled || !isXimuImageGenerationModel(item.model),
   );
 
 export const CANVAS_CHAT_IMAGE_MODEL_PREFIX = "canvas-image:";
@@ -339,18 +272,12 @@ export const GENERATION_SCORE_COST_MAP: Record<string, number> = {
   "doubao-seedream-5-0": 30,
   midjourney: 30,
   "midjourney-niji7": 30,
-  [ADOBE_GPT_IMAGE2_MODEL]: 0,
-  [ADOBE_NANO_BANANA_PRO_MODEL]: 0,
   [XIMU_GPT_IMAGE2_MODEL]: 10,
   [XIMU_GPT_IMAGE2_VIP_MODEL]: 10,
   [XIMU_NANO_BANANA2_MODEL]: 10,
   [XIMU_NANO_BANANA_PRO_MODEL]: 10,
   [RUNNINGHUB_GPT_IMAGE2_MODEL]: 10,
   [RUNNINGHUB_NANO_BANANA_PRO_MODEL]: 10,
-  [GROK_IMAGE_LITE_MODEL]: 0,
-  [GROK_IMAGE_MODEL]: 0,
-  [GROK_IMAGE_PRO_MODEL]: 0,
-  [GROK_IMAGE_EDIT_MODEL]: 0,
   // 视频模型
   "doubao-seedance-2.0": 30,
   "wan2.7-i2v": 30,
