@@ -1,20 +1,29 @@
-﻿import { IconPhoto } from "@tabler/icons-react";
-import {
+﻿import {
   type NodeProps,
   Position,
+  type Viewport,
   useReactFlow,
   useUpdateNodeInternals,
-  type Viewport,
 } from "@xyflow/react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { uploadFileToOSS } from "service/oss";
-import { setProjectCoverFromMediaRef } from "service/projectStorage";
 import {
+  ADOBE_GPT_IMAGE2_MODEL,
+  ADOBE_NANO_BANANA_PRO_MODEL,
+  isGrokImageGenerationModel,
   isXimuImageGenerationModel,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
 } from "shared/constants/ai-models";
+import { setProjectCoverFromMediaRef } from "service/projectStorage";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageNodeType } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
@@ -23,8 +32,8 @@ import { assignMissingMediaSequences } from "shared/utils/mediaSequence";
 import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
 import { ButtonHandle } from "@/components/button-handle";
-import { PanoramaViewer } from "@/components/panorama/PanoramaViewer";
 import { dispatchCreateAssetFromNode } from "@/pages/Canvas/components/CanvasSidebar";
+import { PanoramaViewer } from "@/components/panorama/PanoramaViewer";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
@@ -37,6 +46,7 @@ import { ImageGridCropDialog } from "./ImageGridCropDialog";
 import { ImageLightingDialog } from "./ImageLightingDialog";
 import { ImagePromptPanel } from "./ImagePromptPanel";
 import { ImageToolbar } from "./ImageToolbar";
+import { IconPhoto } from "@tabler/icons-react";
 import {
   getAspectRatioFromMediaFile,
   getNodeSizeByAspectRatio,
@@ -576,7 +586,7 @@ export const ImageNode = memo(
 
           toast.success(
             `已裁剪 ${uploadedItems.length} 张宫格图片` +
-            (failedCount > 0 ? `，${failedCount} 张失败` : ""),
+              (failedCount > 0 ? `，${failedCount} 张失败` : ""),
           );
         } catch (error: any) {
           console.error("宫格裁剪失败:", error);
@@ -641,11 +651,19 @@ export const ImageNode = memo(
           const isNiji7Model = config.model === "midjourney-niji7";
           const isMidjourneyModel =
             config.model === "midjourney" || isNiji7Model;
+          const isAdobeImageModel =
+            config.model === ADOBE_GPT_IMAGE2_MODEL ||
+            config.model === ADOBE_NANO_BANANA_PRO_MODEL;
           const isXimuImageModel = isXimuImageGenerationModel(config.model);
+          const isGrokImageModel = isGrokImageGenerationModel(config.model);
           const isNanoBananaLocalModel =
             config.model === NANO_BANANA_LOCAL_MODEL &&
             config.platform === NANO_BANANA_LOCAL_PLATFORM;
-          const isLocalDirectModel = isXimuImageModel || isNanoBananaLocalModel;
+          const isLocalDirectModel =
+            isAdobeImageModel ||
+            isXimuImageModel ||
+            isGrokImageModel ||
+            isNanoBananaLocalModel;
           const backendModel = isNiji7Model ? "midjourney" : config.model;
           const size = config.size ?? data.size ?? "1:1";
           const resolution = config.resolution ?? data.resolution ?? "2K";
@@ -674,9 +692,9 @@ export const ImageNode = memo(
             lighting: config,
             ...(isMidjourneyModel
               ? {
-                aspectRatio: data.aspectRatio ?? "1:1",
-                midjourneyAdvanced: data.midjourneyAdvanced,
-              }
+                  aspectRatio: data.aspectRatio ?? "1:1",
+                  midjourneyAdvanced: data.midjourneyAdvanced,
+                }
               : {}),
           };
 
@@ -802,7 +820,7 @@ export const ImageNode = memo(
               className={cn(
                 "group/card relative flex h-full w-full flex-col rounded-xl border",
                 hasMultipleResults &&
-                "bg-linear-to-br from-[#141418] to-[#0d0d10]",
+                  "bg-linear-to-br from-[#141418] to-[#0d0d10]",
                 isAnnotationMode
                   ? "border-transparent shadow-none ring-0"
                   : isActiveNode
@@ -857,7 +875,7 @@ export const ImageNode = memo(
                   className={cn(
                     "pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-500 group-hover/card:opacity-100",
                     hasMultipleResults &&
-                    "bg-linear-to-tr from-transparent via-white/2 to-transparent",
+                      "bg-linear-to-tr from-transparent via-white/2 to-transparent",
                   )}
                 />
               ) : null}
@@ -898,34 +916,34 @@ export const ImageNode = memo(
 
         {/* 全景图查看器 - 使用 Portal 渲染到 body，避免 React Flow 的 CSS 隔离影响 fixed 定位 */}
         {typeof document !== "undefined" &&
-          panoramaViewer.open &&
-          panoramaViewer.sourceNodeId === id
+        panoramaViewer.open &&
+        panoramaViewer.sourceNodeId === id
           ? createPortal(
-            <PanoramaViewer
-              open={panoramaViewer.open}
-              onClose={closePanoramaViewer}
-              initialImage={panoramaViewer.imageUrl ?? undefined}
-              sourceNodeId={panoramaViewer.sourceNodeId}
-            />,
-            document.body,
-          )
+              <PanoramaViewer
+                open={panoramaViewer.open}
+                onClose={closePanoramaViewer}
+                initialImage={panoramaViewer.imageUrl ?? undefined}
+                sourceNodeId={panoramaViewer.sourceNodeId}
+              />,
+              document.body,
+            )
           : null}
 
         {typeof document !== "undefined" &&
-          isAnnotationTarget &&
-          annotationWorkspace.open
+        isAnnotationTarget &&
+        annotationWorkspace.open
           ? createPortal(
-            <ImageAnnotationWorkspace
-              open={annotationWorkspace.open}
-              imageUrl={annotationWorkspace.imageUrl}
-              sourceNodeId={annotationWorkspace.sourceNodeId}
-              mode={annotationWorkspace.mode}
-              onClose={() =>
-                useCanvasFlowStore.getState().closeImageAnnotation()
-              }
-            />,
-            document.body,
-          )
+              <ImageAnnotationWorkspace
+                open={annotationWorkspace.open}
+                imageUrl={annotationWorkspace.imageUrl}
+                sourceNodeId={annotationWorkspace.sourceNodeId}
+                mode={annotationWorkspace.mode}
+                onClose={() =>
+                  useCanvasFlowStore.getState().closeImageAnnotation()
+                }
+              />,
+              document.body,
+            )
           : null}
 
         <ImageGridCropDialog

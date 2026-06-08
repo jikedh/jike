@@ -37,7 +37,9 @@ export type ChatSettingsStoreType = {
   assetStoragePath: string;
   jianyingDraftsPath: string;
   ximuCardCode: string;
+  adobeChannelModelsEnabled: boolean;
   ximuChannelModelsEnabled: boolean;
+  grokChannelModelsEnabled: boolean;
 
   // ── 配对 setter ───────────────────────────────
   setDefaultModel: (model: string) => void;
@@ -78,7 +80,9 @@ export type ChatSettingsStoreType = {
   setAssetStoragePath: (path: string) => void;
   setJianyingDraftsPath: (path: string) => void;
   setXimuCardCode: (cardCode: string) => void;
+  setAdobeChannelModelsEnabled: (enabled: boolean) => void;
   setXimuChannelModelsEnabled: (enabled: boolean) => void;
+  setGrokChannelModelsEnabled: (enabled: boolean) => void;
 
   // ── 业务 action ───────────────────────────────
   resetToDefault: () => void;

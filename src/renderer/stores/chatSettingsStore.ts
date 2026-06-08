@@ -47,7 +47,9 @@ const INITIAL_STATE: Pick<
   | "assetStoragePath"
   | "jianyingDraftsPath"
   | "ximuCardCode"
+  | "adobeChannelModelsEnabled"
   | "ximuChannelModelsEnabled"
+  | "grokChannelModelsEnabled"
 > = {
   defaultModel: DEFAULT_CANVAS_CHAT_MODEL,
   defaultImageModel: "gemini-3-pro-image-preview",
@@ -83,7 +85,9 @@ const INITIAL_STATE: Pick<
   assetStoragePath: "",
   jianyingDraftsPath: "",
   ximuCardCode: "",
+  adobeChannelModelsEnabled: false,
   ximuChannelModelsEnabled: false,
+  grokChannelModelsEnabled: false,
 };
 
 const getElectronIpc = () => {
@@ -224,8 +228,12 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
         writeGlobalSettingsPatch({ jianyingDraftsPath: path });
       },
       setXimuCardCode: (cardCode) => set({ ximuCardCode: cardCode }),
+      setAdobeChannelModelsEnabled: (enabled) =>
+        set({ adobeChannelModelsEnabled: enabled }),
       setXimuChannelModelsEnabled: (enabled) =>
         set({ ximuChannelModelsEnabled: enabled }),
+      setGrokChannelModelsEnabled: (enabled) =>
+        set({ grokChannelModelsEnabled: enabled }),
       resetToDefault: () => {
         set(INITIAL_STATE);
         writeGlobalSettings({

@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title data-i18n="model.pageTitle">Grok2API - 模型管理</title>
+  <link rel="icon" href="/favicon.ico?v={{APP_VERSION}}">
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-sans/style.css" rel="stylesheet">
+  <link href="/static/css/app.css?v={{APP_VERSION}}" rel="stylesheet">
+  <style>
+    body { background:#FAF9F5 }
+    .page-hd {
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:16px;
+      margin-bottom:20px;
+    }
+    .page-title-row {
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .page-title {
+      font-size:22px;
+      font-weight:700;
+      line-height:1.2;
+    }
+    .page-sub {
+      font-size:13px;
+      color:var(--fg-muted);
+      margin-top:5px;
+    }
+    .model-hint {
+      display:inline-flex;
+      align-items:center;
+      min-height:24px;
+      padding:0 9px;
+      border-radius:999px;
+      border:1px solid rgba(0,0,0,.08);
+      background:#f7f7f7;
+      color:#4b5563;
+      font-size:12px;
+      font-weight:600;
+      line-height:1.2;
+    }
+    .section-head {
+      display:flex;
+      align-items:baseline;
+      justify-content:space-between;
+      gap:12px;
+      margin:28px 0 14px;
+    }
+    .section-title {
+      font-size:13px;
+      font-weight:600;
+      color:#222;
+      letter-spacing:.01em;
+    }
+    .model-frame-wrap {
+      height:calc(100vh - 190px);
+      min-height:560px;
+      border:0;
+      border-radius:12px;
+      overflow:hidden;
+      background:#fff;
+    }
+    .model-frame {
+      width:100%;
+      height:100%;
+      border:0;
+      display:block;
+      background:#fff;
+    }
+    @media (max-width:720px) {
+      .page-hd { flex-direction:column; }
+      .model-frame-wrap {
+        height:calc(100vh - 218px);
+        min-height:520px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div id="admin-header" data-active="/admin/model"></div>
+
+<main class="admin-main">
+  <div class="page-hd">
+    <div>
+      <div class="page-title-row">
+        <div class="page-title" data-i18n="model.pageHeading">模型管理</div>
+        <span class="model-hint" data-i18n="model.poolHint">该号池可使用 GPT、Gemini 和 Sora2</span>
+      </div>
+      <div class="page-sub" data-i18n="model.pageSubtitle">复用 Adobe2API 的 Token 账号池管理，用于维护模型调用可用的 Token。</div>
+    </div>
+  </div>
+
+  <div class="section-head">
+    <div class="section-title" data-i18n="model.sectionTokens">模型号池</div>
+  </div>
+
+  <section class="model-frame-wrap" aria-label="Adobe2API Token 管理">
+    <iframe id="model-frame" class="model-frame" src="/adobe/?embed=model" title="Adobe2API Token 管理"></iframe>
+  </section>
+</main>
+
+<script src="/static/js/i18n.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/auth.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/admin-header.js?v={{APP_VERSION}}"></script>
+<script>
+  function tr(key, params, fallback) {
+    const value = window.t ? window.t(key, params) : key;
+    return value === key ? fallback : value;
+  }
+
+  I18n.onReady(async () => {
+    document.title = tr('model.pageTitle', null, 'Grok2API - 模型管理');
+    await renderAdminHeader?.();
+  });
+
+  function applyModelFrameSkin() {
+    const frame = document.getElementById('model-frame');
+    const doc = frame && frame.contentDocument;
+    if (!doc || doc.getElementById('grok-model-frame-skin')) return;
+
+    const style = doc.createElement('style');
+    style.id = 'grok-model-frame-skin';
+    style.textContent = `
+      :root {
+        --bg:#fff;
+        --card:#fff;
+        --card-border:#f0f0f0;
+        --text:#171717;
+        --muted:#777;
+        --brand:#111;
+        --brand-hover:#222;
+        --danger:#dc2626;
+        --danger-hover:#b91c1c;
+        --border:#e8e8e8;
+      }
+      * { box-sizing:border-box; }
+      body {
+        min-height:100vh;
+        margin:0;
+        overflow-x:hidden;
+        background:#fff !important;
+        color:#171717;
+        font-family:'Geist Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+        -webkit-font-smoothing:antialiased;
+      }
+      .bg-orb,
+      .header,
+      .tabs,
+      #config,
+      #logs {
+        display:none !important;
+      }
+      .shell {
+        width:100%;
+        max-width:none;
+        margin:0;
+        padding:0;
+        gap:0;
+      }
+      .tab-pane {
+        display:none !important;
+        gap:14px;
+        animation:none !important;
+      }
+      #tokens {
+        display:flex !important;
+      }
+      .card {
+        background:#fff !important;
+        border:0 !important;
+        border-radius:0 !important;
+        box-shadow:none !important;
+        backdrop-filter:none !important;
+        padding:0;
+      }
+      .quick-actions-card {
+        padding:16px 18px 10px;
+        border-bottom:1px solid #f0f0f0 !important;
+      }
+      .token-list-card {
+        padding:14px 18px 18px;
+      }
+      h1, h2 {
+        margin:0;
+        color:#171717;
+        letter-spacing:0;
+      }
+      h2 {
+        font-size:13px;
+        font-weight:600;
+      }
+      .quick-actions-card h2 {
+        display:none;
+      }
+      .actions {
+        display:flex;
+        align-items:center;
+        gap:8px;
+        flex-wrap:wrap;
+      }
+      button,
+      .action-mini {
+        min-height:32px;
+        padding:0 13px;
+        border:1px solid #e6e6e6;
+        border-radius:999px;
+        background:#fafafa;
+        color:#444;
+        font-size:12px;
+        font-weight:600;
+        line-height:1;
+        box-shadow:none;
+        transition:background .15s,border-color .15s,color .15s,opacity .15s;
+      }
+      button:hover:not(:disabled),
+      .action-mini:hover:not(:disabled) {
+        background:#f3f3f3;
+        border-color:#dcdcdc;
+        color:#222;
+      }
+      button:first-child,
+      #openAddTokenModalBtn {
+        background:#111;
+        border-color:#111;
+        color:#fff;
+      }
+      button:first-child:hover:not(:disabled),
+      #openAddTokenModalBtn:hover:not(:disabled) {
+        background:#222;
+        border-color:#222;
+        color:#fff;
+      }
+      button.danger,
+      .action-mini.danger {
+        color:#dc2626;
+        background:#fff;
+        border-color:#fee2e2;
+      }
+      button.danger:hover:not(:disabled),
+      .action-mini.danger:hover:not(:disabled) {
+        background:#fef2f2;
+        border-color:#fecaca;
+        color:#b91c1c;
+      }
+      button:disabled,
+      .action-mini:disabled {
+        cursor:not-allowed;
+        opacity:.45;
+      }
+      .list-head {
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        margin-bottom:12px;
+      }
+      .token-summary {
+        display:flex;
+        gap:10px;
+        flex-wrap:wrap;
+        margin:0 0 12px;
+        color:#666;
+        font-size:12px;
+      }
+      .token-summary span {
+        min-height:24px;
+        display:inline-flex;
+        align-items:center;
+        padding:0 9px;
+        border-radius:999px;
+        background:#f7f7f7;
+      }
+      .token-summary strong {
+        margin-left:4px;
+        color:#171717;
+        font-weight:700;
+        font-variant-numeric:tabular-nums;
+      }
+      .table-wrapper {
+        overflow:auto;
+        border:0;
+        border-radius:0;
+        background:#fff;
+      }
+      table {
+        width:100%;
+        border-collapse:collapse;
+        table-layout:auto;
+        font-size:12px;
+      }
+      thead th {
+        position:sticky;
+        top:0;
+        z-index:1;
+        height:34px;
+        padding:0 10px;
+        border-bottom:1px solid #eee;
+        background:#fff;
+        color:#888;
+        font-size:11px;
+        font-weight:600;
+        text-align:left;
+        white-space:nowrap;
+      }
+      tbody td {
+        min-height:48px;
+        padding:10px;
+        border-bottom:1px solid #f3f3f3;
+        color:#333;
+        vertical-align:middle;
+      }
+      tbody tr:hover td {
+        background:#fafafa;
+      }
+      .token-val {
+        max-width:260px;
+        color:#555;
+        font-family:'SFMono-Regular',Consolas,'Liberation Mono',monospace;
+        font-size:11px;
+        line-height:1.45;
+        word-break:break-all;
+      }
+      .empty-state {
+        height:160px;
+        color:#999;
+        text-align:center;
+      }
+      .logs-pagination {
+        justify-content:flex-end;
+        align-items:center;
+        gap:10px;
+        padding-top:12px;
+        color:#777;
+      }
+      .help,
+      .muted {
+        color:#777;
+        font-size:12px;
+      }
+      .dialog-modal {
+        background:rgba(17,17,17,.32);
+        backdrop-filter:blur(8px);
+      }
+      .dialog-card {
+        background:#fff !important;
+        border:1px solid #eee !important;
+        border-radius:12px !important;
+        color:#171717;
+        box-shadow:0 24px 60px rgba(0,0,0,.12) !important;
+      }
+      .dialog-card textarea,
+      .input-text,
+      .input-select,
+      textarea {
+        background:#fff !important;
+        border:1px solid #e5e5e5 !important;
+        border-radius:8px !important;
+        color:#171717 !important;
+        box-shadow:none !important;
+      }
+      .switch-btn {
+        border-radius:999px;
+      }
+      @media (max-width:720px) {
+        .quick-actions-card,
+        .token-list-card {
+          padding-left:12px;
+          padding-right:12px;
+        }
+        .list-head {
+          align-items:flex-start;
+          flex-direction:column;
+        }
+      }
+    `;
+    doc.head.appendChild(style);
+
+    const tokenTab = doc.querySelector('.tab-btn[data-target="tokens"]');
+    if (tokenTab) tokenTab.click();
+    doc.querySelectorAll('.tab-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.target === 'tokens');
+    });
+    doc.querySelectorAll('.tab-pane').forEach((pane) => {
+      pane.classList.toggle('active', pane.id === 'tokens');
+    });
+  }
+
+  document.getElementById('model-frame')?.addEventListener('load', () => {
+    try {
+      applyModelFrameSkin();
+    } catch (error) {
+      console.warn('model frame skin failed', error);
+    }
+  });
+</script>
+</body>
+</html>
