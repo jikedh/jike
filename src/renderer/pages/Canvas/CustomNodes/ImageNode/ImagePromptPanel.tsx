@@ -5,10 +5,12 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type { ChangeEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toChineseNumber } from "shared/utils/utils";
 import { uploadFileToOSS } from "service/oss";
+import { ImageReferenceThumbnails } from "./components/ImageReferenceThumbnails";
 import {
-  getVisibleImageModels,
   IMAGE_MODELS,
+  getVisibleImageModels,
   isXimuGptImageGenerationModel,
   isXimuImageGenerationModel,
   isXimuNanoBananaGenerationModel,
@@ -16,8 +18,8 @@ import {
   NANO_BANANA_LOCAL_PLATFORM,
   XIMU_GPT_IMAGE2_MODEL,
   XIMU_GPT_IMAGE2_VIP_MODEL,
-  XIMU_NANO_BANANA_PRO_MODEL,
   XIMU_NANO_BANANA2_MODEL,
+  XIMU_NANO_BANANA_PRO_MODEL,
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import { getImageGenerationPoints } from "shared/constants/model-points";
@@ -29,7 +31,7 @@ import {
   normalizeLocalGeminiErrorDetail,
 } from "shared/utils/localGeminiErrors";
 import { getRemoteMediaUrl } from "shared/utils/mediaPersistence";
-import { cn, toChineseNumber } from "shared/utils/utils";
+import { cn } from "shared/utils/utils";
 import { useShallow } from "zustand/react/shallow";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { PresetDropdown } from "@/components/PresetDropdown";
@@ -48,17 +50,16 @@ import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import { handlePromptEditorWheelCapture } from "../shared/wheelEvents";
 import {
+  GeminiParamsPanel,
   GEMINI_RESOLUTIONS,
   GEMINI_SIZES,
-  GeminiParamsPanel,
-  NANO_BANANA_LOCAL_SIZES,
   NANO_BANANA_RESOLUTIONS,
+  NANO_BANANA_LOCAL_SIZES,
 } from "./components/GeminiParamsPanel";
 import {
   GPTIMAGE2_SIZES,
   GptImage2ParamsPanel,
 } from "./components/GptImage2ParamsPanel";
-import { ImageReferenceThumbnails } from "./components/ImageReferenceThumbnails";
 import { MidjourneyAdvancedPanel } from "./components/MidjourneyAdvancedPanel";
 import {
   MIDJOURNEY_ASPECT_RATIOS,
@@ -1793,37 +1794,35 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             />
           )}
 
-          {(isGptImage2Model ||
-            isAdobeGptImage2Model ||
-            isXimuGptImage2Model) && (
-              // GPT-Image-2 整合参数面板
-              <GptImage2ParamsPanel
-                size={size}
-                resolution={resolution}
-                sizeOptions={
-                  isAdobeGptImage2Model
-                    ? ADOBE_GPTIMAGE2_SIZES
-                    : isXimuGptImage2Model
-                      ? XIMU_GPTIMAGE2_SIZES
-                      : undefined
-                }
-                resolutionOptions={
-                  isXimuGptImage2StandardModel
-                    ? XIMU_GPTIMAGE2_RESOLUTION_OPTIONS
-                    : isXimuGptImage2VipModel
-                      ? GPTIMAGE2_RESOLUTION_OPTIONS
-                      : undefined
-                }
-                onSizeChange={(value) => {
-                  persistImageDefaultPreset({ size: value });
-                  updateImageNodeData(nodeId, { size: value });
-                }}
-                onResolutionChange={(value) => {
-                  persistImageDefaultPreset({ resolution: value });
-                  updateImageNodeData(nodeId, { resolution: value });
-                }}
-              />
-            )}
+          {(isGptImage2Model || isAdobeGptImage2Model || isXimuGptImage2Model) && (
+            // GPT-Image-2 整合参数面板
+            <GptImage2ParamsPanel
+              size={size}
+              resolution={resolution}
+              sizeOptions={
+                isAdobeGptImage2Model
+                  ? ADOBE_GPTIMAGE2_SIZES
+                  : isXimuGptImage2Model
+                    ? XIMU_GPTIMAGE2_SIZES
+                    : undefined
+              }
+              resolutionOptions={
+                isXimuGptImage2StandardModel
+                  ? XIMU_GPTIMAGE2_RESOLUTION_OPTIONS
+                  : isXimuGptImage2VipModel
+                    ? GPTIMAGE2_RESOLUTION_OPTIONS
+                    : undefined
+              }
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
+            />
+          )}
 
           {isGrokImageModel && (
             <GeminiParamsPanel
