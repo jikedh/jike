@@ -18,6 +18,9 @@ win:
   executableName: 即刻
   icon: resources/icons/icon.png
 nsis:
+  executableName: 即刻
+  icon: resources/icons/icon.png
+nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
   artifactName: ${name}-${version}-setup.${ext}

@@ -1667,6 +1667,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               const shouldResetXimuGptResolution =
                 selectedModel?.model === XIMU_GPT_IMAGE2_MODEL &&
                 resolution !== "1K";
+              const shouldResetGrokSize =
+                isGrokImageGenerationModel(selectedModel?.model) &&
+                !GROK_IMAGE_SIZE_VALUES.has(size);
+              const shouldResetGrokResolution =
+                isGrokImageGenerationModel(selectedModel?.model) &&
+                resolution !== "standard";
               persistImageDefaultPreset({
                 model: selectedModel?.model ?? value,
                 platform: selectedModel?.platform,
@@ -1674,10 +1680,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                   ? DEFAULT_NANO_BANANA_SIZE
                   : shouldResetXimuGptSize
                     ? "auto"
-                    : undefined,
+                    : shouldResetGrokSize
+                      ? "1:1"
+                      : undefined,
                 resolution: shouldResetXimuGptResolution
                   ? "1K"
-                  : undefined,
+                  : shouldResetGrokResolution
+                    ? "standard"
+                    : undefined,
               });
               updateImageNodeData(nodeId, {
                 model: selectedModel?.model ?? value,
@@ -1686,7 +1696,11 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                   ? { size: DEFAULT_NANO_BANANA_SIZE }
                   : {}),
                 ...(shouldResetXimuGptSize ? { size: "auto" } : {}),
+                ...(shouldResetGrokSize ? { size: "1:1" } : {}),
                 ...(shouldResetXimuGptResolution ? { resolution: "1K" } : {}),
+                ...(shouldResetGrokResolution
+                  ? { resolution: "standard" }
+                  : {}),
               });
             }}
           >

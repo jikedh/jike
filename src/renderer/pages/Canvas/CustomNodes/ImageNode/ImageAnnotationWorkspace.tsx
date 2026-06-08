@@ -10,8 +10,11 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import {
-  getVisibleImageModels,
+  ADOBE_GPT_IMAGE2_MODEL,
+  ADOBE_NANO_BANANA_PRO_MODEL,
   IMAGE_MODELS,
+  getVisibleImageModels,
+  isGrokImageGenerationModel,
   isXimuGptImageGenerationModel,
   isXimuImageGenerationModel,
   isXimuNanoBananaGenerationModel,
@@ -19,8 +22,8 @@ import {
   NANO_BANANA_LOCAL_PLATFORM,
   XIMU_GPT_IMAGE2_MODEL,
   XIMU_GPT_IMAGE2_VIP_MODEL,
-  XIMU_NANO_BANANA_PRO_MODEL,
   XIMU_NANO_BANANA2_MODEL,
+  XIMU_NANO_BANANA_PRO_MODEL,
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageGenerationNode } from "shared/types/flow";
@@ -44,8 +47,8 @@ import {
   GeminiParamsPanel,
   GROK_IMAGE_RESOLUTIONS,
   GROK_IMAGE_SIZES,
-  NANO_BANANA_LOCAL_SIZES,
   NANO_BANANA_RESOLUTIONS,
+  NANO_BANANA_LOCAL_SIZES,
 } from "./components/GeminiParamsPanel";
 import {
   GPTIMAGE2_SIZES,
@@ -120,29 +123,29 @@ type PendingTextDraft = {
 
 type EditTarget =
   | {
-    type: "text";
-    id: string;
-  }
+      type: "text";
+      id: string;
+    }
   | {
-    type: "shape";
-    id: string;
-  };
+      type: "shape";
+      id: string;
+    };
 
 type DragTextState =
   | {
-    type: "move";
-    id: string;
-    offsetX: number;
-    offsetY: number;
-  }
+      type: "move";
+      id: string;
+      offsetX: number;
+      offsetY: number;
+    }
   | {
-    type: "scale";
-    id: string;
-    centerX: number;
-    centerY: number;
-    startDistance: number;
-    startScale: number;
-  };
+      type: "scale";
+      id: string;
+      centerX: number;
+      centerY: number;
+      startDistance: number;
+      startScale: number;
+    };
 
 type DraftRect = {
   start: Point;
@@ -153,20 +156,20 @@ type ShapeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
 type DragShapeState =
   | {
-    type: "move";
-    id: string;
-    startPoint: Point;
-    startShape: ShapeItem;
-    startBounds: { x: number; y: number; width: number; height: number };
-  }
+      type: "move";
+      id: string;
+      startPoint: Point;
+      startShape: ShapeItem;
+      startBounds: { x: number; y: number; width: number; height: number };
+    }
   | {
-    type: "scale";
-    id: string;
-    handle: ShapeHandle;
-    startPoint: Point;
-    startShape: ShapeItem;
-    startBounds: { x: number; y: number; width: number; height: number };
-  };
+      type: "scale";
+      id: string;
+      handle: ShapeHandle;
+      startPoint: Point;
+      startShape: ShapeItem;
+      startBounds: { x: number; y: number; width: number; height: number };
+    };
 
 type ImageAnnotationWorkspaceProps = {
   open: boolean;
@@ -194,9 +197,7 @@ const DEFAULT_NANO_BANANA_SIZE = "1:1";
 const NANO_BANANA_SIZE_VALUES = new Set(
   NANO_BANANA_LOCAL_SIZES.map((item) => item.value),
 );
-const GROK_IMAGE_SIZE_VALUES = new Set(
-  GROK_IMAGE_SIZES.map((item) => item.value),
-);
+const GROK_IMAGE_SIZE_VALUES = new Set(GROK_IMAGE_SIZES.map((item) => item.value));
 const GPTIMAGE2_RESOLUTION_OPTIONS = [
   { label: "1K", value: "1K", description: "标准" },
   { label: "2K", value: "2K", description: "高清" },
@@ -309,16 +310,16 @@ const deepCloneShapeItems = (items: ShapeItem[]) => {
   return items.map((item) =>
     item.type === "brush"
       ? {
-        ...item,
-        points: item.points.map((point) => ({ ...point })),
-      }
+          ...item,
+          points: item.points.map((point) => ({ ...point })),
+        }
       : item.type === "brushGroup"
         ? {
-          ...item,
-          strokes: item.strokes.map((stroke) =>
-            stroke.map((point) => ({ ...point })),
-          ),
-        }
+            ...item,
+            strokes: item.strokes.map((stroke) =>
+              stroke.map((point) => ({ ...point })),
+            ),
+          }
         : { ...item },
   );
 };
@@ -632,11 +633,7 @@ export const ImageAnnotationWorkspace = ({
         ximuChannelModelsEnabled,
         grokChannelModelsEnabled,
       ),
-    [
-      adobeChannelModelsEnabled,
-      grokChannelModelsEnabled,
-      ximuChannelModelsEnabled,
-    ],
+    [adobeChannelModelsEnabled, grokChannelModelsEnabled, ximuChannelModelsEnabled],
   );
 
   const canUndo = historyIndex > 0;
@@ -679,22 +676,33 @@ export const ImageAnnotationWorkspace = ({
   const isEraseNanoBananaLocalModel =
     eraseModel === NANO_BANANA_LOCAL_MODEL &&
     erasePlatform === NANO_BANANA_LOCAL_PLATFORM;
-  const isEraseXimuGptImage2Model = isXimuGptImageGenerationModel(eraseModel);
+  const isEraseAdobeGptImage2Model = eraseModel === ADOBE_GPT_IMAGE2_MODEL;
+  const isEraseAdobeNanoBananaProModel =
+    eraseModel === ADOBE_NANO_BANANA_PRO_MODEL;
+  const isEraseAdobeImageModel =
+    isEraseAdobeGptImage2Model || isEraseAdobeNanoBananaProModel;
+  const isEraseXimuGptImage2Model =
+    isXimuGptImageGenerationModel(eraseModel);
   const isEraseXimuGptImage2StandardModel =
     eraseModel === XIMU_GPT_IMAGE2_MODEL;
-  const isEraseXimuGptImage2VipModel = eraseModel === XIMU_GPT_IMAGE2_VIP_MODEL;
-  const isEraseXimuNanoBanana2Model = eraseModel === XIMU_NANO_BANANA2_MODEL;
+  const isEraseXimuGptImage2VipModel =
+    eraseModel === XIMU_GPT_IMAGE2_VIP_MODEL;
+  const isEraseXimuNanoBanana2Model =
+    eraseModel === XIMU_NANO_BANANA2_MODEL;
   const isEraseXimuNanoBananaProModel =
     eraseModel === XIMU_NANO_BANANA_PRO_MODEL;
   const isEraseXimuNanoBananaModel =
     isXimuNanoBananaGenerationModel(eraseModel);
   const isEraseXimuImageModel = isXimuImageGenerationModel(eraseModel);
+  const isEraseGrokImageModel = isGrokImageGenerationModel(eraseModel);
   const isEraseGptImage2Model = eraseModel === "gpt-image-2";
   const isEraseGeminiPro2Model = erasePlatform === "google_pro2";
   const isEraseLocalGeminiDirectModel =
     isEraseGeminiPro2Model ||
     isEraseNanoBananaLocalModel ||
-    isEraseXimuImageModel;
+    isEraseAdobeImageModel ||
+    isEraseXimuImageModel ||
+    isEraseGrokImageModel;
 
   const stageScale = useMemo(() => {
     if (!imageNaturalSize.width || !imageNaturalSize.height) {
@@ -1154,7 +1162,7 @@ export const ImageAnnotationWorkspace = ({
           });
           const nextScale = clamp(
             dragState.startScale *
-            (currentDistance / Math.max(1, dragState.startDistance)),
+              (currentDistance / Math.max(1, dragState.startDistance)),
             MIN_TEXT_SCALE,
             MAX_TEXT_SCALE,
           );
@@ -1449,9 +1457,9 @@ export const ImageAnnotationWorkspace = ({
         prev.map((item) =>
           item.id === editingId
             ? {
-              ...item,
-              text: value,
-            }
+                ...item,
+                text: value,
+              }
             : item,
         ),
       );
@@ -1526,10 +1534,7 @@ export const ImageAnnotationWorkspace = ({
   );
 
   const handleStartShapeMove = useCallback(
-    (
-      shape: ShapeItem,
-      event: React.PointerEvent<SVGElement | HTMLDivElement>,
-    ) => {
+    (shape: ShapeItem, event: React.PointerEvent<SVGElement | HTMLDivElement>) => {
       event.preventDefault();
       event.stopPropagation();
       const point = getCanvasPoint(event.clientX, event.clientY);
@@ -1713,13 +1718,9 @@ export const ImageAnnotationWorkspace = ({
         throw new Error("导出标注图片失败");
       }
 
-      let file = new File(
-        [blob],
-        `${isEraseMode ? "erase" : "annotation"}-${Date.now()}.png`,
-        {
-          type: "image/png",
-        },
-      );
+      let file = new File([blob], `${isEraseMode ? "erase" : "annotation"}-${Date.now()}.png`, {
+        type: "image/png",
+      });
 
       if (file.size > MAX_IMAGE_SIZE_MB) {
         file = await compressImage(file);
@@ -1776,7 +1777,7 @@ export const ImageAnnotationWorkspace = ({
       console.error(isEraseMode ? "保存擦除失败:" : "保存标注失败:", error);
       toast.error(
         error?.message ||
-        (isEraseMode ? "保存擦除失败，请重试" : "保存标注失败，请重试"),
+          (isEraseMode ? "保存擦除失败，请重试" : "保存标注失败，请重试"),
       );
     } finally {
       setIsSaving(false);
@@ -2000,16 +2001,17 @@ export const ImageAnnotationWorkspace = ({
             </div>
 
             <div className="relative flex items-center gap-2 rounded-2xl border border-white/8 bg-black/15 px-3 py-2">
-              {(isEraseMode
-                ? ([
-                  { key: "eraser", label: "橡皮擦", icon: IconEraser },
-                  { key: "eraseRect", label: "框选擦除", icon: IconSquare },
-                ] as const)
-                : ([
-                  { key: "brush", label: "画笔", icon: IconBrush },
-                  { key: "rect", label: "矩形", icon: IconSquare },
-                  { key: "text", label: "文字", icon: null },
-                ] as const)
+              {(
+                isEraseMode
+                  ? ([
+                      { key: "eraser", label: "橡皮擦", icon: IconEraser },
+                      { key: "eraseRect", label: "框选擦除", icon: IconSquare },
+                    ] as const)
+                  : ([
+                      { key: "brush", label: "画笔", icon: IconBrush },
+                      { key: "rect", label: "矩形", icon: IconSquare },
+                      { key: "text", label: "文字", icon: null },
+                    ] as const)
               ).map((item) => {
                 const Icon = item.icon;
                 const active = tool === item.key;
@@ -2058,49 +2060,45 @@ export const ImageAnnotationWorkspace = ({
                 );
               })}
 
-              {!isEraseMode ? (
-                <div className="mx-1 h-8 w-px bg-white/10" />
-              ) : null}
+              {!isEraseMode ? <div className="mx-1 h-8 w-px bg-white/10" /> : null}
 
-              {!isEraseMode ? (
-                <div className="relative">
-                  <button
-                    type="button"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-transparent bg-white/[0.04] text-white/85 transition hover:bg-white/[0.08]"
-                    onClick={() => setColorPickerOpen((prev) => !prev)}
-                    title="颜色"
-                    aria-label="颜色"
-                  >
-                    <span
-                      className="h-5 w-5 rounded-full border border-white/30"
-                      style={{ backgroundColor: currentColor }}
-                    />
-                  </button>
+              {!isEraseMode ? <div className="relative">
+                <button
+                  type="button"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-transparent bg-white/[0.04] text-white/85 transition hover:bg-white/[0.08]"
+                  onClick={() => setColorPickerOpen((prev) => !prev)}
+                  title="颜色"
+                  aria-label="颜色"
+                >
+                  <span
+                    className="h-5 w-5 rounded-full border border-white/30"
+                    style={{ backgroundColor: currentColor }}
+                  />
+                </button>
 
-                  {colorPickerOpen ? (
-                    <div className="absolute left-0 top-[calc(100%+10px)] z-[120] grid w-44 grid-cols-4 gap-2 rounded-2xl border border-white/10 bg-[#1a1a1d] p-3 shadow-2xl">
-                      {COLOR_OPTIONS.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          className={cn(
-                            "h-8 w-8 rounded-full border transition",
-                            currentColor === color
-                              ? "border-white"
-                              : "border-white/20 hover:border-white/50",
-                          )}
-                          style={{ backgroundColor: color }}
-                          onClick={() => {
-                            setCurrentColor(color);
-                            setColorPickerOpen(false);
-                          }}
-                          aria-label={`选择颜色 ${color}`}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
+                {colorPickerOpen ? (
+                  <div className="absolute left-0 top-[calc(100%+10px)] z-[120] grid w-44 grid-cols-4 gap-2 rounded-2xl border border-white/10 bg-[#1a1a1d] p-3 shadow-2xl">
+                    {COLOR_OPTIONS.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        className={cn(
+                          "h-8 w-8 rounded-full border transition",
+                          currentColor === color
+                            ? "border-white"
+                            : "border-white/20 hover:border-white/50",
+                        )}
+                        style={{ backgroundColor: color }}
+                        onClick={() => {
+                          setCurrentColor(color);
+                          setColorPickerOpen(false);
+                        }}
+                        aria-label={`选择颜色 ${color}`}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div> : null}
 
               {tool === "eraser" || !isEraseMode ? (
                 <div
@@ -2129,9 +2127,9 @@ export const ImageAnnotationWorkspace = ({
                     onChange={(event) =>
                       setStrokeWidth(
                         Number(event.target.value) ||
-                        (isEraseMode
-                          ? DEFAULT_ERASER_STROKE_WIDTH
-                          : DEFAULT_STROKE_WIDTH),
+                          (isEraseMode
+                            ? DEFAULT_ERASER_STROKE_WIDTH
+                        : DEFAULT_STROKE_WIDTH),
                       )
                     }
                   />
@@ -2193,13 +2191,13 @@ export const ImageAnnotationWorkspace = ({
 
               {!isEraseMode ? (
                 <Button
-                  type="button"
-                  size="sm"
-                  className="h-10 rounded-xl bg-white px-5 text-sm font-semibold text-black hover:bg-white/90"
-                  loading={isSaving}
-                  onClick={handleSave}
-                >
-                  保存
+                type="button"
+                size="sm"
+                className="h-10 rounded-xl bg-white px-5 text-sm font-semibold text-black hover:bg-white/90"
+                loading={isSaving}
+                onClick={handleSave}
+              >
+                保存
                 </Button>
               ) : null}
             </div>
@@ -2263,49 +2261,52 @@ export const ImageAnnotationWorkspace = ({
 
                 {draftRect
                   ? (() => {
-                    const rect = normalizeRect(
-                      draftRect.start,
-                      draftRect.current,
-                    );
-                    const isEraseRect = tool === "eraseRect";
-                    return (
-                      <div
-                        className="pointer-events-none absolute"
-                        style={{
-                          left: rect.x * stageScale,
-                          top: rect.y * stageScale,
-                          width: rect.width * stageScale,
-                          height: rect.height * stageScale,
-                        }}
-                      >
+                      const rect = normalizeRect(
+                        draftRect.start,
+                        draftRect.current,
+                      );
+                      const isEraseRect = tool === "eraseRect";
+                      return (
                         <div
-                          className={cn(
-                            "absolute inset-0 rounded-[10px] border",
-                            isEraseRect ? "border-dashed" : "",
-                          )}
+                          className="pointer-events-none absolute"
                           style={{
-                            backgroundColor: isEraseRect
-                              ? "rgba(255,255,255,0.22)"
-                              : "transparent",
-                            borderColor: isEraseRect
-                              ? "rgba(255,255,255,0.92)"
-                              : currentColor,
-                            borderWidth: isEraseRect
-                              ? 2
-                              : Math.max(1.5, strokeWidth * stageScale * 0.3),
+                            left: rect.x * stageScale,
+                            top: rect.y * stageScale,
+                            width: rect.width * stageScale,
+                            height: rect.height * stageScale,
                           }}
-                        />
-                        <div
-                          className="absolute inset-0 rounded-[10px]"
-                          style={{
-                            boxShadow: isEraseRect
-                              ? "0 0 0 1px rgba(0,0,0,0.32), inset 0 0 0 1px rgba(0,0,0,0.18)"
-                              : `0 0 0 1px ${currentColor}26, inset 0 0 0 1px ${currentColor}18`,
-                          }}
-                        />
-                      </div>
-                    );
-                  })()
+                        >
+                          <div
+                            className={cn(
+                              "absolute inset-0 rounded-[10px] border",
+                              isEraseRect ? "border-dashed" : "",
+                            )}
+                            style={{
+                              backgroundColor: isEraseRect
+                                ? "rgba(255,255,255,0.22)"
+                                : "transparent",
+                              borderColor: isEraseRect
+                                ? "rgba(255,255,255,0.92)"
+                                : currentColor,
+                              borderWidth: isEraseRect
+                                ? 2
+                                : Math.max(
+                                    1.5,
+                                    strokeWidth * stageScale * 0.3,
+                                  ),
+                            }}
+                          />
+                          <div
+                            className="absolute inset-0 rounded-[10px]"
+                            style={{
+                              boxShadow: isEraseRect
+                                ? "0 0 0 1px rgba(0,0,0,0.32), inset 0 0 0 1px rgba(0,0,0,0.18)"
+                                : `0 0 0 1px ${currentColor}26, inset 0 0 0 1px ${currentColor}18`,
+                            }}
+                          />
+                        </div>
+                      );
+                    })()
                   : null}
 
                 <svg
@@ -2336,16 +2337,16 @@ export const ImageAnnotationWorkspace = ({
                               onDoubleClick={
                                 canInteractWithShape
                                   ? (event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    handleEnterShapeEditMode(shape);
-                                  }
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      handleEnterShapeEditMode(shape);
+                                    }
                                   : undefined
                               }
                               onPointerDown={
                                 canInteractWithShape
                                   ? (event) =>
-                                    handleStartShapeMove(shape, event)
+                                      handleStartShapeMove(shape, event)
                                   : undefined
                               }
                             />
@@ -2383,16 +2384,16 @@ export const ImageAnnotationWorkspace = ({
                                     onDoubleClick={
                                       canInteractWithShape
                                         ? (event) => {
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          handleEnterShapeEditMode(shape);
-                                        }
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            handleEnterShapeEditMode(shape);
+                                          }
                                         : undefined
                                     }
                                     onPointerDown={
                                       canInteractWithShape
                                         ? (event) =>
-                                          handleStartShapeMove(shape, event)
+                                            handleStartShapeMove(shape, event)
                                         : undefined
                                     }
                                   />
@@ -2424,16 +2425,16 @@ export const ImageAnnotationWorkspace = ({
                               onDoubleClick={
                                 canInteractWithShape
                                   ? (event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    handleEnterShapeEditMode(shape);
-                                  }
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      handleEnterShapeEditMode(shape);
+                                    }
                                   : undefined
                               }
                               onPointerDown={
                                 canInteractWithShape
                                   ? (event) =>
-                                    handleStartShapeMove(shape, event)
+                                      handleStartShapeMove(shape, event)
                                   : undefined
                               }
                             />
@@ -2451,21 +2452,21 @@ export const ImageAnnotationWorkspace = ({
 
                         {isSelected
                           ? (() => {
-                            const bounds = getShapeBounds(shape);
-                            return (
-                              <rect
-                                x={bounds.x}
-                                y={bounds.y}
-                                width={bounds.width}
-                                height={bounds.height}
-                                fill="none"
-                                stroke="rgba(180,63,235,0.9)"
-                                strokeWidth={1.5}
-                                strokeDasharray="8 6"
-                                pointerEvents="none"
-                              />
-                            );
-                          })()
+                              const bounds = getShapeBounds(shape);
+                              return (
+                                <rect
+                                  x={bounds.x}
+                                  y={bounds.y}
+                                  width={bounds.width}
+                                  height={bounds.height}
+                                  fill="none"
+                                  stroke="rgba(180,63,235,0.9)"
+                                  strokeWidth={1.5}
+                                  strokeDasharray="8 6"
+                                  pointerEvents="none"
+                                />
+                              );
+                            })()
                           : null}
                       </g>
                     );
@@ -2500,57 +2501,57 @@ export const ImageAnnotationWorkspace = ({
 
                 {selectedShape
                   ? (() => {
-                    const bounds = getShapeBounds(selectedShape);
-                    const canInteractWithShape =
-                      !isCanvasOnlyMode ||
-                      (editTarget?.type === "shape" &&
-                        editTarget.id === selectedShape.id);
-                    return (
-                      <div
-                        className="absolute"
-                        style={{
-                          left: bounds.x * stageScale,
-                          top: bounds.y * stageScale,
-                          width: bounds.width * stageScale,
-                          height: bounds.height * stageScale,
-                          pointerEvents: canInteractWithShape
-                            ? "auto"
-                            : "none",
-                        }}
-                        onPointerDown={(event) => {
-                          handleStartShapeMove(selectedShape, event);
-                        }}
-                      >
-                        <div className="absolute inset-0 rounded-[10px] border border-[#B43FEB]/55 bg-[#B43FEB]/[0.04] shadow-[0_0_0_1px_rgba(180,63,235,0.18)]" />
-                        {SHAPE_HANDLE_CONFIG.map((handle) => (
-                          <div
-                            key={handle.key}
-                            className={cn(
-                              handle.key.length === 2
-                                ? "absolute h-4 w-4 rounded-full border border-white/70 bg-[#B43FEB] shadow-[0_4px_12px_rgba(180,63,235,0.35)]"
-                                : "absolute",
-                              handle.key === "n" &&
-                              "left-3 right-3 -top-2 h-4 cursor-ns-resize",
-                              handle.key === "s" &&
-                              "left-3 right-3 -bottom-2 h-4 cursor-ns-resize",
-                              handle.key === "w" &&
-                              "-left-2 top-3 bottom-3 w-4 cursor-ew-resize",
-                              handle.key === "e" &&
-                              "-right-2 top-3 bottom-3 w-4 cursor-ew-resize",
-                              handle.key.length === 2 && handle.className,
-                            )}
-                            onPointerDown={(event) =>
-                              handleStartShapeScale(
-                                selectedShape,
-                                handle.key,
-                                event,
-                              )
-                            }
-                          />
-                        ))}
-                      </div>
-                    );
-                  })()
+                      const bounds = getShapeBounds(selectedShape);
+                      const canInteractWithShape =
+                        !isCanvasOnlyMode ||
+                        (editTarget?.type === "shape" &&
+                          editTarget.id === selectedShape.id);
+                      return (
+                        <div
+                          className="absolute"
+                          style={{
+                            left: bounds.x * stageScale,
+                            top: bounds.y * stageScale,
+                            width: bounds.width * stageScale,
+                            height: bounds.height * stageScale,
+                            pointerEvents: canInteractWithShape
+                              ? "auto"
+                              : "none",
+                          }}
+                          onPointerDown={(event) => {
+                            handleStartShapeMove(selectedShape, event);
+                          }}
+                        >
+                          <div className="absolute inset-0 rounded-[10px] border border-[#B43FEB]/55 bg-[#B43FEB]/[0.04] shadow-[0_0_0_1px_rgba(180,63,235,0.18)]" />
+                          {SHAPE_HANDLE_CONFIG.map((handle) => (
+                            <div
+                              key={handle.key}
+                              className={cn(
+                                handle.key.length === 2
+                                  ? "absolute h-4 w-4 rounded-full border border-white/70 bg-[#B43FEB] shadow-[0_4px_12px_rgba(180,63,235,0.35)]"
+                                  : "absolute",
+                                handle.key === "n" &&
+                                  "left-3 right-3 -top-2 h-4 cursor-ns-resize",
+                                handle.key === "s" &&
+                                  "left-3 right-3 -bottom-2 h-4 cursor-ns-resize",
+                                handle.key === "w" &&
+                                  "-left-2 top-3 bottom-3 w-4 cursor-ew-resize",
+                                handle.key === "e" &&
+                                  "-right-2 top-3 bottom-3 w-4 cursor-ew-resize",
+                                handle.key.length === 2 && handle.className,
+                              )}
+                              onPointerDown={(event) =>
+                                handleStartShapeScale(
+                                  selectedShape,
+                                  handle.key,
+                                  event,
+                                )
+                              }
+                            />
+                          ))}
+                        </div>
+                      );
+                    })()
                   : null}
 
                 {textItems.map((item) => {
@@ -2651,12 +2652,12 @@ export const ImageAnnotationWorkspace = ({
                   );
                 })}
 
-                {pendingTextDraft
-                  ? (() => {
+                {pendingTextDraft ? (
+                  (() => {
                     const editingItem = pendingTextDraft.itemId
                       ? textItems.find(
-                        (item) => item.id === pendingTextDraft.itemId,
-                      )
+                          (item) => item.id === pendingTextDraft.itemId,
+                        )
                       : null;
                     const textScale = editingItem?.scale ?? 1;
                     const metrics = getTextMetrics(
@@ -2698,11 +2699,7 @@ export const ImageAnnotationWorkspace = ({
                           <div
                             className="pointer-events-none absolute left-0 top-0 w-[2px] animate-pulse rounded-full"
                             style={{
-                              height:
-                                BASE_TEXT_FONT_SIZE *
-                                textScale *
-                                stageScale *
-                                1.25,
+                              height: BASE_TEXT_FONT_SIZE * textScale * stageScale * 1.25,
                               backgroundColor: textColor,
                               boxShadow:
                                 "0 0 0 1px rgba(255,255,255,0.3), 0 0 10px rgba(0,0,0,0.32)",
@@ -2748,7 +2745,7 @@ export const ImageAnnotationWorkspace = ({
                       </div>
                     );
                   })()
-                  : null}
+                ) : null}
               </div>
             </div>
           </div>
@@ -2776,17 +2773,14 @@ export const ImageAnnotationWorkspace = ({
                     );
                     const shouldResetNanoBananaSize =
                       ((selectedModel?.model === NANO_BANANA_LOCAL_MODEL &&
-                        selectedModel?.platform ===
-                        NANO_BANANA_LOCAL_PLATFORM) ||
-                        isXimuNanoBananaGenerationModel(
-                          selectedModel?.model,
-                        )) &&
+                        selectedModel?.platform === NANO_BANANA_LOCAL_PLATFORM) ||
+                        isXimuNanoBananaGenerationModel(selectedModel?.model)) &&
                       !(
                         selectedModel?.model === XIMU_NANO_BANANA2_MODEL
                           ? XIMU_NANO_BANANA2_SIZE_VALUES
                           : selectedModel?.model === XIMU_NANO_BANANA_PRO_MODEL
                             ? XIMU_NANO_BANANA_PRO_SIZE_VALUES
-                            : NANO_BANANA_SIZE_VALUES
+                          : NANO_BANANA_SIZE_VALUES
                       ).has(eraseSize);
                     const shouldResetXimuGptSize =
                       isXimuGptImageGenerationModel(selectedModel?.model) &&
@@ -2796,6 +2790,12 @@ export const ImageAnnotationWorkspace = ({
                     const shouldResetXimuGptResolution =
                       selectedModel?.model === XIMU_GPT_IMAGE2_MODEL &&
                       eraseResolution !== "1K";
+                    const shouldResetGrokSize =
+                      isGrokImageGenerationModel(selectedModel?.model) &&
+                      !GROK_IMAGE_SIZE_VALUES.has(eraseSize);
+                    const shouldResetGrokResolution =
+                      isGrokImageGenerationModel(selectedModel?.model) &&
+                      eraseResolution !== "standard";
 
                     persistEraseImageDefaultPreset({
                       model: selectedModel?.model ?? value,
@@ -2804,9 +2804,13 @@ export const ImageAnnotationWorkspace = ({
                         ? DEFAULT_NANO_BANANA_SIZE
                         : shouldResetXimuGptSize
                           ? "auto"
-                          : undefined,
+                          : shouldResetGrokSize
+                            ? "1:1"
+                        : undefined,
                       resolution: shouldResetXimuGptResolution
                         ? "1K"
+                        : shouldResetGrokResolution
+                          ? "standard"
                         : undefined,
                     });
                     updateEraseImageParams({
@@ -2816,8 +2820,12 @@ export const ImageAnnotationWorkspace = ({
                         ? { size: DEFAULT_NANO_BANANA_SIZE }
                         : {}),
                       ...(shouldResetXimuGptSize ? { size: "auto" } : {}),
+                      ...(shouldResetGrokSize ? { size: "1:1" } : {}),
                       ...(shouldResetXimuGptResolution
                         ? { resolution: "1K" }
+                        : {}),
+                      ...(shouldResetGrokResolution
+                        ? { resolution: "standard" }
                         : {}),
                     });
                   }}
@@ -2855,7 +2863,7 @@ export const ImageAnnotationWorkspace = ({
                   />
                 ) : null}
 
-                {isEraseGeminiModel || isEraseGeminiPro2Model ? (
+                {(isEraseGeminiModel || isEraseGeminiPro2Model) ? (
                   <GeminiParamsPanel
                     size={eraseSize}
                     resolution={eraseResolution}
@@ -2870,7 +2878,9 @@ export const ImageAnnotationWorkspace = ({
                   />
                 ) : null}
 
-                {isEraseNanoBananaLocalModel || isEraseXimuNanoBananaModel ? (
+                {isEraseNanoBananaLocalModel ||
+                isEraseAdobeNanoBananaProModel ||
+                isEraseXimuNanoBananaModel ? (
                   <GeminiParamsPanel
                     size={eraseSize}
                     resolution={eraseResolution}
@@ -2879,7 +2889,7 @@ export const ImageAnnotationWorkspace = ({
                         ? XIMU_NANO_BANANA2_SIZES
                         : isEraseXimuNanoBananaProModel
                           ? XIMU_NANO_BANANA_PRO_SIZES
-                          : NANO_BANANA_LOCAL_SIZES
+                        : NANO_BANANA_LOCAL_SIZES
                     }
                     resolutionOptions={NANO_BANANA_RESOLUTIONS}
                     onSizeChange={(value) => {
@@ -2893,7 +2903,26 @@ export const ImageAnnotationWorkspace = ({
                   />
                 ) : null}
 
-                {isEraseGptImage2Model || isEraseXimuGptImage2Model ? (
+                {isEraseGrokImageModel ? (
+                  <GeminiParamsPanel
+                    size={eraseSize}
+                    resolution={eraseResolution}
+                    sizeOptions={GROK_IMAGE_SIZES}
+                    resolutionOptions={GROK_IMAGE_RESOLUTIONS}
+                    onSizeChange={(value) => {
+                      persistEraseImageDefaultPreset({ size: value });
+                      updateEraseImageParams({ size: value });
+                    }}
+                    onResolutionChange={(value) => {
+                      persistEraseImageDefaultPreset({ resolution: value });
+                      updateEraseImageParams({ resolution: value });
+                    }}
+                  />
+                ) : null}
+
+                {isEraseGptImage2Model ||
+                isEraseAdobeGptImage2Model ||
+                isEraseXimuGptImage2Model ? (
                   <GptImage2ParamsPanel
                     size={eraseSize}
                     resolution={eraseResolution}
@@ -2938,10 +2967,9 @@ export const ImageAnnotationWorkspace = ({
                         const currentIndex =
                           ERASE_IMAGE_COUNT_OPTIONS.indexOf(eraseImageCount);
                         const nextIndex =
-                          (currentIndex + 1) % ERASE_IMAGE_COUNT_OPTIONS.length;
-                        setEraseImageCount(
-                          ERASE_IMAGE_COUNT_OPTIONS[nextIndex],
-                        );
+                          (currentIndex + 1) %
+                          ERASE_IMAGE_COUNT_OPTIONS.length;
+                        setEraseImageCount(ERASE_IMAGE_COUNT_OPTIONS[nextIndex]);
                       }}
                       disabled={isEraseGenerating}
                       className={cn(
@@ -2971,6 +2999,7 @@ export const ImageAnnotationWorkspace = ({
               </div>
             </div>
           ) : null}
+
         </div>
       </div>
     </div>

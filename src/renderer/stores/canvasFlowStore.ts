@@ -3545,1172 +3545,1201 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             if (ledgerBizId) {
               refundDesktopProxyScore(
                 ledgerBizId,
-                "image task creation failed: no task_id",
-                "image",
-              ).catch(() => { });
-            }
-            throw new Error("未返回任务 ID，请稍后再试");
-          }
+                "
+          ledgerBizId = response?.ledgerBizId;
 
-          // 标记为生成中
-          set((state) => ({
-            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-              ...data,
-              status: GenerationStatus.IN_PROGRESS,
-              progress: 0,
-            })),
-          }));
+              // 从响应中提取 task_id（兼容多种返回结构）
+              taskId =
+                response?.data?.task_id ??
+                response?.result?.task_id ??
+                response?.task_id ??
+                response?.data?.taskId ??
+                response?.result?.taskId ??
+                response?.taskId ??
+                response?.data?.id ??
+                response?.result?.id ??
+                response?.id;
 
-          // 为每个 task 创建独立的 controller，以 taskId 为 key 存储
-          const controller = new AbortController();
-          imagePollingControllers.set(taskId, controller);
-
-          // 根据模型类型选择不同的轮询函数，传入 totalTaskCount 用于判断所有任务是否完成
-          if (isMidjourney) {
-            pollMjImageGeneration(
-              taskId,
-              nodeId,
-              controller.signal,
-              set,
-              get,
-              totalTaskCount,
-              ledgerBizId,
-            );
-          } else {
-            // 非 Midjourney 模型使用标准轮询
-            pollImageGeneration(
-              taskId,
-              nodeId,
-              controller.signal,
-              set,
-              get,
-              totalTaskCount,
-              ledgerBizId,
-            );
-          }
-        }
-      } catch (startError) {
-        console.error("创建图片生成任务失败:", startError);
-        // 调用失败时减少待完成数量
-        const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
-        if (remaining <= 0) {
-          pendingTaskCounts.delete(nodeId);
-        } else {
-          pendingTaskCounts.set(nodeId, remaining);
-        }
-        // 从 error 对象中提取后端返回的详细信息
-        const serverMessage = getRequestErrorMessage(startError);
-        set((state) => ({
-          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            status: GenerationStatus.FAILED,
-            error: {
-              code: "CREATE_TASK_FAILED",
-              message:
-                startError instanceof Error
-                  ? startError.message
-                  : "创建任务失败，请稍后再试",
-              detail: serverMessage,
-              serverMessage,
-            },
-          })),
-        }));
-        throw startError;
-      }
-    },
-
-    /**
-     * 手动停止图片轮询（停止该节点下所有任务的轮询）
-     */
-    stopImagePolling: (nodeId) => {
-      // 停止所有与该节点相关的 task 轮询
-      imagePollingControllers.forEach((controller, taskId) => {
-        controller.abort();
-        imagePollingControllers.delete(taskId);
-      });
-      pendingTaskCounts.delete(nodeId);
-    },
-
-    /**
-     * 本地 Gemini 图片直连：直接调用 API 并上传 OSS（无需轮询）
-     * @param nodeId 节点 ID
-     * @param payload 包含 prompt, image_urls, size, resolution 等字段
-     */
-    startGeminiPro2Generation: async (nodeId, payload) => {
-      // 先中止旧轮询（清除该节点所有相关的 polling controller）
-      imagePollingControllers.forEach((controller, taskId) => {
-        controller.abort();
-        imagePollingControllers.delete(taskId);
-      });
-      pendingTaskCounts.delete(nodeId);
-
-      const {
-        model,
-        platform,
-        prompt,
-        image_urls: rawImageUrls = [],
-        size,
-        resolution,
-        promptDraft,
-        promptDraftHtml,
-        requiredPoints,
-      } = payload;
-      const directGeminiModel = resolveLocalGeminiImageModel({
-        model,
-        platform,
-        size,
-        resolution,
-      });
-      const imageUrls = Array.isArray(rawImageUrls) ? rawImageUrls : [];
-      const originalModel = payload.originalModel ?? payload.model;
-      const ximuImageModel = resolveXimuImageModel(originalModel);
-      const scoreCost = Number(requiredPoints ?? 0) || undefined;
-      let ledgerBizId: string | undefined;
-
-      // 更新节点状态为排队中
-      set((state) => ({
-        nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-          ...data,
-          model: originalModel,
-          originalModel,
-          platform: platform ?? data.platform,
-          prompt,
-          promptDraft: promptDraft ?? "",
-          promptDraftHtml: promptDraftHtml ?? "<p></p>",
-          requiredPoints,
-          size,
-          resolution,
-          status: GenerationStatus.QUEUED,
-          progress: 0,
-          error: undefined,
-          result: {
-            type: "image",
-            data: data.result?.data ?? [],
-          },
-        })),
-      }));
-
-      try {
-        if (ximuImageModel) {
-          const ximuCardCode = useChatSettingsStore
-            .getState()
-            .ximuCardCode.trim();
-          if (!ximuCardCode) {
-            throw new Error("请先在模型管理的西牧渠道填写卡密");
-          }
-
-          set((state) => ({
-            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-              ...data,
-              status: GenerationStatus.IN_PROGRESS,
-              progress: 0,
-            })),
-          }));
-
-          const ximuReferenceUrls = await normalizeXimuReferenceUrls(imageUrls);
-          const request = isXimuGptImageGenerationModel(originalModel)
-            ? buildXimuGptImageRequest({
-              model: ximuImageModel as any,
-              cardCode: ximuCardCode,
-              prompt,
-              aspectRatio: resolveXimuGptAspectRatio({
-                model: ximuImageModel as any,
-                size,
-                resolution,
-              }),
-              urls: ximuReferenceUrls,
-            })
-            : buildXimuNanoBananaRequest({
-              model: ximuImageModel as any,
-              cardCode: ximuCardCode,
-              prompt,
-              aspectRatio:
-                originalModel === XIMU_NANO_BANANA2_MODEL
-                  ? resolveXimuNanoBanana2AspectRatio(size)
-                  : resolveXimuNanoBananaProAspectRatio(size),
-              imageSize: resolveXimuImageSize(resolution),
-              urls: ximuReferenceUrls,
-            });
-
-          let submitResponse;
-          try {
-            submitResponse = isXimuGptImageGenerationModel(originalModel)
-              ? await createXimuGptImageGeneration(request as any)
-              : await createXimuNanoBananaGeneration(request as any);
-          } catch (submitError) {
-            throw new Error(
-              getXimuRequestErrorText(submitError, "西牧提交生图失败"),
-            );
-          }
-
-          const taskId = extractXimuTaskId(submitResponse);
-          if (!taskId) {
-            throw new Error("西牧渠道未返回任务 ID");
-          }
-
-          let responseUrl: string;
-          try {
-            responseUrl = await waitForXimuImageResult(taskId);
-          } catch (pollError) {
-            throw new Error(
-              getXimuRequestErrorText(pollError, "西牧查询生图结果失败"),
-            );
-          }
-          const ossUrl = await mirrorGeneratedImageUrlToOss(responseUrl);
-          const projectId = get().projectId;
-          let resultItem: {
-            url: string;
-            remoteUrl: string;
-            originalUrl?: string;
-            localName?: string;
-            localPath?: string;
-          } = {
-            url: ossUrl,
-            remoteUrl: ossUrl,
-            ...(ossUrl === responseUrl ? {} : { originalUrl: responseUrl }),
-          };
-
-          if (projectId) {
-            try {
-              const fileName = await saveGeneratedImageToLocal(
-                projectId,
-                ossUrl,
-                extractExtensionFromUrl(responseUrl, "png"),
-              );
-
-              if (fileName) {
-                resultItem = {
-                  ...resultItem,
-                  localName: fileName,
-                  localPath: getLocalFilePath(
-                    projectId,
-                    "generate_image",
-                    fileName,
-                  ),
-                };
+              if (!taskId) {
+                if (ledgerBizId) {
+                  refundDesktopProxyScore(
+                    ledgerBizId,
+                    "image task creation failed: no task_id",
+                    "image",
+                  ).catch(() => { });
+                }
+                throw new Error("未返回任务 ID，请稍后再试");
               }
-            } catch (saveError) {
-              console.error(
-                "[startGeminiPro2Generation] 保存西牧图片到本地失败:",
-                saveError,
+            }
+
+            if (!taskId) {
+              if (ledgerBizId) {
+                refundDesktopProxyScore(
+                  ledgerBizId,
+                  "image task creation failed: empty task_id",
+                  "image",
+                ).catch(() => { });
+              }
+              throw new Error("任务 ID 为空");
+            }
+
+            // 标记为生成中
+            set((state) => ({
+              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+                ...data,
+                status: GenerationStatus.IN_PROGRESS,
+                progress: 0,
+              })),
+            }));
+
+            // 为每个 task 创建独立的 controller，以 taskId 为 key 存储
+            const controller = new AbortController();
+            imagePollingControllers.set(taskId, controller);
+
+            // 根据模型类型选择不同的轮询函数，传入 totalTaskCount 用于判断所有任务是否完成
+            if (isMidjourney) {
+              pollMjImageGeneration(
+                taskId,
+                nodeId,
+                controller.signal,
+                set,
+                get,
+                totalTaskCount,
+                ledgerBizId,
+              );
+            } else {
+              // 非 Midjourney 模型使用标准轮询
+              pollImageGeneration(
+                taskId,
+                nodeId,
+                controller.signal,
+                set,
+                get,
+                totalTaskCount,
+                ledgerBizId,
               );
             }
-          }
-
-          set((state) => ({
-            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-              const existingData = data.result?.data ?? [];
-              const mergedData = appendMediaSequences(existingData, [
-                resultItem,
-              ]);
-              return {
+          } catch (startError) {
+            console.error("创建图片生成任务失败:", startError);
+            // 调用失败时减少待完成数量
+            const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
+            if (remaining <= 0) {
+              pendingTaskCounts.delete(nodeId);
+            } else {
+              pendingTaskCounts.set(nodeId, remaining);
+            }
+            // 从 error 对象中提取后端返回的详细信息
+            const serverMessage = getRequestErrorMessage(startError);
+            set((state) => ({
+              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
                 ...data,
-                status: GenerationStatus.COMPLETED,
-                progress: 100,
-                result: {
-                  type: "image",
-                  data: mergedData,
+                status: GenerationStatus.FAILED,
+                error: {
+                  code: "CREATE_TASK_FAILED",
+                  message:
+                    startError instanceof Error
+                      ? startError.message
+                      : "创建任务失败，请稍后再试",
+                  detail: serverMessage,
+                  serverMessage,
                 },
-                error: undefined,
-              };
-            }),
-          }));
-          saveCurrentCanvasToHistory();
-          if (useChatSettingsStore.getState().autoSaveEnabled) {
-            get().saveGraph();
+              })),
+            }));
+            throw startError;
           }
-          await refreshBalanceAfterGeneration({
-            scene: "image",
-            nodeId,
-            model: originalModel,
-            requiredPoints: payload.requiredPoints,
+        },
+
+        /**
+         * 手动停止图片轮询（停止该节点下所有任务的轮询）
+         */
+        stopImagePolling: (nodeId) => {
+          // 停止所有与该节点相关的 task 轮询
+          imagePollingControllers.forEach((controller, taskId) => {
+            controller.abort();
+            imagePollingControllers.delete(taskId);
           });
-          return;
-        }
+          pendingTaskCounts.delete(nodeId);
+        },
 
-        // RunningHub 渠道（低价 -> 官方回退）
-        if (isRunningHubImageGenerationModel(originalModel)) {
-          set((state) => ({
-            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-              ...data,
-              status: GenerationStatus.IN_PROGRESS,
-              progress: 0,
-            })),
-          }));
+          /**
+           * 本地 Gemini 图片直连：直接调用 API 并上传 OSS（无需轮询）
+           * @param nodeId 节点 ID
+           * @param payload 包含 prompt, image_urls, size, resolution 等字段
+           */
+          startGeminiPro2Generation: async (nodeId, payload) => {
+            // 先中止旧轮询（清除该节点所有相关的 polling controller）
+            imagePollingControllers.forEach((controller, taskId) => {
+              controller.abort();
+              imagePollingControllers.delete(taskId);
+            });
+            pendingTaskCounts.delete(nodeId);
 
-          try {
-            const resultUrl = await generateRunningHubImageWithFallback({
-              model: originalModel,
+            const {
+              model,
+              platform,
               prompt,
-              imageUrls,
+              image_urls: rawImageUrls = [],
+              size,
+              resolution,
+              promptDraft,
+              promptDraftHtml,
+              requiredPoints,
+            } = payload;
+            const directGeminiModel = resolveLocalGeminiImageModel({
+              model,
+              platform,
               size,
               resolution,
             });
+            const imageUrls = Array.isArray(rawImageUrls) ? rawImageUrls : [];
+            const originalModel = payload.originalModel ?? payload.model;
+            const ximuImageModel = resolveXimuImageModel(originalModel);
+            const scoreCost = Number(requiredPoints ?? 0) || undefined;
+            let ledgerBizId: string | undefined;
 
-            const ossUrl = await mirrorGeneratedImageUrlToOss(resultUrl);
-            const projectId = get().projectId;
-            let resultItem: {
-              url: string;
-              remoteUrl: string;
-              originalUrl?: string;
-              localName?: string;
-              localPath?: string;
-            } = {
-              url: ossUrl,
-              remoteUrl: ossUrl,
-              ...(ossUrl === resultUrl ? {} : { originalUrl: resultUrl }),
-            };
-
-            if (projectId) {
-              try {
-                const fileName = await saveGeneratedImageToLocal(
-                  projectId,
-                  ossUrl,
-                  extractExtensionFromUrl(resultUrl, "png"),
-                );
-
-                if (fileName) {
-                  resultItem = {
-                    ...resultItem,
-                    localName: fileName,
-                    localPath: getLocalFilePath(
-                      projectId,
-                      "generate_image",
-                      fileName,
-                    ),
-                  };
-                }
-              } catch (saveError) {
-                console.error(
-                  "[startGeminiPro2Generation] 保存 RunningHub 图片到本地失败:",
-                  saveError,
-                );
-              }
-            }
-
+            // 更新节点状态为排队中
             set((state) => ({
-              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-                const existingData = data.result?.data ?? [];
-                const mergedData = appendMediaSequences(existingData, [
-                  resultItem,
-                ]);
-                return {
-                  ...data,
-                  status: GenerationStatus.COMPLETED,
-                  progress: 100,
-                  result: {
-                    type: "image",
-                    data: mergedData,
-                  },
-                  error: undefined,
-                };
-              }),
+              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+                ...data,
+                model: originalModel,
+                originalModel,
+                platform: platform ?? data.platform,
+                prompt,
+                promptDraft: promptDraft ?? "",
+                promptDraftHtml: promptDraftHtml ?? "<p></p>",
+                requiredPoints,
+                size,
+                resolution,
+                status: GenerationStatus.QUEUED,
+                progress: 0,
+                error: undefined,
+                result: {
+                  type: "image",
+                  data: data.result?.data ?? [],
+                },
+              })),
             }));
-            saveCurrentCanvasToHistory();
-            if (useChatSettingsStore.getState().autoSaveEnabled) {
-              get().saveGraph();
-            }
-            await refreshBalanceAfterGeneration({
-              scene: "image",
-              nodeId,
-              model: originalModel,
-              requiredPoints: payload.requiredPoints,
-            });
-            return;
-          } catch (rhError) {
-            console.error(
-              "[startGeminiPro2Generation] RunningHub 生图失败:",
-              rhError,
-            );
-            throw rhError;
-          }
-        }
 
-        // 1. 构造请求体
-        // 注意：text 和 fileData 不能同时存在于同一个 part，必须拆成独立的 part。
-        // 参考图直接把 URL 交给西牧服务端自行拉取，避免前端先转 Base64。
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const parts: any[] = [];
-
-        // 先添加文本 part
-        if (prompt) {
-          parts.push({ text: prompt });
-        }
-
-        // 再添加图片 parts（每个图片一个独立的 fileData part）
-        for (const url of imageUrls) {
-          parts.push({
-            fileData: {
-              fileUri: url,
-              mimeType: inferImageMimeTypeFromUri(url),
-            },
-          });
-        }
-
-        // 如果既没有文本也没有图片，则添加空文本
-        if (parts.length === 0) {
-          parts.push({ text: "" });
-        }
-
-        const requestBody = {
-          contents: [{ parts }],
-          generationConfig: {
-            responseModalities: ["IMAGE"],
-          },
-        };
-
-        // 2. 更新状态为生成中
-        set((state) => ({
-          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            status: GenerationStatus.IN_PROGRESS,
-            progress: 0,
-          })),
-        }));
-
-        // 3. 调用 API
-        const response: GeminiYwResponseBody = await generateGeminiContent(
-          directGeminiModel,
-          requestBody,
-          undefined,
-          scoreCost,
-        );
-        ledgerBizId = (response as any)?.ledgerBizId;
-
-        // 4. 解析响应，提取图片 Base64
-        const candidates = response.candidates ?? [];
-        if (candidates.length === 0) {
-          throw new Error("API 返回为空");
-        }
-
-        const imageParts = candidates[0].content.parts.filter(
-          (p) => p.inlineData?.data,
-        );
-
-        // 5. 将每张图片上传到 OSS
-        const processedResultData = await Promise.all(
-          imageParts.map(async (part, index) => {
-            const base64Data = part.inlineData!.data;
             try {
-              const ossResult = await uploadBase64ToOSS(
-                base64Data,
-                `gemini-${Date.now()}-${index}`,
-              );
-              return {
-                url: ossResult.url,
-                remoteUrl: ossResult.url,
-              };
-            } catch (ossError) {
-              console.error(
-                "[startGeminiPro2Generation] 上传图片到 OSS 失败:",
-                ossError,
-              );
-              throw new Error("图片已生成，但转存 OSS 失败，请重试");
-            }
-          }),
-        );
+              if (ximuImageModel) {
+                const ximuCardCode = useChatSettingsStore
+                  .getState()
+                  .ximuCardCode.trim();
+                if (!ximuCardCode) {
+                  throw new Error("请先在模型管理的西牧渠道填写卡密");
+                }
 
-        // 6. 更新节点状态为完成
-        set((state) => ({
-          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-            const existingData = data.result?.data ?? [];
-            const mergedData = appendMediaSequences(
-              existingData,
-              processedResultData,
-            );
-            return {
-              ...data,
-              status: GenerationStatus.COMPLETED,
-              progress: 100,
-              result: {
-                type: "image",
-                data: mergedData,
-              },
-              error: undefined,
-            };
-          }),
-        }));
-        saveCurrentCanvasToHistory();
-        if (useChatSettingsStore.getState().autoSaveEnabled) {
-          get().saveGraph();
-        }
+                set((state) => ({
+                  nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+                    ...data,
+                    status: GenerationStatus.IN_PROGRESS,
+                    progress: 0,
+                  })),
+                }));
 
-        if (ledgerBizId) {
-          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
-        }
+                const ximuReferenceUrls = await normalizeXimuReferenceUrls(imageUrls);
+                const request = isXimuGptImageGenerationModel(originalModel)
+                  ? buildXimuGptImageRequest({
+                    model: ximuImageModel as any,
+                    cardCode: ximuCardCode,
+                    prompt,
+                    aspectRatio: resolveXimuGptAspectRatio({
+                      model: ximuImageModel as any,
+                      size,
+                      resolution,
+                    }),
+                    urls: ximuReferenceUrls,
+                  })
+                  : buildXimuNanoBananaRequest({
+                    model: ximuImageModel as any,
+                    cardCode: ximuCardCode,
+                    prompt,
+                    aspectRatio:
+                      originalModel === XIMU_NANO_BANANA2_MODEL
+                        ? resolveXimuNanoBanana2AspectRatio(size)
+                        : resolveXimuNanoBananaProAspectRatio(size),
+                    imageSize: resolveXimuImageSize(resolution),
+                    urls: ximuReferenceUrls,
+                  });
 
-        await refreshBalanceAfterGeneration({
-          scene: "image",
-          nodeId,
-          model: payload.originalModel ?? payload.model,
-          requiredPoints: payload.requiredPoints,
-        });
-      } catch (startError) {
-        console.error(
-          "[startGeminiPro2Generation] Gemini 3 Pro 渠道二生成失败:",
-          startError,
-        );
-        const rawServerMessage = getRequestErrorMessage(startError);
-        const detailMessage = normalizeLocalGeminiErrorDetail(rawServerMessage);
-        set((state) => ({
-          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            status: GenerationStatus.FAILED,
-            error: {
-              code: "GEMINI_PRO2_FAILED",
-              message:
-                startError instanceof Error
-                  ? startError.message
-                  : "生成失败，请稍后再试",
-              detail: detailMessage,
-              serverMessage: rawServerMessage,
-            },
-          })),
-        }));
-        saveCurrentCanvasToHistory();
-        if (useChatSettingsStore.getState().autoSaveEnabled) {
-          get().saveGraph();
-        }
-        if (ledgerBizId) {
-          refundDesktopProxyScore(
-            ledgerBizId,
-            rawServerMessage || "gemini image generation failed",
-            "image",
-          ).catch(() => { });
-        }
-        throw startError;
-      }
-    },
+                let submitResponse;
+                try {
+                  submitResponse = isXimuGptImageGenerationModel(originalModel)
+                    ? await createXimuGptImageGeneration(request as any)
+                    : await createXimuNanoBananaGeneration(request as any);
+                } catch (submitError) {
+                  throw new Error(
+                    getXimuRequestErrorText(submitError, "西牧提交生图失败"),
+                  );
+                }
 
-    /**
-     * 拆图：将图片节点拆分为宫格子图
-     * @param nodeId 源图片节点 ID
-     * @param gridSize 网格大小 (2=2x2, 3=3x3, 4=4x4)
-     */
-    splitImage: (nodeId: string, gridSize: number) => {
-      const sourceNode = get().nodes.find((node) => node.id === nodeId);
-      if (!sourceNode || sourceNode.type !== "imageNode") return;
+                const taskId = extractXimuTaskId(submitResponse);
+                if (!taskId) {
+                  throw new Error("西牧渠道未返回任务 ID");
+                }
 
-      const sourceData = sourceNode.data as ImageGenerationNode;
-      const sourceModel = sourceData.model || "doubao-seedream-5-0";
-      const sourcePlatform = sourceData.platform;
-      const isLocalDirectImageModel =
-        sourcePlatform === "google_pro2" ||
-        (sourceModel === NANO_BANANA_LOCAL_MODEL &&
-          sourcePlatform === NANO_BANANA_LOCAL_PLATFORM) ||
-        isXimuImageGenerationModel(sourceModel);
-      const sourceImageUrl = sourceData.result?.data?.[0]?.url;
+                let responseUrl: string;
+                try {
+                  responseUrl = await waitForXimuImageResult(taskId);
+                } catch (pollError) {
+                  throw new Error(
+                    getXimuRequestErrorText(pollError, "西牧查询生图结果失败"),
+                  );
+                }
+                const ossUrl = await mirrorGeneratedImageUrlToOss(responseUrl);
+                const projectId = get().projectId;
+                let resultItem: {
+                  url: string;
+                  remoteUrl: string;
+                  originalUrl?: string;
+                  localName?: string;
+                  localPath?: string;
+                } = {
+                  url: ossUrl,
+                  remoteUrl: ossUrl,
+                  ...(ossUrl === responseUrl ? {} : { originalUrl: responseUrl }),
+                };
 
-      const totalCells = gridSize * gridSize;
-      const sourceAspectRatio =
-        sourceData.size?.includes(":") || sourceData.aspectRatio?.includes(":")
-          ? (sourceData.size ?? sourceData.aspectRatio)
-          : undefined;
-      const childNodeSize = sourceAspectRatio
-        ? getNodeSizeByAspectRatio(sourceAspectRatio, 250)
-        : { width: 350, height: 250 };
-      const columnGap = Math.max(48, Math.round(childNodeSize.width * 0.1));
-      const rowGap = Math.max(48, Math.round(childNodeSize.height * 0.16));
-
-      const startX =
-        sourceNode.position.x +
-        (sourceNode.width ?? childNodeSize.width) +
-        columnGap * 2;
-      const startY = sourceNode.position.y;
-      const createdNodeIds: string[] = [];
-
-      const gridNameMap: Record<number, string> = {
-        2: "四",
-        3: "九",
-        4: "十六",
-      };
-      const gridName = gridNameMap[gridSize];
-
-      const newEdges: EdgeType[] = [];
-
-      for (let i = 0; i < totalCells; i++) {
-        const row = Math.floor(i / gridSize) + 1;
-        const col = (i % gridSize) + 1;
-
-        const position = {
-          x: startX + (col - 1) * (childNodeSize.width + columnGap),
-          y: startY + (row - 1) * (childNodeSize.height + rowGap),
-        };
-        const splitPrompt = `这是${gridName}宫格图片，请提取第${row}行第${col}列，保持原构图和色调，去除边角文字、字幕和标注，高清优化。`;
-
-        const newId = get().addNode("image", position);
-        if (newId) {
-          createdNodeIds.push(newId);
-        }
-
-        newEdges.push({
-          id: `edge-${nodeId}-${newId}`,
-          source: nodeId,
-          target: newId,
-          sourceHandle: "output",
-          targetHandle: "input",
-        });
-
-        // 先将提示词回填到子图的文本输入区域
-        get().updateImageNodeData(newId, {
-          model: sourceData.model,
-          originalModel: sourceData.originalModel ?? sourceData.model,
-          platform: sourceData.platform,
-          size: sourceData.size,
-          resolution: sourceData.resolution,
-          midjourneyAdvanced: sourceData.midjourneyAdvanced,
-          promptDraft: splitPrompt,
-          promptDraftHtml: `<p>${splitPrompt}</p>`,
-        });
-
-        const payload: any = {
-          model: sourceModel,
-          originalModel: sourceData.originalModel ?? sourceData.model,
-          platform: sourceData.platform,
-          prompt: splitPrompt,
-          n: 1,
-          promptDraft: splitPrompt,
-          promptDraftHtml: `<p>${splitPrompt}</p>`,
-          metadata: {},
-        };
-
-        if (sourceData.size) {
-          payload.size = sourceData.size;
-          payload.metadata.resolution = sourceData.resolution;
-        }
-        if (sourceData.resolution) {
-          payload.resolution = sourceData.resolution;
-        }
-
-        if (sourceImageUrl) {
-          payload.image_urls = [sourceImageUrl];
-        }
-
-        if (isLocalDirectImageModel) {
-          void get().startGeminiPro2Generation(newId, payload);
-        } else {
-          void get().startImageGeneration(newId, payload);
-        }
-      }
-
-      // 将新边添加到画布
-      set((state) => ({
-        edges: [...state.edges, ...newEdges],
-      }));
-
-      // 自动保存
-
-      if (createdNodeIds.length > 1) {
-        get().createGroup(createdNodeIds);
-      }
-
-      if (useChatSettingsStore.getState().autoSaveEnabled) {
-        get().saveGraph();
-      }
-    },
-
-    /**
-     * 独立为图片：将节点中的多张图片/视频拆分为独立节点
-     * @param nodeId 源节点 ID
-     */
-    separateToNodes: (nodeId: string) => {
-      void (async () => {
-        const sourceNode = get().nodes.find((node) => node.id === nodeId);
-        if (!sourceNode) return;
-
-        const nodeType = sourceNode.type;
-        const sourceData = sourceNode.data as
-          | ImageGenerationNode
-          | NewVideoGenerationNode;
-        const resultData = sourceData.result?.data;
-        const isNewVideoGenerating =
-          nodeType === "newVideoNode" &&
-          (sourceData.status === GenerationStatus.IN_PROGRESS ||
-            sourceData.status === GenerationStatus.QUEUED);
-        const shouldSeparateGeneratingNewVideo =
-          isNewVideoGenerating && resultData?.length === 1;
-
-        if (
-          !resultData ||
-          (resultData.length <= 1 && !shouldSeparateGeneratingNewVideo)
-        ) {
-          return;
-        }
-
-        saveCurrentCanvasToHistory();
-
-        const targetNodeType =
-          nodeType === "newVideoNode" ? "newVideo" : "image";
-        const validItems = (
-          shouldSeparateGeneratingNewVideo
-            ? resultData.slice(0, 1)
-            : resultData.slice(1)
-        ).filter((item) => item?.url || item?.remoteUrl);
-
-        if (validItems.length === 0) return;
-
-        const sourceVisualSize =
-          nodeType === "imageNode"
-            ? getNodeSizeByAspectRatio(
-              (sourceData as ImageGenerationNode).size ?? "4:3",
-              250,
-            )
-            : getNodeSizeByAspectRatio(
-              (sourceData as NewVideoGenerationNode).aspect_ratio ?? "16:9",
-              250,
-            );
-        const verticalGap = 32;
-        const baseY =
-          sourceNode.position.y + sourceVisualSize.height + verticalGap;
-        const minGap = 18;
-        const maxGap = 30;
-
-        const resolvedItems =
-          targetNodeType === "image"
-            ? await Promise.all(
-              validItems.map(async (item) => {
-                const imageUrl = item.remoteUrl || item.url;
-                let aspectRatio = sourceData.size ?? "4:3";
-
-                if (imageUrl) {
+                if (projectId) {
                   try {
-                    const { width, height } =
-                      await getImageDimensions(imageUrl);
-                    aspectRatio = getClosestAspectRatio(width, height);
-                  } catch (error) {
-                    console.warn(
-                      "[separateToNodes] 获取图片比例失败，使用回退比例:",
-                      error,
+                    const fileName = await saveGeneratedImageToLocal(
+                      projectId,
+                      ossUrl,
+                      extractExtensionFromUrl(responseUrl, "png"),
+                    );
+
+                    if (fileName) {
+                      resultItem = {
+                        ...resultItem,
+                        localName: fileName,
+                        localPath: getLocalFilePath(
+                          projectId,
+                          "generate_image",
+                          fileName,
+                        ),
+                      };
+                    }
+                  } catch (saveError) {
+                    console.error(
+                      "[startGeminiPro2Generation] 保存西牧图片到本地失败:",
+                      saveError,
                     );
                   }
                 }
 
-                const nodeSize = getNodeSizeByAspectRatio(aspectRatio, 250);
-
-                return {
-                  item,
-                  aspectRatio,
-                  nodeSize,
-                };
-              }),
-            )
-            : await Promise.all(
-              validItems.map(async (item) => {
-                const videoUrl = item.remoteUrl || item.url;
-                let aspectRatio =
-                  (sourceData as NewVideoGenerationNode).aspect_ratio ??
-                  "16:9";
-
-                if (videoUrl) {
-                  try {
-                    const { width, height } =
-                      await getVideoDimensions(videoUrl);
-                    aspectRatio = getClosestAspectRatio(width, height);
-                  } catch (error) {
-                    console.warn(
-                      "[separateToNodes] 获取视频比例失败，使用回退比例:",
-                      error,
-                    );
-                  }
+                set((state) => ({
+                  nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+                    const existingData = data.result?.data ?? [];
+                    const mergedData = appendMediaSequences(existingData, [
+                      resultItem,
+                    ]);
+                    return {
+                      ...data,
+                      status: GenerationStatus.COMPLETED,
+                      progress: 100,
+                      result: {
+                        type: "image",
+                        data: mergedData,
+                      },
+                      error: undefined,
+                    };
+                  }),
+                }));
+                saveCurrentCanvasToHistory();
+                if (useChatSettingsStore.getState().autoSaveEnabled) {
+                  get().saveGraph();
                 }
+                await refreshBalanceAfterGeneration({
+                  scene: "image",
+                  nodeId,
+                  model: originalModel,
+                  requiredPoints: payload.requiredPoints,
+                });
+                return;
+              }
 
-                return {
-                  item,
-                  aspectRatio,
-                  nodeSize: getNodeSizeByAspectRatio(aspectRatio, 250),
-                };
-              }),
-            );
+              // RunningHub 渠道（低价 -> 官方回退）
+              if (isRunningHubImageGenerationModel(originalModel)) {
+                set((state) => ({
+                  nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+                    ...data,
+                    status: GenerationStatus.IN_PROGRESS,
+                    progress: 0,
+                  })),
+                }));
 
-        const latestState = get();
-        const latestSourceNode = latestState.nodes.find(
-          (node) => node.id === nodeId,
-        );
-        if (!latestSourceNode) return;
+                try {
+                  const resultUrl = await generateRunningHubImageWithFallback({
+                    model: originalModel,
+                    prompt,
+                    imageUrls,
+                    size,
+                    resolution,
+                  });
 
-        let currentX = latestSourceNode.position.x;
-        const newNodes = resolvedItems.map(
-          ({ item, aspectRatio, nodeSize }) => {
-            const gap = Math.max(
-              minGap,
-              Math.min(maxGap, Math.round(nodeSize.width * 0.06)),
-            );
-            const newNodeId = get().getNextNodeId(targetNodeType);
-            const factory = nodeFactoryMap[targetNodeType];
-            const baseNode = factory(newNodeId, { x: currentX, y: baseY });
+                  const ossUrl = await mirrorGeneratedImageUrlToOss(resultUrl);
+                  const projectId = get().projectId;
+                  let resultItem: {
+                    url: string;
+                    remoteUrl: string;
+                    originalUrl?: string;
+                    localName?: string;
+                    localPath?: string;
+                  } = {
+                    url: ossUrl,
+                    remoteUrl: ossUrl,
+                    ...(ossUrl === resultUrl ? {} : { originalUrl: resultUrl }),
+                  };
 
-            const finalNode =
-              targetNodeType === "newVideo"
-                ? {
-                  ...baseNode,
-                  width: nodeSize.width,
-                  height: nodeSize.height,
-                  data: {
-                    ...baseNode.data,
-                    aspect_ratio: aspectRatio,
-                    status: GenerationStatus.COMPLETED,
-                    progress: 100,
-                    result: {
-                      type: "video",
-                      data: [
-                        {
-                          ...item,
-                          format: item.format ?? "mp4",
+                  if (projectId) {
+                    try {
+                      const fileName = await saveGeneratedImageToLocal(
+                        projectId,
+                        ossUrl,
+                        extractExtensionFromUrl(resultUrl, "png"),
+                      );
+
+                      if (fileName) {
+                        resultItem = {
+                          ...resultItem,
+                          localName: fileName,
+                          localPath: getLocalFilePath(
+                            projectId,
+                            "generate_image",
+                            fileName,
+                          ),
+                        };
+                      }
+                    } catch (saveError) {
+                      console.error(
+                        "[startGeminiPro2Generation] 保存 RunningHub 图片到本地失败:",
+                        saveError,
+                      );
+                    }
+                  }
+
+                  set((state) => ({
+                    nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+                      const existingData = data.result?.data ?? [];
+                      const mergedData = appendMediaSequences(existingData, [
+                        resultItem,
+                      ]);
+                      return {
+                        ...data,
+                        status: GenerationStatus.COMPLETED,
+                        progress: 100,
+                        result: {
+                          type: "image",
+                          data: mergedData,
                         },
-                      ],
-                    },
-                  },
+                        error: undefined,
+                      };
+                    }),
+                  }));
+                  saveCurrentCanvasToHistory();
+                  if (useChatSettingsStore.getState().autoSaveEnabled) {
+                    get().saveGraph();
+                  }
+                  await refreshBalanceAfterGeneration({
+                    scene: "image",
+                    nodeId,
+                    model: originalModel,
+                    requiredPoints: payload.requiredPoints,
+                  });
+                  return;
+                } catch (rhError) {
+                  console.error(
+                    "[startGeminiPro2Generation] RunningHub 生图失败:",
+                    rhError,
+                  );
+                  throw rhError;
                 }
-                : {
-                  ...baseNode,
-                  width: nodeSize.width,
-                  height: nodeSize.height,
-                  data: {
-                    ...baseNode.data,
+              }
+
+              // 1. 构造请求体
+              // 注意：text 和 fileData 不能同时存在于同一个 part，必须拆成独立的 part。
+              // 参考图直接把 URL 交给西牧服务端自行拉取，避免前端先转 Base64。
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const parts: any[] = [];
+
+              // 先添加文本 part
+              if (prompt) {
+                parts.push({ text: prompt });
+              }
+
+              // 再添加图片 parts（每个图片一个独立的 fileData part）
+              for (const url of imageUrls) {
+                parts.push({
+                  fileData: {
+                    fileUri: url,
+                    mimeType: inferImageMimeTypeFromUri(url),
+                  },
+                });
+              }
+
+              // 如果既没有文本也没有图片，则添加空文本
+              if (parts.length === 0) {
+                parts.push({ text: "" });
+              }
+
+              const requestBody = {
+                contents: [{ parts }],
+                generationConfig: {
+                  responseModalities: ["IMAGE"],
+                },
+              };
+
+              // 2. 更新状态为生成中
+              set((state) => ({
+                nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+                  ...data,
+                  status: GenerationStatus.IN_PROGRESS,
+                  progress: 0,
+                })),
+              }));
+
+              // 3. 调用 API
+              const response: GeminiYwResponseBody = await generateGeminiContent(
+                directGeminiModel,
+                requestBody,
+                undefined,
+                scoreCost,
+              );
+              ledgerBizId = (response as any)?.ledgerBizId;
+
+              // 4. 解析响应，提取图片 Base64
+              const candidates = response.candidates ?? [];
+              if (candidates.length === 0) {
+                throw new Error("API 返回为空");
+              }
+
+              const imageParts = candidates[0].content.parts.filter(
+                (p) => p.inlineData?.data,
+              );
+
+              // 5. 将每张图片上传到 OSS
+              const processedResultData = await Promise.all(
+                imageParts.map(async (part, index) => {
+                  const base64Data = part.inlineData!.data;
+                  try {
+                    const ossResult = await uploadBase64ToOSS(
+                      base64Data,
+                      `gemini-${Date.now()}-${index}`,
+                    );
+                    return {
+                      url: ossResult.url,
+                      remoteUrl: ossResult.url,
+                    };
+                  } catch (ossError) {
+                    console.error(
+                      "[startGeminiPro2Generation] 上传图片到 OSS 失败:",
+                      ossError,
+                    );
+                    throw new Error("图片已生成，但转存 OSS 失败，请重试");
+                  }
+                }),
+              );
+
+              // 6. 更新节点状态为完成
+              set((state) => ({
+                nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+                  const existingData = data.result?.data ?? [];
+                  const mergedData = appendMediaSequences(
+                    existingData,
+                    processedResultData,
+                  );
+                  return {
+                    ...data,
                     status: GenerationStatus.COMPLETED,
                     progress: 100,
-                    size: aspectRatio,
                     result: {
                       type: "image",
-                      data: [{ ...item }],
+                      data: mergedData,
                     },
+                    error: undefined,
+                  };
+                }),
+              }));
+              saveCurrentCanvasToHistory();
+              if (useChatSettingsStore.getState().autoSaveEnabled) {
+                get().saveGraph();
+              }
+
+              if (ledgerBizId) {
+                confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
+              }
+
+              await refreshBalanceAfterGeneration({
+                scene: "image",
+                nodeId,
+                model: payload.originalModel ?? payload.model,
+                requiredPoints: payload.requiredPoints,
+              });
+            } catch (startError) {
+              console.error(
+                "[startGeminiPro2Generation] Gemini 3 Pro 渠道二生成失败:",
+                startError,
+              );
+              const rawServerMessage = getRequestErrorMessage(startError);
+              const detailMessage = normalizeLocalGeminiErrorDetail(rawServerMessage);
+              set((state) => ({
+                nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+                  ...data,
+                  status: GenerationStatus.FAILED,
+                  error: {
+                    code: "GEMINI_PRO2_FAILED",
+                    message:
+                      startError instanceof Error
+                        ? startError.message
+                        : "生成失败，请稍后再试",
+                    detail: detailMessage,
+                    serverMessage: rawServerMessage,
                   },
+                })),
+              }));
+              saveCurrentCanvasToHistory();
+              if (useChatSettingsStore.getState().autoSaveEnabled) {
+                get().saveGraph();
+              }
+              if (ledgerBizId) {
+                refundDesktopProxyScore(
+                  ledgerBizId,
+                  rawServerMessage || "gemini image generation failed",
+                  "image",
+                ).catch(() => { });
+              }
+              throw startError;
+            }
+          },
+
+            /**
+             * 拆图：将图片节点拆分为宫格子图
+             * @param nodeId 源图片节点 ID
+             * @param gridSize 网格大小 (2=2x2, 3=3x3, 4=4x4)
+             */
+            splitImage: (nodeId: string, gridSize: number) => {
+              const sourceNode = get().nodes.find((node) => node.id === nodeId);
+              if (!sourceNode || sourceNode.type !== "imageNode") return;
+
+              const sourceData = sourceNode.data as ImageGenerationNode;
+              const sourceModel = sourceData.model || "doubao-seedream-5-0";
+              const sourcePlatform = sourceData.platform;
+              const isLocalDirectImageModel =
+                sourcePlatform === "google_pro2" ||
+                (sourceModel === NANO_BANANA_LOCAL_MODEL &&
+                  sourcePlatform === NANO_BANANA_LOCAL_PLATFORM) ||
+                isXimuImageGenerationModel(sourceModel);
+              const sourceImageUrl = sourceData.result?.data?.[0]?.url;
+
+              const totalCells = gridSize * gridSize;
+              const sourceAspectRatio =
+                sourceData.size?.includes(":") || sourceData.aspectRatio?.includes(":")
+                  ? (sourceData.size ?? sourceData.aspectRatio)
+                  : undefined;
+              const childNodeSize = sourceAspectRatio
+                ? getNodeSizeByAspectRatio(sourceAspectRatio, 250)
+                : { width: 350, height: 250 };
+              const columnGap = Math.max(48, Math.round(childNodeSize.width * 0.1));
+              const rowGap = Math.max(48, Math.round(childNodeSize.height * 0.16));
+
+              const startX =
+                sourceNode.position.x +
+                (sourceNode.width ?? childNodeSize.width) +
+                columnGap * 2;
+              const startY = sourceNode.position.y;
+              const createdNodeIds: string[] = [];
+
+              const gridNameMap: Record<number, string> = {
+                2: "四",
+                3: "九",
+                4: "十六",
+              };
+              const gridName = gridNameMap[gridSize];
+
+              const newEdges: EdgeType[] = [];
+
+              for (let i = 0; i < totalCells; i++) {
+                const row = Math.floor(i / gridSize) + 1;
+                const col = (i % gridSize) + 1;
+
+                const position = {
+                  x: startX + (col - 1) * (childNodeSize.width + columnGap),
+                  y: startY + (row - 1) * (childNodeSize.height + rowGap),
+                };
+                const splitPrompt = `这是${gridName}宫格图片，请提取第${row}行第${col}列，保持原构图和色调，去除边角文字、字幕和标注，高清优化。`;
+
+                const newId = get().addNode("image", position);
+                if (newId) {
+                  createdNodeIds.push(newId);
+                }
+
+                newEdges.push({
+                  id: `edge-${nodeId}-${newId}`,
+                  source: nodeId,
+                  target: newId,
+                  sourceHandle: "output",
+                  targetHandle: "input",
+                });
+
+                // 先将提示词回填到子图的文本输入区域
+                get().updateImageNodeData(newId, {
+                  model: sourceData.model,
+                  originalModel: sourceData.originalModel ?? sourceData.model,
+                  platform: sourceData.platform,
+                  size: sourceData.size,
+                  resolution: sourceData.resolution,
+                  midjourneyAdvanced: sourceData.midjourneyAdvanced,
+                  promptDraft: splitPrompt,
+                  promptDraftHtml: `<p>${splitPrompt}</p>`,
+                });
+
+                const payload: any = {
+                  model: sourceModel,
+                  originalModel: sourceData.originalModel ?? sourceData.model,
+                  platform: sourceData.platform,
+                  prompt: splitPrompt,
+                  n: 1,
+                  promptDraft: splitPrompt,
+                  promptDraftHtml: `<p>${splitPrompt}</p>`,
+                  metadata: {},
                 };
 
-            currentX += nodeSize.width + gap;
-            return finalNode as AllNodeType;
-          },
-        );
+                if (sourceData.size) {
+                  payload.size = sourceData.size;
+                  payload.metadata.resolution = sourceData.resolution;
+                }
+                if (sourceData.resolution) {
+                  payload.resolution = sourceData.resolution;
+                }
 
-        const nextNodes = latestState.nodes
-          .map((node) => {
-            if (node.id !== nodeId) {
-              return node;
-            }
+                if (sourceImageUrl) {
+                  payload.image_urls = [sourceImageUrl];
+                }
 
-            if (targetNodeType === "newVideo") {
-              return {
-                ...node,
-                data: {
-                  ...node.data,
-                  result: {
-                    type: sourceData.result?.type ?? "video",
-                    // 新版视频节点生成中有一个 UI 占位卡；当只有一个真实视频时，独立后源节点继续保留生成状态。
-                    data: shouldSeparateGeneratingNewVideo
-                      ? []
-                      : [
-                        {
-                          ...(resultData[0] as any),
-                          format: (resultData[0] as any)?.format ?? "mp4",
+                if (isLocalDirectImageModel) {
+                  void get().startGeminiPro2Generation(newId, payload);
+                } else {
+                  void get().startImageGeneration(newId, payload);
+                }
+              }
+
+              // 将新边添加到画布
+              set((state) => ({
+                edges: [...state.edges, ...newEdges],
+              }));
+
+              // 自动保存
+
+              if (createdNodeIds.length > 1) {
+                get().createGroup(createdNodeIds);
+              }
+
+              if (useChatSettingsStore.getState().autoSaveEnabled) {
+                get().saveGraph();
+              }
+            },
+
+              /**
+               * 独立为图片：将节点中的多张图片/视频拆分为独立节点
+               * @param nodeId 源节点 ID
+               */
+              separateToNodes: (nodeId: string) => {
+                void (async () => {
+                  const sourceNode = get().nodes.find((node) => node.id === nodeId);
+                  if (!sourceNode) return;
+
+                  const nodeType = sourceNode.type;
+                  const sourceData = sourceNode.data as
+                    | ImageGenerationNode
+                    | NewVideoGenerationNode;
+                  const resultData = sourceData.result?.data;
+                  const isNewVideoGenerating =
+                    nodeType === "newVideoNode" &&
+                    (sourceData.status === GenerationStatus.IN_PROGRESS ||
+                      sourceData.status === GenerationStatus.QUEUED);
+                  const shouldSeparateGeneratingNewVideo =
+                    isNewVideoGenerating && resultData?.length === 1;
+
+                  if (
+                    !resultData ||
+                    (resultData.length <= 1 && !shouldSeparateGeneratingNewVideo)
+                  ) {
+                    return;
+                  }
+
+                  saveCurrentCanvasToHistory();
+
+                  const targetNodeType =
+                    nodeType === "newVideoNode" ? "newVideo" : "image";
+                  const validItems = (
+                    shouldSeparateGeneratingNewVideo
+                      ? resultData.slice(0, 1)
+                      : resultData.slice(1)
+                  ).filter((item) => item?.url || item?.remoteUrl);
+
+                  if (validItems.length === 0) return;
+
+                  const sourceVisualSize =
+                    nodeType === "imageNode"
+                      ? getNodeSizeByAspectRatio(
+                        (sourceData as ImageGenerationNode).size ?? "4:3",
+                        250,
+                      )
+                      : getNodeSizeByAspectRatio(
+                        (sourceData as NewVideoGenerationNode).aspect_ratio ?? "16:9",
+                        250,
+                      );
+                  const verticalGap = 32;
+                  const baseY =
+                    sourceNode.position.y + sourceVisualSize.height + verticalGap;
+                  const minGap = 18;
+                  const maxGap = 30;
+
+                  const resolvedItems =
+                    targetNodeType === "image"
+                      ? await Promise.all(
+                        validItems.map(async (item) => {
+                          const imageUrl = item.remoteUrl || item.url;
+                          let aspectRatio = sourceData.size ?? "4:3";
+
+                          if (imageUrl) {
+                            try {
+                              const { width, height } =
+                                await getImageDimensions(imageUrl);
+                              aspectRatio = getClosestAspectRatio(width, height);
+                            } catch (error) {
+                              console.warn(
+                                "[separateToNodes] 获取图片比例失败，使用回退比例:",
+                                error,
+                              );
+                            }
+                          }
+
+                          const nodeSize = getNodeSizeByAspectRatio(aspectRatio, 250);
+
+                          return {
+                            item,
+                            aspectRatio,
+                            nodeSize,
+                          };
+                        }),
+                      )
+                      : await Promise.all(
+                        validItems.map(async (item) => {
+                          const videoUrl = item.remoteUrl || item.url;
+                          let aspectRatio =
+                            (sourceData as NewVideoGenerationNode).aspect_ratio ??
+                            "16:9";
+
+                          if (videoUrl) {
+                            try {
+                              const { width, height } =
+                                await getVideoDimensions(videoUrl);
+                              aspectRatio = getClosestAspectRatio(width, height);
+                            } catch (error) {
+                              console.warn(
+                                "[separateToNodes] 获取视频比例失败，使用回退比例:",
+                                error,
+                              );
+                            }
+                          }
+
+                          return {
+                            item,
+                            aspectRatio,
+                            nodeSize: getNodeSizeByAspectRatio(aspectRatio, 250),
+                          };
+                        }),
+                      );
+
+                  const latestState = get();
+                  const latestSourceNode = latestState.nodes.find(
+                    (node) => node.id === nodeId,
+                  );
+                  if (!latestSourceNode) return;
+
+                  let currentX = latestSourceNode.position.x;
+                  const newNodes = resolvedItems.map(
+                    ({ item, aspectRatio, nodeSize }) => {
+                      const gap = Math.max(
+                        minGap,
+                        Math.min(maxGap, Math.round(nodeSize.width * 0.06)),
+                      );
+                      const newNodeId = get().getNextNodeId(targetNodeType);
+                      const factory = nodeFactoryMap[targetNodeType];
+                      const baseNode = factory(newNodeId, { x: currentX, y: baseY });
+
+                      const finalNode =
+                        targetNodeType === "newVideo"
+                          ? {
+                            ...baseNode,
+                            width: nodeSize.width,
+                            height: nodeSize.height,
+                            data: {
+                              ...baseNode.data,
+                              aspect_ratio: aspectRatio,
+                              status: GenerationStatus.COMPLETED,
+                              progress: 100,
+                              result: {
+                                type: "video",
+                                data: [
+                                  {
+                                    ...item,
+                                    format: item.format ?? "mp4",
+                                  },
+                                ],
+                              },
+                            },
+                          }
+                          : {
+                            ...baseNode,
+                            width: nodeSize.width,
+                            height: nodeSize.height,
+                            data: {
+                              ...baseNode.data,
+                              status: GenerationStatus.COMPLETED,
+                              progress: 100,
+                              size: aspectRatio,
+                              result: {
+                                type: "image",
+                                data: [{ ...item }],
+                              },
+                            },
+                          };
+
+                      currentX += nodeSize.width + gap;
+                      return finalNode as AllNodeType;
+                    },
+                  );
+
+                  const nextNodes = latestState.nodes
+                    .map((node) => {
+                      if (node.id !== nodeId) {
+                        return node;
+                      }
+
+                      if (targetNodeType === "newVideo") {
+                        return {
+                          ...node,
+                          data: {
+                            ...node.data,
+                            result: {
+                              type: sourceData.result?.type ?? "video",
+                              // 新版视频节点生成中有一个 UI 占位卡；当只有一个真实视频时，独立后源节点继续保留生成状态。
+                              data: shouldSeparateGeneratingNewVideo
+                                ? []
+                                : [
+                                  {
+                                    ...(resultData[0] as any),
+                                    format: (resultData[0] as any)?.format ?? "mp4",
+                                  },
+                                ],
+                            },
+                          },
+                        } as AllNodeType;
+                      }
+
+                      return {
+                        ...node,
+                        data: {
+                          ...node.data,
+                          result: {
+                            type: sourceData.result?.type ?? "image",
+                            data: [resultData[0]],
+                          },
                         },
-                      ],
+                      } as AllNodeType;
+                    })
+                    .concat(newNodes);
+
+                  set(() => ({
+                    nodes: nextNodes,
+                    selectedNodesCount: nextNodes.filter((node) => node.selected).length,
+                  }));
+
+                  get().requestHistorySave();
+
+                  if (useChatSettingsStore.getState().autoSaveEnabled) {
+                    get().saveGraph();
+                  }
+                })();
+              },
+
+                /**
+                 * 更新视频节点数据（局部 patch）
+                 */
+                updateNewVideoNodeData: (nodeId, patch) => {
+                  set((state) => ({
+                    nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
+                      ...data,
+                      ...patch,
+                    })),
+                  }));
+                },
+
+                  updateNodeDimensions: (nodeId, width, height) => {
+                    set((state) => ({
+                      nodes: state.nodes.map((node) =>
+                        node.id === nodeId ? { ...node, width, height } : node,
+                      ),
+                    }));
                   },
-                },
-              } as AllNodeType;
-            }
 
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                result: {
-                  type: sourceData.result?.type ?? "image",
-                  data: [resultData[0]],
-                },
-              },
-            } as AllNodeType;
-          })
-          .concat(newNodes);
+                    /**
+                     * 更新音频节点数据（局部 patch）
+                     */
+                    updateAudioNodeData: (nodeId, patch) => {
+                      set((state) => ({
+                        nodes: updateAudioNodeInList(state.nodes, nodeId, (data) => ({
+                          ...data,
+                          ...patch,
+                        })),
+                      }));
+                    },
 
-        set(() => ({
-          nodes: nextNodes,
-          selectedNodesCount: nextNodes.filter((node) => node.selected).length,
-        }));
+                      /**
+                       * 更新节点的 nickname（通用方法）
+                       */
+                      updateNodeNickname: (nodeId, nickname) => {
+                        set((state) => ({
+                          nodes: state.nodes.map((node) => {
+                            if (node.id === nodeId) {
+                              return {
+                                ...node,
+                                data: {
+                                  ...node.data,
+                                  nickname,
+                                },
+                              };
+                            }
+                            return node;
+                          }),
+                        }));
 
-        get().requestHistorySave();
+                        get().requestHistorySave();
 
-        if (useChatSettingsStore.getState().autoSaveEnabled) {
-          get().saveGraph();
-        }
-      })();
-    },
+                        if (useChatSettingsStore.getState().autoSaveEnabled) {
+                          get().saveGraph();
+                        }
+                      },
 
-    /**
-     * 更新视频节点数据（局部 patch）
-     */
-    updateNewVideoNodeData: (nodeId, patch) => {
-      set((state) => ({
-        nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
-          ...data,
-          ...patch,
-        })),
-      }));
-    },
+                        updateTextAgentNodeData: (nodeId, patch) => {
+                          set((state) => ({
+                            nodes: updateTextAgentNodeInList(state.nodes, nodeId, (data) => ({
+                              ...data,
+                              ...patch,
+                            })),
+                          }));
+                        },
 
-    updateNodeDimensions: (nodeId, width, height) => {
-      set((state) => ({
-        nodes: state.nodes.map((node) =>
-          node.id === nodeId ? { ...node, width, height } : node,
-        ),
-      }));
-    },
+                          updateImageAgentNodeData: (nodeId, patch) => {
+                            set((state) => ({
+                              nodes: updateImageAgentNodeInList(state.nodes, nodeId, (data) => ({
+                                ...data,
+                                ...patch,
+                              })),
+                            }));
+                          },
 
-    /**
-     * 更新音频节点数据（局部 patch）
-     */
-    updateAudioNodeData: (nodeId, patch) => {
-      set((state) => ({
-        nodes: updateAudioNodeInList(state.nodes, nodeId, (data) => ({
-          ...data,
-          ...patch,
-        })),
-      }));
-    },
+                            updateVideoAgentNodeData: (nodeId, patch) => {
+                              set((state) => ({
+                                nodes: updateVideoAgentNodeInList(state.nodes, nodeId, (data) => ({
+                                  ...data,
+                                  ...patch,
+                                })),
+                              }));
+                            },
 
-    /**
-     * 更新节点的 nickname（通用方法）
-     */
-    updateNodeNickname: (nodeId, nickname) => {
-      set((state) => ({
-        nodes: state.nodes.map((node) => {
-          if (node.id === nodeId) {
-            return {
-              ...node,
-              data: {
-                ...node.data,
-                nickname,
-              },
-            };
-          }
-          return node;
-        }),
-      }));
+                              updateTableNodeData: (nodeId, patchOrUpdater) => {
+                                set((state) => ({
+                                  nodes: updateTableNodeInList(
+                                    state.nodes,
+                                    nodeId,
+                                    typeof patchOrUpdater === "function"
+                                      ? patchOrUpdater
+                                      : (data) => ({ ...data, ...patchOrUpdater }),
+                                  ),
+                                }));
+                              },
 
-      get().requestHistorySave();
+                                /**
+                                 * 创建视频生成任务并启动轮询
+                                 */
+                                startNewVideoGeneration: async (nodeId, payload, count = 1) => {
+                                  stopVideoPollingInternal(nodeId);
 
-      if (useChatSettingsStore.getState().autoSaveEnabled) {
-        get().saveGraph();
+                                  const input = payload.__newVideoInput;
+                                  const requestPayload = { ...payload };
+                                  delete requestPayload.__newVideoInput;
+                                  const requiredPoints = requestPayload.requiredPoints;
+                                  delete requestPayload.requiredPoints;
+                                  // 新版视频节点固定一次只创建一个视频任务，避免一个节点同时产出多条结果影响体验。
+                                  const totalTasks = 1;
+                                  const model = input?.model ?? requestPayload.model ?? "";
+                                  const isSeedance20 =
+                                    model === "seedance-2.0-fast" || model === "seedance-2.0-pro";
+
+                                  nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
+                                    ...data,
+                                    model,
+                                    prompt: input?.prompt ?? data.prompt,
+                                    promptDraft: input?.prompt ?? data.promptDraft,
+                                    duration: input?.params?.duration ?? data.duration,
+                                    aspect_ratio: input?.params?.aspectRatio ?? data.aspect_ratio,
+                                    requiredPoints,
+                                    status: GenerationStatus.QUEUED,
+                                    progress: 0,
+                                    // 新版视频节点和老版保持一致：开始生成时保留已有视频结果，
+                                    // 新结果完成后追加进画廊，这样上传视频/生成视频可以一起展开和显示序号标记。
+                                    result: {
+                                      type: "video",
+                                      data: data.result?.data ?? [],
+                                    },
+                                    error: undefined,
+                                    metadata: {
+                                      ...data.metadata,
+                                      params: input?.params,
+                                      mode: input?.mode,
+                                      count: totalTasks,
+                                      tasks: [],
+                                      failedTasks: [],
+                                    },
+                                  })),
+                                  }));
+
+try {
+  const createTask = async () => {
+    let response: any;
+    if (model === "happyhorse-1.0-r2v") {
+      response = await createKuaiziHappyHorseVideoTask(
+        requestPayload,
+        requiredPoints,
+      );
+    } else if (model === "kling-v3-omni") {
+      response = await createKuaiziKlingVideoTask(
+        requestPayload,
+        requiredPoints,
+      );
+    } else if (isSeedance20) {
+      response = await createLzVideoTask(requestPayload, requiredPoints);
+    } else {
+      response = await createDashscopeVideoSynthesis(
+        requestPayload,
+        requiredPoints,
+      );
+    }
+    const taskId = response?.data?.task_id ?? response?.output?.task_id;
+
+    if (!taskId) {
+      // 创建失败时，如果有 ledgerBizId 需要退款
+      if (response?.ledgerBizId) {
+        refundDesktopProxyScore(
+          response.ledgerBizId,
+          "task creation failed: no task_id",
+        ).catch(() => { });
       }
-    },
+      throw new Error("任务 ID 为空");
+    }
 
-    updateTextAgentNodeData: (nodeId, patch) => {
-      set((state) => ({
-        nodes: updateTextAgentNodeInList(state.nodes, nodeId, (data) => ({
-          ...data,
-          ...patch,
-        })),
-      }));
-    },
+    return {
+      taskId: taskId as string,
+      ledgerBizId: response?.ledgerBizId as string | undefined,
+    };
+  };
 
-    updateImageAgentNodeData: (nodeId, patch) => {
-      set((state) => ({
-        nodes: updateImageAgentNodeInList(state.nodes, nodeId, (data) => ({
-          ...data,
-          ...patch,
-        })),
-      }));
-    },
+  const taskResults = await Promise.all(
+    Array.from({ length: totalTasks }, () => createTask()),
+  );
+  const taskIds = taskResults.map((r) => r.taskId);
+  const ledgerBizId = taskResults[0]?.ledgerBizId;
 
-    updateVideoAgentNodeData: (nodeId, patch) => {
-      set((state) => ({
-        nodes: updateVideoAgentNodeInList(state.nodes, nodeId, (data) => ({
-          ...data,
-          ...patch,
-        })),
-      }));
-    },
+  set((state) => ({
+    nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
+      ...data,
+      task_id: taskIds[0],
+      status: GenerationStatus.IN_PROGRESS,
+      progress: 0,
+      metadata: {
+        ...data.metadata,
+        tasks: taskIds,
+        failedTasks: [],
+        ledgerBizId,
+      },
+    })),
+  }));
 
-    updateTableNodeData: (nodeId, patchOrUpdater) => {
-      set((state) => ({
-        nodes: updateTableNodeInList(
-          state.nodes,
-          nodeId,
-          typeof patchOrUpdater === "function"
-            ? patchOrUpdater
-            : (data) => ({ ...data, ...patchOrUpdater }),
-        ),
-      }));
-    },
+  const controller = new AbortController();
+  videoPollingControllers.set(nodeId, controller);
+  taskIds.forEach((taskId, index) => {
+    void pollNewVideoGeneration({
+      taskId,
+      nodeId,
+      signal: controller.signal,
+      setState: set,
+      getState: get,
+      isSeedance20,
+      taskIndex: index,
+      totalTasks,
+      ledgerBizId,
+      videoProvider:
+        model === "happyhorse-1.0-r2v" || model === "kling-v3-omni"
+          ? "kuaizi"
+          : isSeedance20
+            ? "seedance"
+            : "dashscope",
+    });
+  });
+} catch (startError) {
+  const serverMessage = getRequestErrorMessage(startError);
+  set((state) => ({
+    nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
+      ...data,
+      status: GenerationStatus.FAILED,
+      error: {
+        code: "CREATE_TASK_FAILED",
+        message: "创建任务失败，请稍后再试",
+        detail: serverMessage,
+        serverMessage,
+      },
+    })),
+  }));
+  throw startError;
+}
+                                },
 
-    /**
-     * 创建视频生成任务并启动轮询
-     */
-    startNewVideoGeneration: async (nodeId, payload, count = 1) => {
-      stopVideoPollingInternal(nodeId);
+/**
+ * 手动停止视频轮询
+ */
+stopVideoPolling: (nodeId) => {
+  stopVideoPollingInternal(nodeId);
+},
 
-      const input = payload.__newVideoInput;
-      const requestPayload = { ...payload };
-      delete requestPayload.__newVideoInput;
-      const requiredPoints = requestPayload.requiredPoints;
-      delete requestPayload.requiredPoints;
-      // 新版视频节点固定一次只创建一个视频任务，避免一个节点同时产出多条结果影响体验。
-      const totalTasks = 1;
-      const model = input?.model ?? requestPayload.model ?? "";
-      const isSeedance20 =
-        model === "seedance-2.0-fast" || model === "seedance-2.0-pro";
+  // ==================== 任务管理 ====================
 
-      set((state) => ({
-        nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
-          ...data,
-          model,
-          prompt: input?.prompt ?? data.prompt,
-          promptDraft: input?.prompt ?? data.promptDraft,
-          duration: input?.params?.duration ?? data.duration,
-          aspect_ratio: input?.params?.aspectRatio ?? data.aspect_ratio,
-          requiredPoints,
-          status: GenerationStatus.QUEUED,
-          progress: 0,
-          // 新版视频节点和老版保持一致：开始生成时保留已有视频结果，
-          // 新结果完成后追加进画廊，这样上传视频/生成视频可以一起展开和显示序号标记。
-          result: {
-            type: "video",
-            data: data.result?.data ?? [],
-          },
-          error: undefined,
-          metadata: {
-            ...data.metadata,
-            params: input?.params,
-            mode: input?.mode,
-            count: totalTasks,
-            tasks: [],
-            failedTasks: [],
-          },
-        })),
-      }));
+  /**
+   * 获取正在生成的任务数量
+   */
+  getGeneratingTasksCount: () => {
+    const { nodes } = get();
+    let count = 0;
 
-      try {
-        const createTask = async () => {
-          let response: any;
-          if (model === "happyhorse-1.0-r2v") {
-            response = await createKuaiziHappyHorseVideoTask(
-              requestPayload,
-              requiredPoints,
-            );
-          } else if (model === "kling-v3-omni") {
-            response = await createKuaiziKlingVideoTask(
-              requestPayload,
-              requiredPoints,
-            );
-          } else if (isSeedance20) {
-            response = await createLzVideoTask(requestPayload, requiredPoints);
-          } else {
-            response = await createDashscopeVideoSynthesis(
-              requestPayload,
-              requiredPoints,
-            );
-          }
-          const taskId = response?.data?.task_id ?? response?.output?.task_id;
-
-          if (!taskId) {
-            // 创建失败时，如果有 ledgerBizId 需要退款
-            if (response?.ledgerBizId) {
-              refundDesktopProxyScore(
-                response.ledgerBizId,
-                "task creation failed: no task_id",
-              ).catch(() => { });
-            }
-            throw new Error("任务 ID 为空");
-          }
-
-          return {
-            taskId: taskId as string,
-            ledgerBizId: response?.ledgerBizId as string | undefined,
-          };
-        };
-
-        const taskResults = await Promise.all(
-          Array.from({ length: totalTasks }, () => createTask()),
-        );
-        const taskIds = taskResults.map((r) => r.taskId);
-        const ledgerBizId = taskResults[0]?.ledgerBizId;
-
-        set((state) => ({
-          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            task_id: taskIds[0],
-            status: GenerationStatus.IN_PROGRESS,
-            progress: 0,
-            metadata: {
-              ...data.metadata,
-              tasks: taskIds,
-              failedTasks: [],
-              ledgerBizId,
-            },
-          })),
-        }));
-
-        const controller = new AbortController();
-        videoPollingControllers.set(nodeId, controller);
-        taskIds.forEach((taskId, index) => {
-          void pollNewVideoGeneration({
-            taskId,
-            nodeId,
-            signal: controller.signal,
-            setState: set,
-            getState: get,
-            isSeedance20,
-            taskIndex: index,
-            totalTasks,
-            ledgerBizId,
-            videoProvider:
-              model === "happyhorse-1.0-r2v" || model === "kling-v3-omni"
-                ? "kuaizi"
-                : isSeedance20
-                  ? "seedance"
-                  : "dashscope",
-          });
-        });
-      } catch (startError) {
-        const serverMessage = getRequestErrorMessage(startError);
-        set((state) => ({
-          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            status: GenerationStatus.FAILED,
-            error: {
-              code: "CREATE_TASK_FAILED",
-              message: "创建任务失败，请稍后再试",
-              detail: serverMessage,
-              serverMessage,
-            },
-          })),
-        }));
-        throw startError;
+    nodes.forEach((node) => {
+      const status = node.data?.status;
+      // 图片/视频节点使用 GenerationStatus 枚举
+      if (
+        status === GenerationStatus.IN_PROGRESS ||
+        status === GenerationStatus.QUEUED
+      ) {
+        count++;
       }
-    },
+      // 文本智能体节点使用字符串状态
+      if (node.type === "textAgentNode" && status === "generating") {
+        count++;
+      }
+    });
 
-    /**
-     * 手动停止视频轮询
-     */
-    stopVideoPolling: (nodeId) => {
-      stopVideoPollingInternal(nodeId);
-    },
-
-    // ==================== 任务管理 ====================
-
-    /**
-     * 获取正在生成的任务数量
-     */
-    getGeneratingTasksCount: () => {
-      const { nodes } = get();
-      let count = 0;
-
-      nodes.forEach((node) => {
-        const status = node.data?.status;
-        // 图片/视频节点使用 GenerationStatus 枚举
-        if (
-          status === GenerationStatus.IN_PROGRESS ||
-          status === GenerationStatus.QUEUED
-        ) {
-          count++;
-        }
-        // 文本智能体节点使用字符串状态
-        if (node.type === "textAgentNode" && status === "generating") {
-          count++;
-        }
-      });
-
-      return count;
-    },
+    return count;
+  },
 
     /**
      * 取消所有正在生成的任务
@@ -4784,280 +4813,280 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }));
     },
 
-    // ==================== 导入导出方法实现 ====================
+      // ==================== 导入导出方法实现 ====================
 
-    /**
-     * 导出画布数据
-     */
-    exportCanvasData: () => {
-      const state = get();
-      return buildCanvasPersistedState(state);
-    },
+      /**
+       * 导出画布数据
+       */
+      exportCanvasData: () => {
+        const state = get();
+        return buildCanvasPersistedState(state);
+      },
 
-    /**
-     * 导入画布数据（覆盖模式）
-     */
-    importCanvasData: (data) => {
-      const normalizedData = buildCanvasPersistedState(data);
+        /**
+         * 导入画布数据（覆盖模式）
+         */
+        importCanvasData: (data) => {
+          const normalizedData = buildCanvasPersistedState(data);
 
-      set({
-        nodes: normalizedData.nodes,
-        edges: normalizedData.edges,
-        nodeIdCounters: normalizedData.nodeIdCounters,
-        groups: normalizedData.groups,
-        activeNodeId: null,
-        activeVideoTool: null,
-        selectedGroupId: null,
-      });
-    },
+          set({
+            nodes: normalizedData.nodes,
+            edges: normalizedData.edges,
+            nodeIdCounters: normalizedData.nodeIdCounters,
+            groups: normalizedData.groups,
+            activeNodeId: null,
+            activeVideoTool: null,
+            selectedGroupId: null,
+          });
+        },
 
-    // ==================== 流程事件处理 ====================
+          // ==================== 流程事件处理 ====================
 
-    /**
-     * 处理节点变化事件（位置、尺寸、删除等）
-     *
-     * 注意：CanvasFlow 组件内部已做拖动优化（本地状态隔离），
-     * 拖动过程中不会调用此方法，只有拖动结束或其他变更时才调用。
-     */
-    onNodesChange: (changes) => {
-      const hasSelectChange = changes.some(
-        (change) => change.type === "select",
-      );
-      const hasFinalPositionChange = changes.some(
-        (change) => change.type === "position" && !change.dragging,
-      );
-      const hasAddOrRemove = changes.some(
-        (change) => change.type === "add" || change.type === "remove",
-      );
-      set((state) => {
-        const nextNodes = applyNodeChanges(changes, state.nodes);
-        const nextGroups =
-          hasFinalPositionChange || hasAddOrRemove
-            ? normalizeCanvasGroups(state.groups, nextNodes).map((group) => {
-              const bounds = getGroupBounds(nextNodes, group.nodeIds, 24);
+          /**
+           * 处理节点变化事件（位置、尺寸、删除等）
+           *
+           * 注意：CanvasFlow 组件内部已做拖动优化（本地状态隔离），
+           * 拖动过程中不会调用此方法，只有拖动结束或其他变更时才调用。
+           */
+          onNodesChange: (changes) => {
+            const hasSelectChange = changes.some(
+              (change) => change.type === "select",
+            );
+            const hasFinalPositionChange = changes.some(
+              (change) => change.type === "position" && !change.dragging,
+            );
+            const hasAddOrRemove = changes.some(
+              (change) => change.type === "add" || change.type === "remove",
+            );
+            set((state) => {
+              const nextNodes = applyNodeChanges(changes, state.nodes);
+              const nextGroups =
+                hasFinalPositionChange || hasAddOrRemove
+                  ? normalizeCanvasGroups(state.groups, nextNodes).map((group) => {
+                    const bounds = getGroupBounds(nextNodes, group.nodeIds, 24);
+                    return {
+                      ...group,
+                      layoutOrigin: bounds
+                        ? {
+                          x: bounds.x,
+                          y: bounds.y,
+                        }
+                        : group.layoutOrigin,
+                    };
+                  })
+                  : state.groups;
+              // 计算选中节点数量，避免在 ImageNode 等组件中 O(n²) 遍历
+              const selectedCount = nextNodes.filter((n) => n.selected).length;
               return {
-                ...group,
-                layoutOrigin: bounds
-                  ? {
-                    x: bounds.x,
-                    y: bounds.y,
-                  }
-                  : group.layoutOrigin,
+                nodes: nextNodes,
+                selectedNodesCount: selectedCount,
+                selectedGroupId: hasSelectChange ? null : state.selectedGroupId,
+                groups: nextGroups,
               };
-            })
-            : state.groups;
-        // 计算选中节点数量，避免在 ImageNode 等组件中 O(n²) 遍历
-        const selectedCount = nextNodes.filter((n) => n.selected).length;
-        return {
-          nodes: nextNodes,
-          selectedNodesCount: selectedCount,
-          selectedGroupId: hasSelectChange ? null : state.selectedGroupId,
-          groups: nextGroups,
-        };
-      });
+            });
 
-      // 在节点变化后保存历史记录（排除拖动中的变化）
-      if (hasFinalPositionChange || hasAddOrRemove) {
-        get().requestHistorySave();
-      }
-    },
+            // 在节点变化后保存历史记录（排除拖动中的变化）
+            if (hasFinalPositionChange || hasAddOrRemove) {
+              get().requestHistorySave();
+            }
+          },
 
-    /**
-     * 处理边变化事件
-     * 当删除连接到视频/图片节点的边时，同步清理 image_urls 中对应的 URL
-     */
-    onEdgesChange: (changes) => {
-      set((state) => {
-        const nextEdges = applyEdgeChanges(changes, state.edges);
-        const removedEdgeIds = changes
-          .filter((change) => change.type === "remove")
-          .map((change) => change.id);
+            /**
+             * 处理边变化事件
+             * 当删除连接到视频/图片节点的边时，同步清理 image_urls 中对应的 URL
+             */
+            onEdgesChange: (changes) => {
+              set((state) => {
+                const nextEdges = applyEdgeChanges(changes, state.edges);
+                const removedEdgeIds = changes
+                  .filter((change) => change.type === "remove")
+                  .map((change) => change.id);
 
-        if (removedEdgeIds.length === 0) {
-          return {
-            edges: nextEdges,
-            ...buildReferenceHighlightState(
-              state.referenceHoverRefCounts,
-              nextEdges,
-            ),
-          };
-        }
+                if (removedEdgeIds.length === 0) {
+                  return {
+                    edges: nextEdges,
+                    ...buildReferenceHighlightState(
+                      state.referenceHoverRefCounts,
+                      nextEdges,
+                    ),
+                  };
+                }
 
-        const removedEdges = state.edges.filter((edge) =>
-          removedEdgeIds.includes(edge.id),
-        );
-        let nextNodes = state.nodes;
+                const removedEdges = state.edges.filter((edge) =>
+                  removedEdgeIds.includes(edge.id),
+                );
+                let nextNodes = state.nodes;
 
-        removedEdges.forEach((edge) => {
-          nextNodes = syncMediaUrlsByEdge(nextNodes, edge, "remove");
-        });
+                removedEdges.forEach((edge) => {
+                  nextNodes = syncMediaUrlsByEdge(nextNodes, edge, "remove");
+                });
 
-        return {
-          edges: nextEdges,
-          nodes: nextNodes,
-          ...buildReferenceHighlightState(
-            state.referenceHoverRefCounts,
-            nextEdges,
-          ),
-        };
-      });
-    },
+                return {
+                  edges: nextEdges,
+                  nodes: nextNodes,
+                  ...buildReferenceHighlightState(
+                    state.referenceHoverRefCounts,
+                    nextEdges,
+                  ),
+                };
+              });
+            },
 
-    /**
-     * 处理新连接创建事件
-     * 当连接到视频节点时，自动同步上游图片节点的 URL 到 image_urls
-     */
-    onConnect: (connection) => {
-      const { nodes } = get();
+              /**
+               * 处理新连接创建事件
+               * 当连接到视频节点时，自动同步上游图片节点的 URL 到 image_urls
+               */
+              onConnect: (connection) => {
+                const { nodes } = get();
 
-      const sourceNode = nodes.find((n) => n.id === connection.source);
-      const targetNode = nodes.find((n) => n.id === connection.target);
+                const sourceNode = nodes.find((n) => n.id === connection.source);
+                const targetNode = nodes.find((n) => n.id === connection.target);
 
-      if (targetNode?.type === "newVideoNode") {
-        const allowedSourceTypes = [
-          "noteNode",
-          "imageNode",
-          "newVideoNode",
-          "audioNode",
-        ];
-        if (sourceNode && !allowedSourceTypes.includes(sourceNode.type || "")) {
-          console.warn("视频节点只能接受图片、视频、音频节点的输入");
-          return;
-        }
+                if (targetNode?.type === "newVideoNode") {
+                  const allowedSourceTypes = [
+                    "noteNode",
+                    "imageNode",
+                    "newVideoNode",
+                    "audioNode",
+                  ];
+                  if (sourceNode && !allowedSourceTypes.includes(sourceNode.type || "")) {
+                    console.warn("视频节点只能接受图片、视频、音频节点的输入");
+                    return;
+                  }
 
-        if (sourceNode?.type === "audioNode") {
-          const audioData = sourceNode.data as AudioGenerationNode;
-          const audioDuration =
-            audioData.result?.data?.[0]?.duration || audioData.duration || 0;
+                  if (sourceNode?.type === "audioNode") {
+                    const audioData = sourceNode.data as AudioGenerationNode;
+                    const audioDuration =
+                      audioData.result?.data?.[0]?.duration || audioData.duration || 0;
 
-          if (audioDuration > 15) {
-            console.warn("音频时长超过15秒，无法连接到视频节点");
-            return;
-          }
-        }
-      }
+                    if (audioDuration > 15) {
+                      console.warn("音频时长超过15秒，无法连接到视频节点");
+                      return;
+                    }
+                  }
+                }
 
-      set((state) => {
-        const nextEdges = addEdge(connection, state.edges);
-        const currentEdgeIds = new Set(state.edges.map((edge) => edge.id));
-        const createdEdge = nextEdges.find(
-          (edge) => !currentEdgeIds.has(edge.id),
-        );
+                set((state) => {
+                  const nextEdges = addEdge(connection, state.edges);
+                  const currentEdgeIds = new Set(state.edges.map((edge) => edge.id));
+                  const createdEdge = nextEdges.find(
+                    (edge) => !currentEdgeIds.has(edge.id),
+                  );
 
-        return {
-          nodes: createdEdge
-            ? syncMediaUrlsByEdge(state.nodes, createdEdge as EdgeType, "add")
-            : state.nodes,
-          edges: nextEdges,
-          ...buildReferenceHighlightState(
-            state.referenceHoverRefCounts,
-            nextEdges,
-          ),
-        };
-      });
+                  return {
+                    nodes: createdEdge
+                      ? syncMediaUrlsByEdge(state.nodes, createdEdge as EdgeType, "add")
+                      : state.nodes,
+                    edges: nextEdges,
+                    ...buildReferenceHighlightState(
+                      state.referenceHoverRefCounts,
+                      nextEdges,
+                    ),
+                  };
+                });
 
-      get().requestHistorySave();
-    },
+                get().requestHistorySave();
+              },
 
-    /**
-     * 设置参考资源悬浮高亮（支持多项并发高亮）。
-     */
-    setReferenceHoverHighlight: (sourceNodeId, targetNodeId, isHovering) => {
-      if (!sourceNodeId || !targetNodeId) {
-        return;
-      }
+                /**
+                 * 设置参考资源悬浮高亮（支持多项并发高亮）。
+                 */
+                setReferenceHoverHighlight: (sourceNodeId, targetNodeId, isHovering) => {
+                  if (!sourceNodeId || !targetNodeId) {
+                    return;
+                  }
 
-      set((state) => {
-        const key = buildReferenceHoverKey(sourceNodeId, targetNodeId);
-        const currentCount = state.referenceHoverRefCounts[key] ?? 0;
-        const nextCount = isHovering
-          ? currentCount + 1
-          : Math.max(0, currentCount - 1);
-        const nextRefCounts = {
-          ...state.referenceHoverRefCounts,
-        };
+                  set((state) => {
+                    const key = buildReferenceHoverKey(sourceNodeId, targetNodeId);
+                    const currentCount = state.referenceHoverRefCounts[key] ?? 0;
+                    const nextCount = isHovering
+                      ? currentCount + 1
+                      : Math.max(0, currentCount - 1);
+                    const nextRefCounts = {
+                      ...state.referenceHoverRefCounts,
+                    };
 
-        if (nextCount <= 0) {
-          delete nextRefCounts[key];
-        } else {
-          nextRefCounts[key] = nextCount;
-        }
+                    if (nextCount <= 0) {
+                      delete nextRefCounts[key];
+                    } else {
+                      nextRefCounts[key] = nextCount;
+                    }
 
-        return {
-          ...buildReferenceHighlightState(nextRefCounts, state.edges),
-        };
-      });
-    },
+                    return {
+                      ...buildReferenceHighlightState(nextRefCounts, state.edges),
+                    };
+                  });
+                },
 
-    /**
-     * 清空参考资源悬浮高亮。
-     */
-    clearReferenceHoverHighlights: () => {
-      set({
-        highlightedEdgeIds: [],
-        highlightedSourceNodeIds: [],
-        referenceHoverRefCounts: {},
-      });
-    },
+                  /**
+                   * 清空参考资源悬浮高亮。
+                   */
+                  clearReferenceHoverHighlights: () => {
+                    set({
+                      highlightedEdgeIds: [],
+                      highlightedSourceNodeIds: [],
+                      referenceHoverRefCounts: {},
+                    });
+                  },
 
-    // ==================== 全景图查看器 ====================
+                    // ==================== 全景图查看器 ====================
 
-    /**
-     * 打开全景图查看器
-     * @param imageUrl 要查看的图片 URL
-     */
-    openPanoramaViewer: (imageUrl: string, sourceNodeId?: string) => {
-      set({
-        panoramaViewer: {
-          open: true,
-          imageUrl,
-          sourceNodeId: sourceNodeId ?? null,
-        },
-      });
-    },
+                    /**
+                     * 打开全景图查看器
+                     * @param imageUrl 要查看的图片 URL
+                     */
+                    openPanoramaViewer: (imageUrl: string, sourceNodeId?: string) => {
+                      set({
+                        panoramaViewer: {
+                          open: true,
+                          imageUrl,
+                          sourceNodeId: sourceNodeId ?? null,
+                        },
+                      });
+                    },
 
-    /**
-     * 关闭全景图查看器
-     */
-    closePanoramaViewer: () => {
-      set({
-        panoramaViewer: {
-          open: false,
-          imageUrl: null,
-          sourceNodeId: null,
-        },
-        historyResetTrigger: get().historyResetTrigger + 1,
-        // 选中节点数量初始化（用于避免 O(n²) 遍历）
-        selectedNodesCount: 0,
-      });
-    },
+                      /**
+                       * 关闭全景图查看器
+                       */
+                      closePanoramaViewer: () => {
+                        set({
+                          panoramaViewer: {
+                            open: false,
+                            imageUrl: null,
+                            sourceNodeId: null,
+                          },
+                          historyResetTrigger: get().historyResetTrigger + 1,
+                          // 选中节点数量初始化（用于避免 O(n²) 遍历）
+                          selectedNodesCount: 0,
+                        });
+                      },
 
-    openImageAnnotation: (
-      imageUrl: string,
-      sourceNodeId: string,
-      mode: "annotate" | "erase" = "annotate",
-    ) => {
-      set({
-        annotationWorkspace: {
-          open: true,
-          imageUrl,
-          sourceNodeId,
-          mode,
-        },
-      });
-    },
+                        openImageAnnotation: (
+                          imageUrl: string,
+                          sourceNodeId: string,
+                          mode: "annotate" | "erase" = "annotate",
+                        ) => {
+                          set({
+                            annotationWorkspace: {
+                              open: true,
+                              imageUrl,
+                              sourceNodeId,
+                              mode,
+                            },
+                          });
+                        },
 
-    closeImageAnnotation: () => {
-      set({
-        annotationWorkspace: {
-          open: false,
-          imageUrl: null,
-          sourceNodeId: null,
-          mode: "annotate",
-        },
-      });
-    },
+                          closeImageAnnotation: () => {
+                            set({
+                              annotationWorkspace: {
+                                open: false,
+                                imageUrl: null,
+                                sourceNodeId: null,
+                                mode: "annotate",
+                              },
+                            });
+                          },
 
     // ==================== 撤销/重做 ====================
   };
-});
+    });
