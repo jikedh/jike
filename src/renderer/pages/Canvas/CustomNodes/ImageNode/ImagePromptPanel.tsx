@@ -9,8 +9,11 @@ import { toChineseNumber } from "shared/utils/utils";
 import { uploadFileToOSS } from "service/oss";
 import { ImageReferenceThumbnails } from "./components/ImageReferenceThumbnails";
 import {
+  ADOBE_GPT_IMAGE2_MODEL,
+  ADOBE_NANO_BANANA_PRO_MODEL,
   IMAGE_MODELS,
   getVisibleImageModels,
+  isGrokImageGenerationModel,
   isXimuGptImageGenerationModel,
   isXimuImageGenerationModel,
   isXimuNanoBananaGenerationModel,
@@ -53,10 +56,13 @@ import {
   GeminiParamsPanel,
   GEMINI_RESOLUTIONS,
   GEMINI_SIZES,
+  GROK_IMAGE_RESOLUTIONS,
+  GROK_IMAGE_SIZES,
   NANO_BANANA_RESOLUTIONS,
   NANO_BANANA_LOCAL_SIZES,
 } from "./components/GeminiParamsPanel";
 import {
+  ADOBE_GPTIMAGE2_SIZES,
   GPTIMAGE2_SIZES,
   GptImage2ParamsPanel,
 } from "./components/GptImage2ParamsPanel";
@@ -127,7 +133,10 @@ const toOptionValueSet = (options: Array<{ value: string }>) =>
 const GEMINI_SIZE_VALUES = toOptionValueSet(GEMINI_SIZES);
 const GEMINI_RESOLUTION_VALUES = toOptionValueSet(GEMINI_RESOLUTIONS);
 const NANO_BANANA_RESOLUTION_VALUES = toOptionValueSet(NANO_BANANA_RESOLUTIONS);
+const GROK_IMAGE_SIZE_VALUES = toOptionValueSet(GROK_IMAGE_SIZES);
+const GROK_IMAGE_RESOLUTION_VALUES = toOptionValueSet(GROK_IMAGE_RESOLUTIONS);
 const GPTIMAGE2_SIZE_VALUES = toOptionValueSet(GPTIMAGE2_SIZES);
+const ADOBE_GPTIMAGE2_SIZE_VALUES = toOptionValueSet(ADOBE_GPTIMAGE2_SIZES);
 const GPTIMAGE2_RESOLUTION_VALUES = new Set(["1K", "2K", "4K"]);
 const XIMU_GPTIMAGE2_RESOLUTION_VALUES = new Set(["1K"]);
 const GPTIMAGE2_RESOLUTION_OPTIONS = [
@@ -246,8 +255,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const setDefaultImagePreset = useChatSettingsStore(
     (state) => state.setDefaultImagePreset,
   );
+  const adobeChannelModelsEnabled = useChatSettingsStore(
+    (state) => state.adobeChannelModelsEnabled,
+  );
   const ximuChannelModelsEnabled = useChatSettingsStore(
     (state) => state.ximuChannelModelsEnabled,
+  );
+  const grokChannelModelsEnabled = useChatSettingsStore(
+    (state) => state.grokChannelModelsEnabled,
   );
   const deleteEdge = useCanvasFlowStore((state) => state.deleteEdge);
   const setReferenceHoverHighlight = useCanvasFlowStore(
@@ -264,8 +279,13 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     return node.data as ImageGenerationNode;
   });
   const visibleImageModels = useMemo(
-    () => getVisibleImageModels(ximuChannelModelsEnabled),
-    [ximuChannelModelsEnabled],
+    () =>
+      getVisibleImageModels(
+        adobeChannelModelsEnabled,
+        ximuChannelModelsEnabled,
+        grokChannelModelsEnabled,
+      ),
+    [adobeChannelModelsEnabled, grokChannelModelsEnabled, ximuChannelModelsEnabled],
   );
 
   // 从 currentImageData 获取基础字段
@@ -335,6 +355,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const isNanoBananaLocalModel =
     model === NANO_BANANA_LOCAL_MODEL &&
     currentImageData?.platform === NANO_BANANA_LOCAL_PLATFORM;
+  // 判断是否为 GPT-Image-2 模型
+  const isAdobeGptImage2Model = model === ADOBE_GPT_IMAGE2_MODEL;
+  const isAdobeNanoBananaProModel = model === ADOBE_NANO_BANANA_PRO_MODEL;
+  const isAdobeImageModel = isAdobeGptImage2Model || isAdobeNanoBananaProModel;
   const isXimuGptImage2Model = isXimuGptImageGenerationModel(model);
   const isXimuGptImage2StandardModel = model === XIMU_GPT_IMAGE2_MODEL;
   const isXimuGptImage2VipModel = model === XIMU_GPT_IMAGE2_VIP_MODEL;
@@ -342,11 +366,16 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const isXimuNanoBananaProModel = model === XIMU_NANO_BANANA_PRO_MODEL;
   const isXimuNanoBananaModel = isXimuNanoBananaGenerationModel(model);
   const isXimuImageModel = isXimuImageGenerationModel(model);
+  const isGrokImageModel = isGrokImageGenerationModel(model);
   const isGptImage2Model = model === "gpt-image-2";
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
   const isLocalGeminiDirectModel =
-    isGeminiPro2Model || isNanoBananaLocalModel || isXimuImageModel;
+    isGeminiPro2Model ||
+    isNanoBananaLocalModel ||
+    isAdobeImageModel ||
+    isXimuImageModel ||
+    isGrokImageModel;
 
   const supportedImageParams = useMemo<SupportedImageParams | null>(() => {
     if (isSeedreamModel) {

@@ -1,4 +1,6 @@
 import { ElectronAPI } from "@electron-toolkit/preload";
+import type { Adobe2Api } from "shared/types/adobe2api";
+import type { Grok2Api } from "shared/types/grok2api";
 import type { StorageApi } from "shared/types/storage";
 
 export type DebugApi = {
@@ -93,6 +95,8 @@ declare global {
     download: DownloadApi;
     videoProcessing: VideoProcessingApi;
     notification: NotificationApi;
+    adobe2api: Adobe2Api;
+    grok2api: Grok2Api;
     tracking: TrackingApi;
   }
 }

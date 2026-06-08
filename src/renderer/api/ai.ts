@@ -1,18 +1,36 @@
 import { EventSourceParserStream } from "eventsource-parser/stream";
 import {
+  adobe2ApiRequest,
+  getAdobe2ApiState,
+  grok2ApiRequest,
   jikeingService,
   kuaiziOpenApiRequest,
-  wuhenRequest,
   ximuRequest,
+  wuhenRequest,
 } from "service/aiRequest";
+import {
+  createDesktopChatCompletions,
+  createDesktopProxyTask,
+  queryDesktopProxyTask,
+} from "./jikeGo";
 import { BailianVideoGenerationRequest } from "shared/types/detail/Bailian/video";
 import { Seedance20Request } from "shared/types/detail/kuaizhi/Seedance-2.0";
-import type { ToApiImageGenerationRequest } from "shared/types/detail/ToApi/images";
 import type {
-  TaskResponse,
-  VideoRemovalRequest,
-  WuhenAccessTokenResponse,
-} from "shared/types/detail/wuhen";
+  Adobe2ApiVideoGenerationRequest,
+  Adobe2ApiImageGenerationRequest,
+  Adobe2ApiImageGenerationResponse,
+  Adobe2ApiImage2ImageRequest,
+  Adobe2ApiVideoGenerationResponse,
+  FireflyGptImageToImageRequest,
+  FireflyGptImageToImageResponse,
+} from "shared/types/detail/Adobe2API";
+import type {
+  Grok2ApiChatImageEditRequest,
+  Grok2ApiImageGenerationRequest,
+  Grok2ApiImageGenerationResponse,
+  Grok2ApiVideoGenerationRequest,
+  Grok2ApiVideoGenerationResponse,
+} from "shared/types/detail/Grok2API";
 import type {
   XimuCardBalanceResponse,
   XimuGptImageRequest,
@@ -20,13 +38,14 @@ import type {
   XimuTaskResultResponse,
   XimuTaskSubmitResponse,
 } from "shared/types/detail/ximu";
+import type { ToApiImageGenerationRequest } from "shared/types/detail/ToApi/images";
+import type {
+  TaskResponse,
+  VideoRemovalRequest,
+  WuhenAccessTokenResponse,
+} from "shared/types/detail/wuhen";
 import { getJikeingToken } from "shared/utils/utils";
 import { aiVideoTrackingService } from "@/services/aiVideoTracking";
-import {
-  createDesktopChatCompletions,
-  createDesktopProxyTask,
-  queryDesktopProxyTask,
-} from "./jikeGo";
 
 /**
  *
@@ -230,6 +249,122 @@ export async function createImageGeneration(
   const rawData = unwrapDesktopProxyData(response);
   const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
   return ledgerBizId ? { ...responseData, ledgerBizId } : responseData;
+}
+
+export function createAdobe2ApiImageGeneration(
+  data: Adobe2ApiImageGenerationRequest,
+) {
+  return adobe2ApiRequest<Adobe2ApiImageGenerationResponse>({
+    url: "/v1/images/generations",
+    method: "post",
+    data,
+  });
+}
+
+export function createAdobe2ApiChatImageGeneration(
+  data: Adobe2ApiImage2ImageRequest,
+) {
+  return adobe2ApiRequest<Adobe2ApiImageGenerationResponse>({
+    url: "/v1/chat/completions",
+    method: "post",
+    data,
+  });
+}
+
+export function createAdobe2ApiGptImageToImageGeneration(
+  data: FireflyGptImageToImageRequest,
+) {
+  return adobe2ApiRequest<FireflyGptImageToImageResponse>({
+    url: "/v1/chat/completions",
+    method: "post",
+    data,
+  });
+}
+
+export function createAdobe2ApiVideoGeneration(
+  data: Adobe2ApiVideoGenerationRequest,
+) {
+  return adobe2ApiRequest<Adobe2ApiVideoGenerationResponse>({
+    url: "/v1/chat/completions",
+    method: "post",
+    data,
+    timeout: 900000,
+  });
+}
+
+export function createGrok2ApiImageGeneration(
+  data: Grok2ApiImageGenerationRequest,
+) {
+  return grok2ApiRequest<Grok2ApiImageGenerationResponse>({
+    url: "/v1/images/generations",
+    method: "post",
+    data,
+    timeout: 900000,
+  });
+}
+
+export function createGrok2ApiChatImageEditGeneration(
+  data: Grok2ApiChatImageEditRequest,
+) {
+  return grok2ApiRequest<Grok2ApiImageGenerationResponse>({
+    url: "/v1/chat/completions",
+    method: "post",
+    data,
+    timeout: 900000,
+  });
+}
+
+async function fetchImageFileFromUrl(imageUrl: string): Promise<File> {
+  const response = await fetch(imageUrl);
+  if (!response.ok) {
+    throw new Error(`无法加载参考图: HTTP ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const mimeType = blob.type || "image/png";
+  const ext = mimeType.split("/")[1] || "png";
+  return new File([blob], `reference-${Date.now()}.${ext}`, { type: mimeType });
+}
+
+export async function createGrok2ApiImageEditGeneration(data: {
+  model: "grok-imagine-image-edit";
+  prompt: string;
+  imageUrls: string[];
+  n?: 1 | 2;
+  size?: "1024x1024";
+  response_format?: "url" | "b64_json";
+}) {
+  const formData = new FormData();
+  formData.append("model", data.model);
+  formData.append("prompt", data.prompt);
+  formData.append("n", String(data.n ?? 1));
+  formData.append("size", data.size ?? "1024x1024");
+  formData.append("response_format", data.response_format ?? "url");
+
+  const files = await Promise.all(
+    data.imageUrls
+      .slice(0, 5)
+      .map((imageUrl) => fetchImageFileFromUrl(imageUrl)),
+  );
+  files.forEach((file) => formData.append("image[]", file));
+
+  return grok2ApiRequest<Grok2ApiImageGenerationResponse>({
+    url: "/v1/images/edits",
+    method: "post",
+    data: formData,
+    timeout: 900000,
+  });
+}
+
+export function createGrok2ApiVideoGeneration(
+  data: Grok2ApiVideoGenerationRequest,
+) {
+  return grok2ApiRequest<Grok2ApiVideoGenerationResponse>({
+    url: "/v1/chat/completions",
+    method: "post",
+    data,
+    timeout: 1800000,
+  });
 }
 
 export function createXimuGptImageGeneration(data: XimuGptImageRequest) {
@@ -507,6 +642,19 @@ export async function generateGeminiContent(
   signal?: AbortSignal,
   scoreCost?: number,
 ) {
+  const adobe2ApiState = await getAdobe2ApiState();
+  if (adobe2ApiState?.status === "running" && adobe2ApiState.baseUrl) {
+    return adobe2ApiRequest({
+      url: "/v1/images/generations",
+      method: "post",
+      data: {
+        model: modeName,
+        ...data,
+      },
+      signal,
+    });
+  }
+
   const response = await createDesktopProxyTask(
     {
       platform: "yunwu",

@@ -243,6 +243,26 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
     ],
   },
   {
+    id: "adobe-sora2-pro",
+    label: "Sora2Pro（Adobe版本）",
+    variants: [
+      {
+        id: "firefly-sora2-pro",
+        supportedModes: ["text-to-video", "image-to-video"],
+      },
+    ],
+  },
+  {
+    id: "grok-imagine-video",
+    label: "Grok Imagine Video（Grok渠道）",
+    variants: [
+      {
+        id: "grok-imagine-video",
+        supportedModes: ["text-to-video", "image-to-video"],
+      },
+    ],
+  },
+  {
     id: "keling",
     label: "Keling V3",
     variants: [
@@ -268,7 +288,24 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
   },
 ];
 
-export const getVisibleVideoModels = () => MOCK_MAIN_MODELS;
+export const ADOBE_SORA2_PRO_VIDEO_MODEL_ID = "adobe-sora2-pro";
+export const GROK_VIDEO_MODEL_ID = "grok-imagine-video";
+
+export const isAdobeVideoGenerationModel = (modelId?: string) =>
+  modelId === ADOBE_SORA2_PRO_VIDEO_MODEL_ID;
+
+export const isGrokVideoGenerationModel = (modelId?: string) =>
+  modelId === GROK_VIDEO_MODEL_ID;
+
+export const getVisibleVideoModels = (
+  adobeChannelModelsEnabled = false,
+  grokChannelModelsEnabled = false,
+) =>
+  MOCK_MAIN_MODELS.filter(
+    (model) =>
+      (adobeChannelModelsEnabled || !isAdobeVideoGenerationModel(model.id)) &&
+      (grokChannelModelsEnabled || !isGrokVideoGenerationModel(model.id)),
+  );
 
 export const getSupportedModesForModel = (modelId: string): VideoModeKey[] => {
   const modelConfig = MOCK_MAIN_MODELS.find((model) => model.id === modelId);
