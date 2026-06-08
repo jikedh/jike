@@ -1,8 +1,4 @@
 import {
-  type Viewport,
-  useReactFlow,
-} from "@xyflow/react";
-import {
   Icon3dRotate,
   IconBrush,
   IconCrop,
@@ -13,6 +9,7 @@ import {
   IconUpload,
   IconZoomIn,
 } from "@tabler/icons-react";
+import { useReactFlow, type Viewport } from "@xyflow/react";
 import type { ChangeEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
@@ -24,7 +21,6 @@ import {
 import type { ImageGenerationNode } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { appendMediaSequences } from "shared/utils/mediaSequence";
-import { getAspectRatioFromMediaFile } from "./utils/aspectRatioUtils";
 import { cn, downloadImageFromUrl } from "shared/utils/utils";
 import { toast } from "sonner";
 import Lightbox from "yet-another-react-lightbox";
@@ -34,15 +30,16 @@ import Share from "yet-another-react-lightbox/plugins/share";
 import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { saveToolMediaFileToProject } from "../utils/localMedia";
 import { ImageCropDialog } from "./ImageCropDialog";
 import { ImageLightingDialog } from "./ImageLightingDialog";
 import { InpaintDialog } from "./InpaintDialog";
+import { getAspectRatioFromMediaFile } from "./utils/aspectRatioUtils";
 import {
   buildLightingPrompt,
   type LightingGenerationConfig,
 } from "./utils/lighting";
-import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 
 type ImageToolbarProps = {
   nodeId: string;
@@ -189,11 +186,7 @@ export const ImageToolbar = memo(
 
         setIsLightingDialogOpen(open);
       },
-      [
-        focusLightingSourceNode,
-        isLightingGenerating,
-        restoreLightingViewport,
-      ],
+      [focusLightingSourceNode, isLightingGenerating, restoreLightingViewport],
     );
 
     useEffect(() => {
@@ -401,8 +394,7 @@ export const ImageToolbar = memo(
         });
 
         const isNiji7Model = config.model === "midjourney-niji7";
-        const isMidjourneyModel =
-          config.model === "midjourney" || isNiji7Model;
+        const isMidjourneyModel = config.model === "midjourney" || isNiji7Model;
         const isXimuImageModel = isXimuImageGenerationModel(config.model);
         const isNanoBananaLocalModel =
           config.model === NANO_BANANA_LOCAL_MODEL &&
@@ -436,9 +428,9 @@ export const ImageToolbar = memo(
           lighting: config,
           ...(isMidjourneyModel
             ? {
-                aspectRatio: data.aspectRatio ?? "1:1",
-                midjourneyAdvanced: data.midjourneyAdvanced,
-              }
+              aspectRatio: data.aspectRatio ?? "1:1",
+              midjourneyAdvanced: data.midjourneyAdvanced,
+            }
             : {}),
         };
 
@@ -584,9 +576,7 @@ export const ImageToolbar = memo(
               ((item.key === "crop" || item.key === "lighting") &&
                 !currentImageUrl);
             const title =
-              item.key === "lighting"
-                ? "调节当前节点光影布光"
-                : item.label;
+              item.key === "lighting" ? "调节当前节点光影布光" : item.label;
 
             return (
               <button
