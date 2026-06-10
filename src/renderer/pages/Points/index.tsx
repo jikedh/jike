@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ScoreRecordItem, ScoreTransactionItem } from "shared/types/jikeing";
 import { getJikeingToken, getJikeingUserId } from "shared/utils/utils";
 import { toast } from "sonner";
@@ -42,6 +42,11 @@ export function PointsView() {
     const [transactionsTotal, setTransactionsTotal] = useState(0);
     const [transactionsLoading, setTransactionsLoading] = useState(false);
     const [transactionsError, setTransactionsError] = useState<string | null>(null);
+    const hasRequestedTransactionsRef = useRef(false);
+    const transactionsRequestRef = useRef<{ page: number; id: number } | null>(
+        null,
+    );
+    const transactionsRequestIdRef = useRef(0);
 
     const balanceInfo = useUserStore((state) => state.balanceInfo);
     const fetchBalanceInfo = useUserStore((state) => state.fetchBalanceInfo);
@@ -66,20 +71,34 @@ export function PointsView() {
     }, []);
 
     const fetchTransactions = useCallback(async (page = 1) => {
+        if (transactionsRequestRef.current?.page === page) {
+            return;
+        }
+
+        const requestId = transactionsRequestIdRef.current + 1;
+        transactionsRequestIdRef.current = requestId;
+        transactionsRequestRef.current = { page, id: requestId };
+        hasRequestedTransactionsRef.current = true;
+
         setTransactionsLoading(true);
         setTransactionsError(null);
         try {
             const res = await getJikeGoScoreTransactions({ page, pageSize: 10 });
             const data = res?.data;
-            if (data) {
+            if (data && transactionsRequestRef.current?.id === requestId) {
                 setTransactions(data.list || []);
                 setTransactionsPage(data.page || 1);
                 setTransactionsTotal(data.total || 0);
             }
         } catch (error: any) {
-            setTransactionsError(error?.message || "加载充值消费明细失败");
+            if (transactionsRequestRef.current?.id === requestId) {
+                setTransactionsError(error?.message || "加载充值消费明细失败");
+            }
         } finally {
-            setTransactionsLoading(false);
+            if (transactionsRequestRef.current?.id === requestId) {
+                transactionsRequestRef.current = null;
+                setTransactionsLoading(false);
+            }
         }
     }, []);
 
@@ -95,20 +114,18 @@ export function PointsView() {
 
             void fetchBalanceInfo();
             void fetchRecords(1);
-            void fetchTransactions(1);
         }
-    }, [fetchBalanceInfo, fetchRecords, fetchTransactions]);
+    }, [fetchBalanceInfo, fetchRecords]);
 
     useEffect(() => {
         if (
             activeTab === "transaction" &&
             getJikeingToken() &&
-            transactions.length === 0 &&
-            !transactionsLoading
+            !hasRequestedTransactionsRef.current
         ) {
             void fetchTransactions(1);
         }
-    }, [activeTab, fetchTransactions, transactions.length, transactionsLoading]);
+    }, [activeTab, fetchTransactions]);
 
     const selectedPackage =
         selectedPackageId === null
