@@ -141,8 +141,9 @@ const buildMediaAssets = (
 ): AssetRecord[] => {
   const seen = new Set<string>();
   const assets: AssetRecord[] = [];
+  const orderedNodes = scope === "canvas" ? [...nodes].reverse() : nodes;
 
-  for (const node of nodes) {
+  for (const node of orderedNodes) {
     const mediaType = getNodeMediaType(node);
     if (!mediaType) continue;
 

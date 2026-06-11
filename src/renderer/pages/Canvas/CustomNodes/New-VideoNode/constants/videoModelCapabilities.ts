@@ -212,7 +212,7 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
   },
   {
     id: "happyhorse",
-    label: "HappyHores",
+    label: "HappyHorse",
     variants: [
       {
         id: "happyhorse-1.0-t2v",

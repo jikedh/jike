@@ -69,6 +69,17 @@ const formatTime = (timestamp: number) => {
   });
 };
 
+const isScoreRecordIncome = (item: ScoreRecordItem): boolean =>
+  item.type?.toUpperCase() === "INCOME";
+
+const isIncomeDirection = (direction?: string | null): boolean =>
+  direction?.toUpperCase() === "INCOME";
+
+const formatSignedScore = (
+  score: number | null | undefined,
+  isIncome: boolean,
+): string => `${isIncome ? "+" : "-"}${Math.abs(score ?? 0)}`;
+
 const getRecordIcon = (item: ScoreRecordItem): ReactNode => {
   if (item.bizType === "desktop_video" || item.bizType === "video") {
     return <Video className="h-5 w-5" />;
@@ -76,7 +87,7 @@ const getRecordIcon = (item: ScoreRecordItem): ReactNode => {
   if (item.bizType === "desktop_image" || item.bizType === "image") {
     return <ImageIcon className="h-5 w-5" />;
   }
-  if (item.type === "income") {
+  if (isScoreRecordIncome(item)) {
     return <Gift className="h-5 w-5" />;
   }
   return <Zap className="h-5 w-5" />;
@@ -101,7 +112,7 @@ const getRecordDescription = (item: ScoreRecordItem): string => {
 
 const getStatusLabel = (item: ScoreRecordItem): string => {
   if (item.ledgerStatusLabel) return item.ledgerStatusLabel;
-  if (item.type === "income") return "已到账";
+  if (isScoreRecordIncome(item)) return "已到账";
   return "已完成";
 };
 
@@ -125,10 +136,8 @@ const RecordDetailDialog = ({
 }) => {
   if (!record) return null;
 
-  const isIncome = record.type === "income";
-  const amount = isIncome
-    ? `+${record.totalScore}`
-    : `-${Math.abs(record.totalScore)}`;
+  const isIncome = isScoreRecordIncome(record);
+  const amount = formatSignedScore(record.totalScore, isIncome);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -155,8 +164,8 @@ const RecordDetailDialog = ({
         <div className="mt-4 space-y-0">
           <DetailRow label="类型" value={record.typeLabel || record.type || "-"} />
           <DetailRow label="积分变动" value={amount} />
-          <DetailRow label="永久积分" value={`${isIncome ? "+" : "-"}${record.forScore}`} />
-          <DetailRow label="会员积分" value={`${isIncome ? "+" : "-"}${record.vipScore}`} />
+          <DetailRow label="永久积分" value={formatSignedScore(record.forScore, isIncome)} />
+          <DetailRow label="会员积分" value={formatSignedScore(record.vipScore, isIncome)} />
           <DetailRow label="永久积分余额" value={String(record.forBalanceScore ?? "-")} />
           <DetailRow label="会员积分余额" value={String(record.vipBalanceScore ?? "-")} />
           <DetailRow label="来源" value={record.sourceLabel || record.source || "-"} />
@@ -303,10 +312,8 @@ const UsageHistoryList = ({
   return (
     <ul className="divide-y divide-white/5">
       {records.map((item) => {
-        const isIncome = item.type === "income";
-        const amount = isIncome
-          ? `+${item.totalScore}`
-          : `-${Math.abs(item.totalScore)}`;
+        const isIncome = isScoreRecordIncome(item);
+        const amount = formatSignedScore(item.totalScore, isIncome);
 
         return (
           <li
@@ -378,9 +385,9 @@ const getTransactionIcon = (item: ScoreTransactionItem): ReactNode => {
       }
       return <Zap className="h-5 w-5" />;
     case "admin_adjust":
-      return item.direction === "income" ? <ArrowDownLeft className="h-5 w-5" /> : <ArrowUpRight className="h-5 w-5" />;
+      return isIncomeDirection(item.direction) ? <ArrowDownLeft className="h-5 w-5" /> : <ArrowUpRight className="h-5 w-5" />;
     default:
-      return item.direction === "income" ? <Gift className="h-5 w-5" /> : <Zap className="h-5 w-5" />;
+      return isIncomeDirection(item.direction) ? <Gift className="h-5 w-5" /> : <Zap className="h-5 w-5" />;
   }
 };
 
@@ -419,9 +426,9 @@ const TransactionDetailDialog = ({
 }) => {
   if (!record) return null;
 
-  const isIncome = record.direction === "income";
+  const isIncome = isIncomeDirection(record.direction);
   const scoreText = isIncome
-    ? `+${record.totalScore}`
+    ? `+${Math.abs(record.totalScore)}`
     : `-${Math.abs(record.totalScore)}`;
 
   return (
@@ -551,9 +558,9 @@ const TransactionHistoryList = ({
   return (
     <ul className="divide-y divide-white/5">
       {transactions.map((item) => {
-        const isIncome = item.direction === "income";
+        const isIncome = isIncomeDirection(item.direction);
         const scoreText = isIncome
-          ? `+${item.totalScore}`
+          ? `+${Math.abs(item.totalScore)}`
           : `-${Math.abs(item.totalScore)}`;
 
         return (

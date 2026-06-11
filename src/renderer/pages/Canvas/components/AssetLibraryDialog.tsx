@@ -73,7 +73,7 @@ type AssetNameDialogMode = "create-folder" | "rename-folder" | "rename-asset";
 const scopes: Array<{ id: AssetScope; label: string }> = [
   { id: "project", label: "项目资产" },
   { id: "canvas", label: "画布资产" },
-  { id: "public", label: "公共资产" },
+  // { id: "public", label: "公共资产" },
 ];
 
 const projectCategories: Array<{ id: AssetCategory; label: string }> = [
