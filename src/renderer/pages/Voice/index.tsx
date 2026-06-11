@@ -52,10 +52,10 @@ export default function VoicePage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white p-10">
-      <h1 className="text-2xl font-bold mb-8">updateVipScore 接口测试</h1>
+      {/* <h1 className="text-2xl font-bold mb-8">updateVipScore 接口测试</h1> */}
 
       {/* 余额查询 */}
-      <div className="mb-6 p-4 rounded bg-white/5 border border-white/10 max-w-md">
+      {/* <div className="mb-6 p-4 rounded bg-white/5 border border-white/10 max-w-md">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm text-white/60">当前积分余额</span>
           <button
@@ -81,10 +81,10 @@ export default function VoicePage() {
         ) : (
           <p className="text-sm text-white/40">点击按钮查询余额</p>
         )}
-      </div>
+      </div> */}
 
       {/* 积分修改 */}
-      <div className="p-4 rounded bg-white/5 border border-white/10 max-w-md space-y-4">
+      {/* <div className="p-4 rounded bg-white/5 border border-white/10 max-w-md space-y-4">
         <label className="block">
           <span className="text-sm text-white/60">vipScoreDelta（正数增加，负数减少）</span>
           <input
@@ -115,7 +115,7 @@ export default function VoicePage() {
             {result.msg}
           </div>
         )}
-      </div>
+      </div> */}
     </div>
   );
 }
