@@ -9,8 +9,8 @@ import { GenerationStatus } from "shared/constants/enum";
 import type { NewVideoNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
-import { dispatchCreateAssetFromNode } from "@/pages/Canvas/components/CanvasSidebar";
 import { getNodeSizeByAspectRatio } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
+import { dispatchCreateAssetFromNode } from "@/pages/Canvas/components/CanvasSidebar";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
@@ -161,16 +161,8 @@ const NewVideoNode = ({
 
   const shouldShowToolbar = useMemo(
     () =>
-      isActiveNode &&
-      !isDragging &&
-      isDragUiSettled &&
-      selectedNodesCount <= 1,
-    [
-      isActiveNode,
-      isDragging,
-      isDragUiSettled,
-      selectedNodesCount,
-    ],
+      isActiveNode && !isDragging && isDragUiSettled && selectedNodesCount <= 1,
+    [isActiveNode, isDragging, isDragUiSettled, selectedNodesCount],
   );
 
   // 生成中的占位卡在新版节点里也算一个视频，用于支持“1 个真实视频 + 1 个生成中占位”时独立为视频。
@@ -254,7 +246,7 @@ const NewVideoNode = ({
             className={cn(
               "pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-500 group-hover/card:opacity-100",
               hasMultipleResults &&
-                "bg-linear-to-tr from-transparent via-white/2 to-transparent",
+              "bg-linear-to-tr from-transparent via-white/2 to-transparent",
             )}
           />
 
@@ -270,7 +262,6 @@ const NewVideoNode = ({
               nodeId={id}
               updateNewVideoNodeData={updateNewVideoNodeData}
               onGalleryExpandedChange={setIsGalleryExpanded}
-              isNodeSelected={isActiveNode}
               forcePosterOnly={hasActiveVideoTool}
               frameSize={contentFrameSize}
             />

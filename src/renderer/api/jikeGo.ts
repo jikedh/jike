@@ -21,6 +21,37 @@ export type DesktopProxyPlatform =
   | "zeakai"
   | "yunwu";
 
+// ===================== 画质增强相关 =====================
+
+export type VideoEnhanceScene = "aigc" | "short_series" | "ugc" | "old_film";
+export type VideoEnhanceToolVersion = "standard" | "professional";
+export type VideoEnhanceResolution = "720p" | "1080p" | "2k" | "4k";
+export type VideoEnhanceStatus = "running" | "succeeded" | "failed";
+
+export type CreateVideoEnhanceTaskRequest = {
+  video_url: string;
+  scene?: VideoEnhanceScene;
+  tool_version?: VideoEnhanceToolVersion;
+  resolution?: VideoEnhanceResolution;
+  resolution_limit?: number;
+  fps?: number;
+};
+
+export type QueryVideoEnhanceTaskRequest = {
+  task_id: string;
+};
+
+export type VideoEnhanceTaskResponse = {
+  task_id: string;
+  status: VideoEnhanceStatus;
+  video_url?: string;
+  error?: string;
+  duration_ms?: number;
+  output_resolution?: string;
+  output_fps?: number;
+  tool_version?: string;
+};
+
 export type DesktopProxyScoreBizType = "image" | "video";
 
 export type DesktopProxyRequest = {
@@ -468,6 +499,40 @@ function createRunningHubV2ImageToImage(url: string, data: RunningHubImageToImag
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url,
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+// ===================== 画质增强相关 API =====================
+
+/**
+ * 发起画质增强任务
+ * POST /v1/ai/video-enhance/create-task
+ */
+export function createVideoEnhanceTask(
+  data: CreateVideoEnhanceTaskRequest,
+): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/ai/video-enhance/create-task",
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+/**
+ * 查询画质增强任务状态
+ * POST /v1/ai/video-enhance/query-task
+ */
+export function queryVideoEnhanceTask(
+  data: QueryVideoEnhanceTaskRequest,
+): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/ai/video-enhance/query-task",
     method: "post",
     data,
     headers: getJikeGoAuthHeaders(),

@@ -32,7 +32,11 @@ import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
 import Video from "yet-another-react-lightbox/plugins/video";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import { getVideoRemovalStatus, videoRemoval } from "@/api/ai";
-import { getUploadOssPutUrl, createRunningHubTask, pollRunningHubTask } from "@/api/jikeGo";
+import {
+  createVideoEnhanceTask,
+  getUploadOssPutUrl,
+  queryVideoEnhanceTask,
+} from "@/api/jikeGo";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,23 +46,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { VideoPlayer } from "@/components/ui/video-player";
+import { useGenerationPoints } from "@/hooks/useGenerationPoints";
+import { getAspectRatioFromMediaFile } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { useUserStore } from "@/stores/useUserStore";
+import {
+  saveToolMediaFileToProject,
+  saveToolMediaUrlToProject,
+} from "../utils/localMedia";
 import { VideoSnapshotPanel } from "./components/VideoSnapshotPanel";
 import { VideoTimeline } from "./components/VideoTimeline";
 import type { VideoTrimResult } from "./components/VideoTrimPanel";
 import { VideoTrimPanel } from "./components/VideoTrimPanel";
-import { useGenerationPoints } from "@/hooks/useGenerationPoints";
-import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { useUserStore } from "@/stores/useUserStore";
-import { getAspectRatioFromMediaFile } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { useVideoFrameCapture } from "./hooks/useVideoFrameCapture";
 import {
   getVideoItemsFromNodeData,
   getVideoUrlsFromNodeData,
 } from "./utils/video-url";
-import {
-  saveToolMediaFileToProject,
-  saveToolMediaUrlToProject,
-} from "../utils/localMedia";
 
 type WuhenRect = {
   x1: number;
@@ -1307,11 +1311,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   );
 
   const startSubtitlePolling = useCallback(
-    (
-      taskId: string,
-      targetNodeId: string,
-      accessUrl: string,
-    ) => {
+    (taskId: string, targetNodeId: string, accessUrl: string) => {
       const existing = subtitlePollers[targetNodeId];
       if (existing) {
         window.clearInterval(existing);
@@ -1394,11 +1394,11 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   );
 
   // ====== 视频超清轮询器 ======
-  const runningHubEnhancePollers: Record<string, number> = {};
+  const videoEnhancePollers: Record<string, number> = {};
 
-  const startRunningHubPolling = useCallback(
+  const startVideoEnhancePolling = useCallback(
     (taskId: string, targetNodeId: string) => {
-      const existing = runningHubEnhancePollers[targetNodeId];
+      const existing = videoEnhancePollers[targetNodeId];
       if (existing) {
         window.clearInterval(existing);
       }
@@ -1408,7 +1408,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         if (timer) {
           window.clearInterval(timer);
         }
-        delete runningHubEnhancePollers[targetNodeId];
+        delete videoEnhancePollers[targetNodeId];
       };
 
       const poll = async () => {
@@ -1421,27 +1421,20 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             return;
           }
 
-          const response: any = await pollRunningHubTask({ taskId });
-          const status =
-            response?.data?.taskStatus ||
-            response?.taskStatus ||
-            "";
-          const outputs =
-            response?.data?.outputs ||
-            response?.outputs ||
-            [];
+          const response: any = await queryVideoEnhanceTask({
+            task_id: taskId,
+          });
+          const data = response?.data ?? response;
+          const status = data?.status || "";
 
-          if (status === "SUCCESS") {
-            const firstOutput = outputs.find((o: any) =>
-              /\.(mp4|mov|webm)(\?|$)/i.test(o.fileUrl || ""),
-            ) || outputs[0];
-
-            if (firstOutput) {
+          if (status === "succeeded") {
+            const resultUrl = data?.video_url || "";
+            if (resultUrl) {
               const resultItem = await saveToolMediaUrlToProject(
                 projectId,
                 withVideoPosterFields({
-                  url: firstOutput.fileUrl,
-                  remoteUrl: firstOutput.fileUrl,
+                  url: resultUrl,
+                  remoteUrl: resultUrl,
                   format: "mp4",
                 }),
                 "video",
@@ -1457,43 +1450,41 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
                 },
                 error: undefined,
               } as any);
-              await useUserStore.getState().fetchBalanceInfo();
-            } else {
-              updateNewVideoNodeData(targetNodeId, {
-                status: GenerationStatus.COMPLETED,
-                progress: 100,
-                result: { type: "video", data: [] },
-                error: undefined,
-              } as any);
+              toast.success("视频超清完成");
             }
+            await useUserStore.getState().fetchBalanceInfo();
             clearPolling();
             return;
           }
 
-          if (status === "FAILED") {
+          if (status === "failed") {
             updateNewVideoNodeData(targetNodeId, {
               status: GenerationStatus.FAILED,
               progress: 0,
               error: {
-                code: "RUNNINGHUB_FAILED",
-                message: "视频超清失败",
+                code: "ENHANCE_FAILED",
+                message: data?.error || "视频超清失败",
               },
             } as any);
+            toast.error(data?.error || "视频超清失败");
             clearPolling();
             return;
           }
 
+          // running - 更新进度提示
           updateNewVideoNodeData(targetNodeId, {
             status: GenerationStatus.IN_PROGRESS,
-            progress: 50,
+            progress: 30,
           } as any);
-        } catch { }
+        } catch {
+          // 轮询中静默处理
+        }
       };
 
       timer = window.setInterval(() => {
         void poll();
-      }, 5000);
-      runningHubEnhancePollers[targetNodeId] = timer;
+      }, 10000); // 文档建议轮询间隔不低于 10 秒
+      videoEnhancePollers[targetNodeId] = timer;
       void poll();
     },
     [projectId, updateNewVideoNodeData],
@@ -1514,10 +1505,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       const newNodeId = addNode("newVideo", {
         x: basePosition.x - 390,
         y:
-          basePosition.y +
-          (sourceNode?.height ?? 250) +
-          48 +
-          outputIndex * 298,
+          basePosition.y + (sourceNode?.height ?? 250) + 48 + outputIndex * 298,
       } as any);
 
       updateNewVideoNodeData(newNodeId, {
@@ -1539,30 +1527,26 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         });
       }, 50);
 
-      // 使用 video-hp 工作流，node 15 为 video 输入节点
-      const response: any = await createRunningHubTask({
-        workflowId: "2005989768603320322",
-        instanceType: "plus",
-        nodeInfoList: [
-          {
-            nodeId: "15",
-            fieldName: "video",
-            fieldValue: currentVideoUrl,
-          },
-        ],
+      const response: any = await createVideoEnhanceTask({
+        video_url: currentVideoUrl,
+        scene: "aigc",
+        tool_version: "standard",
       });
 
-      const taskId =
-        response?.data?.taskId || response?.taskId || "";
+      const taskId = response?.data?.task_id || response?.task_id || "";
       if (!taskId) {
         updateNewVideoNodeData(newNodeId, {
           status: GenerationStatus.FAILED,
-          error: { code: "NO_TASK_ID", message: "创建任务失败，未获取到 taskId" },
+          error: {
+            code: "NO_TASK_ID",
+            message: "创建画质增强任务失败",
+          },
         } as any);
+        toast.error("创建画质增强任务失败");
         return;
       }
 
-      startRunningHubPolling(taskId, newNodeId);
+      startVideoEnhancePolling(taskId, newNodeId);
     } catch (error: any) {
       toast.error(error?.message || "视频超清失败");
     }
@@ -1572,8 +1556,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
     data.aspect_ratio,
     nodeId,
     onConnect,
-    projectId,
-    startRunningHubPolling,
+    startVideoEnhancePolling,
     updateNewVideoNodeData,
   ]);
 

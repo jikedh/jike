@@ -13,7 +13,6 @@ type VideoContentProps = {
   ) => void;
   onRetry?: () => void;
   onGalleryExpandedChange?: (expanded: boolean) => void;
-  isNodeSelected?: boolean;
   forcePosterOnly?: boolean;
   frameSize?: {
     width: number;
@@ -28,7 +27,6 @@ export const VideoContent = memo(
     updateNewVideoNodeData,
     onRetry,
     onGalleryExpandedChange,
-    isNodeSelected = false,
     forcePosterOnly = false,
     frameSize,
   }: VideoContentProps) => {
@@ -109,7 +107,6 @@ export const VideoContent = memo(
             nodeId={nodeId}
             updateNewVideoNodeData={updateNewVideoNodeData}
             onExpandedChange={onGalleryExpandedChange}
-            isNodeSelected={isNodeSelected}
             forcePosterOnly={forcePosterOnly}
             frameSize={frameSize}
           />
