@@ -1,8 +1,10 @@
 import {
+  IconBell,
   IconBolt,
   IconBook,
   IconDownload,
   IconFolder,
+  IconPin,
   IconPlayerPlay,
   IconRestore,
   IconRotateClockwise,
@@ -60,6 +62,7 @@ import {
 import { ModelSelector } from "@/components/ModelSelector";
 import { Switch } from "@/components/ui/switch";
 import useMessage from "@/hooks/useMessage";
+import { getAnnouncementList, type AnnouncementItem } from "@/api/jikeGo";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 
@@ -77,6 +80,7 @@ const settingSections = [
   { id: "local-gemini", label: "模型管理" },
   { id: "presets", label: "预设提示词库" },
   { id: "collab", label: "协作通知" },
+  { id: "announcements", label: "通知中心" },
   { id: "data", label: "数据与版本" },
   { id: "shortcuts", label: "快捷键" },
   { id: "labs", label: "实验功能", devOnly: true },
@@ -94,6 +98,7 @@ const sectionPlaceholderMap = {
   "local-gemini": [],
   presets: [],
   collab: [{ label: "@我提醒", type: "toggle" }],
+  announcements: [],
   data: [{ label: "自动备份", type: "toggle" }],
   shortcuts: [
     { label: "开启单键模式", type: "toggle" },
@@ -235,6 +240,32 @@ export const SettingsModal = ({
   const [ximuBalanceText, setXimuBalanceText] = useState<string | null>(null);
   const [ximuBusy, setXimuBusy] = useState(false);
   const [ximuError, setXimuError] = useState<string | null>(null);
+
+  // 公告列表
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
+  const [announcementsLoading, setAnnouncementsLoading] = useState(false);
+
+  // 切换到通知中心时自动请求公告
+  useEffect(() => {
+    if (!open || activeSection !== "announcements") return;
+    let cancelled = false;
+    setAnnouncementsLoading(true);
+    getAnnouncementList()
+      .then((res: any) => {
+        if (cancelled) return;
+        const data = res?.data ?? res;
+        setAnnouncements(data?.list ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setAnnouncements([]);
+      })
+      .finally(() => {
+        if (!cancelled) setAnnouncementsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, activeSection]);
 
   // 弹窗打开时从 localStorage 加载预设，首次无数据则写入默认预设
   useEffect(() => {
@@ -749,6 +780,8 @@ export const SettingsModal = ({
                             return <IconBolt size={14} />;
                           if (section.id === "presets")
                             return <IconBook size={14} />;
+                          if (section.id === "announcements")
+                            return <IconBell size={14} />;
                           return <IconBolt size={14} />;
                         };
 
@@ -1572,6 +1605,82 @@ export const SettingsModal = ({
                             onCheckedChange={setDevToolsVisible}
                           />
                         </div>
+                      </section>
+                    </>
+                  )}
+
+                  {/* 通知中心 - 公告列表 */}
+                  {activeSection === "announcements" && (
+                    <>
+                      <section className="rounded-xl px-4 py-4">
+                        <div className="mb-3 text-sm font-medium text-white/80">
+                          公告列表
+                        </div>
+                        {announcementsLoading ? (
+                          <div className="flex items-center justify-center py-8">
+                            <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#B43FEB] border-t-transparent" />
+                          </div>
+                        ) : announcements.length === 0 ? (
+                          <div className="py-8 text-center text-sm text-white/40">
+                            暂无公告
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {[...announcements]
+                              .sort((a, b) => {
+                                // 置顶优先
+                                if (a.is_pinned && !b.is_pinned) return -1;
+                                if (!a.is_pinned && b.is_pinned) return 1;
+                                return 0;
+                              })
+                              .map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="rounded-xl px-4 py-3"
+                                  style={
+                                    item.is_pinned
+                                      ? {
+                                          border: "1px solid rgba(180, 63, 235, 0.25)",
+                                          background:
+                                            "linear-gradient(135deg, rgba(180, 63, 235, 0.08), rgba(180, 63, 235, 0.02))",
+                                        }
+                                      : {
+                                          border: "1px solid rgba(255, 255, 255, 0.05)",
+                                          background: "rgba(0, 0, 0, 0.2)",
+                                        }
+                                  }
+                                >
+                                  <div className="flex items-center gap-2 mb-1.5">
+                                    {item.is_pinned && (
+                                      <span className="inline-flex items-center gap-1 rounded-md bg-[#B43FEB]/15 px-1.5 py-0.5 text-[11px] text-[#B43FEB]">
+                                        <IconPin size={11} />
+                                        置顶
+                                      </span>
+                                    )}
+                                    <span className="text-sm font-medium text-white/85">
+                                      {item.title}
+                                    </span>
+                                  </div>
+                                  <div className="mb-2 text-[11px] text-white/35">
+                                    {item.created_time
+                                      ? new Date(
+                                          item.created_time,
+                                        ).toLocaleString("zh-CN", {
+                                          year: "numeric",
+                                          month: "2-digit",
+                                          day: "2-digit",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })
+                                      : ""}
+                                  </div>
+                                  <div className="text-[13px] leading-relaxed text-white/60 whitespace-pre-wrap">
+                                    {item.content}
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        )}
                       </section>
                     </>
                   )}

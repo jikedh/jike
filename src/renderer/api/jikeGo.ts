@@ -538,3 +538,33 @@ export function queryVideoEnhanceTask(
     headers: getJikeGoAuthHeaders(),
   });
 }
+
+// ===================== 公告相关 =====================
+
+export type AnnouncementItem = {
+  id: string;
+  created_time: string;
+  update_time: string;
+  title: string;
+  content: string;
+  publisher_id: number;
+  is_pinned: boolean;
+  is_valid: number;
+};
+
+export type AnnouncementListResponse = {
+  total: number;
+  list: AnnouncementItem[];
+};
+
+/**
+ * 获取公告列表（公开接口，无需登录）
+ * GET /v1/announcement/list
+ */
+export function getAnnouncementList(): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/announcement/list",
+    method: "get",
+  });
+}
