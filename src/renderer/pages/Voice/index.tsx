@@ -161,7 +161,7 @@ export default function VoicePage() {
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white p-10 space-y-8">
       {/* 发起画质增强任务 */}
-      <div className="p-6 rounded-lg bg-white/5 border border-white/10 max-w-2xl space-y-4">
+      {/* <div className="p-6 rounded-lg bg-white/5 border border-white/10 max-w-2xl space-y-4">
         <h2 className="text-lg font-semibold">发起画质增强任务</h2>
         <p className="text-xs text-white/40">
           POST /v1/ai/video-enhance/create-task
@@ -295,10 +295,10 @@ export default function VoicePage() {
             )}
           </div>
         )}
-      </div>
+      </div> */}
 
       {/* 查询画质增强任务状态 */}
-      <div className="p-6 rounded-lg bg-white/5 border border-white/10 max-w-2xl space-y-4">
+      {/* <div className="p-6 rounded-lg bg-white/5 border border-white/10 max-w-2xl space-y-4">
         <h2 className="text-lg font-semibold">查询画质增强任务状态</h2>
         <p className="text-xs text-white/40">
           POST /v1/ai/video-enhance/query-task
@@ -404,9 +404,9 @@ export default function VoicePage() {
             )}
           </div>
         )}
-      </div>
+      </div> */}
 
-      <div className="text-xs text-white/20">
+      {/* <div className="text-xs text-white/20">
         接口文档:{" "}
         <a
           href="https://aiopenapi.kuaizi.cn"
@@ -416,7 +416,7 @@ export default function VoicePage() {
         >
           aiopenapi.kuaizi.cn
         </a>
-      </div>
+      </div> */}
     </div>
   );
 }

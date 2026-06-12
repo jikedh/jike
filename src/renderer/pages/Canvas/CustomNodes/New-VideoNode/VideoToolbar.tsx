@@ -54,6 +54,8 @@ import {
   saveToolMediaFileToProject,
   saveToolMediaUrlToProject,
 } from "../utils/localMedia";
+import type { VideoEnhanceParams } from "./components/VideoEnhancePanel";
+import { VideoEnhancePanel } from "./components/VideoEnhancePanel";
 import { VideoSnapshotPanel } from "./components/VideoSnapshotPanel";
 import { VideoTimeline } from "./components/VideoTimeline";
 import type { VideoTrimResult } from "./components/VideoTrimPanel";
@@ -923,6 +925,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   const [isTrimmingVideo, setIsTrimmingVideo] = useState(false);
   const [isSubtitlePanelOpen, setIsSubtitlePanelOpen] = useState(false);
   const [isSubmittingSubtitle, setIsSubmittingSubtitle] = useState(false);
+  const [isEnhancePanelOpen, setIsEnhancePanelOpen] = useState(false);
   const [previewVideoUrls, setPreviewVideoUrls] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const previewObjectUrlsRef = useRef<string[]>([]);
@@ -1171,7 +1174,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         return;
       }
       setActiveVideoTool({ nodeId, tool: "videoEnhance" });
-      void handleVideoEnhance();
+      setIsEnhancePanelOpen(true);
       return;
     }
   };
@@ -1187,6 +1190,11 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
   const closeSubtitlePanel = useCallback(() => {
     setIsSubtitlePanelOpen(false);
+    closeVideoTool();
+  }, [closeVideoTool]);
+
+  const closeEnhancePanel = useCallback(() => {
+    setIsEnhancePanelOpen(false);
     closeVideoTool();
   }, [closeVideoTool]);
 
@@ -1490,75 +1498,85 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
     [projectId, updateNewVideoNodeData],
   );
 
-  const handleVideoEnhance = useCallback(async () => {
-    if (!currentVideoUrl) return;
+  const handleVideoEnhance = useCallback(
+    async (params: VideoEnhanceParams) => {
+      if (!currentVideoUrl) return;
 
-    try {
-      const sourceNode = useCanvasFlowStore
-        .getState()
-        .nodes.find((n) => n.id === nodeId);
-      const basePosition = sourceNode?.position ?? { x: 0, y: 0 };
-      const outputIndex = useCanvasFlowStore
-        .getState()
-        .edges.filter((edge) => edge.source === nodeId).length;
+      try {
+        const sourceNode = useCanvasFlowStore
+          .getState()
+          .nodes.find((n) => n.id === nodeId);
+        const basePosition = sourceNode?.position ?? { x: 0, y: 0 };
+        const outputIndex = useCanvasFlowStore
+          .getState()
+          .edges.filter((edge) => edge.source === nodeId).length;
 
-      const newNodeId = addNode("newVideo", {
-        x: basePosition.x - 390,
-        y:
-          basePosition.y + (sourceNode?.height ?? 250) + 48 + outputIndex * 298,
-      } as any);
-
-      updateNewVideoNodeData(newNodeId, {
-        badgeLabel: "视频超清",
-        nickname: "视频超清",
-        aspect_ratio: data.aspect_ratio,
-        status: GenerationStatus.IN_PROGRESS,
-        progress: 0,
-        result: { type: "video", data: [] },
-        error: undefined,
-      } as any);
-
-      window.setTimeout(() => {
-        onConnect({
-          source: nodeId,
-          sourceHandle: "output",
-          target: newNodeId,
-          targetHandle: "input",
-        });
-      }, 50);
-
-      const response: any = await createVideoEnhanceTask({
-        video_url: currentVideoUrl,
-        scene: "aigc",
-        tool_version: "standard",
-      });
-
-      const taskId = response?.data?.task_id || response?.task_id || "";
-      if (!taskId) {
-        updateNewVideoNodeData(newNodeId, {
-          status: GenerationStatus.FAILED,
-          error: {
-            code: "NO_TASK_ID",
-            message: "创建画质增强任务失败",
-          },
+        const newNodeId = addNode("newVideo", {
+          x: basePosition.x - 390,
+          y:
+            basePosition.y +
+            (sourceNode?.height ?? 250) +
+            48 +
+            outputIndex * 298,
         } as any);
-        toast.error("创建画质增强任务失败");
-        return;
-      }
 
-      startVideoEnhancePolling(taskId, newNodeId);
-    } catch (error: any) {
-      toast.error(error?.message || "视频超清失败");
-    }
-  }, [
-    addNode,
-    currentVideoUrl,
-    data.aspect_ratio,
-    nodeId,
-    onConnect,
-    startVideoEnhancePolling,
-    updateNewVideoNodeData,
-  ]);
+        updateNewVideoNodeData(newNodeId, {
+          badgeLabel: "视频超清",
+          nickname: "视频超清",
+          aspect_ratio: data.aspect_ratio,
+          status: GenerationStatus.IN_PROGRESS,
+          progress: 0,
+          result: { type: "video", data: [] },
+          error: undefined,
+        } as any);
+
+        window.setTimeout(() => {
+          onConnect({
+            source: nodeId,
+            sourceHandle: "output",
+            target: newNodeId,
+            targetHandle: "input",
+          });
+        }, 50);
+
+        const response: any = await createVideoEnhanceTask({
+          video_url: currentVideoUrl,
+          scene: params.scene || undefined,
+          tool_version: params.tool_version,
+          resolution: params.resolution || undefined,
+          resolution_limit: params.resolution_limit,
+          fps: params.fps,
+        });
+
+        const taskId = response?.data?.task_id || response?.task_id || "";
+        if (!taskId) {
+          updateNewVideoNodeData(newNodeId, {
+            status: GenerationStatus.FAILED,
+            error: {
+              code: "NO_TASK_ID",
+              message: "创建画质增强任务失败",
+            },
+          } as any);
+          toast.error("创建画质增强任务失败");
+          return;
+        }
+
+        startVideoEnhancePolling(taskId, newNodeId);
+        setIsEnhancePanelOpen(false);
+      } catch (error: any) {
+        toast.error(error?.message || "视频超清失败");
+      }
+    },
+    [
+      addNode,
+      currentVideoUrl,
+      data.aspect_ratio,
+      nodeId,
+      onConnect,
+      startVideoEnhancePolling,
+      updateNewVideoNodeData,
+    ],
+  );
 
   const handleSubmitRemoveCaptions = useCallback(
     async (rect: WuhenRect, requiredPoints: number) => {
@@ -1787,6 +1805,12 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         videoUrl={currentVideoUrl || ""}
         onTrim={handleTrimVideo}
         isTrimming={isTrimmingVideo}
+      />
+
+      <VideoEnhancePanel
+        open={isEnhancePanelOpen}
+        onClose={closeEnhancePanel}
+        onSubmit={handleVideoEnhance}
       />
 
       {isLightboxOpen ? (
