@@ -1544,7 +1544,6 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           scene: params.scene || undefined,
           tool_version: params.tool_version,
           resolution: params.resolution || undefined,
-          resolution_limit: params.resolution_limit,
           fps: params.fps,
         });
 

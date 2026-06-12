@@ -25,7 +25,6 @@ export type VideoEnhanceParams = {
   scene: VideoEnhanceScene | undefined;
   tool_version: VideoEnhanceToolVersion;
   resolution: VideoEnhanceResolution | undefined;
-  resolution_limit: number | undefined;
   fps: number | undefined;
 };
 
@@ -77,22 +76,12 @@ export const VideoEnhancePanel = ({
   const [toolVersion, setToolVersion] =
     useState<VideoEnhanceToolVersion>("standard");
   const [resolution, setResolution] = useState<string>(RESOLUTION_DEFAULT);
-  const [resolutionLimit, setResolutionLimit] = useState("");
   const [fps, setFps] = useState("");
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validate = useCallback(() => {
     const next: Record<string, string> = {};
-
-    if (resolutionLimit) {
-      const n = Number(resolutionLimit);
-      if (Number.isNaN(n) || !Number.isInteger(n)) {
-        next.resolutionLimit = "请输入整数";
-      } else if (n < 64 || n > 2160) {
-        next.resolutionLimit = "范围 64 ~ 2160";
-      }
-    }
 
     if (fps) {
       const n = Number(fps);
@@ -103,13 +92,9 @@ export const VideoEnhancePanel = ({
       }
     }
 
-    if (resolution !== RESOLUTION_DEFAULT && resolutionLimit) {
-      next.resolutionLimit = "与输出分辨率互斥，请二选一";
-    }
-
     setErrors(next);
     return Object.keys(next).length === 0;
-  }, [resolutionLimit, fps, resolution]);
+  }, [fps]);
 
   const handleSubmit = useCallback(() => {
     if (!validate()) return;
@@ -118,9 +103,6 @@ export const VideoEnhancePanel = ({
       scene: scene === SCENE_AUTO ? undefined : (scene as VideoEnhanceScene),
       tool_version: toolVersion,
       resolution: resolution === RESOLUTION_DEFAULT ? undefined : (resolution as VideoEnhanceResolution),
-      resolution_limit: resolutionLimit
-        ? Number(resolutionLimit)
-        : undefined,
       fps: fps ? Number(fps) : undefined,
     });
 
@@ -128,10 +110,9 @@ export const VideoEnhancePanel = ({
     setScene(SCENE_AUTO);
     setToolVersion("standard");
     setResolution(RESOLUTION_DEFAULT);
-    setResolutionLimit("");
     setFps("");
     setErrors({});
-  }, [scene, toolVersion, resolution, resolutionLimit, fps, validate, onSubmit]);
+  }, [scene, toolVersion, resolution, fps, validate, onSubmit]);
 
   const handleClose = useCallback(() => {
     setErrors({});
@@ -205,16 +186,7 @@ export const VideoEnhancePanel = ({
             </label>
             <Select
               value={resolution}
-              onValueChange={(v) => {
-                setResolution(v);
-                if (v !== RESOLUTION_DEFAULT && errors.resolutionLimit) {
-                  setErrors((prev) => {
-                    const next = { ...prev };
-                    delete next.resolutionLimit;
-                    return next;
-                  });
-                }
-              }}
+              onValueChange={(v) => setResolution(v)}
             >
               <SelectTrigger className="h-10 border-white/10 bg-white/5 text-white hover:bg-white/10">
                 <SelectValue placeholder="与源视频一致" />
@@ -227,43 +199,6 @@ export const VideoEnhancePanel = ({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          {/* 短边像素 */}
-          <div className="space-y-2">
-            <label className="text-sm text-white/70">
-              短边像素{" "}
-              <span className="text-white/30">
-                (resolution_limit) [64 ~ 2160]
-              </span>
-            </label>
-            <input
-              type="number"
-              value={resolutionLimit}
-              onChange={(e) => {
-                setResolutionLimit(e.target.value);
-                if (e.target.value && errors.resolutionLimit) {
-                  setErrors((prev) => {
-                    const next = { ...prev };
-                    delete next.resolutionLimit;
-                    return next;
-                  });
-                }
-              }}
-              placeholder="与输出分辨率互斥，二选一"
-              className={cn(
-                "w-full h-10 rounded-lg border bg-white/5 px-3 text-sm text-white placeholder:text-white/25",
-                "focus:outline-none focus:border-[#B43FEB]/50 focus:ring-1 focus:ring-[#B43FEB]/30",
-                errors.resolutionLimit
-                  ? "border-red-500/50"
-                  : "border-white/10",
-              )}
-            />
-            {errors.resolutionLimit && (
-              <p className="text-[11px] text-red-400">
-                {errors.resolutionLimit}
-              </p>
-            )}
           </div>
 
           {/* 输出帧率 */}
@@ -285,7 +220,7 @@ export const VideoEnhancePanel = ({
                   });
                 }
               }}
-              placeholder="与源视频一致"
+              placeholder="输出帧率，最高 120。高于源视频时触发智能插帧"
               className={cn(
                 "w-full h-10 rounded-lg border bg-white/5 px-3 text-sm text-white placeholder:text-white/25",
                 "focus:outline-none focus:border-[#B43FEB]/50 focus:ring-1 focus:ring-[#B43FEB]/30",
