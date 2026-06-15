@@ -184,7 +184,7 @@ Preload 采用白名单模式，只暴露必要的 API 给渲染进程：
 | 3D 全景 | Three.js |
 | 拖拽 | @dnd-kit |
 | 图片裁剪 | react-easy-crop |
-| 代码格式 | Biome 2.1 |
+| 代码格式 | Prettier |
 | 云存储 | ali-oss |
 | HTTP 客户端 | axios |
 

@@ -1,0 +1,33 @@
+# dependencies
+node_modules
+
+# build outputs
+dist
+dist-ssr
+build
+out
+release
+
+# IDE
+.idea
+.vscode/settings.json
+.DS_Store
+
+# logs
+logs
+*.log
+
+# misc
+*.local
+.codegraph
+resources/python
+resources/flow2api-main
+resources/grok2api-main/.jike-grok2api-python-ready
+tmp-ref-adobe2api-pyc
+
+# docs (didn't have Biome formatting)
+agent.md
+AGENTS.md
+findings.md
+progress.md
+task_plan.md

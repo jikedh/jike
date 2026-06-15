@@ -18,7 +18,7 @@ Electron 桌面应用（视频工作流处理平台）
 | 拖拽 | @dnd-kit |
 | 云存储 | ali-oss |
 | HTTP 客户端 | axios |
-| 代码格式 | Biome 2.1 |
+| 代码格式 | Prettier |
 
 ## 项目主要职责
 即刻是一个基于 Electron 的视频工作流处理桌面应用，主进程与渲染进程分离架构，支持节点式工作流编排。
@@ -263,8 +263,8 @@ download: { imageAsBuffer, imageAsBase64, imageToFile }
 | `npm run check:adobe2api-python` | 检查内置 Adobe2API Python 运行时 |
 | `npm run prepare:adobe2api` | 检查并应用 Adobe2API 内嵌补丁 |
 | `npm run prepare:adobe2api-python` | 生成或刷新内置 Adobe2API Python 运行时 |
-| `npm run format` | 自动修复格式（Biome） |
-| `npm run lint` | 运行代码检查（Biome） |
+| `npm run format` | 自动修复格式（Prettier） |
+| `npm run lint` | 检查代码格式（Prettier） |
 | `npm run check-format` | 检查代码格式 |
 
 ## Adobe2API

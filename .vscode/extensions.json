@@ -1,6 +1,6 @@
 {
   "recommendations": [
-    "biomejs.biome",
+    "esbenp.prettier-vscode",
     "eamodio.gitlens",
     "editorconfig.editorconfig"
   ]

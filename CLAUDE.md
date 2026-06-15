@@ -14,13 +14,13 @@
 |------|------|
 | `npm run dev:electron` | 开发模式启动 Electron |
 | `npm run build:win` | 构建 Windows 安装程序 |
-| `npm run format` | Biome 自动格式化 |
-| `npm run lint` | Biome 代码检查 |
+| `npm run format` | Prettier 自动格式化 |
+| `npm run lint` | 代码格式检查 |
 | `npm run check-format` | 格式检查（CI 用） |
 
 - **Node.js 版本**: ≥22（推荐 24）
 - **包管理器**: npm（不是 pnpm）
-- **代码格式化**: Biome 2.1（缩进 2 空格，详见 [biome.json](biome.json)）
+- **代码格式化**: Prettier（缩进 2 空格，详见 [.prettierrc](.prettierrc)）
 - **不自动运行构建/测试**：修改代码后不要自动执行 build、lint 或 test，除非明确要求。
 
 ---
@@ -126,7 +126,7 @@ Preload 层通过 `contextBridge.exposeInMainWorld` 暴露为 `window.storage`�
 | 富文本 | Tiptap 3 |
 | 3D | Three.js |
 | 拖拽 | @dnd-kit |
-| 格式化 | Biome 2.1 |
+| 格式化 | Prettier |
 | HTTP | axios |
 | 云存储 | ali-oss |
 | 自动更新 | electron-updater |

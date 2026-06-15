@@ -19,7 +19,7 @@ argument-hint: "说明要检查、优化、修复、重构、同步或新增的 
 
 ## 项目上下文
 
-- 技术栈：React 19 + TypeScript + Electron + `@xyflow/react` + Zustand + Tailwind CSS v4 + Biome。
+- 技术栈：React 19 + TypeScript + Electron + `@xyflow/react` + Zustand + Tailwind CSS v4 + Prettier。
 - 重点区域：`src/main`（Electron 主进程与 IPC）、`src/preload`（Context Bridge）、`src/renderer`（React UI）、`src/shared`（共享类型与工具）。
 - 用户偏好：使用中文交流；新增节点前必须先展示方案和生成计划，并等待确认；节点元信息需要可同步到项目目录；Canvas/ReactFlow 优先关注记忆化、稳定依赖、避免回流重绘、OSS 缩略图、能力建模与状态驱动 UI。
 - 注意：旧 `.claude` 内容中的路径可作为候选清单，不可盲用；实施前必须搜索并读取当前工作区的真实文件结构。
