@@ -1,11 +1,13 @@
 import { IconBolt } from "@tabler/icons-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { cn } from "shared/utils/utils";
 import type {
   VideoEnhanceResolution,
   VideoEnhanceScene,
   VideoEnhanceToolVersion,
 } from "@/api/jikeGo";
+import { estimateVideoEnhanceCost } from "@/api/jikeGo";
+import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 
 export type VideoEnhanceParams = {
   scene: VideoEnhanceScene | undefined;
@@ -64,6 +67,7 @@ type VideoEnhancePanelProps = {
   onClose: () => void;
   onSubmit: (params: VideoEnhanceParams) => void;
   isSubmitting?: boolean;
+  videoDuration?: number;
 };
 
 export const VideoEnhancePanel = ({
@@ -71,6 +75,7 @@ export const VideoEnhancePanel = ({
   onClose,
   onSubmit,
   isSubmitting = false,
+  videoDuration = 60,
 }: VideoEnhancePanelProps) => {
   const [scene, setScene] = useState<string>(SCENE_AUTO);
   const [toolVersion, setToolVersion] =
@@ -79,6 +84,35 @@ export const VideoEnhancePanel = ({
   const [fps, setFps] = useState("");
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [estimatedScore, setEstimatedScore] = useState<number | null>(null);
+
+  const { totalPoints } = useGenerationPoints();
+
+  // 参数变化时实时查询预估积分
+  useEffect(() => {
+    const fetchEstimate = async () => {
+      try {
+        const res = await estimateVideoEnhanceCost({
+          tool_version: toolVersion,
+          resolution:
+            resolution === RESOLUTION_DEFAULT
+              ? undefined
+              : (resolution as VideoEnhanceResolution),
+          fps: fps ? Number(fps) : undefined,
+          video_duration: videoDuration,
+        });
+        const data = res?.data ?? res;
+        if (typeof data?.score_cost === "number") {
+          setEstimatedScore(data.score_cost);
+        }
+      } catch {
+        setEstimatedScore(null);
+      }
+    };
+    if (open) {
+      fetchEstimate();
+    }
+  }, [open, toolVersion, resolution, fps, videoDuration]);
 
   const validate = useCallback(() => {
     const next: Record<string, string> = {};
@@ -102,7 +136,10 @@ export const VideoEnhancePanel = ({
     onSubmit({
       scene: scene === SCENE_AUTO ? undefined : (scene as VideoEnhanceScene),
       tool_version: toolVersion,
-      resolution: resolution === RESOLUTION_DEFAULT ? undefined : (resolution as VideoEnhanceResolution),
+      resolution:
+        resolution === RESOLUTION_DEFAULT
+          ? undefined
+          : (resolution as VideoEnhanceResolution),
       fps: fps ? Number(fps) : undefined,
     });
 
@@ -135,10 +172,7 @@ export const VideoEnhancePanel = ({
             <label className="text-sm text-white/70">
               场景预设 <span className="text-white/30">(scene)</span>
             </label>
-            <Select
-              value={scene}
-              onValueChange={(v) => setScene(v)}
-            >
+            <Select value={scene} onValueChange={(v) => setScene(v)}>
               <SelectTrigger className="h-10 border-white/10 bg-white/5 text-white hover:bg-white/10">
                 <SelectValue placeholder="自动判定" />
               </SelectTrigger>
@@ -184,10 +218,7 @@ export const VideoEnhancePanel = ({
             <label className="text-sm text-white/70">
               输出分辨率 <span className="text-white/30">(resolution)</span>
             </label>
-            <Select
-              value={resolution}
-              onValueChange={(v) => setResolution(v)}
-            >
+            <Select value={resolution} onValueChange={(v) => setResolution(v)}>
               <SelectTrigger className="h-10 border-white/10 bg-white/5 text-white hover:bg-white/10">
                 <SelectValue placeholder="与源视频一致" />
               </SelectTrigger>
@@ -204,8 +235,7 @@ export const VideoEnhancePanel = ({
           {/* 输出帧率 */}
           <div className="space-y-2">
             <label className="text-sm text-white/70">
-              输出帧率{" "}
-              <span className="text-white/30">(fps) [1 ~ 120]</span>
+              输出帧率 <span className="text-white/30">(fps) [1 ~ 120]</span>
             </label>
             <input
               type="number"
@@ -230,6 +260,25 @@ export const VideoEnhancePanel = ({
             {errors.fps && (
               <p className="text-[11px] text-red-400">{errors.fps}</p>
             )}
+          </div>
+
+          {/* 预估积分消耗 */}
+          <div className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.03] px-4 py-3">
+            <span className="text-sm text-white/60">预估消耗</span>
+            <div className="flex items-center gap-2">
+              {estimatedScore !== null ? (
+                <ModelPointsBadge
+                  totalPoints={totalPoints}
+                  requiredPoints={estimatedScore}
+                  title={`预计消耗 ${estimatedScore} 积分，当前余额 ${totalPoints}`}
+                />
+              ) : (
+                <span className="text-sm text-white/30">计算中...</span>
+              )}
+              <span className="text-xs text-white/25">
+                (基于 {videoDuration}s 时长)
+              </span>
+            </div>
           </div>
         </div>
 

@@ -30,6 +30,7 @@ export type VideoEnhanceStatus = "running" | "succeeded" | "failed";
 
 export type CreateVideoEnhanceTaskRequest = {
   video_url: string;
+  video_duration: number;
   scene?: VideoEnhanceScene;
   tool_version?: VideoEnhanceToolVersion;
   resolution?: VideoEnhanceResolution;
@@ -50,6 +51,26 @@ export type VideoEnhanceTaskResponse = {
   output_resolution?: string;
   output_fps?: number;
   tool_version?: string;
+  score_cost?: number;
+  for_score_cost?: number;
+  vip_score_cost?: number;
+};
+
+export type EstimateEnhanceCostRequest = {
+  tool_version?: VideoEnhanceToolVersion;
+  resolution?: VideoEnhanceResolution;
+  resolution_limit?: number;
+  fps?: number;
+  video_duration?: number;
+};
+
+export type EstimateEnhanceCostResponse = {
+  score_cost: number;
+  tool_version: string;
+  resolution: string;
+  video_duration: number;
+  score_per_yuan: number;
+  effective_fps: number;
 };
 
 export type DesktopProxyScoreBizType = "image" | "video";
@@ -517,6 +538,22 @@ export function createVideoEnhanceTask(
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/v1/ai/video-enhance/create-task",
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+/**
+ * 预估画质增强积分消耗
+ * POST /v1/ai/video-enhance/estimate-cost
+ */
+export function estimateVideoEnhanceCost(
+  data: EstimateEnhanceCostRequest,
+): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/ai/video-enhance/estimate-cost",
     method: "post",
     data,
     headers: getJikeGoAuthHeaders(),

@@ -19,7 +19,7 @@ import { readMediaFromLocal } from "service/projectStorage";
 import { GenerationStatus } from "shared/constants/enum";
 import { normalizeRequiredPoints } from "shared/constants/points";
 import type { NewVideoGenerationNode } from "shared/types/flow";
-import { formatDuration } from "shared/utils/getVideoDuration";
+import { formatDuration, getVideoDuration } from "shared/utils/getVideoDuration";
 import { appendMediaSequences } from "shared/utils/mediaSequence";
 import { cn, downloadImageFromUrl, getJikeingToken } from "shared/utils/utils";
 import { withVideoPosterFields } from "shared/utils/videoPoster";
@@ -956,6 +956,23 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
   }, [data]);
   const currentVideoUrl = videoUrls[0];
 
+  // 视频真实时长：从视频文件加载，失败则 fallback 60s
+  const [videoDuration, setVideoDuration] = useState(60);
+
+  useEffect(() => {
+    if (!currentVideoUrl) {
+      setVideoDuration(60);
+      return;
+    }
+    let cancelled = false;
+    getVideoDuration(currentVideoUrl).then((d) => {
+      if (!cancelled && typeof d === "number" && d > 0) {
+        setVideoDuration(d);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [currentVideoUrl]);
+
   const toolbarActions = useMemo(
     () => [
       { key: "upload" as const, label: "上传", icon: IconUpload },
@@ -1556,6 +1573,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
         const response: any = await createVideoEnhanceTask({
           video_url: currentVideoUrl,
+          video_duration: videoDuration,
           scene: params.scene || undefined,
           tool_version: params.tool_version,
           resolution: params.resolution || undefined,
@@ -1563,6 +1581,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         });
 
         const taskId = response?.data?.task_id || response?.task_id || "";
+        const scoreCost = response?.data?.score_cost ?? response?.score_cost;
         if (!taskId) {
           updateNewVideoNodeData(newNodeId, {
             status: GenerationStatus.FAILED,
@@ -1582,11 +1601,14 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             taskId,
             {
               video_url: currentVideoUrl,
+              video_duration: videoDuration,
               scene: params.scene || undefined,
               tool_version: params.tool_version,
               resolution: params.resolution || undefined,
               fps: params.fps,
             },
+            undefined,
+            scoreCost,
           ),
         );
 
@@ -1600,6 +1622,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       addNode,
       currentVideoUrl,
       data.aspect_ratio,
+      videoDuration,
       nodeId,
       onConnect,
       startVideoEnhancePolling,
@@ -1840,6 +1863,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
         open={isEnhancePanelOpen}
         onClose={closeEnhancePanel}
         onSubmit={handleVideoEnhance}
+        videoDuration={videoDuration || undefined}
       />
 
       {isLightboxOpen ? (

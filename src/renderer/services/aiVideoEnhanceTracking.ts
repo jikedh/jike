@@ -180,6 +180,7 @@ class AIVideoEnhanceTrackingService {
       fps: requestData.fps,
       requestParams: {
         video_url: requestData.video_url,
+        video_duration: requestData.video_duration,
         scene: requestData.scene,
         tool_version: requestData.tool_version,
         resolution: requestData.resolution,

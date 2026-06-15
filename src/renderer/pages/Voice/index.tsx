@@ -20,6 +20,7 @@ export default function VoicePage() {
   const [resolution, setResolution] = useState<VideoEnhanceResolution | "">("");
   const [resolutionLimit, setResolutionLimit] = useState("");
   const [fps, setFps] = useState("");
+  const [videoDuration, setVideoDuration] = useState("60");
   const [createLoading, setCreateLoading] = useState(false);
   const [createResult, setCreateResult] = useState<TaskResult | null>(null);
 
@@ -47,6 +48,7 @@ export default function VoicePage() {
     try {
       const body: CreateVideoEnhanceTaskRequest = {
         video_url: videoUrl.trim(),
+        video_duration: Number(videoDuration) || 60,
       };
       if (scene) body.scene = scene;
       body.tool_version = toolVersion;
@@ -98,6 +100,7 @@ export default function VoicePage() {
         targetResolution: resolution || undefined,
         requestParams: {
           video_url: videoUrl.trim(),
+          video_duration: Number(videoDuration) || 60,
           scene: scene || undefined,
           tool_version: toolVersion,
           resolution: resolution || undefined,
@@ -109,7 +112,7 @@ export default function VoicePage() {
     } finally {
       setCreateLoading(false);
     }
-  }, [videoUrl, scene, toolVersion, resolution, resolutionLimit, fps]);
+  }, [videoUrl, scene, toolVersion, resolution, resolutionLimit, fps, videoDuration]);
 
   const handleQuery = useCallback(async () => {
     if (!queryTaskId.trim()) {
