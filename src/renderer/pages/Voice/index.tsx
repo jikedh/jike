@@ -7,6 +7,7 @@ import type {
   VideoEnhanceToolVersion,
 } from "@/api/jikeGo";
 import { createVideoEnhanceTask, queryVideoEnhanceTask } from "@/api/jikeGo";
+import { aiVideoEnhanceTrackingService } from "@/services/aiVideoEnhanceTracking";
 
 type TaskResult = VideoEnhanceTaskResponse & { ok?: boolean; msg?: string };
 
@@ -60,18 +61,51 @@ export default function VoicePage() {
       }
 
       const res = await createVideoEnhanceTask(body);
+      const taskId = res?.data?.task_id || res?.task_id || "";
       setCreateResult({
         ok: true,
-        task_id: res?.data?.task_id || res?.task_id,
+        task_id: taskId,
         ...res?.data,
         msg: "任务创建成功",
       } as TaskResult);
+
+      // 埋点：创建任务
+      if (taskId) {
+        aiVideoEnhanceTrackingService.track(
+          aiVideoEnhanceTrackingService.buildTrackDataFromCreateRequest(
+            taskId,
+            taskId,
+            body,
+          ),
+        );
+      }
     } catch (e: any) {
+      const errorMsg = e?.message || "请求失败";
       setCreateResult({
         ok: false,
-        msg: e?.message || "请求失败",
+        msg: errorMsg,
         status: "failed",
       } as TaskResult);
+
+      // 埋点：创建失败
+      aiVideoEnhanceTrackingService.track({
+        apiName: "/v1/ai/video-enhance/create-task",
+        model: toolVersion || "standard",
+        taskId: "unknown",
+        videoUrl: videoUrl.trim(),
+        scene: scene || undefined,
+        toolVersion,
+        targetResolution: resolution || undefined,
+        requestParams: {
+          video_url: videoUrl.trim(),
+          scene: scene || undefined,
+          tool_version: toolVersion,
+          resolution: resolution || undefined,
+        },
+        provider: "video_enhance",
+        status: "FAIL",
+        errorMessage: errorMsg,
+      });
     } finally {
       setCreateLoading(false);
     }
@@ -93,12 +127,32 @@ export default function VoicePage() {
       const res = await queryVideoEnhanceTask({ task_id: queryTaskId.trim() });
       const data = res?.data ?? res;
       setQueryResult({ ok: true, ...data, msg: "" } as TaskResult);
+
+      // 埋点：终态时更新状态
+      if (data?.status === "succeeded" || data?.status === "failed") {
+        const statusUpdate =
+          aiVideoEnhanceTrackingService.buildStatusUpdateFromQueryResponse(
+            queryTaskId.trim(),
+            { task_id: queryTaskId.trim(), ...data },
+          );
+        aiVideoEnhanceTrackingService.updateStatus(
+          queryTaskId.trim(),
+          statusUpdate.status,
+          statusUpdate.result,
+        );
+      }
     } catch (e: any) {
+      const errorMsg = e?.message || "请求失败";
       setQueryResult({
         ok: false,
-        msg: e?.message || "请求失败",
+        msg: errorMsg,
         status: "failed",
       } as TaskResult);
+
+      // 埋点：查询异常
+      aiVideoEnhanceTrackingService.updateStatus(queryTaskId.trim(), "FAIL", {
+        errorMessage: errorMsg,
+      });
     } finally {
       setQueryLoading(false);
     }
@@ -125,6 +179,18 @@ export default function VoicePage() {
           clearInterval(timer);
           setPollingTaskId(null);
           setPollInterval(null);
+
+          // 埋点：轮询到终态
+          const statusUpdate =
+            aiVideoEnhanceTrackingService.buildStatusUpdateFromQueryResponse(
+              queryTaskId.trim(),
+              { task_id: queryTaskId.trim(), ...data },
+            );
+          aiVideoEnhanceTrackingService.updateStatus(
+            queryTaskId.trim(),
+            statusUpdate.status,
+            statusUpdate.result,
+          );
         }
       } catch (_e: any) {
         // 轮询中静默处理错误

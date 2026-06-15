@@ -48,6 +48,7 @@ import {
 import { VideoPlayer } from "@/components/ui/video-player";
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import { getAspectRatioFromMediaFile } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
+import { aiVideoEnhanceTrackingService } from "@/services/aiVideoEnhanceTracking";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useUserStore } from "@/stores/useUserStore";
 import {
@@ -1437,6 +1438,15 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
 
           if (status === "succeeded") {
             const resultUrl = data?.video_url || "";
+
+            // 埋点：超清成功
+            aiVideoEnhanceTrackingService.updateStatus(taskId, "SUCCESS", {
+              generatedVideoUrl: resultUrl || undefined,
+              durationMs: data?.duration_ms,
+              outputResolution: data?.output_resolution,
+              outputFps: data?.output_fps,
+            });
+
             if (resultUrl) {
               const resultItem = await saveToolMediaUrlToProject(
                 projectId,
@@ -1466,6 +1476,11 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           }
 
           if (status === "failed") {
+            // 埋点：超清失败
+            aiVideoEnhanceTrackingService.updateStatus(taskId, "FAIL", {
+              errorMessage: data?.error || "视频超清失败",
+            });
+
             updateNewVideoNodeData(targetNodeId, {
               status: GenerationStatus.FAILED,
               progress: 0,
@@ -1559,6 +1574,21 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           toast.error("创建画质增强任务失败");
           return;
         }
+
+        // 埋点：创建任务
+        aiVideoEnhanceTrackingService.track(
+          aiVideoEnhanceTrackingService.buildTrackDataFromCreateRequest(
+            taskId,
+            taskId,
+            {
+              video_url: currentVideoUrl,
+              scene: params.scene || undefined,
+              tool_version: params.tool_version,
+              resolution: params.resolution || undefined,
+              fps: params.fps,
+            },
+          ),
+        );
 
         startVideoEnhancePolling(taskId, newNodeId);
         setIsEnhancePanelOpen(false);
