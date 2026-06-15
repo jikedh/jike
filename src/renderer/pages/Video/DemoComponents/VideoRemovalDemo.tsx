@@ -1,9 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getVideoRemovalStatus, videoRemoval } from "@/api/ai";
-import { getUploadOssPutUrl } from "@/api/jikeGo";
+import {
+    createWuhenRemovalTask,
+    getUploadOssPutUrl,
+    queryWuhenRemovalTask,
+} from "@/api/jikeGo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
 const VideoRemovalDemo = () => {
     const navigate = useNavigate();
     const [videoUrl, setVideoUrl] = useState("");
@@ -17,7 +21,9 @@ const VideoRemovalDemo = () => {
             attempts++;
             console.log(`轮询尝试 ${attempts}/${maxAttempts}`);
             try {
-                const statusResponse: any = await getVideoRemovalStatus(id);
+                const statusResponse: any = await queryWuhenRemovalTask({
+                    task_id: id,
+                });
                 console.log(
                     `[${new Date().toLocaleTimeString()}] 任务状态:`,
                     statusResponse,
@@ -71,13 +77,13 @@ const VideoRemovalDemo = () => {
             const accessUrl =
                 presignedTarget?.access_url ||
                 presignedTarget?.put_url?.split("?")[0] ||
-                '';
+                "";
             if (!presignedTarget?.put_url) {
                 throw new Error("未获取到预签名上传地址");
             }
             console.log("预签名目标:", presignedTarget);
             console.log("步骤2: 调用视频消除接口...");
-            const response: any = await videoRemoval({
+            const response: any = await createWuhenRemovalTask({
                 video_url: videoUrl,
                 model: "video_removal_std",
                 method: "sel_area",
@@ -89,6 +95,7 @@ const VideoRemovalDemo = () => {
                 },
                 upload_url: presignedTarget.put_url,
                 upload_headers: presignedTarget.headers,
+                duration: 60,
             });
             console.log("视频消除响应:", response);
             const id = response?.data?.task_id || response?.task_id;
@@ -123,7 +130,9 @@ const VideoRemovalDemo = () => {
                 <Button onClick={handleSubmit} disabled={loading} variant="blue">
                     {loading ? "处理中..." : "提交视频消除任务"}
                 </Button>
-                {taskId && <p className="text-sm text-gray-400">当前任务ID: {taskId}</p>}
+                {taskId && (
+                    <p className="text-sm text-gray-400">当前任务ID: {taskId}</p>
+                )}
                 {resultVideoUrl && (
                     <div className="mt-4 p-4 bg-white/5 rounded-lg">
                         <p className="text-sm text-gray-400 mb-2">处理完成视频URL:</p>

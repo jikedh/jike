@@ -31,11 +31,12 @@ import Share from "yet-another-react-lightbox/plugins/share";
 import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
 import Video from "yet-another-react-lightbox/plugins/video";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
-import { getVideoRemovalStatus, videoRemoval } from "@/api/ai";
 import {
   createVideoEnhanceTask,
+  createWuhenRemovalTask,
   getUploadOssPutUrl,
   queryVideoEnhanceTask,
+  queryWuhenRemovalTask,
 } from "@/api/jikeGo";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { Button } from "@/components/ui/button";
@@ -1361,10 +1362,12 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
             return;
           }
 
-          const response = await getVideoRemovalStatus(taskId);
-          const { taskStatus, progress } = extractTaskStatusInfo(response);
+          const response = await queryWuhenRemovalTask({ task_id: taskId });
+          const payload = response?.data ?? response;
+          const taskStatus = String(payload.status ?? payload.task_status ?? "").trim().toUpperCase();
+          const progress = Number(payload.progress ?? 0);
 
-          if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
+          if (["SUCCEEDED", "SUCCESS", "COMPLETED"].includes(taskStatus)) {
             const resultItem = await saveToolMediaUrlToProject(
               projectId,
               withVideoPosterFields({
@@ -1692,16 +1695,19 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
           });
         }, 50);
 
-        const response: any = await videoRemoval({
+        const response: any = await createWuhenRemovalTask({
           video_url: currentVideoUrl,
-          method: "sel_area",
-          rect,
           upload_url: target.put_url,
           upload_headers: target.headers,
+          rect,
           model: "video_removal_std",
+          method: "sel_area",
+          duration: videoDuration || 60,
         });
 
-        const { taskId, taskStatus } = extractTaskStatusInfo(response);
+        const payload = response?.data ?? response;
+        const taskId = payload?.task_id || "";
+        const taskStatus = String(payload.status ?? "").trim().toUpperCase()
 
         if (!taskId) {
           updateNewVideoNodeData(newNodeId, {

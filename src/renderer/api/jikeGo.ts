@@ -576,6 +576,79 @@ export function queryVideoEnhanceTask(
   });
 }
 
+// ===================== 去字幕相关 =====================
+
+export type WuhenRemovalRect = {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+};
+
+export type CreateWuhenRemovalRequest = {
+  video_url: string;
+  upload_url: string;
+  upload_headers?: Record<string, string>;
+  model?: "video_removal_std" | "video_removal_pro";
+  method?: "all_area" | "sel_area";
+  rect?: WuhenRemovalRect;
+  duration: number; // 视频时长（秒），用于计算积分
+};
+
+export type CreateWuhenRemovalResponse = {
+  task_id: string;
+  score_cost: number;
+  for_score_cost?: number;
+  vip_score_cost?: number;
+};
+
+export type QueryWuhenRemovalRequest = {
+  task_id: string;
+};
+
+export type WuhenRemovalStatus = "running" | "succeeded" | "failed";
+
+export type QueryWuhenRemovalResponse = {
+  task_id: string;
+  status: WuhenRemovalStatus;
+  progress: number;
+  video_url?: string;
+  error?: string;
+  score_cost?: number;
+};
+
+/**
+ * 创建去字幕任务
+ * POST /v1/ai/wuhen/removal/create
+ */
+export function createWuhenRemovalTask(
+  data: CreateWuhenRemovalRequest,
+): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/ai/wuhen/removal/create",
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+/**
+ * 查询去字幕任务状态
+ * POST /v1/ai/wuhen/removal/query
+ */
+export function queryWuhenRemovalTask(
+  data: QueryWuhenRemovalRequest,
+): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/ai/wuhen/removal/query",
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
 // ===================== 公告相关 =====================
 
 export type AnnouncementItem = {

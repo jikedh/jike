@@ -6,24 +6,17 @@ import {
   jikeingService,
   kuaiziOpenApiRequest,
   ximuRequest,
-  wuhenRequest,
 } from "service/aiRequest";
-import {
-  createDesktopChatCompletions,
-  createDesktopProxyTask,
-  queryDesktopProxyTask,
-} from "./jikeGo";
-import { BailianVideoGenerationRequest } from "shared/types/detail/Bailian/video";
-import { Seedance20Request } from "shared/types/detail/kuaizhi/Seedance-2.0";
 import type {
-  Adobe2ApiVideoGenerationRequest,
+  Adobe2ApiImage2ImageRequest,
   Adobe2ApiImageGenerationRequest,
   Adobe2ApiImageGenerationResponse,
-  Adobe2ApiImage2ImageRequest,
+  Adobe2ApiVideoGenerationRequest,
   Adobe2ApiVideoGenerationResponse,
   FireflyGptImageToImageRequest,
   FireflyGptImageToImageResponse,
 } from "shared/types/detail/Adobe2API";
+import { BailianVideoGenerationRequest } from "shared/types/detail/Bailian/video";
 import type {
   Grok2ApiChatImageEditRequest,
   Grok2ApiImageGenerationRequest,
@@ -31,6 +24,8 @@ import type {
   Grok2ApiVideoGenerationRequest,
   Grok2ApiVideoGenerationResponse,
 } from "shared/types/detail/Grok2API";
+import { Seedance20Request } from "shared/types/detail/kuaizhi/Seedance-2.0";
+import type { ToApiImageGenerationRequest } from "shared/types/detail/ToApi/images";
 import type {
   XimuCardBalanceResponse,
   XimuGptImageRequest,
@@ -38,14 +33,13 @@ import type {
   XimuTaskResultResponse,
   XimuTaskSubmitResponse,
 } from "shared/types/detail/ximu";
-import type { ToApiImageGenerationRequest } from "shared/types/detail/ToApi/images";
-import type {
-  TaskResponse,
-  VideoRemovalRequest,
-  WuhenAccessTokenResponse,
-} from "shared/types/detail/wuhen";
 import { getJikeingToken } from "shared/utils/utils";
 import { aiVideoTrackingService } from "@/services/aiVideoTracking";
+import {
+  createDesktopChatCompletions,
+  createDesktopProxyTask,
+  queryDesktopProxyTask,
+} from "./jikeGo";
 
 /**
  *
@@ -796,99 +790,6 @@ export async function getDashscopeVideoTaskStatus(taskId: string) {
   });
 
   return unwrapDesktopProxyData(response);
-}
-
-// ===================== 无痕 AI 视频消除相关 =====================
-
-// Access Token 缓存（localStorage 持久化）
-const WUHEN_TOKEN_KEY = "wuhen_access_token";
-const WUHEN_TOKEN_EXPIRED_KEY = "wuhen_access_token_expired";
-
-/**
- * 从 .env 读取无痕 AI 的 api_key
- */
-function getWuhenApiKey(): string {
-  return (import.meta as any).env?.VITE_WUHEI_API_KEY || "";
-}
-
-/**
- * 确保拥有有效的 access_token（自动刷新，过期后更新 localStorage）
- * @param forceRefresh 是否强制重新获取
- */
-async function ensureWuhenAccessToken(forceRefresh = false): Promise<string> {
-  const now = Date.now();
-  // 提前 60 秒过期预留缓冲
-  const bufferMs = 60_000;
-
-  if (!forceRefresh) {
-    const cached = localStorage.getItem(WUHEN_TOKEN_KEY);
-    const expired = Number(localStorage.getItem(WUHEN_TOKEN_EXPIRED_KEY) || 0);
-    if (cached && now < expired - bufferMs) {
-      return cached;
-    }
-  }
-
-  const nonce = crypto.randomUUID();
-  const t = now;
-  const apiKey = getWuhenApiKey();
-
-  const res = await wuhenRequest<WuhenAccessTokenResponse>({
-    url: "/v2/user/access_token",
-    method: "get",
-    params: { nonce, t, api_key: apiKey },
-  });
-  localStorage.setItem(WUHEN_TOKEN_KEY, res.data.access_token);
-  // expired 为秒级时间戳，转毫秒后存储
-  localStorage.setItem(
-    WUHEN_TOKEN_EXPIRED_KEY,
-    String((res.data.expired ?? 0) * 1000),
-  );
-  return res.data.access_token;
-}
-
-/**
- * 视频消除接口
- * 用于消除视频中的路人或不需要的元素
- * API 端点: https://api.wuhenai.com/v2/video_removal
- * @param data 请求体，直接对齐共享的 VideoRemovalRequest
- */
-export async function videoRemoval(data: VideoRemovalRequest): Promise<any> {
-  const nonce = crypto.randomUUID();
-  const t = Date.now();
-  const token = await ensureWuhenAccessToken();
-
-  return wuhenRequest({
-    url: "/v2/video_removal",
-    method: "post",
-    params: { nonce, t },
-    data,
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-}
-
-/**
- * 无痕 AI 视频消除任务状态查询接口
- * 用于轮询视频消除任务状态
- * API 端点: https://api.wuhenai.com/v2/status
- * @param taskId 任务 ID
- */
-export async function getVideoRemovalStatus(
-  taskId: string,
-): Promise<TaskResponse> {
-  const nonce = crypto.randomUUID();
-  const t = Date.now();
-  const token = await ensureWuhenAccessToken();
-
-  return wuhenRequest<TaskResponse>({
-    url: "/v2/status",
-    method: "get",
-    params: { nonce, t, task_id: taskId },
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
 }
 
 async function createKuaiziOpenPlatformVideoTask({

@@ -1,8 +1,8 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
-import { handleRequestError } from "shared/utils/requestErrorHandler";
-import { getJikeingToken } from "shared/utils/utils";
 import type { Adobe2ApiState } from "shared/types/adobe2api";
 import type { Grok2ApiState } from "shared/types/grok2api";
+import { handleRequestError } from "shared/utils/requestErrorHandler";
+import { getJikeingToken } from "shared/utils/utils";
 
 const REQUEST_TIMEOUT = 300000;
 
@@ -129,10 +129,6 @@ const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
     authHeader: "x-token",
     useBearer: false,
   },
-  wuhen: {
-    getBaseURL: () => "https://api.wuhenai.com",
-    getToken: () => "",
-  },
   ximu: {
     getBaseURL: () => "https://shengtu.ximuai.com",
     getToken: () => "",
@@ -195,7 +191,6 @@ const createService = (
 };
 
 const jikeingService = createService("jikeing", SERVICE_CONFIGS.jikeing);
-const wuhenService = createService("wuhen", SERVICE_CONFIGS.wuhen);
 const ximuService = createService("ximu", SERVICE_CONFIGS.ximu);
 
 const adobe2ApiRequest = async <T = any>(
@@ -258,12 +253,6 @@ const jikeingRequest = async <T = any>(
   return await jikeingService.request(config);
 };
 
-const wuhenRequest = async <T = any>(
-  config: AxiosRequestConfig,
-): Promise<T> => {
-  return await wuhenService.request(config);
-};
-
 const ximuRequest = async <T = any>(config: AxiosRequestConfig): Promise<T> => {
   return await ximuService.request(config);
 };
@@ -286,7 +275,6 @@ const kuaiziOpenApiRequest = async <T = any>(
 
 export {
   jikeingService,
-  wuhenService,
   ximuService,
   adobe2ApiRequest,
   getAdobe2ApiState,
@@ -295,4 +283,4 @@ export {
   kuaiziOpenApiRequest,
   SKIP_AUTH_HEADER,
 };
-export { jikeingRequest, wuhenRequest, ximuRequest };
+export { jikeingRequest, ximuRequest };

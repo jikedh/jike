@@ -1,4 +1,5 @@
-﻿import {
+﻿import debounce from "lodash/debounce";
+import {
   BookOpenText,
   Bot,
   ChevronDown,
@@ -25,38 +26,39 @@
   X,
 } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
-import debounce from "lodash/debounce";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
+  type AssetRecord,
   ensureAssetOssUrl,
   getAssetOriginalDisplayUrl,
   initializeAssetStorage,
   readCombinedAssetIndex,
-  type AssetRecord,
 } from "service/assetStorage";
-import { copyVideoUrlToOss, uploadFileToOSS, generateImageUrl } from "service/oss";
 import {
+  copyVideoUrlToOss,
+  generateImageUrl,
+  uploadFileToOSS,
+} from "service/oss";
+import {
+  createEmptyAgentData,
   DEFAULT_ASSET_SYSTEM_PROMPT,
   DEFAULT_SPLIT_SYSTEM_PROMPT,
-  createEmptyAgentData,
   getAssetSystemPromptForDisplay,
   getSplitSystemPromptForDisplay,
   identifyAssetsWithAgent,
-  splitScriptWithAgent,
-  storyboardStorage,
   type StoryboardAgentData,
   type StoryboardAgentStep,
-  type StoryboardAssets,
   type StoryboardAssetItem,
   type StoryboardAssetKind,
   type StoryboardAssetMediaItem,
+  type StoryboardAssets,
   type StoryboardProject,
   type StoryboardShot,
   type StoryboardSnippet,
+  splitScriptWithAgent,
+  storyboardStorage,
 } from "service/storyboardStorage";
-import { Switch } from "@/components/ui/switch";
-import { GenerationStatus } from "shared/constants/enum";
 import {
   ADOBE_GPT_IMAGE2_MODEL,
   ADOBE_NANO_BANANA_PRO_MODEL,
@@ -64,17 +66,18 @@ import {
   GROK_IMAGE_LITE_MODEL,
   GROK_IMAGE_MODEL,
   GROK_IMAGE_PRO_MODEL,
-  IMAGE_MODELS,
-  XIMU_GPT_IMAGE2_MODEL,
-  XIMU_GPT_IMAGE2_VIP_MODEL,
-  XIMU_NANO_BANANA2_MODEL,
-  XIMU_NANO_BANANA_PRO_MODEL,
   getVisibleImageModels,
+  IMAGE_MODELS,
   isAdobeImageGenerationModel,
   isGrokImageGenerationModel,
   isXimuGptImageGenerationModel,
   isXimuImageGenerationModel,
+  XIMU_GPT_IMAGE2_MODEL,
+  XIMU_GPT_IMAGE2_VIP_MODEL,
+  XIMU_NANO_BANANA_PRO_MODEL,
+  XIMU_NANO_BANANA2_MODEL,
 } from "shared/constants/ai-models";
+import { GenerationStatus } from "shared/constants/enum";
 import {
   buildXimuGptImageRequest,
   buildXimuNanoBananaRequest,
@@ -89,12 +92,13 @@ import {
   XIMU_TASK_FAILED_STATUSES,
   XIMU_TASK_SUCCESS_STATUSES,
 } from "shared/types/detail/ximu";
+import { formatDuration } from "shared/utils/getVideoDuration";
 import { cn } from "shared/utils/utils";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
 import { toast } from "sonner";
 import {
-  createAdobe2ApiVideoGeneration,
   createAdobe2ApiImageGeneration,
+  createAdobe2ApiVideoGeneration,
   createDashscopeVideoSynthesis,
   createGrok2ApiImageGeneration,
   createGrok2ApiVideoGeneration,
@@ -102,14 +106,16 @@ import {
   createLzVideoTask,
   createXimuGptImageGeneration,
   createXimuNanoBananaGeneration,
-  getVideoRemovalStatus,
-  getXimuImageResult,
   getDashscopeVideoTaskStatus,
   getImageTaskStatus,
   getLzVideoTaskStatus,
-  videoRemoval,
+  getXimuImageResult,
 } from "@/api/ai";
-import { getUploadOssPutUrl } from "@/api/jikeGo";
+import {
+  createWuhenRemovalTask,
+  getUploadOssPutUrl,
+  queryWuhenRemovalTask,
+} from "@/api/jikeGo";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { Button } from "@/components/ui/button";
 import {
@@ -119,18 +125,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { VideoPlayer } from "@/components/ui/video-player";
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
-import { AssetLibraryDialog } from "@/pages/Canvas/components/AssetLibraryDialog";
 import { AspectRatioIcon } from "@/pages/Canvas/CustomNodes/ImageNode/components/AspectRatioIcon";
 import {
-  GeminiParamsPanel,
   GEMINI_RESOLUTIONS,
   GEMINI_SIZES,
+  GeminiParamsPanel,
   GROK_IMAGE_RESOLUTIONS,
   GROK_IMAGE_SIZES,
-  NANO_BANANA_RESOLUTIONS,
   NANO_BANANA_LOCAL_SIZES,
+  NANO_BANANA_RESOLUTIONS,
 } from "@/pages/Canvas/CustomNodes/ImageNode/components/GeminiParamsPanel";
 import {
   ADOBE_GPTIMAGE2_SIZES,
@@ -146,10 +152,11 @@ import {
   SEEDREAM_RESOLUTIONS,
   SeedreamParamsPanel,
 } from "@/pages/Canvas/CustomNodes/ImageNode/components/SeedreamParamsPanel";
-import {
-  type MentionItem,
-} from "@/pages/Canvas/CustomNodes/New-VideoNode/constants/mockData";
 import type { VideoGenerateRequest } from "@/pages/Canvas/CustomNodes/New-VideoNode/components/BottomParamsBar";
+import { ReferenceThumbnails } from "@/pages/Canvas/CustomNodes/New-VideoNode/components/ReferenceThumbnails";
+import { VideoPromptEditor } from "@/pages/Canvas/CustomNodes/New-VideoNode/components/VideoPromptEditor";
+import { VideoTimeline } from "@/pages/Canvas/CustomNodes/New-VideoNode/components/VideoTimeline";
+import { type MentionItem } from "@/pages/Canvas/CustomNodes/New-VideoNode/constants/mockData";
 import {
   getFirstSupportedModeForModel,
   getSupportedModesForModel,
@@ -160,14 +167,11 @@ import {
   normalizeVideoParams,
   type VideoParamState,
 } from "@/pages/Canvas/CustomNodes/New-VideoNode/constants/videoParamConfigs";
-import { ReferenceThumbnails } from "@/pages/Canvas/CustomNodes/New-VideoNode/components/ReferenceThumbnails";
-import { VideoPromptEditor } from "@/pages/Canvas/CustomNodes/New-VideoNode/components/VideoPromptEditor";
-import { VideoTimeline } from "@/pages/Canvas/CustomNodes/New-VideoNode/components/VideoTimeline";
 import { buildVideoApiRequest } from "@/pages/Canvas/CustomNodes/New-VideoNode/utils/buildVideoApiRequest";
 import { PROMPT_PANEL_STYLES } from "@/pages/Canvas/CustomNodes/shared/promptPanelStyles";
+import { AssetLibraryDialog } from "@/pages/Canvas/components/AssetLibraryDialog";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { useUserStore } from "@/stores/useUserStore";
-import { formatDuration } from "shared/utils/getVideoDuration";
 
 const assetKinds: Array<{ id: StoryboardAssetKind; label: string }> = [
   { id: "role", label: "角色" },
@@ -185,13 +189,7 @@ const storyAgentSteps: Array<{ id: StoryboardAgentStep; label: string }> = [
   { id: "video-edit", label: "视频编辑" },
 ];
 
-const scriptCategoryOptions = [
-  "解说漫",
-  "精品演绎剧",
-  "3d",
-  "2d",
-  "仿真人",
-];
+const scriptCategoryOptions = ["解说漫", "精品演绎剧", "3d", "2d", "仿真人"];
 
 const stepOrder: Record<StoryboardAgentStep, number> = {
   script: 0,
@@ -301,10 +299,10 @@ const extractTaskStatusInfo = (response: any) => {
 
   const taskStatus = normalizeTaskStatus(
     nested?.task_status ??
-      nested?.status ??
-      payload?.task_status ??
-      payload?.status ??
-      output?.task_status,
+    nested?.status ??
+    payload?.task_status ??
+    payload?.status ??
+    output?.task_status,
   );
 
   const progressRaw = nested?.progress ?? payload?.progress ?? output?.progress;
@@ -387,9 +385,8 @@ const getFittedWorkspaceFrame = (
 ) => {
   const safeMaxWidth = Math.max(280, maxWidth);
   const safeMaxHeight = Math.max(200, maxHeight);
-  const containerRatio = media?.width && media?.height
-    ? media.width / media.height
-    : 16 / 9;
+  const containerRatio =
+    media?.width && media?.height ? media.width / media.height : 16 / 9;
 
   let width = safeMaxWidth;
   let height = width / containerRatio;
@@ -437,7 +434,9 @@ const isLegacyDefaultSplitSystemPrompt = (value?: string) => {
     isPreviousAssetReferenceDefault ||
     (value.includes("最终只输出分镜正文。格式如下：分镜1：0–2s") &&
       value.includes("每条 shturl.cc/T 只能引用用户提供的可用资产中的名称") &&
-      value.includes("只输出 JSON 对象，不要 Markdown、表格、标题、解释或总结") &&
+      value.includes(
+        "只输出 JSON 对象，不要 Markdown、表格、标题、解释或总结",
+      ) &&
       !value.includes("序号N") &&
       !value.includes("资产引用行"))
   );
@@ -453,9 +452,7 @@ const migrateStoryDefaultPrompts = (data: StoryboardAgentData) => {
   };
 };
 
-const normalizeAgentData = (
-  data: StoryboardAgentData,
-): StoryboardAgentData => {
+const normalizeAgentData = (data: StoryboardAgentData): StoryboardAgentData => {
   const empty = createEmptyAgentData();
   const inferredStep: StoryboardAgentStep = data.unlockedStep
     ? data.unlockedStep
@@ -465,33 +462,35 @@ const normalizeAgentData = (
         ? "shots"
         : "script";
 
-  return migrateStoryDefaultPrompts(migrateStoryShotVideoModels({
-    ...empty,
-    ...data,
-    unlockedStep: inferredStep,
-    promptPrefix: data.promptPrefix ?? empty.promptPrefix,
-    promptSuffix: data.promptSuffix ?? empty.promptSuffix,
-    scriptCategory: data.scriptCategory ?? empty.scriptCategory,
-    assetSystemPrompt: getAssetSystemPromptForDisplay(
-      data.assetSystemPrompt ?? empty.assetSystemPrompt,
-    ),
-    splitSystemPrompt: getSplitSystemPromptForDisplay(
-      data.splitSystemPrompt ?? empty.splitSystemPrompt,
-    ),
-    roleAssetPromptAffixEnabled:
-      data.roleAssetPromptAffixEnabled ?? empty.roleAssetPromptAffixEnabled,
-    shotPromptAffixEnabled:
-      data.shotPromptAffixEnabled ?? empty.shotPromptAffixEnabled,
-    roleAssetPromptPrefix:
-      data.roleAssetPromptPrefix ?? empty.roleAssetPromptPrefix,
-    roleAssetPromptSuffix:
-      data.roleAssetPromptSuffix ?? empty.roleAssetPromptSuffix,
-    assets: {
-      ...empty.assets,
-      ...(data.assets || {}),
-    },
-    shots: data.shots || [],
-  }));
+  return migrateStoryDefaultPrompts(
+    migrateStoryShotVideoModels({
+      ...empty,
+      ...data,
+      unlockedStep: inferredStep,
+      promptPrefix: data.promptPrefix ?? empty.promptPrefix,
+      promptSuffix: data.promptSuffix ?? empty.promptSuffix,
+      scriptCategory: data.scriptCategory ?? empty.scriptCategory,
+      assetSystemPrompt: getAssetSystemPromptForDisplay(
+        data.assetSystemPrompt ?? empty.assetSystemPrompt,
+      ),
+      splitSystemPrompt: getSplitSystemPromptForDisplay(
+        data.splitSystemPrompt ?? empty.splitSystemPrompt,
+      ),
+      roleAssetPromptAffixEnabled:
+        data.roleAssetPromptAffixEnabled ?? empty.roleAssetPromptAffixEnabled,
+      shotPromptAffixEnabled:
+        data.shotPromptAffixEnabled ?? empty.shotPromptAffixEnabled,
+      roleAssetPromptPrefix:
+        data.roleAssetPromptPrefix ?? empty.roleAssetPromptPrefix,
+      roleAssetPromptSuffix:
+        data.roleAssetPromptSuffix ?? empty.roleAssetPromptSuffix,
+      assets: {
+        ...empty.assets,
+        ...(data.assets || {}),
+      },
+      shots: data.shots || [],
+    }),
+  );
 };
 
 const inputClass =
@@ -582,7 +581,12 @@ const buildStoryPromptDraftHtml = (
       mediaUrl: primary?.mediaUrl || asset.mediaUrl,
     });
     const thumbnail = primary?.mediaUrl || asset.mediaUrl || "";
-    const mentionKind = mediaType === "audio" ? "audio" : mediaType === "video" ? "video" : "image";
+    const mentionKind =
+      mediaType === "audio"
+        ? "audio"
+        : mediaType === "video"
+          ? "video"
+          : "image";
     const safeName = escapeHtml(asset.name);
     const safeId = escapeHtml(asset.id);
     const safeThumbnail = escapeHtml(thumbnail);
@@ -850,8 +854,8 @@ const normalizeStoryImageParams = (
       : config.defaultAspectRatio;
   const resolution =
     params.resolution &&
-    config.resolutionValues &&
-    config.resolutionValues.has(params.resolution)
+      config.resolutionValues &&
+      config.resolutionValues.has(params.resolution)
       ? params.resolution
       : config.defaultResolution;
 
@@ -877,7 +881,8 @@ const getFileExtension = (file: File, fallback: string) =>
 const getPathExtension = (path: string, fallback: string) =>
   path.split(".").pop()?.toLowerCase() || fallback;
 
-const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+const wait = (ms: number) =>
+  new Promise((resolve) => window.setTimeout(resolve, ms));
 
 const withTimeout = async <T,>(
   promise: Promise<T>,
@@ -891,7 +896,10 @@ const withTimeout = async <T,>(
     }),
   ]);
 
-const getMimeTypeByPath = (path: string, fallback = "application/octet-stream") => {
+const getMimeTypeByPath = (
+  path: string,
+  fallback = "application/octet-stream",
+) => {
   const extension = path.split(".").pop()?.toLowerCase();
   if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
   if (extension === "png") return "image/png";
@@ -904,14 +912,23 @@ const getMimeTypeByPath = (path: string, fallback = "application/octet-stream") 
 };
 
 const getStoryAssetMediaType = (
-  item: Pick<StoryboardAssetItem, "kind" | "mediaType" | "localPath" | "mediaUrl">,
+  item: Pick<
+    StoryboardAssetItem,
+    "kind" | "mediaType" | "localPath" | "mediaUrl"
+  >,
 ) => {
   if (item.mediaType) return item.mediaType;
   if (item.kind === "audio") return "audio";
   const source = item.localPath || item.mediaUrl || "";
-  const extension = source.split("?")[0].split("#")[0].split(".").pop()?.toLowerCase();
+  const extension = source
+    .split("?")[0]
+    .split("#")[0]
+    .split(".")
+    .pop()
+    ?.toLowerCase();
   if (["mp4", "webm", "mov"].includes(extension || "")) return "video";
-  if (["mp3", "wav", "m4a", "aac", "ogg"].includes(extension || "")) return "audio";
+  if (["mp3", "wav", "m4a", "aac", "ogg"].includes(extension || ""))
+    return "audio";
   return "image";
 };
 
@@ -1027,7 +1044,9 @@ const deleteAssetMediaItem = (
   asset: StoryboardAssetItem,
   mediaId: string,
 ): StoryboardAssetItem => {
-  const mediaItems = getAssetMediaItems(asset).filter((item) => item.id !== mediaId);
+  const mediaItems = getAssetMediaItems(asset).filter(
+    (item) => item.id !== mediaId,
+  );
   const primary = mediaItems[0];
 
   if (!primary) {
@@ -1086,7 +1105,8 @@ const createLibraryStoryboardAsset = (
     id: createAssetMediaId("library_media"),
     source: "library",
     mediaType: asset.mediaType,
-    mediaUrl: asset.ossUrl || getAssetOriginalDisplayUrl(asset, assetStoragePath),
+    mediaUrl:
+      asset.ossUrl || getAssetOriginalDisplayUrl(asset, assetStoragePath),
     localPath: undefined,
     assetId: asset.id,
     name: asset.name,
@@ -1230,7 +1250,9 @@ const cloneImportedStoryboardAssets = (
         ...asset,
         audioAssetIds: Array.from(
           new Set(
-            asset.audioAssetIds.map((id) => idMap.get(id) || id).filter(Boolean),
+            asset.audioAssetIds
+              .map((id) => idMap.get(id) || id)
+              .filter(Boolean),
           ),
         ),
       };
@@ -1251,20 +1273,20 @@ const applyCompletedStoryAsset = (
     [kind]: agent.assets[kind].map((item) =>
       item.id === completedAsset.id
         ? {
-            ...item,
-            source: completedAsset.source,
-            status: completedAsset.status,
-            mediaType: completedAsset.mediaType,
-            mediaUrl: completedAsset.mediaUrl,
-            localPath: completedAsset.localPath,
-            assetId: completedAsset.assetId,
-            mediaItems: completedAsset.mediaItems,
-            primaryMediaId: completedAsset.primaryMediaId,
-            imageModel: completedAsset.imageModel,
-            imagePlatform: completedAsset.imagePlatform,
-            aspectRatio: completedAsset.aspectRatio,
-            resolution: completedAsset.resolution,
-          }
+          ...item,
+          source: completedAsset.source,
+          status: completedAsset.status,
+          mediaType: completedAsset.mediaType,
+          mediaUrl: completedAsset.mediaUrl,
+          localPath: completedAsset.localPath,
+          assetId: completedAsset.assetId,
+          mediaItems: completedAsset.mediaItems,
+          primaryMediaId: completedAsset.primaryMediaId,
+          imageModel: completedAsset.imageModel,
+          imagePlatform: completedAsset.imagePlatform,
+          aspectRatio: completedAsset.aspectRatio,
+          resolution: completedAsset.resolution,
+        }
         : item,
     ),
   },
@@ -1653,9 +1675,8 @@ const toAdobeImageRatio = (
   aspectRatio: string | undefined,
   allowedValues: Set<string>,
 ) => {
-  const normalized = aspectRatio && allowedValues.has(aspectRatio)
-    ? aspectRatio
-    : "1:1";
+  const normalized =
+    aspectRatio && allowedValues.has(aspectRatio) ? aspectRatio : "1:1";
   return normalized.replace(":", "x");
 };
 
@@ -1705,16 +1726,17 @@ const resolveGrokStoryImageModel = (model: string) => {
 
 const resolveGrokStoryImageSize = (aspectRatio: string) =>
   (
-    {
+    ({
       "16:9": "1280x720",
       "9:16": "720x1280",
       "3:2": "1792x1024",
       "2:3": "1024x1792",
       "1:1": "1024x1024",
-    } as const
+    }) as const
   )[aspectRatio] ?? "1024x1024";
 
-const isDataImageUrl = (value: string) => /^data:image\/[^;]+;base64,/i.test(value);
+const isDataImageUrl = (value: string) =>
+  /^data:image\/[^;]+;base64,/i.test(value);
 
 const looksLikeBase64Image = (value: string) => {
   const compact = value.trim();
@@ -1736,7 +1758,10 @@ const getDirectImageUrl = (response: any) => {
   const direct =
     response?.data?.[0]?.url ||
     response?.data?.[0]?.b64_json ||
-    extractMarkdownMediaUrl(response?.choices?.[0]?.message?.content, "image") ||
+    extractMarkdownMediaUrl(
+      response?.choices?.[0]?.message?.content,
+      "image",
+    ) ||
     "";
   return typeof direct === "string" ? normalizeInlineImageSource(direct) : "";
 };
@@ -1757,14 +1782,14 @@ const isGrokVideoRequest = (payload: Record<string, unknown>) =>
 const extractMarkdownMediaUrl = (content: unknown, kind: "image" | "video") => {
   const text = Array.isArray(content)
     ? content
-        .map((part) =>
-          typeof part === "string"
-            ? part
-            : typeof part?.text === "string"
-              ? part.text
-              : "",
-        )
-        .join("\n")
+      .map((part) =>
+        typeof part === "string"
+          ? part
+          : typeof part?.text === "string"
+            ? part.text
+            : "",
+      )
+      .join("\n")
     : String(content || "");
   const urlPattern =
     kind === "video"
@@ -1787,9 +1812,7 @@ const extractMarkdownMediaUrl = (content: unknown, kind: "image" | "video") => {
   if (markdownUrl) return markdownUrl;
 
   const bareUrlPattern = new RegExp(
-    kind === "video"
-      ? `(${urlPattern})`
-      : "(https?:\\/\\/[^\\s\"'<>)]*)",
+    kind === "video" ? `(${urlPattern})` : "(https?:\\/\\/[^\\s\"'<>)]*)",
     "i",
   );
   return text.match(bareUrlPattern)?.[1];
@@ -1817,7 +1840,9 @@ const pickStoryVideoMode = (
 ): VideoModeKey => {
   const supportedModes = getSupportedModesForModel(model);
   const hasReference = referenceItems.length > 0;
-  const hasImageReference = referenceItems.some((item) => item.type === "image");
+  const hasImageReference = referenceItems.some(
+    (item) => item.type === "image",
+  );
 
   if (preferredMode && supportedModes.includes(preferredMode)) {
     if (preferredMode === "all-reference" && !hasReference) {
@@ -1886,7 +1911,9 @@ const extractImageTaskUrl = (response: any) => {
 };
 
 const getImageExtensionFromUrl = (url: string, fallback = "png") => {
-  const dataMime = url.match(/^data:image\/([^;]+);base64,/i)?.[1]?.toLowerCase();
+  const dataMime = url
+    .match(/^data:image\/([^;]+);base64,/i)?.[1]
+    ?.toLowerCase();
   if (dataMime) {
     if (dataMime === "jpeg") return "jpg";
     if (["jpg", "png", "webp", "gif"].includes(dataMime)) return dataMime;
@@ -1932,10 +1959,7 @@ const imageSourceToArrayBuffer = async (imageSource: string) => {
 
   const result = await window.download.imageAsBuffer(normalized);
   if (!result.success || !result.data) {
-    console.warn(
-      "[Story] download generated asset image failed",
-      result.error,
-    );
+    console.warn("[Story] download generated asset image failed", result.error);
     return null;
   }
 
@@ -1959,7 +1983,6 @@ const StoryHeader = ({
 }) => {
   const navigate = useNavigate();
 
-
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/5 px-6">
       <div className="flex items-center gap-3">
@@ -1980,11 +2003,7 @@ const StoryHeader = ({
   );
 };
 
-const StoragePathGuard = ({
-  children,
-}: {
-  children: React.ReactNode;
-}) => {
+const StoragePathGuard = ({ children }: { children: React.ReactNode }) => {
   const storagePath = useChatSettingsStore((state) => state.storagePath);
   const setStoragePath = useChatSettingsStore((state) => state.setStoragePath);
   const [selecting, setSelecting] = useState(false);
@@ -2023,8 +2042,8 @@ const StoragePathGuard = ({
           </div>
           <h2 className="mt-5 text-lg font-medium">选择项目存储路径</h2>
           <p className="mt-3 text-sm leading-6 text-white/48">
-            故事创作会把项目、片段、剧本 Agent 数据和生成结果保存到项目存储路径下的
-            storyboard 目录。
+            故事创作会把项目、片段、剧本 Agent
+            数据和生成结果保存到项目存储路径下的 storyboard 目录。
           </p>
           <Button
             className="mt-6"
@@ -2212,9 +2231,8 @@ const StoryProjectListPage = () => {
   const [projects, setProjects] = useState<StoryboardProject[]>([]);
   const [coverUrls, setCoverUrls] = useState<Record<string, string>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingProject, setEditingProject] = useState<StoryboardProject | null>(
-    null,
-  );
+  const [editingProject, setEditingProject] =
+    useState<StoryboardProject | null>(null);
   const [projectToDelete, setProjectToDelete] =
     useState<StoryboardProject | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -2281,7 +2299,9 @@ const StoryProjectListPage = () => {
 
     Promise.all(
       projects.map(async (project) => {
-        const url = await storyboardStorage.readObjectUrl(project.coverLocalPath);
+        const url = await storyboardStorage.readObjectUrl(
+          project.coverLocalPath,
+        );
         if (url) urls.push(url);
         return [project.id, url] as const;
       }),
@@ -2586,9 +2606,8 @@ const StorySnippetListPage = ({ projectId }: { projectId: string }) => {
   const [project, setProject] = useState<StoryboardProject | null>(null);
   const [snippets, setSnippets] = useState<StoryboardSnippet[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingSnippet, setEditingSnippet] = useState<StoryboardSnippet | null>(
-    null,
-  );
+  const [editingSnippet, setEditingSnippet] =
+    useState<StoryboardSnippet | null>(null);
   const [snippetToDelete, setSnippetToDelete] =
     useState<StoryboardSnippet | null>(null);
   const [deletingSnippet, setDeletingSnippet] = useState(false);
@@ -2705,7 +2724,9 @@ const StorySnippetListPage = ({ projectId }: { projectId: string }) => {
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      navigate(`/story/${projectId}/snippets/${snippet.id}/agent`);
+                      navigate(
+                        `/story/${projectId}/snippets/${snippet.id}/agent`,
+                      );
                     }
                   }}
                   role="button"
@@ -2719,7 +2740,9 @@ const StorySnippetListPage = ({ projectId }: { projectId: string }) => {
                     <div className="flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
                       <button
                         type="button"
-                        onClick={(event) => openEditSnippetDialog(event, snippet)}
+                        onClick={(event) =>
+                          openEditSnippetDialog(event, snippet)
+                        }
                         className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-white/10 bg-black/50 text-white/70 backdrop-blur-md transition-colors hover:bg-black/70 hover:text-white"
                         title="编辑片段"
                       >
@@ -3033,7 +3056,10 @@ const StoryAssetImageParamsControl = ({
     );
   }
 
-  if (model === ADOBE_GPT_IMAGE2_MODEL || isXimuGptImageGenerationModel(model)) {
+  if (
+    model === ADOBE_GPT_IMAGE2_MODEL ||
+    isXimuGptImageGenerationModel(model)
+  ) {
     return (
       <GptImage2ParamsPanel
         size={params.aspectRatio}
@@ -3109,309 +3135,326 @@ const StoryAssetImageParamsControl = ({
   );
 };
 
-const AssetColumnItem = memo(({
-  item,
-  index,
-  audioAssets = [],
-  imageModelOptions,
-  defaultImageModel,
-  defaultImageSize,
-  defaultImageResolution,
-  onChange,
-  onUpload,
-  onUseLibrary,
-  onBindAudio,
-  onBindLocalAudio,
-  onSetPrimaryMedia,
-  onDeleteMedia,
-  onGenerate,
-  onDelete,
-}: {
-  item: StoryboardAssetItem;
-  index: number;
-  audioAssets?: StoryboardAssetItem[];
-  imageModelOptions: StoryImageModelOption[];
-  defaultImageModel?: string;
-  defaultImageSize?: string;
-  defaultImageResolution?: string;
-  onChange: (patch: Partial<StoryboardAssetItem>) => void;
-  onUpload: (file: File) => void;
-  onUseLibrary: () => void;
-  onBindAudio: () => void;
-  onBindLocalAudio: (file: File) => void;
-  onSetPrimaryMedia: (mediaId: string) => void;
-  onDeleteMedia: (mediaId: string) => void;
-  onGenerate: () => void;
-  onDelete: () => void;
-}) => {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const audioInputRef = useRef<HTMLInputElement | null>(null);
-  const [draftPrompt, setDraftPrompt] = useState(item.prompt || "");
-  const promptTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    setDraftPrompt(item.prompt || "");
-  }, [item.prompt]);
-
-  useEffect(() => {
-    return () => {
-      if (promptTimerRef.current) window.clearTimeout(promptTimerRef.current);
-    };
-  }, []);
-  const currentImageModelId = getStoryImageModelOptionId(
-    item.imageModel,
-    item.imagePlatform,
-    defaultImageModel,
+const AssetColumnItem = memo(
+  ({
+    item,
+    index,
+    audioAssets = [],
     imageModelOptions,
-  );
-  const currentImageModel =
-    imageModelOptions.find((option) => String(option.id) === currentImageModelId)
-      ?.model ||
-    item.imageModel ||
-    defaultImageModel ||
-    "doubao-seedream-5-0";
-  const isAudioAsset = item.kind === "audio";
-  const boundAudioIds = item.audioAssetIds || [];
+    defaultImageModel,
+    defaultImageSize,
+    defaultImageResolution,
+    onChange,
+    onUpload,
+    onUseLibrary,
+    onBindAudio,
+    onBindLocalAudio,
+    onSetPrimaryMedia,
+    onDeleteMedia,
+    onGenerate,
+    onDelete,
+  }: {
+    item: StoryboardAssetItem;
+    index: number;
+    audioAssets?: StoryboardAssetItem[];
+    imageModelOptions: StoryImageModelOption[];
+    defaultImageModel?: string;
+    defaultImageSize?: string;
+    defaultImageResolution?: string;
+    onChange: (patch: Partial<StoryboardAssetItem>) => void;
+    onUpload: (file: File) => void;
+    onUseLibrary: () => void;
+    onBindAudio: () => void;
+    onBindLocalAudio: (file: File) => void;
+    onSetPrimaryMedia: (mediaId: string) => void;
+    onDeleteMedia: (mediaId: string) => void;
+    onGenerate: () => void;
+    onDelete: () => void;
+  }) => {
+    const inputRef = useRef<HTMLInputElement | null>(null);
+    const audioInputRef = useRef<HTMLInputElement | null>(null);
+    const [draftPrompt, setDraftPrompt] = useState(item.prompt || "");
+    const promptTimerRef = useRef<number | null>(null);
 
-  return (
-    <div className="rounded-lg border border-white/8 bg-black/25 p-3">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-xs text-white/35">#{index + 1}</span>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-white/45">
-            {item.status === "generating"
-              ? "生成中"
-              : item.status === "ready"
-                ? "已就绪"
-                : item.status === "failed"
-                  ? "失败"
-                  : "待处理"}
-          </span>
-          <Button
-            className="h-7 w-7 px-0 text-red-200 hover:bg-red-500/10 hover:text-red-100"
-            size="sm"
-            variant="ghost"
-            onClick={onDelete}
-            title="删除资产"
-            aria-label="删除资产"
-          >
-            <Trash2 size={13} />
-          </Button>
+    useEffect(() => {
+      setDraftPrompt(item.prompt || "");
+    }, [item.prompt]);
+
+    useEffect(() => {
+      return () => {
+        if (promptTimerRef.current) window.clearTimeout(promptTimerRef.current);
+      };
+    }, []);
+    const currentImageModelId = getStoryImageModelOptionId(
+      item.imageModel,
+      item.imagePlatform,
+      defaultImageModel,
+      imageModelOptions,
+    );
+    const currentImageModel =
+      imageModelOptions.find(
+        (option) => String(option.id) === currentImageModelId,
+      )?.model ||
+      item.imageModel ||
+      defaultImageModel ||
+      "doubao-seedream-5-0";
+    const isAudioAsset = item.kind === "audio";
+    const boundAudioIds = item.audioAssetIds || [];
+
+    return (
+      <div className="rounded-lg border border-white/8 bg-black/25 p-3">
+        <div className="mb-3 flex items-center justify-between">
+          <span className="text-xs text-white/35">#{index + 1}</span>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-white/45">
+              {item.status === "generating"
+                ? "生成中"
+                : item.status === "ready"
+                  ? "已就绪"
+                  : item.status === "failed"
+                    ? "失败"
+                    : "待处理"}
+            </span>
+            <Button
+              className="h-7 w-7 px-0 text-red-200 hover:bg-red-500/10 hover:text-red-100"
+              size="sm"
+              variant="ghost"
+              onClick={onDelete}
+              title="删除资产"
+              aria-label="删除资产"
+            >
+              <Trash2 size={13} />
+            </Button>
+          </div>
         </div>
-      </div>
-      <div className="space-y-3">
-        <StoryAssetPreview
-          item={item}
-          onSetPrimaryMedia={onSetPrimaryMedia}
-          onDeleteMedia={onDeleteMedia}
-        />
-        <input
-          className={inputClass}
-          value={item.name}
-          placeholder="资产名称"
-          onChange={(event) => onChange({ name: event.target.value })}
-        />
-        <textarea
-          className={`${textAreaClass} h-20`}
-          value={draftPrompt}
-          placeholder={isAudioAsset ? "音效描述" : "AI 生成提示词"}
-          onChange={(event) => {
-            const value = event.target.value;
-            setDraftPrompt(value);
-            if (promptTimerRef.current) window.clearTimeout(promptTimerRef.current);
-            promptTimerRef.current = window.setTimeout(() => {
-              onChange({ prompt: value });
-              promptTimerRef.current = null;
-            }, 800);
-          }}
-        />
-        {!isAudioAsset ? (
-          <>
-            <StoryAssetImageParamsControl
-              item={item}
-              model={currentImageModel}
-              defaultImageSize={defaultImageSize}
-              defaultImageResolution={defaultImageResolution}
-              onChange={onChange}
-            />
-            <div className="flex items-center gap-2">
-              <Select
-                value={currentImageModelId}
-                onValueChange={(value) => {
-                  const selected = imageModelOptions.find(
-                    (option) => option.id === Number(value),
-                  );
-                  if (!selected) return;
-                  const nextParams = normalizeStoryImageParams(selected.model, {
-                    aspectRatio: item.aspectRatio || defaultImageSize,
-                    resolution: item.resolution || defaultImageResolution,
-                  });
-                  onChange({
-                    imageModel: selected.model,
-                    imagePlatform: selected.platform,
-                    aspectRatio: nextParams.aspectRatio,
-                    resolution: nextParams.resolution,
-                  });
-                }}
-              >
-                <SelectTrigger
-                  size="sm"
-                  className={cn(
-                    PROMPT_PANEL_STYLES.modelSelect,
-                    "h-8 min-w-0 flex-1 px-3 text-xs",
-                    "[&_[data-slot=select-value]]:block [&_[data-slot=select-value]]:truncate",
-                  )}
-                  title={
-                    imageModelOptions.find(
-                      (option) => String(option.id) === currentImageModelId,
-                    )?.name
-                  }
-                >
-                  <SelectValue placeholder="选择模型" />
-                </SelectTrigger>
-                <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
-                  {imageModelOptions.map((option) => (
-                    <SelectItem
-                      key={option.id}
-                      value={String(option.id)}
-                      className={PROMPT_PANEL_STYLES.modelSelectItem}
-                    >
-                      {option.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                size="sm"
-                variant="blue"
-                onClick={onGenerate}
-                disabled={item.status === "generating"}
-              >
-                {item.status === "generating" ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <WandSparkles size={13} />
-                )}
-                AI 生成
-              </Button>
-            </div>
-          </>
-        ) : null}
-        <div className="flex flex-wrap gap-2">
+        <div className="space-y-3">
+          <StoryAssetPreview
+            item={item}
+            onSetPrimaryMedia={onSetPrimaryMedia}
+            onDeleteMedia={onDeleteMedia}
+          />
           <input
-            ref={inputRef}
-            type="file"
-            accept={item.kind === "audio" ? "audio/*" : "image/*,video/*"}
-            className="hidden"
+            className={inputClass}
+            value={item.name}
+            placeholder="资产名称"
+            onChange={(event) => onChange({ name: event.target.value })}
+          />
+          <textarea
+            className={`${textAreaClass} h-20`}
+            value={draftPrompt}
+            placeholder={isAudioAsset ? "音效描述" : "AI 生成提示词"}
             onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) onUpload(file);
+              const value = event.target.value;
+              setDraftPrompt(value);
+              if (promptTimerRef.current)
+                window.clearTimeout(promptTimerRef.current);
+              promptTimerRef.current = window.setTimeout(() => {
+                onChange({ prompt: value });
+                promptTimerRef.current = null;
+              }, 800);
             }}
           />
-          <Button size="sm" onClick={() => inputRef.current?.click()}>
-            <Upload size={13} />
-            本地上传
-          </Button>
-          <Button size="sm" onClick={onUseLibrary}>
-            <FolderOpen size={13} />
-            资产库上传
-          </Button>
-        </div>
-        {!isAudioAsset ? (
-          <div className="rounded-lg border border-white/8 bg-black/25 p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs text-white/55">
-                <Music size={13} />
-                绑定音效
-              </div>
-              <div className="flex flex-wrap justify-end gap-2">
-                <input
-                  ref={audioInputRef}
-                  type="file"
-                  accept="audio/*"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) onBindLocalAudio(file);
-                    event.target.value = "";
+          {!isAudioAsset ? (
+            <>
+              <StoryAssetImageParamsControl
+                item={item}
+                model={currentImageModel}
+                defaultImageSize={defaultImageSize}
+                defaultImageResolution={defaultImageResolution}
+                onChange={onChange}
+              />
+              <div className="flex items-center gap-2">
+                <Select
+                  value={currentImageModelId}
+                  onValueChange={(value) => {
+                    const selected = imageModelOptions.find(
+                      (option) => option.id === Number(value),
+                    );
+                    if (!selected) return;
+                    const nextParams = normalizeStoryImageParams(
+                      selected.model,
+                      {
+                        aspectRatio: item.aspectRatio || defaultImageSize,
+                        resolution: item.resolution || defaultImageResolution,
+                      },
+                    );
+                    onChange({
+                      imageModel: selected.model,
+                      imagePlatform: selected.platform,
+                      aspectRatio: nextParams.aspectRatio,
+                      resolution: nextParams.resolution,
+                    });
                   }}
-                />
-                <Button size="sm" onClick={onBindAudio}>
-                  <FolderOpen size={13} />
-                  资产库选择
+                >
+                  <SelectTrigger
+                    size="sm"
+                    className={cn(
+                      PROMPT_PANEL_STYLES.modelSelect,
+                      "h-8 min-w-0 flex-1 px-3 text-xs",
+                      "[&_[data-slot=select-value]]:block [&_[data-slot=select-value]]:truncate",
+                    )}
+                    title={
+                      imageModelOptions.find(
+                        (option) => String(option.id) === currentImageModelId,
+                      )?.name
+                    }
+                  >
+                    <SelectValue placeholder="选择模型" />
+                  </SelectTrigger>
+                  <SelectContent
+                    className={PROMPT_PANEL_STYLES.modelSelectContent}
+                  >
+                    {imageModelOptions.map((option) => (
+                      <SelectItem
+                        key={option.id}
+                        value={String(option.id)}
+                        className={PROMPT_PANEL_STYLES.modelSelectItem}
+                      >
+                        {option.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  variant="blue"
+                  onClick={onGenerate}
+                  disabled={item.status === "generating"}
+                >
+                  {item.status === "generating" ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <WandSparkles size={13} />
+                  )}
+                  AI 生成
                 </Button>
-                <Button size="sm" onClick={() => audioInputRef.current?.click()}>
-                  <Upload size={13} />
-                  本地选择
-                </Button>
               </div>
-            </div>
-            {boundAudioIds.length === 0 ? (
-              <div className="text-[11px] text-white/30">
-                暂无已绑定音效。
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {boundAudioIds.map((audioId) => {
-                  const audio = audioAssets.find((item) => item.id === audioId);
-                  return (
-                    <button
-                      type="button"
-                      key={audioId}
-                      className="rounded-full border border-[#B43FEB]/50 bg-[#B43FEB]/18 px-2.5 py-1 text-[11px] text-[#E9C7FF] transition-colors hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-100"
-                      onClick={() =>
-                        onChange({
-                          audioAssetIds: boundAudioIds.filter(
-                            (id) => id !== audioId,
-                          ),
-                        })
-                      }
-                    >
-                      {audio?.name || "已绑定音效"}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            </>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <input
+              ref={inputRef}
+              type="file"
+              accept={item.kind === "audio" ? "audio/*" : "image/*,video/*"}
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onUpload(file);
+              }}
+            />
+            <Button size="sm" onClick={() => inputRef.current?.click()}>
+              <Upload size={13} />
+              本地上传
+            </Button>
+            <Button size="sm" onClick={onUseLibrary}>
+              <FolderOpen size={13} />
+              资产库上传
+            </Button>
           </div>
-        ) : null}
+          {!isAudioAsset ? (
+            <div className="rounded-lg border border-white/8 bg-black/25 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs text-white/55">
+                  <Music size={13} />
+                  绑定音效
+                </div>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <input
+                    ref={audioInputRef}
+                    type="file"
+                    accept="audio/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) onBindLocalAudio(file);
+                      event.target.value = "";
+                    }}
+                  />
+                  <Button size="sm" onClick={onBindAudio}>
+                    <FolderOpen size={13} />
+                    资产库选择
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => audioInputRef.current?.click()}
+                  >
+                    <Upload size={13} />
+                    本地选择
+                  </Button>
+                </div>
+              </div>
+              {boundAudioIds.length === 0 ? (
+                <div className="text-[11px] text-white/30">
+                  暂无已绑定音效。
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {boundAudioIds.map((audioId) => {
+                    const audio = audioAssets.find(
+                      (item) => item.id === audioId,
+                    );
+                    return (
+                      <button
+                        type="button"
+                        key={audioId}
+                        className="rounded-full border border-[#B43FEB]/50 bg-[#B43FEB]/18 px-2.5 py-1 text-[11px] text-[#E9C7FF] transition-colors hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-100"
+                        onClick={() =>
+                          onChange({
+                            audioAssetIds: boundAudioIds.filter(
+                              (id) => id !== audioId,
+                            ),
+                          })
+                        }
+                      >
+                        {audio?.name || "已绑定音效"}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
       </div>
-    </div>
-  );
-}, (prev, next) => {
-  const p = prev.item as StoryboardAssetItem;
-  const n = next.item as StoryboardAssetItem;
-  if (p.id !== n.id) return false;
-  if (p.name !== n.name) return false;
-  if (p.prompt !== n.prompt) return false;
-  if (p.status !== n.status) return false;
-  if (p.imageModel !== n.imageModel) return false;
-  if (p.aspectRatio !== n.aspectRatio) return false;
-  if (p.resolution !== n.resolution) return false;
-  if (p.mediaType !== n.mediaType) return false;
-  if (p.mediaUrl !== n.mediaUrl) return false;
-  if (p.localPath !== n.localPath) return false;
-  if (p.primaryMediaId !== n.primaryMediaId) return false;
-  if ((p.audioAssetIds || []).length !== (n.audioAssetIds || []).length) return false;
-  const pMediaItems = p.mediaItems || [];
-  const nMediaItems = n.mediaItems || [];
-  if (pMediaItems.length !== nMediaItems.length) return false;
-  for (let i = 0; i < pMediaItems.length; i += 1) {
-    const pItem = pMediaItems[i];
-    const nItem = nMediaItems[i];
-    if (pItem.id !== nItem.id) return false;
-    if (pItem.mediaUrl !== nItem.mediaUrl) return false;
-    if (pItem.localPath !== nItem.localPath) return false;
-    if (pItem.mediaType !== nItem.mediaType) return false;
-  }
-  if (prev.index !== next.index) return false;
-  if (prev.defaultImageModel !== next.defaultImageModel) return false;
-  if (prev.defaultImageSize !== next.defaultImageSize) return false;
-  if (prev.defaultImageResolution !== next.defaultImageResolution) return false;
-  if (prev.imageModelOptions !== next.imageModelOptions) return false;
-  if (prev.audioAssets !== next.audioAssets) return false;
-  return true;
-});
+    );
+  },
+  (prev, next) => {
+    const p = prev.item as StoryboardAssetItem;
+    const n = next.item as StoryboardAssetItem;
+    if (p.id !== n.id) return false;
+    if (p.name !== n.name) return false;
+    if (p.prompt !== n.prompt) return false;
+    if (p.status !== n.status) return false;
+    if (p.imageModel !== n.imageModel) return false;
+    if (p.aspectRatio !== n.aspectRatio) return false;
+    if (p.resolution !== n.resolution) return false;
+    if (p.mediaType !== n.mediaType) return false;
+    if (p.mediaUrl !== n.mediaUrl) return false;
+    if (p.localPath !== n.localPath) return false;
+    if (p.primaryMediaId !== n.primaryMediaId) return false;
+    if ((p.audioAssetIds || []).length !== (n.audioAssetIds || []).length)
+      return false;
+    const pMediaItems = p.mediaItems || [];
+    const nMediaItems = n.mediaItems || [];
+    if (pMediaItems.length !== nMediaItems.length) return false;
+    for (let i = 0; i < pMediaItems.length; i += 1) {
+      const pItem = pMediaItems[i];
+      const nItem = nMediaItems[i];
+      if (pItem.id !== nItem.id) return false;
+      if (pItem.mediaUrl !== nItem.mediaUrl) return false;
+      if (pItem.localPath !== nItem.localPath) return false;
+      if (pItem.mediaType !== nItem.mediaType) return false;
+    }
+    if (prev.index !== next.index) return false;
+    if (prev.defaultImageModel !== next.defaultImageModel) return false;
+    if (prev.defaultImageSize !== next.defaultImageSize) return false;
+    if (prev.defaultImageResolution !== next.defaultImageResolution)
+      return false;
+    if (prev.imageModelOptions !== next.imageModelOptions) return false;
+    if (prev.audioAssets !== next.audioAssets) return false;
+    return true;
+  },
+);
 
 const StoryAssetPreview = ({
   item,
@@ -3427,22 +3470,22 @@ const StoryAssetPreview = ({
   onDeleteMedia?: (mediaId: string) => void;
 }) => {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
-  const [failedPreviewUrls, setFailedPreviewUrls] = useState<Record<string, true>>(
-    {},
-  );
-  const [variantObjectUrls, setVariantObjectUrls] = useState<Record<string, string>>(
-    {},
-  );
+  const [failedPreviewUrls, setFailedPreviewUrls] = useState<
+    Record<string, true>
+  >({});
+  const [variantObjectUrls, setVariantObjectUrls] = useState<
+    Record<string, string>
+  >({});
   const [previewOpen, setPreviewOpen] = useState(false);
   const mediaItems = getAssetMediaItems(item);
   const primaryMedia = mediaItems[0];
   const previewSource = primaryMedia
     ? {
-        kind: item.kind,
-        mediaType: primaryMedia.mediaType,
-        mediaUrl: primaryMedia.mediaUrl,
-        localPath: primaryMedia.localPath,
-      }
+      kind: item.kind,
+      mediaType: primaryMedia.mediaType,
+      mediaUrl: primaryMedia.mediaUrl,
+      localPath: primaryMedia.localPath,
+    }
     : item;
   const mediaType = getStoryAssetMediaType(previewSource);
   const storedRemotePreviewUrl = primaryMedia?.mediaUrl || item.mediaUrl || "";
@@ -3468,7 +3511,9 @@ const StoryAssetPreview = ({
   }
   if (displayUrl && failedPreviewUrls[displayUrl]) {
     displayUrl =
-      displayUrl !== remotePreviewUrl && remotePreviewUrl && !failedPreviewUrls[remotePreviewUrl]
+      displayUrl !== remotePreviewUrl &&
+        remotePreviewUrl &&
+        !failedPreviewUrls[remotePreviewUrl]
         ? remotePreviewUrl
         : objectUrl && !failedPreviewUrls[objectUrl]
           ? objectUrl
@@ -3476,7 +3521,9 @@ const StoryAssetPreview = ({
   }
 
   const canOpenPreview =
-    !compact && Boolean(previewUrl) && (mediaType === "image" || mediaType === "video");
+    !compact &&
+    Boolean(previewUrl) &&
+    (mediaType === "image" || mediaType === "video");
 
   useEffect(() => {
     let active = true;
@@ -3556,7 +3603,10 @@ const StoryAssetPreview = ({
         loading="lazy"
         decoding="async"
         onError={() => {
-          setFailedPreviewUrls((current) => ({ ...current, [displayUrl]: true }));
+          setFailedPreviewUrls((current) => ({
+            ...current,
+            [displayUrl]: true,
+          }));
         }}
       />
     ) : displayUrl && mediaType === "video" ? (
@@ -3644,7 +3694,9 @@ const StoryAssetPreview = ({
         <div className="flex gap-2 overflow-x-auto pb-1">
           {mediaItems.map((media, index) => {
             const localThumbUrl = variantObjectUrls[media.id] || "";
-            const remoteThumbUrl = isBlobUrl(media.mediaUrl) ? "" : media.mediaUrl || "";
+            const remoteThumbUrl = isBlobUrl(media.mediaUrl)
+              ? ""
+              : media.mediaUrl || "";
             const thumbMediaType = getStoryAssetMediaType({
               kind: item.kind,
               mediaType: media.mediaType,
@@ -4290,7 +4342,8 @@ const StorySubtitleRemovalDialog = ({
       x2: Math.round((cropRect.x - videoBounds.x + cropRect.width) * scaleX),
       y2: Math.round((cropRect.y - videoBounds.y + cropRect.height) * scaleY),
     };
-    const area = Math.max(0, rect.x2 - rect.x1) * Math.max(0, rect.y2 - rect.y1);
+    const area =
+      Math.max(0, rect.x2 - rect.x1) * Math.max(0, rect.y2 - rect.y1);
     if (area > WUHEI_MAX_RECT_AREA) {
       toast.warning(
         `选区过大（${area}），无痕AI 限制面积 <= ${WUHEI_MAX_RECT_AREA} 像素`,
@@ -4312,13 +4365,25 @@ const StorySubtitleRemovalDialog = ({
 
   const handleConfig = [
     { mode: "nw", className: "-left-2 -top-2 cursor-nwse-resize" },
-    { mode: "n", className: "left-1/2 -top-2 -translate-x-1/2 cursor-ns-resize" },
+    {
+      mode: "n",
+      className: "left-1/2 -top-2 -translate-x-1/2 cursor-ns-resize",
+    },
     { mode: "ne", className: "-right-2 -top-2 cursor-nesw-resize" },
-    { mode: "e", className: "-right-2 top-1/2 -translate-y-1/2 cursor-ew-resize" },
+    {
+      mode: "e",
+      className: "-right-2 top-1/2 -translate-y-1/2 cursor-ew-resize",
+    },
     { mode: "se", className: "-right-2 -bottom-2 cursor-nwse-resize" },
-    { mode: "s", className: "left-1/2 -bottom-2 -translate-x-1/2 cursor-ns-resize" },
+    {
+      mode: "s",
+      className: "left-1/2 -bottom-2 -translate-x-1/2 cursor-ns-resize",
+    },
     { mode: "sw", className: "-left-2 -bottom-2 cursor-nesw-resize" },
-    { mode: "w", className: "-left-2 top-1/2 -translate-y-1/2 cursor-ew-resize" },
+    {
+      mode: "w",
+      className: "-left-2 top-1/2 -translate-y-1/2 cursor-ew-resize",
+    },
   ] as const;
 
   return (
@@ -4429,7 +4494,7 @@ const StorySubtitleRemovalDialog = ({
                         height: Math.max(
                           0,
                           containerSize.height -
-                            (videoBounds.y + videoBounds.height),
+                          (videoBounds.y + videoBounds.height),
                         ),
                       }}
                     />
@@ -4450,7 +4515,7 @@ const StorySubtitleRemovalDialog = ({
                         width: Math.max(
                           0,
                           containerSize.width -
-                            (videoBounds.x + videoBounds.width),
+                          (videoBounds.x + videoBounds.width),
                         ),
                         height: videoBounds.height,
                       }}
@@ -4566,9 +4631,8 @@ const StoryAgentPage = ({
   const [editingShot, setEditingShot] = useState<StoryboardShot | null>(null);
   const [removingSubtitleShot, setRemovingSubtitleShot] =
     useState<StoryboardShot | null>(null);
-  const [editingShotModel, setEditingShotModel] = useState<StoryboardShot | null>(
-    null,
-  );
+  const [editingShotModel, setEditingShotModel] =
+    useState<StoryboardShot | null>(null);
   const [editingSystemPrompt, setEditingSystemPrompt] =
     useState<StorySystemPromptTarget | null>(null);
   const [editingRolePromptAffix, setEditingRolePromptAffix] = useState(false);
@@ -4577,13 +4641,17 @@ const StoryAgentPage = ({
     useState<StoryNextConfirmTarget | null>(null);
   const [bulkGenerateConfirmKind, setBulkGenerateConfirmKind] =
     useState<StoryboardAssetKind | null>(null);
-  const [selectingAssetShotId, setSelectingAssetShotId] = useState<string | null>(
-    null,
-  );
-  const [selectingAssetDetailTarget, setSelectingAssetDetailTarget] =
-    useState<{ kind: StoryboardAssetKind; id: string } | null>(null);
-  const [selectingAudioBindTarget, setSelectingAudioBindTarget] =
-    useState<{ kind: StoryboardAssetKind; id: string } | null>(null);
+  const [selectingAssetShotId, setSelectingAssetShotId] = useState<
+    string | null
+  >(null);
+  const [selectingAssetDetailTarget, setSelectingAssetDetailTarget] = useState<{
+    kind: StoryboardAssetKind;
+    id: string;
+  } | null>(null);
+  const [selectingAudioBindTarget, setSelectingAudioBindTarget] = useState<{
+    kind: StoryboardAssetKind;
+    id: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [splitting, setSplitting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -4592,9 +4660,9 @@ const StoryAgentPage = ({
   const [exportingJianying, setExportingJianying] = useState(false);
   const [bulkGeneratingKind, setBulkGeneratingKind] =
     useState<StoryboardAssetKind | null>(null);
-  const [assetGenerationError, setAssetGenerationError] = useState<string | null>(
-    null,
-  );
+  const [assetGenerationError, setAssetGenerationError] = useState<
+    string | null
+  >(null);
   const [removingSubtitleShotId, setRemovingSubtitleShotId] = useState<
     string | null
   >(null);
@@ -4793,8 +4861,12 @@ const StoryAgentPage = ({
 
     const loadAgent = async () => {
       try {
-        const sharedAssets = await storyboardStorage.ensureProjectAssets(projectId);
-        const data = await storyboardStorage.loadAgentData(projectId, snippetId);
+        const sharedAssets =
+          await storyboardStorage.ensureProjectAssets(projectId);
+        const data = await storyboardStorage.loadAgentData(
+          projectId,
+          snippetId,
+        );
         const needsMigration = hasStoryShotVideoModelMigration(data);
         const needsPromptMigration = isLegacyDefaultSplitSystemPrompt(
           data.splitSystemPrompt,
@@ -4818,7 +4890,11 @@ const StoryAgentPage = ({
         setAgent(nextWithPromptAssets);
         agentRef.current = nextWithPromptAssets;
         setActiveStep(nextWithPromptAssets.unlockedStep);
-        if (needsMigration || needsPromptMigration || needsShotPromptMigration) {
+        if (
+          needsMigration ||
+          needsPromptMigration ||
+          needsShotPromptMigration
+        ) {
           void storyboardStorage.saveAgentData(
             projectId,
             snippetId,
@@ -4894,7 +4970,8 @@ const StoryAgentPage = ({
   // 生成自动资产说明区块（图片/音色），插入提示词最前面
   // 匹配纯文本和 HTML 中的自动资产说明区块
   const AUTO_DESC_BLOCK_RE = /^\[自动资产说明\][\s\S]*?\[\/自动资产说明\]\n*/;
-  const AUTO_DESC_HTML_BLOCK_RE = /\[自动资产说明\][\s\S]*?\[\/自动资产说明\](?:<br>)?/;
+  const AUTO_DESC_HTML_BLOCK_RE =
+    /\[自动资产说明\][\s\S]*?\[\/自动资产说明\](?:<br>)?/;
   const GENERATED_ASSET_REF_RE = /@?(?:图片|视频|音频)\d+/;
   const SHOT_TITLE_RE = /^序号\d+[:：]\s*$/;
 
@@ -4904,7 +4981,9 @@ const StoryAgentPage = ({
   ) => {
     const withoutLegacyBlock = value.replace(AUTO_DESC_BLOCK_RE, "");
     const lines = withoutLegacyBlock.split(/\r?\n/);
-    const titleIndex = lines.findIndex((line) => SHOT_TITLE_RE.test(line.trim()));
+    const titleIndex = lines.findIndex((line) =>
+      SHOT_TITLE_RE.test(line.trim()),
+    );
     if (titleIndex >= 0) {
       lines.splice(titleIndex, 1);
     }
@@ -4937,9 +5016,8 @@ const StoryAgentPage = ({
     allAssets: StoryboardAssets,
   ) => {
     const cleanPrompt = stripGeneratedAssetReferenceLine(prompt, allAssets);
-    return `${referenceLine}${
-      cleanPrompt.trim() ? `\n\n${cleanPrompt.trimStart()}` : ""
-    }`;
+    return `${referenceLine}${cleanPrompt.trim() ? `\n\n${cleanPrompt.trimStart()}` : ""
+      }`;
   };
 
   const buildAssetReferenceLine = (
@@ -4982,8 +5060,9 @@ const StoryAgentPage = ({
       }
     }
 
-    const sceneCount = selectedAssets.filter((asset) => asset.kind === "scene")
-      .length;
+    const sceneCount = selectedAssets.filter(
+      (asset) => asset.kind === "scene",
+    ).length;
 
     const orderedAssets = [
       ...selectedAssets.filter((asset) => asset.kind === "role"),
@@ -5033,8 +5112,15 @@ const StoryAgentPage = ({
 
     if (!referenceLine) {
       const basePrompt = shot.prompt.replace(AUTO_DESC_BLOCK_RE, "");
-      const baseHtml = buildStoryPromptDraftHtml(undefined, basePrompt, allAssets);
-      if (basePrompt === shot.prompt && baseHtml === (shot.promptDraftHtml || "")) {
+      const baseHtml = buildStoryPromptDraftHtml(
+        undefined,
+        basePrompt,
+        allAssets,
+      );
+      if (
+        basePrompt === shot.prompt &&
+        baseHtml === (shot.promptDraftHtml || "")
+      ) {
         return shot;
       }
       return {
@@ -5049,7 +5135,11 @@ const StoryAgentPage = ({
       referenceLine,
       allAssets,
     );
-    const nextHtml = buildStoryPromptDraftHtml(undefined, nextPrompt, allAssets);
+    const nextHtml = buildStoryPromptDraftHtml(
+      undefined,
+      nextPrompt,
+      allAssets,
+    );
 
     if (nextPrompt === shot.prompt && nextHtml === (shot.promptDraftHtml || ""))
       return shot;
@@ -5181,7 +5271,9 @@ const StoryAgentPage = ({
       for (const assetKind of ["role", "scene", "prop"] as const) {
         nextAssets[assetKind] = nextAssets[assetKind].map((item) => ({
           ...item,
-          audioAssetIds: item.audioAssetIds?.filter((assetId) => assetId !== id),
+          audioAssetIds: item.audioAssetIds?.filter(
+            (assetId) => assetId !== id,
+          ),
         }));
       }
     }
@@ -5307,9 +5399,9 @@ const StoryAgentPage = ({
       if (isImageFailureStatus(status)) {
         throw new Error(
           response?.message ||
-            response?.data?.message ||
-            response?.result?.message ||
-            "image generation failed",
+          response?.data?.message ||
+          response?.result?.message ||
+          "image generation failed",
         );
       }
     }
@@ -5325,7 +5417,9 @@ const StoryAgentPage = ({
       await wait(5000);
       const response = await getXimuImageResult(taskId);
       const payload = getXimuResultPayload(response);
-      const status = String(payload.status || response?.status || "").toLowerCase();
+      const status = String(
+        payload.status || response?.status || "",
+      ).toLowerCase();
       lastStatus = status || lastStatus;
       lastMessage = getXimuMessage(response) || lastMessage;
 
@@ -5389,27 +5483,27 @@ const StoryAgentPage = ({
       }
       const request = isXimuGptImageGenerationModel(input.model)
         ? buildXimuGptImageRequest({
+          model: ximuModel as any,
+          cardCode,
+          prompt: input.prompt,
+          aspectRatio: resolveXimuGptAspectRatio({
             model: ximuModel as any,
-            cardCode,
-            prompt: input.prompt,
-            aspectRatio: resolveXimuGptAspectRatio({
-              model: ximuModel as any,
-              size: input.aspectRatio,
-              resolution: input.resolution || "1K",
-            }),
-            urls: [],
-          })
+            size: input.aspectRatio,
+            resolution: input.resolution || "1K",
+          }),
+          urls: [],
+        })
         : buildXimuNanoBananaRequest({
-            model: ximuModel as any,
-            cardCode,
-            prompt: input.prompt,
-            aspectRatio:
-              input.model === XIMU_NANO_BANANA2_MODEL
-                ? resolveXimuNanoBanana2AspectRatio(input.aspectRatio)
-                : resolveXimuNanoBananaProAspectRatio(input.aspectRatio),
-            imageSize: resolveXimuImageSize(input.resolution || "2K"),
-            urls: [],
-          });
+          model: ximuModel as any,
+          cardCode,
+          prompt: input.prompt,
+          aspectRatio:
+            input.model === XIMU_NANO_BANANA2_MODEL
+              ? resolveXimuNanoBanana2AspectRatio(input.aspectRatio)
+              : resolveXimuNanoBananaProAspectRatio(input.aspectRatio),
+          imageSize: resolveXimuImageSize(input.resolution || "2K"),
+          urls: [],
+        });
       const response = isXimuGptImageGenerationModel(input.model)
         ? await createXimuGptImageGeneration(request as any)
         : await createXimuNanoBananaGeneration(request as any);
@@ -5491,10 +5585,7 @@ const StoryAgentPage = ({
   ) => {
     const assetName = (asset.name || "").trim();
     const assetPrompt = (asset.prompt || "").trim();
-    const basePrompt = [
-      assetName ? `资产名称：${assetName}` : "",
-      assetPrompt,
-    ]
+    const basePrompt = [assetName ? `资产名称：${assetName}` : "", assetPrompt]
       .filter(Boolean)
       .join("\n");
 
@@ -5616,7 +5707,9 @@ const StoryAgentPage = ({
         mediaType: "image",
         mediaUrl:
           ossUrl ??
-          (isHttpUrl(imageUrl) && !imageUrl.startsWith("blob:") ? imageUrl : undefined),
+          (isHttpUrl(imageUrl) && !imageUrl.startsWith("blob:")
+            ? imageUrl
+            : undefined),
         localPath,
         name: target.name,
         createdAt: Date.now(),
@@ -5690,10 +5783,7 @@ const StoryAgentPage = ({
     }
   };
 
-  const generateAssetWithAi = async (
-    kind: StoryboardAssetKind,
-    id: string,
-  ) => {
+  const generateAssetWithAi = async (kind: StoryboardAssetKind, id: string) => {
     await generateAssetWithAiInternal(kind, id);
   };
 
@@ -5703,7 +5793,9 @@ const StoryAgentPage = ({
   ) => {
     let items = agentRef.current.assets[kind];
     if (items.length === 0) {
-      toast.error(`暂无${assetKinds.find((item) => item.id === kind)?.label || "资产"}资产`);
+      toast.error(
+        `暂无${assetKinds.find((item) => item.id === kind)?.label || "资产"}资产`,
+      );
       return;
     }
 
@@ -5766,7 +5858,8 @@ const StoryAgentPage = ({
       });
       const results = await Promise.all(generateTasks);
       const successCount = results.filter(Boolean).length;
-      const kindLabel = assetKinds.find((item) => item.id === kind)?.label || "资产";
+      const kindLabel =
+        assetKinds.find((item) => item.id === kind)?.label || "资产";
 
       if (successCount > 0) {
         toast.success(
@@ -5895,7 +5988,10 @@ const StoryAgentPage = ({
     const nextAgent =
       target === "asset"
         ? { ...agent, assetSystemPrompt: getAssetSystemPromptForDisplay(value) }
-        : { ...agent, splitSystemPrompt: getSplitSystemPromptForDisplay(value) };
+        : {
+          ...agent,
+          splitSystemPrompt: getSplitSystemPromptForDisplay(value),
+        };
     await saveAgent(nextAgent);
     setEditingSystemPrompt(null);
     toast.success("系统提示词已保存");
@@ -5971,20 +6067,20 @@ const StoryAgentPage = ({
       shots: agent.shots.map((shot) =>
         shot.id === shotId
           ? {
-              ...shot,
-              modelInfo: patchShotModelInfo(
-                shot.modelInfo,
-                normalizeVideoParams(
-                  shot.modelInfo.videoModel,
-                  {
-                    aspectRatio: value.aspectRatio,
-                    resolution: value.resolution,
-                    duration: STORY_SHOT_FIXED_DURATION,
-                  },
-                  "image-to-video",
-                ),
+            ...shot,
+            modelInfo: patchShotModelInfo(
+              shot.modelInfo,
+              normalizeVideoParams(
+                shot.modelInfo.videoModel,
+                {
+                  aspectRatio: value.aspectRatio,
+                  resolution: value.resolution,
+                  duration: STORY_SHOT_FIXED_DURATION,
+                },
+                "image-to-video",
               ),
-            }
+            ),
+          }
           : shot,
       ),
     });
@@ -5992,10 +6088,7 @@ const StoryAgentPage = ({
     toast.success("已更新当前分镜设置");
   };
 
-  const saveShotPatch = async (
-    id: string,
-    patch: Partial<StoryboardShot>,
-  ) => {
+  const saveShotPatch = async (id: string, patch: Partial<StoryboardShot>) => {
     const currentAgent = agentRef.current;
     const nextAgent = {
       ...currentAgent,
@@ -6035,8 +6128,7 @@ const StoryAgentPage = ({
     selectedAssets: StoryboardAssetItem[],
   ): Promise<MentionItem[]> => {
     const assetIndex =
-      settings.assetStoragePath &&
-      selectedAssets.some((asset) => asset.assetId)
+      settings.assetStoragePath && selectedAssets.some((asset) => asset.assetId)
         ? await readCombinedAssetIndex(settings.assetStoragePath)
         : null;
     const items: MentionItem[] = [];
@@ -6056,7 +6148,10 @@ const StoryAgentPage = ({
           (item) => item.id === libraryAssetId,
         );
         if (libraryAsset) {
-          url = await ensureAssetOssUrl(settings.assetStoragePath, libraryAsset);
+          url = await ensureAssetOssUrl(
+            settings.assetStoragePath,
+            libraryAsset,
+          );
         }
       }
 
@@ -6206,7 +6301,11 @@ const StoryAgentPage = ({
       });
     }
 
-    const basePrompt = (refreshedShot.prompt || refreshedShot.script || "").trim();
+    const basePrompt = (
+      refreshedShot.prompt ||
+      refreshedShot.script ||
+      ""
+    ).trim();
     if (!basePrompt) {
       toast.error("请先填写分镜提示词");
       return;
@@ -6214,7 +6313,10 @@ const StoryAgentPage = ({
     const useAffix = Boolean(agent.shotPromptAffixEnabled);
     const prefix = useAffix ? (agent.promptPrefix || "").trim() : "";
     const suffix = useAffix ? (agent.promptSuffix || "").trim() : "";
-    const prompt = `${prefix}${prefix && " "}${basePrompt}${suffix && " "}${suffix}`.replace(/\s+/g, " ").trim();
+    const prompt =
+      `${prefix}${prefix && " "}${basePrompt}${suffix && " "}${suffix}`
+        .replace(/\s+/g, " ")
+        .trim();
 
     await saveShotPatch(shot.id, {
       prompt: refreshedShot.prompt,
@@ -6349,8 +6451,11 @@ const StoryAgentPage = ({
   ) => {
     for (let attempt = 0; attempt < 90; attempt += 1) {
       await wait(10000);
-      const response = await getVideoRemovalStatus(taskId);
-      const { taskStatus } = extractTaskStatusInfo(response);
+      const response = await queryWuhenRemovalTask({ task_id: taskId });
+      const payload = response?.data ?? response;
+      const taskStatus = String(payload.status ?? payload.task_status ?? "")
+        .trim()
+        .toUpperCase();
 
       if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
         await saveShotPatch(shotId, {
@@ -6398,15 +6503,21 @@ const StoryAgentPage = ({
         throw new Error("未获取到预签名上传地址");
       }
 
-      const response: any = await videoRemoval({
+      const response: any = await createWuhenRemovalTask({
         video_url: videoUrl,
-        method: "sel_area",
-        rect,
         upload_url: target.put_url,
         upload_headers: target.headers,
+        rect,
         model: "video_removal_std",
+        method: "sel_area",
+        duration: STORY_SHOT_FIXED_DURATION,
       });
-      const { taskId, taskStatus } = extractTaskStatusInfo(response);
+
+      const payload = response?.data ?? response;
+      const taskId = payload?.task_id || "";
+      const taskStatus = String(payload.status ?? "")
+        .trim()
+        .toUpperCase();
 
       if (!taskId) {
         throw new Error("创建去字幕任务失败");
@@ -6477,7 +6588,11 @@ const StoryAgentPage = ({
       );
       const draftId = createJianyingId().toUpperCase();
       const draftRoot = draftName;
-      const resourcesRoot = joinDraftRelativePath(draftRoot, "Resources", "media");
+      const resourcesRoot = joinDraftRelativePath(
+        draftRoot,
+        "Resources",
+        "media",
+      );
       const exportedVideos: JianyingExportVideo[] = [];
 
       for (const shot of videoShots) {
@@ -6489,7 +6604,9 @@ const StoryAgentPage = ({
         const relativePath = joinDraftRelativePath(resourcesRoot, fileName);
 
         if (shot.video?.localPath) {
-          const buffer = await storyboardStorage.readBinary(shot.video.localPath);
+          const buffer = await storyboardStorage.readBinary(
+            shot.video.localPath,
+          );
           if (!buffer) {
             throw new Error(`分镜 ${shot.order} 的本地视频不存在`);
           }
@@ -6511,7 +6628,10 @@ const StoryAgentPage = ({
 
         exportedVideos.push({
           fileName,
-          absolutePath: toWindowsPath(settings.jianyingDraftsPath, relativePath),
+          absolutePath: toWindowsPath(
+            settings.jianyingDraftsPath,
+            relativePath,
+          ),
           durationUs: STORY_SHOT_FIXED_DURATION * 1_000_000,
         });
       }
@@ -6619,7 +6739,10 @@ const StoryAgentPage = ({
       await writeDraftJsonFile(
         settings.jianyingDraftsPath,
         joinDraftRelativePath(draftRoot, "performance_opt_info.json"),
-        { manual_cancle_precombine_segs: null, need_auto_precombine_segs: null },
+        {
+          manual_cancle_precombine_segs: null,
+          need_auto_precombine_segs: null,
+        },
       );
       await writeDraftJsonFile(
         settings.jianyingDraftsPath,
@@ -6740,9 +6863,7 @@ const StoryAgentPage = ({
       );
     } catch (error) {
       console.error("[Story] export Jianying draft failed", error);
-      toast.error(
-        error instanceof Error ? error.message : "导出剪映草稿失败",
-      );
+      toast.error(error instanceof Error ? error.message : "导出剪映草稿失败");
     } finally {
       setExportingJianying(false);
     }
@@ -6899,9 +7020,7 @@ const StoryAgentPage = ({
         ...currentAgent.assets,
         audio: nextAudioAssets,
         [kind]: targetList.map((item) =>
-          item.id === id
-            ? { ...item, audioAssetIds: [boundId] }
-            : item,
+          item.id === id ? { ...item, audioAssetIds: [boundId] } : item,
         ),
       },
     });
@@ -7076,97 +7195,99 @@ const StoryAgentPage = ({
 
           {activeStep === "script" ? (
             <section className="rounded-xl border border-white/10 bg-[#111113] p-5">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-medium text-white/90">
-                  输入剧本
-                </h2>
-                <p className="mt-1 text-xs text-white/40">
-                  填写剧本信息后，点击下一步调用大模型识别角色、场景和道具。
-                </p>
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-medium text-white/90">
+                    输入剧本
+                  </h2>
+                  <p className="mt-1 text-xs text-white/40">
+                    填写剧本信息后，点击下一步调用大模型识别角色、场景和道具。
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button onClick={() => setEditingSystemPrompt("asset")}>
+                    <Bot size={15} />
+                    系统提示词
+                  </Button>
+                  <Button
+                    variant="blue"
+                    onClick={requestIdentifyScriptAssets}
+                    loading={splitting}
+                  >
+                    <WandSparkles size={15} />
+                    下一步
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button onClick={() => setEditingSystemPrompt("asset")}>
-                  <Bot size={15} />
-                  系统提示词
-                </Button>
-                <Button
-                  variant="blue"
-                  onClick={requestIdentifyScriptAssets}
-                  loading={splitting}
-                >
-                  <WandSparkles size={15} />
-                  下一步
-                </Button>
+              <div className="grid grid-cols-2 gap-4">
+                <label>
+                  <span className="mb-2 block text-sm text-white/65">
+                    剧本标题 <span className="text-red-400">*</span>
+                  </span>
+                  <input
+                    className={inputClass}
+                    value={agent.scriptTitle}
+                    onChange={(event) =>
+                      patchAgent({ scriptTitle: event.target.value })
+                    }
+                    placeholder="输入剧本标题"
+                  />
+                </label>
+                <label>
+                  <span className="mb-2 block text-sm text-white/65">
+                    剧本最大分镜数
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={120}
+                    className={inputClass}
+                    value={agent.maxShots}
+                    onChange={(event) =>
+                      patchAgent({
+                        maxShots: Math.max(1, Number(event.target.value) || 1),
+                      })
+                    }
+                  />
+                </label>
+                <label className="col-span-2">
+                  <span className="mb-2 block text-sm text-white/65">
+                    剧本分类
+                  </span>
+                  <ScriptCategoryCombobox
+                    value={agent.scriptCategory}
+                    onChange={(scriptCategory) =>
+                      patchAgent({ scriptCategory })
+                    }
+                  />
+                </label>
+                <label className="col-span-2">
+                  <span className="mb-2 block text-sm text-white/65">
+                    拆镜辅助词
+                  </span>
+                  <textarea
+                    className={`${textAreaClass} h-20`}
+                    value={agent.splitAssist}
+                    onChange={(event) =>
+                      patchAgent({ splitAssist: event.target.value })
+                    }
+                    placeholder="可输入每集节奏、镜头偏好、角色限制等"
+                  />
+                </label>
+                <label className="col-span-2">
+                  <span className="mb-2 block text-sm text-white/65">
+                    剧本内容
+                  </span>
+                  <textarea
+                    className={`${textAreaClass} h-56`}
+                    value={agent.scriptContent}
+                    onChange={(event) =>
+                      patchAgent({ scriptContent: event.target.value })
+                    }
+                    placeholder="粘贴完整剧本内容"
+                  />
+                </label>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <label>
-                <span className="mb-2 block text-sm text-white/65">
-                  剧本标题 <span className="text-red-400">*</span>
-                </span>
-                <input
-                  className={inputClass}
-                  value={agent.scriptTitle}
-                  onChange={(event) =>
-                    patchAgent({ scriptTitle: event.target.value })
-                  }
-                  placeholder="输入剧本标题"
-                />
-              </label>
-              <label>
-                <span className="mb-2 block text-sm text-white/65">
-                  剧本最大分镜数
-                </span>
-                <input
-                  type="number"
-                  min={1}
-                  max={120}
-                  className={inputClass}
-                  value={agent.maxShots}
-                  onChange={(event) =>
-                    patchAgent({
-                      maxShots: Math.max(1, Number(event.target.value) || 1),
-                    })
-                  }
-                />
-              </label>
-              <label className="col-span-2">
-                <span className="mb-2 block text-sm text-white/65">
-                  剧本分类
-                </span>
-                <ScriptCategoryCombobox
-                  value={agent.scriptCategory}
-                  onChange={(scriptCategory) => patchAgent({ scriptCategory })}
-                />
-              </label>
-              <label className="col-span-2">
-                <span className="mb-2 block text-sm text-white/65">
-                  拆镜辅助词
-                </span>
-                <textarea
-                  className={`${textAreaClass} h-20`}
-                  value={agent.splitAssist}
-                  onChange={(event) =>
-                    patchAgent({ splitAssist: event.target.value })
-                  }
-                  placeholder="可输入每集节奏、镜头偏好、角色限制等"
-                />
-              </label>
-              <label className="col-span-2">
-                <span className="mb-2 block text-sm text-white/65">
-                  剧本内容
-                </span>
-                <textarea
-                  className={`${textAreaClass} h-56`}
-                  value={agent.scriptContent}
-                  onChange={(event) =>
-                    patchAgent({ scriptContent: event.target.value })
-                  }
-                  placeholder="粘贴完整剧本内容"
-                />
-              </label>
-            </div>
             </section>
           ) : null}
 
@@ -7205,12 +7326,12 @@ const StoryAgentPage = ({
                     onClick={requestProceedToShots}
                     loading={splitting}
                   >
-                  <WandSparkles size={15} />
+                    <WandSparkles size={15} />
                     下一步
                   </Button>
                 </div>
               </div>
-                <div className="grid gap-4 lg:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-3">
                 {assetDetailKinds.map((kind) => (
                   <div
                     key={kind.id}
@@ -7281,14 +7402,33 @@ const StoryAgentPage = ({
                           let cb = assetCallbacksRef.current[item.id];
                           if (!cb) {
                             cb = {
-                              onChange: (patch: Partial<StoryboardAssetItem>) => updateAsset(kind.id, item.id, patch),
-                              onUpload: (file: File) => void uploadAsset(kind.id, item.id, file),
-                              onUseLibrary: () => openAssetLibraryForAssetDetail(kind.id, item.id),
-                              onBindAudio: () => openAssetLibraryForAudioBind(kind.id, item.id),
-                              onBindLocalAudio: (file: File) => void bindLocalAudioAsset(kind.id, item.id, file),
-                              onSetPrimaryMedia: (mediaId: string) => setAssetPrimaryMediaById(kind.id, item.id, mediaId),
-                              onDeleteMedia: (mediaId: string) => deleteAssetMediaById(kind.id, item.id, mediaId),
-                              onGenerate: () => void generateAssetWithAi(kind.id, item.id),
+                              onChange: (patch: Partial<StoryboardAssetItem>) =>
+                                updateAsset(kind.id, item.id, patch),
+                              onUpload: (file: File) =>
+                                void uploadAsset(kind.id, item.id, file),
+                              onUseLibrary: () =>
+                                openAssetLibraryForAssetDetail(
+                                  kind.id,
+                                  item.id,
+                                ),
+                              onBindAudio: () =>
+                                openAssetLibraryForAudioBind(kind.id, item.id),
+                              onBindLocalAudio: (file: File) =>
+                                void bindLocalAudioAsset(
+                                  kind.id,
+                                  item.id,
+                                  file,
+                                ),
+                              onSetPrimaryMedia: (mediaId: string) =>
+                                setAssetPrimaryMediaById(
+                                  kind.id,
+                                  item.id,
+                                  mediaId,
+                                ),
+                              onDeleteMedia: (mediaId: string) =>
+                                deleteAssetMediaById(kind.id, item.id, mediaId),
+                              onGenerate: () =>
+                                void generateAssetWithAi(kind.id, item.id),
                               onDelete: () => deleteAsset(kind.id, item.id),
                             };
                             assetCallbacksRef.current[item.id] = cb;
@@ -7302,7 +7442,9 @@ const StoryAgentPage = ({
                                 audioAssets={agent.assets.audio}
                                 defaultImageModel={settings.defaultImageModel}
                                 defaultImageSize={settings.defaultImageSize}
-                                defaultImageResolution={settings.defaultImageResolution}
+                                defaultImageResolution={
+                                  settings.defaultImageResolution
+                                }
                                 onChange={cb.onChange}
                                 onUpload={cb.onUpload}
                                 onUseLibrary={cb.onUseLibrary}
@@ -7326,71 +7468,75 @@ const StoryAgentPage = ({
 
           {activeStep === "shots" ? (
             <section className="rounded-xl border border-white/10 bg-[#111113] p-5">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-medium text-white/90">
-                  分镜管理
-                </h2>
-                <p className="mt-1 text-xs text-white/40">
-                  生成视频直接使用当前分镜提示词和已选资产作为参考素材。
-                </p>
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-medium text-white/90">
+                    分镜管理
+                  </h2>
+                  <p className="mt-1 text-xs text-white/40">
+                    生成视频直接使用当前分镜提示词和已选资产作为参考素材。
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => void refreshAllShotAssetDescriptions()}
+                  >
+                    <WandSparkles size={13} />
+                    更新资产说明
+                  </Button>
+                  <Button onClick={() => setEditingShotPromptAffix(true)}>
+                    <Pencil size={13} />
+                    提示词前后缀
+                  </Button>
+                  <Button onClick={persistCurrent}>保存分镜</Button>
+                  <Button variant="blue" onClick={proceedToVideoEdit}>
+                    下一步
+                  </Button>
+                </div>
               </div>
-              <div className="flex gap-3">
-                <Button onClick={() => void refreshAllShotAssetDescriptions()}>
-                  <WandSparkles size={13} />
-                  更新资产说明
-                </Button>
-                <Button onClick={() => setEditingShotPromptAffix(true)}>
-                  <Pencil size={13} />
-                  提示词前后缀
-                </Button>
-                <Button onClick={persistCurrent}>保存分镜</Button>
-                <Button variant="blue" onClick={proceedToVideoEdit}>
-                  下一步
-                </Button>
-              </div>
-            </div>
-            <div className="max-h-[calc(100vh-260px)] overflow-auto rounded-lg border border-white/8">
-              <table className="min-w-[1180px] w-full table-fixed">
-                <thead className="sticky top-0 z-10 bg-[#171719] text-xs text-white/45">
-                  <tr>
-                    <th className="w-16 px-3 py-3 text-center">序号</th>
-                    <th className="w-72 px-3 py-3 text-left">剧本</th>
-                    <th className="w-60 px-3 py-3 text-left">资产</th>
-                    <th className="w-80 px-3 py-3 text-left">提示词</th>
-                    <th className="w-72 px-3 py-3 text-left">模型相关信息</th>
-                    <th className="w-64 px-3 py-3 text-left">生成视频</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {agent.shots.length === 0 ? (
+              <div className="max-h-[calc(100vh-260px)] overflow-auto rounded-lg border border-white/8">
+                <table className="min-w-[1180px] w-full table-fixed">
+                  <thead className="sticky top-0 z-10 bg-[#171719] text-xs text-white/45">
                     <tr>
-                      <td
-                        colSpan={6}
-                        className="px-4 py-12 text-center text-sm text-white/30"
-                      >
-                        暂无分镜。填写剧本后点击“下一步”。
-                      </td>
+                      <th className="w-16 px-3 py-3 text-center">序号</th>
+                      <th className="w-72 px-3 py-3 text-left">剧本</th>
+                      <th className="w-60 px-3 py-3 text-left">资产</th>
+                      <th className="w-80 px-3 py-3 text-left">提示词</th>
+                      <th className="w-72 px-3 py-3 text-left">模型相关信息</th>
+                      <th className="w-64 px-3 py-3 text-left">生成视频</th>
                     </tr>
-                  ) : (
-                    agent.shots.map((shot) => (
-                      <ShotRow
-                        key={shot.id}
-                        shot={shot}
-                        selectedAssets={getShotAssetsWithBoundAudio(shot)}
-                        onChange={(patch) => updateShot(shot.id, patch)}
-                        onSelectAssets={() => openAssetLibraryForShot(shot.id)}
-                        onRemoveAsset={(assetId) =>
-                          removeAssetFromShot(shot.id, assetId)
-                        }
-                        onEditModelInfo={() => setEditingShotModel(shot)}
-                        onGenerateVideo={() => void generateShotVideo(shot)}
-                      />
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {agent.shots.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="px-4 py-12 text-center text-sm text-white/30"
+                        >
+                          暂无分镜。填写剧本后点击“下一步”。
+                        </td>
+                      </tr>
+                    ) : (
+                      agent.shots.map((shot) => (
+                        <ShotRow
+                          key={shot.id}
+                          shot={shot}
+                          selectedAssets={getShotAssetsWithBoundAudio(shot)}
+                          onChange={(patch) => updateShot(shot.id, patch)}
+                          onSelectAssets={() =>
+                            openAssetLibraryForShot(shot.id)
+                          }
+                          onRemoveAsset={(assetId) =>
+                            removeAssetFromShot(shot.id, assetId)
+                          }
+                          onEditModelInfo={() => setEditingShotModel(shot)}
+                          onGenerateVideo={() => void generateShotVideo(shot)}
+                        />
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </section>
           ) : null}
 
@@ -7411,7 +7557,9 @@ const StoryAgentPage = ({
             <VideoEditDrawer
               shot={editingShot}
               onClose={() => setEditingShot(null)}
-              onSave={(videoEdit) => void saveVideoEdit(editingShot.id, videoEdit)}
+              onSave={(videoEdit) =>
+                void saveVideoEdit(editingShot.id, videoEdit)
+              }
             />
           ) : null}
 
@@ -7498,7 +7646,10 @@ const StoryAgentPage = ({
                 }
               }}
               onConfirm={(imageModelOptionId) =>
-                void generateAllAssets(bulkGenerateConfirmKind, imageModelOptionId)
+                void generateAllAssets(
+                  bulkGenerateConfirmKind,
+                  imageModelOptionId,
+                )
               }
             />
           ) : null}
@@ -7581,7 +7732,9 @@ const StoryAgentPage = ({
 
 const getShotConfirmedMaterial = (shot: StoryboardShot) =>
   shot.videoEdit?.confirmedMaterial ||
-  (shot.assetIds.length > 0 ? `已引用 ${shot.assetIds.length} 个资产` : "未确认素材");
+  (shot.assetIds.length > 0
+    ? `已引用 ${shot.assetIds.length} 个资产`
+    : "未确认素材");
 
 const VideoEditTable = ({
   shots,
@@ -7611,7 +7764,11 @@ const VideoEditTable = ({
         </p>
       </div>
       <Button size="sm" variant="blue" onClick={onExport} disabled={exporting}>
-        {exporting ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+        {exporting ? (
+          <Loader2 size={14} className="animate-spin" />
+        ) : (
+          <Upload size={14} />
+        )}
         导出到剪映
       </Button>
     </div>
@@ -7628,13 +7785,18 @@ const VideoEditTable = ({
         <tbody>
           {shots.length === 0 ? (
             <tr>
-              <td colSpan={4} className="px-4 py-12 text-center text-sm text-white/30">
+              <td
+                colSpan={4}
+                className="px-4 py-12 text-center text-sm text-white/30"
+              >
                 暂无分镜。请先完成剧本拆分。
               </td>
             </tr>
           ) : (
             shots.map((shot) => {
-              const hasVideo = Boolean(shot.video?.url || shot.video?.localPath);
+              const hasVideo = Boolean(
+                shot.video?.url || shot.video?.localPath,
+              );
               return (
                 <tr key={shot.id} className="border-b border-white/5 align-top">
                   <td className="px-3 py-3 text-sm text-white/70">
@@ -7665,14 +7827,20 @@ const VideoEditTable = ({
                         <Download size={13} />
                         下载
                       </Button>
-                      <Button size="sm" variant="blue" onClick={() => onEdit(shot)}>
+                      <Button
+                        size="sm"
+                        variant="blue"
+                        onClick={() => onEdit(shot)}
+                      >
                         <Pencil size={13} />
                         编辑
                       </Button>
                       <Button
                         size="sm"
                         onClick={() => onRemoveSubtitles(shot)}
-                        disabled={!hasVideo || removingSubtitleShotId === shot.id}
+                        disabled={
+                          !hasVideo || removingSubtitleShotId === shot.id
+                        }
                       >
                         {removingSubtitleShotId === shot.id ? (
                           <Loader2 className="animate-spin" />
@@ -7952,7 +8120,9 @@ const ShotPromptAffixDialog = ({
       <div className="relative z-10 flex w-[min(680px,94vw)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#101012] shadow-2xl">
         <div className="flex items-start justify-between border-b border-white/8 px-5 py-4">
           <div>
-            <h3 className="text-base font-medium text-white/90">分镜提示词前后缀</h3>
+            <h3 className="text-base font-medium text-white/90">
+              分镜提示词前后缀
+            </h3>
             <p className="mt-1 text-xs text-white/40">
               保存分镜时，会将前缀和后缀追加到每条分镜提示词。
             </p>
@@ -8036,13 +8206,14 @@ const AssetGenerateConfirmDialog = ({
     kind === "audio"
       ? ""
       : getStoryImageModelOptionId(
-          assets[0]?.imageModel,
-          assets[0]?.imagePlatform,
-          defaultImageModel,
-          imageModelOptions,
-        ),
+        assets[0]?.imageModel,
+        assets[0]?.imagePlatform,
+        defaultImageModel,
+        imageModelOptions,
+      ),
   );
-  const kindLabel = assetKinds.find((item) => item.id === kind)?.label || "资产";
+  const kindLabel =
+    assetKinds.find((item) => item.id === kind)?.label || "资产";
   const selectedModelName = imageModelOptions.find(
     (option) => String(option.id) === selectedImageModelId,
   )?.name;
@@ -8085,7 +8256,8 @@ const AssetGenerateConfirmDialog = ({
         </div>
         <div className="space-y-4 p-5">
           <p className="text-sm leading-6 text-white/60">
-            确认后会把当前{kindLabel}列的生图模型统一改为所选模型，并为 {count} 个资产调用 AI 生图，生成结果会追加为候选图。
+            确认后会把当前{kindLabel}列的生图模型统一改为所选模型，并为 {count}{" "}
+            个资产调用 AI 生图，生成结果会追加为候选图。
           </p>
           {kind !== "audio" ? (
             <label className="block">
@@ -8106,7 +8278,9 @@ const AssetGenerateConfirmDialog = ({
                 >
                   <SelectValue placeholder="选择模型" />
                 </SelectTrigger>
-                <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
+                <SelectContent
+                  className={PROMPT_PANEL_STYLES.modelSelectContent}
+                >
                   {imageModelOptions.map((option) => (
                     <SelectItem
                       key={option.id}
@@ -8129,7 +8303,9 @@ const AssetGenerateConfirmDialog = ({
             variant="blue"
             onClick={() => onConfirm(selectedImageModelId)}
             loading={running}
-            disabled={count === 0 || (kind !== "audio" && !selectedImageModelId)}
+            disabled={
+              count === 0 || (kind !== "audio" && !selectedImageModelId)
+            }
           >
             确认生成
           </Button>
@@ -8242,9 +8418,7 @@ const VideoEditDrawer = ({
             />
           </label>
           <label className="block">
-            <span className="mb-2 block text-sm text-white/65">
-              分镜提示词
-            </span>
+            <span className="mb-2 block text-sm text-white/65">分镜提示词</span>
             <textarea
               className={`${textAreaClass} h-44`}
               value={prompt}
@@ -8280,7 +8454,10 @@ const ShotModelSettingsDialog = ({
   onApplySingle: (value: VideoParamState) => void;
   onApplyAll: (value: VideoParamState) => void;
 }) => {
-  const config = getVideoParamConfig(shot.modelInfo.videoModel, "image-to-video");
+  const config = getVideoParamConfig(
+    shot.modelInfo.videoModel,
+    "image-to-video",
+  );
   const [value, setValue] = useState<VideoParamState>(() => ({
     ...getShotVideoParamState(shot),
     duration: 15,
@@ -8311,9 +8488,7 @@ const ShotModelSettingsDialog = ({
             <h3 className="text-base font-medium text-white/90">
               分镜 {shot.order} 模型设置
             </h3>
-            <p className="mt-1 text-xs text-white/40">
-              调整比例、分辨率与时长
-            </p>
+            <p className="mt-1 text-xs text-white/40">调整比例、分辨率与时长</p>
           </div>
           <button
             type="button"
@@ -8383,7 +8558,10 @@ const ShotModelSettingsDialog = ({
                           quality: undefined,
                         })
                       }
-                      className={storyVideoOptionButtonClass(active, "h-8 px-3")}
+                      className={storyVideoOptionButtonClass(
+                        active,
+                        "h-8 px-3",
+                      )}
                     >
                       {option.label}
                     </button>
@@ -8430,9 +8608,9 @@ const ShotPromptPanel = ({
   onChange: (patch: Partial<StoryboardShot>) => void;
   onRemoveAsset: (assetId: string) => void;
 }) => {
-  const [localPreviewUrls, setLocalPreviewUrls] = useState<Record<string, string>>(
-    {},
-  );
+  const [localPreviewUrls, setLocalPreviewUrls] = useState<
+    Record<string, string>
+  >({});
   const previewKey = selectedAssets
     .map((asset) => `${asset.id}:${asset.localPath || asset.mediaUrl || ""}`)
     .join("|");
