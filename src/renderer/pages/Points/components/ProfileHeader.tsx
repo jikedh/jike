@@ -61,7 +61,8 @@ export const ProfileHeader = ({
                         </span>
                     </h1>
                     <p className="mb-4 mt-2 text-sm text-white/40">
-                        ID: {userId || "88592031"} · 注册于 2024年3月
+                        ID: {userId || "88592031"}
+                        {/* · 注册于 2024年3月 */}
                     </p>
                     <dl className="flex items-center gap-6">
                         <ScoreStat label="剩余积分" value={totalScore.toLocaleString()} />
