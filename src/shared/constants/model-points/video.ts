@@ -58,15 +58,121 @@ export const getVideoGenerationPoints = ({
     return totalPoints;
   }
 
-  // 特殊逻辑：万相模型 (wan2.7-r2v)
-  if (model === "wan2.7-r2v") {
-    // 1080p -> 60, 720p -> 36 (不区分大小写)
+  // 特殊逻辑：HappyHorse 系列
+  if (model === "happyhorse" || model === "happyhorse-1.0-r2v") {
+    // 720p -> 54/秒, 1080p -> 96/秒
     const res = resolution.toLowerCase();
-    basePointsPerSecond = res === "1080p" ? 60 : 36;
+    basePointsPerSecond = res === "1080p" ? 96 : 54;
 
     let totalPoints = basePointsPerSecond * duration;
 
     // 如果有视频输入，积分翻倍
+    if (hasVideoInput) {
+      totalPoints *= 2;
+    }
+
+    return totalPoints;
+  }
+
+  // 特殊逻辑：万相模型 (wanxiang / wan2.7-r2v)
+  if (model === "wanxiang" || model === "wan2.7-r2v") {
+    // 480p -> 20, 720p -> 36, 1080p -> 60 (不区分大小写)
+    const res = resolution.toLowerCase();
+    const pointsMap: Record<string, number> = {
+      "480p": 20,
+      "720p": 36,
+      "1080p": 60,
+    };
+    basePointsPerSecond = pointsMap[res] ?? 36;
+
+    let totalPoints = basePointsPerSecond * duration;
+
+    // 如果有视频输入，积分翻倍
+    if (hasVideoInput) {
+      totalPoints *= 2;
+    }
+
+    return totalPoints;
+  }
+
+  // 特殊逻辑：Vidu Q3 Pro
+  if (model === "vidu-q3-pro") {
+    // 720p -> 42/秒, 1080p -> 72/秒
+    const res = resolution.toLowerCase();
+    basePointsPerSecond = res === "1080p" ? 72 : 42;
+
+    let totalPoints = basePointsPerSecond * duration;
+
+    if (hasVideoInput) {
+      totalPoints *= 2;
+    }
+
+    return totalPoints;
+  }
+
+  // 特殊逻辑：Vidu Q3 Turbo
+  if (model === "vidu") {
+    // 720p -> 30/秒, 1080p -> 48/秒
+    const res = resolution.toLowerCase();
+    basePointsPerSecond = res === "1080p" ? 48 : 30;
+
+    let totalPoints = basePointsPerSecond * duration;
+
+    if (hasVideoInput) {
+      totalPoints *= 2;
+    }
+
+    return totalPoints;
+  }
+
+  // 特殊逻辑：PixVerse C1
+  if (model === "pixverse") {
+    // 540p -> 18, 720p -> 28, 1080p -> 44
+    const res = resolution.toLowerCase();
+    const pointsMap: Record<string, number> = {
+      "540p": 18,
+      "720p": 28,
+      "1080p": 44,
+    };
+    basePointsPerSecond = pointsMap[res] ?? 28;
+
+    let totalPoints = basePointsPerSecond * duration;
+
+    if (hasVideoInput) {
+      totalPoints *= 2;
+    }
+
+    return totalPoints;
+  }
+
+  // 特殊逻辑：Keling V3
+  if (model === "keling") {
+    // 480p -> 22, 720p -> 40, 1080p -> 66
+    const res = resolution.toLowerCase();
+    const pointsMap: Record<string, number> = {
+      "480p": 22,
+      "720p": 40,
+      "1080p": 66,
+    };
+    basePointsPerSecond = pointsMap[res] ?? 40;
+
+    let totalPoints = basePointsPerSecond * duration;
+
+    if (hasVideoInput) {
+      totalPoints *= 2;
+    }
+
+    return totalPoints;
+  }
+
+  // 特殊逻辑：Kling 筷子版
+  if (model === "kling-v3-omni") {
+    // 720p -> 40/秒, 1080p -> 66/秒
+    const res = resolution.toLowerCase();
+    basePointsPerSecond = res === "1080p" ? 66 : 40;
+
+    let totalPoints = basePointsPerSecond * duration;
+
     if (hasVideoInput) {
       totalPoints *= 2;
     }
