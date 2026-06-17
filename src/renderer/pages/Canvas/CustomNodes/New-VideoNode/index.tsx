@@ -34,6 +34,7 @@ const NewVideoNode = ({
   const isDragging = Boolean(dragging);
   const [isDragUiSettled, setIsDragUiSettled] = useState(!isDragging);
   const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
 
   const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
@@ -199,7 +200,13 @@ const NewVideoNode = ({
       >
         {shouldShowToolbar && (
           <div className="selection-box-deferred-ui nodrag nopan nowheel absolute -top-23 left-1/2 z-50 -translate-x-1/2">
-            <VideoToolbar nodeId={id} data={data} onDelete={handleDelete} />
+            <VideoToolbar
+              nodeId={id}
+              data={data}
+              onDelete={handleDelete}
+              isUploading={isUploading}
+              onUploadingChange={setIsUploading}
+            />
           </div>
         )}
 
@@ -262,6 +269,7 @@ const NewVideoNode = ({
               nodeId={id}
               updateNewVideoNodeData={updateNewVideoNodeData}
               onGalleryExpandedChange={setIsGalleryExpanded}
+              isUploading={isUploading}
               forcePosterOnly={hasActiveVideoTool}
               frameSize={contentFrameSize}
             />

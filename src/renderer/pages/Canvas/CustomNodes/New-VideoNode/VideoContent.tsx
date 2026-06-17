@@ -13,6 +13,7 @@ type VideoContentProps = {
   ) => void;
   onRetry?: () => void;
   onGalleryExpandedChange?: (expanded: boolean) => void;
+  isUploading?: boolean;
   forcePosterOnly?: boolean;
   frameSize?: {
     width: number;
@@ -27,6 +28,7 @@ export const VideoContent = memo(
     updateNewVideoNodeData,
     onRetry,
     onGalleryExpandedChange,
+    isUploading = false,
     forcePosterOnly = false,
     frameSize,
   }: VideoContentProps) => {
@@ -114,15 +116,15 @@ export const VideoContent = memo(
       );
     }
 
-    if (isGenerating) {
+    if (isGenerating || isUploading) {
       return (
         <div className="nopan flex h-full w-full flex-col items-center justify-center bg-[#141418] p-4">
           <div className="relative mb-3 h-8 w-8">
             <div className="absolute inset-0 rounded-full border-2 border-primary/30" />
             <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary" />
           </div>
-          <div className="text-xs text-muted-foreground">
-            {isUpload ? "上传中..." : "生成中..."}
+          <div className="text-xs font-medium text-white/75">
+            {isUploading || isUpload ? "上传中..." : "生成中..."}
           </div>
         </div>
       );

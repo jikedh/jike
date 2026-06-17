@@ -55,6 +55,8 @@ type ImageToolbarProps = {
   onAnnotate?: () => void;
   onErase?: () => void;
   onLighting?: () => void;
+  isUploading?: boolean;
+  onUploadingChange?: (uploading: boolean) => void;
   isLightingGenerating?: boolean;
 };
 
@@ -88,10 +90,11 @@ export const ImageToolbar = memo(
     onAnnotate,
     onErase,
     onLighting,
+    isUploading = false,
+    onUploadingChange,
     isLightingGenerating: isExternalLightingGenerating = false,
   }: ImageToolbarProps) => {
     const [isLightboxOpen, setIsLightboxOpen] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [isCropDialogOpen, setIsCropDialogOpen] = useState(false);
     const [isLightingDialogOpen, setIsLightingDialogOpen] = useState(false);
@@ -227,7 +230,7 @@ export const ImageToolbar = memo(
       const file = event.target.files?.[0];
       if (!file) return;
 
-      setIsUploading(true);
+      onUploadingChange?.(true);
 
       try {
         // 检查文件大小，大于10MB时压缩
@@ -277,7 +280,7 @@ export const ImageToolbar = memo(
         console.error("上传图片失败:", uploadError);
         toast.error("上传失败，请重试");
       } finally {
-        setIsUploading(false);
+        onUploadingChange?.(false);
         event.target.value = "";
       }
     };
@@ -447,9 +450,9 @@ export const ImageToolbar = memo(
           lighting: config,
           ...(isMidjourneyModel
             ? {
-                aspectRatio: data.aspectRatio ?? "1:1",
-                midjourneyAdvanced: data.midjourneyAdvanced,
-              }
+              aspectRatio: data.aspectRatio ?? "1:1",
+              midjourneyAdvanced: data.midjourneyAdvanced,
+            }
             : {}),
         };
 
