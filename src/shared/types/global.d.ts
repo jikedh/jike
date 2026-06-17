@@ -10,6 +10,7 @@ declare global {
     debug: {
       toggleDevTools: () => Promise<{ success: boolean; error?: string }>;
       isDev: () => Promise<boolean>;
+      getAppVersion: () => Promise<string>;
     };
     download: {
       imageAsBuffer: (

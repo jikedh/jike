@@ -177,6 +177,7 @@ export const SettingsModal = ({
     storagePath,
     assetStoragePath,
     jianyingDraftsPath,
+    updateUrl,
     ximuCardCode,
     adobeChannelModelsEnabled,
     ximuChannelModelsEnabled,
@@ -240,6 +241,7 @@ export const SettingsModal = ({
   const [ximuBalanceText, setXimuBalanceText] = useState<string | null>(null);
   const [ximuBusy, setXimuBusy] = useState(false);
   const [ximuError, setXimuError] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState("");
 
   const announcements = useAnnouncementStore((state) => state.announcements);
   const announcementsLoading = useAnnouncementStore(
@@ -351,6 +353,24 @@ export const SettingsModal = ({
     if (!open) return;
     setXimuCardInput(ximuCardCode);
   }, [open, ximuCardCode]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+
+    window.debug
+      ?.getAppVersion()
+      .then((version) => {
+        if (!cancelled) setAppVersion(version || "");
+      })
+      .catch(() => {
+        if (!cancelled) setAppVersion("");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const saveXimuCardCode = () => {
     const nextCardCode = ximuCardInput.trim();
@@ -645,6 +665,16 @@ export const SettingsModal = ({
       setJianyingDraftsPath(selectedPath);
       success("剪映草稿路径已更新");
     }
+  };
+
+  const handleOpenUpdateUrl = () => {
+    const nextUrl = updateUrl.trim();
+    if (!nextUrl) {
+      error("请先填写更新地址");
+      return;
+    }
+
+    window.open(nextUrl, "_blank", "noopener,noreferrer");
   };
 
   const currentSectionItems = useMemo(() => {
@@ -1717,6 +1747,24 @@ export const SettingsModal = ({
                   {/* 数据与版本 - 导入导出 */}
                   {activeSection === "data" && (
                     <>
+                      <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
+                        <div className="mb-3 text-sm font-medium text-white/80">
+                          版本更新
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-xs text-white/40">
+                            当前版本：{appVersion || "读取中"}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="blue"
+                            onClick={handleOpenUpdateUrl}
+                          >
+                            <IconExternalLink size={14} />
+                            打开下载页面
+                          </Button>
+                        </div>
+                      </section>
                       <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
                         <div className="mb-3 text-sm font-medium text-white/80">
                           项目存储路径
