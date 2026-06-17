@@ -902,6 +902,8 @@ type VideoToolbarProps = {
   nodeId: string;
   data: NewVideoGenerationNode;
   onDelete?: () => void;
+  isUploading?: boolean;
+  onUploadingChange?: (uploading: boolean) => void;
 };
 
 type ActionKey =
@@ -918,9 +920,14 @@ type ActionKey =
  * 新版视频节点工具栏
  * 职责：提供首帧、尾帧、上传、下载、放大查看、截帧、去字幕等操作按钮
  */
-export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
+export const VideoToolbar = ({
+  nodeId,
+  data,
+  onDelete,
+  isUploading = false,
+  onUploadingChange,
+}: VideoToolbarProps) => {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSnapshotPanelOpen, setIsSnapshotPanelOpen] = useState(false);
   const [isTrimPanelOpen, setIsTrimPanelOpen] = useState(false);
@@ -1057,7 +1064,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setIsUploading(true);
+    onUploadingChange?.(true);
 
     try {
       const result = await uploadFileToOSS(file);
@@ -1105,7 +1112,7 @@ export const VideoToolbar = ({ nodeId, data, onDelete }: VideoToolbarProps) => {
       console.error("上传视频失败:", uploadError);
       toast.error("上传失败，请重试");
     } finally {
-      setIsUploading(false);
+      onUploadingChange?.(false);
       event.target.value = "";
     }
   };

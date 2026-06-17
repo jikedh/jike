@@ -13,6 +13,7 @@ type ImageContentProps = {
   updateImageNodeData?: (nodeId: string, patch: any) => void;
   onGalleryExpandedChange?: (expanded: boolean) => void;
   isNodeActive?: boolean;
+  isUploading?: boolean;
   frameSize?: {
     width: number;
     height: number;
@@ -36,6 +37,7 @@ export const ImageContent = memo(
     updateImageNodeData,
     onGalleryExpandedChange,
     isNodeActive = false,
+    isUploading = false,
     frameSize,
   }: ImageContentProps) => {
     // 结果图片列表（支持多张），保留原始对象结构用于排序
@@ -90,6 +92,7 @@ export const ImageContent = memo(
 
     // 加载中状态
     if (
+      isUploading ||
       status === GenerationStatus.IN_PROGRESS ||
       status === GenerationStatus.QUEUED
     ) {
@@ -99,8 +102,8 @@ export const ImageContent = memo(
             <div className="absolute inset-0 border-2 border-primary/30 rounded-full"></div>
             <div className="absolute inset-0 border-2 border-transparent border-t-primary rounded-full animate-spin"></div>
           </div>
-          <div className="text-xs text-muted-foreground">
-            {isUpload ? "加载中..." : "生成中..."}
+          <div className="text-xs font-medium text-white/75">
+            {isUploading || isUpload ? "上传中..." : "生成中..."}
           </div>
         </div>
       );

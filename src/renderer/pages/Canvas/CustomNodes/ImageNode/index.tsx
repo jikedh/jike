@@ -81,6 +81,7 @@ export const ImageNode = memo(
     const [isGridCropOpen, setIsGridCropOpen] = useState(false);
     const [isLightingDialogOpen, setIsLightingDialogOpen] = useState(false);
     const [isLightingGenerating, setIsLightingGenerating] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
     const [isRenaming, setIsRenaming] = useState(false);
     const previousLightingViewportRef = useRef<Viewport | null>(null);
     const reactFlowInstance = useReactFlow();
@@ -586,7 +587,7 @@ export const ImageNode = memo(
 
           toast.success(
             `已裁剪 ${uploadedItems.length} 张宫格图片` +
-              (failedCount > 0 ? `，${failedCount} 张失败` : ""),
+            (failedCount > 0 ? `，${failedCount} 张失败` : ""),
           );
         } catch (error: any) {
           console.error("宫格裁剪失败:", error);
@@ -692,9 +693,9 @@ export const ImageNode = memo(
             lighting: config,
             ...(isMidjourneyModel
               ? {
-                  aspectRatio: data.aspectRatio ?? "1:1",
-                  midjourneyAdvanced: data.midjourneyAdvanced,
-                }
+                aspectRatio: data.aspectRatio ?? "1:1",
+                midjourneyAdvanced: data.midjourneyAdvanced,
+              }
               : {}),
           };
 
@@ -811,6 +812,8 @@ export const ImageNode = memo(
                   onAnnotate={handleAnnotate}
                   onErase={handleErase}
                   onLighting={() => handleLightingDialogOpenChange(true)}
+                  isUploading={isUploading}
+                  onUploadingChange={setIsUploading}
                   isLightingGenerating={isLightingGenerating}
                 />
               </div>
@@ -820,7 +823,7 @@ export const ImageNode = memo(
               className={cn(
                 "group/card relative flex h-full w-full flex-col rounded-xl border",
                 hasMultipleResults &&
-                  "bg-linear-to-br from-[#141418] to-[#0d0d10]",
+                "bg-linear-to-br from-[#141418] to-[#0d0d10]",
                 isAnnotationMode
                   ? "border-transparent shadow-none ring-0"
                   : isActiveNode
@@ -875,7 +878,7 @@ export const ImageNode = memo(
                   className={cn(
                     "pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-500 group-hover/card:opacity-100",
                     hasMultipleResults &&
-                      "bg-linear-to-tr from-transparent via-white/2 to-transparent",
+                    "bg-linear-to-tr from-transparent via-white/2 to-transparent",
                   )}
                 />
               ) : null}
@@ -896,6 +899,7 @@ export const ImageNode = memo(
                   updateImageNodeData={updateImageNodeData}
                   onGalleryExpandedChange={setIsGalleryExpanded}
                   isNodeActive={isActiveNode}
+                  isUploading={isUploading}
                   frameSize={{
                     width: nodeSize.width,
                     height: nodeSize.height,
@@ -916,34 +920,34 @@ export const ImageNode = memo(
 
         {/* 全景图查看器 - 使用 Portal 渲染到 body，避免 React Flow 的 CSS 隔离影响 fixed 定位 */}
         {typeof document !== "undefined" &&
-        panoramaViewer.open &&
-        panoramaViewer.sourceNodeId === id
+          panoramaViewer.open &&
+          panoramaViewer.sourceNodeId === id
           ? createPortal(
-              <PanoramaViewer
-                open={panoramaViewer.open}
-                onClose={closePanoramaViewer}
-                initialImage={panoramaViewer.imageUrl ?? undefined}
-                sourceNodeId={panoramaViewer.sourceNodeId}
-              />,
-              document.body,
-            )
+            <PanoramaViewer
+              open={panoramaViewer.open}
+              onClose={closePanoramaViewer}
+              initialImage={panoramaViewer.imageUrl ?? undefined}
+              sourceNodeId={panoramaViewer.sourceNodeId}
+            />,
+            document.body,
+          )
           : null}
 
         {typeof document !== "undefined" &&
-        isAnnotationTarget &&
-        annotationWorkspace.open
+          isAnnotationTarget &&
+          annotationWorkspace.open
           ? createPortal(
-              <ImageAnnotationWorkspace
-                open={annotationWorkspace.open}
-                imageUrl={annotationWorkspace.imageUrl}
-                sourceNodeId={annotationWorkspace.sourceNodeId}
-                mode={annotationWorkspace.mode}
-                onClose={() =>
-                  useCanvasFlowStore.getState().closeImageAnnotation()
-                }
-              />,
-              document.body,
-            )
+            <ImageAnnotationWorkspace
+              open={annotationWorkspace.open}
+              imageUrl={annotationWorkspace.imageUrl}
+              sourceNodeId={annotationWorkspace.sourceNodeId}
+              mode={annotationWorkspace.mode}
+              onClose={() =>
+                useCanvasFlowStore.getState().closeImageAnnotation()
+              }
+            />,
+            document.body,
+          )
           : null}
 
         <ImageGridCropDialog
