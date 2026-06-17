@@ -62,7 +62,7 @@ import {
 import { ModelSelector } from "@/components/ModelSelector";
 import { Switch } from "@/components/ui/switch";
 import useMessage from "@/hooks/useMessage";
-import { getAnnouncementList, type AnnouncementItem } from "@/api/jikeGo";
+import { useAnnouncementStore } from "@/stores/announcementStore";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 
@@ -241,31 +241,39 @@ export const SettingsModal = ({
   const [ximuBusy, setXimuBusy] = useState(false);
   const [ximuError, setXimuError] = useState<string | null>(null);
 
-  // 公告列表
-  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
-  const [announcementsLoading, setAnnouncementsLoading] = useState(false);
+  const announcements = useAnnouncementStore((state) => state.announcements);
+  const announcementsLoading = useAnnouncementStore(
+    (state) => state.announcementsLoading,
+  );
+  const hasUnreadAnnouncements = useAnnouncementStore(
+    (state) => state.hasUnreadAnnouncements,
+  );
+  const fetchAnnouncements = useAnnouncementStore(
+    (state) => state.fetchAnnouncements,
+  );
+  const enterAnnouncementCenter = useAnnouncementStore(
+    (state) => state.enterAnnouncementCenter,
+  );
+  const clearNewAnnouncementMarks = useAnnouncementStore(
+    (state) => state.clearNewAnnouncementMarks,
+  );
+  const newAnnouncementIds = useAnnouncementStore(
+    (state) => state.newAnnouncementIds,
+  );
 
-  // 切换到通知中心时自动请求公告
+  // 切换到通知中心时自动请求公告，并认为当前公告已读
   useEffect(() => {
     if (!open || activeSection !== "announcements") return;
-    let cancelled = false;
-    setAnnouncementsLoading(true);
-    getAnnouncementList()
-      .then((res: any) => {
-        if (cancelled) return;
-        const data = res?.data ?? res;
-        setAnnouncements(data?.list ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setAnnouncements([]);
-      })
-      .finally(() => {
-        if (!cancelled) setAnnouncementsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, activeSection]);
+    enterAnnouncementCenter();
+    void fetchAnnouncements().then(() => {
+      enterAnnouncementCenter();
+    });
+  }, [open, activeSection, enterAnnouncementCenter, fetchAnnouncements]);
+
+  useEffect(() => {
+    if (open) return;
+    clearNewAnnouncementMarks();
+  }, [open, clearNewAnnouncementMarks]);
 
   // 弹窗打开时从 localStorage 加载预设，首次无数据则写入默认预设
   useEffect(() => {
@@ -790,15 +798,24 @@ export const SettingsModal = ({
                             key={section.id}
                             type="button"
                             className={cn(
-                              "flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
+                              "relative flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
                               activeSection === section.id
                                 ? "bg-[#B43FEB]/10 text-[#B43FEB]"
                                 : "text-white/60 hover:bg-white/5 hover:text-white/80",
                             )}
-                            onClick={() => setActiveSection(section.id)}
+                            onClick={() => {
+                              setActiveSection(section.id);
+                              if (section.id === "announcements") {
+                                enterAnnouncementCenter();
+                              }
+                            }}
                           >
                             {getIcon()}
                             <span>{section.label}</span>
+                            {section.id === "announcements" &&
+                              hasUnreadAnnouncements && (
+                                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-[#09090d]" />
+                              )}
                           </button>
                         );
                       })}
@@ -1633,52 +1650,64 @@ export const SettingsModal = ({
                                 if (!a.is_pinned && b.is_pinned) return 1;
                                 return 0;
                               })
-                              .map((item) => (
-                                <div
-                                  key={item.id}
-                                  className="rounded-xl px-4 py-3"
-                                  style={
-                                    item.is_pinned
-                                      ? {
-                                          border: "1px solid rgba(180, 63, 235, 0.25)",
-                                          background:
-                                            "linear-gradient(135deg, rgba(180, 63, 235, 0.08), rgba(180, 63, 235, 0.02))",
-                                        }
-                                      : {
-                                          border: "1px solid rgba(255, 255, 255, 0.05)",
-                                          background: "rgba(0, 0, 0, 0.2)",
-                                        }
-                                  }
-                                >
-                                  <div className="flex items-center gap-2 mb-1.5">
-                                    {item.is_pinned && (
-                                      <span className="inline-flex items-center gap-1 rounded-md bg-[#B43FEB]/15 px-1.5 py-0.5 text-[11px] text-[#B43FEB]">
-                                        <IconPin size={11} />
-                                        置顶
+                              .map((item) => {
+                                const isNewAnnouncement =
+                                  newAnnouncementIds.includes(item.id);
+
+                                return (
+                                  <div
+                                    key={item.id}
+                                    className="relative rounded-xl px-4 py-3 pr-8"
+                                    style={
+                                      item.is_pinned || isNewAnnouncement
+                                        ? {
+                                            border:
+                                              "1px solid rgba(180, 63, 235, 0.25)",
+                                            background:
+                                              "linear-gradient(135deg, rgba(180, 63, 235, 0.08), rgba(180, 63, 235, 0.02))",
+                                          }
+                                        : {
+                                            border:
+                                              "1px solid rgba(255, 255, 255, 0.05)",
+                                            background: "rgba(0, 0, 0, 0.2)",
+                                          }
+                                    }
+                                  >
+                                    {isNewAnnouncement && (
+                                      <span className="absolute right-4 top-3 text-xs font-medium text-red-400">
+                                        新
                                       </span>
                                     )}
-                                    <span className="text-sm font-medium text-white/85">
-                                      {item.title}
-                                    </span>
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                      {item.is_pinned && (
+                                        <span className="inline-flex items-center gap-1 rounded-md bg-[#B43FEB]/15 px-1.5 py-0.5 text-[11px] text-[#B43FEB]">
+                                          <IconPin size={11} />
+                                          置顶
+                                        </span>
+                                      )}
+                                      <span className="text-sm font-medium text-white/85">
+                                        {item.title}
+                                      </span>
+                                    </div>
+                                    <div className="mb-2 text-[11px] text-white/35">
+                                      {item.created_time
+                                        ? new Date(
+                                            item.created_time,
+                                          ).toLocaleString("zh-CN", {
+                                            year: "numeric",
+                                            month: "2-digit",
+                                            day: "2-digit",
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })
+                                        : ""}
+                                    </div>
+                                    <div className="text-[13px] leading-relaxed text-white/60 whitespace-pre-wrap">
+                                      {item.content}
+                                    </div>
                                   </div>
-                                  <div className="mb-2 text-[11px] text-white/35">
-                                    {item.created_time
-                                      ? new Date(
-                                          item.created_time,
-                                        ).toLocaleString("zh-CN", {
-                                          year: "numeric",
-                                          month: "2-digit",
-                                          day: "2-digit",
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })
-                                      : ""}
-                                  </div>
-                                  <div className="text-[13px] leading-relaxed text-white/60 whitespace-pre-wrap">
-                                    {item.content}
-                                  </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                           </div>
                         )}
                       </section>

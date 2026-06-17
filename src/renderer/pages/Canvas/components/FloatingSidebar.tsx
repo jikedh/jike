@@ -15,6 +15,10 @@ import {
 } from "react";
 import { cn } from "shared/utils/utils";
 import useMessage from "@/hooks/useMessage";
+import {
+  ANNOUNCEMENT_POLL_INTERVAL,
+  useAnnouncementStore,
+} from "@/stores/announcementStore";
 import { SettingsModal } from "./SettingsModal";
 import "./floatingSidebar.css";
 
@@ -116,6 +120,12 @@ export const FloatingSidebar = ({
 }: FloatingSidebarProps) => {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const hasUnreadAnnouncements = useAnnouncementStore(
+    (state) => state.hasUnreadAnnouncements,
+  );
+  const fetchAnnouncements = useAnnouncementStore(
+    (state) => state.fetchAnnouncements,
+  );
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -133,6 +143,18 @@ export const FloatingSidebar = ({
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [expandedItemId]);
+
+  useEffect(() => {
+    void fetchAnnouncements();
+    const timer = window.setInterval(() => {
+      void fetchAnnouncements();
+    }, ANNOUNCEMENT_POLL_INTERVAL);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [fetchAnnouncements]);
+
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { warning } = useMessage();
 
@@ -224,6 +246,7 @@ export const FloatingSidebar = ({
           <ItemGroup
             items={bottomItems}
             expandedItemId={expandedItemId}
+            hasUnreadAnnouncements={hasUnreadAnnouncements}
             onItemClick={handleClick}
             onSubItemClick={handleSubItemClick}
           />
@@ -245,6 +268,7 @@ export const FloatingSidebar = ({
 interface ItemGroupProps {
   items: FloatingSidebarItem[];
   expandedItemId: string | null;
+  hasUnreadAnnouncements?: boolean;
   onItemClick: (
     item: FloatingSidebarItem,
     event: ReactMouseEvent<HTMLButtonElement>,
@@ -255,6 +279,7 @@ interface ItemGroupProps {
 const ItemGroup = ({
   items,
   expandedItemId,
+  hasUnreadAnnouncements = false,
   onItemClick,
   onSubItemClick,
 }: ItemGroupProps) => (
@@ -264,6 +289,7 @@ const ItemGroup = ({
         key={item.id}
         item={item}
         isExpanded={expandedItemId === item.id}
+        showUnreadDot={item.id === "settings" && hasUnreadAnnouncements}
         onClick={(event) => onItemClick(item, event)}
         onSubItemClick={onSubItemClick}
       />
@@ -274,6 +300,7 @@ const ItemGroup = ({
 interface SidebarButtonProps {
   item: FloatingSidebarItem;
   isExpanded: boolean;
+  showUnreadDot?: boolean;
   onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   onSubItemClick: (subId: string) => void;
 }
@@ -281,6 +308,7 @@ interface SidebarButtonProps {
 const SidebarButton = ({
   item,
   isExpanded,
+  showUnreadDot = false,
   onClick,
   onSubItemClick,
 }: SidebarButtonProps) => (
@@ -299,6 +327,9 @@ const SidebarButton = ({
       onClick={onClick}
     >
       {item.icon}
+      {showUnreadDot && (
+        <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500 ring-2 ring-[#121214]" />
+      )}
     </button>
 
     {/* 子菜单 */}
