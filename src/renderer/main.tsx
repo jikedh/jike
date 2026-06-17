@@ -2,7 +2,7 @@
 // 通过 import.meta.env.DEV 守卫，生产构建时该分支会被 Vite tree-shake
 if (import.meta.env.DEV) {
   import("react-scan").then(({ scan }) => {
-    scan({ enabled: true });
+    scan({ enabled: false });
   });
 }
 

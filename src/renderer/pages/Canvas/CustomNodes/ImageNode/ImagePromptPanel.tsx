@@ -431,7 +431,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           ? XIMU_GPTIMAGE2_RESOLUTION_VALUES
           : GPTIMAGE2_RESOLUTION_VALUES,
         defaultSize: isXimuGptImage2Model ? "auto" : "1:1",
-        defaultResolution: isXimuGptImage2StandardModel ? "1K" : "2K",
+        defaultResolution: isXimuGptImage2Model ? "1K" : "1K",
       };
     }
 
@@ -1838,9 +1838,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               resolutionOptions={
                 isXimuGptImage2StandardModel
                   ? XIMU_GPTIMAGE2_RESOLUTION_OPTIONS
-                  : isXimuGptImage2VipModel
-                    ? GPTIMAGE2_RESOLUTION_OPTIONS
-                    : undefined
+                  : GPTIMAGE2_RESOLUTION_OPTIONS
               }
               onSizeChange={(value) => {
                 persistImageDefaultPreset({ size: value });

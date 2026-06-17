@@ -689,12 +689,12 @@ export const HistorySection = (props: HistorySectionProps) => {
     <section className="space-y-6">
       <header className="flex items-center justify-between border-b border-white/5">
         <nav className="flex gap-8">
-          <TabButton
+          {/* <TabButton
             active={activeTab === "usage"}
             icon={<ReceiptText className="h-4 w-4" />}
             label="积分消耗明细"
             onClick={() => onTabChange("usage")}
-          />
+          /> */}
           <TabButton
             active={activeTab === "transaction"}
             icon={<CreditCard className="h-4 w-4" />}

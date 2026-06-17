@@ -54,10 +54,10 @@ const INITIAL_STATE: Pick<
   | "grokChannelModelsEnabled"
 > = {
   defaultModel: DEFAULT_CANVAS_CHAT_MODEL,
-  defaultImageModel: "gemini-3-pro-image-preview",
-  defaultImagePlatform: "google",
+  defaultImageModel: "gpt-image-2",
+  defaultImagePlatform: "openai",
   defaultImageSize: "1:1",
-  defaultImageResolution: "2K",
+  defaultImageResolution: "1K",
   defaultVideoModel: "wan2.7-r2v",
   defaultVideoAspectRatio: "16:9",
   defaultVideoDuration: 5,
