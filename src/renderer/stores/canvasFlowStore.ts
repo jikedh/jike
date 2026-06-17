@@ -212,9 +212,9 @@ const normalizeCanvasGroups = (
           group.layoutOrigin ??
           (frame
             ? {
-                x: frame.x,
-                y: frame.y,
-              }
+              x: frame.x,
+              y: frame.y,
+            }
             : undefined),
         frame: frame ?? undefined,
       };
@@ -292,8 +292,8 @@ const removeNodeIdsFromGroups = (
       nodeIds: group.nodeIds.filter((nodeId) => !removedNodeIdSet.has(nodeId)),
       gridLayoutOrder: group.gridLayoutOrder
         ? group.gridLayoutOrder.filter(
-            (nodeId) => !removedNodeIdSet.has(nodeId),
-          )
+          (nodeId) => !removedNodeIdSet.has(nodeId),
+        )
         : group.gridLayoutOrder,
       layoutOrigin: group.layoutOrigin,
       frame: group.frame,
@@ -595,18 +595,21 @@ const buildRunningHubImageRequest = ({
   size,
   resolution,
   route,
+  scoreCost,
 }: {
   prompt?: string;
   imageUrls: string[];
   size?: string;
   resolution?: string;
   route: RunningHubImageRoute;
+  scoreCost?: number;
 }) => {
   const baseRequest = {
     prompt: prompt || "",
     aspectRatio: size || "1:1",
     resolution: normalizeRunningHubResolution(resolution),
     ...(route.model === "gpt-image-2" ? { quality: "medium" } : {}),
+    ...(scoreCost != null ? { scoreCost } : {}),
   };
   return imageUrls.length > 0
     ? { ...baseRequest, imageUrls: imageUrls.slice(0, 10) }
@@ -654,12 +657,14 @@ const submitRunningHubImageTask = async ({
   imageUrls,
   size,
   resolution,
+  scoreCost,
 }: {
   route: RunningHubImageRoute;
   prompt?: string;
   imageUrls: string[];
   size?: string;
   resolution?: string;
+  scoreCost?: number;
 }) => {
   const request = buildRunningHubImageRequest({
     route,
@@ -667,6 +672,7 @@ const submitRunningHubImageTask = async ({
     imageUrls,
     size,
     resolution,
+    scoreCost,
   });
   const response =
     imageUrls.length > 0
@@ -688,12 +694,14 @@ const generateRunningHubImageWithFallback = async ({
   imageUrls,
   size,
   resolution,
+  scoreCost,
 }: {
   model?: string;
   prompt?: string;
   imageUrls: string[];
   size?: string;
   resolution?: string;
+  scoreCost?: number;
 }) => {
   const routes = resolveRunningHubImageRoutes(model);
   if (!routes) {
@@ -706,6 +714,7 @@ const generateRunningHubImageWithFallback = async ({
       imageUrls,
       size,
       resolution,
+      scoreCost,
     });
   } catch (lowCostError) {
     console.warn("RunningHub 低价渠道生成失败，切换官方稳定版:", lowCostError);
@@ -715,6 +724,7 @@ const generateRunningHubImageWithFallback = async ({
       imageUrls,
       size,
       resolution,
+      scoreCost,
     });
   }
 };
@@ -722,14 +732,14 @@ const generateRunningHubImageWithFallback = async ({
 const extractMarkdownMediaUrl = (content: unknown, kind: "image" | "video") => {
   const text = Array.isArray(content)
     ? content
-        .map((part) =>
-          typeof part === "string"
-            ? part
-            : typeof part?.text === "string"
-              ? part.text
-              : "",
-        )
-        .join("\n")
+      .map((part) =>
+        typeof part === "string"
+          ? part
+          : typeof part?.text === "string"
+            ? part.text
+            : "",
+      )
+      .join("\n")
     : String(content || "");
   const urlPattern =
     kind === "video"
@@ -1065,7 +1075,7 @@ const pollImageGeneration = async (
             ledgerBizId,
             "image generation timeout",
             "image",
-          ).catch(() => {});
+          ).catch(() => { });
         }
         return;
       }
@@ -1108,11 +1118,11 @@ const pollImageGeneration = async (
 
       const progressValue = Number(
         responseData?.progress ??
-          responseData?.result?.progress ??
-          response?.data?.progress ??
-          response?.result?.progress ??
-          response?.progress ??
-          50,
+        responseData?.result?.progress ??
+        response?.data?.progress ??
+        response?.result?.progress ??
+        response?.progress ??
+        50,
       );
 
       // 成功状态：小写 completed 或大写 SUCCESS/SUCCEEDED/COMPLETED
@@ -1205,7 +1215,7 @@ const pollImageGeneration = async (
         }
 
         if (ledgerBizId) {
-          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => {});
+          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
         }
 
         await refreshBalanceAfterGeneration({
@@ -1289,7 +1299,7 @@ const pollImageGeneration = async (
             ledgerBizId,
             "image generation failed",
             "image",
-          ).catch(() => {});
+          ).catch(() => { });
         }
         return;
       }
@@ -1332,7 +1342,7 @@ const pollImageGeneration = async (
     }
     if (ledgerBizId) {
       refundDesktopProxyScore(ledgerBizId, "image poll error", "image").catch(
-        () => {},
+        () => { },
       );
     }
   }
@@ -1414,7 +1424,7 @@ const pollMjImageGeneration = async (
             ledgerBizId,
             "midjourney image generation timeout",
             "image",
-          ).catch(() => {});
+          ).catch(() => { });
         }
         return;
       }
@@ -1524,7 +1534,7 @@ const pollMjImageGeneration = async (
         }
 
         if (ledgerBizId) {
-          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => {});
+          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
         }
 
         await refreshBalanceAfterGeneration({
@@ -1602,7 +1612,7 @@ const pollMjImageGeneration = async (
             ledgerBizId,
             "midjourney image generation failed",
             "image",
-          ).catch(() => {});
+          ).catch(() => { });
         }
         return;
       }
@@ -1645,7 +1655,7 @@ const pollMjImageGeneration = async (
         ledgerBizId,
         "midjourney image poll error",
         "image",
-      ).catch(() => {});
+      ).catch(() => { });
     }
   }
 };
@@ -1838,9 +1848,9 @@ const pollVideoTaskGeneration = async (
               progress: completed
                 ? 100
                 : Math.min(
-                    99,
-                    Math.round((completedCount / totalTaskCount) * 100),
-                  ),
+                  99,
+                  Math.round((completedCount / totalTaskCount) * 100),
+                ),
               task_id: normalizedTaskId,
               result: {
                 type: "video",
@@ -1989,7 +1999,7 @@ const pollNewVideoGeneration = async ({
           refundDesktopProxyScore(
             ledgerBizId,
             "video generation timeout",
-          ).catch(() => {});
+          ).catch(() => { });
         }
         await updateVideoTrackFinalStatus(
           taskId,
@@ -2190,7 +2200,7 @@ const pollNewVideoGeneration = async ({
             refundDesktopProxyScore(
               ledgerBizId,
               normalized.errorMessage || "video generation failed",
-            ).catch(() => {});
+            ).catch(() => { });
           }
         }
         await updateVideoTrackFinalStatus(
@@ -2232,7 +2242,7 @@ const pollNewVideoGeneration = async ({
     }));
     if (ledgerBizId) {
       refundDesktopProxyScore(ledgerBizId, serverMessage || "poll error").catch(
-        () => {},
+        () => { },
       );
     }
     await updateVideoTrackFinalStatus(
@@ -2780,81 +2790,81 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const finalNode =
         newNode.type === "audioNode"
           ? {
+            ...newNode,
+            data: {
+              ...newNode.data,
+              nickname: getAudioNicknameByNodeId(nextId),
+            },
+          }
+          : newNode.type === "imageNode"
+            ? {
               ...newNode,
               data: {
                 ...newNode.data,
-                nickname: getAudioNicknameByNodeId(nextId),
+                model: isDefaultHiddenChannelImageModel
+                  ? newNode.data.model
+                  : defaultImageModel || newNode.data.model,
+                platform: isDefaultHiddenChannelImageModel
+                  ? newNode.data.platform
+                  : defaultImagePlatform || newNode.data.platform,
+                size: defaultImageSize || newNode.data.size,
+                resolution: defaultImageResolution || newNode.data.resolution,
               },
             }
-          : newNode.type === "imageNode"
-            ? {
+            : newNode.type === "newVideoNode"
+              ? {
                 ...newNode,
                 data: {
                   ...newNode.data,
-                  model: isDefaultHiddenChannelImageModel
-                    ? newNode.data.model
-                    : defaultImageModel || newNode.data.model,
-                  platform: isDefaultHiddenChannelImageModel
-                    ? newNode.data.platform
-                    : defaultImagePlatform || newNode.data.platform,
-                  size: defaultImageSize || newNode.data.size,
-                  resolution: defaultImageResolution || newNode.data.resolution,
+                  // 新版视频只沿用新版模型的记忆，避免老版默认模型把新版下拉框顶成空值。
+                  model:
+                    [
+                      "seedance-2.0-fast",
+                      "seedance-2.0-pro",
+                      "wanxiang",
+                      "vidu-q3-pro",
+                      "vidu",
+                      "pixverse",
+                      "happyhorse",
+                      "happyhorse-1.0-r2v",
+                      "adobe-sora2-pro",
+                      "grok-imagine-video",
+                      "keling",
+                      "kling-v3-omni",
+                    ].includes(defaultNewVideoModel ?? "") &&
+                      visibleNewVideoModelIds.has(defaultNewVideoModel ?? "")
+                      ? defaultNewVideoModel
+                      : isAdobeVideoGenerationModel(newNode.data.model) &&
+                        !visibleNewVideoModelIds.has(newNode.data.model)
+                        ? "seedance-2.0-pro"
+                        : isGrokVideoGenerationModel(newNode.data.model) &&
+                          !visibleNewVideoModelIds.has(newNode.data.model)
+                          ? "seedance-2.0-pro"
+                          : newNode.data.model,
+                  aspect_ratio:
+                    defaultNewVideoAspectRatio || newNode.data.aspect_ratio,
+                  duration: defaultNewVideoDuration || newNode.data.duration,
+                  metadata: {
+                    ...(newNode.data.metadata ?? {}),
+                    params: {
+                      ...(newNode.data.metadata?.params as
+                        | Record<string, unknown>
+                        | undefined),
+                      aspectRatio:
+                        defaultNewVideoAspectRatio ||
+                        newNode.data.aspect_ratio,
+                      duration:
+                        defaultNewVideoDuration || newNode.data.duration,
+                      resolution: defaultNewVideoResolution,
+                      generateAudio: defaultNewVideoGenerateAudio,
+                      promptExtend: defaultNewVideoPromptExtend,
+                    },
+                    ...(defaultNewVideoMode !== undefined
+                      ? { mode: defaultNewVideoMode }
+                      : {}),
+                  },
                 },
               }
-            : newNode.type === "newVideoNode"
-              ? {
-                  ...newNode,
-                  data: {
-                    ...newNode.data,
-                    // 新版视频只沿用新版模型的记忆，避免老版默认模型把新版下拉框顶成空值。
-                    model:
-                      [
-                        "seedance-2.0-fast",
-                        "seedance-2.0-pro",
-                        "wanxiang",
-                        "vidu-q3-pro",
-                        "vidu",
-                        "pixverse",
-                        "happyhorse",
-                        "happyhorse-1.0-r2v",
-                        "adobe-sora2-pro",
-                        "grok-imagine-video",
-                        "keling",
-                        "kling-v3-omni",
-                      ].includes(defaultNewVideoModel ?? "") &&
-                      visibleNewVideoModelIds.has(defaultNewVideoModel ?? "")
-                        ? defaultNewVideoModel
-                        : isAdobeVideoGenerationModel(newNode.data.model) &&
-                            !visibleNewVideoModelIds.has(newNode.data.model)
-                          ? "seedance-2.0-pro"
-                          : isGrokVideoGenerationModel(newNode.data.model) &&
-                              !visibleNewVideoModelIds.has(newNode.data.model)
-                            ? "seedance-2.0-pro"
-                            : newNode.data.model,
-                    aspect_ratio:
-                      defaultNewVideoAspectRatio || newNode.data.aspect_ratio,
-                    duration: defaultNewVideoDuration || newNode.data.duration,
-                    metadata: {
-                      ...(newNode.data.metadata ?? {}),
-                      params: {
-                        ...(newNode.data.metadata?.params as
-                          | Record<string, unknown>
-                          | undefined),
-                        aspectRatio:
-                          defaultNewVideoAspectRatio ||
-                          newNode.data.aspect_ratio,
-                        duration:
-                          defaultNewVideoDuration || newNode.data.duration,
-                        resolution: defaultNewVideoResolution,
-                        generateAudio: defaultNewVideoGenerateAudio,
-                        promptExtend: defaultNewVideoPromptExtend,
-                      },
-                      ...(defaultNewVideoMode !== undefined
-                        ? { mode: defaultNewVideoMode }
-                        : {}),
-                    },
-                  },
-                }
               : newNode;
 
       set((state) => ({
@@ -3137,9 +3147,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         createdAt: Date.now(),
         layoutOrigin: layoutBounds
           ? {
-              x: layoutBounds.x,
-              y: layoutBounds.y,
-            }
+            x: layoutBounds.x,
+            y: layoutBounds.y,
+          }
           : undefined,
         frame: layoutBounds ?? undefined,
       };
@@ -3175,9 +3185,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         groups: state.groups.map((group) =>
           group.id === groupId
             ? {
-                ...group,
-                name: nextName,
-              }
+              ...group,
+              name: nextName,
+            }
             : group,
         ),
       }));
@@ -3193,13 +3203,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         groups: state.groups.map((group) =>
           group.id === groupId
             ? {
-                ...group,
-                frame,
-                layoutOrigin: {
-                  x: frame.x,
-                  y: frame.y,
-                },
-              }
+              ...group,
+              frame,
+              layoutOrigin: {
+                x: frame.x,
+                y: frame.y,
+              },
+            }
             : group,
         ),
       }));
@@ -3357,9 +3367,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         {
           anchor: currentBounds
             ? {
-                x: currentBounds.x,
-                y: currentBounds.y,
-              }
+              x: currentBounds.x,
+              y: currentBounds.y,
+            }
             : group.layoutOrigin,
         },
       );
@@ -3376,22 +3386,22 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         ).map((item) =>
           item.id === groupId
             ? {
-                ...item,
-                layoutOrigin: layoutResult.bounds
-                  ? {
-                      x: layoutResult.bounds.x,
-                      y: layoutResult.bounds.y,
-                    }
-                  : item.layoutOrigin,
-                frame: layoutResult.bounds
-                  ? {
-                      x: layoutResult.bounds.x,
-                      y: layoutResult.bounds.y,
-                      width: layoutResult.bounds.width,
-                      height: layoutResult.bounds.height,
-                    }
-                  : item.frame,
-              }
+              ...item,
+              layoutOrigin: layoutResult.bounds
+                ? {
+                  x: layoutResult.bounds.x,
+                  y: layoutResult.bounds.y,
+                }
+                : item.layoutOrigin,
+              frame: layoutResult.bounds
+                ? {
+                  x: layoutResult.bounds.x,
+                  y: layoutResult.bounds.y,
+                  width: layoutResult.bounds.width,
+                  height: layoutResult.bounds.height,
+                }
+                : item.frame,
+            }
             : item,
         ),
       }));
@@ -3417,9 +3427,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           preferredOrderNodeIds: group.gridLayoutOrder,
           anchor: currentBounds
             ? {
-                x: currentBounds.x,
-                y: currentBounds.y,
-              }
+              x: currentBounds.x,
+              y: currentBounds.y,
+            }
             : group.layoutOrigin,
         },
       );
@@ -3439,23 +3449,23 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         ).map((item) =>
           item.id === groupId
             ? {
-                ...item,
-                gridLayoutOrder: layoutResult.orderedNodeIds,
-                layoutOrigin: layoutResult.bounds
-                  ? {
-                      x: layoutResult.bounds.x,
-                      y: layoutResult.bounds.y,
-                    }
-                  : item.layoutOrigin,
-                frame: layoutResult.bounds
-                  ? {
-                      x: layoutResult.bounds.x,
-                      y: layoutResult.bounds.y,
-                      width: layoutResult.bounds.width,
-                      height: layoutResult.bounds.height,
-                    }
-                  : item.frame,
-              }
+              ...item,
+              gridLayoutOrder: layoutResult.orderedNodeIds,
+              layoutOrigin: layoutResult.bounds
+                ? {
+                  x: layoutResult.bounds.x,
+                  y: layoutResult.bounds.y,
+                }
+                : item.layoutOrigin,
+              frame: layoutResult.bounds
+                ? {
+                  x: layoutResult.bounds.x,
+                  y: layoutResult.bounds.y,
+                  width: layoutResult.bounds.width,
+                  height: layoutResult.bounds.height,
+                }
+                : item.frame,
+            }
             : item,
         ),
       }));
@@ -3477,25 +3487,25 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           item.id !== groupId
             ? item
             : {
-                ...item,
-                layoutOrigin: {
-                  x:
-                    (item.layoutOrigin?.x ??
-                      getGroupBounds(current.nodes, item.nodeIds, 24)?.x ??
-                      0) + offset.x,
-                  y:
-                    (item.layoutOrigin?.y ??
-                      getGroupBounds(current.nodes, item.nodeIds, 24)?.y ??
-                      0) + offset.y,
-                },
-                frame: item.frame
-                  ? {
-                      ...item.frame,
-                      x: item.frame.x + offset.x,
-                      y: item.frame.y + offset.y,
-                    }
-                  : undefined,
+              ...item,
+              layoutOrigin: {
+                x:
+                  (item.layoutOrigin?.x ??
+                    getGroupBounds(current.nodes, item.nodeIds, 24)?.x ??
+                    0) + offset.x,
+                y:
+                  (item.layoutOrigin?.y ??
+                    getGroupBounds(current.nodes, item.nodeIds, 24)?.y ??
+                    0) + offset.y,
               },
+              frame: item.frame
+                ? {
+                  ...item.frame,
+                  x: item.frame.x + offset.x,
+                  y: item.frame.y + offset.y,
+                }
+                : undefined,
+            },
         ),
       }));
     },
@@ -3579,7 +3589,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                 ledgerBizId,
                 response.description || "midjourney task creation failed",
                 "image",
-              ).catch(() => {});
+              ).catch(() => { });
             }
             throw new Error(response.description || "Midjourney 任务提交失败");
           }
@@ -3607,6 +3617,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                   : [],
                 size: payload.size,
                 resolution: payload.resolution,
+                scoreCost,
               });
 
               const ossUrl = await mirrorGeneratedImageUrlToOss(resultUrl);
@@ -3709,7 +3720,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                 ledgerBizId,
                 "image task creation failed: no task_id",
                 "image",
-              ).catch(() => {});
+              ).catch(() => { });
             }
             throw new Error("未返回任务 ID，请稍后再试");
           }
@@ -3721,7 +3732,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               ledgerBizId,
               "image task creation failed: empty task_id",
               "image",
-            ).catch(() => {});
+            ).catch(() => { });
           }
           throw new Error("任务 ID 为空");
         }
@@ -3888,39 +3899,39 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             gptImageUrls.length > 0
               ? originalModel === ADOBE_GPT_IMAGE2_MODEL
                 ? await createAdobe2ApiGptImageToImageGeneration(
-                    buildFireflyGptImageToImageRequest({
-                      model: adobeImageModel as any,
-                      prompt,
-                      imageUrls: gptImageUrls,
-                    }),
-                  )
-                : await createAdobe2ApiChatImageGeneration({
+                  buildFireflyGptImageToImageRequest({
                     model: adobeImageModel as any,
-                    messages: [
-                      {
-                        role: "user" as const,
-                        content: [
-                          { type: "text" as const, text: prompt || "" },
-                          ...imageUrls.map((url: string) => ({
-                            type: "image_url" as const,
-                            image_url: { url },
-                          })),
-                        ],
-                      },
-                    ],
-                  })
+                    prompt,
+                    imageUrls: gptImageUrls,
+                  }),
+                )
+                : await createAdobe2ApiChatImageGeneration({
+                  model: adobeImageModel as any,
+                  messages: [
+                    {
+                      role: "user" as const,
+                      content: [
+                        { type: "text" as const, text: prompt || "" },
+                        ...imageUrls.map((url: string) => ({
+                          type: "image_url" as const,
+                          image_url: { url },
+                        })),
+                      ],
+                    },
+                  ],
+                })
               : await createAdobe2ApiImageGeneration(
-                  originalModel === ADOBE_GPT_IMAGE2_MODEL
-                    ? buildFireflyGptText2ImageRequest({
-                        model: adobeImageModel as any,
-                        prompt,
-                      })
-                    : {
-                        model: adobeImageModel as any,
-                        prompt: prompt || "",
-                        response_format: "url",
-                      },
-                );
+                originalModel === ADOBE_GPT_IMAGE2_MODEL
+                  ? buildFireflyGptText2ImageRequest({
+                    model: adobeImageModel as any,
+                    prompt,
+                  })
+                  : {
+                    model: adobeImageModel as any,
+                    prompt: prompt || "",
+                    response_format: "url",
+                  },
+              );
 
           const responseAny = response as any;
           const responseUrl =
@@ -4023,27 +4034,27 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           const ximuReferenceUrls = await normalizeXimuReferenceUrls(imageUrls);
           const request = isXimuGptImageGenerationModel(originalModel)
             ? buildXimuGptImageRequest({
+              model: ximuImageModel as any,
+              cardCode: ximuCardCode,
+              prompt,
+              aspectRatio: resolveXimuGptAspectRatio({
                 model: ximuImageModel as any,
-                cardCode: ximuCardCode,
-                prompt,
-                aspectRatio: resolveXimuGptAspectRatio({
-                  model: ximuImageModel as any,
-                  size,
-                  resolution,
-                }),
-                urls: ximuReferenceUrls,
-              })
+                size,
+                resolution,
+              }),
+              urls: ximuReferenceUrls,
+            })
             : buildXimuNanoBananaRequest({
-                model: ximuImageModel as any,
-                cardCode: ximuCardCode,
-                prompt,
-                aspectRatio:
-                  originalModel === XIMU_NANO_BANANA2_MODEL
-                    ? resolveXimuNanoBanana2AspectRatio(size)
-                    : resolveXimuNanoBananaProAspectRatio(size),
-                imageSize: resolveXimuImageSize(resolution),
-                urls: ximuReferenceUrls,
-              });
+              model: ximuImageModel as any,
+              cardCode: ximuCardCode,
+              prompt,
+              aspectRatio:
+                originalModel === XIMU_NANO_BANANA2_MODEL
+                  ? resolveXimuNanoBanana2AspectRatio(size)
+                  : resolveXimuNanoBananaProAspectRatio(size),
+              imageSize: resolveXimuImageSize(resolution),
+              urls: ximuReferenceUrls,
+            });
 
           let submitResponse;
           try {
@@ -4456,7 +4467,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         }
 
         if (ledgerBizId) {
-          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => {});
+          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
         }
 
         await refreshBalanceAfterGeneration({
@@ -4496,7 +4507,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             ledgerBizId,
             rawServerMessage || "gemini image generation failed",
             "image",
-          ).catch(() => {});
+          ).catch(() => { });
         }
         throw startError;
       }
@@ -4674,13 +4685,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const sourceVisualSize =
           nodeType === "imageNode"
             ? getNodeSizeByAspectRatio(
-                (sourceData as ImageGenerationNode).size ?? "4:3",
-                250,
-              )
+              (sourceData as ImageGenerationNode).size ?? "4:3",
+              250,
+            )
             : getNodeSizeByAspectRatio(
-                (sourceData as NewVideoGenerationNode).aspect_ratio ?? "16:9",
-                250,
-              );
+              (sourceData as NewVideoGenerationNode).aspect_ratio ?? "16:9",
+              250,
+            );
         const verticalGap = 32;
         const baseY =
           sourceNode.position.y + sourceVisualSize.height + verticalGap;
@@ -4690,59 +4701,59 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const resolvedItems =
           targetNodeType === "image"
             ? await Promise.all(
-                validItems.map(async (item) => {
-                  const imageUrl = item.remoteUrl || item.url;
-                  let aspectRatio = sourceData.size ?? "4:3";
+              validItems.map(async (item) => {
+                const imageUrl = item.remoteUrl || item.url;
+                let aspectRatio = sourceData.size ?? "4:3";
 
-                  if (imageUrl) {
-                    try {
-                      const { width, height } =
-                        await getImageDimensions(imageUrl);
-                      aspectRatio = getClosestAspectRatio(width, height);
-                    } catch (error) {
-                      console.warn(
-                        "[separateToNodes] 获取图片比例失败，使用回退比例:",
-                        error,
-                      );
-                    }
+                if (imageUrl) {
+                  try {
+                    const { width, height } =
+                      await getImageDimensions(imageUrl);
+                    aspectRatio = getClosestAspectRatio(width, height);
+                  } catch (error) {
+                    console.warn(
+                      "[separateToNodes] 获取图片比例失败，使用回退比例:",
+                      error,
+                    );
                   }
+                }
 
-                  const nodeSize = getNodeSizeByAspectRatio(aspectRatio, 250);
+                const nodeSize = getNodeSizeByAspectRatio(aspectRatio, 250);
 
-                  return {
-                    item,
-                    aspectRatio,
-                    nodeSize,
-                  };
-                }),
-              )
+                return {
+                  item,
+                  aspectRatio,
+                  nodeSize,
+                };
+              }),
+            )
             : await Promise.all(
-                validItems.map(async (item) => {
-                  const videoUrl = item.remoteUrl || item.url;
-                  let aspectRatio =
-                    (sourceData as NewVideoGenerationNode).aspect_ratio ??
-                    "16:9";
+              validItems.map(async (item) => {
+                const videoUrl = item.remoteUrl || item.url;
+                let aspectRatio =
+                  (sourceData as NewVideoGenerationNode).aspect_ratio ??
+                  "16:9";
 
-                  if (videoUrl) {
-                    try {
-                      const { width, height } =
-                        await getVideoDimensions(videoUrl);
-                      aspectRatio = getClosestAspectRatio(width, height);
-                    } catch (error) {
-                      console.warn(
-                        "[separateToNodes] 获取视频比例失败，使用回退比例:",
-                        error,
-                      );
-                    }
+                if (videoUrl) {
+                  try {
+                    const { width, height } =
+                      await getVideoDimensions(videoUrl);
+                    aspectRatio = getClosestAspectRatio(width, height);
+                  } catch (error) {
+                    console.warn(
+                      "[separateToNodes] 获取视频比例失败，使用回退比例:",
+                      error,
+                    );
                   }
+                }
 
-                  return {
-                    item,
-                    aspectRatio,
-                    nodeSize: getNodeSizeByAspectRatio(aspectRatio, 250),
-                  };
-                }),
-              );
+                return {
+                  item,
+                  aspectRatio,
+                  nodeSize: getNodeSizeByAspectRatio(aspectRatio, 250),
+                };
+              }),
+            );
 
         const latestState = get();
         const latestSourceNode = latestState.nodes.find(
@@ -4764,40 +4775,40 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             const finalNode =
               targetNodeType === "newVideo"
                 ? {
-                    ...baseNode,
-                    width: nodeSize.width,
-                    height: nodeSize.height,
-                    data: {
-                      ...baseNode.data,
-                      aspect_ratio: aspectRatio,
-                      status: GenerationStatus.COMPLETED,
-                      progress: 100,
-                      result: {
-                        type: "video",
-                        data: [
-                          {
-                            ...item,
-                            format: item.format ?? "mp4",
-                          },
-                        ],
-                      },
+                  ...baseNode,
+                  width: nodeSize.width,
+                  height: nodeSize.height,
+                  data: {
+                    ...baseNode.data,
+                    aspect_ratio: aspectRatio,
+                    status: GenerationStatus.COMPLETED,
+                    progress: 100,
+                    result: {
+                      type: "video",
+                      data: [
+                        {
+                          ...item,
+                          format: item.format ?? "mp4",
+                        },
+                      ],
                     },
-                  }
+                  },
+                }
                 : {
-                    ...baseNode,
-                    width: nodeSize.width,
-                    height: nodeSize.height,
-                    data: {
-                      ...baseNode.data,
-                      status: GenerationStatus.COMPLETED,
-                      progress: 100,
-                      size: aspectRatio,
-                      result: {
-                        type: "image",
-                        data: [{ ...item }],
-                      },
+                  ...baseNode,
+                  width: nodeSize.width,
+                  height: nodeSize.height,
+                  data: {
+                    ...baseNode.data,
+                    status: GenerationStatus.COMPLETED,
+                    progress: 100,
+                    size: aspectRatio,
+                    result: {
+                      type: "image",
+                      data: [{ ...item }],
                     },
-                  };
+                  },
+                };
 
             currentX += nodeSize.width + gap;
             return finalNode as AllNodeType;
@@ -4821,11 +4832,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                     data: shouldSeparateGeneratingNewVideo
                       ? []
                       : [
-                          {
-                            ...(resultData[0] as any),
-                            format: (resultData[0] as any)?.format ?? "mp4",
-                          },
-                        ],
+                        {
+                          ...(resultData[0] as any),
+                          format: (resultData[0] as any)?.format ?? "mp4",
+                        },
+                      ],
                   },
                 },
               } as AllNodeType;
@@ -5024,11 +5035,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             throw new Error("Adobe2API 未返回视频地址");
           }
 
-          let resultItem: { url: string; format: string; [key: string]: any } =
-            {
-              url: videoUrl,
-              format: "mp4",
-            };
+          let resultItem: { url: string; format: string;[key: string]: any } =
+          {
+            url: videoUrl,
+            format: "mp4",
+          };
           const projectId = get().projectId;
           if (projectId) {
             try {
@@ -5133,11 +5144,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             throw new Error("Grok2API 未返回视频地址");
           }
 
-          let resultItem: { url: string; format: string; [key: string]: any } =
-            {
-              url: videoUrl,
-              format: "mp4",
-            };
+          let resultItem: { url: string; format: string;[key: string]: any } =
+          {
+            url: videoUrl,
+            format: "mp4",
+          };
           const projectId = get().projectId;
           if (projectId) {
             try {
@@ -5246,7 +5257,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               refundDesktopProxyScore(
                 response.ledgerBizId,
                 "task creation failed: no task_id",
-              ).catch(() => {});
+              ).catch(() => { });
             }
             throw new Error("任务 ID 为空");
           }
@@ -5473,17 +5484,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const nextGroups =
           hasFinalPositionChange || hasAddOrRemove
             ? normalizeCanvasGroups(state.groups, nextNodes).map((group) => {
-                const bounds = getGroupBounds(nextNodes, group.nodeIds, 24);
-                return {
-                  ...group,
-                  layoutOrigin: bounds
-                    ? {
-                        x: bounds.x,
-                        y: bounds.y,
-                      }
-                    : group.layoutOrigin,
-                };
-              })
+              const bounds = getGroupBounds(nextNodes, group.nodeIds, 24);
+              return {
+                ...group,
+                layoutOrigin: bounds
+                  ? {
+                    x: bounds.x,
+                    y: bounds.y,
+                  }
+                  : group.layoutOrigin,
+              };
+            })
             : state.groups;
         // 计算选中节点数量，避免在 ImageNode 等组件中 O(n²) 遍历
         const selectedCount = nextNodes.filter((n) => n.selected).length;

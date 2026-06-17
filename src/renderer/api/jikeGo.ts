@@ -438,6 +438,8 @@ export type RunningHubTextToImageRequest = {
   aspectRatio?: string;
   resolution?: string;
   quality?: string;
+  /** 本次操作预计消耗的积分值，传入后将由后端进行积分扣减 */
+  scoreCost?: number;
 };
 export type RunningHubImageToImageRequest = RunningHubTextToImageRequest & {
   imageUrls: string[];
