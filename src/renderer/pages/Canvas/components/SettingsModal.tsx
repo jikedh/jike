@@ -774,7 +774,7 @@ export const SettingsModal = ({
               className={`grid min-h-0 flex-1 ${isFirstLogin ? "" : "grid-cols-[220px_1fr]"}`}
             >
               {!isFirstLogin && (
-                <aside className="border-r border-white/5 bg-black/20 p-3">
+                <aside className="no-scrollbar min-h-0 overflow-y-auto overscroll-contain border-r border-white/5 bg-black/20 p-3">
                   <div className="space-y-1">
                     {settingSections
                       .filter(
@@ -823,7 +823,7 @@ export const SettingsModal = ({
                 </aside>
               )}
 
-              <main className="min-h-0 overflow-auto px-6 py-5">
+              <main className="no-scrollbar min-h-0 overflow-auto px-6 py-5">
                 <div className="space-y-3">
                   {/* AI 助手 - 真实配置 */}
                   {activeSection === "ai" && (

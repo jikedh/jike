@@ -452,7 +452,7 @@ const LoginPage = () => {
                   >
                     微信登录
                   </button>
-                  <button
+                  {/* <button
                     onClick={() => handleSwitchMode("password")}
                     className="px-5 py-1.5 rounded-md text-sm transition-colors"
                     style={{
@@ -463,7 +463,7 @@ const LoginPage = () => {
                     }}
                   >
                     账号登录
-                  </button>
+                  </button> */}
                 </div>
               )}
 
