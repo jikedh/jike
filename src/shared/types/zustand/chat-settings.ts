@@ -36,6 +36,7 @@ export type ChatSettingsStoreType = {
   storagePath: string;
   assetStoragePath: string;
   jianyingDraftsPath: string;
+  updateUrl: string;
   ximuCardCode: string;
   adobeChannelModelsEnabled: boolean;
   ximuChannelModelsEnabled: boolean;
@@ -79,6 +80,7 @@ export type ChatSettingsStoreType = {
   setStoragePath: (path: string) => void;
   setAssetStoragePath: (path: string) => void;
   setJianyingDraftsPath: (path: string) => void;
+  setUpdateUrl: (url: string) => void;
   setXimuCardCode: (cardCode: string) => void;
   setAdobeChannelModelsEnabled: (enabled: boolean) => void;
   setXimuChannelModelsEnabled: (enabled: boolean) => void;

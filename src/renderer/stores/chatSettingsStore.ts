@@ -6,6 +6,7 @@ import { persist } from "zustand/middleware";
 
 const GLOBAL_SETTINGS_KEY = "canvasGlobalSettings";
 const LOCAL_SETTINGS_KEY = "canvas-chat-settings";
+const DEFAULT_UPDATE_URL = "https://github.com/byte-fly/jike-anzhuang/releases";
 
 type GlobalSettings = {
   storagePath?: string;
@@ -46,6 +47,7 @@ const INITIAL_STATE: Pick<
   | "storagePath"
   | "assetStoragePath"
   | "jianyingDraftsPath"
+  | "updateUrl"
   | "ximuCardCode"
   | "adobeChannelModelsEnabled"
   | "ximuChannelModelsEnabled"
@@ -84,6 +86,7 @@ const INITIAL_STATE: Pick<
   storagePath: "",
   assetStoragePath: "",
   jianyingDraftsPath: "",
+  updateUrl: DEFAULT_UPDATE_URL,
   ximuCardCode: "",
   adobeChannelModelsEnabled: false,
   ximuChannelModelsEnabled: false,
@@ -227,6 +230,7 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
         set({ jianyingDraftsPath: path });
         writeGlobalSettingsPatch({ jianyingDraftsPath: path });
       },
+      setUpdateUrl: (url) => set({ updateUrl: url }),
       setXimuCardCode: (cardCode) => set({ ximuCardCode: cardCode }),
       setAdobeChannelModelsEnabled: (enabled) =>
         set({ adobeChannelModelsEnabled: enabled }),
