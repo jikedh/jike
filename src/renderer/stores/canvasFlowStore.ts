@@ -2055,6 +2055,12 @@ const pollNewVideoGeneration = async ({
           }));
 
           stopVideoPollingInternal(nodeId);
+          if (ledgerBizId) {
+            refundDesktopProxyScore(
+              ledgerBizId,
+              "任务已完成但未返回视频地址",
+            ).catch(() => { });
+          }
           await updateVideoTrackFinalStatus(
             normalizedTaskId,
             "FAIL",
@@ -2157,6 +2163,9 @@ const pollNewVideoGeneration = async ({
         }
 
         stopVideoPollingInternal(nodeId);
+        if (ledgerBizId) {
+          confirmDesktopProxyScore(ledgerBizId, "video").catch(() => { });
+        }
         await updateVideoTrackFinalStatus(
           normalizedTaskId,
           "SUCCESS",
