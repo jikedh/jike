@@ -73,7 +73,7 @@ export type EstimateEnhanceCostResponse = {
   effective_fps: number;
 };
 
-export type DesktopProxyScoreBizType = "image" | "video";
+export type DesktopProxyScoreBizType = "image" | "video" | "runninghub_v2";
 
 export type DesktopProxyRequest = {
   platform: DesktopProxyPlatform;
