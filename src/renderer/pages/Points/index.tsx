@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ScoreRecordItem, ScoreTransactionItem } from "shared/types/jikeing";
 import { getJikeingToken, getJikeingUserId } from "shared/utils/utils";
 import { toast } from "sonner";
@@ -19,7 +19,6 @@ import { generateAvatarUrl, getRandomStyle } from "./lib/utils";
 
 export function PointsView() {
     const [activeTab, setActiveTab] = useState<ActiveTab>("usage");
-    const [avatarUrl, setAvatarUrl] = useState<string>("");
     const [userId, setUserId] = useState<string>("");
     const [selectedPackageId, setSelectedPackageId] = useState<number | null>(
         null,
@@ -105,17 +104,22 @@ export function PointsView() {
     useEffect(() => {
         const token = getJikeingToken();
         if (token) {
-            const userId = getJikeingUserId();
-            setUserId(userId);
-            const userSeed = userId || "default-user";
-            const avatarStyle = getRandomStyle(userSeed);
-            const url = generateAvatarUrl(userSeed, avatarStyle);
-            setAvatarUrl(url);
+            const uid = getJikeingUserId();
+            setUserId(uid);
 
             void fetchBalanceInfo();
             void fetchRecords(1);
         }
     }, [fetchBalanceInfo, fetchRecords]);
+
+    // 头像：优先使用用户真实上传头像，无真实头像时 fallback 到 dicebear
+    const userInfo = useUserStore((s) => s.userInfo);
+    const avatarUrl = useMemo(() => {
+        if (userInfo?.avatar) return userInfo.avatar;
+        const userSeed = userId || "default-user";
+        const avatarStyle = getRandomStyle(userSeed);
+        return generateAvatarUrl(userSeed, avatarStyle);
+    }, [userInfo?.avatar, userId]);
 
     useEffect(() => {
         if (

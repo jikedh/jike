@@ -335,9 +335,8 @@ export function updateJikeGoUserInfo(data: UpdateJikeGoUserInfoRequest): any {
   });
 }
 
-// 修改登录密码：旧密码校验 + 新密码长度 ≥ 1
+// 修改登录密码：新密码长度 ≥ 1
 export type UpdateJikeGoUserPasswordRequest = {
-  old_password: string;
   new_password: string;
 };
 

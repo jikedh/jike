@@ -6,8 +6,6 @@ import {
   getDigitalCaptcha,
   getSceneQrcode,
   loginByUsername,
-  registerByUsername,
-  resetPassword as resetPasswordApi,
 } from "@/api/jikeGo";
 import iconImg from "@/assets/icon.png";
 import logoImg from "@/assets/logo.png";
@@ -21,7 +19,7 @@ const RETRY_DELAY = 10000;
 const REDIRECT_DELAY = 500;
 
 // 登录模式
-type LoginMode = "qrcode" | "password" | "reset" | "register";
+type LoginMode = "qrcode" | "password";
 
 // 扫码登录状态
 type QrcodeStatus =
@@ -75,28 +73,6 @@ const LoginPage = () => {
   const [captchaAnswer, setCaptchaAnswer] = useState("");
   const [pwdLoading, setPwdLoading] = useState(false);
   const [pwdError, setPwdError] = useState("");
-
-  // ===================== 重置密码状态 =====================
-  const [resetUsername, setResetUsername] = useState("");
-  const [resetPassword, setResetPasswordValue] = useState("");
-  const [resetConfirm, setResetConfirm] = useState("");
-  const [resetCaptchaImage, setResetCaptchaImage] = useState("");
-  const [resetCaptchaId, setResetCaptchaId] = useState("");
-  const [resetCaptchaAnswer, setResetCaptchaAnswer] = useState("");
-  const [resetLoading, setResetLoading] = useState(false);
-  const [resetError, setResetError] = useState("");
-  const [resetSuccess, setResetSuccess] = useState(false);
-
-  // ===================== 注册状态 =====================
-  const [regUsername, setRegUsername] = useState("");
-  const [regPassword, setRegPassword] = useState("");
-  const [regConfirm, setRegConfirm] = useState("");
-  const [regCaptchaImage, setRegCaptchaImage] = useState("");
-  const [regCaptchaId, setRegCaptchaId] = useState("");
-  const [regCaptchaAnswer, setRegCaptchaAnswer] = useState("");
-  const [regLoading, setRegLoading] = useState(false);
-  const [regError, setRegError] = useState("");
-  const [regSuccess, setRegSuccess] = useState(false);
 
   // ===================== 扫码登录逻辑 =====================
   const handlePollingSuccess = useCallback(
@@ -217,17 +193,9 @@ const LoginPage = () => {
     (mode: LoginMode) => {
       setLoginMode(mode);
       setPwdError("");
-      setResetError("");
-      setResetSuccess(false);
       if (mode === "qrcode") {
         stopPolling();
         fetchQrcode();
-      } else if (mode === "reset") {
-        stopPolling();
-        fetchResetCaptcha();
-      } else if (mode === "register") {
-        stopPolling();
-        fetchRegCaptcha();
       } else {
         stopPolling();
         fetchCaptcha();
@@ -235,142 +203,6 @@ const LoginPage = () => {
     },
     [stopPolling, fetchQrcode, fetchCaptcha],
   );
-
-  // ===================== 重置密码-验证码 =====================
-  const fetchResetCaptcha = useCallback(async () => {
-    try {
-      const res = await getDigitalCaptcha();
-      const data = res.data;
-      setResetCaptchaId(data?.captcha_id || "");
-      const rawPic = data?.pic_path || "";
-      setResetCaptchaImage(
-        rawPic.startsWith("data:image") ? rawPic : `data:image/png;base64,${rawPic}`,
-      );
-    } catch {
-      setResetError("获取验证码失败");
-    }
-  }, []);
-
-  // ===================== 提交重置密码 =====================
-  const handleResetSubmit = useCallback(async () => {
-    if (!resetUsername.trim()) {
-      setResetError("请输入用户名");
-      return;
-    }
-    if (!resetPassword || !resetConfirm) {
-      setResetError("请输入新密码");
-      return;
-    }
-    if (resetPassword !== resetConfirm) {
-      setResetError("两次输入的密码不一致");
-      return;
-    }
-    if (!resetCaptchaAnswer.trim()) {
-      setResetError("请输入验证码");
-      return;
-    }
-
-    setResetLoading(true);
-    setResetError("");
-
-    try {
-      await resetPasswordApi({
-        username: resetUsername.trim(),
-        password: resetPassword,
-        captcha_id: resetCaptchaId,
-        captcha_answer: resetCaptchaAnswer.trim(),
-      });
-      setResetSuccess(true);
-    } catch (error: any) {
-      const msg =
-        error?.response?.data?.msg ||
-        error?.message ||
-        "重置失败，请重试";
-      setResetError(msg);
-      fetchResetCaptcha();
-    } finally {
-      setResetLoading(false);
-    }
-  }, [resetUsername, resetPassword, resetConfirm, resetCaptchaId, resetCaptchaAnswer, fetchResetCaptcha]);
-
-  // 重置成功后跳回登录
-  const handleBackToLogin = useCallback(() => {
-    setLoginMode("password");
-    setResetError("");
-    setResetSuccess(false);
-    setUsername(resetUsername);
-    setPassword("");
-    setCaptchaAnswer("");
-    fetchCaptcha();
-  }, [resetUsername, fetchCaptcha]);
-
-  // ===================== 注册-验证码 =====================
-  const fetchRegCaptcha = useCallback(async () => {
-    try {
-      const res = await getDigitalCaptcha();
-      const data = res.data;
-      setRegCaptchaId(data?.captcha_id || "");
-      const rawPic = data?.pic_path || "";
-      setRegCaptchaImage(
-        rawPic.startsWith("data:image") ? rawPic : `data:image/png;base64,${rawPic}`,
-      );
-    } catch {
-      setRegError("获取验证码失败");
-    }
-  }, []);
-
-  // ===================== 提交注册 =====================
-  const handleRegister = useCallback(async () => {
-    if (!regUsername.trim()) {
-      setRegError("请输入用户名");
-      return;
-    }
-    if (!regPassword || !regConfirm) {
-      setRegError("请输入密码");
-      return;
-    }
-    if (regPassword !== regConfirm) {
-      setRegError("两次输入的密码不一致");
-      return;
-    }
-    if (!regCaptchaAnswer.trim()) {
-      setRegError("请输入验证码");
-      return;
-    }
-
-    setRegLoading(true);
-    setRegError("");
-
-    try {
-      await registerByUsername({
-        username: regUsername.trim(),
-        password: regPassword,
-        captcha_id: regCaptchaId,
-        captcha_answer: regCaptchaAnswer.trim(),
-      });
-      setRegSuccess(true);
-    } catch (error: any) {
-      const msg =
-        error?.response?.data?.msg ||
-        error?.message ||
-        "注册失败，请重试";
-      setRegError(msg);
-      fetchRegCaptcha();
-    } finally {
-      setRegLoading(false);
-    }
-  }, [regUsername, regPassword, regConfirm, regCaptchaId, regCaptchaAnswer, fetchRegCaptcha]);
-
-  // 注册成功后跳回登录
-  const handleRegBackToLogin = useCallback(() => {
-    setLoginMode("password");
-    setRegError("");
-    setRegSuccess(false);
-    setUsername(regUsername);
-    setPassword("");
-    setCaptchaAnswer("");
-    fetchCaptcha();
-  }, [regUsername, fetchCaptcha]);
 
   // ===================== 初始化 =====================
   useEffect(() => {
@@ -394,8 +226,6 @@ const LoginPage = () => {
   // ===================== 渲染 =====================
   const isQrcodeError = qrcodeStatus === "expired" || qrcodeStatus === "error";
   const isQrcode = loginMode === "qrcode";
-  const isReset = loginMode === "reset";
-  const isRegister = loginMode === "register";
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -411,7 +241,7 @@ const LoginPage = () => {
         <div
           className="w-[440px] relative overflow-hidden rounded-lg"
           style={{
-            minHeight: isQrcode ? "620px" : isReset ? "720px" : isRegister ? "720px" : "680px",
+            minHeight: isQrcode ? "620px" : "680px",
             background: `radial-gradient(circle at 50% 0%, rgba(45, 52, 102, 0.5) 0%, transparent 60%),
                         linear-gradient(180deg, #0f1123 0%, #04050b 100%)`,
             boxShadow:
@@ -437,39 +267,37 @@ const LoginPage = () => {
               style={cardStyle}
             >
               {/* 模式切换标签 */}
-              {!isReset && !isRegister && (
-                <div className="flex gap-1 mb-[30px] p-1 rounded-lg"
-                  style={{ background: "rgba(255, 255, 255, 0.06)" }}>
-                  <button
-                    onClick={() => handleSwitchMode("qrcode")}
-                    className="px-5 py-1.5 rounded-md text-sm transition-colors"
-                    style={{
-                      background: isQrcode
-                        ? "linear-gradient(90deg, #a053db 0%, #4c62fb 100%)"
-                        : "transparent",
-                      color: isQrcode ? "#fff" : "rgba(255,255,255,0.5)",
-                    }}
-                  >
-                    微信登录
-                  </button>
-                  {/* <button
-                    onClick={() => handleSwitchMode("password")}
-                    className="px-5 py-1.5 rounded-md text-sm transition-colors"
-                    style={{
-                      background: !isQrcode
-                        ? "linear-gradient(90deg, #a053db 0%, #4c62fb 100%)"
-                        : "transparent",
-                      color: !isQrcode ? "#fff" : "rgba(255,255,255,0.5)",
-                    }}
-                  >
-                    账号登录
-                  </button> */}
-                </div>
-              )}
+              <div className="flex gap-1 mb-[30px] p-1 rounded-lg"
+                style={{ background: "rgba(255, 255, 255, 0.06)" }}>
+                <button
+                  onClick={() => handleSwitchMode("qrcode")}
+                  className="px-5 py-1.5 rounded-md text-sm transition-colors"
+                  style={{
+                    background: isQrcode
+                      ? "linear-gradient(90deg, #a053db 0%, #4c62fb 100%)"
+                      : "transparent",
+                    color: isQrcode ? "#fff" : "rgba(255,255,255,0.5)",
+                  }}
+                >
+                  微信登录
+                </button>
+                <button
+                  onClick={() => handleSwitchMode("password")}
+                  className="px-5 py-1.5 rounded-md text-sm transition-colors"
+                  style={{
+                    background: !isQrcode
+                      ? "linear-gradient(90deg, #a053db 0%, #4c62fb 100%)"
+                      : "transparent",
+                    color: !isQrcode ? "#fff" : "rgba(255,255,255,0.5)",
+                  }}
+                >
+                  账号登录
+                </button>
+              </div>
 
               {/* 标题 */}
               <div className="text-white text-base font-medium mb-[35px] relative pb-2 tracking-wider">
-                {isQrcode ? "微信登录" : isReset ? "重置密码" : isRegister ? "注册账号" : "账号登录"}
+                {isQrcode ? "微信登录" : "账号登录"}
                 <div
                   className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-[2px] rounded"
                   style={titleDecorationStyle}
@@ -537,7 +365,7 @@ const LoginPage = () => {
               )}
 
               {/* ==================== 账号密码登录区域 ==================== */}
-              {!isQrcode && !isReset && !isRegister && (
+              {!isQrcode && (
                 <div className="w-full px-[30px] flex flex-col gap-4">
                   {/* 用户名 */}
                   <input
@@ -598,24 +426,6 @@ const LoginPage = () => {
                     </div>
                   )}
 
-                  {/* 忘记密码 / 注册 */}
-                  <div className="flex justify-between">
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchMode("register")}
-                      className="text-xs text-gray-400 hover:text-gray-300 transition-colors"
-                    >
-                      注册账号
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchMode("reset")}
-                      className="text-xs text-gray-400 hover:text-gray-300 transition-colors"
-                    >
-                      忘记密码？
-                    </button>
-                  </div>
-
                   {/* 登录按钮 */}
                   <button
                     onClick={handlePasswordLogin}
@@ -628,240 +438,6 @@ const LoginPage = () => {
                   >
                     {pwdLoading ? "登录中..." : "登 录"}
                   </button>
-                </div>
-              )}
-
-              {/* ==================== 重置密码区域 ==================== */}
-              {isReset && (
-                <div className="w-full px-[30px] flex flex-col gap-4">
-                  {resetSuccess ? (
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="text-green-400 text-sm">密码重置成功！</div>
-                      <button
-                        onClick={handleBackToLogin}
-                        className="w-full h-[42px] rounded-lg text-white text-sm font-medium"
-                        style={{
-                          background:
-                            "linear-gradient(90deg, #a053db 0%, #4c62fb 100%)",
-                        }}
-                      >
-                        返回登录
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      {/* 用户名 */}
-                      <input
-                        type="text"
-                        placeholder="用户名 / UUID"
-                        value={resetUsername}
-                        onChange={(e) => setResetUsername(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleResetSubmit()}
-                        className="w-full h-[42px] px-3 rounded-lg text-sm placeholder-gray-500"
-                        style={inputStyle}
-                      />
-
-                      {/* 新密码 */}
-                      <input
-                        type="password"
-                        placeholder="新密码"
-                        value={resetPassword}
-                        onChange={(e) => setResetPasswordValue(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleResetSubmit()}
-                        className="w-full h-[42px] px-3 rounded-lg text-sm placeholder-gray-500"
-                        style={inputStyle}
-                      />
-
-                      {/* 确认密码 */}
-                      <input
-                        type="password"
-                        placeholder="确认新密码"
-                        value={resetConfirm}
-                        onChange={(e) => setResetConfirm(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleResetSubmit()}
-                        className="w-full h-[42px] px-3 rounded-lg text-sm placeholder-gray-500"
-                        style={inputStyle}
-                      />
-
-                      {/* 验证码 */}
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          placeholder="验证码"
-                          value={resetCaptchaAnswer}
-                          onChange={(e) => setResetCaptchaAnswer(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && handleResetSubmit()}
-                          className="flex-1 h-[42px] px-3 rounded-lg text-sm placeholder-gray-500"
-                          style={inputStyle}
-                        />
-                        <button
-                          type="button"
-                          onClick={fetchResetCaptcha}
-                          className="w-[100px] h-[42px] rounded-lg overflow-hidden shrink-0 bg-white"
-                        >
-                          {resetCaptchaImage ? (
-                            <img
-                              src={resetCaptchaImage}
-                              alt="验证码"
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
-                              加载中
-                            </div>
-                          )}
-                        </button>
-                      </div>
-
-                      {/* 错误提示 */}
-                      {resetError && (
-                        <div className="text-sm text-red-400 text-center">
-                          {resetError}
-                        </div>
-                      )}
-
-                      {/* 提交按钮 */}
-                      <button
-                        onClick={handleResetSubmit}
-                        disabled={resetLoading}
-                        className="w-full h-[42px] rounded-lg text-white text-sm font-medium transition-opacity disabled:opacity-50"
-                        style={{
-                          background:
-                            "linear-gradient(90deg, #a053db 0%, #4c62fb 100%)",
-                        }}
-                      >
-                        {resetLoading ? "提交中..." : "重置密码"}
-                      </button>
-
-                      {/* 返回登录 */}
-                      <div className="text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleSwitchMode("password")}
-                          className="text-xs text-gray-400 hover:text-gray-300 transition-colors"
-                        >
-                          返回登录
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* ==================== 注册区域 ==================== */}
-              {isRegister && (
-                <div className="w-full px-[30px] flex flex-col gap-4">
-                  {regSuccess ? (
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="text-green-400 text-sm">注册成功！</div>
-                      <button
-                        onClick={handleRegBackToLogin}
-                        className="w-full h-[42px] rounded-lg text-white text-sm font-medium"
-                        style={{
-                          background:
-                            "linear-gradient(90deg, #a053db 0%, #4c62fb 100%)",
-                        }}
-                      >
-                        前往登录
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      {/* 用户名 */}
-                      <input
-                        type="text"
-                        placeholder="用户名"
-                        value={regUsername}
-                        onChange={(e) => setRegUsername(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleRegister()}
-                        className="w-full h-[42px] px-3 rounded-lg text-sm placeholder-gray-500"
-                        style={inputStyle}
-                      />
-
-                      {/* 密码 */}
-                      <input
-                        type="password"
-                        placeholder="密码"
-                        value={regPassword}
-                        onChange={(e) => setRegPassword(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleRegister()}
-                        className="w-full h-[42px] px-3 rounded-lg text-sm placeholder-gray-500"
-                        style={inputStyle}
-                      />
-
-                      {/* 确认密码 */}
-                      <input
-                        type="password"
-                        placeholder="确认密码"
-                        value={regConfirm}
-                        onChange={(e) => setRegConfirm(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleRegister()}
-                        className="w-full h-[42px] px-3 rounded-lg text-sm placeholder-gray-500"
-                        style={inputStyle}
-                      />
-
-                      {/* 验证码 */}
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          placeholder="验证码"
-                          value={regCaptchaAnswer}
-                          onChange={(e) => setRegCaptchaAnswer(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && handleRegister()}
-                          className="flex-1 h-[42px] px-3 rounded-lg text-sm placeholder-gray-500"
-                          style={inputStyle}
-                        />
-                        <button
-                          type="button"
-                          onClick={fetchRegCaptcha}
-                          className="w-[100px] h-[42px] rounded-lg overflow-hidden shrink-0 bg-white"
-                        >
-                          {regCaptchaImage ? (
-                            <img
-                              src={regCaptchaImage}
-                              alt="验证码"
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
-                              加载中
-                            </div>
-                          )}
-                        </button>
-                      </div>
-
-                      {/* 错误提示 */}
-                      {regError && (
-                        <div className="text-sm text-red-400 text-center">
-                          {regError}
-                        </div>
-                      )}
-
-                      {/* 提交按钮 */}
-                      <button
-                        onClick={handleRegister}
-                        disabled={regLoading}
-                        className="w-full h-[42px] rounded-lg text-white text-sm font-medium transition-opacity disabled:opacity-50"
-                        style={{
-                          background:
-                            "linear-gradient(90deg, #a053db 0%, #4c62fb 100%)",
-                        }}
-                      >
-                        {regLoading ? "注册中..." : "注 册"}
-                      </button>
-
-                      {/* 返回登录 */}
-                      <div className="text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleSwitchMode("password")}
-                          className="text-xs text-gray-400 hover:text-gray-300 transition-colors"
-                        >
-                          返回登录
-                        </button>
-                      </div>
-                    </>
-                  )}
                 </div>
               )}
             </div>

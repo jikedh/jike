@@ -53,7 +53,11 @@ export const UserAvatarDropdown = ({
   const token = getJikeingToken();
   const userSeed = userId || "default-user";
   const avatarStyle = getRandomStyle(userSeed);
-  const avatarUrl = generateAvatarUrl(userSeed, avatarStyle);
+  const fallbackAvatarUrl = generateAvatarUrl(userSeed, avatarStyle);
+
+  // 优先使用用户真实上传头像，无真实头像时使用 dicebear 随机头像
+  const userInfo = useUserStore((s) => s.userInfo);
+  const avatarUrl = userInfo?.avatar || fallbackAvatarUrl;
 
   // 退出登录：清理登录缓存后返回登录页
   const handleLogout = async () => {
