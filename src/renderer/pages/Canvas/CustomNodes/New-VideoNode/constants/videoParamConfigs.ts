@@ -7,15 +7,15 @@ export type VideoParamOption = {
 
 export type VideoDurationConfig =
   | {
-      type: "slider";
-      min: number;
-      max: number;
-      step?: number;
-    }
+    type: "slider";
+    min: number;
+    max: number;
+    step?: number;
+  }
   | {
-      type: "buttons";
-      options: VideoParamOption[];
-    };
+    type: "buttons";
+    options: VideoParamOption[];
+  };
 
 export type VideoParamState = {
   aspectRatio?: string;
@@ -25,6 +25,10 @@ export type VideoParamState = {
   duration: number;
   generateAudio: boolean;
   promptExtend?: boolean;
+  /** 自动选择时长（勾选后传 duration: -1 给后端） */
+  autoDuration?: boolean;
+  /** 联网搜索增强（仅 Pro 模式可用） */
+  webSearch?: boolean;
 };
 
 export type VideoParamConfig = {
@@ -45,6 +49,14 @@ export type VideoParamConfig = {
     label: string;
   };
   promptExtend?: {
+    label: string;
+  };
+  /** 自动选择时长复选框（Seedance 等模型专用） */
+  autoDuration?: {
+    label: string;
+  };
+  /** 联网搜索增强开关（Seedance Pro 专用） */
+  webSearch?: {
     label: string;
   };
   defaults: VideoParamState;
@@ -288,6 +300,10 @@ const seedance20Config = (
   },
   duration: { type: "slider", min: 4, max: 15, step: 1 },
   audio,
+  autoDuration: { label: "自动选择时长" },
+  ...(generationMode === "pro"
+    ? { webSearch: { label: "联网搜索增强" } }
+    : {}),
   defaults: {
     aspectRatio: "16:9",
     resolution: "720P",
@@ -295,6 +311,8 @@ const seedance20Config = (
     generationMode,
     duration: 8,
     generateAudio: true,
+    autoDuration: false,
+    webSearch: false,
   },
 });
 

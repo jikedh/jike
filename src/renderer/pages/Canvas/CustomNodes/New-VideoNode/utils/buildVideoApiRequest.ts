@@ -362,19 +362,19 @@ const buildSeedanceRequest = (
     request.mode !== "text-to-video" && request.mode !== "first-last-frame";
   const videos = supportsReferenceMedia
     ? getVideos(request)
-        .slice(0, 3)
-        .map((url) => ({
-          url,
-          role: "reference_video" as const,
-        }))
+      .slice(0, 3)
+      .map((url) => ({
+        url,
+        role: "reference_video" as const,
+      }))
     : [];
   const audios = supportsReferenceMedia
     ? getAudios(request)
-        .slice(0, 3)
-        .map((url) => ({
-          url,
-          role: "reference_audio" as const,
-        }))
+      .slice(0, 3)
+      .map((url) => ({
+        url,
+        role: "reference_audio" as const,
+      }))
     : [];
   const body: Seedance20Request = {
     model: request.model,
@@ -392,10 +392,12 @@ const buildSeedanceRequest = (
       ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive"] as const,
       "16:9",
     ),
-    duration: clampNumber(request.params.duration, 4, 15, 8),
+    duration: request.params.autoDuration
+      ? -1
+      : clampNumber(request.params.duration, 4, 15, 8),
     generate_audio: request.params.generateAudio,
     seed: -1,
-    web_search: false,
+    web_search: request.params.webSearch ?? false,
   };
 
   if (request.mode === "first-last-frame" && images.length > 0) {
@@ -452,13 +454,13 @@ const buildWanxiangRequest = (request: VideoGenerateRequest) => {
     const media: Wan27I2vRequest["input"]["media"] =
       request.mode === "first-last-frame"
         ? images.slice(0, 2).map((url, index) => ({
-            type: index === 0 ? "first_frame" : "last_frame",
-            url,
-          }))
+          type: index === 0 ? "first_frame" : "last_frame",
+          url,
+        }))
         : images.slice(0, 1).map((url) => ({
-            type: "first_frame",
-            url,
-          }));
+          type: "first_frame",
+          url,
+        }));
 
     const body: Wan27I2vRequest = {
       model: "wan2.7-i2v",
