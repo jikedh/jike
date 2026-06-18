@@ -1,6 +1,7 @@
 import { Eye, EyeOff, KeyRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { updateJikeGoUserPassword } from "@/api/jikeGo";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -12,6 +13,7 @@ import {
 interface PasswordDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onSuccess?: () => void;
 }
 
 interface FieldConfig {
@@ -21,17 +23,27 @@ interface FieldConfig {
 }
 
 const FIELDS: FieldConfig[] = [
-    { key: "current", label: "当前密码", placeholder: "请输入当前登录密码" },
-    { key: "next", label: "新密码", placeholder: "8-20 位，包含字母与数字" },
+    { key: "current", label: "原密码", placeholder: "请输入当前登录密码" },
+    { key: "next", label: "新密码", placeholder: "至少 1 个字符" },
     { key: "confirm", label: "确认新密码", placeholder: "再次输入新密码" },
 ];
 
-const INITIAL_VALUES = { current: "", next: "", confirm: "" } as const;
+const INITIAL_VALUES: Record<string, string> = {
+    current: "",
+    next: "",
+    confirm: "",
+};
 
-// 密码设置弹窗（静态交互，仅做基础校验提示）
-export const PasswordDialog = ({ open, onOpenChange }: PasswordDialogProps) => {
+// 密码修改弹窗：调用 PUT /v1/user/password
+export const PasswordDialog = ({
+    open,
+    onOpenChange,
+    onSuccess,
+}: PasswordDialogProps) => {
     const [values, setValues] = useState<Record<string, string>>(INITIAL_VALUES);
-    const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>({});
+    const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>(
+        {},
+    );
     const [submitting, setSubmitting] = useState(false);
 
     // 关闭时重置内部状态，避免下次打开残留
@@ -56,8 +68,8 @@ export const PasswordDialog = ({ open, onOpenChange }: PasswordDialogProps) => {
             toast.error("请完整填写所有密码字段");
             return;
         }
-        if (values.next.length < 8 || values.next.length > 20) {
-            toast.error("新密码长度需在 8-20 位之间");
+        if (values.next.length < 1) {
+            toast.error("新密码至少需要 1 个字符");
             return;
         }
         if (values.next !== values.confirm) {
@@ -65,16 +77,28 @@ export const PasswordDialog = ({ open, onOpenChange }: PasswordDialogProps) => {
             return;
         }
         if (values.next === values.current) {
-            toast.error("新密码不能与当前密码相同");
+            toast.error("新密码不能与原密码相同");
             return;
         }
 
-        // 静态 mock：模拟一次网络请求
         setSubmitting(true);
-        await new Promise((resolve) => setTimeout(resolve, 600));
-        setSubmitting(false);
-        toast.success("密码已更新");
-        onOpenChange(false);
+        try {
+            const res: any = await updateJikeGoUserPassword({
+                old_password: values.current,
+                new_password: values.next,
+            });
+            // 后端使用 common.Response 包装：{ code, msg, data }
+            if (res?.code !== undefined && res.code !== 200 && res.code !== 10000) {
+                throw new Error(res.msg || "密码修改失败");
+            }
+            toast.success("密码已更新");
+            onSuccess?.();
+            onOpenChange(false);
+        } catch (err: any) {
+            toast.error(err?.message || "密码修改失败");
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
