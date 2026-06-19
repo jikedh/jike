@@ -252,17 +252,12 @@ export const TableNode = memo(
       (state) => state.updateNodeNickname,
     );
     const isDragging = Boolean(dragging);
-    // 优化：避免每次 .filter() 遍历全部节点，改用稳定引用
-    const selectedNodesCount = useCanvasFlowStore((state) => {
-      let count = 0;
-      for (const n of state.nodes) {
-        if (n.selected) count++;
-        if (count > 1) break; // 只需判断是否 > 1
-      }
-      return count;
-    });
+    // 仅订阅与当前节点相关的派生布尔值，避免选中数量变化时所有节点重渲染
+    const hasMultipleSelected = useCanvasFlowStore(
+      (state) => state.selectedNodesCount > 1,
+    );
     const shouldShowToolbar =
-      selected && !isDragging && selectedNodesCount <= 1;
+      selected && !isDragging && !hasMultipleSelected;
 
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isRenaming, setIsRenaming] = useState(false);
