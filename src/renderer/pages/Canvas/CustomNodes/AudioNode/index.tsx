@@ -956,11 +956,20 @@ export const AudioNode = memo(
       data.badgeLabel ??
       (isUploadAudio ? "上传音频" : "生成音频");
 
+    const handleContextMenuCreateAsset = useCallback(
+      () => dispatchCreateAssetFromNode(id),
+      [id],
+    );
+
+    const handleEditEnd = useCallback(() => setIsRenaming(false), []);
+
+    const nodeIcon = useMemo(() => <IconMusic size={14} />, []);
+
     return (
       <NodeContextMenu
         onDuplicate={handleDuplicate}
         onDelete={handleDelete}
-        onCreateAsset={() => dispatchCreateAssetFromNode(id)}
+        onCreateAsset={handleContextMenuCreateAsset}
       >
         <div
           className="group/node relative"
@@ -1003,11 +1012,11 @@ export const AudioNode = memo(
             style={{ pointerEvents: "auto" }}
           >
             <NodeNameBadge
-              icon={<IconMusic size={14} />}
+              icon={nodeIcon}
               selected={selected}
               isEditing={isRenaming}
               onEditStart={handleRenameStart}
-              onEditEnd={() => setIsRenaming(false)}
+              onEditEnd={handleEditEnd}
               onRename={handleRename}
             >
               {badgeLabel}

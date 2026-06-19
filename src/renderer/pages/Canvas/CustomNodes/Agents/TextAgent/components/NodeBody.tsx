@@ -11,6 +11,7 @@ import {
   IconUser,
   IconBrandStorybook,
 } from "@tabler/icons-react";
+import { memo } from "react";
 import { ButtonHandle } from "@/components/button-handle";
 import type { TextAgentPresetId } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
@@ -30,7 +31,7 @@ interface NodeBodyProps {
   isGenerating: boolean;
 }
 
-export const NodeBody = ({
+const NodeBodyInner = ({
   presetId,
   presetLabel,
   selected,
@@ -90,3 +91,5 @@ export const NodeBody = ({
     </div>
   );
 };
+
+export const NodeBody = memo(NodeBodyInner);

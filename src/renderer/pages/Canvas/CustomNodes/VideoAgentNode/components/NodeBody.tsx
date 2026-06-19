@@ -4,6 +4,7 @@
  */
 import { Position } from "@xyflow/react";
 import { IconVideo } from "@tabler/icons-react";
+import { memo } from "react";
 import { ButtonHandle } from "@/components/button-handle";
 import type { VideoAgentPresetId } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
@@ -19,7 +20,7 @@ interface NodeBodyProps {
   isGenerating: boolean;
 }
 
-export const NodeBody = ({
+const NodeBodyInner = ({
   presetId,
   presetLabel,
   selected,
@@ -73,3 +74,5 @@ export const NodeBody = ({
     </div>
   );
 };
+
+export const NodeBody = memo(NodeBodyInner);

@@ -1,6 +1,6 @@
 import { IconTable } from "@tabler/icons-react";
 import { type NodeProps, NodeResizer, Position } from "@xyflow/react";
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CharacterTableRow, TableNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
@@ -283,6 +283,10 @@ export const TableNode = memo(
       [id, updateNodeNickname],
     );
 
+    const handleEditEnd = useCallback(() => setIsRenaming(false), []);
+
+    const nodeIcon = useMemo(() => <IconTable size={14} />, []);
+
     const toggleFullscreen = useCallback(
       (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -396,11 +400,11 @@ export const TableNode = memo(
               )}
             >
               <NodeNameBadge
-                icon={<IconTable size={14} />}
+                icon={nodeIcon}
                 selected={selected}
                 isEditing={isRenaming}
                 onEditStart={handleRenameStart}
-                onEditEnd={() => setIsRenaming(false)}
+                onEditEnd={handleEditEnd}
                 onRename={handleRename}
               >
                 {nodeLabel}

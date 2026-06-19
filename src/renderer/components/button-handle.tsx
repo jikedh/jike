@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useRef } from "react";
 import { Position, type HandleProps } from "@xyflow/react";
 import { BaseHandle } from "@/components/base-handle";
 
@@ -15,7 +15,7 @@ const wrapperClassNames: Record<Position, string> = {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
-export function ButtonHandle({
+const ButtonHandleInner = ({
   showButton = false,
   visible,
   position = Position.Bottom,
@@ -28,7 +28,7 @@ export function ButtonHandle({
   visible?: boolean;
   followAreaSize?: number;
   buttonSize?: number;
-}) {
+}) => {
   const shouldShow = visible ?? showButton;
   const wrapperClassName = wrapperClassNames[position || Position.Bottom];
   const followAreaRef = useRef<any>(null);
@@ -156,4 +156,6 @@ export function ButtonHandle({
       )}
     </BaseHandle>
   );
-}
+};
+
+export const ButtonHandle = memo(ButtonHandleInner);

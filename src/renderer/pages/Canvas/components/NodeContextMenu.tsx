@@ -6,7 +6,7 @@ import {
   IconTrash,
   IconLayout,
 } from "@tabler/icons-react";
-import type { PropsWithChildren } from "react";
+import { memo, type PropsWithChildren } from "react";
 
 import {
   ContextMenu,
@@ -31,7 +31,7 @@ type NodeContextMenuProps = PropsWithChildren<{
   separateToNodesLabel?: string;
 }>;
 
-export const NodeContextMenu = ({
+const NodeContextMenuInner = ({
   children,
   onDuplicate,
   onDelete,
@@ -136,3 +136,5 @@ export const NodeContextMenu = ({
     </ContextMenu>
   );
 };
+
+export const NodeContextMenu = memo(NodeContextMenuInner);

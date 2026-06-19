@@ -1,6 +1,6 @@
 import { IconFileText } from "@tabler/icons-react";
 import { type NodeProps, NodeResizer, Position } from "@xyflow/react";
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import type { NoteNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
@@ -49,6 +49,10 @@ export const NoteNode = memo(
       [id, updateNodeNickname],
     );
 
+    const handleEditEnd = useCallback(() => setIsRenaming(false), []);
+
+    const nodeIcon = useMemo(() => <IconFileText size={14} />, []);
+
     const handleVisibilityClass = selected
       ? "visible opacity-100"
       : "invisible opacity-0 group-hover/node:visible group-hover/node:opacity-100";
@@ -81,11 +85,11 @@ export const NoteNode = memo(
             )}
           >
             <NodeNameBadge
-              icon={<IconFileText size={14} />}
+              icon={nodeIcon}
               selected={selected}
               isEditing={isRenaming}
               onEditStart={handleRenameStart}
-              onEditEnd={() => setIsRenaming(false)}
+              onEditEnd={handleEditEnd}
               onRename={handleRename}
             >
               {nodeLabel}

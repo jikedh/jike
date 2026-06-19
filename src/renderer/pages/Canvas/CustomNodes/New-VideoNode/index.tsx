@@ -164,6 +164,15 @@ const NewVideoNode = ({
     separateToNodes(id);
   }, [separateToNodes, id]);
 
+  const handleEditEnd = useCallback(() => setIsRenaming(false), []);
+
+  const handleCreateAsset = useCallback(
+    () => dispatchCreateAssetFromNode(id),
+    [id],
+  );
+
+  const nodeIcon = useMemo(() => <IconVideo size={14} />, []);
+
   const shouldShowToolbar = useMemo(
     () =>
       isActiveNode && !isDragging && isDragUiSettled && !hasMultipleSelected,
@@ -191,7 +200,7 @@ const NewVideoNode = ({
       onDuplicate={handleDuplicate}
       onDelete={handleDelete}
       onSeparateToNodes={handleSeparateToNodes}
-      onCreateAsset={() => dispatchCreateAssetFromNode(id)}
+      onCreateAsset={handleCreateAsset}
       hasMultipleResults={hasMultipleResults}
       separateToNodesLabel="独立为视频"
     >
@@ -234,11 +243,11 @@ const NewVideoNode = ({
           )}
         >
           <NodeNameBadge
-            icon={<IconVideo size={14} />}
+            icon={nodeIcon}
             selected={isActiveNode}
             isEditing={isRenaming}
             onEditStart={handleRenameStart}
-            onEditEnd={() => setIsRenaming(false)}
+            onEditEnd={handleEditEnd}
             onRename={handleRename}
           >
             {badgeLabel}

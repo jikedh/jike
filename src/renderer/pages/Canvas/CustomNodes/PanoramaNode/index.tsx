@@ -93,6 +93,10 @@ export const PanoramaNode = memo(
       [id, updateNodeNickname],
     );
 
+    const handleEditEnd = useCallback(() => setIsRenaming(false), []);
+
+    const nodeIcon = useMemo(() => <IconView360 size={14} />, []);
+
     const handleScreenshot = useCallback(
       async (type: "single" | "4grid" | "12grid") => {
         if (
@@ -631,11 +635,11 @@ export const PanoramaNode = memo(
             >
               {/* 左侧输入 Handle */}
               <NodeNameBadge
-                icon={<IconView360 size={14} />}
+                icon={nodeIcon}
                 selected={selected}
                 isEditing={isRenaming}
                 onEditStart={handleRenameStart}
-                onEditEnd={() => setIsRenaming(false)}
+                onEditEnd={handleEditEnd}
                 onRename={handleRename}
               >
                 {nodeLabel}

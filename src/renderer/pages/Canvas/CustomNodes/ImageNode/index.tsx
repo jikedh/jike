@@ -782,6 +782,15 @@ export const ImageNode = memo(
       [data.result, id, updateImageNodeData],
     );
 
+    const handleContextMenuCreateAsset = useCallback(
+      () => dispatchCreateAssetFromNode(id),
+      [id],
+    );
+
+    const handleEditEnd = useCallback(() => setIsRenaming(false), []);
+
+    const nodeIcon = useMemo(() => <IconPhoto size={14} />, []);
+
     return (
       <>
         <NodeContextMenu
@@ -791,7 +800,7 @@ export const ImageNode = memo(
           onGridCrop={handleContextMenuGridCrop}
           onSeparateToNodes={handleContextMenuSeparateToNodes}
           onSetAsCover={handleContextMenuSetAsCover}
-          onCreateAsset={() => dispatchCreateAssetFromNode(id)}
+          onCreateAsset={handleContextMenuCreateAsset}
           hasMultipleResults={hasMultipleResults}
         >
           <div
@@ -834,11 +843,11 @@ export const ImageNode = memo(
               )}
             >
               <NodeNameBadge
-                icon={<IconPhoto size={14} />}
+                icon={nodeIcon}
                 selected={isActiveNode}
                 isEditing={isRenaming}
                 onEditStart={handleRenameStart}
-                onEditEnd={() => setIsRenaming(false)}
+                onEditEnd={handleEditEnd}
                 onRename={handleRename}
               >
                 {badgeLabel}
