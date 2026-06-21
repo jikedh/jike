@@ -1,6 +1,6 @@
 import {
   type Viewport,
-  useReactFlow,
+  useReactFlow
 } from "@xyflow/react";
 import {
   Icon3dRotate,
@@ -11,18 +11,14 @@ import {
   IconLamp,
   IconTrash,
   IconUpload,
-  IconZoomIn,
+  IconZoomIn
 } from "@tabler/icons-react";
 import type { ChangeEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import {
-  ADOBE_GPT_IMAGE2_MODEL,
-  ADOBE_NANO_BANANA_PRO_MODEL,
-  isGrokImageGenerationModel,
-  isXimuImageGenerationModel,
   NANO_BANANA_LOCAL_MODEL,
-  NANO_BANANA_LOCAL_PLATFORM,
+  NANO_BANANA_LOCAL_PLATFORM
 } from "shared/constants/ai-models";
 import type { ImageGenerationNode } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
@@ -43,7 +39,7 @@ import { ImageLightingDialog } from "./ImageLightingDialog";
 import { InpaintDialog } from "./InpaintDialog";
 import {
   buildLightingPrompt,
-  type LightingGenerationConfig,
+  type LightingGenerationConfig
 } from "./utils/lighting";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 
@@ -409,18 +405,10 @@ export const ImageToolbar = memo(
         const isNiji7Model = config.model === "midjourney-niji7";
         const isMidjourneyModel =
           config.model === "midjourney" || isNiji7Model;
-        const isAdobeImageModel =
-          config.model === ADOBE_GPT_IMAGE2_MODEL ||
-          config.model === ADOBE_NANO_BANANA_PRO_MODEL;
-        const isXimuImageModel = isXimuImageGenerationModel(config.model);
-        const isGrokImageModel = isGrokImageGenerationModel(config.model);
         const isNanoBananaLocalModel =
           config.model === NANO_BANANA_LOCAL_MODEL &&
           config.platform === NANO_BANANA_LOCAL_PLATFORM;
         const isLocalDirectModel =
-          isAdobeImageModel ||
-          isXimuImageModel ||
-          isGrokImageModel ||
           isNanoBananaLocalModel;
         const backendModel = isNiji7Model ? "midjourney" : config.model;
         const size = config.size ?? data.size ?? "1:1";

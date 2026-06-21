@@ -17,21 +17,6 @@ export const GPTIMAGE2_SIZES = [
   { label: "4:5", value: "4:5", description: "竖向4:5" },
 ];
 
-export const ADOBE_GPTIMAGE2_SIZES = GPTIMAGE2_SIZES.filter((item) =>
-  [
-    "1:1",
-    "5:4",
-    "9:16",
-    "21:9",
-    "16:9",
-    "3:2",
-    "4:3",
-    "4:5",
-    "3:4",
-    "2:3",
-  ].includes(item.value),
-);
-
 type GptImage2ParamsPanelProps = {
   size: string;
   resolution: string;

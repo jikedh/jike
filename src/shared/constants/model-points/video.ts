@@ -1,7 +1,4 @@
 export const VIDEO_MODEL_POINTS: Record<string, number> = {
-  "adobe-sora2-pro": 0,
-  "adobe-veo31": 0,
-  "adobe-veo31-fast": 0,
   "doubao-seedance-2.0": 60, // 默认 720p 基础分
   "doubao-seedance-2.0-fast": 48, // 默认 720p 基础分
   "doubao-seedance-2.0-pro": 60, // 默认 720p 基础分

@@ -4,60 +4,25 @@ import {
   getCanvasDataKey,
   getLocalFilePath,
   loadCanvasData,
-  readMediaFromLocal,
   saveCanvasData,
   saveGeneratedImageToLocal,
-  saveGeneratedVideoToLocal,
+  saveGeneratedVideoToLocal
 } from "service/projectStorage";
 import {
-  ADOBE_GPT_IMAGE2_MODEL,
-  ADOBE_NANO_BANANA_PRO_MODEL,
-  GROK_IMAGE_EDIT_MODEL,
-  GROK_IMAGE_LITE_MODEL,
-  GROK_IMAGE_MODEL,
-  GROK_IMAGE_PRO_MODEL,
   getVisibleImageModels,
-  isAdobeImageGenerationModel,
-  isGrokImageGenerationModel,
-  isRunningHubImageGenerationModel,
-  isXimuGptImageGenerationModel,
-  isXimuImageGenerationModel,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
   RUNNINGHUB_GPT_IMAGE2_MODEL,
-  RUNNINGHUB_NANO_BANANA_PRO_MODEL,
-  XIMU_GPT_IMAGE2_VIP_MODEL,
-  XIMU_GPT_IMAGE2_MODEL,
-  XIMU_NANO_BANANA2_MODEL,
-  XIMU_NANO_BANANA_PRO_MODEL,
+  RUNNINGHUB_NANO_BANANA_PRO_MODEL
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import type { GeminiYwResponseBody } from "shared/types/detail/Yunwu/gemini-yw";
-import {
-  buildFireflyGptImageToImageRequest,
-  buildFireflyGptText2ImageRequest,
-  normalizeFireflyGptImageInputUrls,
-} from "shared/types/detail/Adobe2API/images/gpt-image";
-import {
-  buildXimuGptImageRequest,
-  buildXimuNanoBananaRequest,
-  collectXimuImageUrls,
-  extractXimuTaskId,
-  getXimuMessage,
-  getXimuResultPayload,
-  resolveXimuGptAspectRatio,
-  resolveXimuImageSize,
-  resolveXimuNanoBanana2AspectRatio,
-  resolveXimuNanoBananaProAspectRatio,
-  XIMU_TASK_FAILED_STATUSES,
-  XIMU_TASK_SUCCESS_STATUSES,
-} from "shared/types/detail/ximu";
 import type {
   AllNodeType,
   AudioGenerationNode,
   EdgeType,
   ImageGenerationNode,
-  NewVideoGenerationNode,
+  NewVideoGenerationNode
 } from "shared/types/flow";
 import type {
   AddNodeOptions,
@@ -65,7 +30,7 @@ import type {
   CanvasGroup,
   CanvasPersistedState,
   NodePosition,
-  NodeType,
+  NodeType
 } from "shared/types/zustand/canvas-flow";
 import {
   getGroupBounds,
@@ -73,23 +38,22 @@ import {
   layoutGroupGrid,
   layoutGroupHorizontally,
   normalizeGroupNodeIds,
-  translateNodesByIds,
+  translateNodesByIds
 } from "shared/utils/canvasGroups";
 import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
-import { normalizeLocalGeminiErrorDetail } from "shared/utils/localGeminiErrors";
 import {
   getRemoteMediaUrl,
-  hydrateMediaForRuntime,
+  hydrateMediaForRuntime
 } from "shared/utils/mediaPersistence";
 import {
   appendMediaSequences,
-  assignMissingMediaSequences,
+  assignMissingMediaSequences
 } from "shared/utils/mediaSequence";
 import {
   buildPastedNodesAndEdges,
   createCopiedEdgeTemplates,
   createCopiedNodeTemplates,
-  syncMediaUrlsForPastedEdges,
+  syncMediaUrlsForPastedEdges
 } from "shared/utils/canvasCopyPaste";
 import { resetNodeDataRuntimeState } from "shared/utils/nodeCopy";
 import { nodeFactoryMap } from "shared/utils/nodeFactory";
@@ -114,7 +78,7 @@ import {
   VIDEO_RESULT_WAIT_TIMEOUT,
   VIDEO_TIMEOUT,
   videoPollingControllers,
-  wait,
+  wait
 } from "shared/utils/reactflowUtils";
 import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
 import { toChineseNumber } from "shared/utils/utils";
@@ -123,20 +87,10 @@ import { withVideoPosterFields } from "shared/utils/videoPoster";
 import { toast } from "sonner";
 import { create } from "zustand";
 import {
-  createAdobe2ApiChatImageGeneration,
-  createAdobe2ApiGptImageToImageGeneration,
-  createAdobe2ApiImageGeneration,
-  createAdobe2ApiVideoGeneration,
   createDashscopeVideoSynthesis,
-  createGrok2ApiChatImageEditGeneration,
-  createGrok2ApiImageEditGeneration,
-  createGrok2ApiImageGeneration,
-  createGrok2ApiVideoGeneration,
   createKuaiziHappyHorseVideoTask,
   createKuaiziKlingVideoTask,
   createImageGeneration,
-  createXimuGptImageGeneration,
-  createXimuNanoBananaGeneration,
   createLzVideoTask,
   fetchMjTask,
   generateGeminiContent,
@@ -145,8 +99,7 @@ import {
   getLzVideoTaskStatus,
   getKuaiziHappyHorseVideoTaskStatus,
   getKuaiziKlingVideoTaskStatus,
-  getXimuImageResult,
-  submitMjImagine,
+  submitMjImagine
 } from "@/api/ai";
 import {
   confirmDesktopProxyScore,
@@ -159,20 +112,16 @@ import {
   createRhartImageNProOfficialTextToImage,
   createRhartImageNProTextToImage,
   queryRunningHubV2Task,
-  refundDesktopProxyScore,
+  refundDesktopProxyScore
 } from "@/api/jikeGo";
 import {
   getClosestAspectRatio,
   getImageDimensions,
   getNodeSizeByAspectRatio,
-  getVideoDimensions,
+  getVideoDimensions
 } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { buildMidjourneyPrompt } from "@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt";
-import {
-  getVisibleVideoModels,
-  isAdobeVideoGenerationModel,
-  isGrokVideoGenerationModel,
-} from "@/pages/Canvas/CustomNodes/New-VideoNode/constants/videoModelCapabilities";
+import { getVisibleVideoModels } from "@/pages/Canvas/CustomNodes/New-VideoNode/constants/videoModelCapabilities";
 import { aiVideoTrackingService } from "@/services/aiVideoTracking";
 import { useUserStore } from "@/stores/useUserStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
@@ -397,146 +346,6 @@ const resolveLocalGeminiImageModel = ({
 
   throw new Error(
     `Nano Banana Pro 暂不支持 ${size ?? "未知比例"} / ${resolution ?? "未知分辨率"}，请使用 1:1、16:9、9:16、4:3、3:4，并选择 1K/2K/4K`,
-  );
-};
-
-const ADOBE_IMAGE_RATIO_VALUES = new Set([
-  "1:1",
-  "5:4",
-  "9:16",
-  "21:9",
-  "16:9",
-  "3:2",
-  "4:3",
-  "4:5",
-  "3:4",
-  "2:3",
-]);
-
-const ADOBE_NANO_BANANA_PRO_RATIO_VALUES = new Set([
-  "1:1",
-  "16:9",
-  "9:16",
-  "4:3",
-  "3:4",
-]);
-
-const toAdobeRatioSuffix = (ratio?: string) =>
-  (ratio || "1:1").replace(":", "x");
-
-const toAdobeResolutionSuffix = (resolution?: string) =>
-  (resolution || "2K").toLowerCase();
-
-const resolveAdobeImageModel = ({
-  model,
-  size,
-  resolution,
-}: {
-  model?: string;
-  size?: string;
-  resolution?: string;
-}) => {
-  const ratio = size || "1:1";
-  const resolutionSuffix = toAdobeResolutionSuffix(resolution);
-  const ratioSuffix = toAdobeRatioSuffix(ratio);
-
-  if (model === ADOBE_GPT_IMAGE2_MODEL) {
-    if (!ADOBE_IMAGE_RATIO_VALUES.has(ratio)) {
-      throw new Error(`GPT-Image-2 Adobe 暂不支持 ${ratio} 比例`);
-    }
-    return `firefly-gpt-image-${resolutionSuffix}-${ratioSuffix}`;
-  }
-
-  if (model === ADOBE_NANO_BANANA_PRO_MODEL) {
-    if (!ADOBE_NANO_BANANA_PRO_RATIO_VALUES.has(ratio)) {
-      throw new Error(`Nano Banana Pro Adobe 暂不支持 ${ratio} 比例`);
-    }
-    return `firefly-nano-banana-pro-${resolutionSuffix}-${ratioSuffix}`;
-  }
-
-  return undefined;
-};
-
-const resolveXimuImageModel = (model?: string) => {
-  if (model === XIMU_GPT_IMAGE2_MODEL) {
-    return "gpt-image-2" as const;
-  }
-  if (model === XIMU_GPT_IMAGE2_VIP_MODEL) {
-    return "gpt-image-2-vip" as const;
-  }
-  if (model === XIMU_NANO_BANANA2_MODEL) {
-    return "nano-banana-2" as const;
-  }
-  if (model === XIMU_NANO_BANANA_PRO_MODEL) {
-    return "nano-banana-pro" as const;
-  }
-  return undefined;
-};
-
-const resolveGrokImageModel = (model?: string) => {
-  if (model === GROK_IMAGE_EDIT_MODEL) {
-    return "grok-imagine-image-edit" as const;
-  }
-  if (model === GROK_IMAGE_LITE_MODEL) {
-    return "grok-imagine-image-lite" as const;
-  }
-  if (model === GROK_IMAGE_MODEL) {
-    return "grok-imagine-image" as const;
-  }
-  if (model === GROK_IMAGE_PRO_MODEL) {
-    return "grok-imagine-image-pro" as const;
-  }
-  return undefined;
-};
-
-const resolveGrokImageSize = (size?: string) =>
-  (
-    ({
-      "16:9": "1280x720",
-      "9:16": "720x1280",
-      "3:2": "1792x1024",
-      "2:3": "1024x1792",
-      "1:1": "1024x1024",
-    }) as const
-  )[size || ""] ?? "1024x1024";
-
-const waitForXimuImageResult = async (taskId: string) => {
-  const startedAt = Date.now();
-  let lastStatus = "";
-  let lastMessage = "";
-
-  while (Date.now() - startedAt < IMAGE_TIMEOUT) {
-    const response = await getXimuImageResult(taskId);
-    const payload = getXimuResultPayload(response);
-    const status = String(
-      payload.status || response?.status || "",
-    ).toLowerCase();
-    lastStatus = status || lastStatus;
-    lastMessage = getXimuMessage(response) || lastMessage;
-
-    if (XIMU_TASK_FAILED_STATUSES.includes(status as any)) {
-      throw new Error(lastMessage || "西牧生图失败");
-    }
-
-    const urls = collectXimuImageUrls(payload);
-    if (
-      urls.length > 0 &&
-      (!status || XIMU_TASK_SUCCESS_STATUSES.includes(status as any))
-    ) {
-      return urls[0];
-    }
-
-    if (XIMU_TASK_SUCCESS_STATUSES.includes(status as any)) {
-      throw new Error("西牧生图已完成，但查询结果中没有返回图片地址");
-    }
-
-    await wait(5000);
-  }
-
-  throw new Error(
-    lastStatus
-      ? `西牧生图超时，请稍后重试（最后状态：${lastStatus}${lastMessage ? `，${lastMessage}` : ""}）`
-      : "西牧生图超时，请稍后重试",
   );
 };
 
@@ -799,23 +608,6 @@ const extractMarkdownMediaUrl = (content: unknown, kind: "image" | "video") => {
   return text.match(bareUrlPattern)?.[1];
 };
 
-const normalizeGrok2ApiMediaUrl = async (url: string) => {
-  if (!url.startsWith("/v1/files/")) {
-    return url;
-  }
-
-  try {
-    const state = await window.grok2api?.getState();
-    if (state?.baseUrl) {
-      return `${state.baseUrl.replace(/\/+$/, "")}${url}`;
-    }
-  } catch (error) {
-    console.warn("[Grok2API] 获取本地媒体地址失败:", error);
-  }
-
-  return url;
-};
-
 const extractExtensionFromUrl = (url: string, fallback: string) => {
   try {
     const pathname = new URL(url).pathname;
@@ -857,92 +649,6 @@ const mirrorGeneratedImageUrlToOss = async (url: string) => {
 
   return ossResult.url;
 };
-
-const isXimuSupportedReferenceUrl = (url: string) =>
-  /^https?:\/\//i.test(url) ||
-  /^data:image\/[a-zA-Z0-9.+-]+;base64,/i.test(url);
-
-const getImageMimeTypeFromPath = (path: string) => {
-  const normalizedPath = path.split("?")[0].split("#")[0].toLowerCase();
-  if (normalizedPath.endsWith(".jpg") || normalizedPath.endsWith(".jpeg")) {
-    return "image/jpeg";
-  }
-  if (normalizedPath.endsWith(".webp")) {
-    return "image/webp";
-  }
-  if (normalizedPath.endsWith(".gif")) {
-    return "image/gif";
-  }
-  return "image/png";
-};
-
-const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
-  let binary = "";
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    const chunk = bytes.subarray(index, index + chunkSize);
-    binary += String.fromCharCode(...chunk);
-  }
-  return btoa(binary);
-};
-
-const normalizeXimuReferenceUrls = async (urls: string[]) => {
-  const normalizedUrls: string[] = [];
-
-  for (const rawUrl of urls) {
-    const url = String(rawUrl || "").trim();
-    if (!url) {
-      continue;
-    }
-
-    if (isXimuSupportedReferenceUrl(url)) {
-      normalizedUrls.push(url);
-      continue;
-    }
-
-    const localMedia = await readMediaFromLocal(url);
-    if (!localMedia) {
-      throw new Error("西牧图生图参考图不是公网图片，且本地素材读取失败");
-    }
-
-    normalizedUrls.push(
-      `data:${getImageMimeTypeFromPath(url)};base64,${arrayBufferToBase64(localMedia)}`,
-    );
-  }
-
-  return normalizedUrls;
-};
-
-const getXimuRequestErrorText = (error: unknown, fallback: string) => {
-  const requestMessage = getRequestErrorMessage(error);
-  const errorMessage = error instanceof Error ? error.message : "";
-  const message =
-    requestMessage && requestMessage !== "请求失败，请稍后重试"
-      ? requestMessage
-      : errorMessage;
-
-  return message ? `${fallback}：${message}` : fallback;
-};
-
-const isAdobeVideoRequest = (payload: Record<string, unknown>) =>
-  typeof payload.model === "string" &&
-  (payload.model.startsWith("firefly-sora2-pro-") ||
-    payload.model.startsWith("firefly-veo31-") ||
-    payload.model.startsWith("firefly-veo31-fast-")) &&
-  Array.isArray(payload.messages);
-
-const isGrokVideoRequest = (
-  payload: Record<string, unknown>,
-): payload is {
-  model: "grok-imagine-video";
-  messages: unknown[];
-  video_config: Record<string, unknown>;
-} =>
-  payload.model === "grok-imagine-video" &&
-  Array.isArray(payload.messages) &&
-  typeof payload.video_config === "object" &&
-  payload.video_config !== null;
 
 const inferImageMimeTypeFromUri = (uri: string): string | undefined => {
   const dataUriMatch = uri.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
@@ -2792,9 +2498,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         defaultImagePlatform,
         defaultImageSize,
         defaultImageResolution,
-        adobeChannelModelsEnabled,
-        ximuChannelModelsEnabled,
-        grokChannelModelsEnabled,
         defaultNewVideoModel,
         defaultNewVideoAspectRatio,
         defaultNewVideoDuration,
@@ -2804,25 +2507,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         defaultNewVideoPromptExtend,
       } = useChatSettingsStore.getState();
       const visibleNewVideoModelIds = new Set(
-        getVisibleVideoModels(
-          adobeChannelModelsEnabled,
-          grokChannelModelsEnabled,
-        ).map((model) => model.id),
+        getVisibleVideoModels().map((model) => model.id),
       );
-      const visibleImageModel = getVisibleImageModels(
-        adobeChannelModelsEnabled,
-        ximuChannelModelsEnabled,
-        grokChannelModelsEnabled,
-      ).find(
+      const visibleImageModel = getVisibleImageModels().find(
         (item) =>
           item.model === defaultImageModel &&
           item.platform === defaultImagePlatform,
       );
-      const isDefaultHiddenChannelImageModel =
-        (isAdobeImageGenerationModel(defaultImageModel) ||
-          isXimuImageGenerationModel(defaultImageModel) ||
-          isGrokImageGenerationModel(defaultImageModel)) &&
-        !visibleImageModel;
       const finalNode =
         newNode.type === "audioNode"
           ? {
@@ -2837,12 +2528,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               ...newNode,
               data: {
                 ...newNode.data,
-                model: isDefaultHiddenChannelImageModel
-                  ? newNode.data.model
-                  : defaultImageModel || newNode.data.model,
-                platform: isDefaultHiddenChannelImageModel
-                  ? newNode.data.platform
-                  : defaultImagePlatform || newNode.data.platform,
+                model: defaultImageModel || newNode.data.model,
+                platform: defaultImagePlatform || newNode.data.platform,
                 size: defaultImageSize || newNode.data.size,
                 resolution: defaultImageResolution || newNode.data.resolution,
               },
@@ -2863,20 +2550,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                       "pixverse",
                       "happyhorse",
                       "happyhorse-1.0-r2v",
-                      "adobe-sora2-pro",
-                      "grok-imagine-video",
                       "keling",
                       "kling-v3-omni",
                     ].includes(defaultNewVideoModel ?? "") &&
                       visibleNewVideoModelIds.has(defaultNewVideoModel ?? "")
                       ? defaultNewVideoModel
-                      : isAdobeVideoGenerationModel(newNode.data.model) &&
-                        !visibleNewVideoModelIds.has(newNode.data.model)
-                        ? "seedance-2.0-pro"
-                        : isGrokVideoGenerationModel(newNode.data.model) &&
-                          !visibleNewVideoModelIds.has(newNode.data.model)
-                          ? "seedance-2.0-pro"
-                          : newNode.data.model,
+                      : newNode.data.model,
                   aspect_ratio:
                     defaultNewVideoAspectRatio || newNode.data.aspect_ratio,
                   duration: defaultNewVideoDuration || newNode.data.duration,
@@ -3634,104 +3313,102 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         } else {
           // 非 Midjourney 模型：先检查是否为 RunningHub 渠道（低价->官方回退）
           const payloadOriginalModel = payload.originalModel ?? payload.model;
-          if (isRunningHubImageGenerationModel(payloadOriginalModel)) {
-            // RunningHub 直接生成（可能返回立即地址或 taskId）
-            set((state) => ({
-              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-                ...data,
-                status: GenerationStatus.IN_PROGRESS,
-                progress: 0,
-              })),
-            }));
+          // RunningHub 直接生成（可能返回立即地址或 taskId）
+          set((state) => ({
+            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+              ...data,
+              status: GenerationStatus.IN_PROGRESS,
+              progress: 0,
+            })),
+          }));
 
-            try {
-              const resultUrl = await generateRunningHubImageWithFallback({
-                model: payloadOriginalModel,
-                prompt: payload.prompt,
-                imageUrls: Array.isArray(payload.image_urls)
-                  ? payload.image_urls
-                  : [],
-                size: payload.size,
-                resolution: payload.resolution,
-                scoreCost,
-              });
+          try {
+            const resultUrl = await generateRunningHubImageWithFallback({
+              model: payloadOriginalModel,
+              prompt: payload.prompt,
+              imageUrls: Array.isArray(payload.image_urls)
+                ? payload.image_urls
+                : [],
+              size: payload.size,
+              resolution: payload.resolution,
+              scoreCost,
+            });
 
-              const ossUrl = await mirrorGeneratedImageUrlToOss(resultUrl);
-              const projectId = get().projectId;
-              let resultItem = {
-                url: ossUrl,
-                remoteUrl: ossUrl,
-                ...(ossUrl === resultUrl ? {} : { originalUrl: resultUrl }),
-              } as any;
+            const ossUrl = await mirrorGeneratedImageUrlToOss(resultUrl);
+            const projectId = get().projectId;
+            let resultItem = {
+              url: ossUrl,
+              remoteUrl: ossUrl,
+              ...(ossUrl === resultUrl ? {} : { originalUrl: resultUrl }),
+            } as any;
 
-              if (projectId) {
-                try {
-                  const fileName = await saveGeneratedImageToLocal(
-                    projectId,
-                    ossUrl,
-                    extractExtensionFromUrl(resultUrl, "png"),
-                  );
-                  if (fileName) {
-                    resultItem = {
-                      ...resultItem,
-                      localName: fileName,
-                      localPath: getLocalFilePath(
-                        projectId,
-                        "generate_image",
-                        fileName,
-                      ),
-                    };
-                  }
-                } catch (saveError) {
-                  console.error(
-                    "[startImageGeneration] 保存 RunningHub 图片到本地失败:",
-                    saveError,
-                  );
-                }
-              }
-
-              set((state) => ({
-                nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-                  const existingData = data.result?.data ?? [];
-                  const mergedData = appendMediaSequences(existingData, [
-                    resultItem,
-                  ]);
-                  return {
-                    ...data,
-                    status: GenerationStatus.COMPLETED,
-                    progress: 100,
-                    result: { type: "image", data: mergedData },
-                    error: undefined,
+            if (projectId) {
+              try {
+                const fileName = await saveGeneratedImageToLocal(
+                  projectId,
+                  ossUrl,
+                  extractExtensionFromUrl(resultUrl, "png"),
+                );
+                if (fileName) {
+                  resultItem = {
+                    ...resultItem,
+                    localName: fileName,
+                    localPath: getLocalFilePath(
+                      projectId,
+                      "generate_image",
+                      fileName,
+                    ),
                   };
-                }),
-              }));
-              saveCurrentCanvasToHistory();
-              if (useChatSettingsStore.getState().autoSaveEnabled) {
-                get().saveGraph();
+                }
+              } catch (saveError) {
+                console.error(
+                  "[startImageGeneration] 保存 RunningHub 图片到本地失败:",
+                  saveError,
+                );
               }
-              await refreshBalanceAfterGeneration({
-                scene: "image",
-                nodeId,
-                model: payloadOriginalModel,
-                requiredPoints: payload.requiredPoints,
-              });
-
-              // 调整 pending count
-              const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
-              if (remaining <= 0) pendingTaskCounts.delete(nodeId);
-              else pendingTaskCounts.set(nodeId, remaining);
-
-              return;
-            } catch (rhError) {
-              console.error(
-                "[startImageGeneration] RunningHub 生图失败:",
-                rhError,
-              );
-              const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
-              if (remaining <= 0) pendingTaskCounts.delete(nodeId);
-              else pendingTaskCounts.set(nodeId, remaining);
-              throw rhError;
             }
+
+            set((state) => ({
+              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+                const existingData = data.result?.data ?? [];
+                const mergedData = appendMediaSequences(existingData, [
+                  resultItem,
+                ]);
+                return {
+                  ...data,
+                  status: GenerationStatus.COMPLETED,
+                  progress: 100,
+                  result: { type: "image", data: mergedData },
+                  error: undefined,
+                };
+              }),
+            }));
+            saveCurrentCanvasToHistory();
+            if (useChatSettingsStore.getState().autoSaveEnabled) {
+              get().saveGraph();
+            }
+            await refreshBalanceAfterGeneration({
+              scene: "image",
+              nodeId,
+              model: payloadOriginalModel,
+              requiredPoints: payload.requiredPoints,
+            });
+
+            // 调整 pending count
+            const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
+            if (remaining <= 0) pendingTaskCounts.delete(nodeId);
+            else pendingTaskCounts.set(nodeId, remaining);
+
+            return;
+          } catch (rhError) {
+            console.error(
+              "[startImageGeneration] RunningHub 生图失败:",
+              rhError,
+            );
+            const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
+            if (remaining <= 0) pendingTaskCounts.delete(nodeId);
+            else pendingTaskCounts.set(nodeId, remaining);
+            throw rhError;
           }
 
           // 非 RunningHub：创建图片生成任务，获取 task_id 后启动轮询
@@ -3883,13 +3560,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       });
       const imageUrls = Array.isArray(rawImageUrls) ? rawImageUrls : [];
       const originalModel = payload.originalModel ?? payload.model;
-      const adobeImageModel = resolveAdobeImageModel({
-        model: originalModel,
-        size,
-        resolution,
-      });
-      const ximuImageModel = resolveXimuImageModel(originalModel);
-      const grokImageModel = resolveGrokImageModel(originalModel);
       const scoreCost = Number(requiredPoints ?? 0) || undefined;
       let ledgerBizId: string | undefined;
 
@@ -3917,485 +3587,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }));
 
       try {
-        if (adobeImageModel) {
-          set((state) => ({
-            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-              ...data,
-              status: GenerationStatus.IN_PROGRESS,
-              progress: 0,
-            })),
-          }));
-
-          const gptImageUrls =
-            originalModel === ADOBE_GPT_IMAGE2_MODEL
-              ? normalizeFireflyGptImageInputUrls(imageUrls)
-              : imageUrls;
-
-          const response =
-            gptImageUrls.length > 0
-              ? originalModel === ADOBE_GPT_IMAGE2_MODEL
-                ? await createAdobe2ApiGptImageToImageGeneration(
-                  buildFireflyGptImageToImageRequest({
-                    model: adobeImageModel as any,
-                    prompt,
-                    imageUrls: gptImageUrls,
-                  }),
-                )
-                : await createAdobe2ApiChatImageGeneration({
-                  model: adobeImageModel as any,
-                  messages: [
-                    {
-                      role: "user" as const,
-                      content: [
-                        { type: "text" as const, text: prompt || "" },
-                        ...imageUrls.map((url: string) => ({
-                          type: "image_url" as const,
-                          image_url: { url },
-                        })),
-                      ],
-                    },
-                  ],
-                })
-              : await createAdobe2ApiImageGeneration(
-                originalModel === ADOBE_GPT_IMAGE2_MODEL
-                  ? buildFireflyGptText2ImageRequest({
-                    model: adobeImageModel as any,
-                    prompt,
-                  })
-                  : {
-                    model: adobeImageModel as any,
-                    prompt: prompt || "",
-                    response_format: "url",
-                  },
-              );
-
-          const responseAny = response as any;
-          const responseUrl =
-            responseAny?.data?.[0]?.url ??
-            extractMarkdownMediaUrl(
-              responseAny?.choices?.[0]?.message?.content,
-              "image",
-            );
-          if (!responseUrl) {
-            throw new Error("Adobe2API 未返回图片地址");
-          }
-
-          const ossUrl = await mirrorGeneratedImageUrlToOss(responseUrl);
-          const projectId = get().projectId;
-          let resultItem: {
-            url: string;
-            remoteUrl: string;
-            originalUrl?: string;
-            localName?: string;
-            localPath?: string;
-          } = {
-            url: ossUrl,
-            remoteUrl: ossUrl,
-            ...(ossUrl === responseUrl ? {} : { originalUrl: responseUrl }),
-          };
-          if (projectId) {
-            try {
-              const fileName = await saveGeneratedImageToLocal(
-                projectId,
-                ossUrl,
-                extractExtensionFromUrl(responseUrl, "png"),
-              );
-
-              if (fileName) {
-                resultItem = {
-                  ...resultItem,
-                  localName: fileName,
-                  localPath: getLocalFilePath(
-                    projectId,
-                    "generate_image",
-                    fileName,
-                  ),
-                };
-              }
-            } catch (saveError) {
-              console.error(
-                "[startGeminiPro2Generation] 保存 Adobe 图片到本地失败:",
-                saveError,
-              );
-            }
-          }
-
-          set((state) => ({
-            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-              const existingData = data.result?.data ?? [];
-              const mergedData = appendMediaSequences(existingData, [
-                resultItem,
-              ]);
-              return {
-                ...data,
-                status: GenerationStatus.COMPLETED,
-                progress: 100,
-                result: {
-                  type: "image",
-                  data: mergedData,
-                },
-                error: undefined,
-              };
-            }),
-          }));
-          saveCurrentCanvasToHistory();
-          if (useChatSettingsStore.getState().autoSaveEnabled) {
-            get().saveGraph();
-          }
-          await refreshBalanceAfterGeneration({
-            scene: "image",
-            nodeId,
-            model: originalModel,
-            requiredPoints: payload.requiredPoints,
-          });
-          return;
-        }
-
-        if (ximuImageModel) {
-          const ximuCardCode = useChatSettingsStore
-            .getState()
-            .ximuCardCode.trim();
-          if (!ximuCardCode) {
-            throw new Error("请先在模型管理的西牧渠道填写卡密");
-          }
-
-          set((state) => ({
-            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-              ...data,
-              status: GenerationStatus.IN_PROGRESS,
-              progress: 0,
-            })),
-          }));
-
-          const ximuReferenceUrls = await normalizeXimuReferenceUrls(imageUrls);
-          const request = isXimuGptImageGenerationModel(originalModel)
-            ? buildXimuGptImageRequest({
-              model: ximuImageModel as any,
-              cardCode: ximuCardCode,
-              prompt,
-              aspectRatio: resolveXimuGptAspectRatio({
-                model: ximuImageModel as any,
-                size,
-                resolution,
-              }),
-              urls: ximuReferenceUrls,
-            })
-            : buildXimuNanoBananaRequest({
-              model: ximuImageModel as any,
-              cardCode: ximuCardCode,
-              prompt,
-              aspectRatio:
-                originalModel === XIMU_NANO_BANANA2_MODEL
-                  ? resolveXimuNanoBanana2AspectRatio(size)
-                  : resolveXimuNanoBananaProAspectRatio(size),
-              imageSize: resolveXimuImageSize(resolution),
-              urls: ximuReferenceUrls,
-            });
-
-          let submitResponse;
-          try {
-            submitResponse = isXimuGptImageGenerationModel(originalModel)
-              ? await createXimuGptImageGeneration(request as any)
-              : await createXimuNanoBananaGeneration(request as any);
-          } catch (submitError) {
-            throw new Error(
-              getXimuRequestErrorText(submitError, "西牧提交生图失败"),
-            );
-          }
-
-          const taskId = extractXimuTaskId(submitResponse);
-          if (!taskId) {
-            throw new Error("西牧渠道未返回任务 ID");
-          }
-
-          let responseUrl: string;
-          try {
-            responseUrl = await waitForXimuImageResult(taskId);
-          } catch (pollError) {
-            throw new Error(
-              getXimuRequestErrorText(pollError, "西牧查询生图结果失败"),
-            );
-          }
-          const ossUrl = await mirrorGeneratedImageUrlToOss(responseUrl);
-          const projectId = get().projectId;
-          let resultItem: {
-            url: string;
-            remoteUrl: string;
-            originalUrl?: string;
-            localName?: string;
-            localPath?: string;
-          } = {
-            url: ossUrl,
-            remoteUrl: ossUrl,
-            ...(ossUrl === responseUrl ? {} : { originalUrl: responseUrl }),
-          };
-
-          if (projectId) {
-            try {
-              const fileName = await saveGeneratedImageToLocal(
-                projectId,
-                ossUrl,
-                extractExtensionFromUrl(responseUrl, "png"),
-              );
-
-              if (fileName) {
-                resultItem = {
-                  ...resultItem,
-                  localName: fileName,
-                  localPath: getLocalFilePath(
-                    projectId,
-                    "generate_image",
-                    fileName,
-                  ),
-                };
-              }
-            } catch (saveError) {
-              console.error(
-                "[startGeminiPro2Generation] 保存西牧图片到本地失败:",
-                saveError,
-              );
-            }
-          }
-
-          set((state) => ({
-            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-              const existingData = data.result?.data ?? [];
-              const mergedData = appendMediaSequences(existingData, [
-                resultItem,
-              ]);
-              return {
-                ...data,
-                status: GenerationStatus.COMPLETED,
-                progress: 100,
-                result: {
-                  type: "image",
-                  data: mergedData,
-                },
-                error: undefined,
-              };
-            }),
-          }));
-          saveCurrentCanvasToHistory();
-          if (useChatSettingsStore.getState().autoSaveEnabled) {
-            get().saveGraph();
-          }
-          await refreshBalanceAfterGeneration({
-            scene: "image",
-            nodeId,
-            model: originalModel,
-            requiredPoints: payload.requiredPoints,
-          });
-          return;
-        }
-
-        if (grokImageModel) {
-          set((state) => ({
-            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-              ...data,
-              status: GenerationStatus.IN_PROGRESS,
-              progress: 0,
-            })),
-          }));
-
-          const grokReferenceUrls = imageUrls.filter(Boolean).slice(0, 7);
-          if (
-            grokImageModel === "grok-imagine-image-edit" &&
-            grokReferenceUrls.length > 0
-          ) {
-            const response = await createGrok2ApiImageEditGeneration({
-              model: "grok-imagine-image-edit",
-              prompt: prompt || "",
-              imageUrls: grokReferenceUrls,
-              n: 1,
-              size: "1024x1024",
-              response_format: "url",
-            });
-
-            const responseAny = response as any;
-            const responseUrl =
-              responseAny?.data?.[0]?.url ??
-              extractMarkdownMediaUrl(
-                responseAny?.choices?.[0]?.message?.content,
-                "image",
-              );
-            if (!responseUrl) {
-              throw new Error("Grok2API 未返回图片地址");
-            }
-
-            const ossUrl = await mirrorGeneratedImageUrlToOss(responseUrl);
-            const projectId = get().projectId;
-            let resultItem: {
-              url: string;
-              remoteUrl: string;
-              originalUrl?: string;
-              localName?: string;
-              localPath?: string;
-            } = {
-              url: ossUrl,
-              remoteUrl: ossUrl,
-              ...(ossUrl === responseUrl ? {} : { originalUrl: responseUrl }),
-            };
-
-            if (projectId) {
-              try {
-                const fileName = await saveGeneratedImageToLocal(
-                  projectId,
-                  ossUrl,
-                  extractExtensionFromUrl(responseUrl, "png"),
-                );
-
-                if (fileName) {
-                  resultItem = {
-                    ...resultItem,
-                    localName: fileName,
-                    localPath: getLocalFilePath(
-                      projectId,
-                      "generate_image",
-                      fileName,
-                    ),
-                  };
-                }
-              } catch (saveError) {
-                console.error(
-                  "[startGeminiPro2Generation] 保存 Grok 图片到本地失败:",
-                  saveError,
-                );
-              }
-            }
-
-            set((state) => ({
-              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-                const existingData = data.result?.data ?? [];
-                const mergedData = appendMediaSequences(existingData, [
-                  resultItem,
-                ]);
-                return {
-                  ...data,
-                  status: GenerationStatus.COMPLETED,
-                  progress: 100,
-                  result: {
-                    type: "image",
-                    data: mergedData,
-                  },
-                  error: undefined,
-                };
-              }),
-            }));
-            saveCurrentCanvasToHistory();
-            if (useChatSettingsStore.getState().autoSaveEnabled) {
-              get().saveGraph();
-            }
-            await refreshBalanceAfterGeneration({
-              scene: "image",
-              nodeId,
-              model: originalModel,
-              requiredPoints: payload.requiredPoints,
-            });
-            return;
-          }
-        }
-
-        // RunningHub 渠道（低价 -> 官方回退）
-        if (isRunningHubImageGenerationModel(originalModel)) {
-          set((state) => ({
-            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-              ...data,
-              status: GenerationStatus.IN_PROGRESS,
-              progress: 0,
-            })),
-          }));
-
-          try {
-            const resultUrl = await generateRunningHubImageWithFallback({
-              model: originalModel,
-              prompt,
-              imageUrls,
-              size,
-              resolution,
-            });
-
-            const ossUrl = await mirrorGeneratedImageUrlToOss(resultUrl);
-            const projectId = get().projectId;
-            let resultItem: {
-              url: string;
-              remoteUrl: string;
-              originalUrl?: string;
-              localName?: string;
-              localPath?: string;
-            } = {
-              url: ossUrl,
-              remoteUrl: ossUrl,
-              ...(ossUrl === resultUrl ? {} : { originalUrl: resultUrl }),
-            };
-
-            if (projectId) {
-              try {
-                const fileName = await saveGeneratedImageToLocal(
-                  projectId,
-                  ossUrl,
-                  extractExtensionFromUrl(resultUrl, "png"),
-                );
-
-                if (fileName) {
-                  resultItem = {
-                    ...resultItem,
-                    localName: fileName,
-                    localPath: getLocalFilePath(
-                      projectId,
-                      "generate_image",
-                      fileName,
-                    ),
-                  };
-                }
-              } catch (saveError) {
-                console.error(
-                  "[startGeminiPro2Generation] 保存 RunningHub 图片到本地失败:",
-                  saveError,
-                );
-              }
-            }
-
-            set((state) => ({
-              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-                const existingData = data.result?.data ?? [];
-                const mergedData = appendMediaSequences(existingData, [
-                  resultItem,
-                ]);
-                return {
-                  ...data,
-                  status: GenerationStatus.COMPLETED,
-                  progress: 100,
-                  result: {
-                    type: "image",
-                    data: mergedData,
-                  },
-                  error: undefined,
-                };
-              }),
-            }));
-            saveCurrentCanvasToHistory();
-            if (useChatSettingsStore.getState().autoSaveEnabled) {
-              get().saveGraph();
-            }
-            await refreshBalanceAfterGeneration({
-              scene: "image",
-              nodeId,
-              model: originalModel,
-              requiredPoints: payload.requiredPoints,
-            });
-            return;
-          } catch (rhError) {
-            console.error(
-              "[startGeminiPro2Generation] RunningHub 生图失败:",
-              rhError,
-            );
-            throw rhError;
-          }
-        }
 
         // 1. 构造请求体
         // 注意：text 和 fileData 不能同时存在于同一个 part，必须拆成独立的 part。
-        // 参考图直接把 URL 交给 adobe2api，由服务端自行拉取，避免前端先转 Base64。
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const parts: any[] = [];
 
@@ -4518,7 +3712,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           startError,
         );
         const rawServerMessage = getRequestErrorMessage(startError);
-        const detailMessage = normalizeLocalGeminiErrorDetail(rawServerMessage);
         set((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
             ...data,
@@ -4529,7 +3722,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                 startError instanceof Error
                   ? startError.message
                   : "生成失败，请稍后再试",
-              detail: detailMessage,
+              detail: rawServerMessage,
               serverMessage: rawServerMessage,
             },
           })),
@@ -4564,10 +3757,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const isLocalDirectImageModel =
         sourcePlatform === "google_pro2" ||
         (sourceModel === NANO_BANANA_LOCAL_MODEL &&
-          sourcePlatform === NANO_BANANA_LOCAL_PLATFORM) ||
-        sourceModel === ADOBE_GPT_IMAGE2_MODEL ||
-        sourceModel === ADOBE_NANO_BANANA_PRO_MODEL ||
-        isXimuImageGenerationModel(sourceModel);
+          sourcePlatform === NANO_BANANA_LOCAL_PLATFORM);
       const sourceImageUrl = sourceData.result?.data?.[0]?.url;
 
       const totalCells = gridSize * gridSize;
@@ -5017,8 +4207,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const model = input?.model ?? requestPayload.model ?? "";
       const isSeedance20 =
         model === "seedance-2.0-fast" || model === "seedance-2.0-pro";
-      const isAdobeVideo = isAdobeVideoRequest(requestPayload);
-      const isGrokVideo = isGrokVideoRequest(requestPayload);
 
       set((state) => ({
         nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
@@ -5050,220 +4238,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }));
 
       try {
-        if (isAdobeVideo) {
-          set((state) => ({
-            nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
-              ...data,
-              status: GenerationStatus.IN_PROGRESS,
-              progress: 0,
-            })),
-          }));
-
-          console.info("[Adobe2API Video] request payload", requestPayload);
-          const response = await createAdobe2ApiVideoGeneration(
-            requestPayload as any,
-          );
-          const videoUrl = extractMarkdownMediaUrl(
-            response?.choices?.[0]?.message?.content,
-            "video",
-          );
-          if (!videoUrl) {
-            throw new Error("Adobe2API 未返回视频地址");
-          }
-
-          let resultItem: { url: string; format: string;[key: string]: any } =
-          {
-            url: videoUrl,
-            format: "mp4",
-          };
-          const projectId = get().projectId;
-          if (projectId) {
-            try {
-              const fileName = await saveGeneratedVideoToLocal(
-                projectId,
-                videoUrl,
-                extractExtensionFromUrl(videoUrl, "mp4"),
-              );
-
-              if (fileName) {
-                resultItem = {
-                  ...resultItem,
-                  localName: fileName,
-                  localPath: getLocalFilePath(
-                    projectId,
-                    "generate_video",
-                    fileName,
-                  ),
-                };
-              }
-            } catch (saveError) {
-              console.error(
-                "[startNewVideoGeneration] 保存 Adobe 视频到本地失败:",
-                saveError,
-              );
-            }
-          }
-
-          try {
-            const copiedUrl = await copyVideoUrlToOss(videoUrl);
-            if (copiedUrl) {
-              resultItem.url = copiedUrl;
-              resultItem.remoteUrl = copiedUrl;
-            }
-          } catch (copyError) {
-            console.error(
-              "[startNewVideoGeneration] 转存 Adobe 视频到 OSS 失败:",
-              copyError,
-            );
-          }
-          resultItem = withVideoPosterFields(resultItem);
-
-          set((state) => ({
-            nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
-              const existingData = data.result?.data ?? [];
-              const mergedData = appendMediaSequences(existingData, [
-                resultItem,
-              ]);
-              return {
-                ...data,
-                task_id: response?.id,
-                status: GenerationStatus.COMPLETED,
-                progress: 100,
-                result: {
-                  type: "video",
-                  data: mergedData,
-                },
-                error: undefined,
-                metadata: {
-                  ...data.metadata,
-                  tasks: response?.id ? [response.id] : [],
-                  failedTasks: [],
-                },
-              };
-            }),
-          }));
-          saveCurrentCanvasToHistory();
-          if (useChatSettingsStore.getState().autoSaveEnabled) {
-            get().saveGraph();
-          }
-          await refreshBalanceAfterGeneration({
-            scene: "video",
-            nodeId,
-            taskId: response?.id,
-            model,
-            requiredPoints,
-          });
-          return;
-        }
-
-        if (isGrokVideo) {
-          set((state) => ({
-            nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
-              ...data,
-              status: GenerationStatus.IN_PROGRESS,
-              progress: 0,
-            })),
-          }));
-
-          console.info("[Grok2API Video] request payload", requestPayload);
-          const response = await createGrok2ApiVideoGeneration(
-            requestPayload as any,
-          );
-          const rawVideoUrl = extractMarkdownMediaUrl(
-            response?.choices?.[0]?.message?.content,
-            "video",
-          );
-          const videoUrl = rawVideoUrl
-            ? await normalizeGrok2ApiMediaUrl(rawVideoUrl)
-            : rawVideoUrl;
-          if (!videoUrl) {
-            throw new Error("Grok2API 未返回视频地址");
-          }
-
-          let resultItem: { url: string; format: string;[key: string]: any } =
-          {
-            url: videoUrl,
-            format: "mp4",
-          };
-          const projectId = get().projectId;
-          if (projectId) {
-            try {
-              const fileName = await saveGeneratedVideoToLocal(
-                projectId,
-                videoUrl,
-                extractExtensionFromUrl(videoUrl, "mp4"),
-              );
-
-              if (fileName) {
-                resultItem = {
-                  ...resultItem,
-                  localName: fileName,
-                  localPath: getLocalFilePath(
-                    projectId,
-                    "generate_video",
-                    fileName,
-                  ),
-                };
-              }
-            } catch (saveError) {
-              console.error(
-                "[startNewVideoGeneration] 保存 Grok 视频到本地失败:",
-                saveError,
-              );
-            }
-          }
-
-          try {
-            const copiedUrl = await copyVideoUrlToOss(videoUrl);
-            if (copiedUrl) {
-              resultItem.url = copiedUrl;
-              resultItem.remoteUrl = copiedUrl;
-            }
-          } catch (copyError) {
-            console.error(
-              "[startNewVideoGeneration] 转存 Grok 视频到 OSS 失败:",
-              copyError,
-            );
-          }
-          resultItem = withVideoPosterFields(resultItem);
-
-          set((state) => ({
-            nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => {
-              const existingData = data.result?.data ?? [];
-              const mergedData = appendMediaSequences(existingData, [
-                resultItem,
-              ]);
-              return {
-                ...data,
-                task_id: response?.id,
-                status: GenerationStatus.COMPLETED,
-                progress: 100,
-                result: {
-                  type: "video",
-                  data: mergedData,
-                },
-                error: undefined,
-                metadata: {
-                  ...data.metadata,
-                  tasks: response?.id ? [response.id] : [],
-                  failedTasks: [],
-                },
-              };
-            }),
-          }));
-          saveCurrentCanvasToHistory();
-          if (useChatSettingsStore.getState().autoSaveEnabled) {
-            get().saveGraph();
-          }
-          await refreshBalanceAfterGeneration({
-            scene: "video",
-            nodeId,
-            taskId: response?.id,
-            model,
-            requiredPoints,
-          });
-          return;
-        }
 
         const createTask = async () => {
           let response: any;

@@ -2,7 +2,7 @@ import type { MentionItem } from "./mockData";
 import {
   MODE_LABELS,
   MOCK_MAIN_MODELS,
-  type VideoModeKey,
+  type VideoModeKey
 } from "./videoModelCapabilities";
 import type { VideoParamState } from "./videoParamConfigs";
 export type VideoReferenceType = MentionItem["type"];
@@ -171,18 +171,6 @@ export const VIDEO_MODEL_GENERATION_CAPABILITIES: Record<
           ratio: ["16:9", "9:16", "1:1"],
         },
       },
-    },
-  },
-  "adobe-sora2-pro": {
-    modes: {
-      "text-to-video": { references: emptyReferences },
-      "image-to-video": { references: onlyImages(1, 1) },
-    },
-  },
-  "grok-imagine-video": {
-    modes: {
-      "text-to-video": { references: emptyReferences },
-      "image-to-video": { references: onlyImages(1, 7) },
     },
   },
   keling: {

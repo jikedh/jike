@@ -1,10 +1,8 @@
 import {
-  BookOpenText,
   Film,
   Folder,
   House,
   Mic,
-  PanelRightOpen,
   Settings,
   SquareDashedMousePointer,
   Type,
@@ -99,12 +97,6 @@ export const SidebarCeBianLan = () => {
       path: "/canvas",
     },
     {
-      id: "story",
-      icon: <BookOpenText size={24} />,
-      label: "故事创作",
-      path: "/story",
-    },
-    {
       id: "script",
       icon: <Type size={24} />,
       label: "剧本",
@@ -128,13 +120,6 @@ export const SidebarCeBianLan = () => {
       icon: <Film size={24} />,
       label: "短片合成",
       path: "/video",
-    },
-    /* 暂时隐藏模型管理入口，后续恢复时取消注释即可。 */
-    {
-      id: "model-settings",
-      icon: <PanelRightOpen size={24} />,
-      label: "模型管理",
-      path: "/settings",
     },
   ];
 

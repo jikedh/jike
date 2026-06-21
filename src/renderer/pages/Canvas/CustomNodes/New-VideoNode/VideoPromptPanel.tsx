@@ -16,7 +16,7 @@ import {
   getVideoParentAudioMentionId,
   getVideoParentImageMentionId,
   getVideoParentVideoMentionId,
-  useVideoNodeReferences,
+  useVideoNodeReferences
 } from "./hooks/useVideoNodeReferences";
 import { useVideoReferenceActions } from "./hooks/useVideoReferenceActions";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
@@ -25,24 +25,24 @@ import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import { handlePromptEditorWheelCapture } from "../shared/wheelEvents";
 import {
   BottomParamsBar,
-  type VideoGenerateRequest,
+  type VideoGenerateRequest
 } from "./components/BottomParamsBar";
 import { ModeToggleBar } from "./components/ModeToggleBar";
 import { ReferenceThumbnails } from "./components/ReferenceThumbnails";
 import {
   type MentionItem,
   VIDEO_MODEL_OPTIONS,
-  getVideoModelOptions,
+  getVideoModelOptions
 } from "./constants/mockData";
 import {
   ALL_MODE_KEYS,
   getFirstSupportedModeForModel,
   getSupportedModesForModel,
-  type VideoModeKey,
+  type VideoModeKey
 } from "./constants/videoModelCapabilities";
 import {
   normalizeVideoParams,
-  type VideoParamState,
+  type VideoParamState
 } from "./constants/videoParamConfigs";
 import { useModeAvailability } from "./hooks/useModeAvailability";
 import { useVideoGenerationAvailability } from "./hooks/useVideoGenerationAvailability";
@@ -82,17 +82,18 @@ const buildPromptDraftHtml = (html?: string, text?: string) => {
   return `<p>${escapeHtml(normalizedText).replace(/\n/g, "<br>")}</p>`;
 };
 
-const normalizeNewVideoModelId = (
+const resolveEffectiveModelId = (
   value: string | undefined,
   mode?: VideoModeKey,
   modelOptions = VIDEO_MODEL_OPTIONS,
 ) => {
+  const fallbackModel = mode
+    ? getFirstSupportedModeForModel(value ?? "", mode)
+    : modelOptions[0]?.value ?? VIDEO_MODEL_OPTIONS[0].value;
+
   const availableModelIds = new Set(
     modelOptions.map((option) => option.value),
   );
-  const fallbackModel = availableModelIds.has("adobe-sora2-pro")
-    ? "adobe-sora2-pro"
-    : modelOptions[0]?.value ?? VIDEO_MODEL_OPTIONS[0].value;
 
   // Q2 模型暂时屏蔽：历史节点或上一次错误拆分的 ID 统一落到 Q3 Pro，避免下拉出现空值。
   if (
@@ -104,9 +105,7 @@ const normalizeNewVideoModelId = (
   ) {
     return "vidu-q3-pro";
   }
-  if (value === "adobe-veo31" || value === "adobe-veo31-fast") {
-    return fallbackModel;
-  }
+
   return value && availableModelIds.has(value) ? value : fallbackModel;
 };
 
@@ -307,19 +306,9 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const setDefaultNewVideoPreset = useChatSettingsStore(
     (state) => state.setDefaultNewVideoPreset,
   );
-  const adobeChannelModelsEnabled = useChatSettingsStore(
-    (state) => state.adobeChannelModelsEnabled,
-  );
-  const grokChannelModelsEnabled = useChatSettingsStore(
-    (state) => state.grokChannelModelsEnabled,
-  );
   const videoModelOptions = useMemo(
-    () =>
-      getVideoModelOptions(
-        adobeChannelModelsEnabled,
-        grokChannelModelsEnabled,
-      ),
-    [adobeChannelModelsEnabled, grokChannelModelsEnabled],
+    () => getVideoModelOptions(),
+    [],
   );
 
   const currentData = useCanvasFlowStore((state) => {
@@ -335,7 +324,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const initialMode = isVideoModeKey(currentData?.metadata?.mode)
     ? currentData?.metadata?.mode
     : "all-reference";
-  const model = normalizeNewVideoModelId(
+  const model = resolveEffectiveModelId(
     currentData?.model,
     initialMode,
     videoModelOptions,

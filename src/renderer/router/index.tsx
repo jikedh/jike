@@ -14,7 +14,6 @@ const TestPage = lazy(() => import("@/pages/Test"));
 const TestGoPage = lazy(() => import("@/pages/TestGo"));
 const PanoramaDemo = lazy(() => import("@/pages/Test/PanoramaDemo"));
 const CanvasPlaceholderPage = lazy(() => import("@/pages/CanvasPlaceholder"));
-const StoryPage = lazy(() => import("@/pages/Story"));
 const ScriptPage = lazy(() => import("@/pages/Script"));
 const AssetsPage = lazy(() => import("@/pages/Assets"));
 const VoicePage = lazy(() => import("@/pages/Voice"));
@@ -24,7 +23,6 @@ const VideoRemovalDemoPage = lazy(() => import("@/pages/Video/DemoComponents/Vid
 const LocalVideoUploadDemoPage = lazy(() => import("@/pages/Video/DemoComponents/LocalVideoUploadDemo"));
 const RunningHubWorkflowDemoPage = lazy(() => import("@/pages/Video/DemoComponents/RunningHubWorkflowDemo"));
 const RunningHubTextToImageDemoPage = lazy(() => import("@/pages/Video/DemoComponents/RunningHubTextToImageDemo"));
-const SettingsPage = lazy(() => import("@/pages/Settings"));
 const PointsPage = lazy(() => import("@/pages/Points"));
 const LoginPage = lazy(() => import("@/pages/Login"));
 const ProfilePage = lazy(() => import("@/pages/Profile"));
@@ -89,22 +87,6 @@ const router = createHashRouter([
         element: <CanvasPlaceholderPage />,
       },
       {
-        path: "/story",
-        element: <StoryPage />,
-      },
-      {
-        path: "/story/:projectId",
-        element: <StoryPage />,
-      },
-      {
-        path: "/story/:projectId/snippets/:snippetId",
-        element: <StoryPage />,
-      },
-      {
-        path: "/story/:projectId/snippets/:snippetId/agent",
-        element: <StoryPage />,
-      },
-      {
         path: "/script",
         element: <ScriptPage />,
       },
@@ -139,10 +121,6 @@ const router = createHashRouter([
       {
         path: "/video/runninghub-text-to-image-demo",
         element: <RunningHubTextToImageDemoPage />,
-      },
-      {
-        path: "/settings",
-        element: <SettingsPage />,
       },
       {
         path: "/points",

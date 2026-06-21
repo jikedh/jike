@@ -8,7 +8,7 @@ import {
   ALL_MODE_KEYS,
   MODE_LABELS,
   MODE_REFERENCE_CONSTRAINTS,
-  MOCK_MAIN_MODELS,
+  MOCK_MAIN_MODELS
 } from "../constants/videoModelCapabilities";
 
 export interface UseModeAvailabilityResult {
@@ -135,39 +135,6 @@ export function useModeAvailability(params: {
             }
           }
         }
-
-        if (
-          selectedModelId === "adobe-veo31" ||
-          selectedModelId === "adobe-veo31-fast"
-        ) {
-          if (key === "text-to-video" && hasAnyReference) {
-            reasons.push("文生视频不需要参考素材");
-          }
-
-          if (key === "image-to-video") {
-            if (referenceCount !== 1 || !referenceAllImages) {
-              reasons.push("Veo3.1 图生视频需要且仅支持 1 张参考图");
-            }
-          }
-
-          if (key === "first-last-frame") {
-            if (referenceCount !== 2 || !referenceAllImages) {
-              reasons.push("Veo3.1 首尾帧需要且仅支持 2 张参考图");
-            }
-          }
-
-          if (key === "all-reference") {
-            if (selectedModelId === "adobe-veo31-fast") {
-              reasons.push("Veo3.1 Fast 不支持全能参考");
-            } else if (
-              referenceCount < 1 ||
-              referenceCount > 3 ||
-              !referenceAllImages
-            ) {
-              reasons.push("该模型只支持1~3图片做为参考图");
-            }
-          }
-        }
       }
 
       return {
@@ -175,10 +142,6 @@ export function useModeAvailability(params: {
         label: MODE_LABELS[key],
         enabled: reasons.length === 0,
         disabledReason: reasons.length > 0 ? reasons[0] : undefined,
-        tooltip:
-          selectedModelId === "adobe-veo31" && key === "all-reference"
-            ? "该模型只支持1~3图片做为参考图"
-            : undefined,
       };
     });
 

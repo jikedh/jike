@@ -6,14 +6,14 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "@/components/ui/select";
 
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
 import {
   type MentionItem,
   type ModelOption,
-  VIDEO_MODEL_OPTIONS,
+  VIDEO_MODEL_OPTIONS
 } from "../constants/mockData";
 import type { VideoModeKey } from "../constants/videoModelCapabilities";
 import type { VideoParamState } from "../constants/videoParamConfigs";

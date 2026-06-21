@@ -1,6 +1,6 @@
 import {
   MOCK_MAIN_MODELS,
-  getVisibleVideoModels,
+  getVisibleVideoModels
 } from "./videoModelCapabilities";
 
 export interface ModelOption {
@@ -16,12 +16,8 @@ export const VIDEO_MODEL_OPTIONS: ModelOption[] = MOCK_MAIN_MODELS.map(
 );
 
 export const getVideoModelOptions = (
-  adobeChannelModelsEnabled = false,
-  grokChannelModelsEnabled = false,
 ): ModelOption[] =>
   getVisibleVideoModels(
-    adobeChannelModelsEnabled,
-    grokChannelModelsEnabled,
   ).map((model) => ({
     value: model.id,
     label: model.label,

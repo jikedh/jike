@@ -2,7 +2,7 @@ import { IconVideo } from "@tabler/icons-react";
 import {
   type NodeProps,
   Position,
-  useUpdateNodeInternals,
+  useUpdateNodeInternals
 } from "@xyflow/react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { GenerationStatus } from "shared/constants/enum";

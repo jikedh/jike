@@ -4,7 +4,7 @@ import {
   IconPalette,
   IconRotateClockwise,
   IconUpload,
-  IconX,
+  IconX
 } from "@tabler/icons-react";
 import {
   type ChangeEvent,
@@ -13,13 +13,12 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
+  useState
 } from "react";
 import { createPortal } from "react-dom";
 import { uploadFileToOSS } from "service/oss";
 import {
-  IMAGE_MODELS,
-  getVisibleImageModels,
+  IMAGE_MODELS
 } from "shared/constants/ai-models";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { cn } from "shared/utils/utils";
@@ -30,7 +29,7 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
@@ -50,7 +49,7 @@ import {
   type LightingDirection,
   type LightingGenerationConfig,
   loadLightingImage,
-  renderLightingToCanvas,
+  renderLightingToCanvas
 } from "./utils/lighting";
 
 type ImageLightingDialogProps = {
@@ -174,9 +173,9 @@ const getUnrotatedPointInPreview = (
     viewMode === "perspective"
       ? solvePreviewLocalPoint(clientX, clientY, rect, spaceElement)
       : {
-          x: clientX - rect.left,
-          y: clientY - rect.top,
-        };
+        x: clientX - rect.left,
+        y: clientY - rect.top,
+      };
 
   return {
     x: clamp(localPoint.x / rect.width, 0, 1),
@@ -259,23 +258,9 @@ export const ImageLightingDialog = ({
   onOpenChange,
   onConfirm,
 }: ImageLightingDialogProps) => {
-  const adobeChannelModelsEnabled = useChatSettingsStore(
-    (state) => state.adobeChannelModelsEnabled,
-  );
-  const ximuChannelModelsEnabled = useChatSettingsStore(
-    (state) => state.ximuChannelModelsEnabled,
-  );
-  const grokChannelModelsEnabled = useChatSettingsStore(
-    (state) => state.grokChannelModelsEnabled,
-  );
   const visibleImageModels = useMemo(
-    () =>
-      getVisibleImageModels(
-        adobeChannelModelsEnabled,
-        ximuChannelModelsEnabled,
-        grokChannelModelsEnabled,
-      ),
-    [adobeChannelModelsEnabled, grokChannelModelsEnabled, ximuChannelModelsEnabled],
+    () => IMAGE_MODELS,
+    [],
   );
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const previewSphereRef = useRef<HTMLDivElement | null>(null);
@@ -982,104 +967,104 @@ export const ImageLightingDialog = ({
                           }}
                         />
                       ))}
-                    <div
-                      className={cn(
-                        "pointer-events-none absolute h-11 origin-left rounded-full opacity-85",
-                        !isDraggingLight && "transition-all duration-300 ease-out",
-                      )}
-                      style={{
-                          left: `${displayLightPoint.x * 100}%`,
-                          top: `${displayLightPoint.y * 100}%`,
-                        width: `${beamLengthPercent}%`,
-                        transform: `translate(0,-50%) rotate(${beamAngle}deg)`,
-                        background: `linear-gradient(90deg, ${lightColorGlow}, rgba(255,255,255,0.16) 42%, transparent 100%)`,
-                        clipPath: "polygon(0 48%, 100% 10%, 100% 90%)",
-                        filter: "blur(0.4px)",
-                        zIndex: isBackHemisphere ? 2 : 5,
-                      }}
-                    />
-                    {config.rimLightEnabled ? (
                       <div
                         className={cn(
-                          "pointer-events-none absolute h-9 origin-left rounded-full opacity-75",
+                          "pointer-events-none absolute h-11 origin-left rounded-full opacity-85",
                           !isDraggingLight && "transition-all duration-300 ease-out",
                         )}
                         style={{
-                          left: `${rimLightPoint.x * 100}%`,
-                          top: `${rimLightPoint.y * 100}%`,
-                          width: `${rimBeamLengthPercent}%`,
-                          transform: `translate(0,-50%) rotate(${rimBeamAngle}deg)`,
-                          background: `linear-gradient(90deg, ${rimLightColorGlow}, rgba(219,232,255,0.14) 44%, transparent 100%)`,
-                          clipPath: "polygon(0 48%, 100% 18%, 100% 82%)",
-                          filter: "blur(0.5px)",
-                          zIndex: isRimBackHemisphere ? 2 : 5,
-                        }}
-                      />
-                    ) : null}
-                    <div
-                      className={cn(
-                        "pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-[0_0_18px_rgba(255,255,255,0.45)]",
-                        isBackHemisphere
-                          ? "border-dashed border-white/55"
-                          : "border-black/80",
-                        !isDraggingLight && "transition-all duration-300 ease-out",
-                      )}
-                      style={{
                           left: `${displayLightPoint.x * 100}%`,
                           top: `${displayLightPoint.y * 100}%`,
-                        backgroundColor: config.color,
-                        boxShadow: isBackHemisphere
-                          ? `0 0 10px ${lightColorGlow}, inset 0 0 9px rgba(0,0,0,0.55)`
-                          : `0 0 18px ${lightColorGlow}, 0 0 36px ${lightColorWash}`,
-                        opacity: lightMarkerOpacity,
-                        transform: "translate(0%, -0%)",
-                        scale: lightMarkerScale,
-                        zIndex: isBackHemisphere ? 2 : 6,
-                      }}
-                    />
-                    {config.rimLightEnabled ? (
+                          width: `${beamLengthPercent}%`,
+                          transform: `translate(0,-50%) rotate(${beamAngle}deg)`,
+                          background: `linear-gradient(90deg, ${lightColorGlow}, rgba(255,255,255,0.16) 42%, transparent 100%)`,
+                          clipPath: "polygon(0 48%, 100% 10%, 100% 90%)",
+                          filter: "blur(0.4px)",
+                          zIndex: isBackHemisphere ? 2 : 5,
+                        }}
+                      />
+                      {config.rimLightEnabled ? (
+                        <div
+                          className={cn(
+                            "pointer-events-none absolute h-9 origin-left rounded-full opacity-75",
+                            !isDraggingLight && "transition-all duration-300 ease-out",
+                          )}
+                          style={{
+                            left: `${rimLightPoint.x * 100}%`,
+                            top: `${rimLightPoint.y * 100}%`,
+                            width: `${rimBeamLengthPercent}%`,
+                            transform: `translate(0,-50%) rotate(${rimBeamAngle}deg)`,
+                            background: `linear-gradient(90deg, ${rimLightColorGlow}, rgba(219,232,255,0.14) 44%, transparent 100%)`,
+                            clipPath: "polygon(0 48%, 100% 18%, 100% 82%)",
+                            filter: "blur(0.5px)",
+                            zIndex: isRimBackHemisphere ? 2 : 5,
+                          }}
+                        />
+                      ) : null}
                       <div
                         className={cn(
-                          "pointer-events-none absolute size-3.5 rounded-full border shadow-[0_0_16px_rgba(219,232,255,0.45)]",
-                          isRimBackHemisphere
-                            ? "border-dashed border-sky-100/55"
-                            : "border-sky-100/80",
+                          "pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-[0_0_18px_rgba(255,255,255,0.45)]",
+                          isBackHemisphere
+                            ? "border-dashed border-white/55"
+                            : "border-black/80",
                           !isDraggingLight && "transition-all duration-300 ease-out",
                         )}
                         style={{
-                          left: `${rimLightPoint.x * 100}%`,
-                          top: `${rimLightPoint.y * 100}%`,
-                          backgroundColor: rimLightColor,
-                          boxShadow: isRimBackHemisphere
-                            ? `0 0 10px ${rimLightColorGlow}, inset 0 0 8px rgba(0,0,0,0.52)`
-                            : `0 0 16px ${rimLightColorGlow}, 0 0 30px ${rimLightColorWash}`,
-                          opacity: rimLightMarkerOpacity,
-                          transform: "translate(-50%, -50%)",
-                          scale: rimLightMarkerScale,
-                          zIndex: isRimBackHemisphere ? 2 : 6,
+                          left: `${displayLightPoint.x * 100}%`,
+                          top: `${displayLightPoint.y * 100}%`,
+                          backgroundColor: config.color,
+                          boxShadow: isBackHemisphere
+                            ? `0 0 10px ${lightColorGlow}, inset 0 0 9px rgba(0,0,0,0.55)`
+                            : `0 0 18px ${lightColorGlow}, 0 0 36px ${lightColorWash}`,
+                          opacity: lightMarkerOpacity,
+                          transform: "translate(0%, -0%)",
+                          scale: lightMarkerScale,
+                          zIndex: isBackHemisphere ? 2 : 6,
                         }}
                       />
-                    ) : null}
-                    <div className="absolute left-1/2 top-[66%] h-6 w-20 -translate-x-1/2 rounded-full bg-black/38 blur-[6px]" />
-                    {imageUrl ? (
-                      <div
-                        className="absolute left-1/2 top-1/2 flex items-center justify-center overflow-hidden rounded-sm border border-white/16 bg-black/20 shadow-[10px_14px_28px_rgba(0,0,0,0.42)] transition-transform duration-300 ease-out"
-                        style={{
-                          ...perspectiveImageStyle,
-                          transform: previewImageTransform,
-                          transformOrigin: "50% 50%",
-                          transformStyle: "preserve-3d",
-                          zIndex: 4,
-                        }}
-                      >
-                        {isLoadingImage ? null : (
-                          <canvas
-                            ref={canvasRef}
-                            className="block h-full w-full scale-[1.18]"
-                          />
-                        )}
-                      </div>
-                    ) : null}
+                      {config.rimLightEnabled ? (
+                        <div
+                          className={cn(
+                            "pointer-events-none absolute size-3.5 rounded-full border shadow-[0_0_16px_rgba(219,232,255,0.45)]",
+                            isRimBackHemisphere
+                              ? "border-dashed border-sky-100/55"
+                              : "border-sky-100/80",
+                            !isDraggingLight && "transition-all duration-300 ease-out",
+                          )}
+                          style={{
+                            left: `${rimLightPoint.x * 100}%`,
+                            top: `${rimLightPoint.y * 100}%`,
+                            backgroundColor: rimLightColor,
+                            boxShadow: isRimBackHemisphere
+                              ? `0 0 10px ${rimLightColorGlow}, inset 0 0 8px rgba(0,0,0,0.52)`
+                              : `0 0 16px ${rimLightColorGlow}, 0 0 30px ${rimLightColorWash}`,
+                            opacity: rimLightMarkerOpacity,
+                            transform: "translate(-50%, -50%)",
+                            scale: rimLightMarkerScale,
+                            zIndex: isRimBackHemisphere ? 2 : 6,
+                          }}
+                        />
+                      ) : null}
+                      <div className="absolute left-1/2 top-[66%] h-6 w-20 -translate-x-1/2 rounded-full bg-black/38 blur-[6px]" />
+                      {imageUrl ? (
+                        <div
+                          className="absolute left-1/2 top-1/2 flex items-center justify-center overflow-hidden rounded-sm border border-white/16 bg-black/20 shadow-[10px_14px_28px_rgba(0,0,0,0.42)] transition-transform duration-300 ease-out"
+                          style={{
+                            ...perspectiveImageStyle,
+                            transform: previewImageTransform,
+                            transformOrigin: "50% 50%",
+                            transformStyle: "preserve-3d",
+                            zIndex: 4,
+                          }}
+                        >
+                          {isLoadingImage ? null : (
+                            <canvas
+                              ref={canvasRef}
+                              className="block h-full w-full scale-[1.18]"
+                            />
+                          )}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ) : (

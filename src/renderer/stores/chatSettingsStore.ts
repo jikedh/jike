@@ -48,10 +48,6 @@ const INITIAL_STATE: Pick<
   | "assetStoragePath"
   | "jianyingDraftsPath"
   | "updateUrl"
-  | "ximuCardCode"
-  | "adobeChannelModelsEnabled"
-  | "ximuChannelModelsEnabled"
-  | "grokChannelModelsEnabled"
 > = {
   defaultModel: DEFAULT_CANVAS_CHAT_MODEL,
   defaultImageModel: "gpt-image-2",
@@ -87,10 +83,6 @@ const INITIAL_STATE: Pick<
   assetStoragePath: "",
   jianyingDraftsPath: "",
   updateUrl: DEFAULT_UPDATE_URL,
-  ximuCardCode: "",
-  adobeChannelModelsEnabled: false,
-  ximuChannelModelsEnabled: false,
-  grokChannelModelsEnabled: false,
 };
 
 const getElectronIpc = () => {
@@ -231,13 +223,6 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
         writeGlobalSettingsPatch({ jianyingDraftsPath: path });
       },
       setUpdateUrl: (url) => set({ updateUrl: url }),
-      setXimuCardCode: (cardCode) => set({ ximuCardCode: cardCode }),
-      setAdobeChannelModelsEnabled: (enabled) =>
-        set({ adobeChannelModelsEnabled: enabled }),
-      setXimuChannelModelsEnabled: (enabled) =>
-        set({ ximuChannelModelsEnabled: enabled }),
-      setGrokChannelModelsEnabled: (enabled) =>
-        set({ grokChannelModelsEnabled: enabled }),
       resetToDefault: () => {
         set(INITIAL_STATE);
         writeGlobalSettings({
