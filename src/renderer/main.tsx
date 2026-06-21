@@ -9,6 +9,11 @@ if (import.meta.env.DEV) {
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
+import { ensureTauriApis } from "./services/tauri-bridge";
+
+// Tauri 适配层：在 React 挂载前将 storage/debug/download/videoProcessing/
+// notification/tracking 挂到 window，使既有 30+ 处业务调用零改动
+ensureTauriApis();
 
 // tset
 createRoot(document.getElementById("root")!).render(

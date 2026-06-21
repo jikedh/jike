@@ -1,0 +1,90 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "即刻主窗口默认能力集",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-minimize",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-title",
+    "core:webview:default",
+    "core:event:default",
+    "core:app:default",
+    "core:path:default",
+    "core:resources:default",
+    "core:menu:default",
+    "core:tray:default",
+    "core:image:default",
+
+    "dialog:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "dialog:allow-message",
+
+    "fs:default",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-read-dir",
+    "fs:allow-mkdir",
+    "fs:allow-remove",
+    "fs:allow-rename",
+    "fs:allow-exists",
+    "fs:allow-stat",
+    "fs:allow-copy-file",
+    "fs:allow-app-read",
+    "fs:allow-app-write",
+    "fs:allow-app-meta",
+    "fs:allow-app-read-recursive",
+    "fs:allow-app-write-recursive",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$APPDATA/**" },
+        { "path": "$APPDATA" },
+        { "path": "$DOCUMENT/**" },
+        { "path": "$DOCUMENT" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$DESKTOP" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$DOWNLOAD" },
+        { "path": "$HOME/**" },
+        { "path": "$HOME" },
+        { "path": "$VIDEO/**" },
+        { "path": "$PICTURE/**" },
+        { "path": "$MUSIC/**" }
+      ]
+    },
+
+    "http:default",
+
+    "notification:default",
+    "notification:allow-notify",
+    "notification:allow-is-permission-granted",
+    "notification:allow-request-permission",
+
+    "shell:default",
+    "shell:allow-open",
+
+    "store:default",
+
+    "os:default",
+
+    "process:default",
+    "process:allow-exit",
+
+    "opener:default",
+    "opener:allow-open-url",
+    "opener:allow-open-path",
+
+    "global-shortcut:default"
+  ]
+}

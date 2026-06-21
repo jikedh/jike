@@ -325,7 +325,7 @@ const mirrorImageToOss = async (
   }
 
   try {
-    const downloadResult = await withTimeout(
+    const downloadResult = await withTimeout<{ success?: boolean; data?: { base64?: string; mimeType?: string }; error?: string }>(
       window.download.imageAsBase64(image.url),
       CHAT_IMAGE_MIRROR_TIMEOUT,
       "图片转存下载超时",
