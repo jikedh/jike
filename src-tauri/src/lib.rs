@@ -41,7 +41,7 @@ pub fn run() {
                 .icon(app.default_window_icon().cloned().ok_or("missing icon")?)
                 .tooltip("即刻")
                 .menu(&menu)
-                .menu_on_left_click(true)
+                .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "show" => {
                         if let Some(w) = app.get_webview_window("main") {

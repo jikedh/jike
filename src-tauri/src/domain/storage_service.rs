@@ -38,12 +38,6 @@ pub enum StorageError {
     Io(#[from] std::io::Error),
     #[error("invalid path: {0}")]
     InvalidPath(String),
-    #[error("missing base path or project name")]
-    MissingParam,
-    #[error("source project not found: {0}")]
-    SourceNotFound(String),
-    #[error("target already exists: {0}")]
-    TargetExists(String),
 }
 
 fn get_extension(name: &str) -> String {
@@ -134,11 +128,6 @@ fn now_ms() -> u64 {
 
 fn path_to_buf(p: &str) -> PathBuf {
     PathBuf::from(p)
-}
-
-pub fn select_directory() -> Result<Option<String>, StorageError> {
-    // 命令层在调用前会展示原生对话框；此处返回 None 时上层将走 UI 选择
-    Ok(None)
 }
 
 pub fn ensure_project_handler(base: &str, project: &str) -> Result<StorageResult<serde_json::Value>, StorageError> {
@@ -526,17 +515,6 @@ pub async fn download_media_handler(
     Ok(StorageResult { success: true, error: None, data: serde_json::json!({ "path": rel }) })
 }
 
-pub fn save_buffer_to_file_handler(
-    default_name: &str,
-    bytes: Vec<u8>,
-) -> Result<StorageResult<serde_json::Value>, StorageError> {
-    // 命令层在调用前会通过 tauri-plugin-dialog 获取用户选择的路径；
-    // 该函数仅作为占位实现，由命令层在收到目标路径后调用 write_bytes_to_path
-    let _ = default_name;
-    let _ = &bytes;
-    Ok(StorageResult { success: false, error: Some("select_save_path_required".into()), data: serde_json::json!({}) })
-}
-
 pub fn write_bytes_to_path(path: &str, bytes: &[u8]) -> Result<StorageResult<serde_json::Value>, StorageError> {
     if let Some(p) = Path::new(path).parent() { std::fs::create_dir_all(p)?; }
     std::fs::write(path, bytes)?;
@@ -646,24 +624,6 @@ pub fn import_project_handler(
     copy_dir_recursive(&src, &dest)?;
     let _ = ensure_project(&base_path, &dest_name);
     Ok(StorageResult { success: true, error: None, data: serde_json::json!({ "projectName": dest_name, "path": dest.to_string_lossy() }) })
-}
-
-pub fn export_storyboard_assets_handler(
-    _base: &str,
-    _project_id: &str,
-    _assets: Value,
-    _export_dir: &str,
-) -> Result<StorageResult<serde_json::Value>, StorageError> {
-    // 业务重写在 video_service 中实现
-    Ok(StorageResult { success: false, error: Some("not implemented in storage_service".into()), data: serde_json::json!({}) })
-}
-
-pub fn import_storyboard_assets_package_handler(
-    _base: &str,
-    _project_id: &str,
-    _package_dir: &str,
-) -> Result<StorageResult<serde_json::Value>, StorageError> {
-    Ok(StorageResult { success: false, error: Some("not implemented in storage_service".into()), data: serde_json::json!({}) })
 }
 
 pub fn get_default_path_handler(documents_dir: &str) -> String {

@@ -6,12 +6,6 @@
 // 前端 src/renderer/services/tauri-bridge.ts 中做 channel → command 名映射
 
 use crate::domain;
-use tauri::AppHandle;
-
-pub fn register(_app: &AppHandle) {
-    // 命令函数由 generate_handler! 集中注册在 lib.rs
-    // 此函数保留用于未来插件化注册
-}
 
 #[tauri::command]
 pub async fn storage_select_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {

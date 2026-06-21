@@ -1,7 +1,4 @@
-use crate::domain::notification_service::{self, ShowNotificationParams};
 use tauri::Manager;
-
-pub fn register(_app: &tauri::AppHandle) {}
 
 #[tauri::command]
 pub async fn notification_show(app: tauri::AppHandle, title: Option<String>, body: Option<String>, when_window_focused: Option<bool>) -> Result<serde_json::Value, String> {
@@ -27,9 +24,4 @@ pub async fn notification_show(app: tauri::AppHandle, title: Option<String>, bod
 pub async fn notification_is_supported(app: tauri::AppHandle) -> Result<bool, String> {
     use tauri_plugin_notification::NotificationExt;
     Ok(app.notification().permission_state().is_ok())
-}
-
-#[tauri::command]
-pub async fn notification_build(_params: ShowNotificationParams) -> Result<serde_json::Value, String> {
-    Ok(serde_json::to_value(notification_service::build_notification(&_params)).unwrap())
 }

@@ -75,7 +75,7 @@ pub async fn trim_video(req: VideoTrimRequest) -> Result<VideoTrimResult, VideoE
     trim_via_ffmpeg(&req).await
 }
 
-async fn trim_via_ice(cfg: &AliyunRuntimeConfig, req: &VideoTrimRequest) -> Result<VideoTrimResult, VideoError> {
+async fn trim_via_ice(cfg: &AliyunRuntimeConfig, _req: &VideoTrimRequest) -> Result<VideoTrimResult, VideoError> {
     let _ = (cfg.access_key_id.as_str(), cfg.ims_region_id.as_ref());
     // 真实接入阿里云 ICE 需要 aliyun-openapi-core SDK；
     // 此处作为可运行骨架的占位（提交-轮询-下载链路在 .cargo 锁文件中已含 reqwest + serde）。

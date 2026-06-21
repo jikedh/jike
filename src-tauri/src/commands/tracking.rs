@@ -1,8 +1,6 @@
 use crate::domain::tracking_service;
 use crate::models::AIVideoTrackData;
 
-pub fn register(_app: &tauri::AppHandle) {}
-
 #[tauri::command]
 pub async fn tracking_send(data: AIVideoTrackData) -> Result<serde_json::Value, String> {
     Ok(serde_json::to_value(tracking_service::send(&data)).unwrap())

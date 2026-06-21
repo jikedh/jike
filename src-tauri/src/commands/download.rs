@@ -1,7 +1,5 @@
 use crate::domain;
 
-pub fn register(_app: &tauri::AppHandle) {}
-
 #[tauri::command]
 pub async fn download_image_as_buffer(url: String) -> Result<serde_json::Value, String> {
     domain::image_as_buffer(&url).await

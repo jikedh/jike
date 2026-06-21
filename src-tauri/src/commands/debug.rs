@@ -1,7 +1,5 @@
 use tauri::Manager;
 
-pub fn register(_app: &tauri::AppHandle) {}
-
 #[tauri::command]
 pub async fn debug_toggle_dev_tools(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     if let Some(w) = app.get_webview_window("main") {

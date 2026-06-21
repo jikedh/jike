@@ -5,8 +5,6 @@
 
 use crate::domain::tray_service;
 
-pub fn register(_app: &tauri::AppHandle) {}
-
 #[tauri::command]
 pub async fn tray_build_menu(window_visible: bool) -> Result<serde_json::Value, String> {
     let items = tray_service::build_default_menu(window_visible);
