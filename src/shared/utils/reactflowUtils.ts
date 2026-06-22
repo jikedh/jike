@@ -14,8 +14,8 @@ import type {
 
 /** 图片轮询间隔（毫秒） */
 export const IMAGE_POLL_INTERVAL = 10000;
-/** 图片生成超时（毫秒）= 5 分钟 */
-export const IMAGE_TIMEOUT = 5 * 60 * 1000;
+/** 图片生成超时（毫秒）= 30 分钟 */
+export const IMAGE_TIMEOUT = 30 * 60 * 1000;
 /** 视频轮询间隔（毫秒） */
 export const VIDEO_POLL_INTERVAL = 10000;
 /** 视频生成超时（毫秒）= 30 分钟 */
@@ -45,9 +45,9 @@ export const getNextNodePosition = (nodes: AllNodeType[]) => {
 
   return lastNode
     ? {
-        x: lastNode.position.x + 40,
-        y: lastNode.position.y + 40,
-      }
+      x: lastNode.position.x + 40,
+      y: lastNode.position.y + 40,
+    }
     : fallbackPosition;
 };
 
