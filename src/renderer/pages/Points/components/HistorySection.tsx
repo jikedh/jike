@@ -433,7 +433,7 @@ const TransactionDetailDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#1a1a1e] border-white/10 text-white max-h-[80vh] overflow-y-auto">
+      <DialogContent className="bg-[#1a1a1e] border-white/10 text-white max-h-[80vh] overflow-y-auto no-scrollbar">
         <DialogClose className="text-white/40 hover:text-white hover:bg-white/10">
           <X className="h-4 w-4" />
         </DialogClose>
@@ -628,6 +628,7 @@ const TransactionHistoryList = ({
 type HistorySectionProps = {
   activeTab: ActiveTab;
   onTabChange: (tab: ActiveTab) => void;
+  visibleTabs?: ActiveTab[];
   records: ScoreRecordItem[];
   transactions: ScoreTransactionItem[];
   page: number;
@@ -648,6 +649,7 @@ export const HistorySection = (props: HistorySectionProps) => {
   const {
     activeTab,
     onTabChange,
+    visibleTabs = ["usage", "transaction"],
     records,
     transactions,
     page,
@@ -666,6 +668,9 @@ export const HistorySection = (props: HistorySectionProps) => {
   const pageSize = 10;
   const totalPages = Math.ceil(total / pageSize);
   const transactionsTotalPages = Math.ceil(transactionsTotal / pageSize);
+  const showUsageTab = visibleTabs.includes("usage");
+  const showTransactionTab = visibleTabs.includes("transaction");
+  const shouldShowUsage = activeTab === "usage" && showUsageTab;
 
   // 积分消耗明细详情弹窗状态
   const [detailRecord, setDetailRecord] = useState<ScoreRecordItem | null>(null);
@@ -689,23 +694,27 @@ export const HistorySection = (props: HistorySectionProps) => {
     <section className="space-y-6">
       <header className="flex items-center justify-between border-b border-white/5">
         <nav className="flex gap-8">
-          {/* <TabButton
-            active={activeTab === "usage"}
-            icon={<ReceiptText className="h-4 w-4" />}
-            label="积分消耗明细"
-            onClick={() => onTabChange("usage")}
-          /> */}
-          <TabButton
-            active={activeTab === "transaction"}
-            icon={<CreditCard className="h-4 w-4" />}
-            label="充值消费明细"
-            onClick={() => onTabChange("transaction")}
-          />
+          {showTransactionTab ? (
+            <TabButton
+              active={activeTab === "transaction"}
+              icon={<CreditCard className="h-4 w-4" />}
+              label="充值消费明细"
+              onClick={() => onTabChange("transaction")}
+            />
+          ) : null}
+          {showUsageTab ? (
+            <TabButton
+              active={activeTab === "usage"}
+              icon={<ReceiptText className="h-4 w-4" />}
+              label="积分消耗明细"
+              onClick={() => onTabChange("usage")}
+            />
+          ) : null}
         </nav>
       </header>
 
       <article className="overflow-hidden rounded-[24px] border border-white/5 bg-[#121214]">
-        {activeTab === "usage" ? (
+        {shouldShowUsage ? (
           <>
             <UsageHistoryList
               records={records}
