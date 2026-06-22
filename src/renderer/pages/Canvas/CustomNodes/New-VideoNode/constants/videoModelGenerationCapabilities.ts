@@ -205,6 +205,13 @@ export const VIDEO_MODEL_GENERATION_CAPABILITIES: Record<
       },
     },
   },
+  // Agnes-Video-V2.0：仅支持文生视频与图生视频；图生视频最多支持 10 张参考图。
+  "agnes-video-v2.0": {
+    modes: {
+      "text-to-video": { references: emptyReferences },
+      "image-to-video": { references: onlyImages(1, 10) },
+    },
+  },
 };
 const getModelLabel = (modelId: string) =>
   MOCK_MAIN_MODELS.find((model) => model.id === modelId)?.label ?? modelId;

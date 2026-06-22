@@ -29,6 +29,15 @@ export type VideoParamState = {
   autoDuration?: boolean;
   /** 联网搜索增强（仅 Pro 模式可用） */
   webSearch?: boolean;
+  // ===================== Agnes-Video-V2.0 专属字段 =====================
+  /** 视频总帧数（num_frames：必须 ≤ 441 且满足 8n + 1） */
+  agnesNumFrames?: number;
+  /** 视频帧率（frame_rate：1-60） */
+  agnesFrameRate?: number;
+  /** 随机种子（保证结果可复现） */
+  agnesSeed?: number;
+  /** 负向提示词 */
+  agnesNegativePrompt?: string;
 };
 
 export type VideoParamConfig = {
@@ -155,6 +164,14 @@ const duration5_10 = {
     { label: "15s", value: 15 },
   ],
 };
+
+// Agnes-Video-V2.0 常用的目标时长（以秒为单位），背后会按 frame_rate 24 推算 num_frames。
+const agnesDurationPresets = [
+  { label: "3s", value: 3 },
+  { label: "5s", value: 5 },
+  { label: "10s", value: 10 },
+  { label: "18s", value: 18 },
+];
 
 const byModeKey = (modelId: string, mode: VideoModeKey) => `${modelId}:${mode}`;
 
@@ -525,6 +542,47 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
     },
   },
   [byModeKey("kling-v3-omni", "all-reference")]: kuaiziKlingOmniConfig(),
+  // ===================== Agnes-Video-V2.0 =====================
+  // Agnes 把宽高比、分辨率、帧数、帧率都暴露给前端。分辨率/帧率交给专门的 Agnes 面板控件；
+  // 这里保留宽高比与通用时长以便与现有 VideoParamsPopover 共存。
+  [byModeKey("agnes-video-v2.0", "text-to-video")]: {
+    modelId: "agnes-video-v2.0",
+    mode: "text-to-video",
+    aspectRatios: [
+      RATIO.wide,
+      RATIO.vertical,
+      RATIO.square,
+      RATIO.classic,
+      RATIO.portrait,
+    ],
+    duration: { type: "buttons", options: agnesDurationPresets },
+    defaults: {
+      aspectRatio: "16:9",
+      duration: 5,
+      generateAudio: false,
+      agnesNumFrames: 121,
+      agnesFrameRate: 24,
+    },
+  },
+  [byModeKey("agnes-video-v2.0", "image-to-video")]: {
+    modelId: "agnes-video-v2.0",
+    mode: "image-to-video",
+    aspectRatios: [
+      RATIO.wide,
+      RATIO.vertical,
+      RATIO.square,
+      RATIO.classic,
+      RATIO.portrait,
+    ],
+    duration: { type: "buttons", options: agnesDurationPresets },
+    defaults: {
+      aspectRatio: "16:9",
+      duration: 5,
+      generateAudio: false,
+      agnesNumFrames: 121,
+      agnesFrameRate: 24,
+    },
+  },
 };
 
 export const getVideoParamConfig = (modelId: string, mode?: VideoModeKey) =>

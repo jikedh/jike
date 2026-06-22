@@ -80,6 +80,23 @@ const extractKuaiziVideoItems = (response: any) => {
   }));
 };
 
+// Agnes-Video-V2.0 完成态在顶层 remixed_from_video_id 字段返回视频 URL。
+const extractAgnesVideoItems = (response: any) => {
+  const candidates = [
+    response?.remixed_from_video_id,
+    response?.data?.remixed_from_video_id,
+  ].filter((url): url is string => typeof url === "string" && url.length > 0);
+
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  return Array.from(new Set(candidates)).map((url) => ({
+    url,
+    format: "mp4",
+  }));
+};
+
 const getErrorMessage = (response: any, fallbackMessage: string) => {
   const message =
     response?.error?.message ||
@@ -110,7 +127,66 @@ const isKuaiziResponse = (response: any): boolean =>
   response?.output?.task_status !== undefined ||
   response?.data?.task_status !== undefined;
 
+// Agnes-Video-V2.0 响应在顶层以 status: queued/in_progress/completed/failed 标识，
+// 视频 URL 在 remixed_from_video_id 字段。
+const isAgnesVideoResponse = (response: any): boolean => {
+  const status = response?.status;
+  return (
+    status === "queued" ||
+    status === "in_progress" ||
+    status === "completed" ||
+    status === "failed"
+  );
+};
+
+const agnesVideoStatusMap: Record<string, GenerationStatus> = {
+  queued: GenerationStatus.QUEUED,
+  in_progress: GenerationStatus.IN_PROGRESS,
+  completed: GenerationStatus.COMPLETED,
+  failed: GenerationStatus.FAILED,
+};
+
 export const normalizeVideoTaskResponse = (response: any) => {
+  // Agnes-Video-V2.0 优先识别，避免与 kuaizi/dashscope 格式混淆
+  if (isAgnesVideoResponse(response)) {
+    const rawStatus = String(response?.status ?? "");
+    const taskId = response?.video_id ?? response?.id ?? response?.task_id;
+    const progress = response?.progress ?? 0;
+    const videoItems = extractAgnesVideoItems(response);
+
+    if (rawStatus === "completed") {
+      return {
+        status: GenerationStatus.COMPLETED,
+        progress: 100,
+        taskId,
+        videoItems,
+        missingResultUrl: videoItems.length === 0,
+        errorMessage: undefined,
+      };
+    }
+
+    if (rawStatus === "failed") {
+      return {
+        status: GenerationStatus.FAILED,
+        progress,
+        taskId,
+        videoItems: [],
+        missingResultUrl: false,
+        errorMessage: getErrorMessage(response, "生成失败，请稍后再试"),
+      };
+    }
+
+    return {
+      status:
+        agnesVideoStatusMap[rawStatus] ?? GenerationStatus.IN_PROGRESS,
+      progress,
+      taskId,
+      videoItems,
+      missingResultUrl: false,
+      errorMessage: undefined,
+    };
+  }
+
   if (isKuaiziResponse(response)) {
     const rawStatus = String(
       response?.output?.task_status ?? response?.data?.task_status ?? "",

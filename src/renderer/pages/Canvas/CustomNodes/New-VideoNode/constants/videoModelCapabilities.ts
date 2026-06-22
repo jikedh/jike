@@ -266,6 +266,17 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
       },
     ],
   },
+  {
+    // Agnes-Video-V2.0 通过桌面代理接入 apihub.agnes-ai.com
+    id: "agnes-video-v2.0",
+    label: "Agnes Video V2.0",
+    variants: [
+      {
+        id: "agnes-video-v2.0",
+        supportedModes: ["text-to-video", "image-to-video"],
+      },
+    ],
+  },
 ];
 
 export const getVisibleVideoModels = () => MOCK_MAIN_MODELS;

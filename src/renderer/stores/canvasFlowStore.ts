@@ -87,6 +87,7 @@ import { withVideoPosterFields } from "shared/utils/videoPoster";
 import { toast } from "sonner";
 import { create } from "zustand";
 import {
+  createAgnesVideoTask,
   createDashscopeVideoSynthesis,
   createKuaiziHappyHorseVideoTask,
   createKuaiziKlingVideoTask,
@@ -94,6 +95,7 @@ import {
   createLzVideoTask,
   fetchMjTask,
   generateGeminiContent,
+  getAgnesVideoTaskStatus,
   getDashscopeVideoTaskStatus,
   getImageTaskStatus,
   getLzVideoTaskStatus,
@@ -1707,7 +1709,7 @@ const pollNewVideoGeneration = async ({
   taskIndex: number;
   totalTasks: number;
   ledgerBizId?: string;
-  videoProvider?: "seedance" | "kuaizi" | "dashscope";
+  videoProvider?: "seedance" | "kuaizi" | "dashscope" | "agnes";
 }) => {
   const startTime = Date.now();
   let missingResultUrlStartTime: number | null = null;
@@ -1729,9 +1731,12 @@ const pollNewVideoGeneration = async ({
           })),
         }));
         if (ledgerBizId) {
+          const bizType =
+            videoProvider === "agnes" ? "agnes" : "video";
           refundDesktopProxyScore(
             ledgerBizId,
             "video generation timeout",
+            bizType,
           ).catch(() => { });
         }
         await updateVideoTrackFinalStatus(
@@ -1754,9 +1759,11 @@ const pollNewVideoGeneration = async ({
             ? currentNode.data.model === "happyhorse-1.0-r2v"
               ? await getKuaiziHappyHorseVideoTaskStatus(taskId)
               : await getKuaiziKlingVideoTaskStatus(taskId)
-            : isSeedance20
-              ? await getLzVideoTaskStatus(taskId)
-              : await getDashscopeVideoTaskStatus(taskId);
+            : videoProvider === "agnes"
+              ? await getAgnesVideoTaskStatus(taskId)
+              : isSeedance20
+                ? await getLzVideoTaskStatus(taskId)
+                : await getDashscopeVideoTaskStatus(taskId);
 
       const normalized = normalizeVideoTaskResponse(response);
       const normalizedTaskId = normalized.taskId ?? taskId;
@@ -1789,9 +1796,12 @@ const pollNewVideoGeneration = async ({
 
           stopVideoPollingInternal(nodeId);
           if (ledgerBizId) {
+            const bizType =
+              videoProvider === "agnes" ? "agnes" : "video";
             refundDesktopProxyScore(
               ledgerBizId,
               "任务已完成但未返回视频地址",
+              bizType,
             ).catch(() => { });
           }
           await updateVideoTrackFinalStatus(
@@ -1897,7 +1907,10 @@ const pollNewVideoGeneration = async ({
 
         stopVideoPollingInternal(nodeId);
         if (ledgerBizId) {
-          confirmDesktopProxyScore(ledgerBizId, "video").catch(() => { });
+          // Agnes 走独立的积分业务类型；其他视频模型沿用 video 流水。
+          const bizType =
+            videoProvider === "agnes" ? "agnes" : "video";
+          confirmDesktopProxyScore(ledgerBizId, bizType).catch(() => { });
         }
         await updateVideoTrackFinalStatus(
           normalizedTaskId,
@@ -4253,13 +4266,29 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             );
           } else if (isSeedance20) {
             response = await createLzVideoTask(requestPayload, requiredPoints);
+          } else if (model === "agnes-video-v2.0") {
+            // Agnes 走独立桌面代理通道，避免被误归类为 dashscope / kuaizi。
+            response = await createAgnesVideoTask(
+              requestPayload,
+              requiredPoints,
+            );
           } else {
             response = await createDashscopeVideoSynthesis(
               requestPayload,
               requiredPoints,
             );
           }
-          const taskId = response?.data?.task_id ?? response?.output?.task_id;
+          // 通用 taskId 提取：兼容 dashscope/kuaizi 的 data/output 嵌套，
+          // 以及 agnes-video-v2.0 的顶层 video_id / id / task_id 字段。
+          const taskId =
+            response?.data?.task_id ??
+            response?.output?.task_id ??
+            response?.video_id ??
+            response?.id ??
+            response?.task_id ??
+            response?.data?.taskId ??
+            response?.taskId ??
+            "";
 
           if (!taskId) {
             // 创建失败时，如果有 ledgerBizId 需要退款
@@ -4313,11 +4342,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             totalTasks,
             ledgerBizId,
             videoProvider:
-              model === "happyhorse-1.0-r2v" || model === "kling-v3-omni"
-                ? "kuaizi"
-                : isSeedance20
-                  ? "seedance"
-                  : "dashscope",
+              model === "agnes-video-v2.0"
+                ? "agnes"
+                : model === "happyhorse-1.0-r2v" || model === "kling-v3-omni"
+                  ? "kuaizi"
+                  : isSeedance20
+                    ? "seedance"
+                    : "dashscope",
           });
         });
       } catch (startError) {

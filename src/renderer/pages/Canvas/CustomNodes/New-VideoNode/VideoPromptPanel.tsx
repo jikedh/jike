@@ -1011,6 +1011,29 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     selectedParams.resolution,
   ]);
 
+  // Agnes 专属参数实时校验：仅当选中 Agnes 模型时纳入计算。
+  // 详细控件与字段级错误提示内嵌在 VideoParamsPopover.AgnesAdvancedParams 中，
+  // 这里只负责汇总并把"参数不合法"作为 disabledReason 透传给 BottomParamsBar。
+  const agnesParamHasError = useMemo(() => {
+    if (selectedModel !== "agnes-video-v2.0") return false;
+    const numFrames = selectedParams.agnesNumFrames ?? 121;
+    const frameRate = selectedParams.agnesFrameRate ?? 24;
+    if (!Number.isFinite(numFrames) || numFrames <= 0 || numFrames > 441) {
+      return true;
+    }
+    if ((numFrames - 1) % 8 !== 0) {
+      return true;
+    }
+    if (!Number.isFinite(frameRate) || frameRate < 1 || frameRate > 60) {
+      return true;
+    }
+    return false;
+  }, [
+    selectedModel,
+    selectedParams.agnesFrameRate,
+    selectedParams.agnesNumFrames,
+  ]);
+
   const isGenerating =
     currentData?.status === GenerationStatus.QUEUED ||
     currentData?.status === GenerationStatus.IN_PROGRESS;
@@ -1162,11 +1185,17 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
           onGenerate={handleGenerate}
           onStop={handleStop}
           isGenerating={isGenerating}
-          disabled={isUploading || !generationAvailability.canGenerate}
+          disabled={
+            isUploading ||
+            !generationAvailability.canGenerate ||
+            (selectedModel === "agnes-video-v2.0" && agnesParamHasError)
+          }
           disabledReason={
             isUploading
               ? "素材正在上传中，请稍后再生成"
-              : generationAvailability.summaryReason
+              : selectedModel === "agnes-video-v2.0" && agnesParamHasError
+                ? "Agnes 参数不合法，请修正后再提交"
+                : generationAvailability.summaryReason
           }
           accessory={
             <>

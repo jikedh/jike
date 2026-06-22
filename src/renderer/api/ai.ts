@@ -601,6 +601,69 @@ export async function getDashscopeVideoTaskStatus(taskId: string) {
   return unwrapDesktopProxyData(response);
 }
 
+// ===================== Agnes-Video-V2.0 相关 =====================
+//
+// 与 /pages/Video Demo 页面保持完全一致的请求路径与字段：
+// 创建: POST /desktop/v1/ai/generation/proxy -> platform=agnes -> /v1/videos
+// 查询: POST /desktop/v1/ai/task/query      -> platform=agnes -> /agnesapi?video_id=...
+
+/**
+ * 创建 Agnes-Video-V2.0 视频生成任务
+ */
+export async function createAgnesVideoTask(
+  data: Record<string, any>,
+  scoreCost?: number,
+) {
+  const response = await createDesktopProxyTask({
+    platform: "agnes",
+    upstreamPath: "/v1/videos",
+    method: "POST",
+    body: data,
+    scoreCost,
+    scoreBizType: "agnes",
+    scoreModel: data.model,
+    scoreSource: "agnes",
+    scoreSourceLabel: "Agnes 视频生成",
+  });
+
+  const rawData = unwrapDesktopProxyData(response);
+  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
+
+  await aiVideoTrackingService.track({
+    apiName: "/v1/videos",
+    model: String(data.model || ""),
+    taskId:
+      responseData?.video_id ||
+      responseData?.id ||
+      responseData?.task_id ||
+      "",
+    prompt: extractPrompt(data),
+    duration: extractDurationSeconds(data),
+    referenceImageUrls: extractReferenceImageUrls(data),
+    provider: "agnes",
+    requestParams: data,
+    status: responseData?.video_id || responseData?.id ? "PENDING" : "FAIL",
+    scoreCost,
+  });
+
+  return { ...responseData, ledgerBizId };
+}
+
+/**
+ * 查询 Agnes-Video-V2.0 任务状态（推荐使用 video_id）
+ * @param videoId 视频 ID（也兼容旧版 task_id）
+ */
+export async function getAgnesVideoTaskStatus(videoId: string) {
+  const response = await queryDesktopProxyTask({
+    platform: "agnes",
+    upstreamPath: "/agnesapi",
+    method: "GET",
+    query: { video_id: videoId, model_name: "agnes-video-v2.0" },
+  });
+
+  return unwrapDesktopProxyData(response);
+}
+
 async function createKuaiziOpenPlatformVideoTask({
   data,
   upstreamPath,

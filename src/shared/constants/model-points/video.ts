@@ -6,6 +6,7 @@ export const VIDEO_MODEL_POINTS: Record<string, number> = {
   "seedance-2.0-pro": 60, // 新版视频节点 Seedance 2.0 Pro
   "wan2.7-r2v": 36, // 默认 720p 基础分
   "pixverse-i2v": 60,
+  "agnes-video-v2.0": 0, // Agnes-Video-V2.0 当前为免费模型，固定 0 积分
 };
 
 export const DEFAULT_VIDEO_GENERATION_POINTS = 60;
@@ -175,6 +176,11 @@ export const getVideoGenerationPoints = ({
     }
 
     return totalPoints;
+  }
+
+  // Agnes-Video-V2.0：当前为免费模型，固定消耗 0 积分。
+  if (model === "agnes-video-v2.0") {
+    return 0;
   }
 
   // 特殊逻辑：PixVerse (pixverse-i2v)

@@ -23,6 +23,27 @@ export type NewVideoApiRequest =
   | ViduQ3Image2VideoRequest
   | KuaiziHappyHorseVideoRequest
   | KuaiziKlingOmniVideoRequest
+  | AgnesVideoRequest;
+
+// Agnes-Video-V2.0 请求体：完全对齐 apihub.agnes-ai.com 的 POST /v1/videos 入参。
+type AgnesVideoRequest = {
+  model: "agnes-video-v2.0";
+  prompt: string;
+  // 图生视频（单张图片动画化）：传单个图片 URL。
+  image?: string;
+  // 多图视频生成 / 关键帧动画：传图片 URL 数组，必要时附带 mode。
+  extra_body?: {
+    image?: string[];
+    mode?: "keyframes";
+  };
+  width?: number;
+  height?: number;
+  num_frames?: number;
+  frame_rate?: number;
+  num_inference_steps?: number;
+  seed?: number;
+  negative_prompt?: string;
+};
 type ViduQ3Image2VideoRequest = {
   model: "vidu/viduq3_turbo_img2video" | "vidu/viduq3-pro_img2video";
   input: {
@@ -851,7 +872,157 @@ export const buildVideoApiRequest = (
       return buildKelingRequest(request);
     case "kling-v3-omni":
       return buildKuaiziKlingOmniRequest(request);
+    case "agnes-video-v2.0":
+      return buildAgnesRequest(request);
     default:
       return buildSeedanceRequest(request);
   }
+};
+
+// ============ Agnes-Video-V2.0 ============
+// 宽高比 → width / height 标准化映射
+const AGNES_RATIO_SIZES: Record<string, { width: number; height: number }> = {
+  "16:9": { width: 1152, height: 768 },
+  "9:16": { width: 768, height: 1152 },
+  "1:1": { width: 960, height: 960 },
+  "4:3": { width: 1024, height: 768 },
+  "3:4": { width: 768, height: 1024 },
+};
+
+// num_frames 必须满足 8n+1 且 ≤ 441
+const sanitizeAgnesNumFrames = (value: number | undefined, fallback: number) => {
+  if (!Number.isFinite(value)) return fallback;
+  const v = Math.max(1, Math.min(441, Math.round(Number(value))));
+  return v - ((v - 1) % 8);
+};
+
+// frame_rate 限制在 1-60
+const sanitizeAgnesFrameRate = (value: number | undefined, fallback: number) => {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(1, Math.min(60, Math.round(Number(value))));
+};
+
+// 把通用 duration（秒）按 frame_rate 推算 num_frames，作为缺省值兜底
+const estimateAgnesNumFrames = (seconds: number, frameRate: number) => {
+  const frames = Math.round(seconds * frameRate);
+  return sanitizeAgnesNumFrames(frames, 121);
+};
+
+// 中文数字 → 阿拉伯数字
+const CHINESE_NUMERALS: Record<string, number> = {
+  零: 0,
+  一: 1,
+  二: 2,
+  三: 3,
+  四: 4,
+  五: 5,
+  六: 6,
+  七: 7,
+  八: 8,
+  九: 9,
+  十: 10,
+};
+
+const chineseToNumber = (text: string): number | null => {
+  // 简单支持 1-19：一二三四五六七八九十 十一 十二 ... 十九
+  if (text.length === 1) {
+    const direct = CHINESE_NUMERALS[text];
+    return typeof direct === "number" ? direct : null;
+  }
+  if (text.length === 2 && text[0] === "十") {
+    return 10 + (CHINESE_NUMERALS[text[1]] ?? 0);
+  }
+  if (text.length === 2 && text[1] === "十") {
+    return (CHINESE_NUMERALS[text[0]] ?? 0) * 10;
+  }
+  return null;
+};
+
+// 把 prompt 中 "图片N"（N 是中文或阿拉伯数字）替换为对应的图片名称。
+// 仅 image-to-video 模式生效；imageNames 与 getImages() 顺序一致。
+const replaceImageMentions = (
+  prompt: string,
+  imageNames: string[],
+): string => {
+  if (!prompt || imageNames.length === 0) return prompt;
+  return prompt.replace(/图片([0-9〇零一二三四五六七八九十]{1,3})/g, (_, token) => {
+    let index: number | null = null;
+    if (/^\d+$/.test(token)) {
+      index = Number.parseInt(token, 10);
+    } else {
+      index = chineseToNumber(token);
+    }
+    if (index === null || index < 1 || index > imageNames.length) {
+      return token; // 保持原样，避免误替换
+    }
+    return imageNames[index - 1] ?? token;
+  });
+};
+
+// 按图片参考顺序提取名称，与 getImages() 顺序保持一致。
+const getImageNames = (request: VideoGenerateRequest): string[] =>
+  request.referenceItems
+    .filter((item) => item.type === "image")
+    .map((item) => item.label);
+
+const buildAgnesRequest = (request: VideoGenerateRequest): AgnesVideoRequest => {
+  const images = getImages(request);
+  const ratio = isOneOf(
+    getRatio(request),
+    ["16:9", "9:16", "1:1", "4:3", "3:4"] as const,
+    "16:9",
+  );
+  const size = AGNES_RATIO_SIZES[ratio] ?? AGNES_RATIO_SIZES["16:9"]!;
+
+  const frameRate = sanitizeAgnesFrameRate(
+    request.params.agnesFrameRate,
+    24,
+  );
+  const numFrames =
+    request.params.agnesNumFrames && request.params.agnesNumFrames > 0
+      ? sanitizeAgnesNumFrames(request.params.agnesNumFrames, 121)
+      : estimateAgnesNumFrames(request.params.duration, frameRate);
+
+  const body: AgnesVideoRequest = {
+    model: "agnes-video-v2.0",
+    prompt: getPrompt(request.prompt),
+    width: size.width,
+    height: size.height,
+    num_frames: numFrames,
+    frame_rate: frameRate,
+  };
+
+  const negativePrompt = request.params.agnesNegativePrompt?.trim();
+  if (negativePrompt) {
+    body.negative_prompt = negativePrompt;
+  }
+
+  if (
+    typeof request.params.agnesSeed === "number" &&
+    Number.isFinite(request.params.agnesSeed)
+  ) {
+    body.seed = Math.trunc(request.params.agnesSeed);
+  }
+
+  if (request.mode === "image-to-video") {
+    // Agnes-Video-V2.0 图生视频：
+    //   1 张 → 走顶层 image（单图动画化，apihub 要求 string）
+    //   多张 → 走 extra_body.image（多图视频生成 / 关键帧动画）
+    const referenceImages = images.slice(0, 10);
+    if (referenceImages.length === 1) {
+      body.image = referenceImages[0];
+    } else if (referenceImages.length > 1) {
+      body.extra_body = {
+        ...(body.extra_body ?? {}),
+        image: referenceImages,
+      };
+    }
+    if (referenceImages.length > 0) {
+      // 用户在输入框中 @ 提及 "图片1" / "图片二" 时，需要把字面量替换为对应图片名称
+      // 再发送给上游；其它模式不涉及参考图，跳过此步。
+      body.prompt = replaceImageMentions(body.prompt, getImageNames(request));
+    }
+  }
+
+  return body;
 };
