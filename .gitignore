@@ -28,10 +28,6 @@ out
 .codegraph
 *.log*
 release
-resources/python
-resources/flow2api-main
-agent.md
-AGENTS.md
 findings.md
 progress.md
 task_plan.md
