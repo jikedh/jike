@@ -246,9 +246,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const startGeminiPro2Generation = useCanvasFlowStore(
     (state) => state.startGeminiPro2Generation,
   );
-  const stopImagePolling = useCanvasFlowStore(
-    (state) => state.stopImagePolling,
-  );
   const updateImageNodeData = useCanvasFlowStore(
     (state) => state.updateImageNodeData,
   );
@@ -1550,20 +1547,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   };
 
   /**
-   * 停止正在进行的图片生成轮询。
+   * 图片生成任务一旦发起即不可中断，停止按钮仅作占位展示，已禁用点击响应。
    */
-  const handleStop = useCallback(() => {
-    if (!isGenerating) return;
-    stopImagePolling(nodeId);
-    // 重置节点状态为完成，清除进度和结果
-    updateImageNodeData(nodeId, {
-      status: GenerationStatus.COMPLETED,
-      progress: 0,
-      result: undefined,
-      error: undefined,
-    });
-    success("已停止生成");
-  }, [isGenerating, stopImagePolling, nodeId, success, updateImageNodeData]);
 
   return (
     <div className={PROMPT_PANEL_STYLES.container}>
@@ -1966,8 +1951,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               <Button
                 type="button"
                 unstyled
-                className={PROMPT_PANEL_STYLES.stopButton}
-                onClick={handleStop}
+                // 图片生成任务创建后不可中断，停止按钮仅作占位展示，主动禁用点击响应
+                className={cn(
+                  PROMPT_PANEL_STYLES.stopButton,
+                  "cursor-not-allowed opacity-60 hover:scale-100 active:scale-100 hover:bg-red-500/80",
+                )}
+                disabled
+                aria-disabled
+                title="生成任务已创建，无法停止"
               >
                 停止
               </Button>
