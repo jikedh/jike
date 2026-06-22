@@ -17,8 +17,11 @@ import { RECHARGE_PACKAGES } from "./lib/constants";
 import type { ActiveTab, NativePayOrder, RechargePackage } from "./lib/types";
 import { generateAvatarUrl, getRandomStyle } from "./lib/utils";
 
+const visibleHistoryTabs: ActiveTab[] = ["transaction", "usage"];
+const defaultHistoryTab = visibleHistoryTabs[0] ?? "transaction";
+
 export function PointsView() {
-    const [activeTab, setActiveTab] = useState<ActiveTab>("usage");
+    const [activeTab, setActiveTab] = useState<ActiveTab>(defaultHistoryTab);
     const [avatarUrl, setAvatarUrl] = useState<string>("");
     const [userId, setUserId] = useState<string>("");
     const [selectedPackageId, setSelectedPackageId] = useState<number | null>(
@@ -42,7 +45,6 @@ export function PointsView() {
     const [transactionsTotal, setTransactionsTotal] = useState(0);
     const [transactionsLoading, setTransactionsLoading] = useState(false);
     const [transactionsError, setTransactionsError] = useState<string | null>(null);
-    const hasRequestedTransactionsRef = useRef(false);
     const transactionsRequestRef = useRef<{ page: number; id: number } | null>(
         null,
     );
@@ -78,7 +80,6 @@ export function PointsView() {
         const requestId = transactionsRequestIdRef.current + 1;
         transactionsRequestIdRef.current = requestId;
         transactionsRequestRef.current = { page, id: requestId };
-        hasRequestedTransactionsRef.current = true;
 
         setTransactionsLoading(true);
         setTransactionsError(null);
@@ -103,6 +104,12 @@ export function PointsView() {
     }, []);
 
     useEffect(() => {
+        if (!visibleHistoryTabs.includes(activeTab)) {
+            setActiveTab(defaultHistoryTab);
+        }
+    }, [activeTab]);
+
+    useEffect(() => {
         const token = getJikeingToken();
         if (token) {
             const userId = getJikeingUserId();
@@ -113,19 +120,14 @@ export function PointsView() {
             setAvatarUrl(url);
 
             void fetchBalanceInfo();
-            void fetchRecords(1);
+            if (visibleHistoryTabs.includes("usage")) {
+                void fetchRecords(1);
+            }
+            if (visibleHistoryTabs.includes("transaction")) {
+                void fetchTransactions(1);
+            }
         }
-    }, [fetchBalanceInfo, fetchRecords]);
-
-    useEffect(() => {
-        if (
-            activeTab === "transaction" &&
-            getJikeingToken() &&
-            !hasRequestedTransactionsRef.current
-        ) {
-            void fetchTransactions(1);
-        }
-    }, [activeTab, fetchTransactions]);
+    }, [fetchBalanceInfo, fetchRecords, fetchTransactions]);
 
     const selectedPackage =
         selectedPackageId === null
@@ -195,8 +197,12 @@ export function PointsView() {
                             });
                         }
                         void fetchBalanceInfo();
-                        void fetchRecords(1);
-                        void fetchTransactions(1);
+                        if (visibleHistoryTabs.includes("usage")) {
+                            void fetchRecords(1);
+                        }
+                        if (visibleHistoryTabs.includes("transaction")) {
+                            void fetchTransactions(1);
+                        }
                         toast.success("充值成功，积分已到账");
                     } catch (error: any) {
                         console.error(error);
@@ -273,6 +279,7 @@ export function PointsView() {
                 <HistorySection
                     activeTab={activeTab}
                     onTabChange={setActiveTab}
+                    visibleTabs={visibleHistoryTabs}
                     records={records}
                     transactions={transactions}
                     page={recordsPage}
