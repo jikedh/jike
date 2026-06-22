@@ -19,7 +19,8 @@ export type DesktopProxyPlatform =
   | "dashscope"
   | "toapi"
   | "zeakai"
-  | "yunwu";
+  | "yunwu"
+  | "agnes";
 
 // ===================== 画质增强相关 =====================
 
@@ -73,7 +74,11 @@ export type EstimateEnhanceCostResponse = {
   effective_fps: number;
 };
 
-export type DesktopProxyScoreBizType = "image" | "video" | "runninghub_v2";
+export type DesktopProxyScoreBizType =
+  | "image"
+  | "video"
+  | "runninghub_v2"
+  | "agnes";
 
 export type DesktopProxyRequest = {
   platform: DesktopProxyPlatform;
