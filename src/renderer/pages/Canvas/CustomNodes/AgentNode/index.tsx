@@ -1,6 +1,6 @@
 import { IconRobot } from "@tabler/icons-react";
 import { type NodeProps, Position } from "@xyflow/react";
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { getAgentPresetLabelById } from "shared/constants/agent-presets";
 import type { AgentNodeType } from "shared/types/flow";
 import { ButtonHandle } from "@/components/button-handle";
@@ -71,9 +71,17 @@ export const AgentNode = memo(
       [id, updateNodeNickname],
     );
 
+    const handleDuplicate = useCallback(() => {
+      duplicateNode(id);
+    }, [duplicateNode, id]);
+
+    const handleEditEnd = useCallback(() => setIsRenaming(false), []);
+
+    const nodeIcon = useMemo(() => <IconRobot size={14} />, []);
+
     return (
       <NodeContextMenu
-        onDuplicate={() => duplicateNode(id)}
+        onDuplicate={handleDuplicate}
         onDelete={handleDelete}
       >
         <div className="group/node relative">
@@ -86,11 +94,11 @@ export const AgentNode = memo(
             )}
           >
             <NodeNameBadge
-              icon={<IconRobot size={14} />}
+              icon={nodeIcon}
               selected={selected}
               isEditing={isRenaming}
               onEditStart={handleRenameStart}
-              onEditEnd={() => setIsRenaming(false)}
+              onEditEnd={handleEditEnd}
               onRename={handleRename}
             >
               {nodeLabel}

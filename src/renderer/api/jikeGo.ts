@@ -73,7 +73,7 @@ export type EstimateEnhanceCostResponse = {
   effective_fps: number;
 };
 
-export type DesktopProxyScoreBizType = "image" | "video";
+export type DesktopProxyScoreBizType = "image" | "video" | "runninghub_v2";
 
 export type DesktopProxyRequest = {
   platform: DesktopProxyPlatform;
@@ -317,13 +317,35 @@ export function getJikeGoUserInfo(): any {
   });
 }
 
-export function updateJikeGoUserInfo(data: {
-  nickname: string;
-  avatar: string;
-}): any {
+// 个人信息更新请求体：所有字段可选，仅传入字段会被更新
+export type UpdateJikeGoUserInfoRequest = {
+  nickname?: string;
+  avatar?: string;
+  mobile?: string;
+  email?: string;
+};
+
+export function updateJikeGoUserInfo(data: UpdateJikeGoUserInfoRequest): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/v1/user/info",
+    method: "put",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+// 修改登录密码：新密码长度 ≥ 1
+export type UpdateJikeGoUserPasswordRequest = {
+  new_password: string;
+};
+
+export function updateJikeGoUserPassword(
+  data: UpdateJikeGoUserPasswordRequest,
+): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/user/password",
     method: "put",
     data,
     headers: getJikeGoAuthHeaders(),

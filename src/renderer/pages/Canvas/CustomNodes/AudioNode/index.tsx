@@ -759,8 +759,9 @@ export const AudioNode = memo(
       (state) => state.updateAudioNodeData,
     );
     const onConnect = useCanvasFlowStore((state) => state.onConnect);
-    const highlightedSourceNodeIds = useCanvasFlowStore(
-      (state) => state.highlightedSourceNodeIds,
+    // 仅订阅与当前节点相关的派生布尔值，避免高亮列表变化时所有节点重渲染
+    const isSourceHighlighted = useCanvasFlowStore((state) =>
+      state.highlightedSourceNodeIds.includes(id),
     );
     const { setNodes: setReactFlowNodes } = useReactFlow();
     const { success, error: showError } = useMessage();
@@ -772,12 +773,14 @@ export const AudioNode = memo(
 
     const audioUrl = data.result?.data?.[0]?.url;
 
-    const selectedNodesCount = useStore((state) => {
+    // 仅订阅与当前节点相关的派生布尔值，避免选中数量变化时所有节点重渲染
+    const hasMultipleSelected = useStore((state) => {
       let count = 0;
       for (const node of state.nodes) {
         if (node.selected) count++;
+        if (count > 1) break;
       }
-      return count;
+      return count > 1;
     });
 
     useEffect(() => {
@@ -806,13 +809,9 @@ export const AudioNode = memo(
     );
 
     const shouldShowToolbar = useMemo(
-      () => selected && !isDragging && selectedNodesCount <= 1,
-      [selected, isDragging, selectedNodesCount],
+      () => selected && !isDragging && !hasMultipleSelected,
+      [selected, isDragging, hasMultipleSelected],
     );
-
-    const isSourceHighlighted = useMemo(() => {
-      return highlightedSourceNodeIds.includes(id);
-    }, [highlightedSourceNodeIds, id]);
 
     const handleDuplicate = useCallback(() => {
       duplicateNode(id);
@@ -957,11 +956,20 @@ export const AudioNode = memo(
       data.badgeLabel ??
       (isUploadAudio ? "上传音频" : "生成音频");
 
+    const handleContextMenuCreateAsset = useCallback(
+      () => dispatchCreateAssetFromNode(id),
+      [id],
+    );
+
+    const handleEditEnd = useCallback(() => setIsRenaming(false), []);
+
+    const nodeIcon = useMemo(() => <IconMusic size={14} />, []);
+
     return (
       <NodeContextMenu
         onDuplicate={handleDuplicate}
         onDelete={handleDelete}
-        onCreateAsset={() => dispatchCreateAssetFromNode(id)}
+        onCreateAsset={handleContextMenuCreateAsset}
       >
         <div
           className="group/node relative"
@@ -1004,11 +1012,11 @@ export const AudioNode = memo(
             style={{ pointerEvents: "auto" }}
           >
             <NodeNameBadge
-              icon={<IconMusic size={14} />}
+              icon={nodeIcon}
               selected={selected}
               isEditing={isRenaming}
               onEditStart={handleRenameStart}
-              onEditEnd={() => setIsRenaming(false)}
+              onEditEnd={handleEditEnd}
               onRename={handleRename}
             >
               {badgeLabel}
@@ -1050,7 +1058,7 @@ export const AudioNode = memo(
                 trimEnd={trimEnd}
                 onTrimStartChange={setTrimStart}
                 onTrimEndChange={setTrimEnd}
-                onPreviewTrim={() => {}}
+                onPreviewTrim={() => { }}
                 audioRef={audioRef}
               />
             </div>

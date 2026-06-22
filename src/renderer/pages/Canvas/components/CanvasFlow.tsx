@@ -614,9 +614,11 @@ export const CanvasFlow = ({
     handleFiles,
   } = useDragUpload();
 
-  // 空格键按下状态同时驱动 React Flow 的平移/框选切换。
+  // 空格键按下状态：仅通过 ref 暴露给事件回调（pan、group 拖拽等），
+  // 不再使用 useState，避免每次 keydown/keyup 触发 CanvasFlow 整树重渲染。
+  // 光标切换走 `data-space-pressed` DOM 属性，pan 走 React Flow 自身的
+  // `panActivationKeyCode="Space"`，两者都无需 React 参与。
   const spacePressedRef = useRef(false);
-  const [isSpacePressed, setIsSpacePressed] = useState(false);
   const previousAnnotationViewportRef = useRef<{
     x: number;
     y: number;
@@ -810,6 +812,13 @@ export const CanvasFlow = ({
         const generatingNodes = selectedNodes.filter(
           needsGeneratingDeleteConfirm,
         );
+        const nodeIdsToDelete = selectedNodes.map((node) => node.id);
+        const edgeIdsToDelete = selectedEdges.map((edge) => edge.id);
+        // 阻止默认行为（删除字符等）必须同步执行
+        event.preventDefault();
+        // 删除会同步触发：双历史快照（深克隆）+ buildCanvasPersistedState + saveGraph 全量序列化，
+        // 在节点/图片数据量大时会长时间阻塞主线程。把实际删除操作延后到下一个 macrotask，
+        // 让浏览器先呈现一帧，keydown 处理时间降到几乎为 0。
         if (generatingNodes.length > 0) {
           const uniqueLabels = Array.from(
             new Set(
@@ -822,26 +831,20 @@ export const CanvasFlow = ({
             generatingNodes.length === 1
               ? `当前${uniqueLabels[0]}还在生成中，确定要删除吗？`
               : `当前选中的节点里有 ${generatingNodes.length} 个生成中的节点（${uniqueLabels.join("、")}），确定要删除吗？`;
-          const nodesToDelete = [...selectedNodes];
-          const edgesToDelete = [...selectedEdges];
-          event.preventDefault();
-          openDeleteConfirmDialog({
-            message,
-            onConfirm: () => {
-              deleteMultipleElements(
-                nodesToDelete.map((node) => node.id),
-                edgesToDelete.map((edge) => edge.id),
-              );
-            },
-          });
+          globalThis.setTimeout(() => {
+            openDeleteConfirmDialog({
+              message,
+              onConfirm: () => {
+                deleteMultipleElements(nodeIdsToDelete, edgeIdsToDelete);
+              },
+            });
+          }, 0);
           return;
         }
 
-        event.preventDefault();
-        deleteMultipleElements(
-          selectedNodes.map((node) => node.id),
-          selectedEdges.map((edge) => edge.id),
-        );
+        globalThis.setTimeout(() => {
+          deleteMultipleElements(nodeIdsToDelete, edgeIdsToDelete);
+        }, 0);
         return;
       }
 
@@ -1003,7 +1006,6 @@ export const CanvasFlow = ({
         reactFlowEl.removeAttribute("data-space-pressed");
         reactFlowEl.removeAttribute("data-ctrl-pressed");
         spacePressedRef.current = false;
-        setIsSpacePressed(false);
         return;
       }
 
@@ -1011,17 +1013,14 @@ export const CanvasFlow = ({
         reactFlowEl.setAttribute("data-space-pressed", "true");
         reactFlowEl.removeAttribute("data-ctrl-pressed");
         spacePressedRef.current = true;
-        setIsSpacePressed(true);
       } else if (isCtrlPressed) {
         reactFlowEl.setAttribute("data-ctrl-pressed", "true");
         reactFlowEl.removeAttribute("data-space-pressed");
         spacePressedRef.current = false;
-        setIsSpacePressed(false);
       } else {
         reactFlowEl.removeAttribute("data-space-pressed");
         reactFlowEl.removeAttribute("data-ctrl-pressed");
         spacePressedRef.current = false;
-        setIsSpacePressed(false);
       }
     };
 
@@ -1073,7 +1072,6 @@ export const CanvasFlow = ({
       reactFlowEl.removeAttribute("data-space-pressed");
       reactFlowEl.removeAttribute("data-ctrl-pressed");
       spacePressedRef.current = false;
-      setIsSpacePressed(false);
     };
   }, [annotationWorkspace.open]);
 
@@ -1251,6 +1249,33 @@ export const CanvasFlow = ({
       style: { stroke: "rgba(220, 178, 255, 0.42)", strokeWidth: 1.5 },
       animated: false,
     }),
+    [],
+  );
+
+  // 稳定 <ReactFlow> 上反复出现的对象/数组/字符串字面量 props，
+  // 避免每次渲染产生新引用导致 ReactFlow 内部 NodeWrapper / EdgeWrapper /
+  // HandleComponent 触发大规模重渲染（参见 React Scan 报告：460 / 327 / 654 次）。
+  const reactFlowStyle = useMemo(() => ({ background: "#090909" }), []);
+  const fitViewOptions = useMemo(
+    () => ({
+      padding: 0.1,
+      minZoom: DEFAULT_OPEN_ZOOM,
+      maxZoom: DEFAULT_OPEN_ZOOM,
+    }),
+    [],
+  );
+  const snapGrid = useMemo<[number, number]>(() => [20, 20], []);
+  const multiSelectionKeyCode = useMemo<string[]>(() => ["Shift"], []);
+  const panOnDrag = useMemo(
+    () => (isAnnotationLocked ? false : [1, 2]),
+    [isAnnotationLocked],
+  );
+  // `__space-pan-all` 没有 CSS 规则消费，pan 的开关由 `panOnDrag` +
+  // `panActivationKeyCode` 控制；这里固定为 `"nopan"` 以避免 Space 按下/释放
+  // 触发全量 NodeWrapper / EdgeWrapper 重渲染。
+  const NO_PAN_CLASS_NAME = "nopan";
+  const miniMapStyle = useMemo(
+    () => ({ left: "16px", bottom: "72px" }),
     [],
   );
 
@@ -4690,37 +4715,41 @@ export const CanvasFlow = ({
             </>
           ) : null}
 
-          {/* 菜单态虚拟连线：在拖线释放后保留连接感 */}
-          <svg
-            className="pointer-events-none fixed inset-0 z-20 overflow-visible"
-            aria-hidden="true"
-          >
-            {connectionGhostPath ? (
-              <path
-                d={connectionGhostPath}
-                fill="none"
-                stroke="#B43FEB"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity={0.9}
-              />
-            ) : null}
+          {/* 菜单态虚拟连线：在拖线释放后保留连接感。
+              仅在确实有路径要绘制时才挂载全屏 fixed SVG，避免空 SVG 在
+              每次 state 变化时强制整屏合成层重绘。 */}
+          {connectionGhostPath || quickAddConnectionPaths.length > 0 ? (
+            <svg
+              className="pointer-events-none fixed inset-0 z-20 overflow-visible"
+              aria-hidden="true"
+            >
+              {connectionGhostPath ? (
+                <path
+                  d={connectionGhostPath}
+                  fill="none"
+                  stroke="#B43FEB"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity={0.9}
+                />
+              ) : null}
 
-            {quickAddConnectionPaths.map((item) => (
-              <path
-                key={`quick-add-ghost-${item.nodeId}`}
-                d={item.path}
-                fill="none"
-                stroke="#B43FEB"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity={0.72}
-                strokeDasharray="8 6"
-              />
-            ))}
-          </svg>
+              {quickAddConnectionPaths.map((item) => (
+                <path
+                  key={`quick-add-ghost-${item.nodeId}`}
+                  d={item.path}
+                  fill="none"
+                  stroke="#B43FEB"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity={0.72}
+                  strokeDasharray="8 6"
+                />
+              ))}
+            </svg>
+          ) : null}
 
           {isSelectionBoxActive ? (
             <div
@@ -4776,24 +4805,20 @@ export const CanvasFlow = ({
             edgesFocusable={!isAnnotationLocked}
             elementsSelectable={!isAnnotationLocked}
             fitView
-            fitViewOptions={{
-              padding: 0.1,
-              minZoom: DEFAULT_OPEN_ZOOM,
-              maxZoom: DEFAULT_OPEN_ZOOM,
-            }}
+            fitViewOptions={fitViewOptions}
             minZoom={MIN_CANVAS_ZOOM}
             maxZoom={MAX_CANVAS_ZOOM}
             colorMode="dark"
-            style={{ background: "#090909" }}
+            style={reactFlowStyle}
             deleteKeyCode={null}
-            panOnDrag={isAnnotationLocked ? false : [1, 2]}
+            panOnDrag={panOnDrag}
             panActivationKeyCode={isAnnotationLocked ? null : "Space"}
-            noPanClassName={isSpacePressed ? "__space-pan-all" : "nopan"}
+            noPanClassName={NO_PAN_CLASS_NAME}
             noWheelClassName="__canvas-tools-allow-wheel"
             selectionOnDrag={false}
             selectionKeyCode={null}
             selectionMode={SelectionMode.Full}
-            multiSelectionKeyCode={["Shift"]}
+            multiSelectionKeyCode={multiSelectionKeyCode}
             panOnScroll={false}
             zoomOnDoubleClick={false}
             zoomOnScroll={!isAnnotationLocked}
@@ -4802,7 +4827,7 @@ export const CanvasFlow = ({
             connectionLineStyle={connectionLineStyle}
             // 吸附开关与网格尺寸由设置中心驱动
             snapToGrid={snapToGrid}
-            snapGrid={[20, 20]}
+            snapGrid={snapGrid}
             connectionRadius={50}
             defaultEdgeOptions={defaultEdgeOptions}
           >
@@ -5023,7 +5048,7 @@ export const CanvasFlow = ({
                 pannable
                 zoomable
                 position="bottom-left"
-                style={{ left: "16px", bottom: "72px" }}
+                style={miniMapStyle}
                 nodeStrokeWidth={0}
                 nodeColor="#B43FEB"
                 maskColor="rgba(0,0,0,0.5)"

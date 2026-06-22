@@ -8,6 +8,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { AspectRatioIcon } from "../../ImageNode/components/AspectRatioIcon";
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
 import type { VideoModeKey } from "../constants/videoModelCapabilities";
@@ -62,7 +63,11 @@ export const VideoParamsPopover = ({
     if (ratio) parts.push(ratio);
     if (quality) parts.push(quality);
     if (generationMode) parts.push(generationMode);
-    if (value.duration) parts.push(`${value.duration}s`);
+    if (value.autoDuration) {
+      parts.push("自动");
+    } else if (value.duration) {
+      parts.push(`${value.duration}s`);
+    }
     if (config.promptExtend && value.promptExtend) parts.push("改写");
 
     return parts;
@@ -158,13 +163,13 @@ export const VideoParamsPopover = ({
                         patch(
                           config.qualityGroup?.key === "resolution"
                             ? {
-                                resolution: String(option.value),
-                                quality: undefined,
-                              }
+                              resolution: String(option.value),
+                              quality: undefined,
+                            }
                             : {
-                                quality: String(option.value),
-                                resolution: undefined,
-                              },
+                              quality: String(option.value),
+                              resolution: undefined,
+                            },
                         )
                       }
                       className={optionButtonClass(active, "h-8 px-3")}
@@ -209,12 +214,26 @@ export const VideoParamsPopover = ({
             <div className="flex items-center justify-between text-xs">
               <span className="font-medium text-neutral-300">视频时长</span>
               <span className="font-semibold text-[#B43FEB]">
-                {value.duration}s
+                {value.autoDuration ? "自动" : `${value.duration}s`}
               </span>
             </div>
 
+            {config.autoDuration ? (
+              <label className="flex items-center justify-between rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2">
+                <span className="text-xs text-neutral-300">
+                  {config.autoDuration.label}
+                </span>
+                <Switch
+                  checked={value.autoDuration ?? false}
+                  onCheckedChange={(checked) =>
+                    patch({ autoDuration: checked })
+                  }
+                />
+              </label>
+            ) : null}
+
             {config.duration.type === "slider" ? (
-              <div className="space-y-2">
+              <div className={cn("space-y-2", value.autoDuration && "pointer-events-none opacity-40")}>
                 <Slider
                   value={[value.duration]}
                   min={config.duration.min}
@@ -271,6 +290,22 @@ export const VideoParamsPopover = ({
                   关闭
                 </button>
               </div>
+            </section>
+          ) : null}
+
+          {config.webSearch ? (
+            <section className="space-y-2">
+              <label className="flex items-center justify-between rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2">
+                <span className="text-xs text-neutral-300">
+                  {config.webSearch.label}
+                </span>
+                <Switch
+                  checked={value.webSearch ?? false}
+                  onCheckedChange={(checked) =>
+                    patch({ webSearch: checked })
+                  }
+                />
+              </label>
             </section>
           ) : null}
 

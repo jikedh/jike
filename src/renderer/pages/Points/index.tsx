@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ScoreRecordItem, ScoreTransactionItem } from "shared/types/jikeing";
 import { getJikeingToken, getJikeingUserId } from "shared/utils/utils";
 import { toast } from "sonner";
@@ -17,12 +17,8 @@ import { RECHARGE_PACKAGES } from "./lib/constants";
 import type { ActiveTab, NativePayOrder, RechargePackage } from "./lib/types";
 import { generateAvatarUrl, getRandomStyle } from "./lib/utils";
 
-const visibleHistoryTabs: ActiveTab[] = ["transaction", "usage"];
-const defaultHistoryTab = visibleHistoryTabs[0] ?? "transaction";
-
 export function PointsView() {
-    const [activeTab, setActiveTab] = useState<ActiveTab>(defaultHistoryTab);
-    const [avatarUrl, setAvatarUrl] = useState<string>("");
+    const [activeTab, setActiveTab] = useState<ActiveTab>("usage");
     const [userId, setUserId] = useState<string>("");
     const [selectedPackageId, setSelectedPackageId] = useState<number | null>(
         null,
@@ -45,6 +41,7 @@ export function PointsView() {
     const [transactionsTotal, setTransactionsTotal] = useState(0);
     const [transactionsLoading, setTransactionsLoading] = useState(false);
     const [transactionsError, setTransactionsError] = useState<string | null>(null);
+    const hasRequestedTransactionsRef = useRef(false);
     const transactionsRequestRef = useRef<{ page: number; id: number } | null>(
         null,
     );
@@ -80,6 +77,7 @@ export function PointsView() {
         const requestId = transactionsRequestIdRef.current + 1;
         transactionsRequestIdRef.current = requestId;
         transactionsRequestRef.current = { page, id: requestId };
+        hasRequestedTransactionsRef.current = true;
 
         setTransactionsLoading(true);
         setTransactionsError(null);
@@ -104,30 +102,34 @@ export function PointsView() {
     }, []);
 
     useEffect(() => {
-        if (!visibleHistoryTabs.includes(activeTab)) {
-            setActiveTab(defaultHistoryTab);
-        }
-    }, [activeTab]);
-
-    useEffect(() => {
         const token = getJikeingToken();
         if (token) {
-            const userId = getJikeingUserId();
-            setUserId(userId);
-            const userSeed = userId || "default-user";
-            const avatarStyle = getRandomStyle(userSeed);
-            const url = generateAvatarUrl(userSeed, avatarStyle);
-            setAvatarUrl(url);
+            const uid = getJikeingUserId();
+            setUserId(uid);
 
             void fetchBalanceInfo();
-            if (visibleHistoryTabs.includes("usage")) {
-                void fetchRecords(1);
-            }
-            if (visibleHistoryTabs.includes("transaction")) {
-                void fetchTransactions(1);
-            }
+            void fetchRecords(1);
         }
-    }, [fetchBalanceInfo, fetchRecords, fetchTransactions]);
+    }, [fetchBalanceInfo, fetchRecords]);
+
+    // 头像：优先使用用户真实上传头像，无真实头像时 fallback 到 dicebear
+    const userInfo = useUserStore((s) => s.userInfo);
+    const avatarUrl = useMemo(() => {
+        if (userInfo?.avatar) return userInfo.avatar;
+        const userSeed = userId || "default-user";
+        const avatarStyle = getRandomStyle(userSeed);
+        return generateAvatarUrl(userSeed, avatarStyle);
+    }, [userInfo?.avatar, userId]);
+
+    useEffect(() => {
+        if (
+            activeTab === "transaction" &&
+            getJikeingToken() &&
+            !hasRequestedTransactionsRef.current
+        ) {
+            void fetchTransactions(1);
+        }
+    }, [activeTab, fetchTransactions]);
 
     const selectedPackage =
         selectedPackageId === null
@@ -197,12 +199,8 @@ export function PointsView() {
                             });
                         }
                         void fetchBalanceInfo();
-                        if (visibleHistoryTabs.includes("usage")) {
-                            void fetchRecords(1);
-                        }
-                        if (visibleHistoryTabs.includes("transaction")) {
-                            void fetchTransactions(1);
-                        }
+                        void fetchRecords(1);
+                        void fetchTransactions(1);
                         toast.success("充值成功，积分已到账");
                     } catch (error: any) {
                         console.error(error);
@@ -279,7 +277,6 @@ export function PointsView() {
                 <HistorySection
                     activeTab={activeTab}
                     onTabChange={setActiveTab}
-                    visibleTabs={visibleHistoryTabs}
                     records={records}
                     transactions={transactions}
                     page={recordsPage}

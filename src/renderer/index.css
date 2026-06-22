@@ -681,25 +681,33 @@
   cursor: zoom-in !important;
 }
 
-/* 空格键按下时：抓手（最高优先级） */
+/* 空格键按下时：抓手（最高优先级）。
+ * 注意：原实现使用了 `.react-flow[data-space-pressed="true"] *` 全树通配，
+ * 在画布节点/边数量大时（如数千条线），`setAttribute` 触发的 style
+ * invalidation 会让浏览器对整棵 React Flow 子树重算 `cursor`，
+ * 这与节点数成正比，体感延迟明显。
+ *
+ * 这里只对 React Flow 实际的可交互容器（pane/node/handle/nodrag）显式
+ * 设置 cursor，其他子元素（edge、文本、图片、SVG 等）通过 CSS 的
+ * cursor 默认继承行为自动继承祖先光标，无需 `*` 通配。 */
 .react-flow[data-space-pressed="true"] {
-  cursor: grab !important;
+  cursor: grab;
 }
-
 .react-flow[data-space-pressed="true"] .react-flow__pane,
 .react-flow[data-space-pressed="true"] .react-flow__node,
-.react-flow[data-space-pressed="true"] .nodrag,
-.react-flow[data-space-pressed="true"] * {
+.react-flow[data-space-pressed="true"] .react-flow__handle,
+.react-flow[data-space-pressed="true"] .nodrag {
   cursor: grab !important;
 }
 
 /* 空格+拖动时：grabbing */
-.react-flow[data-space-pressed="true"] .react-flow__edge {
-  pointer-events: none;
+.react-flow[data-space-pressed="true"].react-flow__pane--dragging {
+  cursor: grabbing;
 }
-
-.react-flow[data-space-pressed="true"].react-flow__pane--dragging,
-.react-flow[data-space-pressed="true"].react-flow__pane--dragging * {
+.react-flow[data-space-pressed="true"].react-flow__pane--dragging .react-flow__pane,
+.react-flow[data-space-pressed="true"].react-flow__pane--dragging .react-flow__node,
+.react-flow[data-space-pressed="true"].react-flow__pane--dragging .react-flow__handle,
+.react-flow[data-space-pressed="true"].react-flow__pane--dragging .nodrag {
   cursor: grabbing !important;
 }
 

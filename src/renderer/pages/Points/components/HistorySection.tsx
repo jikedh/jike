@@ -702,14 +702,14 @@ export const HistorySection = (props: HistorySectionProps) => {
               onClick={() => onTabChange("transaction")}
             />
           ) : null}
-          {/* {showUsageTab ? (
+          {showUsageTab ? (
             <TabButton
               active={activeTab === "usage"}
               icon={<ReceiptText className="h-4 w-4" />}
               label="积分消耗明细"
               onClick={() => onTabChange("usage")}
             />
-          ) : null} */}
+          ) : null}
         </nav>
       </header>
 

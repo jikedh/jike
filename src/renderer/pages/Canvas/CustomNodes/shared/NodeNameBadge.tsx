@@ -2,6 +2,8 @@ import {
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
+  memo,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -25,7 +27,7 @@ type NodeNameBadgeProps = {
   onRename?: (name: string) => void;
 };
 
-export const NodeNameBadge = ({
+const NodeNameBadgeInner = ({
   children,
   className,
   icon,
@@ -147,3 +149,5 @@ export const NodeNameBadge = ({
     </div>
   );
 };
+
+export const NodeNameBadge = memo(NodeNameBadgeInner);

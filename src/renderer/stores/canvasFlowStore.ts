@@ -680,13 +680,40 @@ const submitRunningHubImageTask = async ({
       : await route.textToImage(request);
   const data = response?.data ?? response;
   const immediateUrl = extractRunningHubImageUrl(data);
+  const ledgerBizId: string | undefined =
+    data?.ledger_biz_id ?? data?.ledgerBizId;
   if (immediateUrl) {
+    if (ledgerBizId) {
+      confirmDesktopProxyScore(ledgerBizId, "runninghub_v2").catch(() => { });
+    }
     return immediateUrl;
   }
   if (!data?.taskId) {
+    if (ledgerBizId) {
+      refundDesktopProxyScore(
+        ledgerBizId,
+        "RunningHub 未返回任务 ID",
+        "runninghub_v2",
+      ).catch(() => { });
+    }
     throw new Error("RunningHub 未返回任务 ID");
   }
-  return waitForRunningHubV2ImageResult(data.taskId);
+  try {
+    const url = await waitForRunningHubV2ImageResult(data.taskId);
+    if (ledgerBizId) {
+      confirmDesktopProxyScore(ledgerBizId, "runninghub_v2").catch(() => { });
+    }
+    return url;
+  } catch (pollError) {
+    if (ledgerBizId) {
+      const message =
+        pollError instanceof Error
+          ? pollError.message
+          : "RunningHub 生图失败";
+      refundDesktopProxyScore(ledgerBizId, message, "runninghub_v2").catch(() => { });
+    }
+    throw pollError;
+  }
 };
 const generateRunningHubImageWithFallback = async ({
   model,
@@ -2055,6 +2082,12 @@ const pollNewVideoGeneration = async ({
           }));
 
           stopVideoPollingInternal(nodeId);
+          if (ledgerBizId) {
+            refundDesktopProxyScore(
+              ledgerBizId,
+              "任务已完成但未返回视频地址",
+            ).catch(() => { });
+          }
           await updateVideoTrackFinalStatus(
             normalizedTaskId,
             "FAIL",
@@ -2157,6 +2190,9 @@ const pollNewVideoGeneration = async ({
         }
 
         stopVideoPollingInternal(nodeId);
+        if (ledgerBizId) {
+          confirmDesktopProxyScore(ledgerBizId, "video").catch(() => { });
+        }
         await updateVideoTrackFinalStatus(
           normalizedTaskId,
           "SUCCESS",

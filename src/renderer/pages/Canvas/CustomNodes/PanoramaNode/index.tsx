@@ -46,9 +46,9 @@ export const PanoramaNode = memo(
     const [isRenaming, setIsRenaming] = useState(false);
     const nodeLabel = data.nickname ?? "全景图节点";
 
-    // 从 store 直接读取选中节点数量，避免 O(n²) 遍历
-    const selectedNodesCount = useCanvasFlowStore(
-      (state) => state.selectedNodesCount,
+    // 仅订阅与当前节点相关的派生布尔值，避免选中数量变化时所有节点重渲染
+    const hasMultipleSelected = useCanvasFlowStore(
+      (state) => state.selectedNodesCount > 1,
     );
 
     const handleVisibilityClass = useMemo(
@@ -60,8 +60,8 @@ export const PanoramaNode = memo(
     );
 
     const shouldShowToolbar = useMemo(
-      () => selected && !isDragging && selectedNodesCount <= 1,
-      [selected, isDragging, selectedNodesCount],
+      () => selected && !isDragging && !hasMultipleSelected,
+      [selected, isDragging, hasMultipleSelected],
     );
 
     const handleDuplicate = useCallback(() => {
@@ -92,6 +92,10 @@ export const PanoramaNode = memo(
       },
       [id, updateNodeNickname],
     );
+
+    const handleEditEnd = useCallback(() => setIsRenaming(false), []);
+
+    const nodeIcon = useMemo(() => <IconView360 size={14} />, []);
 
     const handleScreenshot = useCallback(
       async (type: "single" | "4grid" | "12grid") => {
@@ -631,11 +635,11 @@ export const PanoramaNode = memo(
             >
               {/* 左侧输入 Handle */}
               <NodeNameBadge
-                icon={<IconView360 size={14} />}
+                icon={nodeIcon}
                 selected={selected}
                 isEditing={isRenaming}
                 onEditStart={handleRenameStart}
-                onEditEnd={() => setIsRenaming(false)}
+                onEditEnd={handleEditEnd}
                 onRename={handleRename}
               >
                 {nodeLabel}

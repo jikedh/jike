@@ -52,15 +52,19 @@ const NewVideoNode = ({
   const isSourceHighlighted = useCanvasFlowStore((state) =>
     state.highlightedSourceNodeIds.includes(id),
   );
-  const activeNodeId = useCanvasFlowStore((state) => state.activeNodeId);
+  // 仅订阅与当前节点相关的派生布尔值，避免其他节点的 activeNodeId 变化时整树重渲染
+  const isActiveFromStore = useCanvasFlowStore(
+    (state) => state.activeNodeId === id,
+  );
   const hasActiveVideoTool = useCanvasFlowStore(
     (state) => state.activeVideoTool !== null,
   );
 
-  const selectedNodesCount = useCanvasFlowStore(
-    (state) => state.selectedNodesCount,
+  // 只关心是否 > 1，避免选中数量变化时所有节点重渲染
+  const hasMultipleSelected = useCanvasFlowStore(
+    (state) => state.selectedNodesCount > 1,
   );
-  const isActiveNode = activeNodeId === id && selected;
+  const isActiveNode = isActiveFromStore && selected;
 
   const handleVisibilityClass = useMemo(
     () =>
@@ -160,10 +164,19 @@ const NewVideoNode = ({
     separateToNodes(id);
   }, [separateToNodes, id]);
 
+  const handleEditEnd = useCallback(() => setIsRenaming(false), []);
+
+  const handleCreateAsset = useCallback(
+    () => dispatchCreateAssetFromNode(id),
+    [id],
+  );
+
+  const nodeIcon = useMemo(() => <IconVideo size={14} />, []);
+
   const shouldShowToolbar = useMemo(
     () =>
-      isActiveNode && !isDragging && isDragUiSettled && selectedNodesCount <= 1,
-    [isActiveNode, isDragging, isDragUiSettled, selectedNodesCount],
+      isActiveNode && !isDragging && isDragUiSettled && !hasMultipleSelected,
+    [isActiveNode, isDragging, isDragUiSettled, hasMultipleSelected],
   );
 
   // 生成中的占位卡在新版节点里也算一个视频，用于支持“1 个真实视频 + 1 个生成中占位”时独立为视频。
@@ -187,7 +200,7 @@ const NewVideoNode = ({
       onDuplicate={handleDuplicate}
       onDelete={handleDelete}
       onSeparateToNodes={handleSeparateToNodes}
-      onCreateAsset={() => dispatchCreateAssetFromNode(id)}
+      onCreateAsset={handleCreateAsset}
       hasMultipleResults={hasMultipleResults}
       separateToNodesLabel="独立为视频"
     >
@@ -230,11 +243,11 @@ const NewVideoNode = ({
           )}
         >
           <NodeNameBadge
-            icon={<IconVideo size={14} />}
+            icon={nodeIcon}
             selected={isActiveNode}
             isEditing={isRenaming}
             onEditStart={handleRenameStart}
-            onEditEnd={() => setIsRenaming(false)}
+            onEditEnd={handleEditEnd}
             onRename={handleRename}
           >
             {badgeLabel}

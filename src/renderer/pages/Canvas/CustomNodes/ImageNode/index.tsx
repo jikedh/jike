@@ -111,13 +111,17 @@ export const ImageNode = memo(
     const startGeminiPro2Generation = useCanvasFlowStore(
       (state) => state.startGeminiPro2Generation,
     );
-    const highlightedSourceNodeIds = useCanvasFlowStore(
-      (state) => state.highlightedSourceNodeIds,
+    // 仅订阅与当前节点相关的派生布尔值，避免高亮列表变化时所有节点重渲染
+    const isSourceHighlighted = useCanvasFlowStore((state) =>
+      state.highlightedSourceNodeIds.includes(id),
     );
-    const activeNodeId = useCanvasFlowStore((state) => state.activeNodeId);
-    // 从 store 直接读取选中节点数量，避免 O(n²) 遍历
-    const selectedNodesCount = useCanvasFlowStore(
-      (state) => state.selectedNodesCount,
+    // 仅订阅与当前节点相关的派生布尔值，避免其他节点的 activeNodeId 变化时整树重渲染
+    const isActiveFromStore = useCanvasFlowStore(
+      (state) => state.activeNodeId === id,
+    );
+    // 从 store 直接读取选中节点数量，避免 O(n²) 遍历；这里只关心是否 > 1
+    const hasMultipleSelected = useCanvasFlowStore(
+      (state) => state.selectedNodesCount > 1,
     );
     const projectId = useCanvasFlowStore((state) => state.projectId);
     const setDefaultImagePreset = useChatSettingsStore(
@@ -138,7 +142,7 @@ export const ImageNode = memo(
 
     const isAnnotationMode = annotationWorkspace.open;
     const isAnnotationTarget = annotationWorkspace.sourceNodeId === id;
-    const isActiveNode = activeNodeId === id && selected;
+    const isActiveNode = isActiveFromStore && selected;
 
     // 使用 useMemo 缓存样式类名，避免每次渲染都重新拼接字符串
     useEffect(() => {
@@ -172,20 +176,16 @@ export const ImageNode = memo(
         isActiveNode &&
         !isDragging &&
         isDragUiSettled &&
-        selectedNodesCount <= 1 &&
+        !hasMultipleSelected &&
         !isAnnotationMode,
       [
         isActiveNode,
         isDragging,
         isDragUiSettled,
         isAnnotationMode,
-        selectedNodesCount,
+        hasMultipleSelected,
       ],
     );
-
-    const isSourceHighlighted = useMemo(() => {
-      return highlightedSourceNodeIds.includes(id);
-    }, [highlightedSourceNodeIds, id]);
 
     // 根据 data.size（如 "1:1", "16:9"）动态计算节点尺寸，按图片原始比例展示
     const nodeSize = useMemo(() => {
@@ -782,6 +782,15 @@ export const ImageNode = memo(
       [data.result, id, updateImageNodeData],
     );
 
+    const handleContextMenuCreateAsset = useCallback(
+      () => dispatchCreateAssetFromNode(id),
+      [id],
+    );
+
+    const handleEditEnd = useCallback(() => setIsRenaming(false), []);
+
+    const nodeIcon = useMemo(() => <IconPhoto size={14} />, []);
+
     return (
       <>
         <NodeContextMenu
@@ -791,7 +800,7 @@ export const ImageNode = memo(
           onGridCrop={handleContextMenuGridCrop}
           onSeparateToNodes={handleContextMenuSeparateToNodes}
           onSetAsCover={handleContextMenuSetAsCover}
-          onCreateAsset={() => dispatchCreateAssetFromNode(id)}
+          onCreateAsset={handleContextMenuCreateAsset}
           hasMultipleResults={hasMultipleResults}
         >
           <div
@@ -834,11 +843,11 @@ export const ImageNode = memo(
               )}
             >
               <NodeNameBadge
-                icon={<IconPhoto size={14} />}
+                icon={nodeIcon}
                 selected={isActiveNode}
                 isEditing={isRenaming}
                 onEditStart={handleRenameStart}
-                onEditEnd={() => setIsRenaming(false)}
+                onEditEnd={handleEditEnd}
                 onRename={handleRename}
               >
                 {badgeLabel}

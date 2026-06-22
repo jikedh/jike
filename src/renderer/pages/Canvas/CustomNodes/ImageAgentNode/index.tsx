@@ -5,7 +5,7 @@
  */
 import { IconPhoto } from "@tabler/icons-react";
 import { type NodeProps } from "@xyflow/react";
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
   getImageAgentPresetById,
   getImageAgentPresetLabelById,
@@ -127,19 +127,27 @@ export const ImageAgentNode = memo(
       [id, updateNodeNickname],
     );
 
+    const handleDuplicate = useCallback(() => {
+      duplicateNode(id);
+    }, [duplicateNode, id]);
+
+    const handleEditEnd = useCallback(() => setIsRenaming(false), []);
+
+    const nodeIcon = useMemo(() => <IconPhoto size={14} />, []);
+
     return (
       <NodeContextMenu
-        onDuplicate={() => duplicateNode(id)}
+        onDuplicate={handleDuplicate}
         onDelete={handleDelete}
       >
         <div className="group/node relative flex flex-col items-center">
           {!showPresetSelector && (
             <NodeNameBadge
-              icon={<IconPhoto size={14} />}
+              icon={nodeIcon}
               selected={selected}
               isEditing={isRenaming}
               onEditStart={handleRenameStart}
-              onEditEnd={() => setIsRenaming(false)}
+              onEditEnd={handleEditEnd}
               onRename={handleRename}
             >
               {nodeLabel}

@@ -27,6 +27,7 @@ const RunningHubTextToImageDemoPage = lazy(() => import("@/pages/Video/DemoCompo
 const SettingsPage = lazy(() => import("@/pages/Settings"));
 const PointsPage = lazy(() => import("@/pages/Points"));
 const LoginPage = lazy(() => import("@/pages/Login"));
+const ProfilePage = lazy(() => import("@/pages/Profile"));
 // Canvas 是重型页面，独立懒加载
 const CanvasPage = lazy(() => import("@/pages/Canvas"));
 
@@ -146,6 +147,10 @@ const router = createHashRouter([
       {
         path: "/points",
         element: <PointsPage />,
+      },
+      {
+        path: "/profile",
+        element: <ProfilePage />,
       },
     ],
   },

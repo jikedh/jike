@@ -1,4 +1,4 @@
-import { Gift, LogOut, User, Zap } from "lucide-react";
+import { Gift, LogOut, User, UserCog, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { POINTS_FEATURE_ENABLED } from "shared/constants/points";
 import type { UserScoreVO } from "shared/types/jikeing";
@@ -53,7 +53,11 @@ export const UserAvatarDropdown = ({
   const token = getJikeingToken();
   const userSeed = userId || "default-user";
   const avatarStyle = getRandomStyle(userSeed);
-  const avatarUrl = generateAvatarUrl(userSeed, avatarStyle);
+  const fallbackAvatarUrl = generateAvatarUrl(userSeed, avatarStyle);
+
+  // 优先使用用户真实上传头像，无真实头像时使用 dicebear 随机头像
+  const userInfo = useUserStore((s) => s.userInfo);
+  const avatarUrl = userInfo?.avatar || fallbackAvatarUrl;
 
   // 退出登录：清理登录缓存后返回登录页
   const handleLogout = async () => {
@@ -64,6 +68,11 @@ export const UserAvatarDropdown = ({
   // 进入会员页面
   const handlePointsClick = () => {
     navigate("/points");
+  };
+
+  // 进入个人中心
+  const handleProfileClick = () => {
+    navigate("/profile");
   };
 
   if (!token) {
@@ -129,6 +138,14 @@ export const UserAvatarDropdown = ({
             </p>
             <p className="mt-1 text-xs text-white/40">ID: {userSeed}</p>
           </div>
+
+          <DropdownMenuItem
+            onSelect={handleProfileClick}
+            className="flex w-full cursor-pointer items-center gap-3 rounded-none px-4 py-3 text-sm text-white/75 focus:bg-white/8 focus:text-white"
+          >
+            <UserCog size={16} />
+            <span>个人中心</span>
+          </DropdownMenuItem>
 
           <DropdownMenuItem
             onSelect={handlePointsClick}

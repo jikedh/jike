@@ -5,6 +5,7 @@
 
 import { IconPhoto } from "@tabler/icons-react";
 import { Position } from "@xyflow/react";
+import { memo } from "react";
 import type { ImageAgentPresetId } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
@@ -20,7 +21,7 @@ interface NodeBodyProps {
   isGenerating: boolean;
 }
 
-export const NodeBody = ({
+const NodeBodyInner = ({
   presetId,
   presetLabel,
   selected,
@@ -77,3 +78,5 @@ export const NodeBody = ({
     </div>
   );
 };
+
+export const NodeBody = memo(NodeBodyInner);
