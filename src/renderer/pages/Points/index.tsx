@@ -18,7 +18,7 @@ import type { ActiveTab, NativePayOrder, RechargePackage } from "./lib/types";
 import { generateAvatarUrl, getRandomStyle } from "./lib/utils";
 
 export function PointsView() {
-    const [activeTab, setActiveTab] = useState<ActiveTab>("usage");
+    const [activeTab, setActiveTab] = useState<ActiveTab>("transaction");
     const [userId, setUserId] = useState<string>("");
     const [selectedPackageId, setSelectedPackageId] = useState<number | null>(
         null,
@@ -109,8 +109,9 @@ export function PointsView() {
 
             void fetchBalanceInfo();
             void fetchRecords(1);
+            void fetchTransactions(1);
         }
-    }, [fetchBalanceInfo, fetchRecords]);
+    }, [fetchBalanceInfo, fetchRecords, fetchTransactions]);
 
     // 头像：优先使用用户真实上传头像，无真实头像时 fallback 到 dicebear
     const userInfo = useUserStore((s) => s.userInfo);
