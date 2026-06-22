@@ -18,11 +18,6 @@ const ScriptPage = lazy(() => import("@/pages/Script"));
 const AssetsPage = lazy(() => import("@/pages/Assets"));
 const VoicePage = lazy(() => import("@/pages/Voice"));
 const VideoPage = lazy(() => import("@/pages/Video"));
-const UploadTestPage = lazy(() => import("@/pages/Video/UploadTest"));
-const VideoRemovalDemoPage = lazy(() => import("@/pages/Video/DemoComponents/VideoRemovalDemo"));
-const LocalVideoUploadDemoPage = lazy(() => import("@/pages/Video/DemoComponents/LocalVideoUploadDemo"));
-const RunningHubWorkflowDemoPage = lazy(() => import("@/pages/Video/DemoComponents/RunningHubWorkflowDemo"));
-const RunningHubTextToImageDemoPage = lazy(() => import("@/pages/Video/DemoComponents/RunningHubTextToImageDemo"));
 const PointsPage = lazy(() => import("@/pages/Points"));
 const LoginPage = lazy(() => import("@/pages/Login"));
 const ProfilePage = lazy(() => import("@/pages/Profile"));
@@ -101,26 +96,6 @@ const router = createHashRouter([
       {
         path: "/video",
         element: <VideoPage />,
-      },
-      {
-        path: "/video/upload-test",
-        element: <UploadTestPage />,
-      },
-      {
-        path: "/video/removal-demo",
-        element: <VideoRemovalDemoPage />,
-      },
-      {
-        path: "/video/local-upload-demo",
-        element: <LocalVideoUploadDemoPage />,
-      },
-      {
-        path: "/video/runninghub-workflow-demo",
-        element: <RunningHubWorkflowDemoPage />,
-      },
-      {
-        path: "/video/runninghub-text-to-image-demo",
-        element: <RunningHubTextToImageDemoPage />,
       },
       {
         path: "/points",
