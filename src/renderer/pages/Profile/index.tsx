@@ -1,5 +1,6 @@
 import { ChevronRight, KeyRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   getJikeGoUserInfo,
@@ -7,6 +8,7 @@ import {
   uploadOssFile,
   type UpdateJikeGoUserInfoRequest,
 } from "@/api/jikeGo";
+import { markPasswordSettled } from "@/components/FirstLoginGuideDialog";
 import { PasswordDialog } from "./components/PasswordDialog";
 import {
   ProfileEditDialog,
@@ -55,12 +57,29 @@ const buildVipLabel = (vipLevel: number) => {
 };
 
 const ProfilePage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [avatarUploading, setAvatarUploading] = useState(false);
 
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [editField, setEditField] = useState<ProfileEditField | null>(null);
+
+  // 首次登录引导：通过 URL ?focus=xxx 自动打开对应子弹窗
+  useEffect(() => {
+    const focus = searchParams.get("focus");
+    if (!focus) return;
+    // 等待 profile 加载完成后再打开，确保 initialValue 有值
+    if (focus === "password") {
+      setPasswordOpen(true);
+    } else if (focus === "nickname" || focus === "email" || focus === "mobile") {
+      setEditField(focus);
+    }
+    // 消费掉参数，避免刷新页面重复触发
+    const next = new URLSearchParams(searchParams);
+    next.delete("focus");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const loadProfile = useCallback(async () => {
     try {
@@ -279,7 +298,14 @@ const ProfilePage = () => {
         onOpenChange={(open) => !open && setEditField(null)}
         onSubmit={handleEditSubmit}
       />
-      <PasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} />
+      <PasswordDialog
+        open={passwordOpen}
+        onOpenChange={setPasswordOpen}
+        onSuccess={() => {
+          // 密码设置成功后写入本地标记，FirstLoginGuideDialog 下次不会再提示
+          markPasswordSettled();
+        }}
+      />
     </div>
   );
 };

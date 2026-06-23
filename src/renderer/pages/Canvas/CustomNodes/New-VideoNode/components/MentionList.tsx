@@ -15,6 +15,7 @@ interface MentionListProps {
   command: (item: {
     id: string;
     label: string;
+    originalLabel?: string;
     value: string;
     thumbnail?: string;
     type?: "image" | "video" | "audio";
@@ -69,9 +70,12 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(
     const selectItem = (index: number) => {
       const item = items[index];
       if (item && command) {
+        // label 字段对编辑器而言是 displayLabel（中文数字），
+        // 这里把原始名作为 originalLabel 一并传递，供悬浮提示与 UI 使用。
         command({
           id: item.id,
           label: item.label,
+          originalLabel: item.label,
           value: item.value,
           thumbnail: item.thumbnail,
           type: item.type,
@@ -126,8 +130,17 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(
               />
             )}
 
-            {/* 名称 */}
-            <span className="flex-1 truncate text-sm">{item.label}</span>
+            {/* 名称：浮层主标题展示原始名，副标题展示固定显示文本（图片一/图片二…） */}
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-sm">
+                {item.originalLabel || item.label}
+              </span>
+              {item.label && item.label !== (item.originalLabel || item.label) && (
+                <span className="truncate text-xs text-neutral-500">
+                  {item.label}
+                </span>
+              )}
+            </div>
 
             {/* 类型图标 */}
             {item.type === "image" && (

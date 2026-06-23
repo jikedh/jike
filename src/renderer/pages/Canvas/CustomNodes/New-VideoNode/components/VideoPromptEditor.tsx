@@ -32,6 +32,7 @@ export interface VideoPromptEditorHandle {
     updates: Array<{
       id: string;
       label: string;
+      originalLabel?: string;
       value?: string;
       thumbnail?: string;
       type?: "image" | "video" | "audio";
@@ -44,6 +45,7 @@ export interface VideoPromptEditorProps {
   mentionItems: {
     id: string;
     label: string;
+    originalLabel?: string;
     value: string;
     thumbnail: string;
     type: "image" | "video" | "audio";
@@ -85,6 +87,34 @@ export const VideoPromptEditor = forwardRef<
               };
             },
           },
+          // 原始图片名称（节点昵称 / 文件名 / 类型默认名），仅用于 UI 展示与悬浮提示。
+          originalLabel: {
+            default: null,
+            parseHTML: (element) =>
+              element.getAttribute("data-mention-original-label"),
+            renderHTML: (attributes) => {
+              if (!attributes.originalLabel) {
+                return {};
+              }
+              return {
+                "data-mention-original-label": attributes.originalLabel,
+              };
+            },
+          },
+          // 实际拼接到 Prompt 的固定文本（"图片一/图片二…"）。
+          displayLabel: {
+            default: null,
+            parseHTML: (element) =>
+              element.getAttribute("data-mention-display-label"),
+            renderHTML: (attributes) => {
+              if (!attributes.displayLabel) {
+                return {};
+              }
+              return {
+                "data-mention-display-label": attributes.displayLabel,
+              };
+            },
+          },
           type: {
             default: "image",
             parseHTML: (element) => {
@@ -116,10 +146,22 @@ export const VideoPromptEditor = forwardRef<
         draggable: "true",
       },
       renderText({ node }) {
-        return getMentionLabel(node.attrs);
+        // getText() 输出的纯文本必须使用 displayLabel（中文数字），
+        // 这样 editor.getText() 拼接到 Prompt 时始终是"图片一/图片二…"。
+        const displayLabel =
+          (node.attrs.displayLabel as string | null | undefined) ??
+          getMentionLabel(node.attrs);
+        return displayLabel;
       },
       renderHTML({ options, node }) {
-        const mentionLabel = getMentionLabel(node.attrs);
+        const fallbackLabel = getMentionLabel(node.attrs);
+        // Pill 上展示的文本始终是 displayLabel，与 Prompt 拼接文本保持一致。
+        const mentionLabel =
+          (node.attrs.displayLabel as string | null | undefined) ||
+          fallbackLabel;
+        const originalLabel =
+          (node.attrs.originalLabel as string | null | undefined) ||
+          fallbackLabel;
         const thumbnail = node.attrs.thumbnail as string | undefined;
         const mentionType = node.attrs.type as
           | "image"
@@ -143,7 +185,8 @@ export const VideoPromptEditor = forwardRef<
             {
               class: "video-node-mention-pill__thumbnail",
               src: thumbnail,
-              alt: mentionLabel,
+              alt: originalLabel,
+              title: originalLabel,
               draggable: "false",
             },
           ]);
@@ -163,9 +206,12 @@ export const VideoPromptEditor = forwardRef<
             "data-mention-id": node.attrs.id,
             "data-mention-value": node.attrs.value,
             "data-mention-label": mentionLabel,
+            "data-mention-display-label": mentionLabel,
+            "data-mention-original-label": originalLabel,
             "data-mention-kind": mentionType || "image",
             contenteditable: "false",
             draggable: "true",
+            title: originalLabel,
           },
           ...children,
         ];
@@ -220,6 +266,16 @@ export const VideoPromptEditor = forwardRef<
               component = new ReactRenderer(MentionList, {
                 props: {
                   ...props,
+                  // 为浮层补回 originalLabel：props.items 已被替换为 displayLabel（中文数字），
+                  // 这里映射原始名，让 MentionList 列表行能展示原始名。
+                  items: (props.items as Array<Record<string, unknown>>).map(
+                    (item) => ({
+                      ...item,
+                      originalLabel:
+                        (item.originalLabel as string | undefined) ??
+                        (item.label as string | undefined),
+                    }),
+                  ),
                   command: (item: any) => {
                     props.command(item);
                   },
@@ -255,7 +311,17 @@ export const VideoPromptEditor = forwardRef<
                 return;
               }
 
-              component.updateProps(props);
+              component.updateProps({
+                ...props,
+                items: (props.items as Array<Record<string, unknown>>).map(
+                  (item) => ({
+                    ...item,
+                    originalLabel:
+                      (item.originalLabel as string | undefined) ??
+                      (item.label as string | undefined),
+                  }),
+                ),
+              });
               updateSuggestionPosition(props.editor, component.element);
             },
 
@@ -436,7 +502,11 @@ export const VideoPromptEditor = forwardRef<
 
           transaction = transaction.setNodeMarkup(pos, undefined, {
             ...node.attrs,
+            // update.label 已是 displayLabel（中文数字），写入 attrs.label 与 value。
             label: update.label,
+            displayLabel: update.label,
+            originalLabel:
+              update.originalLabel ?? node.attrs.originalLabel ?? update.label,
             value: update.value ?? update.label,
             thumbnail: update.thumbnail ?? node.attrs.thumbnail,
             type: update.type ?? node.attrs.type,

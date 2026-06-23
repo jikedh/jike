@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -8,10 +8,57 @@ import {
   Type,
 } from "lucide-react";
 import ProjectDialog from "@/components/ProjectDialog";
+import FirstLoginGuideDialog, {
+  type GuideItem,
+} from "@/components/FirstLoginGuideDialog";
+import { checkProfileCompleteness } from "@/utils/profileCompleteness";
 
 const HomePage = () => {
   const navigate = useNavigate();
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [pendingItems, setPendingItems] = useState<GuideItem["key"][]>([]);
+  // 防止 React 18 严格模式 / 路由重复挂载时重复触发校验
+  const guideCheckedRef = useRef(false);
+
+  // 首次登录引导：登录成功后进入 /home，校验用户信息完整性
+  useEffect(() => {
+    if (guideCheckedRef.current) return;
+    guideCheckedRef.current = true;
+
+    (async () => {
+      try {
+        const { pending } = await checkProfileCompleteness();
+        if (pending.length > 0) {
+          setPendingItems(pending);
+          setGuideOpen(true);
+        }
+      } catch (err: any) {
+        // 静默失败：避免阻塞首页，仅在控制台记录
+        console.warn("[FirstLoginGuide] 校验失败:", err?.message || err);
+      }
+    })();
+  }, []);
+
+  // 单项设置完成后即时从待办列表中移除（用户从 /profile 跳转回来时再次触发）
+  const handleGuideClose = () => {
+    setGuideOpen(false);
+  };
+
+  // 当用户在 /profile 完成单项后回到 /home，重新校验一次弹窗
+  useEffect(() => {
+    const handlePageShow = async () => {
+      try {
+        const { pending } = await checkProfileCompleteness();
+        setPendingItems(pending);
+        setGuideOpen(pending.length > 0);
+      } catch {
+        /* 静默 */
+      }
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
   // 功能入口卡片的数据源，保持布局与文案和参考页一致
   const features = [
     {
@@ -174,6 +221,12 @@ const HomePage = () => {
           setIsProjectDialogOpen(false);
           navigate(`/canvas/${projectId}`);
         }}
+      />
+
+      <FirstLoginGuideDialog
+        open={guideOpen}
+        pending={pendingItems}
+        onClose={handleGuideClose}
       />
     </div>
   );

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GenerationStatus } from "shared/constants/enum";
 import { getVideoGenerationPoints } from "shared/constants/model-points";
 import type { NewVideoGenerationNode } from "shared/types/flow";
+import { toChineseNumber } from "shared/utils/utils";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { PresetDropdown } from "@/components/PresetDropdown";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -151,15 +152,16 @@ const buildOrderedReferenceItems = (
         item,
         `image-${index}-${typeof item === "string" ? item : item.url}`,
       );
+      const originalLabel = source.label || `图片${index + 1}`;
       return {
         id: source.id,
-        label: `图片${index + 1}`,
+        label: originalLabel,
+        displayLabel: `图片${toChineseNumber(index + 1)}`,
         value: source.url,
         thumbnail: source.thumbnail,
         url: source.url,
         mentionId: source.mentionId,
         preserveLabel: Boolean(source.label),
-        ...(source.label ? { label: source.label } : {}),
         type: "image" as const,
       };
     }),
@@ -168,15 +170,16 @@ const buildOrderedReferenceItems = (
         item,
         `video-${index}-${typeof item === "string" ? item : item.url}`,
       );
+      const originalLabel = source.label || `视频${index + 1}`;
       return {
         id: source.id,
-        label: `视频${index + 1}`,
+        label: originalLabel,
+        displayLabel: `视频${toChineseNumber(index + 1)}`,
         value: source.url,
         thumbnail: source.thumbnail,
         url: source.url,
         mentionId: source.mentionId,
         preserveLabel: Boolean(source.label),
-        ...(source.label ? { label: source.label } : {}),
         type: "video" as const,
       };
     }),
@@ -185,15 +188,16 @@ const buildOrderedReferenceItems = (
         item,
         `audio-${index}-${typeof item === "string" ? item : item.url}`,
       );
+      const originalLabel = source.label || `音频${index + 1}`;
       return {
         id: source.id,
-        label: `音频${index + 1}`,
+        label: originalLabel,
+        displayLabel: `音频${toChineseNumber(index + 1)}`,
         value: source.url,
         thumbnail: source.thumbnail,
         url: source.url,
         mentionId: source.mentionId,
         preserveLabel: Boolean(source.label),
-        ...(source.label ? { label: source.label } : {}),
         type: "audio" as const,
       };
     }),
@@ -213,13 +217,20 @@ const relabelReferenceItemsByOrder = (items: MentionItem[]) => {
 
   return items.map((item) => {
     counters[item.type] += 1;
-    if (item.preserveLabel && item.label.trim()) {
-      return item;
-    }
+    // displayLabel 始终按"添加顺序"分配为"图片一/图片二/图片三…"，
+    // 与原始 label（节点昵称 / 文件名 / 类型默认值）解耦，确保 Prompt 拼接文本稳定。
+    const nextDisplayLabel = `${labelPrefix[item.type]}${toChineseNumber(
+      counters[item.type],
+    )}`;
 
     return {
       ...item,
-      label: `${labelPrefix[item.type]}${counters[item.type]}`,
+      displayLabel: nextDisplayLabel,
+      // 保留原始名称以供 UI 使用（缩略图悬浮 tooltip 等）。
+      label:
+        item.preserveLabel && item.label.trim()
+          ? item.label
+          : nextDisplayLabel,
     };
   });
 };
@@ -553,8 +564,10 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const editorMentionItems = useMemo(() => {
     return generationReferenceItems.map((item) => ({
       id: item.mentionId ?? item.id,
-      label: item.label,
-      value: item.label,
+      label: item.displayLabel,
+      // 原始名保留在 mention attrs 上，供 UI 与悬浮提示使用。
+      originalLabel: item.label,
+      value: item.displayLabel,
       thumbnail: item.thumbnail,
       type: item.type,
     }));
@@ -926,8 +939,9 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       editorRef.current?.updateReferenceMentions(
         nextItems.map((item) => ({
           id: item.mentionId ?? item.id,
-          label: item.label,
-          value: item.label,
+          label: item.displayLabel,
+          originalLabel: item.label,
+          value: item.displayLabel,
           thumbnail: item.thumbnail,
           type: item.type,
         })),
