@@ -12,6 +12,7 @@ import FirstLoginGuideDialog, {
   type GuideItem,
 } from "@/components/FirstLoginGuideDialog";
 import { checkProfileCompleteness } from "@/utils/profileCompleteness";
+import { getJikeingToken } from "shared/utils/utils";
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -22,8 +23,10 @@ const HomePage = () => {
   const guideCheckedRef = useRef(false);
 
   // 首次登录引导：登录成功后进入 /home，校验用户信息完整性
+  // 未登录时直接跳过，避免在初次进入应用时弹出"完善账号信息"
   useEffect(() => {
     if (guideCheckedRef.current) return;
+    if (!getJikeingToken()) return;
     guideCheckedRef.current = true;
 
     (async () => {
@@ -46,8 +49,10 @@ const HomePage = () => {
   };
 
   // 当用户在 /profile 完成单项后回到 /home，重新校验一次弹窗
+  // 未登录时直接跳过
   useEffect(() => {
     const handlePageShow = async () => {
+      if (!getJikeingToken()) return;
       try {
         const { pending } = await checkProfileCompleteness();
         setPendingItems(pending);

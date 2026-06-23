@@ -19,14 +19,11 @@ import { SidebarNav } from "./components/SidebarNav";
 import { SidebarNavItem } from "./components/SidebarNavItem";
 import { SidebarRoot } from "./components/SidebarRoot";
 
-const FIRST_LOGIN_KEY = "jike_first_login_completed";
-
 export const SidebarCeBianLan = () => {
   const navigate = useNavigate();
   const userId = getJikeingUserId();
   const token = getJikeingToken();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isFirstLoginModalOpen, setIsFirstLoginModalOpen] = useState(false);
   const [appVersion, setAppVersion] = useState("");
 
   const { loginStatus, fetchUserInfo, balanceInfo, fetchBalanceInfo } =
@@ -63,10 +60,8 @@ export const SidebarCeBianLan = () => {
     if (token) {
       fetchUserInfo();
       fetchBalanceInfo();
-      const hasCompletedFirstLogin = localStorage.getItem(FIRST_LOGIN_KEY);
-      if (!hasCompletedFirstLogin) {
-        setIsFirstLoginModalOpen(true);
-      }
+      // 画布设置中心的"首次登录欢迎"弹窗已下线：
+      // 首次进入应用（无论登录与否）都直接进入主界面，不再自动弹出。
     }
   }, [token, fetchUserInfo, fetchBalanceInfo]);
 
@@ -76,11 +71,6 @@ export const SidebarCeBianLan = () => {
 
   const handleSettingsClick = () => {
     setIsSettingsOpen(true);
-  };
-
-  const handleFirstLoginComplete = () => {
-    localStorage.setItem(FIRST_LOGIN_KEY, "true");
-    setIsFirstLoginModalOpen(false);
   };
 
   const navItems = [
@@ -169,12 +159,6 @@ export const SidebarCeBianLan = () => {
       <SettingsModal
         open={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-      />
-
-      <SettingsModal
-        open={isFirstLoginModalOpen}
-        onClose={handleFirstLoginComplete}
-        isFirstLogin={true}
       />
     </>
   );
