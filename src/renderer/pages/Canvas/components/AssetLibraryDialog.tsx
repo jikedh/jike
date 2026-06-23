@@ -24,7 +24,7 @@ import {
   readCombinedAssetIndex,
   getAssetCategoryLabel,
   getAssetDisplayUrl,
-  getAssetOriginalDisplayUrl,
+  getAssetFileUrl,
   renameAsset,
   renameAssetFolder,
 } from "service/assetStorage";
@@ -119,6 +119,51 @@ const categoryAliases: Record<string, AssetCategory> = {
 
 const normalizeImportPath = (value: string) => value.replace(/\\/g, "/");
 
+const isAbsoluteMediaUrl = (value: string) =>
+  /^(https?:|file:|blob:|data:)/i.test(value.trim());
+
+const isWindowsAbsolutePath = (value: string) => /^[a-zA-Z]:[\\/]/.test(value);
+
+const toFileUrl = (value: string) => {
+  const normalized = value.replace(/\\/g, "/");
+  return encodeURI(
+    /^[a-zA-Z]:\//.test(normalized)
+      ? `file:///${normalized}`
+      : `file://${normalized.startsWith("/") ? "" : "/"}${normalized}`,
+  );
+};
+
+const getProjectStoragePath = () => {
+  try {
+    const raw = localStorage.getItem("canvas-chat-settings");
+    if (!raw) return "";
+    const parsed = JSON.parse(raw);
+    return parsed.state?.storagePath || "";
+  } catch {
+    return "";
+  }
+};
+
+const getAssetPreviewUrl = (asset: AssetRecord, assetStoragePath: string) => {
+  const sourcePath = asset.originalFile || asset.fileUrl;
+  if (!sourcePath) return "";
+
+  if (isAbsoluteMediaUrl(sourcePath)) {
+    return sourcePath;
+  }
+
+  if (isWindowsAbsolutePath(sourcePath)) {
+    return toFileUrl(sourcePath);
+  }
+
+  const basePath =
+    asset.source?.type === "canvas" && !sourcePath.startsWith("assets/")
+      ? getProjectStoragePath()
+      : assetStoragePath;
+
+  return getAssetFileUrl(basePath, sourcePath);
+};
+
 const getFileRelativePath = (file: File) =>
   normalizeImportPath(
     ((file as File & { webkitRelativePath?: string }).webkitRelativePath ||
@@ -207,7 +252,7 @@ const AssetPreviewPane = ({
     );
   }
 
-  const displayUrl = getAssetOriginalDisplayUrl(asset, basePath);
+  const displayUrl = getAssetPreviewUrl(asset, basePath);
   const updatedAt = new Date(asset.updatedAt || asset.createdAt);
 
   return (
@@ -321,6 +366,8 @@ export const AssetLibraryDialog = ({
   const [renamingFolder, setRenamingFolder] = useState<AssetFolder | null>(null);
   const [renamingAsset, setRenamingAsset] = useState<AssetRecord | null>(null);
   const [previewAsset, setPreviewAsset] = useState<AssetRecord | null>(null);
+  const [videoPreviewAsset, setVideoPreviewAsset] =
+    useState<AssetRecord | null>(null);
   const [activeProjectAssetId, setActiveProjectAssetId] = useState<
     string | null
   >(null);
@@ -1442,6 +1489,19 @@ export const AssetLibraryDialog = ({
               {"\u63d2\u5165\u753b\u5e03"}
             </button>
           ) : null}
+          {contextMenu.asset.mediaType === "video" ? (
+            <button
+              type="button"
+              className="flex w-full items-center rounded-md px-3 py-2 text-left text-white/80 hover:bg-[#B43FEB]/10 hover:text-white"
+              onClick={() => {
+                const asset = contextMenu.asset;
+                setContextMenu(null);
+                setVideoPreviewAsset(asset);
+              }}
+            >
+              {"\u9884\u89c8"}
+            </button>
+          ) : null}
           <button
             type="button"
             className="flex w-full items-center rounded-md px-3 py-2 text-left text-white/80 hover:bg-[#B43FEB]/10 hover:text-white"
@@ -1532,6 +1592,39 @@ export const AssetLibraryDialog = ({
             <IconPlus size={15} />
             {"\u65b0\u5efa\u8d44\u4ea7\u9879\u76ee"}
           </button>
+        </div>
+      ) : null}
+
+      {videoPreviewAsset ? (
+        <div
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-black/70 p-6"
+          onPointerDown={() => setVideoPreviewAsset(null)}
+        >
+          <div
+            className="flex h-[80vh] w-[min(960px,92vw)] flex-col overflow-hidden rounded-xl border border-white/10 bg-[#121214] shadow-2xl"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <header className="flex h-12 shrink-0 items-center justify-between border-b border-white/10 px-4">
+              <div className="min-w-0 truncate text-sm font-medium text-white/90">
+                {videoPreviewAsset.name}
+              </div>
+              <button
+                type="button"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-white/55 hover:bg-white/10 hover:text-white"
+                onClick={() => setVideoPreviewAsset(null)}
+              >
+                <IconX size={18} />
+              </button>
+            </header>
+            <div className="flex min-h-0 flex-1 items-center justify-center bg-black">
+              <video
+                src={getAssetPreviewUrl(videoPreviewAsset, basePath)}
+                className="max-h-[calc(80vh-3rem)] max-w-full"
+                controls
+                autoPlay
+              />
+            </div>
+          </div>
         </div>
       ) : null}
 
