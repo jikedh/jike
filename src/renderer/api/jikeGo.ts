@@ -325,6 +325,7 @@ export function getJikeGoUserInfo(): any {
 // 个人信息更新请求体：所有字段可选，仅传入字段会被更新
 export type UpdateJikeGoUserInfoRequest = {
   nickname?: string;
+  username?: string;
   avatar?: string;
   mobile?: string;
   email?: string;

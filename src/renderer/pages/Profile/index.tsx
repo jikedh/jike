@@ -72,7 +72,11 @@ const ProfilePage = () => {
     // 等待 profile 加载完成后再打开，确保 initialValue 有值
     if (focus === "password") {
       setPasswordOpen(true);
-    } else if (focus === "nickname" || focus === "email" || focus === "mobile") {
+    } else if (
+      focus === "username" ||
+      focus === "email" ||
+      focus === "mobile"
+    ) {
       setEditField(focus);
     }
     // 消费掉参数，避免刷新页面重复触发
@@ -170,11 +174,12 @@ const ProfilePage = () => {
     if (!profile) return [];
     return [
       {
-        key: "nickname",
-        icon: PROFILE_INFO_ICONS.nickname,
-        label: "自定义昵称",
-        value: profile.nickname || "未设置",
+        key: "username",
+        icon: PROFILE_INFO_ICONS.username,
+        label: "自定义用户名",
+        value: profile.username || "未设置",
         editable: true,
+        actionText: profile.username ? "修改" : "设置",
       },
       {
         key: "email",
@@ -196,7 +201,7 @@ const ProfilePage = () => {
   }, [profile]);
 
   const handleInfoAction = useCallback((key: string) => {
-    if (key === "nickname" || key === "email" || key === "mobile") {
+    if (key === "username" || key === "email" || key === "mobile") {
       setEditField(key);
     }
   }, []);
@@ -227,13 +232,15 @@ const ProfilePage = () => {
   }
 
   const editInitialValue =
-    editField === "nickname"
-      ? profile.nickname
-      : editField === "email"
-        ? profile.email
-        : editField === "mobile"
-          ? profile.mobile
-          : "";
+    editField === "username"
+      ? profile.username
+      : editField === "nickname"
+        ? profile.nickname
+        : editField === "email"
+          ? profile.email
+          : editField === "mobile"
+            ? profile.mobile
+            : "";
 
   return (
     <div className="min-h-screen bg-[#09090b] text-white">

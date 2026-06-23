@@ -3,7 +3,7 @@ import { getJikeGoUserInfo } from "@/api/jikeGo";
 
 // 待补全项 key 列表（与 FirstLoginGuideDialog 中 GuideItem["key"] 对齐）
 export type PendingItemKey =
-    | "nickname"
+    | "username"
     | "email"
     | "mobile"
     | "password";
@@ -25,6 +25,11 @@ export interface ProfileCompletenessResult {
 // 与 Profile 页一致的 success code 判定
 const SUCCESS_CODES = new Set([200, 10000]);
 
+// 判断 username 是否属于"尚未自定义"：
+// 为空、或以 wx_ 开头（微信渠道默认账号）均视为待补全
+const isUsernameUnset = (username: string): boolean =>
+    !username || username.startsWith("wx_");
+
 // 校验用户基础信息与安全设置的完整性，返回待补全项列表
 export const checkProfileCompleteness =
     async (): Promise<ProfileCompletenessResult> => {
@@ -38,11 +43,11 @@ export const checkProfileCompleteness =
             email: String(data.email ?? "").trim(),
             mobile: String(data.mobile ?? "").trim(),
             avatar: String(data.avatar ?? ""),
-            username: String(data.username ?? ""),
+            username: String(data.username ?? "").trim(),
         };
 
         const pending: PendingItemKey[] = [];
-        if (!profile.nickname) pending.push("nickname");
+        if (isUsernameUnset(profile.username)) pending.push("username");
         if (!profile.email) pending.push("email");
         if (!profile.mobile) pending.push("mobile");
         // 密码已设置过则不再提示
