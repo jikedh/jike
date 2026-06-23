@@ -21,8 +21,6 @@ export type NewVideoApiRequest =
   | Seedance20Request
   | BailianVideoGenerationRequest
   | ViduQ3Image2VideoRequest
-  | KuaiziHappyHorseVideoRequest
-  | KuaiziKlingOmniVideoRequest
   | AgnesVideoRequest;
 
 // Agnes-Video-V2.0 请求体：完全对齐 apihub.agnes-ai.com 的 POST /v1/videos 入参。
@@ -674,64 +672,6 @@ const buildKelingRequest = (
   };
 };
 
-type KuaiziKlingOmniVideoRequest = {
-  model: "kling-v3-omni";
-  prompt: string;
-  kling_mode: "std" | "pro" | "4k";
-  aspect_ratio: "16:9" | "9:16" | "1:1";
-  duration: 5 | 10 | 15;
-  generate_audio: boolean;
-  images?: Array<{
-    url: string;
-    role: "reference_image";
-  }>;
-};
-
-type KuaiziHappyHorseVideoRequest = {
-  model: "happyhorse-1.0-r2v";
-  prompt: string;
-  resolution: "720P" | "1080P";
-  ratio: "16:9" | "9:16" | "1:1";
-  duration: 5 | 6;
-  media: Array<{
-    type: "reference_image";
-    url: string;
-  }>;
-};
-
-const buildKuaiziKlingOmniRequest = (
-  request: VideoGenerateRequest,
-): KuaiziKlingOmniVideoRequest => {
-  const images = getImages(request);
-  const ratio = isOneOf(
-    getRatio(request),
-    ["16:9", "9:16", "1:1"] as const,
-    "16:9",
-  );
-  const duration = pickDuration(request.params.duration, [5, 10, 15] as const, 5);
-  const mode = isOneOf(
-    request.params.quality,
-    ["std", "pro", "4k"] as const,
-    "std",
-  );
-
-  const referenceImages: KuaiziKlingOmniVideoRequest["images"] = images
-    .slice(0, 7)
-    .map((url) => ({
-      url,
-      role: "reference_image" as const,
-    }));
-
-  return {
-    model: "kling-v3-omni",
-    prompt: getPrompt(request.prompt),
-    kling_mode: mode,
-    aspect_ratio: ratio,
-    duration,
-    generate_audio: true,
-    ...(referenceImages.length > 0 ? { images: referenceImages } : {}),
-  };
-};
 
 const buildHappyHorseRequest = (request: VideoGenerateRequest) => {
   const images = getImages(request);
@@ -814,29 +754,6 @@ const buildHappyHorseRequest = (request: VideoGenerateRequest) => {
   } satisfies BailianVideoGenerationRequest;
 };
 
-const buildKuaiziHappyHorseRequest = (request: VideoGenerateRequest) => {
-  const images = getImages(request);
-  const ratio = isOneOf(
-    getRatio(request),
-    ["16:9", "9:16", "1:1"] as const,
-    "16:9",
-  );
-  const resolution = getHappyHorseResolution(request);
-  const duration = pickDuration(request.params.duration, [5, 6] as const, 5);
-
-  return {
-    model: "happyhorse-1.0-r2v",
-    prompt: getPrompt(request.prompt),
-    resolution,
-    ratio,
-    duration,
-    media: images.slice(0, 9).map((url) => ({
-      type: "reference_image" as const,
-      url,
-    })),
-  } satisfies KuaiziHappyHorseVideoRequest;
-};
-
 export const buildVideoApiRequest = (
   request: VideoGenerateRequest,
 ): NewVideoApiRequest => {
@@ -866,12 +783,8 @@ export const buildVideoApiRequest = (
       return buildPixverseRequest(request);
     case "happyhorse":
       return buildHappyHorseRequest(request);
-    case "happyhorse-1.0-r2v":
-      return buildKuaiziHappyHorseRequest(request);
     case "keling":
       return buildKelingRequest(request);
-    case "kling-v3-omni":
-      return buildKuaiziKlingOmniRequest(request);
     case "agnes-video-v2.0":
       return buildAgnesRequest(request);
     default:

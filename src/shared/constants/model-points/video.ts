@@ -57,7 +57,7 @@ export const getVideoGenerationPoints = ({
   }
 
   // 特殊逻辑：HappyHorse 系列
-  if (model === "happyhorse" || model === "happyhorse-1.0-r2v") {
+  if (model === "happyhorse") {
     // 720p -> 54/秒, 1080p -> 96/秒
     const res = resolution.toLowerCase();
     basePointsPerSecond = res === "1080p" ? 96 : 54;
@@ -153,21 +153,6 @@ export const getVideoGenerationPoints = ({
       "1080p": 66,
     };
     basePointsPerSecond = pointsMap[res] ?? 40;
-
-    let totalPoints = basePointsPerSecond * duration;
-
-    if (hasVideoInput) {
-      totalPoints *= 2;
-    }
-
-    return totalPoints;
-  }
-
-  // 特殊逻辑：Kling 筷子版
-  if (model === "kling-v3-omni") {
-    // 720p -> 40/秒, 1080p -> 66/秒
-    const res = resolution.toLowerCase();
-    basePointsPerSecond = res === "1080p" ? 66 : 40;
 
     let totalPoints = basePointsPerSecond * duration;
 

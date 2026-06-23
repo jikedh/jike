@@ -233,16 +233,6 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
     ],
   },
   {
-    id: "happyhorse-1.0-r2v",
-    label: "HappyHorse（筷子）",
-    variants: [
-      {
-        id: "happyhorse-1.0-r2v",
-        supportedModes: ["all-reference"],
-      },
-    ],
-  },
-  {
     id: "keling",
     label: "Keling V3",
     variants: [
@@ -252,16 +242,6 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
       },
       {
         id: "kling/kling-v3-omni-video-generation",
-        supportedModes: ["all-reference"],
-      },
-    ],
-  },
-  {
-    id: "kling-v3-omni",
-    label: "Kling（筷子）",
-    variants: [
-      {
-        id: "kling-v3-omni",
         supportedModes: ["all-reference"],
       },
     ],

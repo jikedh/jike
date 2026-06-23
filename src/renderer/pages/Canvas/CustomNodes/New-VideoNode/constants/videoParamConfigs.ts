@@ -148,23 +148,6 @@ const duration4_5_10 = {
   ],
 };
 
-const duration5_6 = {
-  type: "buttons" as const,
-  options: [
-    { label: "5s", value: 5 },
-    { label: "6s", value: 6 },
-  ],
-};
-
-const duration5_10 = {
-  type: "buttons" as const,
-  options: [
-    { label: "5s", value: 5 },
-    { label: "10s", value: 10 },
-    { label: "15s", value: 15 },
-  ],
-};
-
 // Agnes-Video-V2.0 常用的目标时长（以秒为单位），背后会按 frame_rate 24 推算 num_frames。
 const agnesDurationPresets = [
   { label: "3s", value: 3 },
@@ -290,46 +273,6 @@ const happyHorseConfig = (mode: VideoModeKey): VideoParamConfig => ({
   },
 });
 
-const kuaiziHappyHorseR2vConfig = (): VideoParamConfig => ({
-  modelId: "happyhorse-1.0-r2v",
-  mode: "all-reference",
-  aspectRatios: squareRatios,
-  qualityGroup: {
-    key: "resolution",
-    label: "Resolution",
-    options: happyHorseResolutions,
-  },
-  duration: duration5_6,
-  defaults: {
-    aspectRatio: "16:9",
-    resolution: "1080P",
-    duration: 5,
-    generateAudio: false,
-  },
-});
-
-const kuaiziKlingOmniConfig = (): VideoParamConfig => ({
-  modelId: "kling-v3-omni",
-  mode: "all-reference",
-  aspectRatios: squareRatios,
-  qualityGroup: {
-    key: "quality",
-    label: "Mode",
-    options: [
-      { label: "Std", value: "std" },
-      { label: "Pro", value: "pro" },
-      { label: "4K", value: "4k" },
-    ],
-  },
-  duration: duration5_10,
-  defaults: {
-    aspectRatio: "16:9",
-    quality: "std",
-    duration: 5,
-    generateAudio: false,
-  },
-});
-
 export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
   "seedance-2.0-fast": seedance20Config("seedance-2.0-fast", "fast"),
   "seedance-2.0-pro": seedance20Config("seedance-2.0-pro", "pro"),
@@ -392,8 +335,6 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
   [byModeKey("happyhorse", "image-to-video")]:
     happyHorseConfig("image-to-video"),
   [byModeKey("happyhorse", "video-edit")]: happyHorseConfig("video-edit"),
-  [byModeKey("happyhorse-1.0-r2v", "all-reference")]:
-    kuaiziHappyHorseR2vConfig(),
   // Vidu Q2 仅保留历史兼容配置，新 UI 不再展示。
   [byModeKey("vidu-q2-fast", "image-to-video")]: {
     modelId: "vidu-q2-fast",
@@ -541,7 +482,6 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
       generateAudio: false,
     },
   },
-  [byModeKey("kling-v3-omni", "all-reference")]: kuaiziKlingOmniConfig(),
   // ===================== Agnes-Video-V2.0 =====================
   // Agnes 把宽高比、分辨率、帧数、帧率都暴露给前端。分辨率/帧率交给专门的 Agnes 面板控件；
   // 这里保留宽高比与通用时长以便与现有 VideoParamsPopover 共存。

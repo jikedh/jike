@@ -89,8 +89,6 @@ import { create } from "zustand";
 import {
   createAgnesVideoTask,
   createDashscopeVideoSynthesis,
-  createKuaiziHappyHorseVideoTask,
-  createKuaiziKlingVideoTask,
   createImageGeneration,
   createLzVideoTask,
   fetchMjTask,
@@ -99,8 +97,6 @@ import {
   getDashscopeVideoTaskStatus,
   getImageTaskStatus,
   getLzVideoTaskStatus,
-  getKuaiziHappyHorseVideoTaskStatus,
-  getKuaiziKlingVideoTaskStatus,
   submitMjImagine
 } from "@/api/ai";
 import {
@@ -1709,7 +1705,7 @@ const pollNewVideoGeneration = async ({
   taskIndex: number;
   totalTasks: number;
   ledgerBizId?: string;
-  videoProvider?: "seedance" | "kuaizi" | "dashscope" | "agnes";
+  videoProvider?: "seedance" | "dashscope" | "agnes";
 }) => {
   const startTime = Date.now();
   let missingResultUrlStartTime: number | null = null;
@@ -1755,15 +1751,11 @@ const pollNewVideoGeneration = async ({
       const response: any =
         videoProvider === "seedance"
           ? await getLzVideoTaskStatus(taskId)
-          : videoProvider === "kuaizi"
-            ? currentNode.data.model === "happyhorse-1.0-r2v"
-              ? await getKuaiziHappyHorseVideoTaskStatus(taskId)
-              : await getKuaiziKlingVideoTaskStatus(taskId)
-            : videoProvider === "agnes"
-              ? await getAgnesVideoTaskStatus(taskId)
-              : isSeedance20
-                ? await getLzVideoTaskStatus(taskId)
-                : await getDashscopeVideoTaskStatus(taskId);
+          : videoProvider === "agnes"
+            ? await getAgnesVideoTaskStatus(taskId)
+            : isSeedance20
+              ? await getLzVideoTaskStatus(taskId)
+              : await getDashscopeVideoTaskStatus(taskId);
 
       const normalized = normalizeVideoTaskResponse(response);
       const normalizedTaskId = normalized.taskId ?? taskId;
@@ -2562,9 +2554,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                       "vidu",
                       "pixverse",
                       "happyhorse",
-                      "happyhorse-1.0-r2v",
                       "keling",
-                      "kling-v3-omni",
                     ].includes(defaultNewVideoModel ?? "") &&
                       visibleNewVideoModelIds.has(defaultNewVideoModel ?? "")
                       ? defaultNewVideoModel
@@ -4254,17 +4244,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         const createTask = async () => {
           let response: any;
-          if (model === "happyhorse-1.0-r2v") {
-            response = await createKuaiziHappyHorseVideoTask(
-              requestPayload,
-              requiredPoints,
-            );
-          } else if (model === "kling-v3-omni") {
-            response = await createKuaiziKlingVideoTask(
-              requestPayload,
-              requiredPoints,
-            );
-          } else if (isSeedance20) {
+          if (isSeedance20) {
             response = await createLzVideoTask(requestPayload, requiredPoints);
           } else if (model === "agnes-video-v2.0") {
             // Agnes 走独立桌面代理通道，避免被误归类为 dashscope / kuaizi。
@@ -4344,11 +4324,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             videoProvider:
               model === "agnes-video-v2.0"
                 ? "agnes"
-                : model === "happyhorse-1.0-r2v" || model === "kling-v3-omni"
-                  ? "kuaizi"
-                  : isSeedance20
-                    ? "seedance"
-                    : "dashscope",
+                : isSeedance20
+                  ? "seedance"
+                  : "dashscope",
           });
         });
       } catch (startError) {

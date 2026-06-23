@@ -21,16 +21,6 @@ type ServiceConfig = {
   useBearer?: boolean;
 };
 
-function toHeaderRecord(
-  headers: AxiosRequestConfig["headers"],
-): Record<string, string> {
-  if (!headers) {
-    return {};
-  }
-
-  return headers as Record<string, string>;
-}
-
 const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
   jikeing: {
     // 本地开发默认走本地服务，生产环境可通过 .env 覆盖为线上地址
@@ -101,21 +91,5 @@ const jikeingRequest = async <T = any>(
   return await jikeingService.request(config);
 };
 
-const kuaiziOpenApiRequest = async <T = any>(
-  config: AxiosRequestConfig,
-): Promise<T> => {
-  const finalConfig: AxiosRequestConfig = {
-    ...config,
-    baseURL: config.baseURL || "https://aiopenapi.kuaizi.cn",
-    timeout: config.timeout ?? REQUEST_TIMEOUT,
-    headers: {
-      ...DEFAULT_HEADERS,
-      ...toHeaderRecord(config.headers),
-    },
-  };
-
-  return await axios(finalConfig).then((response) => response.data);
-};
-
-export { jikeingService, kuaiziOpenApiRequest, SKIP_AUTH_HEADER };
+export { jikeingService, SKIP_AUTH_HEADER };
 export { jikeingRequest };

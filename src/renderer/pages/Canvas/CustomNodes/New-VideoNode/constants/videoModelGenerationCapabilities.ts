@@ -155,24 +155,6 @@ export const VIDEO_MODEL_GENERATION_CAPABILITIES: Record<
       },
     },
   },
-  "happyhorse-1.0-r2v": {
-    modes: {
-      "all-reference": {
-        references: {
-          image: { min: 1, max: 9 },
-          video: { max: 0 },
-          audio: { max: 0 },
-          requireAnyReference: true,
-          requireOnlyImages: true,
-        },
-        params: {
-          duration: [5, 6],
-          resolution: ["720P", "1080P"],
-          ratio: ["16:9", "9:16", "1:1"],
-        },
-      },
-    },
-  },
   keling: {
     modes: {
       "text-to-video": { references: emptyReferences },
@@ -186,23 +168,6 @@ export const VIDEO_MODEL_GENERATION_CAPABILITIES: Record<
       },
       "image-to-video": { references: onlyImages(1, 1) },
       "first-last-frame": { references: firstLastFrame },
-    },
-  },
-  "kling-v3-omni": {
-    modes: {
-      "all-reference": {
-        references: {
-          image: { min: 1, max: 7 },
-          video: { max: 7 },
-          audio: { max: 0 },
-          requireAnyReference: true,
-        },
-        params: {
-          duration: [5, 10, 15],
-          ratio: ["16:9", "9:16", "1:1"],
-          generateAudio: false,
-        },
-      },
     },
   },
   // Agnes-Video-V2.0：仅支持文生视频与图生视频；图生视频最多支持 10 张参考图。
