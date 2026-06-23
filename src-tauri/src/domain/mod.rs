@@ -2,7 +2,6 @@
 pub mod storage_service;
 pub mod download_service;
 pub mod tracking_service;
-pub mod tray_service;
 pub mod video_service;
 
 pub use storage_service::*;

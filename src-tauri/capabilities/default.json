@@ -20,7 +20,6 @@
     "core:path:default",
     "core:resources:default",
     "core:menu:default",
-    "core:tray:default",
     "core:image:default",
 
     "dialog:default",

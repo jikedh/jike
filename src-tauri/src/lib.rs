@@ -1,19 +1,14 @@
 // 即刻 Tauri 应用入口
 // 重构要点：
 // 1. 注册 Tauri 2 官方插件（dialog/fs/http/notification/shell/store/os/process/opener/global-shortcut）
-// 2. 在 setup() 阶段构建系统托盘（替代原 Electron tray）
-// 3. 通过 generate_handler! 集中注册所有 commands
-// 4. 窗口全屏启动、最大化（保持与原 Electron 一致）
+// 2. 通过 generate_handler! 集中注册所有 commands
+// 3. 窗口全屏启动、最大化（保持与原 Electron 一致）
 
 mod commands;
 mod domain;
 mod models;
 
-use tauri::{
-    menu::{Menu, MenuItem},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager,
-};
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -31,47 +26,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
-            // 托盘构建 - 替代原 Electron tray/service.ts
-            let show_item = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
-            let hide_item = MenuItem::with_id(app, "hide", "隐藏主窗口", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "退出应用", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_item, &hide_item, &quit_item])?;
-
-            let _tray = TrayIconBuilder::with_id("main-tray")
-                .icon(app.default_window_icon().cloned().ok_or("missing icon")?)
-                .tooltip("即刻")
-                .menu(&menu)
-                .show_menu_on_left_click(true)
-                .on_menu_event(|app, event| match event.id().as_ref() {
-                    "show" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
-                    }
-                    "hide" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.hide();
-                        }
-                    }
-                    "quit" => app.exit(0),
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
-                        let app = tray.app_handle();
-                        if let Some(w) = app.get_webview_window("main") {
-                            if w.is_visible().unwrap_or(false) {
-                                let _ = w.hide();
-                            } else {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            }
-                        }
-                    }
-                })
-                .build(app)?;
-
             // 启动时最大化（保持与原 Electron 一致）
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.maximize();
@@ -130,8 +84,6 @@ pub fn run() {
             commands::debug_is_dev,
             commands::debug_get_app_version,
             commands::debug_capture_page,
-            commands::tray_build_menu,
-            commands::tray_quit,
             commands::video_processing_trim,
         ])
         .run(tauri::generate_context!())

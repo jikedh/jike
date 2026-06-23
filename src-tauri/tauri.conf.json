@@ -38,12 +38,6 @@
           "**"
         ]
       }
-    },
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": false,
-      "menuOnLeftClick": true,
-      "tooltip": "即刻"
     }
   },
   "bundle": {

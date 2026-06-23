@@ -5,7 +5,6 @@ pub mod download;
 pub mod notification;
 pub mod tracking;
 pub mod debug;
-pub mod tray;
 pub mod video;
 
 pub use storage::*;
@@ -13,5 +12,4 @@ pub use download::*;
 pub use notification::*;
 pub use tracking::*;
 pub use debug::*;
-pub use tray::*;
 pub use video::*;
