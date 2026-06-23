@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { getJikeingToken, setJikeingToken, setJikeingUserId } from "shared/utils/utils";
 import {
   getDigitalCaptcha,
+  getJikeGoUserInfo,
   getSceneQrcode,
   loginByUsername,
 } from "@/api/jikeGo";
@@ -17,6 +18,7 @@ import { useUserStore } from "@/stores/useUserStore";
 const MAX_RETRY_COUNT = 3;
 const RETRY_DELAY = 10000;
 const REDIRECT_DELAY = 500;
+const PROFILE_NOTICE_PATH = "/profile?completeProfile=1";
 
 // 登录模式
 type LoginMode = "qrcode" | "password";
@@ -52,6 +54,12 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
 };
 
+const isProfileContactIncomplete = (profile: any) => {
+  const mobile = String(profile?.mobile ?? "").trim();
+  const email = String(profile?.email ?? "").trim();
+  return !mobile || !email;
+};
+
 const LoginPage = () => {
   const navigate = useNavigate();
 
@@ -74,16 +82,31 @@ const LoginPage = () => {
   const [pwdLoading, setPwdLoading] = useState(false);
   const [pwdError, setPwdError] = useState("");
 
+  const redirectAfterLogin = useCallback(async () => {
+    await useUserStore.getState().fetchUserInfo();
+
+    let nextPath = "/home";
+    try {
+      const res: any = await getJikeGoUserInfo();
+      if (isProfileContactIncomplete(res?.data)) {
+        nextPath = PROFILE_NOTICE_PATH;
+      }
+    } catch (error) {
+      console.error("[登录] 获取用户资料失败:", error);
+    }
+
+    setTimeout(() => {
+      navigate(nextPath);
+    }, REDIRECT_DELAY);
+  }, [navigate]);
+
   // ===================== 扫码登录逻辑 =====================
   const handlePollingSuccess = useCallback(
     async () => {
       setQrcodeStatus("success");
-      await useUserStore.getState().fetchUserInfo();
-      setTimeout(() => {
-        navigate("/home");
-      }, REDIRECT_DELAY);
+      await redirectAfterLogin();
     },
-    [navigate],
+    [redirectAfterLogin],
   );
 
   const { startPolling, stopPolling } = useQrcodePolling({
@@ -168,10 +191,7 @@ const LoginPage = () => {
         if (res.data.id) {
           setJikeingUserId(String(res.data.id));
         }
-        await useUserStore.getState().fetchUserInfo();
-        setTimeout(() => {
-          navigate("/home");
-        }, REDIRECT_DELAY);
+        await redirectAfterLogin();
       } else {
         setPwdError(res.msg || "登录失败");
         fetchCaptcha();
@@ -186,7 +206,14 @@ const LoginPage = () => {
     } finally {
       setPwdLoading(false);
     }
-  }, [username, password, captchaId, captchaAnswer, navigate, fetchCaptcha]);
+  }, [
+    username,
+    password,
+    captchaId,
+    captchaAnswer,
+    fetchCaptcha,
+    redirectAfterLogin,
+  ]);
 
   // 切换登录模式
   const handleSwitchMode = useCallback(
@@ -208,12 +235,11 @@ const LoginPage = () => {
   useEffect(() => {
     const token = getJikeingToken();
     if (token) {
-      useUserStore.getState().fetchUserInfo();
-      navigate("/home");
+      void redirectAfterLogin();
       return;
     }
     fetchQrcode();
-  }, [fetchQrcode, navigate]);
+  }, [fetchQrcode, redirectAfterLogin]);
 
   // 启动扫码轮询
   useEffect(() => {

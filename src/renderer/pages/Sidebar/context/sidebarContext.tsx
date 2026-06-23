@@ -12,6 +12,10 @@ import { useLocation } from "react-router-dom";
 // 创建上下文
 const SidebarContext = createContext<SidebarContextValue | null>(null);
 
+const ROUTE_ACTIVE_ID_MAP: Record<string, string> = {
+  settings: "model-settings",
+};
+
 // Provider 属性类型
 type SidebarProviderProps = {
   children: React.ReactNode;
@@ -35,7 +39,9 @@ export const SidebarProvider = ({
     // 从路径中提取路由名称（例如 /canvas -> canvas）
     const routeName = pathname.split("/").filter(Boolean)[0];
     if (routeName) {
-      setActiveId(routeName);
+      setActiveId(ROUTE_ACTIVE_ID_MAP[routeName] ?? routeName);
+    } else {
+      setActiveId(null);
     }
   }, [location.pathname]);
 

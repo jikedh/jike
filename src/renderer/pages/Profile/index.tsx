@@ -1,5 +1,6 @@
 import { ChevronRight, KeyRound } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useBlocker, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   getJikeGoUserInfo,
@@ -7,6 +8,13 @@ import {
   uploadOssFile,
   type UpdateJikeGoUserInfoRequest,
 } from "@/api/jikeGo";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { PasswordDialog } from "./components/PasswordDialog";
 import {
   ProfileEditDialog,
@@ -54,13 +62,31 @@ const buildVipLabel = (vipLevel: number) => {
   return "";
 };
 
+const isProfileContactIncomplete = (profile: any) => {
+  const mobile = String(profile?.mobile ?? "").trim();
+  const email = String(profile?.email ?? "").trim();
+  return !mobile || !email;
+};
+
 const ProfilePage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [avatarUploading, setAvatarUploading] = useState(false);
 
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [editField, setEditField] = useState<ProfileEditField | null>(null);
+  const [profileNoticeOpen, setProfileNoticeOpen] = useState(false);
+  const leaveCheckPendingRef = useRef(false);
+
+  const leaveBlocker = useBlocker(
+    useCallback(
+      ({ currentLocation, nextLocation }) =>
+        currentLocation.pathname === "/profile" &&
+        nextLocation.pathname !== "/profile",
+      [],
+    ),
+  );
 
   const loadProfile = useCallback(async () => {
     try {
@@ -90,6 +116,67 @@ const ProfilePage = () => {
   useEffect(() => {
     void loadProfile();
   }, [loadProfile]);
+
+  useEffect(() => {
+    if (searchParams.get("completeProfile") === "1") {
+      setProfileNoticeOpen(true);
+    }
+  }, [searchParams]);
+
+  const handleProfileNoticeOpenChange = useCallback(
+    (open: boolean) => {
+      setProfileNoticeOpen(open);
+      if (!open && searchParams.get("completeProfile") === "1") {
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete("completeProfile");
+        setSearchParams(nextParams, { replace: true });
+      }
+    },
+    [searchParams, setSearchParams],
+  );
+
+  useEffect(() => {
+    if (leaveBlocker.state !== "blocked" || leaveCheckPendingRef.current) {
+      return;
+    }
+
+    leaveCheckPendingRef.current = true;
+    let isCancelled = false;
+
+    const checkProfileBeforeLeave = async () => {
+      try {
+        const res: any = await getJikeGoUserInfo();
+        if (!isSuccess(res?.code)) {
+          throw new Error(res?.msg || "获取用户信息失败");
+        }
+
+        if (isCancelled) return;
+
+        if (isProfileContactIncomplete(res?.data)) {
+          leaveBlocker.reset();
+          setProfileNoticeOpen(true);
+          return;
+        }
+
+        leaveBlocker.proceed();
+      } catch (err: any) {
+        if (isCancelled) return;
+        leaveBlocker.reset();
+        toast.error(err?.message || "获取用户信息失败");
+      } finally {
+        if (!isCancelled) {
+          leaveCheckPendingRef.current = false;
+        }
+      }
+    };
+
+    void checkProfileBeforeLeave();
+
+    return () => {
+      isCancelled = true;
+      leaveCheckPendingRef.current = false;
+    };
+  }, [leaveBlocker]);
 
   const handleEditSubmit = useCallback(
     async (field: ProfileEditField, value: string) => {
@@ -280,6 +367,30 @@ const ProfilePage = () => {
         onSubmit={handleEditSubmit}
       />
       <PasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} />
+      <Dialog
+        open={profileNoticeOpen}
+        onOpenChange={handleProfileNoticeOpenChange}
+      >
+        <DialogContent className="w-[min(420px,92vw)] border border-white/10 bg-[#121214] p-0 text-white">
+          <DialogHeader className="border-b border-white/5 bg-[#18181b] px-5 py-4">
+            <DialogTitle className="text-white">完善个人信息</DialogTitle>
+          </DialogHeader>
+          <section className="space-y-5 px-5 py-5">
+            <p className="text-sm leading-6 text-white/70">
+              请修改并补充个人信息和密码。
+            </p>
+            <div className="flex justify-end">
+              <Button
+                variant="blue"
+                size="sm"
+                onClick={() => handleProfileNoticeOpenChange(false)}
+              >
+                知道了
+              </Button>
+            </div>
+          </section>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

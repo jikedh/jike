@@ -10,11 +10,10 @@ export const SidebarNavItem = ({
   onClick,
   classNames,
 }: SidebarNavItemProps) => {
-  const { activeId, setActiveId } = useSidebar();
+  const { activeId } = useSidebar();
   const isActive = activeId === id;
 
   const handleClick = () => {
-    setActiveId(id);
     onClick?.();
   };
 
