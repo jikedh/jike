@@ -18,7 +18,7 @@ import type { ActiveTab, NativePayOrder, RechargePackage } from "./lib/types";
 import { generateAvatarUrl, getRandomStyle } from "./lib/utils";
 
 export function PointsView() {
-    const [activeTab, setActiveTab] = useState<ActiveTab>("usage");
+    const [activeTab, setActiveTab] = useState<ActiveTab>("transaction");
     const [userId, setUserId] = useState<string>("");
     const [selectedPackageId, setSelectedPackageId] = useState<number | null>(
         null,
