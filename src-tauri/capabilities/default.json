@@ -79,6 +79,9 @@
 
     "process:default",
     "process:allow-exit",
+    "process:allow-restart",
+
+    "updater:default",
 
     "opener:default",
     "opener:allow-open-url",

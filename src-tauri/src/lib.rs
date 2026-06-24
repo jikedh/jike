@@ -25,6 +25,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             // 启动时最大化（保持与原 Electron 一致）
             if let Some(w) = app.get_webview_window("main") {

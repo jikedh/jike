@@ -10,8 +10,8 @@ permissions:
   contents: write
 
 env:
-  NODE_VERSION: '24'
-  RUST_VERSION: 'stable'
+  NODE_VERSION: '24.11.1'
+  RUST_VERSION: '1.96.0'
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
@@ -42,30 +42,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Tauri app
-        run: npm run build:tauri
-
-      - name: Locate installer
-        id: locate
-        shell: pwsh
-        run: |
-          $bundle = Get-ChildItem -Path src-tauri/target/release/bundle -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $bundle) {
-            $bundle = Get-ChildItem -Path src-tauri/target/release -Recurse -Filter "jike-*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          }
-          if ($bundle) {
-            "path=$($bundle.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-            "name=$($bundle.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          } else {
-            Write-Error "Installer not found"
-            exit 1
-          }
-
-      - name: Upload to Release
-        uses: softprops/action-gh-release@v2
+      # 使用 tauri-action 自动构建并发布，
+      # 同时通过 createUpdaterArtifacts + TAURI_SIGNING_PRIVATE_KEY
+      # 生成 latest.json + 签名后的安装包，供应用内 updater 检查使用。
+      - name: Build & publish Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          files: |
-            ${{ steps.locate.outputs.path }}
+          tagName: ${{ github.ref_name }}
+          releaseName: '即刻 v__VERSION__'
+          releaseDraft: false
           prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
 
       - name: Upload build logs on failure

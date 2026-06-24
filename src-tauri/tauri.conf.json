@@ -53,6 +53,7 @@
     "category": "Productivity",
     "shortDescription": "视频工作流",
     "longDescription": "即刻 - 基于节点式画布的 AI 视频工作流编排桌面应用",
+    "createUpdaterArtifacts": true,
     "windows": {
       "wix": {
         "language": ["zh-CN"]
@@ -65,5 +66,13 @@
     "resources": [],
     "publisher": "小明",
     "copyright": "© 2026 小明"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFFRUVGREFFMDM3NjQyMTUKUldRVlFuWURydjN1SGhKUVRuMlM3ZGl2Tml1Vzg4eVg0RHcvWVRwMGpGaFBRdStLT2RkdDRnMGQK",
+      "endpoints": [
+        "https://github.com/jikedh/jike/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

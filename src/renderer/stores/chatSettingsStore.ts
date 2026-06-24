@@ -6,7 +6,7 @@ import { persist } from "zustand/middleware";
 
 const GLOBAL_SETTINGS_KEY = "canvasGlobalSettings";
 const LOCAL_SETTINGS_KEY = "canvas-chat-settings";
-const DEFAULT_UPDATE_URL = "https://github.com/byte-fly/jike-anzhuang/releases";
+const DEFAULT_UPDATE_URL = "https://github.com/jikedh/jike/releases";
 
 type GlobalSettings = {
   storagePath?: string;

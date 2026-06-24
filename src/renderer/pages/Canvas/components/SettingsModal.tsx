@@ -6,6 +6,7 @@ import {
   IconExternalLink,
   IconFolder,
   IconPin,
+  IconRefresh,
   IconRestore,
   IconUpload,
   IconX,
@@ -49,7 +50,9 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ModelSelector } from "@/components/ModelSelector";
+import { UpdateDialog } from "@/components/ui/update-dialog";
 import useMessage from "@/hooks/useMessage";
+import { useUpdater } from "@/hooks/useUpdater";
 import { useAnnouncementStore } from "@/stores/announcementStore";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
@@ -138,6 +141,19 @@ export const SettingsModal = ({
   const exportCanvasData = useCanvasFlowStore(
     (state) => state.exportCanvasData,
   );
+
+  // 自动更新：默认走 Tauri updater，开发态自动模拟
+  const {
+    state: updateState,
+    progress: updateProgress,
+    updateInfo,
+    error: updateError,
+    checkForUpdates,
+    startUpdate,
+    restartApp,
+    resetState: resetUpdateState,
+  } = useUpdater();
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const importCanvasData = useCanvasFlowStore(
     (state) => state.importCanvasData,
   );
@@ -419,13 +435,28 @@ export const SettingsModal = ({
     }
   };
 
-  const handleOpenUpdateUrl = () => {
+  const handleCheckUpdate = async () => {
+    // 打开弹窗后再异步检查，便于用户立即看到 loading 状态
+    setUpdateDialogOpen(true);
+    resetUpdateState();
+    const hasUpdate = await checkForUpdates();
+    if (!hasUpdate && updateState !== "available") {
+      // 已是最新 / 检查失败：弹窗保持打开，由 UpdateDialog 渲染对应状态
+    }
+  };
+
+  const handleRetryUpdate = async () => {
+    const hasUpdate = await checkForUpdates();
+    return hasUpdate;
+  };
+
+  // 检测/下载全部失败时，让用户可以手动打开浏览器去下载页面（兜底）
+  const handleOpenUpdateUrlManually = () => {
     const nextUrl = updateUrl.trim();
     if (!nextUrl) {
-      error("请先填写更新地址");
+      error("未配置更新地址，无法打开下载页面");
       return;
     }
-
     window.open(nextUrl, "_blank", "noopener,noreferrer");
   };
 
@@ -1101,11 +1132,14 @@ export const SettingsModal = ({
                           <Button
                             size="sm"
                             variant="blue"
-                            onClick={handleOpenUpdateUrl}
+                            onClick={() => void handleCheckUpdate()}
                           >
-                            <IconExternalLink size={14} />
-                            打开下载页面
+                            <IconRefresh size={14} />
+                            检查更新
                           </Button>
+                        </div>
+                        <div className="mt-3 text-[11px] text-white/30 leading-relaxed">
+                          检测到新版本后会自动下载并安装；安装完成后重启应用即可生效。
                         </div>
                       </section>
                       <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
@@ -1339,6 +1373,26 @@ export const SettingsModal = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 自动更新弹窗 */}
+      <UpdateDialog
+        open={updateDialogOpen}
+        onOpenChange={(nextOpen) => {
+          setUpdateDialogOpen(nextOpen);
+          if (!nextOpen) resetUpdateState();
+        }}
+        state={updateState}
+        progress={updateProgress}
+        updateInfo={updateInfo}
+        error={updateError}
+        currentVersion={appVersion}
+        onCheckForUpdates={checkForUpdates}
+        onStartUpdate={startUpdate}
+        onRestartApp={restartApp}
+        onRetry={handleRetryUpdate}
+        fallbackOpenUrl={updateUrl}
+        onFallbackOpen={handleOpenUpdateUrlManually}
+      />
     </>
   );
 };
