@@ -56,6 +56,7 @@ jobs:
           releaseName: '即刻 v__VERSION__'
           releaseDraft: false
           prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+          updaterJsonPreferNsis: true
 
       - name: Upload build logs on failure
         if: failure()

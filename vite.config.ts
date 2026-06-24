@@ -68,6 +68,6 @@ export default defineConfig({
       },
     },
   },
-  // Tauri 推荐的开发配置：避免 HMR 跨域
+  // Tauri 推荐的开发配置：防止 Vite 清除 Rust 显示的错误
   clearScreen: false,
 });
