@@ -1,52 +1,37 @@
-name: Release Build
+name: Release
 
-# 触发：推送 v 开头的 tag 时运行
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
 
-env:
-  NODE_VERSION: '24.11.1'
-  RUST_VERSION: '1.96.0'
-  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
 jobs:
-  release:
+  build-windows:
     runs-on: windows-latest
+    timeout-minutes: 60
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          node-version: '24'
 
-      - name: Setup Rust ${{ env.RUST_VERSION }}
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
         with:
-          toolchain: ${{ env.RUST_VERSION }}
-          targets: x86_64-pc-windows-msvc
+          cache-targets: true
+          cache-all-crates: true
+          key: windows
 
-      - name: Cache cargo registry & target
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
+      - run: npm install
 
-      - name: Install dependencies
-        run: npm ci
-
-      # 使用 tauri-action 自动构建并发布，
-      # 同时通过 createUpdaterArtifacts + TAURI_SIGNING_PRIVATE_KEY
-      # 生成 latest.json + 签名后的安装包，供应用内 updater 检查使用。
-      - name: Build & publish Tauri app
-        uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -55,14 +40,5 @@ jobs:
           tagName: v__VERSION__
           releaseName: '即刻 v__VERSION__'
           releaseDraft: false
-          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
-          updaterJsonPreferNsis: true
+          prerelease: false
 
-      - name: Upload build logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: |
-            src-tauri/target/release/build/**/*.log
-          retention-days: 7

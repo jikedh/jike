@@ -2080,7 +2080,7 @@ dependencies = [
 
 [[package]]
 name = "jike"
-version = "1.9.7"
+version = "1.9.8"
 dependencies = [
  "anyhow",
  "async-trait",
