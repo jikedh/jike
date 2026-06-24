@@ -342,7 +342,6 @@ const AudioContent = memo(
         <audio
           ref={audioRef}
           src={audioUrl}
-          crossOrigin="anonymous"
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           onEnded={() => setIsPlaying(false)}

@@ -165,9 +165,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const startGeminiPro2Generation = useCanvasFlowStore(
     (state) => state.startGeminiPro2Generation,
   );
-  const stopImagePolling = useCanvasFlowStore(
-    (state) => state.stopImagePolling,
-  );
   const updateImageNodeData = useCanvasFlowStore(
     (state) => state.updateImageNodeData,
   );
@@ -1391,22 +1388,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     }
   };
 
-  /**
-   * 停止正在进行的图片生成轮询。
-   */
-  const handleStop = useCallback(() => {
-    if (!isGenerating) return;
-    stopImagePolling(nodeId);
-    // 重置节点状态为完成，清除进度和结果
-    updateImageNodeData(nodeId, {
-      status: GenerationStatus.COMPLETED,
-      progress: 0,
-      result: undefined,
-      error: undefined,
-    });
-    success("已停止生成");
-  }, [isGenerating, stopImagePolling, nodeId, success, updateImageNodeData]);
-
   return (
     <div className={PROMPT_PANEL_STYLES.container}>
       <div className={PROMPT_PANEL_STYLES.inputArea}>
@@ -1745,7 +1726,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                 type="button"
                 unstyled
                 className={PROMPT_PANEL_STYLES.stopButton}
-                onClick={handleStop}
+                onClick={(event) => event.stopPropagation()}
               >
                 停止
               </Button>

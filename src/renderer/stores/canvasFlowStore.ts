@@ -13,6 +13,7 @@ import {
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
   RUNNINGHUB_GPT_IMAGE2_MODEL,
+  RUNNINGHUB_IMAGE_MODEL_IDS,
   RUNNINGHUB_NANO_BANANA_PRO_MODEL
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
@@ -3314,104 +3315,106 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
           taskId = response.result;
         } else {
-          // 非 Midjourney 模型：先检查是否为 RunningHub 渠道（低价->官方回退）
+          // 非 Midjourney 模型：RunningHub 专属模型走低价->官方回退，其它模型直接走 ToAPI。
           const payloadOriginalModel = payload.originalModel ?? payload.model;
-          // RunningHub 直接生成（可能返回立即地址或 taskId）
-          set((state) => ({
-            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-              ...data,
-              status: GenerationStatus.IN_PROGRESS,
-              progress: 0,
-            })),
-          }));
-
-          try {
-            const resultUrl = await generateRunningHubImageWithFallback({
-              model: payloadOriginalModel,
-              prompt: payload.prompt,
-              imageUrls: Array.isArray(payload.image_urls)
-                ? payload.image_urls
-                : [],
-              size: payload.size,
-              resolution: payload.resolution,
-              scoreCost,
-            });
-
-            const ossUrl = await mirrorGeneratedImageUrlToOss(resultUrl);
-            const projectId = get().projectId;
-            let resultItem = {
-              url: ossUrl,
-              remoteUrl: ossUrl,
-              ...(ossUrl === resultUrl ? {} : { originalUrl: resultUrl }),
-            } as any;
-
-            if (projectId) {
-              try {
-                const fileName = await saveGeneratedImageToLocal(
-                  projectId,
-                  ossUrl,
-                  extractExtensionFromUrl(resultUrl, "png"),
-                );
-                if (fileName) {
-                  resultItem = {
-                    ...resultItem,
-                    localName: fileName,
-                    localPath: getLocalFilePath(
-                      projectId,
-                      "generate_image",
-                      fileName,
-                    ),
-                  };
-                }
-              } catch (saveError) {
-                console.error(
-                  "[startImageGeneration] 保存 RunningHub 图片到本地失败:",
-                  saveError,
-                );
-              }
-            }
-
+          if (RUNNINGHUB_IMAGE_MODEL_IDS.has(payloadOriginalModel)) {
+            // RunningHub 直接生成（可能返回立即地址或 taskId）
             set((state) => ({
-              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-                const existingData = data.result?.data ?? [];
-                const mergedData = appendMediaSequences(existingData, [
-                  resultItem,
-                ]);
-                return {
-                  ...data,
-                  status: GenerationStatus.COMPLETED,
-                  progress: 100,
-                  result: { type: "image", data: mergedData },
-                  error: undefined,
-                };
-              }),
+              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+                ...data,
+                status: GenerationStatus.IN_PROGRESS,
+                progress: 0,
+              })),
             }));
-            saveCurrentCanvasToHistory();
-            if (useChatSettingsStore.getState().autoSaveEnabled) {
-              get().saveGraph();
+
+            try {
+              const resultUrl = await generateRunningHubImageWithFallback({
+                model: payloadOriginalModel,
+                prompt: payload.prompt,
+                imageUrls: Array.isArray(payload.image_urls)
+                  ? payload.image_urls
+                  : [],
+                size: payload.size,
+                resolution: payload.resolution,
+                scoreCost,
+              });
+
+              const ossUrl = await mirrorGeneratedImageUrlToOss(resultUrl);
+              const projectId = get().projectId;
+              let resultItem = {
+                url: ossUrl,
+                remoteUrl: ossUrl,
+                ...(ossUrl === resultUrl ? {} : { originalUrl: resultUrl }),
+              } as any;
+
+              if (projectId) {
+                try {
+                  const fileName = await saveGeneratedImageToLocal(
+                    projectId,
+                    ossUrl,
+                    extractExtensionFromUrl(resultUrl, "png"),
+                  );
+                  if (fileName) {
+                    resultItem = {
+                      ...resultItem,
+                      localName: fileName,
+                      localPath: getLocalFilePath(
+                        projectId,
+                        "generate_image",
+                        fileName,
+                      ),
+                    };
+                  }
+                } catch (saveError) {
+                  console.error(
+                    "[startImageGeneration] 保存 RunningHub 图片到本地失败:",
+                    saveError,
+                  );
+                }
+              }
+
+              set((state) => ({
+                nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+                  const existingData = data.result?.data ?? [];
+                  const mergedData = appendMediaSequences(existingData, [
+                    resultItem,
+                  ]);
+                  return {
+                    ...data,
+                    status: GenerationStatus.COMPLETED,
+                    progress: 100,
+                    result: { type: "image", data: mergedData },
+                    error: undefined,
+                  };
+                }),
+              }));
+              saveCurrentCanvasToHistory();
+              if (useChatSettingsStore.getState().autoSaveEnabled) {
+                get().saveGraph();
+              }
+              await refreshBalanceAfterGeneration({
+                scene: "image",
+                nodeId,
+                model: payloadOriginalModel,
+                requiredPoints: payload.requiredPoints,
+              });
+
+              // 调整 pending count
+              const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
+              if (remaining <= 0) pendingTaskCounts.delete(nodeId);
+              else pendingTaskCounts.set(nodeId, remaining);
+
+              return;
+            } catch (rhError) {
+              console.error(
+                "[startImageGeneration] RunningHub 生图失败:",
+                rhError,
+              );
+              const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
+              if (remaining <= 0) pendingTaskCounts.delete(nodeId);
+              else pendingTaskCounts.set(nodeId, remaining);
+              throw rhError;
             }
-            await refreshBalanceAfterGeneration({
-              scene: "image",
-              nodeId,
-              model: payloadOriginalModel,
-              requiredPoints: payload.requiredPoints,
-            });
-
-            // 调整 pending count
-            const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
-            if (remaining <= 0) pendingTaskCounts.delete(nodeId);
-            else pendingTaskCounts.set(nodeId, remaining);
-
-            return;
-          } catch (rhError) {
-            console.error(
-              "[startImageGeneration] RunningHub 生图失败:",
-              rhError,
-            );
-            const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
-            if (remaining <= 0) pendingTaskCounts.delete(nodeId);
-            else pendingTaskCounts.set(nodeId, remaining);
-            throw rhError;
           }
 
           // 非 RunningHub：创建图片生成任务，获取 task_id 后启动轮询
