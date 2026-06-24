@@ -39,6 +39,7 @@ interface BottomParamsBarProps {
   onGenerate: (request: VideoGenerateRequest) => void;
   onStop?: () => void;
   isGenerating?: boolean;
+  canStop?: boolean;
   disabled?: boolean;
   disabledReason?: string;
   accessory?: ReactNode;
@@ -56,6 +57,7 @@ export const BottomParamsBar = ({
   onGenerate,
   onStop,
   isGenerating = false,
+  canStop = false,
   disabled = false,
   disabledReason,
   accessory,
@@ -106,7 +108,7 @@ export const BottomParamsBar = ({
           <Button
             unstyled
             onClick={onStop}
-            disabled
+            aria-disabled={!canStop}
             className={PROMPT_PANEL_STYLES.stopButton}
           >
             停止

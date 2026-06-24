@@ -288,6 +288,20 @@ const areStringRecordsEqual = (
   );
 };
 
+const VIDEO_GENERATION_FAKE_REQUEST_DELAY_MS = 5000;
+const VIDEO_FAKE_REQUEST_PENDING_KEY = "fakeRequestPending";
+const videoFakeRequestTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+const isVideoFakeRequestPending = (data?: NewVideoGenerationNode) =>
+  data?.metadata?.[VIDEO_FAKE_REQUEST_PENDING_KEY] === true;
+
+const getCurrentNewVideoData = (nodeId: string) => {
+  const node = useCanvasFlowStore
+    .getState()
+    .nodes.find((item) => item.id === nodeId && item.type === "newVideoNode");
+  return node?.data as NewVideoGenerationNode | undefined;
+};
+
 export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const editorRef = useRef<VideoPromptEditorHandle | null>(null);
   const { success, warning } = useMessage();
@@ -302,9 +316,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
 
   const startNewVideoGeneration = useCanvasFlowStore(
     (state) => state.startNewVideoGeneration,
-  );
-  const stopVideoPolling = useCanvasFlowStore(
-    (state) => state.stopVideoPolling,
   );
   const updateNewVideoNodeData = useCanvasFlowStore(
     (state) => state.updateNewVideoNodeData,
@@ -328,6 +339,9 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     );
     return node?.data as NewVideoGenerationNode | undefined;
   });
+  const isFakeRequestPending =
+    isVideoFakeRequestPending(currentData) &&
+    videoFakeRequestTimers.has(nodeId);
 
   const metadataParams = currentData?.metadata?.params as
     | VideoParamState
@@ -1048,21 +1062,36 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     selectedParams.agnesNumFrames,
   ]);
 
-  const isGenerating =
+  const isRealRequestGenerating =
     currentData?.status === GenerationStatus.QUEUED ||
     currentData?.status === GenerationStatus.IN_PROGRESS;
+  const isGenerating = isFakeRequestPending || isRealRequestGenerating;
 
   const handleStop = useCallback(() => {
-    if (!isGenerating) return;
-    stopVideoPolling(nodeId);
+    const timer = videoFakeRequestTimers.get(nodeId);
+    if (!isFakeRequestPending || !timer) {
+      return;
+    }
+    clearTimeout(timer);
+    videoFakeRequestTimers.delete(nodeId);
+    const latestData = getCurrentNewVideoData(nodeId) ?? currentData;
     updateNewVideoNodeData(nodeId, {
       status: GenerationStatus.COMPLETED,
       progress: 0,
-      result: { type: "video", data: [] },
       error: undefined,
+      metadata: {
+        ...(latestData?.metadata ?? {}),
+        [VIDEO_FAKE_REQUEST_PENDING_KEY]: false,
+      },
     });
     success("已停止生成");
-  }, [isGenerating, nodeId, stopVideoPolling, success, updateNewVideoNodeData]);
+  }, [
+    currentData,
+    isFakeRequestPending,
+    nodeId,
+    success,
+    updateNewVideoNodeData,
+  ]);
 
   const handleGenerate = useCallback(
     async (request: VideoGenerateRequest) => {
@@ -1105,19 +1134,79 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       };
       const apiRequest = buildVideoApiRequest(fullRequest);
 
-      await startNewVideoGeneration(
-        nodeId,
-        {
-          ...apiRequest,
-          requiredPoints,
-          __newVideoInput: fullRequest,
+      updateNewVideoNodeData(nodeId, {
+        model: fullRequest.model,
+        prompt: fullRequest.prompt,
+        promptDraft: fullRequest.prompt,
+        duration: fullRequest.params.duration,
+        aspect_ratio: fullRequest.params.aspectRatio,
+        requiredPoints,
+        status: GenerationStatus.QUEUED,
+        progress: 0,
+        result: {
+          type: "video",
+          data: currentData?.result?.data ?? [],
         },
-        1,
-      );
-      success("已开始生成视频");
-      void refreshBalanceInfo();
+        error: undefined,
+        metadata: {
+          ...(currentData?.metadata ?? {}),
+          params: fullRequest.params,
+          mode: fullRequest.mode,
+          count: 1,
+          tasks: [],
+          failedTasks: [],
+          [VIDEO_FAKE_REQUEST_PENDING_KEY]: true,
+        },
+      });
+
+      const existingTimer = videoFakeRequestTimers.get(nodeId);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+      }
+
+      const timer = setTimeout(() => {
+        if (videoFakeRequestTimers.get(nodeId) !== timer) {
+          return;
+        }
+        const latestData = getCurrentNewVideoData(nodeId);
+        if (!isVideoFakeRequestPending(latestData)) {
+          videoFakeRequestTimers.delete(nodeId);
+          return;
+        }
+        videoFakeRequestTimers.delete(nodeId);
+        updateNewVideoNodeData(nodeId, {
+          metadata: {
+            ...(latestData?.metadata ?? {}),
+            params: fullRequest.params,
+            mode: fullRequest.mode,
+            count: 1,
+            tasks: [],
+            failedTasks: [],
+            [VIDEO_FAKE_REQUEST_PENDING_KEY]: false,
+          },
+        });
+        void startNewVideoGeneration(
+          nodeId,
+          {
+            ...apiRequest,
+            requiredPoints,
+            __newVideoInput: fullRequest,
+          },
+          1,
+        )
+          .then(() => {
+            success("已开始生成视频");
+            void refreshBalanceInfo();
+          })
+          .catch(() => {
+            // 失败状态已由 startNewVideoGeneration 写回节点。
+          });
+      }, VIDEO_GENERATION_FAKE_REQUEST_DELAY_MS);
+      videoFakeRequestTimers.set(nodeId, timer);
     },
     [
+      currentData?.metadata,
+      currentData?.result?.data,
       generationReferenceItems,
       isGenerating,
       nodeId,
@@ -1126,6 +1215,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       requiredPoints,
       startNewVideoGeneration,
       success,
+      updateNewVideoNodeData,
       validateBalanceBeforeGenerate,
       warning,
     ],
@@ -1199,6 +1289,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
           onGenerate={handleGenerate}
           onStop={handleStop}
           isGenerating={isGenerating}
+          canStop={isFakeRequestPending}
           disabled={
             isUploading ||
             !generationAvailability.canGenerate ||
