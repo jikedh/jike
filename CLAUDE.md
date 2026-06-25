@@ -167,7 +167,7 @@ src/renderer/
 │
 ├── hooks/                   # use* 自定义 React Hook
 │                             #   useAgentExecution / useCanvasChat / useChatHistory
-│                             #   useCopyPaste / useDragUpload / useGenerationPoints
+│                             #   useCopyPaste / useGenerationPoints
 │                             #   useMessage / useNodeScale / useQrcodePolling
 │                             #   useResizableWidth / useUndoRedo / useVideoEnhanceTask
 │
