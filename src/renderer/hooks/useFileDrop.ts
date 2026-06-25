@@ -164,29 +164,41 @@ export function useFileDrop(
                     return;
                 }
 
-                const uploadResults = await uploadFilesToOss(files);
-                const flowPosition = screenToFlowPosition({
-                    x: cssPos.x - PLACEHOLDER_OFFSET.x,
-                    y: cssPos.y - PLACEHOLDER_OFFSET.y,
-                });
+                const toastId = toast.loading(
+                    `正在上传 ${files.length} 个文件...`,
+                    { duration: Infinity },
+                );
 
-                let createdCount = 0;
-                for (const result of uploadResults) {
-                    if (!result) continue;
-                    const nodeId = insertFileDropIntoCanvas(
-                        result.file,
-                        result.uploadResult,
-                        flowPosition,
-                    );
-                    if (nodeId) {
-                        createdCount++;
-                        const mediaType = detectMediaType(result.file.name, result.file.type);
-                        void applyAspectRatioToNode(nodeId, mediaType, result.uploadResult.url);
+                try {
+                    const uploadResults = await uploadFilesToOss(files);
+                    toast.dismiss(toastId);
+
+                    const flowPosition = screenToFlowPosition({
+                        x: cssPos.x - PLACEHOLDER_OFFSET.x,
+                        y: cssPos.y - PLACEHOLDER_OFFSET.y,
+                    });
+
+                    let createdCount = 0;
+                    for (const result of uploadResults) {
+                        if (!result) continue;
+                        const nodeId = insertFileDropIntoCanvas(
+                            result.file,
+                            result.uploadResult,
+                            flowPosition,
+                        );
+                        if (nodeId) {
+                            createdCount++;
+                            const mediaType = detectMediaType(result.file.name, result.file.type);
+                            void applyAspectRatioToNode(nodeId, mediaType, result.uploadResult.url);
+                        }
                     }
-                }
 
-                if (createdCount > 0) {
-                    toast.success(`已创建 ${createdCount} 个节点`);
+                    if (createdCount > 0) {
+                        toast.success(`已创建 ${createdCount} 个节点`);
+                    }
+                } catch (uploadErr) {
+                    toast.dismiss(toastId);
+                    throw uploadErr;
                 }
             } catch (error) {
                 console.error("[useFileDrop] drop processing failed:", error);
