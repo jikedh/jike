@@ -74,6 +74,7 @@ pub fn run() {
             commands::storage_list_files,
             commands::storage_download_file,
             commands::storage_file_exists,
+            commands::storage_read_absolute_file,
             commands::download_image_as_buffer,
             commands::download_image_as_base64,
             commands::download_image_to_file,

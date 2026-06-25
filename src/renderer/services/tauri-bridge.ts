@@ -71,6 +71,8 @@ const storageApi = {
         invokeOrThrow("storage_write_raw_file", { base: basePath, relativePath, buffer: Array.from(new Uint8Array(buffer)) }),
     readRawFile: (basePath: string, relativePath: string) =>
         invokeOrThrow("storage_read_raw_file", { base: basePath, relativePath }),
+    readAbsoluteFile: (path: string) =>
+        invokeOrThrow<number[]>("storage_read_absolute_file", { path }),
     scanAssetLibrary: (basePath: string) =>
         invokeOrThrow("storage_scan_asset_library", { base: basePath }),
     deleteRawPath: (basePath: string, relativePath: string) =>

@@ -40,6 +40,8 @@ import {
 import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
 import { NodeSearch } from "@/components/node-search";
+import { useFileDrop } from "@/hooks/useFileDrop";
+import { FileDropOverlay } from "./FileDropOverlay";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -600,6 +602,7 @@ export const CanvasFlow = ({
   );
   const reactFlowInstance = useReactFlow<AllNodeType, EdgeType>();
   const { screenToFlowPosition } = reactFlowInstance;
+  const { dragStateRef, dragActive } = useFileDrop(screenToFlowPosition);
   const navigate = useNavigate();
 
   // 空格键按下状态：仅通过 ref 暴露给事件回调（pan、group 拖拽等），
@@ -4943,6 +4946,13 @@ export const CanvasFlow = ({
                   onPointerDown={handleQuickAddPointerDown}
                 />
               ) : null}
+
+              {dragActive && (
+                <FileDropOverlay
+                  dragStateRef={dragStateRef}
+                  screenToFlowPosition={screenToFlowPosition}
+                />
+              )}
             </ViewportPortal>
 
             {gridVisible && (
