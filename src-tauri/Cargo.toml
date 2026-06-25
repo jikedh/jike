@@ -1,6 +1,6 @@
 [package]
 name = "jike"
-version = "1.9.8"
+version = "1.9.9"
 description = "即刻 - 视频工作流"
 authors = ["小明"]
 edition = "2021"
@@ -11,10 +11,10 @@ name = "jike_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.5.3", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["image-png", "protocol-asset", "devtools"] }
+tauri = { version = "2.9.5", features = ["image-png", "protocol-asset", "devtools"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
