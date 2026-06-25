@@ -1,4 +1,5 @@
 import {
+  BookOpenText,
   Film,
   Folder,
   House,
@@ -91,6 +92,12 @@ export const SidebarCeBianLan = () => {
       icon: <Type size={24} />,
       label: "剧本",
       path: "/script",
+    },
+    {
+      id: "story",
+      icon: <BookOpenText size={24} />,
+      label: "故事创作",
+      path: "/story",
     },
     {
       id: "assets",

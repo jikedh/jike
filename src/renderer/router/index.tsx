@@ -23,6 +23,8 @@ const LoginPage = lazy(() => import("@/pages/Login"));
 const ProfilePage = lazy(() => import("@/pages/Profile"));
 // Canvas 是重型页面，独立懒加载
 const CanvasPage = lazy(() => import("@/pages/Canvas"));
+// Story 故事创作是独立全屏页面
+const StoryPage = lazy(() => import("@/pages/Story"));
 
 // 页面加载中 fallback
 const PageLoader = () => (
@@ -104,6 +106,22 @@ const router = createHashRouter([
       {
         path: "/profile",
         element: <ProfilePage />,
+      },
+      {
+        path: "/story",
+        element: <StoryPage />,
+      },
+      {
+        path: "/story/:projectId",
+        element: <StoryPage />,
+      },
+      {
+        path: "/story/:projectId/snippets/:snippetId",
+        element: <StoryPage />,
+      },
+      {
+        path: "/story/:projectId/snippets/:snippetId/agent",
+        element: <StoryPage />,
       },
     ],
   },
