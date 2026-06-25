@@ -1,26 +1,26 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "安装依赖",
-            "type": "node-terminal",
-            "request": "launch",
-            "command": "npm install",
-            "cwd": "${workspaceFolder:jike}"
-        },
-        {
-            "name": "本地启动 Electron",
-            "type": "node-terminal",
-            "request": "launch",
-            "command": "npm run dev:electron",
-            "cwd": "${workspaceFolder:jike}"
-        },
-        {
-            "name": "构建 Windows 可执行文件",
-            "type": "node-terminal",
-            "request": "launch",
-            "command": "npm run build:win",
-            "cwd": "${workspaceFolder:jike}"
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "安装依赖",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm install",
+      "cwd": "${workspaceFolder:jike}"
+    },
+    {
+      "name": "本地启动 Tauri (开发)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev:tauri",
+      "cwd": "${workspaceFolder:jike}"
+    },
+    {
+      "name": "构建 Tauri 桌面应用",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run build:tauri",
+      "cwd": "${workspaceFolder:jike}"
+    }
+  ]
 }

@@ -4,15 +4,8 @@ import type { ChatSettingsStoreType } from "shared/types/zustand/chat-settings";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-const GLOBAL_SETTINGS_KEY = "canvasGlobalSettings";
 const LOCAL_SETTINGS_KEY = "canvas-chat-settings";
 const DEFAULT_UPDATE_URL = "https://github.com/jikedh/jike/releases";
-
-type GlobalSettings = {
-  storagePath?: string;
-  assetStoragePath?: string;
-  jianyingDraftsPath?: string;
-};
 
 const INITIAL_STATE: Pick<
   ChatSettingsStoreType,
@@ -85,16 +78,17 @@ const INITIAL_STATE: Pick<
   updateUrl: DEFAULT_UPDATE_URL,
 };
 
-const getElectronIpc = () => {
-  if (typeof window === "undefined") return null;
-  return window.electron?.ipcRenderer || null;
-};
-
-const readLocalPersistedPaths = (): GlobalSettings => {
-  if (typeof localStorage === "undefined") return {};
+const readLocalPersistedPaths = (): {
+  storagePath: string;
+  assetStoragePath: string;
+  jianyingDraftsPath: string;
+} => {
+  if (typeof localStorage === "undefined") {
+    return { storagePath: "", assetStoragePath: "", jianyingDraftsPath: "" };
+  }
   try {
     const raw = localStorage.getItem(LOCAL_SETTINGS_KEY);
-    if (!raw) return {};
+    if (!raw) return { storagePath: "", assetStoragePath: "", jianyingDraftsPath: "" };
     const parsed = JSON.parse(raw);
     return {
       storagePath: parsed.state?.storagePath || "",
@@ -102,45 +96,8 @@ const readLocalPersistedPaths = (): GlobalSettings => {
       jianyingDraftsPath: parsed.state?.jianyingDraftsPath || "",
     };
   } catch {
-    return {};
+    return { storagePath: "", assetStoragePath: "", jianyingDraftsPath: "" };
   }
-};
-
-const readGlobalSettings = async (): Promise<GlobalSettings> => {
-  const ipcRenderer = getElectronIpc();
-  if (!ipcRenderer) return {};
-  try {
-    const value = await ipcRenderer.invoke("app:dbStore:get", {
-      key: GLOBAL_SETTINGS_KEY,
-    });
-    return value && typeof value === "object" ? value : {};
-  } catch (error) {
-    console.warn("[chatSettingsStore] read global settings failed", error);
-    return {};
-  }
-};
-
-const writeGlobalSettings = (settings: GlobalSettings) => {
-  const ipcRenderer = getElectronIpc();
-  if (!ipcRenderer) return;
-  try {
-    ipcRenderer.send("app:dbStore:set", {
-      key: GLOBAL_SETTINGS_KEY,
-      value: settings,
-    });
-  } catch (error) {
-    console.warn("[chatSettingsStore] write global settings failed", error);
-  }
-};
-
-const writeGlobalSettingsPatch = (patch: GlobalSettings) => {
-  const state = useChatSettingsStore.getState();
-  writeGlobalSettings({
-    storagePath: state.storagePath,
-    assetStoragePath: state.assetStoragePath,
-    jianyingDraftsPath: state.jianyingDraftsPath,
-    ...patch,
-  });
 };
 
 export const useChatSettingsStore = create<ChatSettingsStoreType>()(
@@ -212,24 +169,16 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
       setDevToolsVisible: (visible) => set({ devToolsVisible: visible }),
       setStoragePath: (path) => {
         set({ storagePath: path });
-        writeGlobalSettingsPatch({ storagePath: path });
       },
       setAssetStoragePath: (path) => {
         set({ assetStoragePath: path });
-        writeGlobalSettingsPatch({ assetStoragePath: path });
       },
       setJianyingDraftsPath: (path) => {
         set({ jianyingDraftsPath: path });
-        writeGlobalSettingsPatch({ jianyingDraftsPath: path });
       },
       setUpdateUrl: (url) => set({ updateUrl: url }),
       resetToDefault: () => {
         set(INITIAL_STATE);
-        writeGlobalSettings({
-          storagePath: INITIAL_STATE.storagePath,
-          assetStoragePath: INITIAL_STATE.assetStoragePath,
-          jianyingDraftsPath: INITIAL_STATE.jianyingDraftsPath,
-        });
       },
     }),
     {
@@ -238,47 +187,27 @@ export const useChatSettingsStore = create<ChatSettingsStoreType>()(
   ),
 );
 
-void (async () => {
-  const globalSettings = await readGlobalSettings();
+void (() => {
+  // Tauri 2 下不再通过 Electron IPC 同步全局设置；zustand persist 已自动写入 localStorage。
+  // 保留此处仅用于在加载时把 localStorage 中的持久化字段回填到 store 状态。
   const localSettings = readLocalPersistedPaths();
   const state = useChatSettingsStore.getState();
 
-  const nextSettings: GlobalSettings = {
-    storagePath:
-      globalSettings.storagePath || state.storagePath || localSettings.storagePath,
-    assetStoragePath:
-      globalSettings.assetStoragePath ||
-      state.assetStoragePath ||
-      localSettings.assetStoragePath,
-    jianyingDraftsPath:
-      globalSettings.jianyingDraftsPath ||
-      state.jianyingDraftsPath ||
-      localSettings.jianyingDraftsPath,
-  };
-
   const shouldUpdateState =
-    (nextSettings.storagePath &&
-      nextSettings.storagePath !== state.storagePath) ||
-    (nextSettings.assetStoragePath &&
-      nextSettings.assetStoragePath !== state.assetStoragePath) ||
-    (nextSettings.jianyingDraftsPath &&
-      nextSettings.jianyingDraftsPath !== state.jianyingDraftsPath);
+    (localSettings.storagePath &&
+      localSettings.storagePath !== state.storagePath) ||
+    (localSettings.assetStoragePath &&
+      localSettings.assetStoragePath !== state.assetStoragePath) ||
+    (localSettings.jianyingDraftsPath &&
+      localSettings.jianyingDraftsPath !== state.jianyingDraftsPath);
 
   if (shouldUpdateState) {
     useChatSettingsStore.setState({
-      storagePath: nextSettings.storagePath || state.storagePath,
+      storagePath: localSettings.storagePath || state.storagePath,
       assetStoragePath:
-        nextSettings.assetStoragePath || state.assetStoragePath,
+        localSettings.assetStoragePath || state.assetStoragePath,
       jianyingDraftsPath:
-        nextSettings.jianyingDraftsPath || state.jianyingDraftsPath,
+        localSettings.jianyingDraftsPath || state.jianyingDraftsPath,
     });
-  }
-
-  if (
-    nextSettings.storagePath !== globalSettings.storagePath ||
-    nextSettings.assetStoragePath !== globalSettings.assetStoragePath ||
-    nextSettings.jianyingDraftsPath !== globalSettings.jianyingDraftsPath
-  ) {
-    writeGlobalSettings(nextSettings);
   }
 })();

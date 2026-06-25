@@ -78,6 +78,48 @@ export const ASSET_FILE_ACCEPT = SUPPORTED_ASSET_EXTENSIONS.join(",");
 export const ASSET_SUPPORTED_TYPES_LABEL =
   "图片 jpg/jpeg/png/webp/gif，视频 mp4/webm/mov，音频 mp3/wav/m4a/aac/ogg";
 
+/** 根据扩展名 -> 媒体类型的快速查找表 */
+const EXT_TO_TYPE: Record<string, "image" | "video" | "audio"> = {};
+for (const ext of SUPPORTED_IMAGE_EXTENSIONS) EXT_TO_TYPE[ext] = "image";
+for (const ext of SUPPORTED_VIDEO_EXTENSIONS) EXT_TO_TYPE[ext] = "video";
+for (const ext of SUPPORTED_AUDIO_EXTENSIONS) EXT_TO_TYPE[ext] = "audio";
+
+/** MIME 主类型 -> 媒体类型 */
+const MIME_MAIN_TO_TYPE: Record<string, "image" | "video" | "audio"> = {
+  image: "image",
+  video: "video",
+  audio: "audio",
+};
+
+export type MediaFileType = "image" | "video" | "audio" | "unknown";
+
+/**
+ * 根据文件名和可选的 MIME 类型检测媒体类型。
+ * 优先使用扩展名匹配，其次使用 MIME type 主类型。
+ */
+export function detectMediaType(
+  fileName: string,
+  mimeType?: string,
+): MediaFileType {
+  // 1. 扩展名精确匹配
+  const dotIndex = fileName.lastIndexOf(".");
+  if (dotIndex >= 0) {
+    const ext = fileName.slice(dotIndex).toLowerCase();
+    const byExt = EXT_TO_TYPE[ext];
+    if (byExt) return byExt;
+  }
+
+  // 2. MIME 主类型匹配
+  if (mimeType) {
+    const mainType = mimeType.split("/")[0]?.toLowerCase();
+    if (mainType && mainType in MIME_MAIN_TO_TYPE) {
+      return MIME_MAIN_TO_TYPE[mainType];
+    }
+  }
+
+  return "unknown";
+}
+
 /**
  * 图片 MIME 类型映射
  */

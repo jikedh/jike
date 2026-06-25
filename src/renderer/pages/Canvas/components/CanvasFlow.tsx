@@ -40,6 +40,8 @@ import {
 import { cn } from "shared/utils/utils";
 import { toast } from "sonner";
 import { NodeSearch } from "@/components/node-search";
+import { useFileDrop } from "@/hooks/useFileDrop";
+import { FileDropOverlay } from "./FileDropOverlay";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -60,7 +62,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useCopyPaste } from "@/hooks/useCopyPaste";
-import { useDragUpload } from "@/hooks/useDragUpload";
 import { useUndoRedo } from "@/hooks/useUndoRedo";
 import {
   CANVAS_DELETE_CONFIRM_EVENT,
@@ -72,7 +73,6 @@ import { edgeTypes, nodeTypes } from "../constants/canvasConfig";
 import { CanvasBatchToolbar } from "./CanvasBatchToolbar";
 import { CanvasContextMenu, type CanvasNodeType } from "./CanvasContextMenu";
 import { CanvasGroupNameBadge } from "./CanvasGroupNameBadge";
-import { DragOverlay } from "./DragOverlay";
 import { MultiSelectQuickCreate } from "./MultiSelectQuickCreate";
 
 const FALLBACK_NODE_WIDTH = 175;
@@ -602,17 +602,8 @@ export const CanvasFlow = ({
   );
   const reactFlowInstance = useReactFlow<AllNodeType, EdgeType>();
   const { screenToFlowPosition } = reactFlowInstance;
+  const { dragStateRef, dragActive } = useFileDrop(screenToFlowPosition);
   const navigate = useNavigate();
-
-  // 拖拽上传功能
-  const {
-    dragState,
-    handleDragEnter,
-    handleDragOver,
-    handleDragLeave,
-    handleDrop,
-    handleFiles,
-  } = useDragUpload();
 
   // 空格键按下状态：仅通过 ref 暴露给事件回调（pan、group 拖拽等），
   // 不再使用 useState，避免每次 keydown/keyup 触发 CanvasFlow 整树重渲染。
@@ -1083,27 +1074,6 @@ export const CanvasFlow = ({
 
       const isEditableTarget = isEditableEventTarget(event.target);
 
-      const files = Array.from(event.clipboardData?.items ?? [])
-        .map((item) => item.getAsFile())
-        .filter((file): file is File => file !== null);
-
-      if (files.length > 0) {
-        if (isEditableTarget) {
-          return;
-        }
-
-        event.preventDefault();
-        void handleFiles(
-          files,
-          mouseFlowPositionRef.current ??
-          screenToFlowPosition({
-            x: window.innerWidth / 2,
-            y: window.innerHeight / 2,
-          }),
-        );
-        return;
-      }
-
       if (isEditableTarget) {
         return;
       }
@@ -1127,7 +1097,7 @@ export const CanvasFlow = ({
     return () => {
       document.removeEventListener("paste", handlePaste);
     };
-  }, [annotationWorkspace.open, handleFiles, pasteNodes, screenToFlowPosition]);
+  }, [annotationWorkspace.open, pasteNodes, screenToFlowPosition]);
 
   // 监听鼠标移动以更新画布上的鼠标位置
   useEffect(() => {
@@ -3388,10 +3358,6 @@ export const CanvasFlow = ({
 
   const contextMenuTriggerRef = useRef<HTMLDivElement | null>(null);
   const [menuScreenPosition, setMenuScreenPosition] = useState({ x: 0, y: 0 });
-  const [canvasMenuMode, setCanvasMenuMode] = useState<"create" | "upload">(
-    "create",
-  );
-  const uploadMediaInputRef = useRef<HTMLInputElement | null>(null);
   const pendingConnectRef = useRef<{
     nodeId: string;
     handleId: string | null;
@@ -3930,12 +3896,11 @@ export const CanvasFlow = ({
   ]);
 
   const openContextMenuAt = useCallback(
-    (x: number, y: number, mode: "create" | "upload" = "create") => {
+    (x: number, y: number) => {
       if (annotationWorkspace.open) {
         return;
       }
 
-      setCanvasMenuMode(mode);
       setMenuScreenPosition({ x, y });
       const contextMenuEvent = new MouseEvent("contextmenu", {
         bubbles: true,
@@ -3959,13 +3924,12 @@ export const CanvasFlow = ({
         event as CustomEvent<{
           x: number;
           y: number;
-          mode?: "create" | "upload";
         }>
       ).detail;
       if (!detail) {
         return;
       }
-      openContextMenuAt(detail.x, detail.y, detail.mode ?? "create");
+      openContextMenuAt(detail.x, detail.y);
     };
     window.addEventListener("jike:open-canvas-context-menu", handler);
     return () => {
@@ -4047,7 +4011,6 @@ export const CanvasFlow = ({
 
     pendingConnectRef.current = null;
     setConnectionGhost(null);
-    setCanvasMenuMode("create");
   }, []);
 
   // 通过原生 dblclick 事件实现双击唤出菜单
@@ -4073,7 +4036,7 @@ export const CanvasFlow = ({
         // 阻止 ReactFlow 默认的双击缩放行为
         event.preventDefault();
         event.stopPropagation();
-        openContextMenuAt(event.clientX, event.clientY, "create");
+        openContextMenuAt(event.clientX, event.clientY);
       }
     },
     [annotationWorkspace.open, openContextMenuAt],
@@ -4269,39 +4232,6 @@ export const CanvasFlow = ({
       addNode,
       menuScreenPosition,
       onConnect,
-      screenToFlowPosition,
-    ],
-  );
-
-  const handleUploadMediaFromMenu = useCallback(() => {
-    if (annotationWorkspace.open) {
-      return;
-    }
-
-    const input = uploadMediaInputRef.current;
-    if (!input) {
-      return;
-    }
-
-    input.value = "";
-    input.click();
-  }, [annotationWorkspace.open]);
-
-  const handleUploadMediaInputChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(event.currentTarget.files ?? []);
-      event.currentTarget.value = "";
-
-      if (annotationWorkspace.open || files.length === 0) {
-        return;
-      }
-
-      void handleFiles(files, screenToFlowPosition(menuScreenPosition));
-    },
-    [
-      annotationWorkspace.open,
-      handleFiles,
-      menuScreenPosition,
       screenToFlowPosition,
     ],
   );
@@ -4689,9 +4619,7 @@ export const CanvasFlow = ({
     <>
       <CanvasContextMenu
         onCreateNode={handleCreateNodeFromMenu}
-        onUploadMedia={handleUploadMediaFromMenu}
         onOpenChange={handleCanvasContextMenuOpenChange}
-        mode={canvasMenuMode}
       >
         <div
           ref={contextMenuTriggerRef}
@@ -4700,12 +4628,6 @@ export const CanvasFlow = ({
           onPointerDownCapture={handleCanvasPointerDownCapture}
           onContextMenuCapture={handleCanvasContextMenuCapture}
           onDoubleClick={handleNativeDblClick}
-          onDragEnter={handleDragEnter}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          role="region"
-          aria-label="Canvas drop zone"
         >
           {annotationWorkspace.open ? (
             <>
@@ -4768,15 +4690,6 @@ export const CanvasFlow = ({
               style={{ left: 0, top: 0, width: 0, height: 0 }}
             />
           ) : null}
-
-          <input
-            ref={uploadMediaInputRef}
-            accept="image/*,video/*,audio/*"
-            className="hidden"
-            multiple
-            onChange={handleUploadMediaInputChange}
-            type="file"
-          />
 
           <ReactFlow<AllNodeType, EdgeType>
             nodes={displayNodes}
@@ -5033,6 +4946,13 @@ export const CanvasFlow = ({
                   onPointerDown={handleQuickAddPointerDown}
                 />
               ) : null}
+
+              {dragActive && (
+                <FileDropOverlay
+                  dragStateRef={dragStateRef}
+                  screenToFlowPosition={screenToFlowPosition}
+                />
+              )}
             </ViewportPortal>
 
             {gridVisible && (
@@ -5278,13 +5198,6 @@ export const CanvasFlow = ({
           ) : null}
         </div>
       </CanvasContextMenu>
-
-      {/* 拖拽上传遮罩 */}
-      <DragOverlay
-        isVisible={dragState.isDragging}
-        fileCount={dragState.fileCount}
-        acceptedTypes={dragState.acceptedTypes}
-      />
 
       {/* 确认退出对话框 */}
       <Dialog open={showExitDialog} onOpenChange={setShowExitDialog}>

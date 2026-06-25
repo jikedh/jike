@@ -115,41 +115,67 @@ export async function downloadImageFromUrl(
   filename?: string,
 ): Promise<void> {
   try {
-    const response = await fetch(imageUrl, { mode: "cors" });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const blob = await response.blob();
-
-    let finalFilename = filename;
-
-    if (!finalFilename) {
+    // 从 URL 提取默认文件名
+    let defaultFilename = filename;
+    if (!defaultFilename) {
       try {
         const url = new URL(imageUrl);
         const pathname = url.pathname;
         const basename = pathname.split("/").pop();
-
         if (basename && basename.includes(".")) {
-          finalFilename = basename;
+          defaultFilename = basename;
         }
       } catch { }
+    }
 
-      if (!finalFilename) {
-        const ext = blob.type.split("/")[1] || "jpg";
-        finalFilename = `image-${Date.now()}.${ext}`;
+    const w = typeof window !== "undefined" ? (window as any) : null;
+    const invoke = w?.__TAURI_INTERNALS__?.invoke;
+
+    if (invoke) {
+      // Tauri 环境：通过 Rust 后端下载 + 原生保存对话框
+      // 步骤 1：Rust 端下载图片字节（reqwest 绕过浏览器 CORS）
+      const downloadResult = await invoke("download_image_as_buffer", { url: imageUrl });
+      if (!downloadResult?.success || !downloadResult?.data?.data) {
+        throw new Error(downloadResult?.error || "下载失败");
       }
+      const buffer = downloadResult.data.data as number[];
+      const mimeType = (downloadResult.data.mimeType as string) || "image/png";
+      const ext = mimeType.split("/")[1] || "png";
+      const saveName = defaultFilename || `image-${Date.now()}.${ext}`;
+
+      // 步骤 2：弹出原生保存对话框，用户选择路径后写入文件
+      const saveResult = await invoke("storage_save_buffer_to_file", {
+        defaultName: saveName,
+        buffer,
+      });
+      if (!saveResult?.success) {
+        if (saveResult?.canceled) {
+          throw new Error("取消下载");
+        }
+        throw new Error(saveResult?.error || "保存失败");
+      }
+      return;
+    }
+
+    // 浏览器 / Electron 环境：直接 fetch + Blob 下载
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const blob = await response.blob();
+
+    if (!defaultFilename) {
+      const ext = blob.type.split("/")[1] || "jpg";
+      defaultFilename = `image-${Date.now()}.${ext}`;
     }
 
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = objectUrl;
-    link.download = finalFilename;
+    link.download = defaultFilename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
     URL.revokeObjectURL(objectUrl);
   } catch (error) {
     const message = error instanceof Error ? error.message : "未知错误";
@@ -276,25 +302,9 @@ export function clearJikeingUserInfo(): void {
 // ===================== 环境检测与基础URL配置 =====================
 
 /**
- * 检测是否在 Electron 环境中运行
- */
-export const isElectron = (): boolean => {
-  if (typeof window !== "undefined" && (window as any).electron) {
-    return true;
-  }
-  if (
-    typeof navigator !== "undefined" &&
-    navigator.userAgent.toLowerCase().includes("electron")
-  ) {
-    return true;
-  }
-  return false;
-};
-
-/**
  * 获取基础 URL
- * - Electron 环境：使用完整的 API 地址
- * - Web 环境：使用相对路径（由 Vite 代理或 Nginx 代理处理）
+ * - Tauri 环境：使用相对路径（由 Vite 代理或 Nginx 代理处理）
+ * - Web 环境：使用相对路径
  */
 export const getBaseURL = (apiPath: string): string => {
   void apiPath;

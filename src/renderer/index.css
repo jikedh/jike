@@ -711,6 +711,14 @@
   cursor: grabbing !important;
 }
 
+/* 文件拖放到画布时：copy 光标（最高优先级，覆盖空格/Ctrl） */
+.react-flow.file-drop-allowed,
+.react-flow.file-drop-allowed .react-flow__pane,
+.react-flow.file-drop-allowed .react-flow__node,
+.react-flow.file-drop-allowed .nodrag {
+  cursor: copy !important;
+}
+
 /* 框选范围样式 */
 .react-flow__selection {
   background: rgba(180, 63, 235, 0.1) !important;

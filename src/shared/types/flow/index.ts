@@ -57,10 +57,10 @@ export interface ImageGenerationNode {
       posterUrl?: string;
       coverUrl?: string;
       mediaType?: "image" | "video";
-      relativePath?: string; // 本地相对路径（兼容字段，仅用于 Electron 离线环境备用访问）
-      localPath?: string; // 本地相对路径（仅用于 Electron 离线环境备用访问）
-      localFileName?: string; // 本地文件名（兼容字段，仅用于 Electron 离线环境备用访问）
-      localName?: string; // 本地文件名（仅用于 Electron 离线环境备用访问）
+      relativePath?: string; // 本地相对路径（Tauri asset 协议备用访问）
+      localPath?: string; // 本地相对路径（Tauri asset 协议备用访问）
+      localFileName?: string; // 本地文件名（Tauri asset 协议备用访问）
+      localName?: string; // 本地文件名（Tauri asset 协议备用访问）
       [key: string]: any;
     }[]; // 图片数据列表（支持多张图片累积）
   }; // 生成结果
@@ -262,8 +262,8 @@ export interface AudioGenerationNode {
       displayUrl?: string; // 运行时展示地址，允许为 blob URL，不参与持久化
       format?: string; // 音频格式（如 mp3, wav）
       duration?: number; // 音频时长
-      localPath?: string; // 本地相对路径（仅用于 Electron 离线环境备用访问）
-      localName?: string; // 本地文件名（仅用于 Electron 离线环境备用访问）
+      localPath?: string; // 本地相对路径（Tauri asset 协议备用访问）
+      localName?: string; // 本地文件名（Tauri asset 协议备用访问）
     }[];
   };
 

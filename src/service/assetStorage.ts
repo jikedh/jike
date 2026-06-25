@@ -2,6 +2,7 @@ import { readMediaFromLocal } from "service/projectStorage";
 import { getAssetMediaTypeByFileName } from "shared/constants/mediaTypes";
 import type { AssetDiskFileInfo, AssetDiskProjectInfo } from "shared/types/storage";
 import { uploadFileToOSS } from "service/oss";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 export type AssetScope = "project" | "canvas" | "public";
 export type AssetMediaType = "image" | "video" | "audio";
@@ -290,11 +291,50 @@ export const getAssetStoragePath = (): string => {
   }
 };
 
+/**
+ * 判断当前是否运行在 Tauri WebView 内。
+ * 浏览器调试（vite dev server）下不直接用 asset:// 协议，而是走后端 dev server 的 asset http 转发。
+ */
+const isTauriRuntime = (): boolean => {
+  if (typeof window === "undefined") return false;
+  const w = window as unknown as {
+    __TAURI_INTERNALS__?: unknown;
+    __TAURI__?: unknown;
+  };
+  return Boolean(w.__TAURI_INTERNALS__ || w.__TAURI__);
+};
+
+/**
+ * 把本地绝对路径转换为 <img>/<video>/<audio> 可直接消费的 URL：
+ * - Tauri WebView 环境下使用官方 convertFileSrc()，自动产出 asset://localhost/...
+ *   （dev 环境自动走 http://asset.localhost/...，由 Vite dev server 代理到 Tauri 进程）
+ * - 浏览器调试环境下回退到 file:/// URL，桌面端打开 Vite dev 时可正常显示
+ * - 已是 http(s) / blob / data 的 URL 原样返回
+ */
+const toDisplayableUrl = (absolutePath: string): string => {
+  if (!absolutePath) return absolutePath;
+  if (/^(https?:|blob:|data:|asset:)/i.test(absolutePath.trim())) {
+    return absolutePath;
+  }
+
+  if (isTauriRuntime()) {
+    // Tauri WebView: convertFileSrc 自动产出 asset://localhost/... (prod)
+    // 或 http://asset.localhost/... (dev，由 Vite dev server 代理到主进程)
+    return convertFileSrc(absolutePath);
+  }
+
+  // 浏览器 dev 环境：保持 file:// 让桌面端 chrome 可直接渲染（仅用于本地调试）
+  const fileUrl = /^[a-zA-Z]:\//.test(absolutePath)
+    ? `file:///${absolutePath}`
+    : `file://${absolutePath.startsWith("/") ? "" : "/"}${absolutePath}`;
+  return encodeURI(fileUrl);
+};
+
 export const getAssetFileUrl = (
   basePath: string,
   relativePath: string,
 ): string => {
-  if (/^(https?:|file:|blob:|data:)/i.test(relativePath.trim())) {
+  if (/^(https?:|file:|blob:|data:|asset:)/i.test(relativePath.trim())) {
     return relativePath;
   }
   const normalizedBase = basePath.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -304,11 +344,7 @@ export const getAssetFileUrl = (
   }
 
   const absolutePath = `${normalizedBase}/${normalizedRelative}`;
-  const fileUrl = /^[a-zA-Z]:\//.test(absolutePath)
-    ? `file:///${absolutePath}`
-    : `file://${absolutePath.startsWith("/") ? "" : "/"}${absolutePath}`;
-
-  return encodeURI(fileUrl);
+  return toDisplayableUrl(absolutePath);
 };
 
 export const getAssetDisplayUrl = (asset: AssetRecord, basePath: string) =>

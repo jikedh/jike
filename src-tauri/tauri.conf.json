@@ -27,7 +27,8 @@
         "skipTaskbar": false,
         "center": true,
         "visible": true,
-        "maximized": true
+        "maximized": true,
+        "dragDropEnabled": true
       }
     ],
     "security": {

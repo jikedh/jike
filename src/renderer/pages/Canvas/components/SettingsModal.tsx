@@ -520,8 +520,8 @@ export const SettingsModal = ({
     setPendingImportData(null);
   };
 
-  // 切换 Electron 开发者工具
-  const handleToggleElectronDevTools = async () => {
+  // 切换 Tauri 开发者工具
+  const handleToggleTauriDevTools = async () => {
     const debugApi = (window as any).debug;
 
     if (!debugApi?.toggleDevTools) {
@@ -1238,19 +1238,19 @@ export const SettingsModal = ({
                     </>
                   )}
 
-                  {/* 实验功能 - Electron 开发者工具 */}
+                  {/* 实验功能 - Tauri 开发者工具 */}
                   {activeSection === "labs" && isDev && (
                     <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
                       <div className="mb-3 text-sm font-medium text-white/80">
-                        Electron 开发者工具
+                        Tauri 开发者工具
                       </div>
                       <div className="text-xs text-white/40 mb-3">
-                        点击后可打开或关闭 Electron 控制台（DevTools）
+                        点击后可打开或关闭 Tauri WebView 控制台（DevTools）
                       </div>
                       <Button
                         size="sm"
                         variant="blue"
-                        onClick={handleToggleElectronDevTools}
+                        onClick={handleToggleTauriDevTools}
                       >
                         <IconBolt size={14} />
                         切换开发者工具

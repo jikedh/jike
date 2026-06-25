@@ -1,17 +1,15 @@
 /**
- * Tauri 适配层
+ * Tauri 2 适配层
  *
- * 重构背景：
  * 原 Electron 应用通过 contextBridge 在 window 上暴露 storage/debug/download/videoProcessing/
- * notification/tracking/electron 七个 API 命名空间。Renderer 端代码直接调用
- * window.storage.xxx() 等 30+ 处。
+ * notification/tracking 等 API 命名空间，Renderer 端代码直接调用 window.storage.xxx() 等。
  *
  * 本模块在 Tauri 2 下提供同名 API：把 window.storage 等调用转换为
- * @tauri-apps/api 的 invoke('storage_xxx', ...)，保持前端业务代码零改动。
+ * @tauri-apps/api/core 的 invoke('storage_xxx', ...)，保持前端业务代码零改动。
  *
- * 同时保留对老 Electron ipcRenderer.invoke / send 调用的兜底（chatSettingsStore
- * 与 ipcService.ts 中的 window.electron.ipcRenderer），通过 window.__TAURI_INTERNALS__
- * 直接走 invoke 通道。
+ * 注意：本项目已彻底从 Electron 迁移到 Tauri 2，旧的 window.electron.ipcRenderer
+ * 兼容层（electronCompat）已移除，所有调用方应使用 window.storage / window.debug 等
+ * Tauri 桥接命名空间，或直接 import { invoke } from '@tauri-apps/api/core'。
  */
 
 // AIVideoTrackData 已在 src/shared/types/tracking.ts 中维护
@@ -71,6 +69,8 @@ const storageApi = {
         invokeOrThrow("storage_write_raw_file", { base: basePath, relativePath, buffer: Array.from(new Uint8Array(buffer)) }),
     readRawFile: (basePath: string, relativePath: string) =>
         invokeOrThrow("storage_read_raw_file", { base: basePath, relativePath }),
+    readAbsoluteFile: (path: string) =>
+        invokeOrThrow<number[]>("storage_read_absolute_file", { path }),
     scanAssetLibrary: (basePath: string) =>
         invokeOrThrow("storage_scan_asset_library", { base: basePath }),
     deleteRawPath: (basePath: string, relativePath: string) =>
@@ -164,63 +164,6 @@ const trackingApi = {
         invokeOrThrow<{ success: boolean; error?: string }>("tracking_update_status", { taskId, status, errorMessage, generatedVideoUrl }),
 };
 
-// === electron 兜底（仅用于 chatSettingsStore / ipcService 中的 ipcRenderer） ===
-
-const electronCompat = {
-    ipcRenderer: {
-        invoke: (channel: string, ...args: unknown[]) => {
-            const map: Record<string, string> = {
-                "storage:selectDirectory": "storage_select_directory",
-                "storage:ensureProject": "storage_ensure_project",
-                "storage:listProjects": "storage_list_projects",
-                "storage:saveCanvas": "storage_save_canvas",
-                "storage:loadCanvas": "storage_load_canvas",
-                "storage:saveMedia": "storage_save_media",
-                "storage:readMedia": "storage_read_media",
-                "storage:writeRawFile": "storage_write_raw_file",
-                "storage:readRawFile": "storage_read_raw_file",
-                "storage:scanAssetLibrary": "storage_scan_asset_library",
-                "storage:deleteRawPath": "storage_delete_raw_path",
-                "storage:renameRawPath": "storage_rename_raw_path",
-                "storage:listMedia": "storage_list_media",
-                "storage:deleteMedia": "storage_delete_media",
-                "storage:downloadMedia": "storage_download_media",
-                "storage:saveBufferToFile": "storage_save_buffer_to_file",
-                "storage:mediaExists": "storage_media_exists",
-                "storage:renameProject": "storage_rename_project",
-                "storage:deleteProject": "storage_delete_project",
-                "storage:copyProject": "storage_copy_project",
-                "storage:exportProject": "storage_export_project",
-                "storage:importProject": "storage_import_project",
-                "storage:getDefaultPath": "storage_get_default_path",
-                "debug:toggleDevTools": "debug_toggle_dev_tools",
-                "debug:isDev": "debug_is_dev",
-                "debug:getAppVersion": "debug_get_app_version",
-                "debug:capturePage": "debug_capture_page",
-                "download:imageAsBuffer": "download_image_as_buffer",
-                "download:imageAsBase64": "download_image_as_base64",
-                "download:imageToFile": "download_image_to_file",
-                "notification:show": "notification_show",
-                "notification:isSupported": "notification_is_supported",
-                "tracking:send": "tracking_send",
-                "tracking:updateStatus": "tracking_update_status",
-                "video-processing:trim": "video_processing_trim",
-            };
-            const target = map[channel] ?? channel;
-            const [first, second] = args;
-            // 大多数 Electron invoke 是 (channel, ...payload)，将第一个参数作为命名参数
-            if (second === undefined) {
-                return invokeOrThrow(target, first as Record<string, unknown>);
-            }
-            return invokeOrThrow(target, { payload: first, extra: second });
-        },
-        send: (_channel: string, _data: unknown) => {
-            // fire-and-forget 模式，Tauri 端无对应语义；保持静默
-            return Promise.resolve();
-        },
-    },
-};
-
 // === 导出：调用方应使用 ensureTauriApis() 自动安装到 window ===================
 
 export const ensureTauriApis = () => {
@@ -233,8 +176,7 @@ export const ensureTauriApis = () => {
         w.videoProcessing = videoProcessingApi;
         w.notification = notificationApi;
         w.tracking = trackingApi;
-        w.electron = electronCompat;
     }
 };
 
-export { storageApi, debugApi, downloadApi, videoProcessingApi, notificationApi, trackingApi, electronCompat };
+export { storageApi, debugApi, downloadApi, videoProcessingApi, notificationApi, trackingApi };

@@ -216,3 +216,9 @@ pub async fn storage_download_file(base: String, url: String, relative_path: Str
 pub async fn storage_file_exists(base: String, relative_path: String) -> Result<bool, String> {
     storage_media_exists(base, relative_path).await
 }
+
+/// 从绝对路径读取文件内容（用于拖放文件读取）
+#[tauri::command]
+pub async fn storage_read_absolute_file(path: String) -> Result<Vec<u8>, String> {
+    std::fs::read(&path).map_err(|e| e.to_string())
+}
