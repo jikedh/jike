@@ -1,20 +1,11 @@
 import type { StorageApi } from "shared/types/storage";
 
-// 项目已迁移到 Tauri，但 ipcService.ts 仍以 window.electron.ipcRenderer.* 的形态调用
-// （由 src/renderer/services/tauri-bridge.ts 中的 electronCompat 注入并转发到 Tauri invoke）。
-// 这里定义最小兼容类型，避免依赖已卸载的 @electron-toolkit/preload。
-interface ElectronIpcRendererCompat {
-  send: (channel: string, data?: unknown) => void;
-  invoke: <T = unknown>(channel: string, data?: unknown) => Promise<T>;
-}
-
-interface ElectronApiCompat {
-  ipcRenderer: ElectronIpcRendererCompat;
-}
+// 项目已完全迁移到 Tauri 2，Electron 兼容层（window.electron.ipcRenderer）已移除。
+// Renderer 端通过 src/renderer/services/tauri-bridge.ts 注入的 window.storage / window.debug
+// 等命名空间访问主进程能力，或直接使用 import { invoke } from '@tauri-apps/api/core'。
 
 declare global {
   interface Window {
-    electron: ElectronApiCompat;
     storage: StorageApi;
     debug: {
       toggleDevTools: () => Promise<{ success: boolean; error?: string }>;

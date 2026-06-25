@@ -302,25 +302,9 @@ export function clearJikeingUserInfo(): void {
 // ===================== 环境检测与基础URL配置 =====================
 
 /**
- * 检测是否在 Electron 环境中运行
- */
-export const isElectron = (): boolean => {
-  if (typeof window !== "undefined" && (window as any).electron) {
-    return true;
-  }
-  if (
-    typeof navigator !== "undefined" &&
-    navigator.userAgent.toLowerCase().includes("electron")
-  ) {
-    return true;
-  }
-  return false;
-};
-
-/**
  * 获取基础 URL
- * - Electron 环境：使用完整的 API 地址
- * - Web 环境：使用相对路径（由 Vite 代理或 Nginx 代理处理）
+ * - Tauri 环境：使用相对路径（由 Vite 代理或 Nginx 代理处理）
+ * - Web 环境：使用相对路径
  */
 export const getBaseURL = (apiPath: string): string => {
   void apiPath;
