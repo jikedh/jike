@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -66,7 +68,128 @@ jobs:
           prerelease: false
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
+          uploadWorkflowArtifacts: true
+          workflowArtifactNamePattern: '[platform]-[arch]-[bundle]'
           retryAttempts: 2
+
+      - name: Print generated updater artifacts
+        if: always()
+        shell: pwsh
+        run: |
+          $bundleRoot = Join-Path $PWD "src-tauri/target/release/bundle"
+          if (Test-Path $bundleRoot) {
+            Get-ChildItem $bundleRoot -Recurse -File |
+              Select-Object FullName, Length, LastWriteTime |
+              Format-Table -AutoSize
+          } else {
+            Write-Host "Bundle output directory does not exist yet: $bundleRoot"
+          }
+
+      - name: Ensure latest.json release asset
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tag = "v$version"
+          $repo = $env:GITHUB_REPOSITORY
+          $downloadDir = Join-Path $env:RUNNER_TEMP "updater-manifest-ensure"
+          $manifestPath = Join-Path $downloadDir "latest.json"
+
+          New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
+
+          $latestJsonIsValid = $false
+          try {
+            gh release download $tag --pattern "latest.json" --dir $downloadDir --clobber
+            if (Test-Path $manifestPath) {
+              $existingManifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+              $existingWindows = $existingManifest.platforms.'windows-x86_64'
+              $latestJsonIsValid = `
+                $existingManifest.version -eq $version -and `
+                -not [string]::IsNullOrWhiteSpace($existingWindows.url) -and `
+                -not [string]::IsNullOrWhiteSpace($existingWindows.signature)
+            }
+          } catch {
+            Write-Host "latest.json is not available yet, fallback generation will run. Detail: $($_.Exception.Message)"
+          }
+
+          if ($latestJsonIsValid) {
+            Write-Host "Release $tag already has a valid latest.json."
+            exit 0
+          }
+
+          $bundleRoot = Join-Path $PWD "src-tauri/target/release/bundle"
+          if (-not (Test-Path $bundleRoot)) {
+            throw "Tauri bundle output directory was not found: $bundleRoot"
+          }
+
+          $nsisDir = Join-Path $bundleRoot "nsis"
+          $msiDir = Join-Path $bundleRoot "msi"
+
+          $installer = $null
+          if (Test-Path $nsisDir) {
+            $installer = Get-ChildItem $nsisDir -Recurse -File -Filter "*.exe" |
+              Where-Object { $_.Name -notmatch "webview2|WebView2" } |
+              Sort-Object LastWriteTime -Descending |
+              Select-Object -First 1
+          }
+
+          if (-not $installer -and (Test-Path $msiDir)) {
+            $installer = Get-ChildItem $msiDir -Recurse -File -Filter "*.msi" |
+              Sort-Object LastWriteTime -Descending |
+              Select-Object -First 1
+          }
+
+          if (-not $installer) {
+            throw "No Windows installer was found under $bundleRoot."
+          }
+
+          $signaturePath = "$($installer.FullName).sig"
+          if (-not (Test-Path $signaturePath)) {
+            throw "Signature file was not found for installer: $($installer.FullName). Expected: $signaturePath"
+          }
+
+          $signature = (Get-Content $signaturePath -Raw).Trim()
+          if ([string]::IsNullOrWhiteSpace($signature)) {
+            throw "Signature file is empty: $signaturePath"
+          }
+
+          $assetsJson = gh release view $tag --json assets | ConvertFrom-Json
+          $installerAsset = $assetsJson.assets | Where-Object { $_.name -eq $installer.Name } | Select-Object -First 1
+          $signatureAsset = $assetsJson.assets | Where-Object { $_.name -eq (Split-Path $signaturePath -Leaf) } | Select-Object -First 1
+
+          if (-not $installerAsset) {
+            Write-Host "Installer asset is missing on release $tag. Uploading $($installer.Name)."
+            gh release upload $tag $installer.FullName --clobber
+          }
+
+          if (-not $signatureAsset) {
+            Write-Host "Signature asset is missing on release $tag. Uploading $(Split-Path $signaturePath -Leaf)."
+            gh release upload $tag $signaturePath --clobber
+          }
+
+          $encodedInstallerName = [System.Uri]::EscapeDataString($installer.Name)
+          $installerUrl = "https://github.com/$repo/releases/download/$tag/$encodedInstallerName"
+
+          $manifest = [ordered]@{
+            version = $version
+            notes = "自动发布 Windows 安装包和 Tauri updater manifest。"
+            pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            platforms = [ordered]@{
+              "windows-x86_64" = [ordered]@{
+                signature = $signature
+                url = $installerUrl
+              }
+            }
+          }
+
+          $json = $manifest | ConvertTo-Json -Depth 10
+          [System.IO.File]::WriteAllText($manifestPath, $json, [System.Text.UTF8Encoding]::new($false))
+
+          gh release upload $tag $manifestPath --clobber
+          Write-Host "Generated and uploaded latest.json for $tag -> $installerUrl"
 
       - name: Verify latest.json release asset
         shell: pwsh
@@ -89,8 +212,8 @@ jobs:
           $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
           $windows = $manifest.platforms.'windows-x86_64'
 
-          if (-not $manifest.version) {
-            throw "latest.json is missing version."
+          if ($manifest.version -ne $version) {
+            throw "latest.json version '$($manifest.version)' does not match package version '$version'."
           }
 
           if (-not $windows.url) {
