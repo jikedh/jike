@@ -4,7 +4,7 @@
   "description": "视频工作流",
   "author": "小明",
   "private": true,
-  "version": "1.9.9",
+  "version": "2.0.0",
   "engines": {
     "node": ">=22"
   },
