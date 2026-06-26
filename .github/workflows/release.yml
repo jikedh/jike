@@ -111,6 +111,7 @@ jobs:
           $releaseNotes = "自动发布 Windows 安装包和 Tauri updater manifest。"
           $bundleRoot = Join-Path $PWD "src-tauri/target/release/bundle"
           $manifestDir = Join-Path $env:RUNNER_TEMP "tauri-updater-manifest"
+          $assetUploadDir = Join-Path $env:RUNNER_TEMP "tauri-release-assets"
           $manifestPath = Join-Path $manifestDir "latest.json"
 
           if (-not (Test-Path $bundleRoot)) {
@@ -118,6 +119,7 @@ jobs:
           }
 
           New-Item -ItemType Directory -Force -Path $manifestDir | Out-Null
+          New-Item -ItemType Directory -Force -Path $assetUploadDir | Out-Null
 
           $nsisDir = Join-Path $bundleRoot "nsis"
           $msiDir = Join-Path $bundleRoot "msi"
@@ -153,6 +155,14 @@ jobs:
             throw "Signature file is empty: $($signatureFile.FullName)"
           }
 
+          $releaseInstallerSuffix = if ($installer.Extension -ieq ".exe") { "x64-setup.exe" } else { "x64_zh-CN.msi" }
+          $releaseInstallerName = "jike_${version}_$releaseInstallerSuffix"
+          $releaseInstallerPath = Join-Path $assetUploadDir $releaseInstallerName
+          $releaseSignaturePath = "$releaseInstallerPath.sig"
+
+          Copy-Item $installer.FullName $releaseInstallerPath -Force
+          Copy-Item $signatureFile.FullName $releaseSignaturePath -Force
+
           $releaseExists = $true
           gh release view $tag --json tagName,isDraft,isPrerelease 1>$null 2>$null
           if ($LASTEXITCODE -ne 0) {
@@ -165,16 +175,14 @@ jobs:
             gh release create $tag --target $env:GITHUB_SHA --title $releaseTitle --notes $releaseNotes --latest
           }
 
-          $assetFiles = @()
-          $assetFiles += Get-ChildItem $bundleRoot -Recurse -File -Include *.exe,*.msi,*.sig |
-            Where-Object { $_.Name -notmatch "webview2|WebView2" }
+          $assetFiles = Get-ChildItem $assetUploadDir -File
 
           foreach ($asset in $assetFiles) {
             Write-Host "Uploading release asset: $($asset.FullName)"
             gh release upload $tag $asset.FullName --clobber
           }
 
-          $encodedInstallerName = [System.Uri]::EscapeDataString($installer.Name)
+          $encodedInstallerName = [System.Uri]::EscapeDataString($releaseInstallerName)
           $installerUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/$encodedInstallerName"
 
           $manifest = [ordered]@{
