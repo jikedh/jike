@@ -145,7 +145,7 @@ const HomePage = () => {
             className="mb-10 text-5xl font-normal tracking-widest text-white drop-shadow-2xl md:text-6xl"
             style={{ fontFamily: "var(--font-legendary)" }}
           >
-            即刻点亮星漫，灵感破界而生(v1.9.9)
+            即刻点亮星漫，灵感破界而生(v2.0.0)
           </h1>
           <button
             onClick={() => setIsProjectDialogOpen(true)}
@@ -220,17 +220,13 @@ const HomePage = () => {
       </div>
 
       <ProjectDialog
-        isOpen={isProjectDialogOpen}
-        onClose={() => setIsProjectDialogOpen(false)}
-        onSuccess={(projectId) => {
-          setIsProjectDialogOpen(false);
-          navigate(`/canvas/${projectId}`);
-        }}
+        open={isProjectDialogOpen}
+        onOpenChange={setIsProjectDialogOpen}
       />
-
       <FirstLoginGuideDialog
         open={guideOpen}
-        pending={pendingItems}
+        onOpenChange={setGuideOpen}
+        pendingItems={pendingItems}
         onClose={handleGuideClose}
       />
     </div>
