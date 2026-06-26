@@ -11,27 +11,49 @@ permissions:
 
 jobs:
   build-windows:
+    name: Build Windows release
     runs-on: windows-latest
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: 'npm'
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
         with:
           cache-targets: true
           cache-all-crates: true
           key: windows
 
-      - run: npm install
+      - name: Install frontend dependencies
+        run: npm ci
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Validate release tag
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $expectedTag = "v$version"
+
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne $expectedTag) {
+            throw "Git tag '$env:GITHUB_REF_NAME' does not match app version '$version'. Expected tag: '$expectedTag'. Update package.json/src-tauri/tauri.conf.json/src-tauri/Cargo.toml before tagging."
+          }
+
+          Write-Host "Release tag validated: $expectedTag"
+
+      - name: Build and publish Tauri release
+        id: tauri_release
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -39,6 +61,44 @@ jobs:
         with:
           tagName: v__VERSION__
           releaseName: '即刻 v__VERSION__'
+          releaseBody: '自动发布 Windows 安装包和 Tauri updater manifest。'
           releaseDraft: false
           prerelease: false
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+          retryAttempts: 2
 
+      - name: Verify latest.json release asset
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tag = "v$version"
+          $downloadDir = Join-Path $env:RUNNER_TEMP "updater-manifest-check"
+
+          New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
+          gh release download $tag --pattern "latest.json" --dir $downloadDir --clobber
+
+          $manifestPath = Join-Path $downloadDir "latest.json"
+          if (-not (Test-Path $manifestPath)) {
+            throw "latest.json was not uploaded to GitHub Release $tag."
+          }
+
+          $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+          $windows = $manifest.platforms.'windows-x86_64'
+
+          if (-not $manifest.version) {
+            throw "latest.json is missing version."
+          }
+
+          if (-not $windows.url) {
+            throw "latest.json is missing platforms.windows-x86_64.url."
+          }
+
+          if (-not $windows.signature) {
+            throw "latest.json is missing platforms.windows-x86_64.signature."
+          }
+
+          Write-Host "Verified latest.json for $tag -> $($windows.url)"
