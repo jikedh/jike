@@ -141,7 +141,7 @@ const RecordDetailDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#1a1a1e] border-white/10 text-white max-h-[80vh] overflow-y-auto">
+      <DialogContent className="bg-[#1a1a1e] border-white/10 text-white max-h-[80vh] overflow-y-auto no-scrollbar">
         <DialogClose className="text-white/40 hover:text-white hover:bg-white/10">
           <X className="h-4 w-4" />
         </DialogClose>
@@ -433,7 +433,7 @@ const TransactionDetailDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#1a1a1e] border-white/10 text-white max-h-[80vh] overflow-y-auto">
+      <DialogContent className="bg-[#1a1a1e] border-white/10 text-white max-h-[80vh] overflow-y-auto no-scrollbar">
         <DialogClose className="text-white/40 hover:text-white hover:bg-white/10">
           <X className="h-4 w-4" />
         </DialogClose>
