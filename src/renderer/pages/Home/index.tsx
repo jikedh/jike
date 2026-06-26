@@ -145,7 +145,7 @@ const HomePage = () => {
             className="mb-10 text-5xl font-normal tracking-widest text-white drop-shadow-2xl md:text-6xl"
             style={{ fontFamily: "var(--font-legendary)" }}
           >
-            即刻点亮星漫，灵感破界而生(v2.0.1)
+            即刻点亮星漫，灵感破界而生(v2.0.2)
           </h1>
           <button
             onClick={() => setIsProjectDialogOpen(true)}
