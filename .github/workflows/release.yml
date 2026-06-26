@@ -40,52 +40,65 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Validate release tag
+      - name: Validate release version
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          $expectedTag = "v$version"
+          $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tauriVersion = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $cargoVersion = Select-String -Path src-tauri/Cargo.toml -Pattern '^version\s*=\s*"(.+)"' | Select-Object -First 1
+          $cargoVersion = $cargoVersion.Matches[0].Groups[1].Value
 
-          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne $expectedTag) {
-            throw "Git tag '$env:GITHUB_REF_NAME' does not match app version '$version'. Expected tag: '$expectedTag'. Update package.json/src-tauri/tauri.conf.json/src-tauri/Cargo.toml before tagging."
+          if ($packageVersion -ne $tauriVersion) {
+            throw "package.json version '$packageVersion' does not match src-tauri/tauri.conf.json version '$tauriVersion'."
           }
 
-          Write-Host "Release tag validated: $expectedTag"
+          if ($packageVersion -ne $cargoVersion) {
+            throw "package.json version '$packageVersion' does not match src-tauri/Cargo.toml version '$cargoVersion'."
+          }
 
-      - name: Build and publish Tauri release
-        id: tauri_release
-        uses: tauri-apps/tauri-action@v1
+          $expectedTag = "v$packageVersion"
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne $expectedTag) {
+            throw "Git tag '$env:GITHUB_REF_NAME' does not match app version '$packageVersion'. Expected tag: '$expectedTag'."
+          }
+
+          Write-Host "Release version validated: $packageVersion / $expectedTag"
+
+      - name: Build Tauri bundles
+        shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: v__VERSION__
-          releaseName: '即刻 v__VERSION__'
-          releaseBody: '自动发布 Windows 安装包和 Tauri updater manifest。'
-          releaseDraft: false
-          prerelease: false
-          uploadUpdaterJson: true
-          updaterJsonPreferNsis: true
-          uploadWorkflowArtifacts: true
-          workflowArtifactNamePattern: '[platform]-[arch]-[bundle]'
-          retryAttempts: 2
+        run: |
+          $ErrorActionPreference = "Stop"
+          npm run build:tauri
 
-      - name: Print generated updater artifacts
+      - name: Print generated bundle files
         if: always()
         shell: pwsh
         run: |
           $bundleRoot = Join-Path $PWD "src-tauri/target/release/bundle"
           if (Test-Path $bundleRoot) {
             Get-ChildItem $bundleRoot -Recurse -File |
+              Sort-Object FullName |
               Select-Object FullName, Length, LastWriteTime |
               Format-Table -AutoSize
           } else {
-            Write-Host "Bundle output directory does not exist yet: $bundleRoot"
+            Write-Host "Bundle output directory does not exist: $bundleRoot"
           }
 
-      - name: Ensure latest.json release asset
+      - name: Upload workflow artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-tauri-bundles
+          path: |
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.sig
+          if-no-files-found: warn
+
+      - name: Publish release assets and latest.json
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -94,36 +107,17 @@ jobs:
 
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $tag = "v$version"
-          $repo = $env:GITHUB_REPOSITORY
-          $downloadDir = Join-Path $env:RUNNER_TEMP "updater-manifest-ensure"
-          $manifestPath = Join-Path $downloadDir "latest.json"
-
-          New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
-
-          $latestJsonIsValid = $false
-          try {
-            gh release download $tag --pattern "latest.json" --dir $downloadDir --clobber
-            if (Test-Path $manifestPath) {
-              $existingManifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
-              $existingWindows = $existingManifest.platforms.'windows-x86_64'
-              $latestJsonIsValid = `
-                $existingManifest.version -eq $version -and `
-                -not [string]::IsNullOrWhiteSpace($existingWindows.url) -and `
-                -not [string]::IsNullOrWhiteSpace($existingWindows.signature)
-            }
-          } catch {
-            Write-Host "latest.json is not available yet, fallback generation will run. Detail: $($_.Exception.Message)"
-          }
-
-          if ($latestJsonIsValid) {
-            Write-Host "Release $tag already has a valid latest.json."
-            exit 0
-          }
-
+          $releaseTitle = "即刻 v$version"
+          $releaseNotes = "自动发布 Windows 安装包和 Tauri updater manifest。"
           $bundleRoot = Join-Path $PWD "src-tauri/target/release/bundle"
+          $manifestDir = Join-Path $env:RUNNER_TEMP "tauri-updater-manifest"
+          $manifestPath = Join-Path $manifestDir "latest.json"
+
           if (-not (Test-Path $bundleRoot)) {
             throw "Tauri bundle output directory was not found: $bundleRoot"
           }
+
+          New-Item -ItemType Directory -Force -Path $manifestDir | Out-Null
 
           $nsisDir = Join-Path $bundleRoot "nsis"
           $msiDir = Join-Path $bundleRoot "msi"
@@ -146,36 +140,46 @@ jobs:
             throw "No Windows installer was found under $bundleRoot."
           }
 
-          $signaturePath = "$($installer.FullName).sig"
-          if (-not (Test-Path $signaturePath)) {
-            throw "Signature file was not found for installer: $($installer.FullName). Expected: $signaturePath"
+          $signatureFile = Get-ChildItem $installer.DirectoryName -File |
+            Where-Object { $_.Name -eq "$($installer.Name).sig" -or $_.Name -eq "$($installer.BaseName).sig" } |
+            Select-Object -First 1
+
+          if (-not $signatureFile) {
+            throw "No signature file was found for installer '$($installer.FullName)'. Expected '$($installer.Name).sig' or '$($installer.BaseName).sig'."
           }
 
-          $signature = (Get-Content $signaturePath -Raw).Trim()
+          $signature = (Get-Content $signatureFile.FullName -Raw).Trim()
           if ([string]::IsNullOrWhiteSpace($signature)) {
-            throw "Signature file is empty: $signaturePath"
+            throw "Signature file is empty: $($signatureFile.FullName)"
           }
 
-          $assetsJson = gh release view $tag --json assets | ConvertFrom-Json
-          $installerAsset = $assetsJson.assets | Where-Object { $_.name -eq $installer.Name } | Select-Object -First 1
-          $signatureAsset = $assetsJson.assets | Where-Object { $_.name -eq (Split-Path $signaturePath -Leaf) } | Select-Object -First 1
-
-          if (-not $installerAsset) {
-            Write-Host "Installer asset is missing on release $tag. Uploading $($installer.Name)."
-            gh release upload $tag $installer.FullName --clobber
+          $releaseExists = $true
+          gh release view $tag --json tagName,isDraft,isPrerelease 1>$null 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            $releaseExists = $false
           }
 
-          if (-not $signatureAsset) {
-            Write-Host "Signature asset is missing on release $tag. Uploading $(Split-Path $signaturePath -Leaf)."
-            gh release upload $tag $signaturePath --clobber
+          if ($releaseExists) {
+            gh release edit $tag --title $releaseTitle --notes $releaseNotes --draft=false --prerelease=false --latest
+          } else {
+            gh release create $tag --target $env:GITHUB_SHA --title $releaseTitle --notes $releaseNotes --latest
+          }
+
+          $assetFiles = @()
+          $assetFiles += Get-ChildItem $bundleRoot -Recurse -File -Include *.exe,*.msi,*.sig |
+            Where-Object { $_.Name -notmatch "webview2|WebView2" }
+
+          foreach ($asset in $assetFiles) {
+            Write-Host "Uploading release asset: $($asset.FullName)"
+            gh release upload $tag $asset.FullName --clobber
           }
 
           $encodedInstallerName = [System.Uri]::EscapeDataString($installer.Name)
-          $installerUrl = "https://github.com/$repo/releases/download/$tag/$encodedInstallerName"
+          $installerUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/$encodedInstallerName"
 
           $manifest = [ordered]@{
             version = $version
-            notes = "自动发布 Windows 安装包和 Tauri updater manifest。"
+            notes = $releaseNotes
             pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
             platforms = [ordered]@{
               "windows-x86_64" = [ordered]@{
@@ -188,8 +192,11 @@ jobs:
           $json = $manifest | ConvertTo-Json -Depth 10
           [System.IO.File]::WriteAllText($manifestPath, $json, [System.Text.UTF8Encoding]::new($false))
 
+          Write-Host "Generated latest.json:"
+          Get-Content $manifestPath -Raw
+
           gh release upload $tag $manifestPath --clobber
-          Write-Host "Generated and uploaded latest.json for $tag -> $installerUrl"
+          Write-Host "Uploaded latest.json for $tag -> $installerUrl"
 
       - name: Verify latest.json release asset
         shell: pwsh
@@ -200,11 +207,11 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $tag = "v$version"
           $downloadDir = Join-Path $env:RUNNER_TEMP "updater-manifest-check"
+          $manifestPath = Join-Path $downloadDir "latest.json"
 
           New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null
           gh release download $tag --pattern "latest.json" --dir $downloadDir --clobber
 
-          $manifestPath = Join-Path $downloadDir "latest.json"
           if (-not (Test-Path $manifestPath)) {
             throw "latest.json was not uploaded to GitHub Release $tag."
           }
@@ -216,11 +223,11 @@ jobs:
             throw "latest.json version '$($manifest.version)' does not match package version '$version'."
           }
 
-          if (-not $windows.url) {
+          if ([string]::IsNullOrWhiteSpace($windows.url)) {
             throw "latest.json is missing platforms.windows-x86_64.url."
           }
 
-          if (-not $windows.signature) {
+          if ([string]::IsNullOrWhiteSpace($windows.signature)) {
             throw "latest.json is missing platforms.windows-x86_64.signature."
           }
 
