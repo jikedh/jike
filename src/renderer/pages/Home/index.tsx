@@ -220,13 +220,17 @@ const HomePage = () => {
       </div>
 
       <ProjectDialog
-        open={isProjectDialogOpen}
-        onOpenChange={setIsProjectDialogOpen}
+        isOpen={isProjectDialogOpen}
+        onClose={() => setIsProjectDialogOpen(false)}
+        onSuccess={(projectId) => {
+          setIsProjectDialogOpen(false);
+          navigate(`/canvas/${projectId}`);
+        }}
       />
+
       <FirstLoginGuideDialog
         open={guideOpen}
-        onOpenChange={setGuideOpen}
-        pendingItems={pendingItems}
+        pending={pendingItems}
         onClose={handleGuideClose}
       />
     </div>
