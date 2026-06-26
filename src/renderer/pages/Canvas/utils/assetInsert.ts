@@ -143,6 +143,7 @@ export const insertAssetIntoCanvas = async (
             ...(localPath ? { localPath } : {}),
             localName,
             format: localName.split(".").pop() || "mp4",
+            ...(asset.coverUrl ? { coverUrl: asset.coverUrl } : {}),
           },
         ],
       },
