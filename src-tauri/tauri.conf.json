@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "即刻",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "identifier": "com.jike.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -72,7 +72,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFFRUVGREFFMDM3NjQyMTUKUldRVlFuWURydjN1SGhKUVRuMlM3ZGl2Tml1Vzg4eVg0RHcvWVRwMGpGaFBRdStLT2RkdDRnMGQK",
       "endpoints": [
-        "https://github.com/jikedh/jike/releases/latest/download/latest.json"
+        "https://github.com/jikedh/jike-release/releases/latest/download/latest.json"
       ]
     }
   }

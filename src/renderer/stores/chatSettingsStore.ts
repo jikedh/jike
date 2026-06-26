@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 const LOCAL_SETTINGS_KEY = "canvas-chat-settings";
-const DEFAULT_UPDATE_URL = "https://github.com/jikedh/jike/releases";
+const DEFAULT_UPDATE_URL = "https://github.com/jikedh/jike-release/releases";
 
 const INITIAL_STATE: Pick<
   ChatSettingsStoreType,
