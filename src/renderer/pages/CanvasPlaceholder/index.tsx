@@ -3,7 +3,7 @@
  * 用于 /canvas 路由的简单占位页面
  * 样式与 ProjectList 页面保持一致
  */
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   SquareDashedMousePointer,
@@ -20,37 +20,34 @@ import {
   Loader2,
 } from "lucide-react";
 import {
-  getProjectListAsync,
   deleteProject,
-  exportProjectDraft,
-  importProjectDraft,
-  loadProjectCoverObjectUrl,
-  type ProjectMeta,
-} from "service/projectStorage";
+  exportProject,
+  getProjectList,
+  importProject,
+} from "@/api/projects";
 import { toast } from "sonner";
 import ProjectDialog from "@/components/ProjectDialog";
+import type { ProjectListItem } from "shared/types/api/projects";
 
 export default function CanvasPlaceholderPage() {
   const navigate = useNavigate();
-  const [projects, setProjects] = useState<ProjectMeta[]>([]);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
+  const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [projectToDelete, setProjectToDelete] = useState<ProjectMeta | null>(
+  const [projectToDelete, setProjectToDelete] = useState<ProjectListItem | null>(
     null,
   );
-  const [projectToEdit, setProjectToEdit] = useState<ProjectMeta | null>(null);
+  const [projectToEdit, setProjectToEdit] = useState<ProjectListItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [exportingProjectId, setExportingProjectId] = useState<string | null>(
     null,
   );
-  const [projectCoverUrls, setProjectCoverUrls] = useState<
-    Record<string, string>
-  >({});
 
   const refreshProjects = async () => {
-    const list = await getProjectListAsync();
-    setProjects(list);
+    const result = await getProjectList({ page: 1, page_size: 100 });
+    setProjects(result.data.list);
   };
 
   const handleProjectSuccess = (projectId: string) => {
@@ -65,41 +62,8 @@ export default function CanvasPlaceholderPage() {
     refreshProjects();
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
-    const objectUrls: string[] = [];
-
-    const loadCovers = async () => {
-      const coverEntries = await Promise.all(
-        projects.map(async (project) => {
-          const coverUrl = await loadProjectCoverObjectUrl(project);
-          if (coverUrl?.startsWith("blob:")) {
-            objectUrls.push(coverUrl);
-          }
-          return [project.id, coverUrl] as const;
-        }),
-      );
-
-      if (!isMounted) {
-        objectUrls.forEach((url) => URL.revokeObjectURL(url));
-        return;
-      }
-
-      setProjectCoverUrls(
-        Object.fromEntries(coverEntries.filter(([, url]) => Boolean(url))),
-      );
-    };
-
-    loadCovers();
-
-    return () => {
-      isMounted = false;
-      objectUrls.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [projects]);
-
   // 处理项目卡片点击
-  const handleProjectClick = (project: ProjectMeta) => {
+  const handleProjectClick = (project: ProjectListItem) => {
     navigate(`/canvas/${project.id}`);
   };
 
@@ -110,14 +74,14 @@ export default function CanvasPlaceholderPage() {
   };
 
   // 打开编辑弹窗
-  const openEditDialog = (e: React.MouseEvent, project: ProjectMeta) => {
+  const openEditDialog = (e: React.MouseEvent, project: ProjectListItem) => {
     e.stopPropagation();
     setProjectToEdit(project);
     setIsProjectDialogOpen(true);
   };
 
   // 打开删除确认弹窗
-  const openDeleteDialog = (e: React.MouseEvent, project: ProjectMeta) => {
+  const openDeleteDialog = (e: React.MouseEvent, project: ProjectListItem) => {
     e.stopPropagation();
     setProjectToDelete(project);
     setIsDeleteDialogOpen(true);
@@ -138,25 +102,39 @@ export default function CanvasPlaceholderPage() {
     }
   };
 
-  const handleImportProject = async () => {
+  const handleImportProject = () => {
+    importFileInputRef.current?.click();
+  };
+
+  const handleImportProjectFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) {
+      return;
+    }
+
     setIsImporting(true);
     try {
-      const result = await importProjectDraft();
-      if (result.canceled) {
-        return;
-      }
+      const raw = await file.text();
+      const parsed = JSON.parse(raw);
+      const sourceProject = parsed.project || {};
+      const sourceCanvas = parsed.canvas || parsed;
 
-      if (!result.success) {
-        toast.error(result.error || "导入项目失败");
-        return;
-      }
+      const result = await importProject({
+        name: sourceProject.name || file.name.replace(/\.json$/i, "") || "导入项目",
+        description: sourceProject.description || "",
+        type: sourceProject.type || "video",
+        cover_url: sourceProject.cover_url || sourceProject.coverUrl || "",
+        data: sourceCanvas.data || sourceCanvas,
+      });
 
       await refreshProjects();
       toast.success("导入成功", {
-        description: result.projectName
-          ? `已导入项目「${result.projectName}」`
-          : "项目草稿已导入",
+        description: `已导入项目「${result.data.name}」`,
       });
+    } catch (error) {
+      console.error("Failed to import project:", error);
+      toast.error("导入项目失败");
     } finally {
       setIsImporting(false);
     }
@@ -164,26 +142,28 @@ export default function CanvasPlaceholderPage() {
 
   const handleExportProject = async (
     e: React.MouseEvent,
-    project: ProjectMeta,
+    project: ProjectListItem,
   ) => {
     e.stopPropagation();
-    setExportingProjectId(project.id);
+    setExportingProjectId(String(project.id));
     try {
-      const result = await exportProjectDraft(project.id);
-      if (result.canceled) {
-        return;
-      }
-
-      if (!result.success) {
-        toast.error(result.error || "导出项目失败");
-        return;
-      }
+      const result = await exportProject(project.id);
+      const blob = new Blob([JSON.stringify(result.data, null, 2)], {
+        type: "application/json",
+      });
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `${project.name || "project"}.json`;
+      link.click();
+      URL.revokeObjectURL(objectUrl);
 
       toast.success("导出成功", {
-        description: result.path
-          ? `已导出到 ${result.path}`
-          : `已导出项目「${project.name}」`,
+        description: `已导出项目「${project.name}」`,
       });
+    } catch (error) {
+      console.error("Failed to export project:", error);
+      toast.error("导出项目失败");
     } finally {
       setExportingProjectId(null);
     }
@@ -265,8 +245,7 @@ export default function CanvasPlaceholderPage() {
               {/* Thumbnail */}
               <div className="relative aspect-video overflow-hidden bg-white/5">
                 {(() => {
-                  const coverSrc =
-                    projectCoverUrls[project.id] || project.coverUrl;
+                  const coverSrc = project.cover_url || project.coverUrl;
 
                   return coverSrc ? (
                     <img
@@ -330,22 +309,22 @@ export default function CanvasPlaceholderPage() {
                   <div className="flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5" />
                     <span>
-                      {formatTime(project.updatedAt || project.createdAt)}
+                      {formatTime(project.updated_at || project.updateTime || project.created_at || project.createTime || Date.now())}
                     </span>
                   </div>
                 </div>
                 <div className="mt-3 flex justify-end">
                   <button
                     onClick={(e) => handleExportProject(e, project)}
-                    disabled={exportingProjectId === project.id}
+                    disabled={exportingProjectId === String(project.id)}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/25 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:border-[#B43FEB]/40 hover:text-[#d8b6ff] hover:bg-[#B43FEB]/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {exportingProjectId === project.id ? (
+                    {exportingProjectId === String(project.id) ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                       <Download className="w-3.5 h-3.5" />
                     )}
-                    {exportingProjectId === project.id ? "导出中..." : "导出"}
+                    {exportingProjectId === String(project.id) ? "导出中..." : "导出"}
                   </button>
                 </div>
               </div>
@@ -360,6 +339,14 @@ export default function CanvasPlaceholderPage() {
         onClose={() => setIsProjectDialogOpen(false)}
         project={projectToEdit}
         onSuccess={handleProjectSuccess}
+      />
+
+      <input
+        ref={importFileInputRef}
+        type="file"
+        accept="application/json,.json"
+        onChange={handleImportProjectFile}
+        className="hidden"
       />
 
       {/* 删除确认弹窗 */}

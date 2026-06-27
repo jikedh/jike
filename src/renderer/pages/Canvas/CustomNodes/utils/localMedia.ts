@@ -1,10 +1,11 @@
-import {
-  type MediaRef,
-  saveMediaBuffer,
-  saveMediaFromUrl,
-} from "service/projectStorage";
-
 type MediaType = "image" | "video" | "generate_image" | "generate_video";
+
+type MediaRef = {
+  url: string;
+  remoteUrl?: string;
+  localName?: string;
+  localPath?: string;
+};
 
 export const mergeLocalMediaRef = <T extends { url: string; remoteUrl?: string }>(
   item: T,
@@ -28,15 +29,11 @@ export const saveToolMediaFileToProject = async <T extends { url: string }>(
     return item;
   }
 
-  const buffer = await file.arrayBuffer();
-  const localRef = await saveMediaBuffer(
-    projectId,
-    buffer,
-    mediaType,
-    extension,
-    fileNamePrefix,
-  );
-  return mergeLocalMediaRef(item, localRef);
+  void file;
+  void mediaType;
+  void extension;
+  void fileNamePrefix;
+  return mergeLocalMediaRef(item, { url: item.url, remoteUrl: item.url });
 };
 
 export const saveToolMediaUrlToProject = async <T extends { url: string }>(
@@ -50,12 +47,8 @@ export const saveToolMediaUrlToProject = async <T extends { url: string }>(
     return item;
   }
 
-  const localRef = await saveMediaFromUrl(
-    projectId,
-    item.url,
-    mediaType,
-    extension,
-    fileNamePrefix,
-  );
-  return mergeLocalMediaRef(item, localRef);
+  void mediaType;
+  void extension;
+  void fileNamePrefix;
+  return mergeLocalMediaRef(item, { url: item.url, remoteUrl: item.url });
 };

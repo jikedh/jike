@@ -18,7 +18,6 @@ import {
   type PresetsMap,
   presetsService,
 } from "service/localStorageService";
-import { clearProjectList } from "service/projectStorage";
 import { CANVAS_CHAT_MODELS } from "shared/constants/ai-models";
 import {
   CANVAS_CHAT_PERSONAS,
@@ -402,7 +401,6 @@ export const SettingsModal = ({
 
     if (selectedPath && selectedPath !== storagePath) {
       setStoragePath(selectedPath);
-      clearProjectList();
       success("存储路径已更新（旧路径数据不会自动迁移）");
     }
   };

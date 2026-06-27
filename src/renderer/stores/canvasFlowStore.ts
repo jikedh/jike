@@ -1,14 +1,6 @@
 ﻿import { addEdge, applyEdgeChanges, applyNodeChanges } from "@xyflow/react";
 import { copyVideoUrlToOss } from "service/oss";
 import {
-  getCanvasDataKey,
-  getLocalFilePath,
-  loadCanvasData,
-  saveCanvasData,
-  saveGeneratedImageToLocal,
-  saveGeneratedVideoToLocal
-} from "service/projectStorage";
-import {
   AGNES_IMAGE_2_FLASH_MODEL,
   getVisibleImageModels,
   NANO_BANANA_LOCAL_MODEL,
@@ -128,6 +120,7 @@ import { aiVideoTrackingService } from "@/services/aiVideoTracking";
 import { useUserStore } from "@/stores/useUserStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { saveCurrentCanvasToHistory } from "@/utils/canvasHistoryBridge";
+import { getCanvas, saveCanvas } from "@/api/projects";
 
 // ==================== 持久化配置 ====================
 
@@ -227,6 +220,72 @@ export const buildCanvasPersistedState = ({
     nodeIdCounters,
   };
 };
+
+const EMPTY_NODE_ID_COUNTERS = {
+  note: 1,
+  image: 1,
+  video: 1,
+  agent: 1,
+  panorama: 1,
+  audio: 1,
+  table: 1,
+};
+
+const unwrapApiData = <T,>(response: T | { data: T }): T => {
+  if (response && typeof response === "object" && "data" in response) {
+    return (response as { data: T }).data;
+  }
+
+  return response as T;
+};
+
+const toCanvasPersistedState = (canvas: {
+  version?: number;
+  saved_at?: number;
+  data?: {
+    nodes?: AllNodeType[];
+    edges?: EdgeType[];
+    groups?: CanvasGroup[];
+    node_id_counters?: CanvasPersistedState["nodeIdCounters"];
+  };
+}): CanvasPersistedState => ({
+  version: canvas.version || CANVAS_STORAGE_VERSION,
+  savedAt: canvas.saved_at || Date.now(),
+  nodes: canvas.data?.nodes || [],
+  edges: canvas.data?.edges || [],
+  groups: canvas.data?.groups || [],
+  nodeIdCounters: {
+    ...EMPTY_NODE_ID_COUNTERS,
+    ...(canvas.data?.node_id_counters || {}),
+  },
+});
+
+const toCanvasSaveRequest = (state: CanvasPersistedState) => ({
+  version: state.version,
+  saved_at: state.savedAt,
+  data: {
+    nodes: state.nodes,
+    edges: state.edges,
+    groups: state.groups,
+    node_id_counters: state.nodeIdCounters,
+  },
+});
+
+const saveGeneratedImageToLocal = async (
+  _projectId?: string,
+  _url?: string,
+  _extension?: string,
+) => "";
+const saveGeneratedVideoToLocal = async (
+  _projectId?: string,
+  _url?: string,
+  _extension?: string,
+) => "";
+const getLocalFilePath = (
+  _projectId?: string,
+  _fileType?: string,
+  _fileName?: string,
+) => "";
 
 const removeNodeIdsFromGroups = (
   groups: CanvasGroup[],
@@ -2265,25 +2324,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         stopVideoPollingInternal(nodeId);
       });
 
-      // 尝试从本地文件加载
       let data: CanvasPersistedState | null = null;
       try {
-        data = (await loadCanvasData(projectId)) as CanvasPersistedState | null;
+        const response = await getCanvas(projectId);
+        data = toCanvasPersistedState(unwrapApiData(response));
       } catch (err) {
-        console.warn("Failed to load canvas data from local file:", err);
-      }
-
-      // 如果本地文件加载失败，尝试从 localStorage 加载
-      if (!data) {
-        const storageKey = getCanvasDataKey(projectId);
-        try {
-          const raw = localStorage.getItem(storageKey);
-          if (raw) {
-            data = JSON.parse(raw) as CanvasPersistedState;
-          }
-        } catch (err) {
-          console.warn("Failed to load canvas data from localStorage:", err);
-        }
+        console.warn("Failed to load canvas data from API:", err);
       }
 
       if (
@@ -2354,23 +2400,20 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     },
 
     /**
-     * 保存当前图状态到 localStorage 和本地文件
+     * 保存当前图状态到后端画布 API
      */
     saveGraph: () => {
       const state = get();
       if (!state.projectId) return;
 
       const data = buildCanvasPersistedState(state);
-      const storageKey = getCanvasDataKey(state.projectId);
-      localStorage.setItem(storageKey, JSON.stringify(data));
-
-      saveCanvasData(state.projectId, data).catch((err) => {
-        console.warn("Failed to save canvas data to local file:", err);
+      saveCanvas(state.projectId, toCanvasSaveRequest(data)).catch((err) => {
+        console.warn("Failed to save canvas data to API:", err);
       });
     },
 
     /**
-     * 从 localStorage 恢复图状态
+     * 从后端画布 API 恢复图状态
      */
     hydrateGraph: (projectId: string) => {
       if (get().hydrated) return;
@@ -2385,10 +2428,40 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const state = get();
       if (!state.projectId) return;
 
-      try {
-        const storageKey = getCanvasDataKey(state.projectId);
-        const raw = localStorage.getItem(storageKey);
-        if (!raw) {
+      getCanvas(state.projectId)
+        .then(async (response) => {
+          const data = toCanvasPersistedState(unwrapApiData(response));
+          if (
+            data.version !== CANVAS_STORAGE_VERSION &&
+            data.version !== LEGACY_CANVAS_STORAGE_VERSION
+          ) {
+            set({
+              nodes: [],
+              edges: [],
+              groups: [],
+              activeNodeId: null,
+              activeVideoTool: null,
+              selectedGroupId: null,
+            });
+            return;
+          }
+
+          const hydratedNodes = await hydrateCanvasNodesForRuntime(data.nodes);
+          const persistedReadyNodes = normalizeCanvasNodesForPersistence(
+            hydratedNodes,
+          );
+
+          set({
+            nodes: persistedReadyNodes,
+            edges: data.edges,
+            nodeIdCounters: data.nodeIdCounters,
+            groups: normalizeCanvasGroups(data.groups, persistedReadyNodes),
+            activeNodeId: null,
+            activeVideoTool: null,
+            selectedGroupId: null,
+          });
+        })
+        .catch(() => {
           set({
             nodes: [],
             edges: [],
@@ -2397,48 +2470,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             activeVideoTool: null,
             selectedGroupId: null,
           });
-          return;
-        }
-
-        const data = JSON.parse(raw) as CanvasPersistedState;
-        if (
-          data.version !== CANVAS_STORAGE_VERSION &&
-          data.version !== LEGACY_CANVAS_STORAGE_VERSION
-        ) {
-          set({
-            nodes: [],
-            edges: [],
-            groups: [],
-            activeNodeId: null,
-            activeVideoTool: null,
-            selectedGroupId: null,
-          });
-          return;
-        }
-
-        const persistedReadyNodes = normalizeCanvasNodesForPersistence(
-          data.nodes,
-        );
-
-        set({
-          nodes: persistedReadyNodes,
-          edges: data.edges,
-          nodeIdCounters: data.nodeIdCounters,
-          groups: normalizeCanvasGroups(data.groups, persistedReadyNodes),
-          activeNodeId: null,
-          activeVideoTool: null,
-          selectedGroupId: null,
         });
-      } catch {
-        set({
-          nodes: [],
-          edges: [],
-          groups: [],
-          activeNodeId: null,
-          activeVideoTool: null,
-          selectedGroupId: null,
-        });
-      }
     },
 
     /**
