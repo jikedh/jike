@@ -4,11 +4,12 @@
  * video-pull-film 预设输出为表格节点，其他预设输出为便签节点
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { VIDEO_PULL_FILM_COLUMNS } from "shared/constants/video-agent-presets";
 import type { VideoAgentNodeType, VideoAgentPresetId } from "shared/types/flow";
 import { createDashscopeChatCompletion } from "@/api/ai";
 import { useMessage } from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { parseVideoAnalysisTable } from "../utils";
+import { parseVideoAnalysisResult } from "../utils";
 
 interface UseVideoAgentGenerateProps {
   id: string;
@@ -102,19 +103,13 @@ export const useVideoAgentGenerate = ({
 
       if (presetId === "video-pull-film") {
         // 视频拉片预设 → 输出表格节点
-        const tableRows = parseVideoAnalysisTable(content);
+        const { rows: tableRows, characterProfiles } =
+          parseVideoAnalysisResult(content);
         outputNodeId = addNode("table", nextPosition, {
           tableTitle: "视频拉片分析",
-          tableColumns: [
-            "时间点",
-            "场景描述",
-            "镜头类型",
-            "关键动作",
-            "画面构图",
-            "台词字幕",
-            "节奏分析",
-          ],
+          tableColumns: [...VIDEO_PULL_FILM_COLUMNS],
           tableRows: tableRows,
+          tableCharacterProfiles: characterProfiles,
         });
       } else {
         // 其他预设 → 输出便签节点

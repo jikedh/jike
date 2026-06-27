@@ -252,6 +252,7 @@ export const createTableNode = (
       "习惯和兴趣",
     ],
     rows: options?.tableRows ?? [],
+    characterProfiles: options?.tableCharacterProfiles ?? [],
     createdAt: Date.now(),
   },
 });

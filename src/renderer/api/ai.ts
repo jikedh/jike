@@ -267,6 +267,7 @@ export const extractAgnesImageUrls = (response: any): string[] => {
 export async function createImageGeneration(
   data: ToApiImageGenerationRequest,
   scoreCost?: number,
+  signal?: AbortSignal,
 ) {
   const response = await createDesktopProxyTask({
     platform: "toapi",
@@ -279,7 +280,7 @@ export async function createImageGeneration(
     scoreSource: "toapi",
     // scoreSourceLabel: "ToAPI 图片生成",
     scoreSourceLabel: data.model,
-  });
+  }, signal);
 
   const rawData = unwrapDesktopProxyData(response);
   const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
@@ -346,12 +347,12 @@ export async function createAgnesImageGeneration(
 }
 
 // 获取图片生成任务状态
-export async function getImageTaskStatus(id: string) {
+export async function getImageTaskStatus(id: string, signal?: AbortSignal) {
   const response = await queryDesktopProxyTask({
     platform: "toapi",
     upstreamPath: `/v1/images/generations/${id}`,
     method: "GET",
-  });
+  }, signal);
 
   return unwrapDesktopProxyData(response);
 }
@@ -453,6 +454,7 @@ export async function analyzeLightingReferenceImage(
 export async function submitMjImagine(
   data: { prompt: string },
   scoreCost?: number,
+  signal?: AbortSignal,
 ) {
   const response = await createDesktopProxyTask({
     platform: "zeakai",
@@ -464,7 +466,7 @@ export async function submitMjImagine(
     scoreModel: "midjourney",
     scoreSource: "zeakai",
     scoreSourceLabel: "Midjourney",
-  });
+  }, signal);
 
   const rawData = unwrapDesktopProxyData(response);
   const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
@@ -472,12 +474,12 @@ export async function submitMjImagine(
 }
 
 // 获取 Midjourney 任务状态
-export async function fetchMjTask(id: string) {
+export async function fetchMjTask(id: string, signal?: AbortSignal) {
   const response = await queryDesktopProxyTask({
     platform: "zeakai",
     upstreamPath: `/mj/task/${id}/fetch`,
     method: "GET",
-  });
+  }, signal);
 
   return unwrapDesktopProxyData(response);
 }

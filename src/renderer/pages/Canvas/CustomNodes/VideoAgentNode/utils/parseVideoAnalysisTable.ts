@@ -2,78 +2,263 @@
  * 解析视频分析内容，提取结构化表格数据
  * 用于 video-pull-film 预设类型
  */
-export interface VideoAnalysisRow {
-  时间点: string;
-  场景描述: string;
-  镜头类型: string;
-  关键动作: string;
-  画面构图: string;
-  台词字幕: string;
-  节奏分析: string;
-}
+import { VIDEO_PULL_FILM_COLUMNS } from "shared/constants/video-agent-presets";
 
-/**
- * 解析视频分析文本，尝试从 Markdown 表格中提取数据
- * 如果没有表格，则按时间点/序号分段解析
- */
-export const parseVideoAnalysisTable = (
-  content: string,
-): VideoAnalysisRow[] => {
-  const rows: VideoAnalysisRow[] = [];
+export type VideoAnalysisRow = Record<
+  (typeof VIDEO_PULL_FILM_COLUMNS)[number],
+  string
+>;
 
-  // 尝试匹配 Markdown 表格格式
+export type VideoCharacterProfile = {
+  id: string;
+  name: string;
+  aliases?: string[];
+  appearance?: string;
+  outfit?: string;
+  accessories?: string;
+  distinctiveFeatures?: string;
+  consistencyPrompt?: string;
+  raw?: string;
+};
+
+export type VideoAnalysisParseResult = {
+  rows: VideoAnalysisRow[];
+  characterProfiles: VideoCharacterProfile[];
+};
+
+const LEGACY_COLUMN_MAP: Record<string, keyof VideoAnalysisRow> = {
+  时间点: "时长",
+  场景描述: "画面",
+  镜头类型: "景别",
+  关键动作: "主体动作",
+  画面构图: "画面",
+  台词字幕: "信息点",
+  节奏分析: "信息点",
+  人物: "角色",
+  出场角色: "角色",
+  核心主体: "角色",
+  "角色/主体": "角色",
+};
+
+type MarkdownTable = {
+  headerCells: string[];
+  rows: string[][];
+};
+
+const CHARACTER_PROFILE_HEADER_KEYWORDS = [
+  "别名",
+  "样貌",
+  "外貌",
+  "穿着",
+  "服装",
+  "道具",
+  "明显特征",
+  "一致性提示",
+];
+
+const createEmptyRow = (): VideoAnalysisRow =>
+  VIDEO_PULL_FILM_COLUMNS.reduce((row, column) => {
+    row[column] = "";
+    return row;
+  }, {} as VideoAnalysisRow);
+
+const parseMarkdownTableRow = (row: string) => {
+  const cells = row.split("|");
+  if (cells[0]?.trim() === "") cells.shift();
+  if (cells[cells.length - 1]?.trim() === "") cells.pop();
+  return cells.map((cell) => cell.trim());
+};
+
+const isMarkdownTableSeparator = (line: string) =>
+  /^\|[\s\-:|]+\|$/.test(line);
+
+const collectMarkdownTables = (content: string): MarkdownTable[] => {
   const lines = content.split("\n");
-  const tableRows: string[] = [];
-  let inTable = false;
+  const tables: string[][] = [];
+  let currentTable: string[] = [];
+
+  const finishTable = () => {
+    if (currentTable.length > 1) {
+      tables.push(currentTable);
+    }
+    currentTable = [];
+  };
 
   for (const line of lines) {
     const trimmedLine = line.trim();
-    // 检测表格行（以 | 开头和结尾）
     if (trimmedLine.startsWith("|") && trimmedLine.endsWith("|")) {
-      // 跳过分隔行（如 |---|---|）
-      if (/^\|[\s\-:|]+\|$/.test(trimmedLine)) {
-        continue;
+      if (!isMarkdownTableSeparator(trimmedLine)) {
+        currentTable.push(trimmedLine);
       }
-      tableRows.push(trimmedLine);
-      inTable = true;
-    } else if (inTable && trimmedLine === "") {
-      // 空行结束表格
-      break;
+      continue;
     }
+    finishTable();
+  }
+  finishTable();
+
+  return tables.map((tableRows) => ({
+    headerCells: parseMarkdownTableRow(tableRows[0] ?? ""),
+    rows: tableRows.slice(1).map(parseMarkdownTableRow),
+  }));
+};
+
+const countVideoHeaders = (headers: string[]) =>
+  headers.filter((header) =>
+    (VIDEO_PULL_FILM_COLUMNS as readonly string[]).includes(header),
+  ).length;
+
+const isCharacterProfileTable = (headers: string[]) =>
+  headers.includes("角色") &&
+  headers.some((header) =>
+    CHARACTER_PROFILE_HEADER_KEYWORDS.some((keyword) =>
+      header.includes(keyword),
+    ),
+  );
+
+const isVideoAnalysisTable = (headers: string[]) =>
+  countVideoHeaders(headers) >= 3 &&
+  (headers.includes("场景") ||
+    headers.includes("镜号") ||
+    headers.includes("画面"));
+
+const parseVideoRowsFromTable = (table: MarkdownTable): VideoAnalysisRow[] => {
+  const normalizedHeaders = table.headerCells.map(
+    (header, index) =>
+      (VIDEO_PULL_FILM_COLUMNS as readonly string[]).includes(header)
+        ? (header as keyof VideoAnalysisRow)
+        : (LEGACY_COLUMN_MAP[header] ?? VIDEO_PULL_FILM_COLUMNS[index] ?? null),
+  );
+
+  return table.rows
+    .filter((cells) => cells.length >= 2)
+    .map((cells) => {
+      const nextRow = createEmptyRow();
+      cells.forEach((cell, index) => {
+        const column = normalizedHeaders[index];
+        if (!column) return;
+        nextRow[column] = cell || "";
+      });
+      return nextRow;
+    });
+};
+
+const splitAliases = (value?: string) =>
+  String(value ?? "")
+    .split(/[、,，/]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const getCellByHeader = (
+  headers: string[],
+  cells: string[],
+  keywords: string[],
+) => {
+  const index = headers.findIndex((header) =>
+    keywords.some((keyword) => header.includes(keyword)),
+  );
+  return index >= 0 ? cells[index]?.trim() : "";
+};
+
+const parseCharacterProfilesFromTable = (
+  table: MarkdownTable,
+): VideoCharacterProfile[] =>
+  table.rows
+    .map((cells, index) => {
+      const name =
+        getCellByHeader(table.headerCells, cells, ["角色", "人物", "主体"]) ||
+        cells[0]?.trim() ||
+        "";
+      if (!name || name === "无人物") return null;
+
+      const aliases = splitAliases(
+        getCellByHeader(table.headerCells, cells, ["别名", "称呼"]),
+      );
+      const appearance = getCellByHeader(table.headerCells, cells, [
+        "样貌",
+        "外貌",
+        "长相",
+        "发型",
+        "体型",
+      ]);
+      const outfit = getCellByHeader(table.headerCells, cells, [
+        "穿着",
+        "服装",
+        "衣着",
+      ]);
+      const accessories = getCellByHeader(table.headerCells, cells, [
+        "道具",
+        "饰品",
+        "配饰",
+      ]);
+      const distinctiveFeatures = getCellByHeader(table.headerCells, cells, [
+        "明显特征",
+        "特征",
+        "标志",
+      ]);
+      const consistencyPrompt = getCellByHeader(table.headerCells, cells, [
+        "一致性提示",
+        "一致性",
+        "保持",
+      ]);
+
+      return {
+        id: `char_${index + 1}`,
+        name,
+        ...(aliases.length ? { aliases } : {}),
+        ...(appearance ? { appearance } : {}),
+        ...(outfit ? { outfit } : {}),
+        ...(accessories ? { accessories } : {}),
+        ...(distinctiveFeatures ? { distinctiveFeatures } : {}),
+        ...(consistencyPrompt ? { consistencyPrompt } : {}),
+        raw: cells.filter(Boolean).join("；"),
+      };
+    })
+    .filter(Boolean) as VideoCharacterProfile[];
+
+const parseCharacterProfilesFromText = (
+  content: string,
+): VideoCharacterProfile[] => {
+  const tables = collectMarkdownTables(content);
+  const tableProfiles = tables
+    .filter((table) => isCharacterProfileTable(table.headerCells))
+    .flatMap(parseCharacterProfilesFromTable);
+
+  if (tableProfiles.length > 0) {
+    return tableProfiles;
   }
 
-  // 如果找到表格数据，解析它
-  if (tableRows.length > 1) {
-    // 跳过表头行，从第二行开始解析数据
-    for (let i = 1; i < tableRows.length; i++) {
-      const row = tableRows[i];
-      const cells = row
-        .split("|")
-        .map((cell) => cell.trim())
-        .filter((cell) => cell !== "");
+  const lines = content
+    .split("\n")
+    .map((line) => line.trim().replace(/^[-*]\s*/, ""))
+    .filter(Boolean);
+  const profileLines = lines.filter((line) =>
+    /^(角色|人物|主体)\s*[\w\u4e00-\u9fa5]{1,12}[：:]/.test(line) ||
+    /^[\w\u4e00-\u9fa5]{1,12}[：:].*(样貌|外貌|穿着|服装|发型|体型|特征)/.test(
+      line,
+    ),
+  );
 
-      if (cells.length >= 2) {
-        rows.push({
-          时间点: cells[0] || "",
-          场景描述: cells[1] || "",
-          镜头类型: cells[2] || "",
-          关键动作: cells[3] || "",
-          画面构图: cells[4] || "",
-          台词字幕: cells[5] || "",
-          节奏分析: cells[6] || "",
-        });
-      }
-    }
-    return rows;
-  }
+  return profileLines.map((line, index) => {
+    const [namePart, ...rest] = line.split(/[：:]/);
+    const name = namePart.replace(/^(角色|人物|主体)\s*/, "").trim();
+    const raw = rest.join("：").trim();
+    return {
+      id: `char_${index + 1}`,
+      name,
+      raw,
+      consistencyPrompt: raw,
+    };
+  });
+};
 
-  // 如果没有表格，尝试按时间点模式解析（如 "0:00"、"第1幕"、"场景1" 等）
+const parseVideoRowsFromSegments = (content: string): VideoAnalysisRow[] => {
+  const lines = content.split("\n");
   const timePointPatterns = [
-    /^(\d{1,2}:\d{2}(?::\d{2})?)/, // 0:00 或 00:00:00
-    /^第(\d+)[幕场集]/, // 第1幕、第1场、第1集
-    /^场景?(\d+)/, // 场景1、场景2
-    /^镜头?(\d+)/, // 镜头1
-    /^(\d+)[.、](?=\D)/, // 1. 或 1、
+    /^(\d{1,2}:\d{2}(?::\d{2})?)/,
+    /^第(\d+)[幕场集]/,
+    /^场景?(\d+)/,
+    /^镜头?(\d+)/,
+    /^(\d+)[.、](?=\D)/,
   ];
 
   const segments: { timePoint: string; content: string }[] = [];
@@ -83,7 +268,6 @@ export const parseVideoAnalysisTable = (
     const trimmedLine = line.trim();
     if (!trimmedLine) continue;
 
-    // 检查是否匹配时间点模式
     let matchedTimePoint: string | null = null;
     for (const pattern of timePointPatterns) {
       const match = trimmedLine.match(pattern);
@@ -112,33 +296,56 @@ export const parseVideoAnalysisTable = (
     segments.push(currentSegment);
   }
 
-  // 如果解析到段落，转换为 rows
   if (segments.length > 0) {
-    return segments.map((seg) => ({
-      时间点: seg.timePoint,
-      场景描述: seg.content,
-      镜头类型: "",
-      关键动作: "",
-      画面构图: "",
-      台词字幕: "",
-      节奏分析: "",
-    }));
+    return segments.map((seg) => {
+      const row = createEmptyRow();
+      if (/^\d{1,2}:\d{2}/.test(seg.timePoint)) {
+        row.时长 = seg.timePoint;
+      } else if (
+        /^镜头?\d+/.test(seg.timePoint) ||
+        /^\d+[.、]/.test(seg.timePoint)
+      ) {
+        row.镜号 = seg.timePoint.replace(/[.、]$/, "");
+      } else {
+        row.场景 = seg.timePoint;
+      }
+      row.画面 = seg.content;
+      return row;
+    });
   }
 
-  // 如果完全无法解析，返回单行原始内容
   if (content.trim()) {
-    return [
-      {
-        时间点: "全文",
-        场景描述: content,
-        镜头类型: "",
-        关键动作: "",
-        画面构图: "",
-        台词字幕: "",
-        节奏分析: "",
-      },
-    ];
+    const row = createEmptyRow();
+    row.场景 = "全文";
+    row.画面 = content;
+    return [row];
   }
 
   return [];
 };
+
+/**
+ * 解析视频分析文本，尝试从 Markdown 表格中提取数据
+ * 如果没有表格，则按时间点/序号分段解析
+ */
+export const parseVideoAnalysisTable = (
+  content: string,
+): VideoAnalysisRow[] => {
+  const tables = collectMarkdownTables(content);
+  const videoTable =
+    tables.find((table) => isVideoAnalysisTable(table.headerCells)) ??
+    tables.find((table) => !isCharacterProfileTable(table.headerCells));
+
+  if (videoTable) {
+    return parseVideoRowsFromTable(videoTable);
+  }
+
+  return parseVideoRowsFromSegments(content);
+};
+
+export const parseVideoAnalysisResult = (
+  content: string,
+): VideoAnalysisParseResult => ({
+  rows: parseVideoAnalysisTable(content),
+  characterProfiles: parseCharacterProfilesFromText(content),
+});
