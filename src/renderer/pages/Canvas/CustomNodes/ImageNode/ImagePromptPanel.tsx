@@ -9,6 +9,7 @@ import { toChineseNumber } from "shared/utils/utils";
 import { uploadFileToOSS } from "service/oss";
 import { ImageReferenceThumbnails } from "./components/ImageReferenceThumbnails";
 import {
+  AGNES_IMAGE_2_FLASH_MODEL,
   IMAGE_MODELS,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM
@@ -120,6 +121,18 @@ const GPTIMAGE2_RESOLUTION_OPTIONS = [
   { label: "1K", value: "1K", description: "标准" },
   { label: "2K", value: "2K", description: "高清" },
   { label: "4K", value: "4K", description: "超清" },
+];
+const AGNES_IMAGE_SIZE_OPTIONS = [
+  { label: "1:1", value: "1:1", description: "正方形" },
+  { label: "4:3", value: "4:3", description: "横向4:3" },
+  { label: "3:4", value: "3:4", description: "竖向3:4" },
+  { label: "16:9", value: "16:9", description: "横向宽屏" },
+  { label: "9:16", value: "9:16", description: "竖向长图" },
+];
+const AGNES_IMAGE_SIZE_VALUES = toOptionValueSet(AGNES_IMAGE_SIZE_OPTIONS);
+const AGNES_IMAGE_RESOLUTION_VALUES = new Set(["1K"]);
+const AGNES_IMAGE_RESOLUTION_OPTIONS = [
+  { label: "1K", value: "1K", description: "1024px" },
 ];
 const SEEDREAM_SIZE_VALUES = toOptionValueSet(SEEDREAM_ASPECT_RATIOS);
 const SEEDREAM_RESOLUTION_VALUES = toOptionValueSet(SEEDREAM_RESOLUTIONS);
@@ -259,6 +272,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     currentImageData?.platform === NANO_BANANA_LOCAL_PLATFORM;
   // 判断是否为 GPT-Image-2 模型
   const isGptImage2Model = model === "gpt-image-2";
+  const isAgnesImageModel = model === AGNES_IMAGE_2_FLASH_MODEL;
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
   const isLocalGeminiDirectModel =
@@ -308,6 +322,15 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       };
     }
 
+    if (isAgnesImageModel) {
+      return {
+        sizes: AGNES_IMAGE_SIZE_VALUES,
+        resolutions: AGNES_IMAGE_RESOLUTION_VALUES,
+        defaultSize: "1:1",
+        defaultResolution: "1K",
+      };
+    }
+
     if (isMidjourneyModel) {
       return {
         sizes: MIDJOURNEY_SIZE_VALUES,
@@ -320,6 +343,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     isGeminiModel,
     isGeminiPro2Model,
     isGptImage2Model,
+    isAgnesImageModel,
     isMidjourneyModel,
     isLocalGeminiDirectModel,
     isNanoBananaLocalModel,
@@ -1608,6 +1632,23 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               resolution={resolution}
               sizeOptions={GPTIMAGE2_SIZES}
               resolutionOptions={GPTIMAGE2_RESOLUTION_OPTIONS}
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
+            />
+          )}
+
+          {isAgnesImageModel && (
+            <GptImage2ParamsPanel
+              size={size}
+              resolution={resolution}
+              sizeOptions={AGNES_IMAGE_SIZE_OPTIONS}
+              resolutionOptions={AGNES_IMAGE_RESOLUTION_OPTIONS}
               onSizeChange={(value) => {
                 persistImageDefaultPreset({ size: value });
                 updateImageNodeData(nodeId, { size: value });

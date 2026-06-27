@@ -1,4 +1,5 @@
 import {
+  AGNES_IMAGE_2_FLASH_MODEL,
   NANO_BANANA_LOCAL_MODEL,
   RUNNINGHUB_GPT_IMAGE2_MODEL,
   RUNNINGHUB_NANO_BANANA_PRO_MODEL
@@ -12,6 +13,7 @@ export const IMAGE_MODEL_POINTS: Record<string, number> = {
   "midjourney-niji7": 27,
   [RUNNINGHUB_GPT_IMAGE2_MODEL]: 24,
   [RUNNINGHUB_NANO_BANANA_PRO_MODEL]: 24,
+  [AGNES_IMAGE_2_FLASH_MODEL]: 0,
 };
 
 export const IMAGE_PLATFORM_POINTS: Record<string, number> = {

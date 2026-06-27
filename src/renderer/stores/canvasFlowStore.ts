@@ -9,6 +9,7 @@ import {
   saveGeneratedVideoToLocal
 } from "service/projectStorage";
 import {
+  AGNES_IMAGE_2_FLASH_MODEL,
   getVisibleImageModels,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
@@ -88,9 +89,11 @@ import { withVideoPosterFields } from "shared/utils/videoPoster";
 import { toast } from "sonner";
 import { create } from "zustand";
 import {
+  createAgnesImageGeneration,
   createAgnesVideoTask,
   createDashscopeVideoSynthesis,
   createImageGeneration,
+  extractAgnesImageUrls,
   createLzVideoTask,
   fetchMjTask,
   generateGeminiContent,
@@ -647,6 +650,22 @@ const mirrorGeneratedImageUrlToOss = async (url: string) => {
   }
 
   return ossResult.url;
+};
+
+const mirrorGeneratedImageResultToOss = async (url: string) => {
+  const dataUriMatch = url.match(/^data:image\/[a-z0-9.+-]+;base64,(.+)$/i);
+  if (dataUriMatch?.[1]) {
+    const ossResult = await uploadBase64ToOSS(
+      dataUriMatch[1],
+      `generated-image-${Date.now()}`,
+    );
+    if (!ossResult.url) {
+      throw new Error("图片已生成，但转存 OSS 失败，请重试");
+    }
+    return ossResult.url;
+  }
+
+  return mirrorGeneratedImageUrlToOss(url);
 };
 
 const inferImageMimeTypeFromUri = (uri: string): string | undefined => {
@@ -3317,6 +3336,118 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         } else {
           // 非 Midjourney 模型：RunningHub 专属模型走低价->官方回退，其它模型直接走 ToAPI。
           const payloadOriginalModel = payload.originalModel ?? payload.model;
+          if (payloadOriginalModel === AGNES_IMAGE_2_FLASH_MODEL) {
+            set((state) => ({
+              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+                ...data,
+                status: GenerationStatus.IN_PROGRESS,
+                progress: 0,
+              })),
+            }));
+
+            try {
+              const response = await createAgnesImageGeneration(
+                payload,
+                scoreCost,
+              );
+              ledgerBizId = response?.ledgerBizId;
+
+              const resultUrls = extractAgnesImageUrls(response);
+              if (resultUrls.length === 0) {
+                throw new Error("Agnes 图片生成完成，但未返回图片地址");
+              }
+
+              const projectId = get().projectId;
+              const processedResultData = await Promise.all(
+                resultUrls.map(async (resultUrl) => {
+                  const ossUrl = await mirrorGeneratedImageResultToOss(
+                    resultUrl,
+                  );
+                  let resultItem = {
+                    url: ossUrl,
+                    remoteUrl: ossUrl,
+                    ...(ossUrl === resultUrl
+                      ? {}
+                      : { originalUrl: resultUrl }),
+                  } as any;
+
+                  if (projectId) {
+                    try {
+                      const fileName = await saveGeneratedImageToLocal(
+                        projectId,
+                        ossUrl,
+                        extractExtensionFromUrl(resultUrl, "png"),
+                      );
+                      if (fileName) {
+                        resultItem = {
+                          ...resultItem,
+                          localName: fileName,
+                          localPath: getLocalFilePath(
+                            projectId,
+                            "generate_image",
+                            fileName,
+                          ),
+                        };
+                      }
+                    } catch (saveError) {
+                      console.error(
+                        "[startImageGeneration] 保存 Agnes 图片到本地失败:",
+                        saveError,
+                      );
+                    }
+                  }
+
+                  return resultItem;
+                }),
+              );
+
+              set((state) => ({
+                nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+                  const existingData = data.result?.data ?? [];
+                  const mergedData = appendMediaSequences(
+                    existingData,
+                    processedResultData,
+                  );
+                  return {
+                    ...data,
+                    status: GenerationStatus.COMPLETED,
+                    progress: 100,
+                    result: { type: "image", data: mergedData },
+                    error: undefined,
+                  };
+                }),
+              }));
+              saveCurrentCanvasToHistory();
+              if (useChatSettingsStore.getState().autoSaveEnabled) {
+                get().saveGraph();
+              }
+              if (ledgerBizId) {
+                confirmDesktopProxyScore(ledgerBizId, "agnes").catch(() => { });
+              }
+              await refreshBalanceAfterGeneration({
+                scene: "image",
+                nodeId,
+                model: payloadOriginalModel,
+                requiredPoints: payload.requiredPoints,
+              });
+
+              const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
+              if (remaining <= 0) pendingTaskCounts.delete(nodeId);
+              else pendingTaskCounts.set(nodeId, remaining);
+
+              return;
+            } catch (agnesError) {
+              if (ledgerBizId) {
+                refundDesktopProxyScore(
+                  ledgerBizId,
+                  getRequestErrorMessage(agnesError) || "Agnes image failed",
+                  "agnes",
+                ).catch(() => { });
+              }
+              throw agnesError;
+            }
+          }
+
           if (RUNNINGHUB_IMAGE_MODEL_IDS.has(payloadOriginalModel)) {
             // RunningHub 直接生成（可能返回立即地址或 taskId）
             set((state) => ({

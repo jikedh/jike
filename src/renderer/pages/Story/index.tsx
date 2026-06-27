@@ -60,6 +60,7 @@ import {
   storyboardStorage,
 } from "service/storyboardStorage";
 import {
+  AGNES_IMAGE_2_FLASH_MODEL,
   getVisibleImageModels,
   IMAGE_MODELS,
   RUNNINGHUB_GPT_IMAGE2_MODEL,
@@ -72,8 +73,10 @@ import { cn } from "shared/utils/utils";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
 import { toast } from "sonner";
 import {
+  createAgnesImageGeneration,
   createDashscopeVideoSynthesis,
   createImageGeneration,
+  extractAgnesImageUrls,
   createLzVideoTask,
   getDashscopeVideoTaskStatus,
   getImageTaskStatus,
@@ -696,6 +699,20 @@ const STORY_GPTIMAGE2_SIZE_VALUES = toOptionValueSet(GPTIMAGE2_SIZES);
 const STORY_RUNNINGHUB_GPTIMAGE2_SIZE_VALUES = toOptionValueSet(GPTIMAGE2_SIZES);
 const STORY_GPTIMAGE2_RESOLUTION_VALUES = new Set(["1K", "2K", "4K"]);
 const STORY_RUNNINGHUB_GPTIMAGE2_RESOLUTION_VALUES = new Set(["1K", "2K", "4K"]);
+const STORY_AGNES_IMAGE_SIZE_OPTIONS = [
+  { label: "1:1", value: "1:1", description: "正方形" },
+  { label: "4:3", value: "4:3", description: "横向4:3" },
+  { label: "3:4", value: "3:4", description: "竖向3:4" },
+  { label: "16:9", value: "16:9", description: "横向宽屏" },
+  { label: "9:16", value: "9:16", description: "竖向长图" },
+];
+const STORY_AGNES_IMAGE_SIZE_VALUES = toOptionValueSet(
+  STORY_AGNES_IMAGE_SIZE_OPTIONS,
+);
+const STORY_AGNES_IMAGE_RESOLUTION_VALUES = new Set(["1K"]);
+const STORY_AGNES_IMAGE_RESOLUTION_OPTIONS = [
+  { label: "1K", value: "1K", description: "1024px" },
+];
 const STORY_MIDJOURNEY_SIZE_VALUES = toOptionValueSet(MIDJOURNEY_ASPECT_RATIOS);
 
 type StoryImageParamConfig = {
@@ -739,6 +756,15 @@ const getStoryImageParamConfig = (model: string): StoryImageParamConfig => {
       defaultResolution: "2K",
       aspectRatioValues: STORY_NANO_BANANA_LOCAL_SIZE_VALUES,
       resolutionValues: STORY_NANO_BANANA_RESOLUTION_VALUES,
+    };
+  }
+
+  if (model === AGNES_IMAGE_2_FLASH_MODEL) {
+    return {
+      defaultAspectRatio: "1:1",
+      defaultResolution: "1K",
+      aspectRatioValues: STORY_AGNES_IMAGE_SIZE_VALUES,
+      resolutionValues: STORY_AGNES_IMAGE_RESOLUTION_VALUES,
     };
   }
 
@@ -2896,6 +2922,19 @@ const StoryAssetImageParamsControl = ({
       <GeminiParamsPanel
         size={params.aspectRatio}
         resolution={params.resolution || "2K"}
+        onSizeChange={updateAspectRatio}
+        onResolutionChange={updateResolution}
+      />
+    );
+  }
+
+  if (model === AGNES_IMAGE_2_FLASH_MODEL) {
+    return (
+      <GptImage2ParamsPanel
+        size={params.aspectRatio}
+        resolution={params.resolution || "1K"}
+        sizeOptions={STORY_AGNES_IMAGE_SIZE_OPTIONS}
+        resolutionOptions={STORY_AGNES_IMAGE_RESOLUTION_OPTIONS}
         onSizeChange={updateAspectRatio}
         onResolutionChange={updateResolution}
       />
@@ -5192,6 +5231,23 @@ const StoryAgentPage = ({
     aspectRatio: string;
     resolution?: string;
   }) => {
+    if (input.model === AGNES_IMAGE_2_FLASH_MODEL) {
+      const response: any = await createAgnesImageGeneration({
+        model: input.model,
+        prompt: input.prompt,
+        size: input.aspectRatio,
+        resolution: input.resolution,
+        n: 1,
+        image_urls: [],
+        metadata: { resolution: input.resolution },
+      });
+      const imageUrl = extractAgnesImageUrls(response)[0];
+      if (!imageUrl) {
+        throw new Error("Agnes image generation completed but missing url");
+      }
+      return imageUrl;
+    }
+
     const response: any = await createImageGeneration({
       model: input.model,
       prompt: input.prompt,

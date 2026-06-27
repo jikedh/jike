@@ -1,5 +1,7 @@
 import {
+  createAgnesImageGeneration,
   createImageGeneration,
+  extractAgnesImageUrls,
   fetchMjTask,
   generateGeminiContent,
   getImageTaskStatus,
@@ -13,7 +15,10 @@ import { buildMidjourneyPrompt } from "@/pages/Canvas/CustomNodes/ImageNode/util
 import { getImageDimensions } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { useUserStore } from "@/stores/useUserStore";
 import { generateImageUrl } from "service/oss";
-import { getCanvasChatImageModelConfig } from "shared/constants/ai-models";
+import {
+  AGNES_IMAGE_2_FLASH_MODEL,
+  getCanvasChatImageModelConfig,
+} from "shared/constants/ai-models";
 import { getImageGenerationPoints } from "shared/constants/modelPoints";
 import type { NoteGenerationImage } from "shared/types/NoteGeneration";
 import type { GeminiYwResponseBody } from "shared/types/detail/Yunwu/gemini-yw";
@@ -621,9 +626,28 @@ export const generateCanvasChatImages = async ({
   const payload = buildBasePayload(config, normalizedPrompt);
   let images: NoteGenerationImage[] = [];
   let ledgerBizId: string | undefined;
+  const scoreBizType =
+    config.imageModel === AGNES_IMAGE_2_FLASH_MODEL ? "agnes" : "image";
 
   try {
-    if (config.imagePlatform === "google_pro2") {
+    if (config.imageModel === AGNES_IMAGE_2_FLASH_MODEL) {
+      onProgress?.("正在生成 Agnes 图片...");
+      const response: any = await createAgnesImageGeneration(
+        payload,
+        requiredPoints,
+        signal,
+      );
+      ledgerBizId = response?.ledgerBizId;
+      throwIfAborted(signal);
+
+      images = extractAgnesImageUrls(response).map((url) => ({
+        url,
+        previewUrl: getChatImagePreviewUrl(url),
+      }));
+      if (images.length === 0) {
+        throw new Error("Agnes 图片生成完成，但未返回图片地址");
+      }
+    } else if (config.imagePlatform === "google_pro2") {
       onProgress?.("正在生成图片...");
       const result = await generateGeminiPro2Images(
         payload.prompt,
@@ -688,14 +712,14 @@ export const generateCanvasChatImages = async ({
     }
 
     if (ledgerBizId) {
-      await confirmDesktopProxyScore(ledgerBizId, "image");
+      await confirmDesktopProxyScore(ledgerBizId, scoreBizType);
     }
   } catch (error) {
     if (ledgerBizId) {
       await refundDesktopProxyScore(
         ledgerBizId,
         getRequestErrorMessage(error) || "canvas chat image generation failed",
-        "image",
+        scoreBizType,
       ).catch(() => { });
     }
     throw error;

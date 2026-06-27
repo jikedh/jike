@@ -3,6 +3,7 @@ import { jikeingService } from "service/aiRequest";
 import { BailianVideoGenerationRequest } from "shared/types/detail/Bailian/video";
 import { Seedance20Request } from "shared/types/detail/kuaizhi/Seedance-2.0";
 import type { ToApiImageGenerationRequest } from "shared/types/detail/ToApi/images";
+import { AGNES_IMAGE_2_FLASH_MODEL } from "shared/constants/ai-models";
 import { getJikeingToken } from "shared/utils/utils";
 import { aiVideoTrackingService } from "@/services/aiVideoTracking";
 import {
@@ -192,6 +193,76 @@ async function createDesktopChatStream(data: any, signal?: AbortSignal) {
 
 // ===================== 图片生成相关 =====================
 
+const AGNES_IMAGE_SIZE_BY_RATIO: Record<string, string> = {
+  "1:1": "1024x1024",
+  "3:2": "1024x682",
+  "2:3": "682x1024",
+  "4:3": "1024x768",
+  "3:4": "768x1024",
+  "16:9": "1024x576",
+  "9:16": "576x1024",
+  "21:9": "1344x576",
+  "9:21": "576x1344",
+  "2:1": "1024x512",
+  "1:2": "512x1024",
+  "5:4": "1024x819",
+  "4:5": "819x1024",
+};
+
+const getAgnesImageApiBaseUrl = () =>
+  String(
+    (import.meta as any).env?.VITE_AGNES_API_BASE_URL ||
+      "https://apihub.agnes-ai.com",
+  ).replace(/\/+$/, "");
+
+const getAgnesImageApiKey = () =>
+  String((import.meta as any).env?.VITE_AGNES_API_KEY || "").trim();
+
+const normalizeAgnesImageSize = (size: unknown) => {
+  const rawSize = typeof size === "string" ? size.trim() : "";
+  if (/^\d{2,5}x\d{2,5}$/i.test(rawSize)) {
+    return rawSize.toLowerCase();
+  }
+  return AGNES_IMAGE_SIZE_BY_RATIO[rawSize] ?? AGNES_IMAGE_SIZE_BY_RATIO["1:1"];
+};
+
+const normalizeAgnesImageInput = (value: unknown): string[] => {
+  const rawItems = Array.isArray(value) ? value : value ? [value] : [];
+  return rawItems
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean);
+};
+
+export const extractAgnesImageUrls = (response: any): string[] => {
+  const rawItems =
+    response?.data?.data ??
+    response?.result?.data ??
+    response?.data ??
+    response?.images ??
+    response?.imageUrls ??
+    [];
+  const items = Array.isArray(rawItems) ? rawItems : [rawItems];
+
+  return items
+    .map((item: any) => {
+      const candidate =
+        typeof item === "string"
+          ? item
+          : item?.url ?? item?.image_url ?? item?.imageUrl ?? item?.b64_json;
+      if (typeof candidate !== "string") return "";
+      const trimmed = candidate.trim();
+      if (!trimmed) return "";
+      if (trimmed.startsWith("data:image/") || /^https?:\/\//i.test(trimmed)) {
+        return trimmed;
+      }
+      if (/^[a-z0-9+/]+=*$/i.test(trimmed) && trimmed.length > 120) {
+        return `data:image/png;base64,${trimmed}`;
+      }
+      return trimmed;
+    })
+    .filter(Boolean);
+};
+
 // 创建图片生成任务
 export async function createImageGeneration(
   data: ToApiImageGenerationRequest,
@@ -213,6 +284,65 @@ export async function createImageGeneration(
   const rawData = unwrapDesktopProxyData(response);
   const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
   return ledgerBizId ? { ...responseData, ledgerBizId } : responseData;
+}
+
+export async function createAgnesImageGeneration(
+  data: Record<string, any>,
+  scoreCost?: number,
+  signal?: AbortSignal,
+) {
+  void scoreCost;
+
+  const imageUrls = normalizeAgnesImageInput(
+    data.image ?? data.image_urls ?? data.images,
+  );
+  const extraBody: Record<string, any> = {
+    response_format: "url",
+  };
+  const body: Record<string, any> = {
+    model: AGNES_IMAGE_2_FLASH_MODEL,
+    prompt: String(data.prompt ?? ""),
+    size: normalizeAgnesImageSize(data.size),
+    extra_body: extraBody,
+  };
+
+  if (imageUrls.length > 0) {
+    body.image = imageUrls;
+    extraBody.image = imageUrls;
+  }
+
+  const apiKey = getAgnesImageApiKey();
+  if (!apiKey) {
+    throw new Error("缺少 Agnes API Key，请配置 VITE_AGNES_API_KEY");
+  }
+
+  const response = await fetch(`${getAgnesImageApiBaseUrl()}/v1/images/generations`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  const responseText = await response.text();
+  let responseData: any = null;
+  try {
+    responseData = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    responseData = { message: responseText };
+  }
+
+  if (!response.ok) {
+    const message =
+      responseData?.error?.message ||
+      responseData?.message ||
+      `Agnes 图片生成失败（HTTP ${response.status}）`;
+    throw new Error(message);
+  }
+
+  return responseData;
 }
 
 // 获取图片生成任务状态
