@@ -1,8 +1,24 @@
-import { readMediaFromLocal } from "service/projectStorage";
+import { localStorageService } from "service/localStorageService";
 import { getAssetMediaTypeByFileName } from "shared/constants/mediaTypes";
 import type { AssetDiskFileInfo, AssetDiskProjectInfo } from "shared/types/storage";
 import { uploadFileToOSS } from "service/oss";
 import { convertFileSrc } from "@tauri-apps/api/core";
+
+const readMediaFromLocal = async (
+  relativePath: string,
+): Promise<ArrayBuffer | null> => {
+  if (!localStorageService.isAvailable()) return null;
+
+  const readResult = await localStorageService.readMedia(relativePath);
+  if (!readResult.success || !readResult.data) {
+    return null;
+  }
+
+  const rawBytes = new Uint8Array(readResult.data);
+  const copiedBytes = new Uint8Array(rawBytes.length);
+  copiedBytes.set(rawBytes);
+  return copiedBytes.buffer;
+};
 
 export type AssetScope = "project" | "canvas" | "public";
 export type AssetMediaType = "image" | "video" | "audio";

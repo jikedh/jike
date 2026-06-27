@@ -6,7 +6,6 @@ import {
 } from "@tabler/icons-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { generateThumbnailWithFormat, uploadFileToOSS } from "service/oss";
-import { readMediaFromLocal } from "service/projectStorage";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { getMediaSequence } from "shared/utils/mediaSequence";
 import { cn, downloadImageFromUrl } from "shared/utils/utils";
@@ -284,30 +283,21 @@ export const CollapsibleImageGallery = memo(
       async (e: React.MouseEvent, index: number) => {
         e.stopPropagation();
 
-        if (!nodeId || !updateImageNodeData || !images[index]?.localPath) {
+        if (!nodeId || !updateImageNodeData || !images[index]?.url) {
           return;
         }
 
         const item = images[index];
-        if (!item.localPath || !item.localName) {
-          return;
-        }
 
         // 使用 ref 追踪刷新状态，避免频繁 setState
         refreshingIndexesRef.current.add(index);
         forceRefreshUpdate((n) => n + 1);
 
         try {
-          // 读取本地文件
-          const fileBytes = await readMediaFromLocal(item.localPath);
-          if (!fileBytes) {
-            throw new Error("无法获取本地文件路径");
-          }
-
-          // 创建 File 对象
-          const ext = item.localName.split(".").pop() || "png";
-          let file = new File([fileBytes], item.localName, {
-            type: `image/${ext}`,
+          const response = await fetch(item.url);
+          const blob = await response.blob();
+          let file = new File([blob], item.localName || `image-${index}.png`, {
+            type: blob.type || "image/png",
           });
 
           // 检查文件大小，大于10MB时压缩
@@ -429,16 +419,16 @@ export const CollapsibleImageGallery = memo(
                 className={cn(
                   "group/card absolute left-0 top-0 rounded-[14px] transition-[transform,filter,opacity,box-shadow,border-color,width,height] duration-[700ms] ease-[cubic-bezier(0.2,0.85,0.15,1)] will-change-[transform,filter,opacity,width,height]",
                   shouldUseCardChrome &&
-                    "border border-white/8 bg-[#1a1a1a] shadow-[0_10px_30px_rgba(0,0,0,0.28)]",
+                  "border border-white/8 bg-[#1a1a1a] shadow-[0_10px_30px_rgba(0,0,0,0.28)]",
                   isExpanded || isPrimary
                     ? "pointer-events-auto"
                     : "pointer-events-none",
                   isExpanded &&
-                    isSecondary &&
-                    "hover:border-white/14 hover:shadow-[0_18px_36px_rgba(0,0,0,0.34)]",
                   isSecondary &&
-                    isFocused &&
-                    "shadow-[0_24px_48px_rgba(0,0,0,0.38)]",
+                  "hover:border-white/14 hover:shadow-[0_18px_36px_rgba(0,0,0,0.34)]",
+                  isSecondary &&
+                  isFocused &&
+                  "shadow-[0_24px_48px_rgba(0,0,0,0.38)]",
                 )}
                 onMouseEnter={() => {
                   if (isExpanded) {
@@ -461,11 +451,11 @@ export const CollapsibleImageGallery = memo(
                       : cardHeight,
                   ...(isExpanded && isPrimary
                     ? {
-                        transform: "translate(0px, 0px) scale(1)",
-                        filter: "brightness(1)",
-                        opacity: 1,
-                        zIndex: totalCount + 6,
-                      }
+                      transform: "translate(0px, 0px) scale(1)",
+                      filter: "brightness(1)",
+                      opacity: 1,
+                      zIndex: totalCount + 6,
+                    }
                     : stackStyle),
                   transitionDelay,
                   zIndex:
@@ -513,8 +503,8 @@ export const CollapsibleImageGallery = memo(
                     className={cn(
                       "pointer-events-none absolute inset-0 rounded-[13px] ring-0 transition-all duration-200",
                       isSecondary &&
-                        isFocused &&
-                        "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]",
+                      isFocused &&
+                      "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]",
                     )}
                   />
 

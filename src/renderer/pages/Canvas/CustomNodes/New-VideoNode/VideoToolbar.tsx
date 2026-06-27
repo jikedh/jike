@@ -15,7 +15,6 @@ import {
 import type { ChangeEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
-import { readMediaFromLocal } from "service/projectStorage";
 import { GenerationStatus } from "shared/constants/enum";
 import { normalizeRequiredPoints } from "shared/constants/points";
 import type { NewVideoGenerationNode } from "shared/types/flow";
@@ -1015,31 +1014,8 @@ export const VideoToolbar = ({
 
     const urls = await Promise.all(
       videoItems.map(async (item) => {
-        if (!item.localPath) {
-          return item.displayUrl || item.remoteUrl || item.url || "";
-        }
-
-        try {
-          const bytes = await readMediaFromLocal(item.localPath);
-          if (!bytes) {
-            return item.displayUrl || item.remoteUrl || item.url || "";
-          }
-
-          const ext = (item.localName || item.localPath)
-            .split("?")[0]
-            .split(".")
-            .pop();
-          const objectUrl = URL.createObjectURL(
-            new Blob([bytes], {
-              type: `video/${ext || item.format || "mp4"}`,
-            }),
-          );
-          previewObjectUrlsRef.current.push(objectUrl);
-          return objectUrl;
-        } catch (error) {
-          console.warn("[视频预览] 读取本地视频失败，使用远程地址:", error);
-          return item.displayUrl || item.remoteUrl || item.url || "";
-        }
+        void item.localPath;
+        return item.displayUrl || item.remoteUrl || item.url || "";
       }),
     );
 

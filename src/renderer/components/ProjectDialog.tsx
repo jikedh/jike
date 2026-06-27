@@ -1,21 +1,15 @@
-import { X as CloseIcon, Upload, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import {
-  createProject,
-  loadProjectCoverObjectUrl,
-  type ProjectMeta,
-  renameProject,
-  saveCoverImageToLocal,
-  updateProject,
-} from "service/projectStorage";
+import { X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { createProject, updateProject } from "@/api/projects";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useUserStore } from "@/stores/useUserStore";
+import type { ProjectListItem, ProjectType } from "shared/types/api/projects";
 
 interface ProjectDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  project?: ProjectMeta | null;
+  project?: ProjectListItem | null;
   onSuccess?: (projectId: string) => void;
 }
 
@@ -30,52 +24,18 @@ export default function ProjectDialog({
   const [name, setName] = useState("");
   const [coverUrl, setCoverUrl] = useState("");
   const [description, setDescription] = useState("");
-  const [type, setType] = useState<"video" | "script">("video");
-  const [coverPreview, setCoverPreview] = useState("");
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const coverFileInputRef = useRef<HTMLInputElement>(null);
-  const loadedCoverObjectUrlRef = useRef<string | null>(null);
+  const [type, setType] = useState<ProjectType>("video");
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
-
-    if (loadedCoverObjectUrlRef.current) {
-      URL.revokeObjectURL(loadedCoverObjectUrlRef.current);
-      loadedCoverObjectUrlRef.current = null;
-    }
-
     if (project) {
       setName(project.name);
       setDescription(project.description || "");
       setType(project.type);
-      setCoverPreview("");
-      setCoverFile(null);
-
-      loadProjectCoverObjectUrl(project).then((localCover) => {
-        if (!isMounted) {
-          if (localCover?.startsWith("blob:")) {
-            URL.revokeObjectURL(localCover);
-          }
-          return;
-        }
-
-        if (localCover?.startsWith("blob:")) {
-          loadedCoverObjectUrlRef.current = localCover;
-        }
-        setCoverUrl(localCover || project.coverUrl || "");
-      });
+      setCoverUrl(project.cover_url || project.coverUrl || "");
     } else {
       resetFormState();
     }
-
-    return () => {
-      isMounted = false;
-      if (loadedCoverObjectUrlRef.current) {
-        URL.revokeObjectURL(loadedCoverObjectUrlRef.current);
-        loadedCoverObjectUrlRef.current = null;
-      }
-    };
   }, [project, isOpen]);
 
   const resetFormState = () => {
@@ -83,30 +43,7 @@ export default function ProjectDialog({
     setCoverUrl("");
     setDescription("");
     setType("video");
-    setCoverPreview("");
-    setCoverFile(null);
     setIsProcessing(false);
-    if (coverFileInputRef.current) {
-      coverFileInputRef.current.value = "";
-    }
-  };
-
-  const handleCoverFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const previewUrl = URL.createObjectURL(file);
-      setCoverPreview(previewUrl);
-      setCoverFile(file);
-    }
-  };
-
-  const handleRemoveCover = () => {
-    setCoverPreview("");
-    setCoverFile(null);
-    setCoverUrl("");
-    if (coverFileInputRef.current) {
-      coverFileInputRef.current.value = "";
-    }
   };
 
   const handleConfirm = async () => {
@@ -129,52 +66,37 @@ export default function ProjectDialog({
     setIsProcessing(true);
 
     try {
-      let resultId = "";
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        toast.error("请输入项目名称");
+        setIsProcessing(false);
+        return;
+      }
 
       if (isEdit && project) {
-        const nameChanged = name !== project.name && name.trim() !== "";
-
-        if (nameChanged) {
-          const renameSuccess = await renameProject(project.id, name.trim());
-          if (!renameSuccess) {
-            console.error("Failed to rename project folder");
-            setIsProcessing(false);
-            return;
-          }
-        }
-
-        if (coverFile) {
-          const arrayBuffer = await coverFile.arrayBuffer();
-          await saveCoverImageToLocal(project.id, arrayBuffer);
-        }
-
-        updateProject(project.id, {
-          name: name.trim(),
+        const result = await updateProject(project.id, {
+          name: trimmedName,
           description: description || undefined,
-        });
-
-        resultId = project.id;
-      } else {
-        const newProject = await createProject(
-          name || undefined,
-          undefined,
-          description || undefined,
           type,
-        );
-
-        if (coverFile) {
-          const arrayBuffer = await coverFile.arrayBuffer();
-          await saveCoverImageToLocal(newProject.id, arrayBuffer);
-        }
-
-        resultId = newProject.id;
+          cover_url: coverUrl || undefined,
+          cover_source: coverUrl ? "manual" : undefined,
+        });
+        onSuccess?.(String(result.data.id));
+      } else {
+        const result = await createProject({
+          name: trimmedName,
+          description: description || undefined,
+          type,
+          cover_url: coverUrl || undefined,
+        });
+        onSuccess?.(String(result.data.id));
       }
 
       setIsProcessing(false);
-      onSuccess?.(resultId);
       handleClose();
     } catch (error) {
       console.error("Failed to save project:", error);
+      toast.error(isEdit ? "保存项目失败" : "创建项目失败");
       setIsProcessing(false);
     }
   };
@@ -214,54 +136,22 @@ export default function ProjectDialog({
 
           <div>
             <label className="text-sm font-medium text-white/70 block mb-2">
-              封面图
+              封面图 URL
             </label>
+            {coverUrl && (
+              <img
+                src={coverUrl}
+                alt="封面预览"
+                className="mb-3 h-32 w-full rounded-lg border border-white/10 object-cover"
+              />
+            )}
             <input
-              ref={coverFileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleCoverFileSelect}
-              className="hidden"
+              type="url"
+              value={coverUrl}
+              onChange={(e) => setCoverUrl(e.target.value)}
+              placeholder="输入远程封面图地址"
+              className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-[#B43FEB] focus:ring-1 focus:ring-[#B43FEB] outline-none transition-all"
             />
-
-            {(coverPreview || coverUrl) && (
-              <div className="relative group mb-3">
-                <img
-                  src={coverPreview || coverUrl}
-                  alt="封面预览"
-                  className="w-full h-32 object-cover rounded-lg border border-white/10"
-                />
-                <button
-                  onClick={handleRemoveCover}
-                  className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 text-white/80 hover:bg-black/80 flex items-center justify-center cursor-pointer"
-                >
-                  <CloseIcon size={14} />
-                </button>
-              </div>
-            )}
-
-            {!coverPreview && !coverUrl && (
-              <button
-                type="button"
-                onClick={() => coverFileInputRef.current?.click()}
-                className="w-full h-32 border-2 border-dashed border-white/10 rounded-lg bg-black/30 flex flex-col items-center justify-center text-white/40 hover:text-white/70 hover:border-[#B43FEB]/50 hover:bg-[#B43FEB]/5 transition-all cursor-pointer group"
-              >
-                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-2 group-hover:bg-[#B43FEB]/20 group-hover:text-[#B43FEB] transition-colors">
-                  <Upload size={20} />
-                </div>
-                <span className="text-xs">点击或拖拽上传封面图</span>
-              </button>
-            )}
-
-            {(coverPreview || coverUrl) && (
-              <button
-                type="button"
-                onClick={() => coverFileInputRef.current?.click()}
-                className="w-full mt-2 px-4 py-2.5 bg-black/50 border border-white/10 rounded-lg text-white/60 hover:border-[#B43FEB] hover:text-[#B43FEB] transition-all text-sm cursor-pointer"
-              >
-                更换封面
-              </button>
-            )}
           </div>
 
           <div>

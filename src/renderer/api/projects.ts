@@ -4,15 +4,13 @@
 import { jikeingService } from "service/aiRequest";
 import {
   BatchDeleteProjectsRequest,
-  CanvasResponse,
+  ApiId,
   ClearCanvasRequest,
   CreateProjectRequest,
   CreateProjectResponse,
   DuplicateProjectRequest,
-  ExportProjectData,
   ImportProjectRequest,
   PatchCanvasNodeRequest,
-  ProjectDetail,
   ProjectListParams,
   ProjectListResponse,
   SaveCanvasRequest,
@@ -59,7 +57,7 @@ export function createProject(
  * 获取项目详情
  * GET /v1/projects/:id
  */
-export function getProjectDetail(id: number): Promise<CreateProjectResponse> {
+export function getProjectDetail(id: ApiId): Promise<CreateProjectResponse> {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: `/v1/projects/${id}`,
@@ -72,7 +70,7 @@ export function getProjectDetail(id: number): Promise<CreateProjectResponse> {
  * PATCH /v1/projects/:id
  */
 export function updateProject(
-  id: number,
+  id: ApiId,
   data: UpdateProjectRequest,
 ): Promise<UpdateProjectResponse> {
   return jikeingService({
@@ -87,7 +85,7 @@ export function updateProject(
  * 删除项目（软删除）
  * DELETE /v1/projects/:id
  */
-export function deleteProject(id: number): Promise<any> {
+export function deleteProject(id: ApiId): Promise<any> {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: `/v1/projects/${id}`,
@@ -132,7 +130,7 @@ export function searchProjects(
  * POST /v1/projects/:id/duplicate
  */
 export function duplicateProject(
-  id: number,
+  id: ApiId,
   data?: DuplicateProjectRequest,
 ): Promise<CreateProjectResponse> {
   return jikeingService({
@@ -147,7 +145,7 @@ export function duplicateProject(
  * 导出项目
  * GET /v1/projects/:id/export
  */
-export function exportProject(id: number): Promise<ExportProjectData> {
+export function exportProject(id: ApiId): Promise<any> {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: `/v1/projects/${id}/export`,
@@ -176,7 +174,7 @@ export function importProject(
  * 加载画布
  * GET /v1/projects/:id/canvas
  */
-export function getCanvas(projectId: number): Promise<CanvasResponse> {
+export function getCanvas(projectId: ApiId): Promise<any> {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: `/v1/projects/${projectId}/canvas`,
@@ -189,7 +187,7 @@ export function getCanvas(projectId: number): Promise<CanvasResponse> {
  * PUT /v1/projects/:id/canvas
  */
 export function saveCanvas(
-  projectId: number,
+  projectId: ApiId,
   data: SaveCanvasRequest,
 ): Promise<any> {
   return jikeingService({
@@ -205,7 +203,7 @@ export function saveCanvas(
  * DELETE /v1/projects/:id/canvas
  */
 export function clearCanvas(
-  projectId: number,
+  projectId: ApiId,
   data?: ClearCanvasRequest,
 ): Promise<any> {
   return jikeingService({
@@ -221,7 +219,7 @@ export function clearCanvas(
  * PATCH /v1/projects/:id/canvas/nodes/:nodeId
  */
 export function patchCanvasNode(
-  projectId: number,
+  projectId: ApiId,
   nodeId: string,
   data: PatchCanvasNodeRequest,
 ): Promise<any> {

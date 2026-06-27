@@ -5,7 +5,6 @@ import {
 } from "@tabler/icons-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
-import { readMediaFromLocal } from "service/projectStorage";
 import { getMediaSequence } from "shared/utils/mediaSequence";
 import { cn } from "shared/utils/utils";
 import {
@@ -248,52 +247,8 @@ export const CollapsibleVideoGallery = memo(
         });
       };
 
-      const loadLocalVideo = async (item: VideoItem, videoKey: string) => {
-        try {
-          const bytes = await readMediaFromLocal(item.localPath as string);
-          if (!bytes || cancelled) {
-            if (!bytes) {
-              setLocalVideoFallbackKeys((prev) => ({
-                ...prev,
-                [videoKey]: true,
-              }));
-            }
-            return;
-          }
-
-          const ext = (item.localName || item.localPath)
-            .split("?")[0]
-            .split(".")
-            .pop();
-          const objectUrl = URL.createObjectURL(
-            new Blob([bytes], {
-              type: `video/${ext || item.format || "mp4"}`,
-            }),
-          );
-
-          if (cancelled) {
-            URL.revokeObjectURL(objectUrl);
-            return;
-          }
-
-          const previousUrl = localVideoObjectUrlsRef.current[videoKey];
-          if (previousUrl) {
-            URL.revokeObjectURL(previousUrl);
-          }
-          localVideoObjectUrlsRef.current[videoKey] = objectUrl;
-          setLocalVideoUrls((prev) => ({
-            ...prev,
-            [videoKey]: objectUrl,
-          }));
-        } catch (error) {
-          console.warn("[视频本地播放] 读取本地视频失败:", error);
-          if (!cancelled) {
-            setLocalVideoFallbackKeys((prev) => ({
-              ...prev,
-              [videoKey]: true,
-            }));
-          }
-        }
+      const loadLocalVideo = async (_item: VideoItem, videoKey: string) => {
+        setLocalVideoFallbackKeys((prev) => ({ ...prev, [videoKey]: true }));
       };
 
       videos.forEach((item, index) => {
@@ -364,27 +319,19 @@ export const CollapsibleVideoGallery = memo(
       async (e: React.MouseEvent, index: number) => {
         e.stopPropagation();
 
-        if (!nodeId || !updateNewVideoNodeData || !videos[index]?.localPath) {
+        if (!nodeId || !updateNewVideoNodeData || !videos[index]?.url) {
           return;
         }
 
         const item = videos[index];
-        if (!item.localPath || !item.localName) {
-          return;
-        }
-
         refreshingIndexesRef.current.add(index);
         forceRefreshUpdate((n) => n + 1);
 
         try {
-          const fileBytes = await readMediaFromLocal(item.localPath);
-          if (!fileBytes) {
-            throw new Error("无法获取本地文件路径");
-          }
-
-          const ext = item.localName.split(".").pop() || "mp4";
-          const file = new File([fileBytes], item.localName, {
-            type: `video/${ext}`,
+          const response = await fetch(item.url);
+          const blob = await response.blob();
+          const file = new File([blob], item.localName || `video-${index}.mp4`, {
+            type: blob.type || "video/mp4",
           });
 
           const ossResult = await uploadFileToOSS(file);

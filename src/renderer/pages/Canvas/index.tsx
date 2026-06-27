@@ -3,7 +3,6 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { readMediaFromLocal } from "service/projectStorage";
 import type { AllNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
 import { CinematicProjectLoader } from "@/components/CinematicProjectLoader";
@@ -28,20 +27,6 @@ const waitForAnimationFrame = () =>
     });
   });
 
-const getImageMimeType = (url: string) => {
-  const cleanUrl = url.split("?")[0].toLowerCase();
-  if (cleanUrl.endsWith(".jpg") || cleanUrl.endsWith(".jpeg")) {
-    return "image/jpeg";
-  }
-  if (cleanUrl.endsWith(".webp")) {
-    return "image/webp";
-  }
-  if (cleanUrl.endsWith(".gif")) {
-    return "image/gif";
-  }
-  return "image/png";
-};
-
 const waitForImage = (url: string) =>
   new Promise<void>((resolve) => {
     const image = new Image();
@@ -52,7 +37,7 @@ const waitForImage = (url: string) =>
   });
 
 const getCanvasPreviewImages = (nodes: AllNodeType[]) => {
-  const images: Array<{ url: string; localPath?: string }> = [];
+  const images: string[] = [];
 
   for (const node of nodes) {
     if (node.type !== "imageNode") {
@@ -62,7 +47,7 @@ const getCanvasPreviewImages = (nodes: AllNodeType[]) => {
     const firstImage = node.data?.result?.data?.find((item) => item?.url);
     const url = firstImage?.displayUrl || firstImage?.url || firstImage?.remoteUrl;
     if (url) {
-      images.push({ url, localPath: firstImage?.localPath });
+      images.push(url);
     }
 
     if (images.length >= PRELOAD_IMAGE_LIMIT) {
@@ -73,27 +58,7 @@ const getCanvasPreviewImages = (nodes: AllNodeType[]) => {
   return images;
 };
 
-const waitForCanvasPreviewImage = async (image: {
-  url: string;
-  localPath?: string;
-}) => {
-  if (image.localPath) {
-    const bytes = await readMediaFromLocal(image.localPath);
-    if (bytes) {
-      const blobUrl = URL.createObjectURL(
-        new Blob([bytes], { type: getImageMimeType(image.localPath) }),
-      );
-      try {
-        await waitForImage(blobUrl);
-      } finally {
-        URL.revokeObjectURL(blobUrl);
-      }
-      return;
-    }
-  }
-
-  await waitForImage(image.url);
-};
+const waitForCanvasPreviewImage = (url: string) => waitForImage(url);
 
 // 外部组件 - 提供 ReactFlowProvider 和工具栏
 const CanvasPage = () => {

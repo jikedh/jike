@@ -19,7 +19,6 @@ import {
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM
 } from "shared/constants/ai-models";
-import { setProjectCoverFromMediaRef } from "service/projectStorage";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageNodeType } from "shared/types/flow";
 import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
@@ -36,6 +35,7 @@ import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { NodeNameBadge } from "../shared/NodeNameBadge";
 import { saveToolMediaFileToProject } from "../utils/localMedia";
+import { updateProject } from "@/api/projects";
 import { ImageAnnotationWorkspace } from "./ImageAnnotationWorkspace";
 import { ImageContent } from "./ImageContent";
 import { ImageGridCropDialog } from "./ImageGridCropDialog";
@@ -301,15 +301,17 @@ export const ImageNode = memo(
       }
 
       try {
-        const savedCoverName = await setProjectCoverFromMediaRef(
-          projectId,
-          primaryImage,
-        );
+        const coverUrl = getRemoteMediaUrl(primaryImage) || primaryImage.url;
 
-        if (!savedCoverName) {
+        if (!coverUrl) {
           toast.error("封面图设置失败");
           return;
         }
+
+        await updateProject(projectId, {
+          cover_url: coverUrl,
+          cover_source: "manual",
+        });
 
         toast.success("已设置为项目封面图");
       } catch (error) {
