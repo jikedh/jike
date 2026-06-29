@@ -2,6 +2,7 @@ import { memo } from "react";
 import { GenerationStatus } from "shared/constants/enum";
 import type { ImageGenerationNode } from "shared/types/flow";
 import { assignMissingMediaSequences } from "shared/utils/mediaSequence";
+import { GenerationErrorTooltip } from "../shared/GenerationErrorTooltip";
 import { CollapsibleImageGallery } from "./CollapsibleImageGallery";
 
 type ImageContentProps = {
@@ -62,9 +63,10 @@ export const ImageContent = memo(
           <div className="text-sm font-medium text-destructive mb-2">
             生成失败
           </div>
-          <div className="text-xs text-muted-foreground mb-3 line-clamp-3 max-w-full px-2">
-            {displayMessage}
-          </div>
+          <GenerationErrorTooltip
+            message={displayMessage}
+            className="mb-3 w-full"
+          />
           {onRetry && (
             <button
               type="button"

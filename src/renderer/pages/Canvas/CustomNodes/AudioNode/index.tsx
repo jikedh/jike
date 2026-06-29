@@ -27,6 +27,7 @@ import { useNodeScale } from "@/hooks/useNodeScale";
 import { dispatchCreateAssetFromNode } from "@/pages/Canvas/components/CanvasSidebar";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { GenerationErrorTooltip } from "../shared/GenerationErrorTooltip";
 import { NodeNameBadge } from "../shared/NodeNameBadge";
 
 const formatTime = (time: number) => {
@@ -315,12 +316,12 @@ const AudioContent = memo(
     }
 
     if (status === GenerationStatus.FAILED) {
+      const displayMessage = data.error?.message || "生成失败";
+
       return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-3">
           <IconMusic size={48} className="text-red-400/50" />
-          <div className="text-sm text-red-400">
-            {data.error?.message || "生成失败"}
-          </div>
+          <GenerationErrorTooltip message={displayMessage} />
         </div>
       );
     }
