@@ -291,13 +291,13 @@ export const VIDEO_GENERATION_MODES = [
 
 /**
  * 画布聊天模型配置.
- * 说明：当前只开放 deepseek-v3.2，后续新增模型仅需追加配置项.
+ * 说明：当前只开放 deepseek-v4-flash，后续新增模型仅需追加配置项.
  */
 export const CANVAS_CHAT_MODELS = [
   {
     id: 1001,
-    name: "DeepSeek v3.2",
-    model: "deepseek-v3.2",
+    name: "deepseek-v4-flash",
+    model: "deepseek-v4-flash",
     platform: "deepseek",
     platformId: 17,
   },

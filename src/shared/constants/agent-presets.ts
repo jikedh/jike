@@ -9,7 +9,7 @@ export const AGENT_PRESETS: Record<
   [DEFAULT_AGENT_PRESET_ID]: {
     id: DEFAULT_AGENT_PRESET_ID,
     label: "智能体",
-    model: "deepseek-v3.2",
+    model: "deepseek-v4-flash",
     systemPrompt: "",
   },
 };
