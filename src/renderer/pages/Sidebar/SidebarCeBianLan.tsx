@@ -87,37 +87,37 @@ export const SidebarCeBianLan = () => {
       label: "项目",
       path: "/canvas",
     },
-    {
-      id: "script",
-      icon: <Type size={24} />,
-      label: "剧本",
-      path: "/script",
-    },
+    // {
+    //   id: "script",
+    //   icon: <Type size={24} />,
+    //   label: "剧本",
+    //   path: "/script",
+    // },
     {
       id: "story",
       icon: <BookOpenText size={24} />,
       label: "故事创作",
       path: "/story",
     },
-    {
-      id: "assets",
-      icon: <Folder size={24} />,
-      label: "资产库",
-      path: "/assets",
-    },
-    {
-      id: "voice",
-      icon: <Mic size={24} />,
-      label: "配音工作室",
-      path: "/voice",
-    },
+    // {
+    //   id: "assets",
+    //   icon: <Folder size={24} />,
+    //   label: "资产库",
+    //   path: "/assets",
+    // },
+    // {
+    //   id: "voice",
+    //   icon: <Mic size={24} />,
+    //   label: "配音工作室",
+    //   path: "/voice",
+    // },
     /* 暂时隐藏短片合成入口，后续恢复时取消注释即可。 */
-    {
-      id: "video",
-      icon: <Film size={24} />,
-      label: "短片合成",
-      path: "/video",
-    },
+    // {
+    //   id: "video",
+    //   icon: <Film size={24} />,
+    //   label: "短片合成",
+    //   path: "/video",
+    // },
   ];
 
   return (
