@@ -7,6 +7,7 @@
 mod commands;
 mod domain;
 mod models;
+mod tray;
 
 use tauri::Manager;
 
@@ -15,6 +16,7 @@ pub fn run() {
     let _ = env_logger::try_init();
 
     tauri::Builder::default()
+        .manage(tray::AppLifecycle::new())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
@@ -27,6 +29,8 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            tray::setup_tray(app)?;
+
             // 启动时最大化（保持与原 Electron 一致）
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.maximize();
@@ -37,7 +41,8 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // 关闭窗口时不退出，仅隐藏（与原 Electron window-all-closed 行为一致）
-                if window.label() == "main" {
+                let lifecycle = window.state::<tray::AppLifecycle>();
+                if window.label() == "main" && !lifecycle.is_exiting() {
                     let _ = window.hide();
                     api.prevent_close();
                 }
