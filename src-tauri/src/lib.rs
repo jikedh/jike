@@ -83,6 +83,7 @@ pub fn run() {
             commands::download_image_as_buffer,
             commands::download_image_as_base64,
             commands::download_image_to_file,
+            commands::download_image_with_save_dialog,
             commands::notification_show,
             commands::notification_is_supported,
             commands::tracking_send,
