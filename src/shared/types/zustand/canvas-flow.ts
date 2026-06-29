@@ -91,6 +91,7 @@ export type AddNodeOptions = {
   tableTitle?: string;
   tableColumns?: string[];
   tableRows?: unknown[];
+  tableCharacterProfiles?: unknown[];
 };
 
 /**

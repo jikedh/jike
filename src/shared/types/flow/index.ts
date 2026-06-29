@@ -307,13 +307,18 @@ export interface CharacterTableRow {
  * 视频分析表格行数据
  */
 export interface VideoAnalysisTableRow {
-  时间点: string;
-  场景描述: string;
-  镜头类型: string;
-  关键动作: string;
-  画面构图: string;
-  台词字幕: string;
-  节奏分析: string;
+  场景: string;
+  时长: string;
+  镜号: string;
+  景别: string;
+  画面: string;
+  角度: string;
+  运动: string;
+  主体动作: string;
+  信息点: string;
+  声画关系: string;
+  技参: string;
+  转场: string;
 }
 
 /**
@@ -324,6 +329,7 @@ export interface TableNodeData {
   title: string;
   columns: string[];
   rows: any[];
+  characterProfiles?: unknown[];
   createdAt?: number;
   [key: string]: any;
 }
