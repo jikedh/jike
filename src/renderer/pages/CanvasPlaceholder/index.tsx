@@ -35,6 +35,42 @@ import type { ProjectListItem } from "shared/types/api/projects";
 
 const SHARE_UUID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
+const escapeRegExp = (value: string) => {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
+const getImportedProjectName = (
+  rawName: string,
+  existingProjects: ProjectListItem[],
+) => {
+  const baseName = rawName.trim() || "导入项目";
+  const existingNames = new Set(existingProjects.map((project) => project.name));
+
+  if (baseName.toLowerCase() !== "canvas" && !existingNames.has(baseName)) {
+    return baseName;
+  }
+
+  const namePattern = new RegExp(`^${escapeRegExp(baseName)}(\\d+)$`);
+  let maxIndex = 0;
+
+  existingNames.forEach((name) => {
+    const match = name.match(namePattern);
+    if (match) {
+      maxIndex = Math.max(maxIndex, Number(match[1]));
+    }
+  });
+
+  let nextIndex = maxIndex + 1;
+  let nextName = `${baseName}${nextIndex}`;
+
+  while (existingNames.has(nextName)) {
+    nextIndex += 1;
+    nextName = `${baseName}${nextIndex}`;
+  }
+
+  return nextName;
+};
+
 export default function CanvasPlaceholderPage() {
   const navigate = useNavigate();
   const importFileInputRef = useRef<HTMLInputElement>(null);
@@ -197,9 +233,16 @@ export default function CanvasPlaceholderPage() {
       const parsed = JSON.parse(raw);
       const sourceProject = parsed.project || {};
       const sourceCanvas = parsed.canvas || parsed;
+      const latestProjectResult = await getProjectList({ page: 1, page_size: 100 });
+      const rawProjectName =
+        sourceProject.name || file.name.replace(/\.json$/i, "") || "导入项目";
+      const importedProjectName = getImportedProjectName(
+        rawProjectName,
+        latestProjectResult.data.list,
+      );
 
       const result = await importProject({
-        name: sourceProject.name || file.name.replace(/\.json$/i, "") || "导入项目",
+        name: importedProjectName,
         description: sourceProject.description || "",
         type: sourceProject.type || "video",
         cover_url: sourceProject.cover_url || sourceProject.coverUrl || "",
