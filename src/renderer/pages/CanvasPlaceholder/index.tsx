@@ -18,16 +18,20 @@ import {
   Trash2,
   FileText,
   Loader2,
+  Share2,
 } from "lucide-react";
 import {
   deleteProject,
   exportProject,
   getProjectList,
   importProject,
+  shareProject,
 } from "@/api/projects";
 import { toast } from "sonner";
 import ProjectDialog from "@/components/ProjectDialog";
 import type { ProjectListItem } from "shared/types/api/projects";
+
+const SHARE_UUID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 export default function CanvasPlaceholderPage() {
   const navigate = useNavigate();
@@ -39,8 +43,14 @@ export default function CanvasPlaceholderPage() {
     null,
   );
   const [projectToEdit, setProjectToEdit] = useState<ProjectListItem | null>(null);
+  const [projectToShare, setProjectToShare] = useState<ProjectListItem | null>(
+    null,
+  );
   const [isDeleting, setIsDeleting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [targetUuid, setTargetUuid] = useState("");
+  const [shareError, setShareError] = useState("");
   const [exportingProjectId, setExportingProjectId] = useState<string | null>(
     null,
   );
@@ -85,6 +95,53 @@ export default function CanvasPlaceholderPage() {
     e.stopPropagation();
     setProjectToDelete(project);
     setIsDeleteDialogOpen(true);
+  };
+
+  const openShareDialog = (e: React.MouseEvent, project: ProjectListItem) => {
+    e.stopPropagation();
+    setProjectToShare(project);
+    setTargetUuid("");
+    setShareError("");
+  };
+
+  const closeShareDialog = () => {
+    if (isSharing) return;
+    setProjectToShare(null);
+    setTargetUuid("");
+    setShareError("");
+  };
+
+  const handleConfirmShare = async () => {
+    if (!projectToShare) return;
+
+    const uuid = targetUuid.trim();
+    if (!uuid) {
+      setShareError("请输入要分享的用户 UUID");
+      return;
+    }
+    if (!SHARE_UUID_PATTERN.test(uuid)) {
+      setShareError("UUID 仅支持 1-64 位字母、数字、下划线或短横线");
+      return;
+    }
+
+    setIsSharing(true);
+    setShareError("");
+    try {
+      const result = await shareProject(projectToShare.id, {
+        target_uuid: uuid,
+      });
+      toast.success("分享成功", {
+        description: `已为目标用户创建项目「${result.data.name}」`,
+      });
+      setProjectToShare(null);
+      setTargetUuid("");
+    } catch (error: any) {
+      console.error("Failed to share project:", error);
+      setShareError(error?.response?.data?.msg || "分享项目失败，请稍后重试");
+      toast.error("分享项目失败");
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   // 确认删除项目
@@ -263,7 +320,7 @@ export default function CanvasPlaceholderPage() {
                       className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/5 to-white/[0.02]">
+                    <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-white/5 to-white/2">
                       <FileText className="w-12 h-12 text-white/20 group-hover:text-[#B43FEB]/50 transition-colors" />
                     </div>
                   );
@@ -322,7 +379,14 @@ export default function CanvasPlaceholderPage() {
                     </span>
                   </div>
                 </div>
-                <div className="mt-3 flex justify-end">
+                <div className="mt-3 flex justify-end gap-2">
+                  <button
+                    onClick={(e) => openShareDialog(e, project)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/25 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:border-[#B43FEB]/40 hover:text-[#d8b6ff] hover:bg-[#B43FEB]/10 cursor-pointer"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    分享
+                  </button>
                   <button
                     onClick={(e) => handleExportProject(e, project)}
                     disabled={exportingProjectId === String(project.id)}
@@ -357,6 +421,85 @@ export default function CanvasPlaceholderPage() {
         onChange={handleImportProjectFile}
         className="hidden"
       />
+
+      {/* 分享项目弹窗 */}
+      {projectToShare && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#121214] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-5 border-b border-white/5">
+              <div>
+                <h2 className="text-lg font-semibold text-white/90">分享项目</h2>
+                <p className="mt-1 text-xs text-white/45">
+                  将为目标用户复制一份独立的项目和画布数据。
+                </p>
+              </div>
+              <button
+                onClick={closeShareDialog}
+                disabled={isSharing}
+                className="text-white/50 hover:text-white transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="rounded-xl border border-[#B43FEB]/20 bg-[#B43FEB]/10 px-4 py-3">
+                <p className="text-sm text-white/70">
+                  当前项目：
+                  <span className="font-medium text-white">
+                    「{projectToShare.name}」
+                  </span>
+                </p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-white/70 block mb-2">
+                  目标用户 UUID
+                </label>
+                <input
+                  type="text"
+                  value={targetUuid}
+                  onChange={(e) => {
+                    setTargetUuid(e.target.value);
+                    if (shareError) setShareError("");
+                  }}
+                  placeholder="输入要分享给的用户 UUID"
+                  disabled={isSharing}
+                  className={`w-full bg-black/50 border rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:ring-1 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed ${shareError
+                    ? "border-red-500/60 focus:border-red-500 focus:ring-red-500"
+                    : "border-white/10 focus:border-[#B43FEB] focus:ring-[#B43FEB]"
+                    }`}
+                />
+                {shareError ? (
+                  <p className="mt-2 text-xs text-red-400">{shareError}</p>
+                ) : (
+                  <p className="mt-2 text-xs text-white/40">
+                    UUID 为目标用户个人中心头像点击之后出现的12 位字符串。
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 p-5 border-t border-white/5 bg-black/20">
+              <button
+                onClick={closeShareDialog}
+                disabled={isSharing}
+                className="px-5 py-2.5 rounded-lg text-sm font-medium text-white/70 hover:text-white hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirmShare}
+                disabled={isSharing}
+                className="px-5 py-2.5 rounded-lg text-sm font-medium bg-[#B43FEB] text-white hover:bg-[#9d35ce] shadow-[0_0_15px_rgba(180,63,235,0.3)] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isSharing && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isSharing ? "分享中..." : "确认分享"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 删除确认弹窗 */}
       {isDeleteDialogOpen && (
