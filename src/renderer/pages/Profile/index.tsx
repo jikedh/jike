@@ -8,7 +8,6 @@ import {
   uploadOssFile,
   type UpdateJikeGoUserInfoRequest,
 } from "@/api/jikeGo";
-import { markPasswordSettled } from "@/components/FirstLoginGuideDialog";
 import { PasswordDialog } from "./components/PasswordDialog";
 import {
   ProfileEditDialog,
@@ -308,10 +307,6 @@ const ProfilePage = () => {
       <PasswordDialog
         open={passwordOpen}
         onOpenChange={setPasswordOpen}
-        onSuccess={() => {
-          // 密码设置成功后写入本地标记，FirstLoginGuideDialog 下次不会再提示
-          markPasswordSettled();
-        }}
       />
     </div>
   );

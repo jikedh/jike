@@ -13,7 +13,6 @@ import {
 interface PasswordDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void;
 }
 
 interface FieldConfig {
@@ -36,7 +35,6 @@ const INITIAL_VALUES: Record<string, string> = {
 export const PasswordDialog = ({
   open,
   onOpenChange,
-  onSuccess,
 }: PasswordDialogProps) => {
   const [values, setValues] = useState<Record<string, string>>(INITIAL_VALUES);
   const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>(
@@ -85,7 +83,6 @@ export const PasswordDialog = ({
         throw new Error(res.msg || "密码修改失败");
       }
       toast.success("密码已更新");
-      onSuccess?.();
       onOpenChange(false);
     } catch (err: any) {
       toast.error(err?.message || "密码修改失败");
