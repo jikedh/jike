@@ -148,15 +148,24 @@ export default function CanvasPlaceholderPage() {
     setExportingProjectId(String(project.id));
     try {
       const result = await exportProject(project.id);
-      const blob = new Blob([JSON.stringify(result.data, null, 2)], {
-        type: "application/json",
-      });
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = objectUrl;
-      link.download = `${project.name || "project"}.json`;
-      link.click();
-      URL.revokeObjectURL(objectUrl);
+      const projectName =
+        (project.name || "project").replace(/[<>:"/\\|?*]+/g, "_").trim() ||
+        "project";
+      const bytes = new TextEncoder().encode(
+        JSON.stringify(result.data, null, 2),
+      );
+      const saveResult = await window.storage.saveBufferToFile(
+        `${projectName}.json`,
+        bytes.buffer,
+      );
+
+      if (saveResult.canceled) {
+        return;
+      }
+
+      if (!saveResult.success) {
+        throw new Error(saveResult.error || "保存文件失败");
+      }
 
       toast.success("导出成功", {
         description: `已导出项目「${project.name}」`,
