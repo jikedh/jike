@@ -19,6 +19,7 @@ import {
   FileText,
   Loader2,
   Share2,
+  ExternalLink,
 } from "lucide-react";
 import {
   deleteProject,
@@ -29,6 +30,7 @@ import {
 } from "@/api/projects";
 import { toast } from "sonner";
 import ProjectDialog from "@/components/ProjectDialog";
+import { openCanvasProjectWindow } from "@/services/projectWindowService";
 import type { ProjectListItem } from "shared/types/api/projects";
 
 const SHARE_UUID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -75,6 +77,25 @@ export default function CanvasPlaceholderPage() {
   // 处理项目卡片点击
   const handleProjectClick = (project: ProjectListItem) => {
     navigate(`/canvas/${project.id}`);
+  };
+
+  const handleOpenProjectWindow = async (
+    e: React.MouseEvent,
+    project: ProjectListItem,
+  ) => {
+    e.stopPropagation();
+
+    try {
+      const result = await openCanvasProjectWindow(String(project.id), project.name);
+      if (result.openedExisting) {
+        toast.info("该项目已在新窗口打开", {
+          description: "已切换到对应的画布窗口",
+        });
+      }
+    } catch (error) {
+      console.error("Failed to open canvas project window:", error);
+      toast.error("打开新窗口失败");
+    }
   };
 
   // 打开创建项目弹窗
@@ -341,6 +362,13 @@ export default function CanvasPlaceholderPage() {
 
                 {/* More options button */}
                 <div className="absolute top-3 right-3 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => handleOpenProjectWindow(e, project)}
+                    className="h-8 rounded-lg bg-black/50 px-2.5 text-[11px] font-medium text-white/70 hover:text-white hover:bg-black/70 flex items-center justify-center gap-1.5 backdrop-blur-md border border-white/10 transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    在新的窗口当中打开画布
+                  </button>
                   <button
                     onClick={(e) => openEditDialog(e, project)}
                     className="w-8 h-8 rounded-lg bg-black/50 text-white/70 hover:text-white hover:bg-black/70 flex items-center justify-center backdrop-blur-md border border-white/10 transition-colors cursor-pointer"
