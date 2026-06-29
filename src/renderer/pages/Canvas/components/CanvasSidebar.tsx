@@ -1,60 +1,118 @@
+/**
+ * Canvas 侧边栏（远程资产版本）
+ *
+ * 变化点（vs 旧版）：
+ * - 完全移除 service/assetStorage 的本地资产路径依赖
+ * - 资产库弹窗切换为 RemoteAssetLibraryDialog
+ * - 创建资产弹窗切换为 RemoteCreateAssetDialog
+ * - 创建资产事件直接从节点结果拿到 mediaRef.url/remoteUrl/displayUrl 上传
+ */
+
 import { useReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  type AssetMediaRef,
-  type AssetMediaType,
-  type AssetRecord,
-  initializeAssetStorage,
-} from "service/assetStorage";
-import type { AllNodeType, EdgeType } from "shared/types/flow";
 import { toast } from "sonner";
+import type { AllNodeType, EdgeType } from "shared/types/flow";
+import type { MediaType } from "shared/types/api/assets";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { useChatSettingsStore } from "@/stores/chatSettingsStore";
-import { insertAssetIntoCanvas } from "../utils/assetInsert";
-import { AssetLibraryDialog } from "./AssetLibraryDialog";
+import { useUserStore } from "@/stores/useUserStore";
+import { insertRemoteAssetIntoCanvas } from "../utils/remoteAssetInsert";
+import type { RemoteAsset } from "../utils/remoteAssets";
+import { RemoteAssetLibraryDialog } from "./RemoteAssetLibraryDialog";
 import {
-  CreateAssetDialog,
-  type CreateAssetRequest,
-} from "./CreateAssetDialog";
+  RemoteCreateAssetDialog,
+  type RemoteCreateAssetRequest,
+} from "./RemoteCreateAssetDialog";
 import type { FloatingSidebarProps } from "./FloatingSidebar";
 import { FloatingSidebar } from "./FloatingSidebar";
 
 const CREATE_ASSET_EVENT = "jike:create-asset";
 
-const getFirstMediaRef = (node?: AllNodeType): AssetMediaRef | null => {
-  const firstItem = (node?.data as any)?.result?.data?.find(
-    (item: AssetMediaRef) => item?.url || item?.localPath,
+type MediaRefLike = {
+  url?: string;
+  remoteUrl?: string;
+  displayUrl?: string;
+  thumbnailUrl?: string;
+  coverUrl?: string;
+  posterUrl?: string;
+  localName?: string;
+  localFileName?: string;
+};
+
+const getFirstMediaRef = (node?: AllNodeType): MediaRefLike | null => {
+  const data = (node?.data as any)?.result?.data;
+  if (!Array.isArray(data)) return null;
+  const firstItem = data.find(
+    (item: MediaRefLike) =>
+      item?.url || item?.remoteUrl || item?.displayUrl,
   );
   return firstItem ?? null;
 };
 
-const getNodeMediaType = (node?: AllNodeType): AssetMediaType | null => {
+const getNodeMediaType = (node?: AllNodeType): MediaType | null => {
   if (node?.type === "imageNode") return "image";
   if (node?.type === "newVideoNode") return "video";
   if (node?.type === "audioNode") return "audio";
   return null;
 };
 
-const buildCreateAssetRequest = (
+const resolveRemoteUrl = (mediaRef: MediaRefLike): string => {
+  return (
+    mediaRef.remoteUrl ||
+    mediaRef.displayUrl ||
+    mediaRef.thumbnailUrl ||
+    mediaRef.coverUrl ||
+    mediaRef.posterUrl ||
+    mediaRef.url ||
+    ""
+  );
+};
+
+const getDefaultFileName = (
+  mediaType: MediaType,
+  mediaRef: MediaRefLike,
+  nodeId: string,
+) => {
+  const raw =
+    mediaRef.localName ||
+    mediaRef.localFileName ||
+    resolveRemoteUrl(mediaRef).split("/").pop() ||
+    "";
+  if (raw) return raw;
+  const ext =
+    mediaType === "image"
+      ? "png"
+      : mediaType === "video"
+        ? "mp4"
+        : "mp3";
+  return `${nodeId}.${ext}`;
+};
+
+const buildRemoteCreateRequest = (
   node: AllNodeType | undefined,
   projectId: string | null,
-): CreateAssetRequest | null => {
+): RemoteCreateAssetRequest | null => {
   const mediaType = getNodeMediaType(node);
   const mediaRef = getFirstMediaRef(node);
   if (!node || !mediaType || !mediaRef) return null;
+  const url = resolveRemoteUrl(mediaRef);
+  if (!url) return null;
+
+  const nickname =
+    String((node.data as any)?.nickname || "").trim() ||
+    (mediaType === "image"
+      ? "图片素材"
+      : mediaType === "video"
+        ? "视频素材"
+        : "音频素材");
 
   return {
     nodeId: node.id,
     projectId,
     mediaType,
-    mediaRef,
-    name:
-      String((node.data as any)?.nickname || "").trim() ||
-      (mediaType === "image"
-        ? "图片素材"
-        : mediaType === "video"
-          ? "视频素材"
-          : "音频素材"),
+    url,
+    fileName: getDefaultFileName(mediaType, mediaRef, node.id),
+    initialName: nickname,
+    defaultScope: projectId ? "project" : "personal",
   };
 };
 
@@ -69,17 +127,16 @@ export const dispatchCreateAssetFromNode = (nodeId: string) => {
 export const CanvasSidebar = () => {
   const addNode = useCanvasFlowStore((state) => state.addNode);
   const saveGraph = useCanvasFlowStore((state) => state.saveGraph);
-  const nodes = useCanvasFlowStore((state) => state.nodes);
   const projectId = useCanvasFlowStore((state) => state.projectId);
-  const assetStoragePath = useChatSettingsStore(
-    (state) => state.assetStoragePath,
-  );
-  const setAssetStoragePath = useChatSettingsStore(
-    (state) => state.setAssetStoragePath,
-  );
+  const userInfo = useUserStore((state) => state.userInfo);
+  const currentUserId = useMemo(() => {
+    if (!userInfo) return undefined;
+    return String(userInfo.id ?? "");
+  }, [userInfo]);
+
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
   const [createAssetRequest, setCreateAssetRequest] =
-    useState<CreateAssetRequest | null>(null);
+    useState<RemoteCreateAssetRequest | null>(null);
   const [assetRefreshKey, setAssetRefreshKey] = useState(0);
   const { screenToFlowPosition } = useReactFlow<AllNodeType, EdgeType>();
 
@@ -92,69 +149,65 @@ export const CanvasSidebar = () => {
     [screenToFlowPosition],
   );
 
-  const ensureAssetPath = useCallback(async () => {
-    if (assetStoragePath) {
-      await initializeAssetStorage(assetStoragePath);
-      return assetStoragePath;
-    }
-
-    if (!window.storage) {
-      toast.error("本地存储功能不可用");
-      return "";
-    }
-
-    const selectedPath = await window.storage.selectDirectory();
-    if (!selectedPath) return "";
-
-    setAssetStoragePath(selectedPath);
-    await initializeAssetStorage(selectedPath);
-    return selectedPath;
-  }, [assetStoragePath, setAssetStoragePath]);
-
-  const openAssetLibrary = useCallback(async () => {
-    const readyPath = await ensureAssetPath();
-    if (!readyPath) return;
+  const openAssetLibrary = useCallback(() => {
     setAssetLibraryOpen(true);
-  }, [ensureAssetPath]);
+  }, []);
 
-  const handleUseAsset = useCallback(
-    async (asset: AssetRecord) => {
+  const insertAssetAt = useCallback(
+    async (asset: RemoteAsset, position: { x: number; y: number }) => {
       try {
-        await insertAssetIntoCanvas(asset, centerFlowPosition());
-        toast.success("资产已插入画布");
+        await insertRemoteAssetIntoCanvas(asset, position);
       } catch (error) {
         console.error("[CanvasSidebar] insert asset failed", error);
         toast.error("资产插入画布失败");
       }
     },
-    [centerFlowPosition],
+    [],
   );
 
-  const handleUseAssets = useCallback(
-    async (assets: AssetRecord[]) => {
+  const handleUseOne = useCallback(
+    async (asset: RemoteAsset) => {
+      await insertAssetAt(asset, centerFlowPosition());
+      toast.success("资产已插入画布");
+    },
+    [centerFlowPosition, insertAssetAt],
+  );
+
+  const handleUseMany = useCallback(
+    async (assets: RemoteAsset[]) => {
       if (assets.length === 0) return;
 
       const basePosition = centerFlowPosition();
       const nodeWidth = 380;
       const nodeHeight = 300;
       const perRow = 3;
+      const successCount = { value: 0 };
+      let failedCount = 0;
 
-      try {
-        for (let index = 0; index < assets.length; index += 1) {
-          const row = Math.floor(index / perRow);
-          const col = index % perRow;
-          await insertAssetIntoCanvas(assets[index], {
-            x: basePosition.x + col * nodeWidth,
-            y: basePosition.y + row * nodeHeight,
-          });
+      for (let index = 0; index < assets.length; index += 1) {
+        const row = Math.floor(index / perRow);
+        const col = index % perRow;
+        const target = {
+          x: basePosition.x + col * nodeWidth,
+          y: basePosition.y + row * nodeHeight,
+        };
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await insertRemoteAssetIntoCanvas(assets[index], target);
+          successCount.value += 1;
+        } catch (error) {
+          console.error("[CanvasSidebar] batch insert failed", error);
+          failedCount += 1;
         }
+      }
+
+      if (successCount.value > 0) {
         toast.success(
-          assets.length === 1
+          successCount.value === 1
             ? "资产已插入画布"
-            : `已插入 ${assets.length} 个资产`,
+            : `已插入 ${successCount.value} 个资产${failedCount > 0 ? `，失败 ${failedCount} 个` : ""}`,
         );
-      } catch (error) {
-        console.error("[CanvasSidebar] batch insert assets failed", error);
+      } else if (failedCount > 0) {
         toast.error("批量插入资产失败");
       }
     },
@@ -162,36 +215,28 @@ export const CanvasSidebar = () => {
   );
 
   const handleDropAsset = useCallback(
-    async (asset: AssetRecord, clientPosition: { x: number; y: number }) => {
-      try {
-        await insertAssetIntoCanvas(
-          asset,
-          screenToFlowPosition({
-            x: clientPosition.x,
-            y: clientPosition.y,
-          }),
-        );
-        toast.success("资产已插入画布");
-      } catch (error) {
-        console.error("[CanvasSidebar] drop asset failed", error);
-        toast.error("资产插入画布失败");
-      }
+    async (
+      asset: RemoteAsset,
+      clientPosition: { x: number; y: number },
+    ) => {
+      await insertAssetAt(
+        asset,
+        screenToFlowPosition({ x: clientPosition.x, y: clientPosition.y }),
+      );
+      toast.success("资产已插入画布");
     },
-    [screenToFlowPosition],
+    [insertAssetAt, screenToFlowPosition],
   );
 
   useEffect(() => {
-    const handleCreateAsset = async (event: Event) => {
+    const handleCreateAsset = (event: Event) => {
       const nodeId = (event as CustomEvent<{ nodeId?: string }>).detail?.nodeId;
       if (!nodeId) return;
-
-      const readyPath = await ensureAssetPath();
-      if (!readyPath) return;
 
       const node = useCanvasFlowStore
         .getState()
         .nodes.find((item) => item.id === nodeId);
-      const request = buildCreateAssetRequest(node, projectId);
+      const request = buildRemoteCreateRequest(node, projectId);
       if (!request) {
         toast.warning("当前节点没有可保存的媒体结果");
         return;
@@ -203,7 +248,7 @@ export const CanvasSidebar = () => {
     return () => {
       window.removeEventListener(CREATE_ASSET_EVENT, handleCreateAsset);
     };
-  }, [ensureAssetPath, projectId]);
+  }, [projectId]);
 
   const createAssetDialogOpen = useMemo(
     () => Boolean(createAssetRequest),
@@ -239,7 +284,7 @@ export const CanvasSidebar = () => {
           addNode("videoAgent", flowPosition);
           break;
         case "asset-library":
-          void openAssetLibrary();
+          openAssetLibrary();
           break;
         case "save":
           saveGraph();
@@ -255,20 +300,18 @@ export const CanvasSidebar = () => {
   return (
     <>
       <FloatingSidebar onAction={handleSidebarAction} />
-      <AssetLibraryDialog
+      <RemoteAssetLibraryDialog
         open={assetLibraryOpen}
-        basePath={assetStoragePath}
         projectId={projectId}
-        nodes={nodes}
+        currentUserId={currentUserId}
         refreshKey={assetRefreshKey}
         onClose={() => setAssetLibraryOpen(false)}
-        onUse={handleUseAsset}
-        onUseMany={handleUseAssets}
+        onUseOne={handleUseOne}
+        onUseMany={handleUseMany}
         onDropAsset={handleDropAsset}
       />
-      <CreateAssetDialog
+      <RemoteCreateAssetDialog
         open={createAssetDialogOpen}
-        basePath={assetStoragePath}
         request={createAssetRequest}
         onClose={() => setCreateAssetRequest(null)}
         onCreated={() => setAssetRefreshKey((current) => current + 1)}

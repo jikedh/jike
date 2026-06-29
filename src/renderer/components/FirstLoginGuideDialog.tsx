@@ -1,9 +1,6 @@
 import {
   AlertCircle,
   CheckCircle2,
-  KeyRound,
-  Mail,
-  Phone,
   ShieldCheck,
   AtSign,
 } from "lucide-react";
@@ -16,12 +13,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-// 已设置标记的 localStorage key：值为 "1" 表示用户曾经完成过密码设置
-const PASSWORD_SET_KEY = "jike.profile.password_set";
-
 // 单项定义：key 用于区分点击行为，icon 用于视觉展示
 export type GuideItem = {
-  key: "username" | "email" | "mobile" | "password";
+  key: "username";
   label: string;
   reason: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -34,21 +28,6 @@ const ITEM_META: Record<GuideItem["key"], Omit<GuideItem, "key">> = {
     reason: "尚未设置自定义用户名",
     icon: AtSign,
   },
-  email: {
-    label: "邮箱",
-    reason: "尚未绑定邮箱",
-    icon: Mail,
-  },
-  mobile: {
-    label: "手机号",
-    reason: "尚未绑定手机号",
-    icon: Phone,
-  },
-  password: {
-    label: "登录密码",
-    reason: "建议设置独立登录密码",
-    icon: KeyRound,
-  },
 };
 
 interface FirstLoginGuideDialogProps {
@@ -57,27 +36,7 @@ interface FirstLoginGuideDialogProps {
   pending: GuideItem["key"][];
   // 用户点击"去设置"或选择跳过时关闭弹窗
   onClose: () => void;
-  // 当用户在弹窗内完成某项时通知外部移除该项（用于实时刷新剩余项）
-  onItemSettled?: (key: GuideItem["key"]) => void;
 }
-
-// 读取本地密码设置标记（true 表示已设置）
-export const isPasswordSettled = (): boolean => {
-  try {
-    return localStorage.getItem(PASSWORD_SET_KEY) === "1";
-  } catch {
-    return false;
-  }
-};
-
-// 写入本地密码设置标记（PasswordDialog 完成后调用）
-export const markPasswordSettled = () => {
-  try {
-    localStorage.setItem(PASSWORD_SET_KEY, "1");
-  } catch {
-    /* 忽略写入失败 */
-  }
-};
 
 // 构造引导项集合
 export const buildGuideItems = (
@@ -93,7 +52,6 @@ export const FirstLoginGuideDialog = ({
   open,
   pending,
   onClose,
-  onItemSettled,
 }: FirstLoginGuideDialogProps) => {
   const navigate = useNavigate();
 
@@ -102,10 +60,10 @@ export const FirstLoginGuideDialog = ({
 
   const items = buildGuideItems(pending);
 
-  // 处理单项点击：关闭主弹窗 -> 跳转 Profile -> 通过 URL 参数告知 Profile 打开对应子弹窗
+  // 处理单项点击：关闭主弹窗 -> 跳转 Profile -> 通过 URL 参数告知 Profile 打开用户名弹窗
   const handleGoToSettle = (key: GuideItem["key"]) => {
     onClose();
-    // username / email / mobile / password 均在 Profile 页面，URL 带 focus=xxx 让 Profile 自动展开
+    // 当前必填项只有 username，URL 带 focus=username 让 Profile 自动展开。
     navigate(`/profile?focus=${key}`);
   };
 
@@ -131,7 +89,7 @@ export const FirstLoginGuideDialog = ({
             <span className="flex flex-col">
               <span className="text-[15px] font-semibold">完善账号信息</span>
               <span className="text-[11px] font-normal text-white/50">
-                检测到您的账号有 {items.length} 项待补全，建议立即完善
+                检测到您的账号尚未设置自定义用户名，建议立即完善
               </span>
             </span>
           </DialogTitle>
@@ -141,7 +99,7 @@ export const FirstLoginGuideDialog = ({
           <div className="mb-2 flex items-start gap-2 rounded-lg border border-[#B43FEB]/20 bg-[#B43FEB]/5 px-3 py-2 text-[12px] leading-relaxed text-white/70">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#B43FEB]" />
             <span>
-              完整的基础信息与安全设置可保障账号安全、找回密码并接收重要通知。
+              自定义用户名可用于账号识别与登录，设置后更便于后续使用。
             </span>
           </div>
 
