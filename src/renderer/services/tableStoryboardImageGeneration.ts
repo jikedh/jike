@@ -8,8 +8,12 @@ import {
 } from "@/api/ai";
 import {
   confirmDesktopProxyScore,
+  createRhartImageG2ImageToImage,
+  createRhartImageG2OfficialImageToImage,
   createRhartImageG2OfficialTextToImage,
   createRhartImageG2TextToImage,
+  createRhartImageNProImageToImage,
+  createRhartImageNProOfficialImageToImage,
   createRhartImageNProOfficialTextToImage,
   createRhartImageNProTextToImage,
   queryRunningHubV2Task,
@@ -28,6 +32,7 @@ type GenerateStoryboardImageOptions = {
   prompt: string;
   size: string;
   resolution?: string;
+  referenceImageUrls?: string[];
   requiredPoints?: number;
   signal?: AbortSignal;
 };
@@ -125,7 +130,7 @@ const extractImageUrls = (response: any): string[] => {
       normalizeImageUrl(
         typeof item === "string"
           ? item
-          : item?.url ?? item?.image_url ?? item?.imageUrl ?? item?.b64_json,
+          : (item?.url ?? item?.image_url ?? item?.imageUrl ?? item?.b64_json),
       ),
     )
     .filter(Boolean);
@@ -162,7 +167,10 @@ const pollStandardImageTask = async (taskId: string, signal?: AbortSignal) => {
   throw new Error("图片生成超时，请稍后再试");
 };
 
-const pollMidjourneyImageTask = async (taskId: string, signal?: AbortSignal) => {
+const pollMidjourneyImageTask = async (
+  taskId: string,
+  signal?: AbortSignal,
+) => {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < IMAGE_TASK_TIMEOUT) {
@@ -200,7 +208,10 @@ const extractRunningHubImageUrl = (response: any) => {
   return firstOutput?.url || firstOutput?.imageUrl || firstOutput?.fileUrl;
 };
 
-const pollRunningHubImageTask = async (taskId: string, signal?: AbortSignal) => {
+const pollRunningHubImageTask = async (
+  taskId: string,
+  signal?: AbortSignal,
+) => {
   const startedAt = Date.now();
   let lastMessage = "";
 
@@ -230,21 +241,37 @@ const generateRunningHubImage = async ({
   prompt,
   size,
   resolution,
+  referenceImageUrls,
   requiredPoints,
   signal,
 }: GenerateStoryboardImageOptions) => {
+  const imageUrls = referenceImageUrls?.filter(Boolean) ?? [];
   const request = {
     prompt,
     aspectRatio: size || "1:1",
     resolution: (resolution || "1K").toLowerCase(),
     ...(model === RUNNINGHUB_GPT_IMAGE2_MODEL ? { quality: "medium" } : {}),
+    ...(imageUrls.length > 0 ? { imageUrls } : {}),
     ...(requiredPoints != null ? { scoreCost: requiredPoints } : {}),
   };
 
-  const routes =
-    model === RUNNINGHUB_GPT_IMAGE2_MODEL
-      ? [createRhartImageG2TextToImage, createRhartImageG2OfficialTextToImage]
-      : [createRhartImageNProTextToImage, createRhartImageNProOfficialTextToImage];
+  const routes: Array<(data: any, signal?: AbortSignal) => any> =
+    imageUrls.length > 0
+      ? model === RUNNINGHUB_GPT_IMAGE2_MODEL
+        ? [
+            (data) => createRhartImageG2ImageToImage(data),
+            (data) => createRhartImageG2OfficialImageToImage(data),
+          ]
+        : [
+            (data) => createRhartImageNProImageToImage(data),
+            (data) => createRhartImageNProOfficialImageToImage(data),
+          ]
+      : model === RUNNINGHUB_GPT_IMAGE2_MODEL
+        ? [createRhartImageG2TextToImage, createRhartImageG2OfficialTextToImage]
+        : [
+            createRhartImageNProTextToImage,
+            createRhartImageNProOfficialTextToImage,
+          ];
 
   let lastError: unknown = null;
   for (const route of routes) {
@@ -292,13 +319,16 @@ const generateRunningHubImage = async ({
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error("RunningHub 生图失败");
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("RunningHub 生图失败");
 };
 
 export const generateTableStoryboardImage = async (
   options: GenerateStoryboardImageOptions,
 ) => {
   const scoreCost = Number(options.requiredPoints ?? 0) || undefined;
+  const referenceImageUrls = options.referenceImageUrls?.filter(Boolean) ?? [];
   throwIfAborted(options.signal);
 
   if (options.model === AGNES_IMAGE_2_FLASH_MODEL) {
@@ -309,7 +339,7 @@ export const generateTableStoryboardImage = async (
         size: options.size,
         resolution: options.resolution,
         n: 1,
-        image_urls: [],
+        image_urls: referenceImageUrls,
         metadata: { resolution: options.resolution },
       },
       scoreCost,
@@ -330,10 +360,12 @@ export const generateTableStoryboardImage = async (
   }
 
   if (options.model === "midjourney" || options.model === "midjourney-niji7") {
+    const referencePromptPrefix =
+      referenceImageUrls.length > 0 ? `${referenceImageUrls.join(" ")} ` : "";
     const finalPrompt =
       options.model === "midjourney-niji7"
-        ? `${options.prompt} --ar ${options.size || "1:1"} --niji 7`
-        : `${options.prompt} --ar ${options.size || "1:1"}`;
+        ? `${referencePromptPrefix}${options.prompt} --ar ${options.size || "1:1"} --niji 7`
+        : `${referencePromptPrefix}${options.prompt} --ar ${options.size || "1:1"}`;
     const response = await submitMjImagine(
       { prompt: finalPrompt },
       scoreCost,
@@ -379,7 +411,7 @@ export const generateTableStoryboardImage = async (
       size: options.size,
       resolution: options.resolution,
       n: 1,
-      image_urls: [],
+      image_urls: referenceImageUrls,
       metadata: { resolution: options.resolution },
     } as any,
     scoreCost,

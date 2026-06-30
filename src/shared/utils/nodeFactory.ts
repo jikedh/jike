@@ -253,6 +253,8 @@ export const createTableNode = (
     ],
     rows: options?.tableRows ?? [],
     characterProfiles: options?.tableCharacterProfiles ?? [],
+    sourceVideoUrl: options?.tableSourceVideoUrl,
+    sourceVideoNodeId: options?.tableSourceVideoNodeId,
     createdAt: Date.now(),
   },
 });

@@ -52,12 +52,10 @@ export type CanvasGroup = {
 /**
  * 画布支持的节点类型标识。
  */
-export type ActiveVideoTool =
-  | {
-      nodeId: string;
-      tool: "preview" | "snapshot" | "trim" | "removeCaptions" | "videoEnhance";
-    }
-  | null;
+export type ActiveVideoTool = {
+  nodeId: string;
+  tool: "preview" | "snapshot" | "trim" | "removeCaptions" | "videoEnhance";
+} | null;
 
 export type NodeType =
   | "note"
@@ -92,6 +90,8 @@ export type AddNodeOptions = {
   tableColumns?: string[];
   tableRows?: unknown[];
   tableCharacterProfiles?: unknown[];
+  tableSourceVideoUrl?: string;
+  tableSourceVideoNodeId?: string;
 };
 
 /**

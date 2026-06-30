@@ -1,3 +1,9 @@
+import {
+  readInFlightStoryboardImage,
+  readCachedStoryboardImage,
+  type StoryboardImageCacheMap,
+} from "@/services/storyboardImageCache";
+
 type TableExportRow = Record<string, unknown>;
 
 type SheetData = {
@@ -12,6 +18,8 @@ export type ExportVideoPullFilmExcelInput = {
   columns: string[];
   rows: TableExportRow[];
   characterProfiles?: unknown[];
+  storyboardImageCache?: StoryboardImageCacheMap;
+  projectId?: string | null;
 };
 
 export type ExportVideoPullFilmExcelResult = {
@@ -48,12 +56,22 @@ type PreparedStoryboardImages = {
 
 const XLSX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const STORYBOARD_IMAGE_EXPORT_CONCURRENCY = 6;
 
 const ZIP_UTF8_FLAG = 0x0800;
 const IMAGE_WIDTH_EMU = 160 * 9525;
 const IMAGE_HEIGHT_EMU = 90 * 9525;
+const EXCEL_EMBED_IMAGE_MAX_WIDTH = 640;
+const EXCEL_EMBED_IMAGE_MAX_HEIGHT = 360;
+const EXCEL_EMBED_IMAGE_JPEG_QUALITY = 0.82;
 
 const textEncoder = new TextEncoder();
+
+type PreparedStoryboardImageItem = {
+  rowIndex: number;
+  columnIndex: number;
+  image: ExcelImage;
+};
 
 const CHARACTER_PROFILE_EXPORT_COLUMNS = [
   { label: "角色", keys: ["name", "角色", "姓名", "人物", "主体"] },
@@ -99,7 +117,8 @@ const stringifyCellValue = (value: unknown): string => {
   return String(value);
 };
 
-const isStoryboardImageColumn = (column: string) => column.includes("分镜图");
+const isStoryboardImageColumn = (column: string) =>
+  column.includes("分镜图") || column.includes("分镜草图");
 
 const isImageSource = (value: string) =>
   /^(https?:|data:image\/|blob:|asset:|file:)/i.test(value.trim());
@@ -157,6 +176,64 @@ const convertImageToPng = async (bytes: Uint8Array, contentType: string) => {
   }
 };
 
+const canvasToBlob = (
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality?: number,
+) =>
+  new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (result) => {
+        if (result) resolve(result);
+        else reject(new Error("图片压缩失败"));
+      },
+      type,
+      quality,
+    );
+  });
+
+const optimizeImageForExcel = async (
+  image: ExcelImage,
+): Promise<ExcelImage> => {
+  const objectUrl = URL.createObjectURL(
+    new Blob([toArrayBuffer(image.bytes)], { type: image.contentType }),
+  );
+
+  try {
+    const element = await loadImageElement(objectUrl);
+    const sourceWidth = element.naturalWidth || element.width || 1;
+    const sourceHeight = element.naturalHeight || element.height || 1;
+    const scale = Math.min(
+      1,
+      EXCEL_EMBED_IMAGE_MAX_WIDTH / sourceWidth,
+      EXCEL_EMBED_IMAGE_MAX_HEIGHT / sourceHeight,
+    );
+    const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+    const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const context = canvas.getContext("2d");
+    if (!context) return image;
+
+    context.drawImage(element, 0, 0, targetWidth, targetHeight);
+    const blob = await canvasToBlob(
+      canvas,
+      "image/jpeg",
+      EXCEL_EMBED_IMAGE_JPEG_QUALITY,
+    );
+    return {
+      bytes: new Uint8Array(await blob.arrayBuffer()),
+      extension: "jpeg",
+      contentType: "image/jpeg",
+    };
+  } catch {
+    return image;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
+
 const fetchImageViaBrowser = async (source: string) => {
   const response = await fetch(source);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -164,7 +241,8 @@ const fetchImageViaBrowser = async (source: string) => {
   const blob = await response.blob();
   return {
     bytes: new Uint8Array(await blob.arrayBuffer()),
-    contentType: blob.type || response.headers.get("content-type") || "image/png",
+    contentType:
+      blob.type || response.headers.get("content-type") || "image/png",
   };
 };
 
@@ -192,19 +270,72 @@ const fetchImageBytes = async (source: string): Promise<ExcelImage> => {
   }
 
   const extension = getImageExtension(image.contentType);
-  return {
+  return optimizeImageForExcel({
     bytes: image.bytes,
     extension,
     contentType: getImageContentType(extension),
-  };
+  });
+};
+
+const getCachedImageBytes = async (
+  source: string,
+  storyboardImageCache?: StoryboardImageCacheMap,
+  projectId?: string | null,
+): Promise<ExcelImage | null> => {
+  const cacheEntry = storyboardImageCache?.[source.trim()];
+  let image = cacheEntry
+    ? await readCachedStoryboardImage(cacheEntry)
+    : await readInFlightStoryboardImage(source, projectId);
+  if (!image) return null;
+
+  if (!isExcelSupportedImageType(image.contentType)) {
+    image = {
+      bytes: await convertImageToPng(image.bytes, image.contentType),
+      contentType: "image/png",
+    };
+  }
+
+  const extension = getImageExtension(image.contentType);
+  return optimizeImageForExcel({
+    bytes: image.bytes,
+    extension,
+    contentType: getImageContentType(extension),
+  });
+};
+
+const runWithConcurrency = async <T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> => {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await worker(items[currentIndex]);
+      }
+    },
+  );
+
+  await Promise.all(workers);
+  return results;
 };
 
 const prepareStoryboardImages = async (
   columns: string[],
   rows: TableExportRow[],
+  storyboardImageCache?: StoryboardImageCacheMap,
+  projectId?: string | null,
 ): Promise<PreparedStoryboardImages> => {
-  const imageColumnIndex = columns.findIndex(isStoryboardImageColumn);
-  if (imageColumnIndex < 0) {
+  const imageColumnIndexes = columns
+    .map((column, index) => (isStoryboardImageColumn(column) ? index : -1))
+    .filter((index) => index >= 0);
+  if (imageColumnIndexes.length === 0) {
     return {
       rows,
       mediaFiles: [],
@@ -213,18 +344,53 @@ const prepareStoryboardImages = async (
     };
   }
 
-  const imageColumn = columns[imageColumnIndex];
   const nextRows = rows.map((row) => ({ ...row }));
   const mediaFiles: PreparedStoryboardImages["mediaFiles"] = [];
   const worksheetImages: WorksheetImage[] = [];
-  let failedImageCount = 0;
+  const imageSources = nextRows.flatMap((row, rowIndex) =>
+    imageColumnIndexes
+      .map((columnIndex) => ({
+        rowIndex,
+        columnIndex,
+        columnName: columns[columnIndex],
+        source: stringifyCellValue(row[columns[columnIndex]]).trim(),
+      }))
+      .filter(({ source }) => source && isImageSource(source)),
+  );
 
-  for (const [rowIndex, row] of nextRows.entries()) {
-    const source = stringifyCellValue(row[imageColumn]).trim();
-    if (!source || !isImageSource(source)) continue;
+  const preparedImages = await runWithConcurrency(
+    imageSources,
+    STORYBOARD_IMAGE_EXPORT_CONCURRENCY,
+    async ({
+      rowIndex,
+      columnIndex,
+      source,
+    }): Promise<PreparedStoryboardImageItem | null> => {
+      try {
+        const image =
+          (await getCachedImageBytes(
+            source,
+            storyboardImageCache,
+            projectId,
+          )) ?? (await fetchImageBytes(source));
+        return {
+          rowIndex,
+          columnIndex,
+          image,
+        };
+      } catch {
+        return null;
+      }
+    },
+  );
 
-    try {
-      const image = await fetchImageBytes(source);
+  const failedImageCount = preparedImages.filter(
+    (item) => item === null,
+  ).length;
+  preparedImages
+    .filter((item): item is PreparedStoryboardImageItem => item !== null)
+    .sort((a, b) => a.rowIndex - b.rowIndex)
+    .forEach(({ rowIndex, columnIndex, image }) => {
       const mediaIndex = mediaFiles.length + 1;
       const mediaPath = `xl/media/storyboard-${mediaIndex}.${image.extension}`;
       mediaFiles.push({
@@ -235,15 +401,12 @@ const prepareStoryboardImages = async (
       });
       worksheetImages.push({
         rowIndex,
-        columnIndex: imageColumnIndex,
+        columnIndex,
         relationshipId: `rId${mediaIndex}`,
-        name: `分镜图 ${rowIndex + 1}`,
+        name: `${columns[columnIndex]} ${rowIndex + 1}`,
       });
-      row[imageColumn] = "";
-    } catch {
-      failedImageCount += 1;
-    }
-  }
+      nextRows[rowIndex][columns[columnIndex]] = "";
+    });
 
   return {
     rows: nextRows,
@@ -297,7 +460,7 @@ const getColumnName = (index: number) => {
 };
 
 const getColumnWidth = (column: string) => {
-  if (column.includes("分镜图")) return 48;
+  if (isStoryboardImageColumn(column)) return 48;
   if (
     column.includes("画面") ||
     column.includes("信息点") ||
@@ -308,13 +471,21 @@ const getColumnWidth = (column: string) => {
   ) {
     return 36;
   }
-  if (column.includes("角色") || column.includes("样貌") || column.includes("穿着")) {
+  if (
+    column.includes("角色") ||
+    column.includes("样貌") ||
+    column.includes("穿着")
+  ) {
     return 24;
   }
   return 16;
 };
 
-const createCellXml = (rowIndex: number, columnIndex: number, value: unknown) => {
+const createCellXml = (
+  rowIndex: number,
+  columnIndex: number,
+  value: unknown,
+) => {
   const text = stringifyCellValue(value);
   const ref = `${getColumnName(columnIndex)}${rowIndex}`;
 
@@ -418,7 +589,9 @@ const createDrawingXml = (images: WorksheetImage[]) => {
 const getMediaRelationshipTarget = (path: string) =>
   `../media/${path.split("/").pop() ?? path}`;
 
-const createDrawingRelsXml = (mediaFiles: PreparedStoryboardImages["mediaFiles"]) => {
+const createDrawingRelsXml = (
+  mediaFiles: PreparedStoryboardImages["mediaFiles"],
+) => {
   const relationships = mediaFiles
     .map(
       (file, index) =>
@@ -480,6 +653,9 @@ const createContentTypesXml = (sheetCount: number, hasImages: boolean) => {
           `<Default Extension="${item.extension}" ContentType="${item.contentType}"/>`,
       ).join("")
     : "";
+  const drawingOverride = hasImages
+    ? '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>'
+    : "";
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -487,11 +663,13 @@ const createContentTypesXml = (sheetCount: number, hasImages: boolean) => {
   <Default Extension="xml" ContentType="application/xml"/>
   ${imageDefaults}
   <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  ${drawingOverride}
   ${sheetOverrides}
 </Types>`;
 };
 
-const createRootRelsXml = () => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+const createRootRelsXml =
+  () => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
 </Relationships>`;
@@ -681,11 +859,15 @@ export const exportVideoPullFilmExcel = async ({
   columns,
   rows,
   characterProfiles,
+  storyboardImageCache,
+  projectId,
 }: ExportVideoPullFilmExcelInput): Promise<ExportVideoPullFilmExcelResult> => {
   const tableColumns = columns.length > 0 ? columns : ["视频拉片分析"];
   const preparedStoryboardImages = await prepareStoryboardImages(
     tableColumns,
     rows,
+    storyboardImageCache,
+    projectId,
   );
   const characterProfileRows = buildCharacterProfileRows(characterProfiles);
   const sheets: SheetData[] = [
@@ -710,7 +892,10 @@ export const exportVideoPullFilmExcel = async ({
     },
     { path: "_rels/.rels", content: createRootRelsXml() },
     { path: "xl/workbook.xml", content: createWorkbookXml(sheets) },
-    { path: "xl/_rels/workbook.xml.rels", content: createWorkbookRelsXml(sheets.length) },
+    {
+      path: "xl/_rels/workbook.xml.rels",
+      content: createWorkbookRelsXml(sheets.length),
+    },
     ...sheets.map((sheet, index) => ({
       path: `xl/worksheets/sheet${index + 1}.xml`,
       content: createWorksheetXml(sheet),
