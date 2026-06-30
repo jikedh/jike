@@ -23,6 +23,7 @@ import type {
   CanvasFlowStoreType,
   CanvasGroup,
   CanvasPersistedState,
+  NodeIdCounters,
   NodePosition,
   NodeType
 } from "shared/types/zustand/canvas-flow";
@@ -200,6 +201,80 @@ export const normalizeCanvasNodesForPersistence = (
     };
   });
 
+const EMPTY_NODE_ID_COUNTERS = {
+  note: 1,
+  image: 1,
+  newVideo: 1,
+  video: 1,
+  agent: 1,
+  panorama: 1,
+  audio: 1,
+  textAgent: 1,
+  imageAgent: 1,
+  videoAgent: 1,
+  table: 1,
+  default: 1,
+} satisfies NodeIdCounters;
+
+const getNodeCounterKey = (node: AllNodeType): NodeType => {
+  switch (node.type) {
+    case "noteNode":
+      return "note";
+    case "imageNode":
+      return "image";
+    case "newVideoNode":
+      return "newVideo";
+    case "agentNode":
+      return "agent";
+    case "panoramaNode":
+      return "panorama";
+    case "audioNode":
+      return "audio";
+    case "textAgentNode":
+      return "textAgent";
+    case "imageAgentNode":
+      return "imageAgent";
+    case "videoAgentNode":
+      return "videoAgent";
+    case "tableNode":
+      return "table";
+    default:
+      return "default";
+  }
+};
+
+const normalizeNodeIdCounters = (
+  counters?: Partial<NodeIdCounters>,
+  nodes: AllNodeType[] = [],
+): NodeIdCounters => {
+  const nextCounters: NodeIdCounters = {
+    ...EMPTY_NODE_ID_COUNTERS,
+    ...(counters ?? {}),
+  };
+
+  nodes.forEach((node) => {
+    const counterKey = getNodeCounterKey(node);
+    const prefix = `${counterKey}-`;
+    if (!node.id.startsWith(prefix)) {
+      return;
+    }
+
+    const numericSuffix = Number(node.id.slice(prefix.length));
+    if (!Number.isInteger(numericSuffix) || numericSuffix < 0) {
+      return;
+    }
+
+    nextCounters[counterKey] = Math.max(
+      nextCounters[counterKey] ?? 1,
+      numericSuffix + 1,
+    );
+  });
+
+  return nextCounters;
+};
+
+export const normalizeCanvasNodeIdCounters = normalizeNodeIdCounters;
+
 export const buildCanvasPersistedState = ({
   nodes,
   edges,
@@ -217,18 +292,8 @@ export const buildCanvasPersistedState = ({
     nodes: persistedNodes,
     edges,
     groups: normalizeCanvasGroups(groups, persistedNodes),
-    nodeIdCounters,
+    nodeIdCounters: normalizeNodeIdCounters(nodeIdCounters, persistedNodes),
   };
-};
-
-const EMPTY_NODE_ID_COUNTERS = {
-  note: 1,
-  image: 1,
-  video: 1,
-  agent: 1,
-  panorama: 1,
-  audio: 1,
-  table: 1,
 };
 
 const unwrapApiData = <T,>(response: T | { data: T }): T => {
@@ -254,10 +319,10 @@ const toCanvasPersistedState = (canvas: {
   nodes: canvas.data?.nodes || [],
   edges: canvas.data?.edges || [],
   groups: canvas.data?.groups || [],
-  nodeIdCounters: {
-    ...EMPTY_NODE_ID_COUNTERS,
-    ...(canvas.data?.node_id_counters || {}),
-  },
+  nodeIdCounters: normalizeNodeIdCounters(
+    canvas.data?.node_id_counters,
+    canvas.data?.nodes || [],
+  ),
 });
 
 const toCanvasSaveRequest = (state: CanvasPersistedState) => ({
@@ -2246,15 +2311,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     highlightedEdgeIds: [],
     highlightedSourceNodeIds: [],
     referenceHoverRefCounts: {},
-    nodeIdCounters: {
-      note: 1,
-      image: 1,
-      video: 1,
-      agent: 1,
-      panorama: 1,
-      audio: 1,
-      table: 1,
-    },
+    nodeIdCounters: normalizeNodeIdCounters(),
     hydrated: false,
     projectId: null,
     // 全景图查看器初始化
@@ -2288,7 +2345,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     setHighlightedEdgeIds: (highlightedEdgeIds) => set({ highlightedEdgeIds }),
     setHighlightedSourceNodeIds: (highlightedSourceNodeIds) =>
       set({ highlightedSourceNodeIds }),
-    setNodeIdCounters: (nodeIdCounters) => set({ nodeIdCounters }),
+    setNodeIdCounters: (nodeIdCounters) =>
+      set((state) => ({
+        nodeIdCounters: normalizeNodeIdCounters(nodeIdCounters, state.nodes),
+      })),
     setProjectId: (projectId) => set({ projectId }),
     setPanoramaViewer: (panoramaViewer) => set({ panoramaViewer }),
     setAnnotationWorkspace: (annotationWorkspace) =>
@@ -2344,15 +2404,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           highlightedEdgeIds: [],
           highlightedSourceNodeIds: [],
           referenceHoverRefCounts: {},
-          nodeIdCounters: {
-            note: 1,
-            image: 1,
-            video: 1,
-            agent: 1,
-            panorama: 1,
-            audio: 1,
-            table: 1,
-          },
+          nodeIdCounters: normalizeNodeIdCounters(),
           hydrated: true,
           historyResetTrigger: get().historyResetTrigger + 1,
           groups: [],
@@ -2388,7 +2440,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         highlightedEdgeIds: [],
         highlightedSourceNodeIds: [],
         referenceHoverRefCounts: {},
-        nodeIdCounters: data.nodeIdCounters,
+        nodeIdCounters: normalizeNodeIdCounters(
+          data.nodeIdCounters,
+          persistedReadyNodes,
+        ),
         hydrated: true,
         historyResetTrigger: get().historyResetTrigger + 1,
         groups: normalizeCanvasGroups(data.groups, persistedReadyNodes),
@@ -2454,7 +2509,10 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           set({
             nodes: persistedReadyNodes,
             edges: data.edges,
-            nodeIdCounters: data.nodeIdCounters,
+            nodeIdCounters: normalizeNodeIdCounters(
+              data.nodeIdCounters,
+              persistedReadyNodes,
+            ),
             groups: normalizeCanvasGroups(data.groups, persistedReadyNodes),
             activeNodeId: null,
             activeVideoTool: null,
@@ -2495,15 +2553,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         activeNodeId: null,
         activeVideoTool: null,
         selectedGroupId: null,
-        nodeIdCounters: {
-          note: 1,
-          image: 1,
-          video: 1,
-          agent: 1,
-          panorama: 1,
-          audio: 1,
-          table: 1,
-        },
+        nodeIdCounters: normalizeNodeIdCounters(),
         hydrated: false,
         projectId: null,
       });
@@ -2519,9 +2569,15 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     getNextNodeId: (nodeType: NodeType) => {
       // 确保 nodeType 是有效的字符串
       const typeKey = nodeType || "default";
-      const current = get().nodeIdCounters[typeKey] ?? 0;
+      const existingNodeIds = new Set(get().nodes.map((node) => node.id));
+      let current = get().nodeIdCounters[typeKey] ?? 1;
+      let nextId = `${typeKey}-${current}`;
 
-      const nextId = `${typeKey}-${current}`;
+      while (existingNodeIds.has(nextId)) {
+        current += 1;
+        nextId = `${typeKey}-${current}`;
+      }
+
       set((state) => ({
         nodeIdCounters: {
           ...state.nodeIdCounters,

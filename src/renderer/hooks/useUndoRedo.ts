@@ -3,6 +3,7 @@ import type { CanvasPersistedState } from "shared/types/zustand/canvas-flow";
 import {
   buildCanvasPersistedState,
   hydrateCanvasNodesForRuntime,
+  normalizeCanvasNodeIdCounters,
   useCanvasFlowStore,
 } from "@/stores/canvasFlowStore";
 import {
@@ -81,7 +82,10 @@ export function useUndoRedo() {
       nodes: hydratedNodes,
       edges: JSON.parse(JSON.stringify(entry.edges)),
       groups: JSON.parse(JSON.stringify(entry.groups)),
-      nodeIdCounters: { ...entry.nodeIdCounters },
+      nodeIdCounters: normalizeCanvasNodeIdCounters(
+        entry.nodeIdCounters,
+        hydratedNodes,
+      ),
       selectedGroupId: null,
       selectedNodesCount: hydratedNodes.filter((node) => node.selected).length,
     });
@@ -103,7 +107,10 @@ export function useUndoRedo() {
       nodes: hydratedNodes,
       edges: JSON.parse(JSON.stringify(entry.edges)),
       groups: JSON.parse(JSON.stringify(entry.groups)),
-      nodeIdCounters: { ...entry.nodeIdCounters },
+      nodeIdCounters: normalizeCanvasNodeIdCounters(
+        entry.nodeIdCounters,
+        hydratedNodes,
+      ),
       selectedGroupId: null,
       selectedNodesCount: hydratedNodes.filter((node) => node.selected).length,
     });

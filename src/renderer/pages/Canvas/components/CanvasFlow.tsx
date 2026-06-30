@@ -1390,6 +1390,37 @@ export const CanvasFlow = ({
     flushStoreNodeChanges();
   }, [flushDisplayNodeChanges, flushStoreNodeChanges]);
 
+  const clearNodeSelection = useCallback(() => {
+    const storeNodes = useCanvasFlowStore.getState().nodes;
+    const storeNodeIds = new Set(storeNodes.map((node) => node.id));
+    const selectedNodeIds = new Set<string>();
+
+    storeNodes.forEach((node) => {
+      if (node.selected) {
+        selectedNodeIds.add(node.id);
+      }
+    });
+    displayNodes.forEach((node) => {
+      if (node.selected && storeNodeIds.has(node.id)) {
+        selectedNodeIds.add(node.id);
+      }
+    });
+
+    if (selectedNodeIds.size === 0) {
+      return false;
+    }
+
+    const changes = Array.from(selectedNodeIds).map((nodeId) => ({
+      id: nodeId,
+      type: "select" as const,
+      selected: false,
+    }));
+
+    setDisplayNodes((prev) => applyNodeChanges(changes, prev));
+    storeOnNodesChange(changes);
+    return true;
+  }, [displayNodes, storeOnNodesChange]);
+
   useEffect(() => {
     return () => {
       if (nodeChangeRafRef.current !== null) {
@@ -1735,16 +1766,61 @@ export const CanvasFlow = ({
     ],
   );
 
+  const selectOnlyNode = useCallback(
+    (nodeId: string) => {
+      const storeNodes = useCanvasFlowStore.getState().nodes;
+      const displaySelectedById = new Map(
+        displayNodes.map((node) => [node.id, Boolean(node.selected)]),
+      );
+      const changes = storeNodes
+        .map((node) => {
+          const nextSelected = node.id === nodeId;
+          const storeSelected = Boolean(node.selected);
+          const displaySelected = displaySelectedById.get(node.id) ?? false;
+
+          if (
+            storeSelected === nextSelected &&
+            displaySelected === nextSelected
+          ) {
+            return null;
+          }
+
+          return {
+            id: node.id,
+            type: "select" as const,
+            selected: nextSelected,
+          };
+        })
+        .filter(Boolean) as NodeChange<AllNodeType>[];
+
+      if (changes.length === 0) {
+        return;
+      }
+
+      setDisplayNodes((prev) => applyNodeChanges(changes, prev));
+      storeOnNodesChange(changes);
+    },
+    [displayNodes, storeOnNodesChange],
+  );
+
   const handleNodeClick = useCallback(
-    (_event: React.MouseEvent, node: AllNodeType) => {
+    (event: React.MouseEvent, node: AllNodeType) => {
       if (annotationWorkspace.open || hasActiveCanvasModal()) {
         return;
       }
 
+      if (!event.shiftKey && !event.ctrlKey && !event.metaKey) {
+        selectOnlyNode(node.id);
+      }
       setActiveNodeId(node.id);
       setSelectedGroupId(null);
     },
-    [annotationWorkspace.open, setActiveNodeId, setSelectedGroupId],
+    [
+      annotationWorkspace.open,
+      selectOnlyNode,
+      setActiveNodeId,
+      setSelectedGroupId,
+    ],
   );
 
   const handleNodeDrag = useCallback(
@@ -2152,25 +2228,14 @@ export const CanvasFlow = ({
     clearManualSelectionRect();
     setActiveNodeId(null);
     setSelectedGroupId(null);
-
-    const allNodes = useCanvasFlowStore.getState().nodes;
-    const selectedNodes = allNodes.filter((node) => node.selected);
-
-    if (selectedNodes.length > 0) {
-      const changes: NodeChange<AllNodeType>[] = selectedNodes.map((node) => ({
-        id: node.id,
-        type: "select",
-        selected: false,
-      }));
-      storeOnNodesChange(changes);
-    }
+    clearNodeSelection();
   }, [
     annotationWorkspace.open,
+    clearNodeSelection,
     clearManualSelectionRect,
     setActiveNodeId,
     setSelectionBoxActive,
     setSelectedGroupId,
-    storeOnNodesChange,
   ]);
 
   const buildResizedGroupFrame = useCallback(
@@ -2230,18 +2295,7 @@ export const CanvasFlow = ({
         return;
       }
 
-      const currentState = useCanvasFlowStore.getState();
-      const selectedNodes = currentState.nodes.filter((node) => node.selected);
-      if (selectedNodes.length > 0) {
-        storeOnNodesChange(
-          selectedNodes.map((node) => ({
-            id: node.id,
-            type: "select" as const,
-            selected: false,
-          })),
-        );
-      }
-
+      clearNodeSelection();
       setActiveNodeId(null);
       setSelectionBoxActive(false);
       setSelectedGroupId(groupId);
@@ -2621,6 +2675,7 @@ export const CanvasFlow = ({
     },
     [
       alignPositionToGrid,
+      clearNodeSelection,
       displayEdges,
       displayNodes,
       groups,
@@ -2655,18 +2710,7 @@ export const CanvasFlow = ({
         return;
       }
 
-      const currentState = useCanvasFlowStore.getState();
-      const selectedNodes = currentState.nodes.filter((node) => node.selected);
-      if (selectedNodes.length > 0) {
-        storeOnNodesChange(
-          selectedNodes.map((node) => ({
-            id: node.id,
-            type: "select" as const,
-            selected: false,
-          })),
-        );
-      }
-
+      clearNodeSelection();
       setSelectionBoxActive(false);
       setSelectedGroupId(groupId);
 
@@ -2812,6 +2856,7 @@ export const CanvasFlow = ({
     [
       annotationWorkspace.open,
       buildResizedGroupFrame,
+      clearNodeSelection,
       displayNodes,
       groups,
       screenToFlowPosition,
@@ -3280,22 +3325,16 @@ export const CanvasFlow = ({
         return;
       }
 
-      const currentState = useCanvasFlowStore.getState();
-      const selectedNodes = currentState.nodes.filter((node) => node.selected);
-      if (selectedNodes.length > 0) {
-        storeOnNodesChange(
-          selectedNodes.map((node) => ({
-            id: node.id,
-            type: "select" as const,
-            selected: false,
-          })),
-        );
-      }
-
+      clearNodeSelection();
       setSelectionBoxActive(false);
       setSelectedGroupId(groupId);
     },
-    [annotationWorkspace.open, setSelectedGroupId, storeOnNodesChange],
+    [
+      annotationWorkspace.open,
+      clearNodeSelection,
+      setSelectedGroupId,
+      setSelectionBoxActive,
+    ],
   );
 
   // 当 projectId 变化时切换项目
@@ -4962,7 +5001,11 @@ export const CanvasFlow = ({
                       ? storeSelectedNodeIds
                       : multiSelectedNodeIds;
                 setActiveNodeId(null);
-                createGroup(selectedNodeIds);
+                const groupId = createGroup(selectedNodeIds);
+                if (groupId) {
+                  clearNodeSelection();
+                  setSelectedGroupId(groupId);
+                }
               }}
               onLayoutHorizontal={() => {
                 if (!activeBatchGroup) {

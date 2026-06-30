@@ -11,21 +11,28 @@ import type {
 /**
  * Canvas 持久化状态定义（内部用，不参与 data+setter 配对）。
  */
+export type NodeType =
+  | "note"
+  | "image"
+  | "newVideo"
+  | "agent"
+  | "panorama"
+  | "audio"
+  | "textAgent"
+  | "imageAgent"
+  | "videoAgent"
+  | "table"
+  | "default";
+
+export type NodeIdCounters = Record<NodeType | "video", number>;
+
 export type CanvasPersistedState = {
   version: number;
   savedAt: number;
   nodes: AllNodeType[];
   edges: EdgeType[];
   groups: CanvasGroup[];
-  nodeIdCounters: {
-    note: number;
-    image: number;
-    video: number;
-    agent: number;
-    panorama: number;
-    audio: number;
-    table: number;
-  };
+  nodeIdCounters: NodeIdCounters;
 };
 
 /**
@@ -56,19 +63,6 @@ export type ActiveVideoTool = {
   nodeId: string;
   tool: "preview" | "snapshot" | "trim" | "removeCaptions" | "videoEnhance";
 } | null;
-
-export type NodeType =
-  | "note"
-  | "image"
-  | "newVideo"
-  | "agent"
-  | "panorama"
-  | "audio"
-  | "textAgent"
-  | "imageAgent"
-  | "videoAgent"
-  | "table"
-  | "default";
 
 /**
  * 节点坐标.
@@ -104,15 +98,7 @@ export type CanvasFlowStoreType = {
   highlightedEdgeIds: string[];
   highlightedSourceNodeIds: string[];
   referenceHoverRefCounts: Record<string, number>;
-  nodeIdCounters: {
-    note: number;
-    image: number;
-    video: number;
-    agent: number;
-    panorama: number;
-    audio: number;
-    table: number;
-  };
+  nodeIdCounters: NodeIdCounters;
   hydrated: boolean;
   projectId: string | null;
   panoramaViewer: {
@@ -141,15 +127,7 @@ export type CanvasFlowStoreType = {
   setEdges: (edges: EdgeType[]) => void;
   setHighlightedEdgeIds: (ids: string[]) => void;
   setHighlightedSourceNodeIds: (ids: string[]) => void;
-  setNodeIdCounters: (counters: {
-    note: number;
-    image: number;
-    video: number;
-    agent: number;
-    panorama: number;
-    audio: number;
-    table: number;
-  }) => void;
+  setNodeIdCounters: (counters: NodeIdCounters) => void;
   setHydrated: (hydrated: boolean) => void;
   setProjectId: (projectId: string | null) => void;
   setPanoramaViewer: (viewer: {

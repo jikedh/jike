@@ -8,6 +8,11 @@ import { toast } from "sonner";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { saveToolMediaFileToProject } from "../../utils/localMedia";
 
+const SNAPSHOT_NODE_HORIZONTAL_GAP = 0;
+const SNAPSHOT_NODE_VERTICAL_GAP = 16;
+const FALLBACK_VIDEO_NODE_WIDTH = 350;
+const FALLBACK_VIDEO_NODE_HEIGHT = 250;
+
 /**
  * 新版视频截帧 Hook
  * 封装首帧提取和指定时间点截帧的逻辑，截帧后会创建新的图片节点
@@ -41,26 +46,40 @@ export const useVideoFrameCapture = () => {
         y: window.innerHeight / 2,
       });
 
+      const flowState = useCanvasFlowStore.getState();
       const sourceVideoNode = sourceVideoNodeId
-        ? useCanvasFlowStore
-            .getState()
-            .nodes.find((node) => node.id === sourceVideoNodeId)
+        ? flowState.nodes.find((node) => node.id === sourceVideoNodeId)
         : null;
+      const nodeById = new Map(flowState.nodes.map((node) => [node.id, node]));
       const outputIndex = sourceVideoNodeId
-        ? useCanvasFlowStore
-            .getState()
-            .edges.filter((edge) => edge.source === sourceVideoNodeId).length
+        ? flowState.edges.filter((edge) => {
+            const targetNode = nodeById.get(edge.target);
+            return (
+              edge.source === sourceVideoNodeId &&
+              targetNode?.type === "imageNode"
+            );
+          }).length
         : 0;
+      const sourceVideoWidth =
+        sourceVideoNode?.width ??
+        sourceVideoNode?.measured?.width ??
+        FALLBACK_VIDEO_NODE_WIDTH;
+      const sourceVideoHeight =
+        sourceVideoNode?.height ??
+        sourceVideoNode?.measured?.height ??
+        FALLBACK_VIDEO_NODE_HEIGHT;
       const newNodeId = addNode(
         "image",
         sourceVideoNode
           ? {
-              x: sourceVideoNode.position.x - 390,
+              x:
+                sourceVideoNode.position.x +
+                sourceVideoWidth +
+                SNAPSHOT_NODE_HORIZONTAL_GAP,
               y:
                 sourceVideoNode.position.y +
-                (sourceVideoNode.height ?? 250) +
-                48 +
-                outputIndex * 298,
+                outputIndex *
+                  (sourceVideoHeight + SNAPSHOT_NODE_VERTICAL_GAP),
             }
           : centerPosition,
       );
