@@ -29,7 +29,6 @@ export type ChatSettingsStoreType = {
   autoSaveEnabled: boolean;
   gridVisible: boolean;
   snapToGrid: boolean;
-  edgeAnimationEnabled: boolean;
   snapGridSize: [number, number];
   nodeSearchVisible: boolean;
   devToolsVisible: boolean;
@@ -69,7 +68,6 @@ export type ChatSettingsStoreType = {
   setAutoSaveEnabled: (enabled: boolean) => void;
   setGridVisible: (visible: boolean) => void;
   setSnapToGrid: (enabled: boolean) => void;
-  setEdgeAnimationEnabled: (enabled: boolean) => void;
   setSnapGridSize: (size: [number, number]) => void;
   setNodeSearchVisible: (visible: boolean) => void;
   setDevToolsVisible: (visible: boolean) => void;

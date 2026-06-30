@@ -9,26 +9,10 @@ import { ScissorsLineDashed } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 
 const DEFAULT_EDGE_STYLE = {
   stroke: "rgba(255, 255, 255, 0.28)",
   strokeWidth: 1.2,
-};
-
-const SELECTED_EDGE_STREAK_STYLE = {
-  strokeWidth: 1.8,
-  strokeDasharray: "7.5 92.5",
-  animation: "selected-edge-streak 1.45s linear infinite",
-  opacity: 0.5,
-  filter:
-    "drop-shadow(0 0 2px rgba(215,155,255,0.3)) drop-shadow(0 0 5px rgba(180,63,235,0.08))",
-};
-
-const SELECTED_EDGE_GLASS_STYLE = {
-  strokeWidth: 0.55,
-  opacity: 0.42,
-  filter: "drop-shadow(0 0 3px rgba(215,155,255,0.18))",
 };
 
 const EDGE_CUT_BUTTON_ANIMATION_MS = 220;
@@ -59,9 +43,6 @@ const CustomEdgeComponent = (props: EdgeProps) => {
       Boolean(state.activeNodeId) &&
       (state.activeNodeId === props.source || state.activeNodeId === props.target),
   );
-  const edgeAnimationEnabled = useChatSettingsStore(
-    (state) => state.edgeAnimationEnabled,
-  );
   const edgeStyle = useMemo(() => {
     const isActive = isConnectedToActiveNode || isHovered;
 
@@ -82,8 +63,6 @@ const CustomEdgeComponent = (props: EdgeProps) => {
       strokeWidth: 3,
       strokeDasharray: "8 6",
       strokeDashoffset: 0,
-      animation: "reference-edge-dash 1.2s linear infinite",
-      filter: "drop-shadow(0 0 8px rgba(180,63,235,0.85))",
     };
   }, [isConnectedToActiveNode, isHighlighted, isHovered, props.style]);
 
@@ -170,36 +149,9 @@ const CustomEdgeComponent = (props: EdgeProps) => {
     };
   }, [clearHoverActivationTimer]);
 
-  const isFlowing = isHighlighted || isConnectedToActiveNode || isHovered;
-
   return (
     <>
-      <BaseEdge id={props.id} path={edgePath} style={edgeStyle} className="" />
-      {isFlowing && !isHighlighted ? (
-        <>
-          <path
-            d={edgePath}
-            fill="none"
-            pointerEvents="none"
-            stroke="#E9CCFF"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={SELECTED_EDGE_GLASS_STYLE}
-          />
-          {edgeAnimationEnabled ? (
-            <path
-              d={edgePath}
-              fill="none"
-              pathLength={100}
-              pointerEvents="none"
-              stroke="#D79BFF"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={SELECTED_EDGE_STREAK_STYLE}
-            />
-          ) : null}
-        </>
-      ) : null}
+      <BaseEdge id={props.id} path={edgePath} style={edgeStyle} />
       <path
         d={edgePath}
         fill="none"
