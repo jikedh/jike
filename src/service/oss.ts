@@ -1,4 +1,5 @@
 import { uploadOssFile } from "@/api/jikeGo";
+import { getJikeingToken } from "shared/utils/utils";
 
 // ===================== 预设缩略图尺寸 =====================
 
@@ -288,30 +289,49 @@ export async function copyVideoUrlToOss(
   videoUrl: string,
 ): Promise<string | null> {
   try {
-    const response = await fetch(videoUrl);
-    if (!response.ok) {
-      console.error(
-        "[OSS] Failed to fetch video for copy:",
-        response.statusText,
-      );
+    const invoke = getTauriInvoke();
+    if (!invoke) {
+      console.error("[OSS] Tauri invoke unavailable for video copy");
       return null;
     }
 
-    const blob = await response.blob();
-    const ext = blob.type.split("/")[1]?.toLowerCase() || "mp4";
-    const fileName = `copied-video-${Date.now()}.${ext}`;
-    const file = new File([blob], fileName, { type: blob.type });
+    const result = await invoke<{ success?: boolean; url?: string }>(
+      "copy_video_url_to_oss",
+      {
+        videoUrl,
+        uploadApiUrl: `${getJikeGoBaseUrl()}/v1/oss/upload`,
+        authToken: getJikeingToken() || null,
+      },
+    );
 
-    const uploadResult = await uploadFileToOSS(file);
-    if (!uploadResult.url) {
-      console.error("[OSS] Failed to upload copied video");
-      return null;
-    }
-
-    return uploadResult.url;
+    return result?.url || null;
   } catch (error) {
     console.error("[OSS] copyVideoUrlToOss error:", error);
     return null;
   }
 }
+
+type TauriInvoke = <T = unknown>(
+  cmd: string,
+  args?: Record<string, unknown>,
+) => Promise<T>;
+
+const getTauriInvoke = (): TauriInvoke | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const tauriWindow = window as unknown as {
+    __TAURI_INTERNALS__?: { invoke?: TauriInvoke };
+    __TAURI__?: { invoke?: TauriInvoke };
+  };
+
+  return tauriWindow.__TAURI_INTERNALS__?.invoke ?? tauriWindow.__TAURI__?.invoke ?? null;
+};
+
+const getJikeGoBaseUrl = () =>
+  (import.meta.env.VITE_JIKE_GO_BASE_URL || "http://localhost:9181").replace(
+    /\/$/,
+    "",
+  );
 

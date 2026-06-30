@@ -93,6 +93,7 @@ pub fn run() {
             commands::debug_get_app_version,
             commands::debug_capture_page,
             commands::video_processing_trim,
+            commands::copy_video_url_to_oss,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
