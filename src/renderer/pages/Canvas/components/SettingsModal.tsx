@@ -118,7 +118,6 @@ export const SettingsModal = ({
     devToolsVisible,
     gridVisible,
     snapToGrid,
-    edgeAnimationEnabled,
     storagePath,
     assetStoragePath,
     jianyingDraftsPath,
@@ -130,7 +129,6 @@ export const SettingsModal = ({
     setDevToolsVisible,
     setGridVisible,
     setSnapToGrid,
-    setEdgeAnimationEnabled,
     setStoragePath,
     setAssetStoragePath,
     setJianyingDraftsPath,
@@ -973,22 +971,6 @@ export const SettingsModal = ({
                           <Switch
                             checked={snapToGrid}
                             onCheckedChange={setSnapToGrid}
-                          />
-                        </div>
-                      </section>
-                      <section className="rounded-xl border border-white/5 bg-black/20 px-4 py-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-sm font-medium text-white/80">
-                              连接线动效
-                            </div>
-                            <div className="text-xs text-white/40 mt-1">
-                              选中节点时显示连接线上的流光提示
-                            </div>
-                          </div>
-                          <Switch
-                            checked={edgeAnimationEnabled}
-                            onCheckedChange={setEdgeAnimationEnabled}
                           />
                         </div>
                       </section>
