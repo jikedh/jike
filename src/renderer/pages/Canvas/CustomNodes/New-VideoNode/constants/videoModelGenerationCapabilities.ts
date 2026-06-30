@@ -212,7 +212,7 @@ export const VIDEO_MODEL_GENERATION_CAPABILITIES: Record<
         params: {
           duration: [5, 10, 15],
           ratio: ["16:9", "9:16", "1:1"],
-          generateAudio: false,
+          generateAudio: true,
         },
       },
     },

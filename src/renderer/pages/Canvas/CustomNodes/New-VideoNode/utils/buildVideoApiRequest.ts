@@ -871,7 +871,7 @@ const buildKuaiziKlingOmniRequest = (
     kling_mode: mode,
     aspect_ratio: ratio,
     duration,
-    generate_audio: true,
+    generate_audio: request.params.generateAudio ?? true,
     ...(referenceImages.length > 0 ? { images: referenceImages } : {}),
   };
 };

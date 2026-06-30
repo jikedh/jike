@@ -399,7 +399,7 @@ const kuaiziKlingOmniConfig = (): VideoParamConfig => ({
     aspectRatio: "16:9",
     quality: "std",
     duration: 5,
-    generateAudio: false,
+    generateAudio: true,
   },
 });
 
