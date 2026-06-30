@@ -25,6 +25,7 @@ dist-ssr
 dist
 build
 out
+src-tauri
 .codegraph
 *.log*
 release
