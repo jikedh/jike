@@ -9,6 +9,7 @@ import type { VideoAgentNodeType, VideoAgentPresetId } from "shared/types/flow";
 import { createDashscopeChatCompletion } from "@/api/ai";
 import { useMessage } from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { getPrimaryRemoteVideoUrlFromNodeData } from "../../New-VideoNode/utils/video-url";
 import { parseVideoAnalysisResult } from "../utils";
 
 interface UseVideoAgentGenerateProps {
@@ -54,6 +55,7 @@ export const useVideoAgentGenerate = ({
   /** 从上游连接中获取视频 URL */
   const getParentVideoUrl = useCallback((): {
     videoUrl: string | null;
+    videoNodeId: string | null;
     inputError: string | null;
   } => {
     const currentEdges = useCanvasFlowStore.getState().edges;
@@ -61,7 +63,11 @@ export const useVideoAgentGenerate = ({
 
     const incomingEdges = currentEdges.filter((edge) => edge.target === id);
     if (!incomingEdges.length) {
-      return { videoUrl: null, inputError: "需要连接一个视频节点作为输入" };
+      return {
+        videoUrl: null,
+        videoNodeId: null,
+        inputError: "需要连接一个视频节点作为输入",
+      };
     }
 
     const parentVideoNode = incomingEdges
@@ -69,17 +75,25 @@ export const useVideoAgentGenerate = ({
       .find((node) => node?.type === "newVideoNode");
 
     if (!parentVideoNode) {
-      return { videoUrl: null, inputError: "输入节点必须是视频节点" };
+      return {
+        videoUrl: null,
+        videoNodeId: null,
+        inputError: "输入节点必须是视频节点",
+      };
     }
 
-    const videoUrl =
-      parentVideoNode.data?.video_url ??
-      parentVideoNode.data?.result?.data?.[0]?.url;
+    const videoUrl = getPrimaryRemoteVideoUrlFromNodeData(
+      parentVideoNode.data,
+    );
     if (!videoUrl) {
-      return { videoUrl: null, inputError: "视频节点尚未生成视频" };
+      return {
+        videoUrl: null,
+        videoNodeId: parentVideoNode.id,
+        inputError: "视频节点尚未生成视频",
+      };
     }
 
-    return { videoUrl, inputError: null };
+    return { videoUrl, videoNodeId: parentVideoNode.id, inputError: null };
   }, [id]);
 
   /**
@@ -89,7 +103,10 @@ export const useVideoAgentGenerate = ({
    * 多次点击时每次生成独立新节点（Y 轴随机偏移避免堆叠）
    */
   const createOutputNode = useCallback(
-    (content: string) => {
+    (
+      content: string,
+      sourceVideo?: { videoUrl: string; videoNodeId: string | null },
+    ) => {
       const currentNode = nodes.find((n) => n.id === id);
       const randomYOffset = (Math.random() - 0.5) * 80;
       const nextPosition = currentNode
@@ -110,6 +127,8 @@ export const useVideoAgentGenerate = ({
           tableColumns: [...VIDEO_PULL_FILM_COLUMNS],
           tableRows: tableRows,
           tableCharacterProfiles: characterProfiles,
+          tableSourceVideoUrl: sourceVideo?.videoUrl,
+          tableSourceVideoNodeId: sourceVideo?.videoNodeId ?? undefined,
         });
       } else {
         // 其他预设 → 输出便签节点
@@ -143,7 +162,7 @@ export const useVideoAgentGenerate = ({
   const handleGenerate = useCallback(async () => {
     if (isGenerating) return;
 
-    const { videoUrl, inputError } = getParentVideoUrl();
+    const { videoUrl, videoNodeId, inputError } = getParentVideoUrl();
     if (inputError || !videoUrl) {
       warning(inputError || "未知错误");
       return;
@@ -208,7 +227,7 @@ export const useVideoAgentGenerate = ({
       }
 
       // 以便签子节点形式追加，支持多次点击
-      createOutputNode(content);
+      createOutputNode(content, { videoUrl, videoNodeId });
       updateNodeData({ status: "success" });
       success("分析完成");
     } catch (err: any) {

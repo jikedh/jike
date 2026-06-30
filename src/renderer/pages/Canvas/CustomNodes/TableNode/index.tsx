@@ -1,7 +1,14 @@
-import { IconDownload, IconPhotoPlus, IconTable, IconUser } from "@tabler/icons-react";
+import {
+  IconDownload,
+  IconPhotoPlus,
+  IconPencil,
+  IconTable,
+  IconUser,
+} from "@tabler/icons-react";
 import { type NodeProps, NodeResizer, Position } from "@xyflow/react";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { generateVideoSnapshotUrl, uploadFileToOSS } from "service/oss";
 import {
   AGNES_IMAGE_2_FLASH_MODEL,
   AGNES_PLATFORM,
@@ -23,10 +30,23 @@ import {
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import { useMessage } from "@/hooks/useMessage";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
+import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
+import {
+  cacheStoryboardImageToProject,
+  getStoryboardImageCacheKey,
+  type StoryboardImageCacheMap,
+} from "@/services/storyboardImageCache";
 import { exportVideoPullFilmExcel } from "@/services/tableExcelExport";
 import { generateTableStoryboardImage } from "@/services/tableStoryboardImageGeneration";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { getPrimaryRemoteVideoUrlFromNodeData } from "../New-VideoNode/utils/video-url";
 import { NodeNameBadge } from "../shared/NodeNameBadge";
+import Lightbox from "yet-another-react-lightbox";
+import Download from "yet-another-react-lightbox/plugins/download";
+import Fullscreen from "yet-another-react-lightbox/plugins/fullscreen";
+import Share from "yet-another-react-lightbox/plugins/share";
+import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
 
 const TABLE_COLUMNS = [
   "姓名",
@@ -38,18 +58,15 @@ const TABLE_COLUMNS = [
 ];
 
 const STORYBOARD_IMAGE_COLUMN = "分镜图";
-const STORYBOARD_PROMPT_COLUMNS = [
-  "场景",
-  "镜号",
-  "角色",
-  "景别",
-  "画面",
-  "角度",
-  "主体动作",
-  "信息点",
-  "技参",
-] as const;
-
+const STORYBOARD_SKETCH_COLUMN = "分镜草图";
+const STORYBOARD_ACTION_COLUMN = "操作";
+const STORYBOARD_CAPTURE_CONCURRENCY = 6;
+const STORYBOARD_SKETCH_CONCURRENCY = 4;
+const STORYBOARD_SKETCH_MODEL = AGNES_IMAGE_2_FLASH_MODEL;
+const STORYBOARD_SKETCH_PLATFORM = AGNES_PLATFORM;
+const STORYBOARD_SKETCH_SIZE = "16:9";
+const STORYBOARD_SKETCH_RESOLUTION = "1K";
+const STORYBOARD_SKETCH_RETRY_LIMIT = 2;
 const COMMON_IMAGE_SIZE_OPTIONS = [
   { label: "1:1", value: "1:1" },
   { label: "4:3", value: "4:3" },
@@ -57,7 +74,6 @@ const COMMON_IMAGE_SIZE_OPTIONS = [
   { label: "16:9", value: "16:9" },
   { label: "9:16", value: "9:16" },
 ];
-
 const WIDE_IMAGE_SIZE_OPTIONS = [
   ...COMMON_IMAGE_SIZE_OPTIONS,
   { label: "3:2", value: "3:2" },
@@ -65,43 +81,29 @@ const WIDE_IMAGE_SIZE_OPTIONS = [
   { label: "21:9", value: "21:9" },
   { label: "9:21", value: "9:21" },
 ];
-
 const IMAGE_RESOLUTION_OPTIONS = [
   { label: "1K", value: "1K" },
   { label: "2K", value: "2K" },
   { label: "4K", value: "4K" },
 ];
-
 const AGNES_IMAGE_RESOLUTION_OPTIONS = [{ label: "1K", value: "1K" }];
-
 const STORYBOARD_SELECT_CONTENT_CLASS =
   "!z-[10001] border border-white/10 bg-[#141418] text-white shadow-2xl ring-white/10";
 const STORYBOARD_SELECT_ITEM_CLASS =
   "text-white focus:bg-white/10 focus:text-white data-[state=checked]:text-[#B43FEB] data-[state=checked]:focus:text-[#B43FEB]";
-
-const DEFAULT_STORYBOARD_IMAGE_PROMPT_TEMPLATE = [
-  "你是一名影视分镜师和翻拍导演，请根据分镜信息生成一张可用于后续翻拍参考的单镜头分镜图。",
-  "角色设定：",
-  "{{character_profiles}}",
-  "分镜信息：",
-  "{{storyboard_info}}",
-  "生成约束：",
-  "1. 必须输出单张完整图像，一个画面，一张图，无网格、无拼贴、无分屏、无九宫格。",
-  "2. 画面中只保留一个核心主体或一个主要人物，不要生成多人同框、群像、多个角色站位；如果分镜信息里出现多个人物，只表现最关键动作执行者，其他人用环境、视线方向、道具或虚化背景暗示。",
-  "3. 严格保持角色样貌、发型、服装、颜色、体型、道具和明显特征一致，不要随意换衣服、换发型、换年龄、换性别。",
-  "4. 严格根据场景、镜号、景别、画面、角度、主体动作、信息点、技参确定构图和镜头语言，不额外添加与分镜无关的剧情。",
-  "5. 画面应像真实电影分镜或导演预演图，主体清晰，机位、景别、动作方向和运动趋势明确，便于后续翻拍执行。",
-  "6. 不要出现文字、字幕、水印、UI、表格、说明性标注、画中画、分屏。",
+const DEFAULT_STORYBOARD_SKETCH_PROMPT_TEMPLATE = [
+  "请只根据输入的分镜图参考图生成一张影视分镜草图。",
+  "必须保持参考图中的构图、主体位置、人物姿态、镜头角度、景别、动作方向、明暗关系和画幅比例。",
+  "草图风格：黑白或灰阶导演分镜线稿，清晰轮廓，保留必要的光影层次，适合拍摄执行参考。",
+  "不要生成信息表格、分镜信息栏、字幕、台词、说明文字、水印、UI、画中画或分屏。",
+  "不要根据任何表格文字或分镜字段补充画面内容；画面内容只来自输入的分镜图。",
 ].join("\n");
-
-const STORYBOARD_CONCURRENCY_OPTIONS = [
-  { label: "2", value: "2" },
-  { label: "3", value: "3" },
-  { label: "4", value: "4" },
-  { label: "5", value: "5" },
-  { label: "6", value: "6" },
-];
-
+const LEGACY_STORYBOARD_SKETCH_PROMPT_MARKERS = [
+  "{{storyboard_table}}",
+  "分镜草图卡片",
+  "信息表格区",
+  "下方表格",
+] as const;
 const CHARACTER_PROFILE_DISPLAY_FIELDS = [
   { label: "别名", keys: ["aliases", "别名", "称呼"] },
   { label: "样貌", keys: ["appearance", "样貌", "外貌", "长相"] },
@@ -117,72 +119,158 @@ const CHARACTER_PROFILE_DISPLAY_FIELDS = [
   },
 ] as const;
 
-const getDefaultStoryboardImageModel = () =>
-  IMAGE_MODELS.find((model) => model.model === AGNES_IMAGE_2_FLASH_MODEL) ??
+const isImageSource = (value?: string) =>
+  Boolean(
+    value &&
+    (/^https?:\/\//i.test(value) ||
+      value.startsWith("data:image/") ||
+      value.startsWith("blob:")),
+  );
+
+const isStoryboardMediaColumn = (column: string) =>
+  column === STORYBOARD_IMAGE_COLUMN || column === STORYBOARD_SKETCH_COLUMN;
+
+const isStoryboardActionColumn = (column: string) =>
+  column === STORYBOARD_ACTION_COLUMN;
+
+type StoryboardCaptureRow = {
+  row: Record<string, unknown>;
+  rowIndex: number;
+  captureTimeMs: number;
+};
+
+type StoryboardSketchRow = {
+  rowIndex: number;
+  referenceImageUrl: string;
+};
+
+type GenerateStoryboardSketchWithRetryOptions = {
+  rowIndex: number;
+  referenceImageUrl: string;
+  signal: AbortSignal;
+};
+
+type SourceVideoInfo = {
+  videoUrl: string;
+  videoNodeId?: string;
+};
+
+const getVideoUrlFromNode = (node: any) =>
+  String(getPrimaryRemoteVideoUrlFromNodeData(node?.data) ?? "").trim();
+
+const parseTimeTokenToSeconds = (token: string) => {
+  const normalized = token.trim().replace(/：/g, ":");
+  if (!normalized) return null;
+
+  const secondsMatch = normalized.match(/^(\d+(?:\.\d+)?)\s*(?:秒|s)$/i);
+  if (secondsMatch) {
+    return Number(secondsMatch[1]);
+  }
+
+  const parts = normalized.split(":");
+  if (parts.length === 2 || parts.length === 3) {
+    const numbers = parts.map((part) => Number(part));
+    if (numbers.some((value) => Number.isNaN(value))) return null;
+
+    if (numbers.length === 2) {
+      const [minutes, seconds] = numbers;
+      return minutes * 60 + seconds;
+    }
+
+    const [hours, minutes, seconds] = numbers;
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+
+  return null;
+};
+
+const parseStoryboardCaptureTimeMs = (value: unknown) => {
+  const text = String(value ?? "")
+    .replace(/：/g, ":")
+    .trim();
+  if (!text) return null;
+
+  const timeTokens =
+    text.match(/\d{1,2}:\d{1,2}(?::\d{1,2})?(?:\.\d+)?/g) ??
+    text.match(/\d+(?:\.\d+)?\s*(?:秒|s)/gi) ??
+    [];
+  const seconds = timeTokens
+    .map(parseTimeTokenToSeconds)
+    .filter((time): time is number => time != null && time >= 0);
+
+  if (seconds.length >= 2) {
+    const [start, end] = seconds;
+    const captureTime = end >= start ? (start + end) / 2 : start;
+    return Math.round(captureTime * 1000);
+  }
+
+  if (seconds.length === 1) {
+    return Math.round(seconds[0] * 1000);
+  }
+
+  return null;
+};
+
+const ensureColumnAfter = (
+  columns: string[],
+  column: string,
+  afterColumn: string,
+) => {
+  if (columns.includes(column)) return columns;
+  const afterIndex = columns.indexOf(afterColumn);
+  if (afterIndex < 0) return [...columns, column];
+  return [
+    ...columns.slice(0, afterIndex + 1),
+    column,
+    ...columns.slice(afterIndex + 1),
+  ];
+};
+
+const ensureStoryboardColumns = (columns: string[]) =>
+  ensureColumnAfter(
+    ensureColumnAfter(columns, STORYBOARD_IMAGE_COLUMN, "转场"),
+    STORYBOARD_SKETCH_COLUMN,
+    STORYBOARD_IMAGE_COLUMN,
+  );
+
+const getDisplayColumns = (columns: string[], showActions: boolean) => {
+  const dataColumns = columns.filter(
+    (column) => column !== STORYBOARD_ACTION_COLUMN,
+  );
+  return showActions ? [...dataColumns, STORYBOARD_ACTION_COLUMN] : dataColumns;
+};
+
+const buildStoryboardSketchPrompt = (
+  template = DEFAULT_STORYBOARD_SKETCH_PROMPT_TEMPLATE,
+) => {
+  const promptTemplate =
+    template.trim() || DEFAULT_STORYBOARD_SKETCH_PROMPT_TEMPLATE;
+  if (
+    LEGACY_STORYBOARD_SKETCH_PROMPT_MARKERS.some((marker) =>
+      promptTemplate.includes(marker),
+    )
+  ) {
+    return DEFAULT_STORYBOARD_SKETCH_PROMPT_TEMPLATE;
+  }
+  return promptTemplate;
+};
+
+const isAbortGenerationError = (error: unknown) =>
+  error instanceof Error && error.name === "AbortError";
+
+const getGenerationErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "生成失败";
+
+const getDefaultStoryboardSketchModel = () =>
+  IMAGE_MODELS.find((model) => model.model === STORYBOARD_SKETCH_MODEL) ??
   IMAGE_MODELS[0];
 
-const getModelOption = (model: string, platform?: string) =>
+const getSketchModelOption = (model: string, platform?: string) =>
   IMAGE_MODELS.find(
     (item) => item.model === model && item.platform === platform,
   ) ??
   IMAGE_MODELS.find((item) => item.model === model) ??
-  getDefaultStoryboardImageModel();
-
-const isImageSource = (value?: string) =>
-  Boolean(
-    value &&
-      (/^https?:\/\//i.test(value) ||
-        value.startsWith("data:image/") ||
-        value.startsWith("blob:")),
-  );
-
-const buildStoryboardPromptInfo = (row: Record<string, unknown>) =>
-  STORYBOARD_PROMPT_COLUMNS.map((column) => {
-    const value = String(row[column] ?? "").trim();
-    return value ? `${column}：${value}` : "";
-  })
-    .filter(Boolean)
-    .join("\n");
-
-const normalizeStoryboardName = (value: unknown) =>
-  String(value ?? "")
-    .trim()
-    .replace(/[【】\[\]（）()《》"'“”‘’\s]/g, "")
-    .toLowerCase();
-
-const splitStoryboardNames = (value: unknown) =>
-  String(value ?? "")
-    .split(/[、,，/／;；\s]+/)
-    .map(normalizeStoryboardName)
-    .filter(Boolean)
-    .filter((name) => !["无", "无人物", "无角色", "环境", "空镜"].includes(name));
-
-const formatCharacterProfile = (profile: unknown) => {
-  if (!profile || typeof profile !== "object") return "";
-  const item = profile as Record<string, unknown>;
-  const name = String(item.name ?? item.角色 ?? "").trim();
-  if (!name) return "";
-
-  const aliases = Array.isArray(item.aliases)
-    ? item.aliases.filter(Boolean).join("、")
-    : String(item.别名 ?? "").trim();
-  const parts = [
-    aliases ? `别名：${aliases}` : "",
-    item.appearance || item.样貌 ? `样貌：${item.appearance ?? item.样貌}` : "",
-    item.outfit || item.穿着 ? `穿着：${item.outfit ?? item.穿着}` : "",
-    item.accessories || item.道具
-      ? `道具：${item.accessories ?? item.道具}`
-      : "",
-    item.distinctiveFeatures || item.明显特征
-      ? `明显特征：${item.distinctiveFeatures ?? item.明显特征}`
-      : "",
-    item.consistencyPrompt || item.一致性提示
-      ? `一致性提示：${item.consistencyPrompt ?? item.一致性提示}`
-      : "",
-  ].filter(Boolean);
-
-  return `${name}：${parts.join("；") || String(item.raw ?? "").trim()}`;
-};
+  getDefaultStoryboardSketchModel();
 
 const stringifyProfileValue = (value: unknown) => {
   if (Array.isArray(value)) {
@@ -247,72 +335,11 @@ const getCharacterProfileDetails = (profile: unknown) => {
 
   return Object.entries(item)
     .filter(([key]) => !["id", "name", "角色", "姓名"].includes(key))
-    .map(([key, value]) => ({ label: key, value: stringifyProfileValue(value) }))
+    .map(([key, value]) => ({
+      label: key,
+      value: stringifyProfileValue(value),
+    }))
     .filter(({ value }) => Boolean(value));
-};
-
-const getCharacterProfileNames = (profile: unknown) => {
-  if (!profile || typeof profile !== "object") return [];
-  const item = profile as Record<string, unknown>;
-  const names = [
-    item.name,
-    item.角色,
-    ...(Array.isArray(item.aliases) ? item.aliases : []),
-    item.别名,
-  ];
-  return names.flatMap(splitStoryboardNames);
-};
-
-const buildCharacterProfilesPrompt = (
-  row: Record<string, unknown>,
-  profiles?: unknown[],
-) => {
-  if (!profiles?.length) return "无明确角色档案";
-
-  const rowNames = splitStoryboardNames(row.角色);
-  const matchedProfiles =
-    rowNames.length > 0
-      ? profiles.filter((profile) => {
-          const profileNames = getCharacterProfileNames(profile);
-          return rowNames.some((rowName) => profileNames.includes(rowName));
-        })
-      : [];
-  const selectedProfiles =
-    matchedProfiles.length > 0
-      ? matchedProfiles
-      : rowNames.length === 0 && profiles.length === 1
-        ? profiles
-        : [];
-  const profileLines = selectedProfiles.map(formatCharacterProfile).filter(Boolean);
-
-  return profileLines.length > 0 ? profileLines.join("\n") : "无明确角色档案";
-};
-
-const buildStoryboardImagePrompt = (
-  row: Record<string, unknown>,
-  template: string,
-  characterProfiles?: unknown[],
-) => {
-  const promptTemplate =
-    template.trim() || DEFAULT_STORYBOARD_IMAGE_PROMPT_TEMPLATE;
-  const promptInfo = buildStoryboardPromptInfo(row) || "无";
-  const characterProfilesPrompt = buildCharacterProfilesPrompt(
-    row,
-    characterProfiles,
-  );
-  let result = promptTemplate
-    .split("{{storyboard_info}}")
-    .join(promptInfo)
-    .split("{{character_profiles}}")
-    .join(characterProfilesPrompt);
-
-  if (!promptTemplate.includes("{{storyboard_info}}")) {
-    result = [result, "分镜信息：", promptInfo].join("\n");
-  }
-  if (!promptTemplate.includes("{{character_profiles}}")) {
-    result = [result, "角色设定：", characterProfilesPrompt].join("\n");
-  }
-  return result;
 };
 
 const FullscreenIcon = () => (
@@ -376,6 +403,7 @@ interface EditableCellProps {
   rowIndex: number;
   column: string;
   onUpdate: (rowIndex: number, column: string, value: string) => void;
+  onPreviewImage?: (url: string) => void;
   maxWidth?: string;
   className?: string;
 }
@@ -386,6 +414,7 @@ const EditableCell = memo(
     rowIndex,
     column,
     onUpdate,
+    onPreviewImage,
     maxWidth,
     className,
   }: EditableCellProps) => {
@@ -429,24 +458,25 @@ const EditableCell = memo(
       [],
     );
 
-    if (column === STORYBOARD_IMAGE_COLUMN && !isEditing) {
+    if (isStoryboardMediaColumn(column) && !isEditing) {
       if (isImageSource(value)) {
         return (
-          <a
-            href={value}
-            target="_blank"
-            rel="noreferrer"
-            className="block w-[148px] overflow-hidden rounded-md border border-white/10 bg-black/20"
-            onClick={(e) => e.stopPropagation()}
-            onDoubleClick={handleDoubleClick}
+          <button
+            type="button"
+            className="flex h-[84px] w-[148px] items-center justify-center overflow-hidden rounded-md border border-white/10 bg-black/20 cursor-zoom-in"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPreviewImage?.(value);
+            }}
+            title="预览图片"
           >
             <img
               src={value}
               alt=""
-              className="h-[84px] w-full object-cover"
+              className="h-full w-full object-contain"
               draggable={false}
             />
-          </a>
+          </button>
         );
       }
 
@@ -505,6 +535,10 @@ interface TableBodyProps {
   rows: CharacterTableRow[];
   columns: string[];
   onUpdateCell: (rowIndex: number, column: string, value: string) => void;
+  onPreviewImage?: (url: string) => void;
+  onGenerateStoryboardSketch?: (rowIndex: number) => void;
+  storyboardActionDisabled?: boolean;
+  storyboardSketchingRowIndex?: number | null;
   maxWidth?: string;
   cellClassName?: string;
 }
@@ -514,6 +548,10 @@ const TableBody = memo(
     rows,
     columns,
     onUpdateCell,
+    onPreviewImage,
+    onGenerateStoryboardSketch,
+    storyboardActionDisabled,
+    storyboardSketchingRowIndex,
     maxWidth,
     cellClassName,
   }: TableBodyProps) => {
@@ -540,23 +578,52 @@ const TableBody = memo(
             key={rowIndex}
             className="hover:bg-white/[0.03] transition-colors"
           >
-            {columns.map((col) => (
-              <td
-                key={col}
-                className={cn(
-                  "relative px-3 py-2 border-b border-r border-white/[0.06] text-[#8D8D8E] text-xs align-top",
-                  cellClassName,
-                )}
-              >
-                <EditableCell
-                  value={row[col as keyof typeof row] || ""}
-                  rowIndex={rowIndex}
-                  column={col}
-                  onUpdate={onUpdateCell}
-                  maxWidth={maxWidth}
-                />
-              </td>
-            ))}
+            {columns.map((col) => {
+              const isActionColumn = isStoryboardActionColumn(col);
+              const hasSketch = isImageSource(
+                String(row[STORYBOARD_SKETCH_COLUMN] ?? "").trim(),
+              );
+              const isSketchingThisRow =
+                storyboardSketchingRowIndex === rowIndex;
+
+              return (
+                <td
+                  key={col}
+                  className={cn(
+                    "relative px-3 py-2 border-b border-r border-white/[0.06] text-[#8D8D8E] text-xs align-top",
+                    isActionColumn && "text-center align-middle whitespace-nowrap",
+                    cellClassName,
+                  )}
+                >
+                  {isActionColumn ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onGenerateStoryboardSketch?.(rowIndex);
+                      }}
+                      disabled={storyboardActionDisabled}
+                      className="rounded-md border border-[#B43FEB]/70 bg-[#B43FEB] px-2.5 py-1.5 text-[11px] font-medium text-white transition-colors hover:border-[#c45bff] hover:bg-[#c45bff] disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      {isSketchingThisRow
+                        ? "生成中..."
+                        : hasSketch
+                          ? "重新生成分镜草图"
+                          : "生成分镜草图"}
+                    </button>
+                  ) : (
+                    <EditableCell
+                      value={row[col as keyof typeof row] || ""}
+                      rowIndex={rowIndex}
+                      column={col}
+                      onUpdate={onUpdateCell}
+                      onPreviewImage={onPreviewImage}
+                      maxWidth={maxWidth}
+                    />
+                  )}
+                </td>
+              );
+            })}
           </tr>
         ))}
       </>
@@ -577,6 +644,7 @@ export const TableNode = memo(
   }: NodeProps<TableNodeType>) => {
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
+    const projectId = useCanvasFlowStore((state) => state.projectId);
     const updateTableNodeData = useCanvasFlowStore(
       (state) => state.updateTableNodeData,
     );
@@ -588,8 +656,7 @@ export const TableNode = memo(
     const hasMultipleSelected = useCanvasFlowStore(
       (state) => state.selectedNodesCount > 1,
     );
-    const shouldShowToolbar =
-      selected && !isDragging && !hasMultipleSelected;
+    const shouldShowToolbar = selected && !isDragging && !hasMultipleSelected;
     const {
       totalPoints,
       fallbackAIGenPrice,
@@ -601,30 +668,38 @@ export const TableNode = memo(
 
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isRenaming, setIsRenaming] = useState(false);
+    const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
     const [characterProfilesDialogOpen, setCharacterProfilesDialogOpen] =
       useState(false);
-    const defaultStoryboardModel = useMemo(
-      () => getDefaultStoryboardImageModel(),
+    const defaultStoryboardSketchModel = useMemo(
+      () => getDefaultStoryboardSketchModel(),
       [],
     );
-    const [storyboardDialogOpen, setStoryboardDialogOpen] = useState(false);
-    const [storyboardModel, setStoryboardModel] = useState(
-      defaultStoryboardModel.model,
+    const [storyboardSketchDialogOpen, setStoryboardSketchDialogOpen] =
+      useState(false);
+    const [storyboardSketchModel, setStoryboardSketchModel] = useState(
+      defaultStoryboardSketchModel.model,
     );
-    const [storyboardPlatform, setStoryboardPlatform] = useState(
-      defaultStoryboardModel.platform,
+    const [storyboardSketchPlatform, setStoryboardSketchPlatform] = useState(
+      defaultStoryboardSketchModel.platform,
     );
-    const [storyboardSize, setStoryboardSize] = useState("1:1");
-    const [storyboardResolution, setStoryboardResolution] = useState("1K");
-    const [storyboardConcurrency, setStoryboardConcurrency] = useState("6");
-    const [storyboardPromptTemplate, setStoryboardPromptTemplate] = useState(
-      DEFAULT_STORYBOARD_IMAGE_PROMPT_TEMPLATE,
+    const [storyboardSketchSize, setStoryboardSketchSize] = useState(
+      STORYBOARD_SKETCH_SIZE,
     );
+    const [storyboardSketchResolution, setStoryboardSketchResolution] =
+      useState(STORYBOARD_SKETCH_RESOLUTION);
+    const [storyboardSketchPromptTemplate, setStoryboardSketchPromptTemplate] =
+      useState(DEFAULT_STORYBOARD_SKETCH_PROMPT_TEMPLATE);
     const [storyboardGenerating, setStoryboardGenerating] = useState(false);
+    const [storyboardTaskType, setStoryboardTaskType] = useState<
+      "capture" | "sketch" | null
+    >(null);
     const [storyboardProgress, setStoryboardProgress] = useState({
       done: 0,
       total: 0,
     });
+    const [storyboardSketchingRowIndex, setStoryboardSketchingRowIndex] =
+      useState<number | null>(null);
     const storyboardAbortControllerRef = useRef<AbortController | null>(null);
 
     const handleVisibilityClass = selected
@@ -633,57 +708,104 @@ export const TableNode = memo(
 
     const { title, rows } = data;
     const nodeLabel = data.nickname ?? title ?? "表格节点";
-    const columns = data.columns || TABLE_COLUMNS;
+    const rawColumns = data.columns || TABLE_COLUMNS;
+    const dataColumns = rawColumns.filter(
+      (column) => column !== STORYBOARD_ACTION_COLUMN,
+    );
+    const sourceVideoUrl =
+      typeof data.sourceVideoUrl === "string" ? data.sourceVideoUrl : "";
+    const sourceVideoNodeId =
+      typeof data.sourceVideoNodeId === "string" ? data.sourceVideoNodeId : "";
     const characterProfiles = useMemo(
       () =>
         Array.isArray(data.characterProfiles) ? data.characterProfiles : [],
       [data.characterProfiles],
     );
+    const storyboardImageCache = useMemo<StoryboardImageCacheMap>(
+      () =>
+        data.storyboardImageCache &&
+        typeof data.storyboardImageCache === "object"
+          ? data.storyboardImageCache
+          : {},
+      [data.storyboardImageCache],
+    );
     const isVideoPullFilmTable =
       title === "视频拉片分析" ||
-      VIDEO_PULL_FILM_COLUMNS.every((column) => columns.includes(column));
+      ["场景", "时长", "镜号", STORYBOARD_IMAGE_COLUMN].every((column) =>
+        dataColumns.includes(column),
+      );
+    const columns = isVideoPullFilmTable
+      ? ensureStoryboardColumns(dataColumns)
+      : dataColumns;
+    const displayColumns = getDisplayColumns(columns, isVideoPullFilmTable);
     const storyboardRows = useMemo(
       () =>
         (rows || [])
-          .map((row: Record<string, unknown>, rowIndex: number) => ({
-            row,
-            rowIndex,
-          }))
-          .filter(({ row }) =>
-            STORYBOARD_PROMPT_COLUMNS.some((column) =>
-              String(row[column] ?? "").trim(),
-            ),
-          ),
+          .map((row: Record<string, unknown>, rowIndex: number) => {
+            const captureTimeMs = parseStoryboardCaptureTimeMs(row.时长);
+            return captureTimeMs == null
+              ? null
+              : {
+                  row,
+                  rowIndex,
+                  captureTimeMs,
+                };
+          })
+          .filter((item): item is StoryboardCaptureRow => item != null),
       [rows],
     );
-    const selectedStoryboardModel = getModelOption(
-      storyboardModel,
-      storyboardPlatform,
+    const storyboardSketchRows = useMemo(
+      () =>
+        (rows || [])
+          .map((row: Record<string, unknown>, rowIndex: number) => {
+            const referenceImageUrl = String(
+              row[STORYBOARD_IMAGE_COLUMN] ?? "",
+            ).trim();
+            return isImageSource(referenceImageUrl)
+              ? {
+                  rowIndex,
+                  referenceImageUrl,
+                }
+              : null;
+          })
+          .filter((item): item is StoryboardSketchRow => item != null),
+      [rows],
     );
-    const storyboardSizeOptions =
-      storyboardModel === AGNES_IMAGE_2_FLASH_MODEL
+    const storyboardConcurrencyLimit = Math.max(
+      1,
+      Math.min(STORYBOARD_CAPTURE_CONCURRENCY, storyboardRows.length || 1),
+    );
+    const storyboardSketchConcurrencyLimit = Math.max(
+      1,
+      Math.min(STORYBOARD_SKETCH_CONCURRENCY, storyboardSketchRows.length || 1),
+    );
+    const selectedStoryboardSketchModel = getSketchModelOption(
+      storyboardSketchModel,
+      storyboardSketchPlatform,
+    );
+    const storyboardSketchSizeOptions =
+      storyboardSketchModel === AGNES_IMAGE_2_FLASH_MODEL
         ? COMMON_IMAGE_SIZE_OPTIONS
         : WIDE_IMAGE_SIZE_OPTIONS;
-    const storyboardResolutionOptions =
-      storyboardModel === AGNES_IMAGE_2_FLASH_MODEL
+    const storyboardSketchResolutionOptions =
+      storyboardSketchModel === AGNES_IMAGE_2_FLASH_MODEL
         ? AGNES_IMAGE_RESOLUTION_OPTIONS
         : IMAGE_RESOLUTION_OPTIONS;
-    const showStoryboardResolution =
-      storyboardModel !== "midjourney" && storyboardModel !== "midjourney-niji7";
-    const perStoryboardImagePoints = normalizeRequiredPoints(
+    const showStoryboardSketchResolution =
+      storyboardSketchModel !== "midjourney" &&
+      storyboardSketchModel !== "midjourney-niji7";
+    const perStoryboardSketchPoints = normalizeRequiredPoints(
       getImageGenerationPoints({
-        model: selectedStoryboardModel.model,
-        platform: selectedStoryboardModel.platform,
+        model: selectedStoryboardSketchModel.model,
+        platform: selectedStoryboardSketchModel.platform,
         count: 1,
         fallback: fallbackAIGenPrice,
       }),
     );
-    const storyboardRequiredPoints =
-      perStoryboardImagePoints * storyboardRows.length;
-    const storyboardConcurrencyLimit = Math.max(
-      1,
-      Math.min(Number(storyboardConcurrency) || 1, storyboardRows.length || 1),
-    );
+    const storyboardSketchRequiredPoints =
+      perStoryboardSketchPoints * storyboardSketchRows.length;
+    const isStoryboardCapturing = storyboardTaskType === "capture";
+    const isStoryboardSketching = storyboardTaskType === "sketch";
 
     const handleRenameStart = useCallback(() => {
       if (selected) {
@@ -702,6 +824,19 @@ export const TableNode = memo(
 
     const nodeIcon = useMemo(() => <IconTable size={14} />, []);
 
+    const requestDeleteNode = useCallback(() => {
+      if (isVideoPullFilmTable) {
+        requestCanvasDeleteConfirm({
+          message:
+            "确定要删除视频拉片分析表吗？删除后表格内容、分镜图和分镜草图都会从画布移除。",
+          onConfirm: () => deleteNode(id),
+        });
+        return;
+      }
+
+      deleteNode(id);
+    }, [deleteNode, id, isVideoPullFilmTable]);
+
     const toggleFullscreen = useCallback(
       (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -713,9 +848,9 @@ export const TableNode = memo(
     const handleDelete = useCallback(
       (e: React.MouseEvent) => {
         e.stopPropagation();
-        deleteNode(id);
+        requestDeleteNode();
       },
-      [deleteNode, id],
+      [requestDeleteNode],
     );
 
     const handleUpdateCell = useCallback(
@@ -738,9 +873,7 @@ export const TableNode = memo(
       (rowIndex: number, value: string) => {
         updateTableNodeData(id, ((prevData: any) => {
           const currentColumns = prevData.columns || [];
-          const nextColumns = currentColumns.includes(STORYBOARD_IMAGE_COLUMN)
-            ? currentColumns
-            : [...currentColumns, STORYBOARD_IMAGE_COLUMN];
+          const nextColumns = ensureStoryboardColumns(currentColumns);
           const currentRows = prevData.rows || [];
           const nextRows = [...currentRows];
           nextRows[rowIndex] = {
@@ -758,10 +891,91 @@ export const TableNode = memo(
       [id, updateTableNodeData],
     );
 
-    const openStoryboardDialog = useCallback((e: React.MouseEvent) => {
-      e.stopPropagation();
-      setStoryboardDialogOpen(true);
-    }, []);
+    const updateStoryboardSketchCell = useCallback(
+      (rowIndex: number, value: string) => {
+        updateTableNodeData(id, ((prevData: any) => {
+          const currentColumns = prevData.columns || [];
+          const nextColumns = ensureStoryboardColumns(currentColumns);
+          const currentRows = prevData.rows || [];
+          const nextRows = [...currentRows];
+          nextRows[rowIndex] = {
+            ...nextRows[rowIndex],
+            [STORYBOARD_SKETCH_COLUMN]: value,
+          };
+
+          return {
+            ...prevData,
+            columns: nextColumns,
+            rows: nextRows,
+          };
+        }) as (prev: Record<string, unknown>) => Record<string, unknown>);
+      },
+      [id, updateTableNodeData],
+    );
+
+    const generateStoryboardSketchWithRetry = useCallback(
+      async ({
+        rowIndex,
+        referenceImageUrl,
+        signal,
+      }: GenerateStoryboardSketchWithRetryOptions) => {
+        for (
+          let retryCount = 0;
+          retryCount <= STORYBOARD_SKETCH_RETRY_LIMIT;
+          retryCount += 1
+        ) {
+          if (signal.aborted) {
+            throw new Error("已停止生成");
+          }
+
+          updateStoryboardSketchCell(
+            rowIndex,
+            retryCount === 0
+              ? "生成中..."
+              : `重试中... ${retryCount}/${STORYBOARD_SKETCH_RETRY_LIMIT}`,
+          );
+
+          try {
+            return await generateTableStoryboardImage({
+              model: selectedStoryboardSketchModel.model,
+              platform: selectedStoryboardSketchModel.platform,
+              prompt: buildStoryboardSketchPrompt(
+                storyboardSketchPromptTemplate,
+              ),
+              size: storyboardSketchSize,
+              resolution: showStoryboardSketchResolution
+                ? storyboardSketchResolution
+                : undefined,
+              referenceImageUrls: [referenceImageUrl],
+              requiredPoints: perStoryboardSketchPoints,
+              signal,
+            });
+          } catch (generateError) {
+            if (signal.aborted || isAbortGenerationError(generateError)) {
+              throw generateError;
+            }
+
+            if (retryCount >= STORYBOARD_SKETCH_RETRY_LIMIT) {
+              throw new Error(
+                `${getGenerationErrorMessage(generateError)}（已重试 ${STORYBOARD_SKETCH_RETRY_LIMIT} 次）`,
+              );
+            }
+          }
+        }
+
+        throw new Error("生成失败");
+      },
+      [
+        perStoryboardSketchPoints,
+        selectedStoryboardSketchModel.model,
+        selectedStoryboardSketchModel.platform,
+        showStoryboardSketchResolution,
+        storyboardSketchPromptTemplate,
+        storyboardSketchResolution,
+        storyboardSketchSize,
+        updateStoryboardSketchCell,
+      ],
+    );
 
     const openCharacterProfilesDialog = useCallback((e: React.MouseEvent) => {
       e.stopPropagation();
@@ -772,15 +986,101 @@ export const TableNode = memo(
       setCharacterProfilesDialogOpen(false);
     }, []);
 
-    const closeStoryboardDialog = useCallback(() => {
-      setStoryboardDialogOpen(false);
+    const openImagePreview = useCallback(
+      (imageUrl: string) => {
+        setPreviewImageUrl(imageUrl);
+      },
+      [],
+    );
+
+    const openStoryboardSketchDialog = useCallback(
+      (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (isStoryboardCapturing) return;
+        if (!storyboardSketchRows.length) {
+          warning("没有可参考的分镜图，请先截取分镜图");
+          return;
+        }
+        setStoryboardSketchDialogOpen(true);
+      },
+      [isStoryboardCapturing, storyboardSketchRows.length, warning],
+    );
+
+    const closeStoryboardSketchDialog = useCallback(() => {
+      setStoryboardSketchDialogOpen(false);
     }, []);
+
+    const handleStoryboardSketchModelChange = useCallback(
+      (value: string) => {
+        const selectedModel = IMAGE_MODELS.find(
+          (item) => item.id === Number(value),
+        );
+        if (!selectedModel) return;
+
+        setStoryboardSketchModel(selectedModel.model);
+        setStoryboardSketchPlatform(selectedModel.platform);
+        if (
+          selectedModel.model === AGNES_IMAGE_2_FLASH_MODEL ||
+          selectedModel.platform === AGNES_PLATFORM
+        ) {
+          setStoryboardSketchResolution("1K");
+          if (
+            !COMMON_IMAGE_SIZE_OPTIONS.some(
+              (item) => item.value === storyboardSketchSize,
+            )
+          ) {
+            setStoryboardSketchSize("1:1");
+          }
+        }
+      },
+      [storyboardSketchSize],
+    );
+
+    const resolveSourceVideo = useCallback((): SourceVideoInfo | null => {
+      if (sourceVideoUrl) {
+        return {
+          videoUrl: sourceVideoUrl,
+          videoNodeId: sourceVideoNodeId || undefined,
+        };
+      }
+
+      const { nodes: currentNodes, edges: currentEdges } =
+        useCanvasFlowStore.getState();
+      const incomingEdges = currentEdges.filter((edge) => edge.target === id);
+
+      for (const edge of incomingEdges) {
+        const directSourceNode = currentNodes.find(
+          (node) => node.id === edge.source,
+        );
+        if (directSourceNode?.type === "newVideoNode") {
+          const videoUrl = getVideoUrlFromNode(directSourceNode);
+          if (videoUrl) return { videoUrl, videoNodeId: directSourceNode.id };
+        }
+
+        const upstreamVideoNode = currentEdges
+          .filter((candidateEdge) => candidateEdge.target === edge.source)
+          .map((candidateEdge) =>
+            currentNodes.find((node) => node.id === candidateEdge.source),
+          )
+          .find((node) => node?.type === "newVideoNode");
+        const videoUrl = getVideoUrlFromNode(upstreamVideoNode);
+        if (videoUrl) {
+          return { videoUrl, videoNodeId: upstreamVideoNode?.id };
+        }
+      }
+
+      return null;
+    }, [id, sourceVideoNodeId, sourceVideoUrl]);
 
     const handleExportExcel = useCallback(
       async (e: React.MouseEvent) => {
         e.stopPropagation();
 
         if (!isVideoPullFilmTable) return;
+        if (isStoryboardSketching) {
+          warning("分镜草图生成中，暂不可导出");
+          return;
+        }
         if (!rows?.length) {
           warning("没有可导出的表格数据");
           return;
@@ -792,11 +1092,13 @@ export const TableNode = memo(
             columns,
             rows,
             characterProfiles,
+            storyboardImageCache,
+            projectId,
           });
           if (result.saved) {
             if (result.failedImageCount > 0) {
               warning(
-                `已导出 ${result.filename}，${result.failedImageCount} 张分镜图未能嵌入，已保留链接`,
+                `已导出 ${result.filename}，${result.failedImageCount} 张图片未能嵌入，已保留链接`,
               );
             } else {
               success(`已导出 ${result.filename}`);
@@ -813,160 +1115,608 @@ export const TableNode = memo(
         columns,
         error,
         isVideoPullFilmTable,
+        isStoryboardSketching,
+        projectId,
         rows,
+        storyboardImageCache,
         success,
         title,
         warning,
       ],
     );
 
-    const handleStoryboardModelChange = useCallback((value: string) => {
-      const selectedModel = IMAGE_MODELS.find((item) => item.id === Number(value));
-      if (!selectedModel) return;
-      setStoryboardModel(selectedModel.model);
-      setStoryboardPlatform(selectedModel.platform);
-      if (
-        selectedModel.model === AGNES_IMAGE_2_FLASH_MODEL ||
-        selectedModel.platform === AGNES_PLATFORM
-      ) {
-        setStoryboardResolution("1K");
-        if (!COMMON_IMAGE_SIZE_OPTIONS.some((item) => item.value === storyboardSize)) {
-          setStoryboardSize("1:1");
+    const cacheStoryboardImageUrl = useCallback(
+      (imageUrl: string, rowIndex: number, signal?: AbortSignal) => {
+        void cacheStoryboardImageToProject({
+          projectId,
+          url: imageUrl,
+          rowIndex,
+          signal,
+        })
+          .then((cacheEntry) => {
+            if (!cacheEntry.localPath) return;
+            updateTableNodeData(id, ((prevData: any) => {
+              const prevCache =
+                prevData.storyboardImageCache &&
+                typeof prevData.storyboardImageCache === "object"
+                  ? prevData.storyboardImageCache
+                  : {};
+              return {
+                ...prevData,
+                storyboardImageCache: {
+                  ...prevCache,
+                  [getStoryboardImageCacheKey(imageUrl)]: cacheEntry,
+                },
+              };
+            }) as (prev: Record<string, unknown>) => Record<string, unknown>);
+          })
+          .catch((cacheError) => {
+            console.warn("[TableNode] 缓存分镜图失败:", cacheError);
+          });
+      },
+      [id, projectId, updateTableNodeData],
+    );
+
+    const handleStopStoryboardGeneration = useCallback(
+      (e?: React.MouseEvent) => {
+        e?.stopPropagation();
+        storyboardAbortControllerRef.current?.abort();
+      },
+      [],
+    );
+
+    const handleCaptureStoryboardImages = useCallback(
+      async (e: React.MouseEvent) => {
+        e.stopPropagation();
+
+        if (storyboardGenerating) return;
+        if (!storyboardRows.length) {
+          warning("没有可截取分镜图的有效时间码");
+          return;
         }
-      }
-    }, [storyboardSize]);
 
-    const handleStopStoryboardGeneration = useCallback(() => {
-      storyboardAbortControllerRef.current?.abort();
-    }, []);
+        const sourceVideo = resolveSourceVideo();
+        if (!sourceVideo?.videoUrl) {
+          warning("未找到原视频，无法截取分镜图");
+          return;
+        }
 
-    const handleGenerateStoryboardImages = useCallback(async () => {
-      if (storyboardGenerating) return;
-      if (!storyboardRows.length) {
-        warning("没有可生成分镜图的表格行");
-        return;
-      }
+        const abortController = new AbortController();
+        storyboardAbortControllerRef.current = abortController;
+        setStoryboardGenerating(true);
+        setStoryboardTaskType("capture");
+        setStoryboardProgress({ done: 0, total: storyboardRows.length });
 
-      const balancePassed = await validateBalanceBeforeGenerate({
-        requiredPoints: storyboardRequiredPoints,
-        warning,
-        insufficientMessage: (requiredPoints, currentTotalPoints) =>
-          `积分不足，当前剩余 ${currentTotalPoints} 积分，一键生成 ${storyboardRows.length} 张分镜图需要 ${requiredPoints} 积分`,
-      });
-      if (!balancePassed) return;
+        let successCount = 0;
+        let failedCount = 0;
+        let stoppedCount = 0;
+        let nextRowIndex = 0;
 
-      const abortController = new AbortController();
-      storyboardAbortControllerRef.current = abortController;
-      setStoryboardGenerating(true);
-      setStoryboardProgress({ done: 0, total: storyboardRows.length });
+        const captureNext = async () => {
+          while (
+            nextRowIndex < storyboardRows.length &&
+            !abortController.signal.aborted
+          ) {
+            const currentIndex = nextRowIndex;
+            nextRowIndex += 1;
 
-      let successCount = 0;
-      let failedCount = 0;
-      let stoppedCount = 0;
-      let nextRowIndex = 0;
+            const item = storyboardRows[currentIndex];
+            if (!item) return;
 
-      const generateNext = async () => {
-        while (
-          nextRowIndex < storyboardRows.length &&
-          !abortController.signal.aborted
-        ) {
-          const currentIndex = nextRowIndex;
-          nextRowIndex += 1;
+            updateStoryboardImageCell(item.rowIndex, "截取中...");
+            try {
+              const snapshotUrl = generateVideoSnapshotUrl(
+                sourceVideo.videoUrl,
+                {
+                  time: item.captureTimeMs,
+                  format: "jpg",
+                },
+              );
+              const response = await fetch(snapshotUrl, {
+                signal: abortController.signal,
+              });
+              if (!response.ok) {
+                throw new Error(`获取截帧失败：HTTP ${response.status}`);
+              }
 
-          const item = storyboardRows[currentIndex];
-          if (!item) return;
+              const blob = await response.blob();
+              const file = new File(
+                [blob],
+                `storyboard-${item.rowIndex + 1}-${item.captureTimeMs}ms-${Date.now()}.jpg`,
+                { type: blob.type || "image/jpeg" },
+              );
+              const uploadResult = await uploadFileToOSS(file);
+              if (!uploadResult.url) {
+                throw new Error("上传截帧图片失败");
+              }
 
-          updateStoryboardImageCell(item.rowIndex, "生成中...");
-          try {
-            const imageUrl = await generateTableStoryboardImage({
-              model: selectedStoryboardModel.model,
-              platform: selectedStoryboardModel.platform,
-              prompt: buildStoryboardImagePrompt(
-                item.row,
-                storyboardPromptTemplate,
-                characterProfiles,
-              ),
-              size: storyboardSize,
-              resolution: showStoryboardResolution
-                ? storyboardResolution
-                : undefined,
-              requiredPoints: perStoryboardImagePoints,
-              signal: abortController.signal,
-            });
-            if (abortController.signal.aborted) {
-              stoppedCount += 1;
-              updateStoryboardImageCell(item.rowIndex, "已停止");
-            } else {
-              updateStoryboardImageCell(item.rowIndex, imageUrl);
-              successCount += 1;
+              if (abortController.signal.aborted) {
+                stoppedCount += 1;
+                updateStoryboardImageCell(item.rowIndex, "已停止");
+              } else {
+                updateStoryboardImageCell(item.rowIndex, uploadResult.url);
+                cacheStoryboardImageUrl(
+                  uploadResult.url,
+                  item.rowIndex,
+                  abortController.signal,
+                );
+                successCount += 1;
+              }
+            } catch (captureError) {
+              if (abortController.signal.aborted) {
+                stoppedCount += 1;
+                updateStoryboardImageCell(item.rowIndex, "已停止");
+              } else {
+                failedCount += 1;
+                const message =
+                  captureError instanceof Error
+                    ? captureError.message
+                    : "截取失败";
+                updateStoryboardImageCell(item.rowIndex, `失败：${message}`);
+              }
+            } finally {
+              setStoryboardProgress((current) => ({
+                ...current,
+                done: Math.min(current.done + 1, current.total),
+              }));
             }
-          } catch (generateError) {
-            if (abortController.signal.aborted) {
-              stoppedCount += 1;
-              updateStoryboardImageCell(item.rowIndex, "已停止");
-            } else {
-              failedCount += 1;
-              const message =
-                generateError instanceof Error
-                  ? generateError.message
-                  : "生成失败";
-              updateStoryboardImageCell(item.rowIndex, `失败：${message}`);
-            }
-          } finally {
-            setStoryboardProgress((current) => ({
-              ...current,
-              done: Math.min(current.done + 1, current.total),
-            }));
           }
-        }
-      };
+        };
 
-      await Promise.all(
-        Array.from({ length: storyboardConcurrencyLimit }, () =>
-          generateNext(),
-        ),
-      );
-
-      await refreshBalanceInfo();
-      storyboardAbortControllerRef.current = null;
-      setStoryboardGenerating(false);
-      if (abortController.signal.aborted) {
-        warning(
-          successCount > 0
-            ? `已停止生成，已完成 ${successCount} 张，已停止 ${stoppedCount} 张`
-            : "已停止生成",
+        await Promise.all(
+          Array.from({ length: storyboardConcurrencyLimit }, () =>
+            captureNext(),
+          ),
         );
-        return;
-      }
 
-      if (failedCount === 0) {
-        success(`已生成 ${successCount} 张分镜图`);
-        setStoryboardDialogOpen(false);
-      } else if (successCount > 0) {
-        warning(`已生成 ${successCount} 张分镜图，${failedCount} 张失败`);
-      } else {
-        error("生成分镜图失败", "所有分镜图都生成失败");
-      }
-    }, [
-      error,
-      perStoryboardImagePoints,
-      refreshBalanceInfo,
-      storyboardConcurrencyLimit,
-      selectedStoryboardModel.model,
-      selectedStoryboardModel.platform,
-      characterProfiles,
-      showStoryboardResolution,
-      storyboardGenerating,
-      storyboardPromptTemplate,
-      storyboardRequiredPoints,
-      storyboardResolution,
-      storyboardRows,
-      storyboardSize,
-      success,
-      updateStoryboardImageCell,
-      validateBalanceBeforeGenerate,
-      warning,
-    ]);
+        storyboardAbortControllerRef.current = null;
+        setStoryboardGenerating(false);
+        setStoryboardTaskType(null);
+        if (abortController.signal.aborted) {
+          warning(
+            successCount > 0
+              ? `已停止截取，已完成 ${successCount} 张，已停止 ${stoppedCount} 张`
+              : "已停止截取",
+          );
+          return;
+        }
+
+        if (failedCount === 0) {
+          success(`已截取 ${successCount} 张分镜图`);
+        } else if (successCount > 0) {
+          warning(`已截取 ${successCount} 张分镜图，${failedCount} 张失败`);
+        } else {
+          error("截取分镜图失败", "所有分镜图都截取失败");
+        }
+      },
+      [
+        cacheStoryboardImageUrl,
+        error,
+        resolveSourceVideo,
+        storyboardConcurrencyLimit,
+        storyboardGenerating,
+        storyboardRows,
+        success,
+        updateStoryboardImageCell,
+        warning,
+      ],
+    );
+
+    const handleGenerateSingleStoryboardSketch = useCallback(
+      async (rowIndex: number) => {
+        if (
+          isStoryboardCapturing ||
+          storyboardGenerating ||
+          storyboardAbortControllerRef.current
+        ) {
+          return;
+        }
+
+        const row = rows?.[rowIndex] as Record<string, unknown> | undefined;
+        if (!row) {
+          warning("未找到当前分镜行");
+          return;
+        }
+
+        const referenceImageUrl = String(
+          row[STORYBOARD_IMAGE_COLUMN] ?? "",
+        ).trim();
+        if (!isImageSource(referenceImageUrl)) {
+          warning("请先生成该行的分镜图，再生成分镜草图");
+          return;
+        }
+
+        const balancePassed = await validateBalanceBeforeGenerate({
+          requiredPoints: perStoryboardSketchPoints,
+          warning,
+          insufficientMessage: (requiredPoints, currentTotalPoints) =>
+            `积分不足，当前剩余 ${currentTotalPoints} 积分，生成 1 张分镜草图需要 ${requiredPoints} 积分`,
+        });
+        if (!balancePassed) return;
+
+        const abortController = new AbortController();
+        storyboardAbortControllerRef.current = abortController;
+        setStoryboardGenerating(true);
+        setStoryboardTaskType("sketch");
+        setStoryboardSketchingRowIndex(rowIndex);
+        setStoryboardProgress({ done: 0, total: 1 });
+
+        try {
+          const sketchUrl = await generateStoryboardSketchWithRetry({
+            rowIndex,
+            referenceImageUrl,
+            signal: abortController.signal,
+          });
+
+          if (abortController.signal.aborted) {
+            updateStoryboardSketchCell(rowIndex, "已停止");
+            warning("已停止生成草图");
+            return;
+          }
+
+          updateStoryboardSketchCell(rowIndex, sketchUrl);
+          cacheStoryboardImageUrl(sketchUrl, rowIndex, abortController.signal);
+          success(
+            isImageSource(String(row[STORYBOARD_SKETCH_COLUMN] ?? "").trim())
+              ? "已重新生成分镜草图"
+              : "已生成分镜草图",
+          );
+        } catch (generateError) {
+          if (
+            abortController.signal.aborted ||
+            isAbortGenerationError(generateError)
+          ) {
+            updateStoryboardSketchCell(rowIndex, "已停止");
+            warning("已停止生成草图");
+          } else {
+            const message = getGenerationErrorMessage(generateError);
+            updateStoryboardSketchCell(rowIndex, `失败：${message}`);
+            error("生成分镜草图失败", message);
+          }
+        } finally {
+          setStoryboardProgress({ done: 1, total: 1 });
+          await refreshBalanceInfo();
+          storyboardAbortControllerRef.current = null;
+          setStoryboardGenerating(false);
+          setStoryboardTaskType(null);
+          setStoryboardSketchingRowIndex(null);
+        }
+      },
+      [
+        cacheStoryboardImageUrl,
+        error,
+        generateStoryboardSketchWithRetry,
+        isStoryboardCapturing,
+        perStoryboardSketchPoints,
+        refreshBalanceInfo,
+        rows,
+        storyboardGenerating,
+        success,
+        updateStoryboardSketchCell,
+        validateBalanceBeforeGenerate,
+        warning,
+      ],
+    );
+
+    const handleGenerateStoryboardSketches = useCallback(
+      async (e?: React.MouseEvent) => {
+        e?.stopPropagation();
+
+        if (
+          isStoryboardCapturing ||
+          storyboardGenerating ||
+          storyboardAbortControllerRef.current
+        ) {
+          return;
+        }
+        if (!storyboardSketchRows.length) {
+          warning("没有可参考的分镜图，请先截取分镜图");
+          return;
+        }
+
+        const balancePassed = await validateBalanceBeforeGenerate({
+          requiredPoints: storyboardSketchRequiredPoints,
+          warning,
+          insufficientMessage: (requiredPoints, currentTotalPoints) =>
+            `积分不足，当前剩余 ${currentTotalPoints} 积分，生成 ${storyboardSketchRows.length} 张分镜草图需要 ${requiredPoints} 积分`,
+        });
+        if (!balancePassed) return;
+
+        const abortController = new AbortController();
+        storyboardAbortControllerRef.current = abortController;
+        setStoryboardGenerating(true);
+        setStoryboardTaskType("sketch");
+        setStoryboardSketchingRowIndex(null);
+        setStoryboardProgress({ done: 0, total: storyboardSketchRows.length });
+
+        let successCount = 0;
+        let failedCount = 0;
+        let stoppedCount = 0;
+        let nextRowIndex = 0;
+
+        const generateNext = async () => {
+          while (
+            nextRowIndex < storyboardSketchRows.length &&
+            !abortController.signal.aborted
+          ) {
+            const currentIndex = nextRowIndex;
+            nextRowIndex += 1;
+
+            const item = storyboardSketchRows[currentIndex];
+            if (!item) return;
+
+            try {
+              const sketchUrl = await generateStoryboardSketchWithRetry({
+                rowIndex: item.rowIndex,
+                referenceImageUrl: item.referenceImageUrl,
+                signal: abortController.signal,
+              });
+
+              if (abortController.signal.aborted) {
+                stoppedCount += 1;
+                updateStoryboardSketchCell(item.rowIndex, "已停止");
+              } else {
+                updateStoryboardSketchCell(item.rowIndex, sketchUrl);
+                cacheStoryboardImageUrl(
+                  sketchUrl,
+                  item.rowIndex,
+                  abortController.signal,
+                );
+                successCount += 1;
+              }
+            } catch (generateError) {
+              if (
+                abortController.signal.aborted ||
+                isAbortGenerationError(generateError)
+              ) {
+                stoppedCount += 1;
+                updateStoryboardSketchCell(item.rowIndex, "已停止");
+              } else {
+                failedCount += 1;
+                const message = getGenerationErrorMessage(generateError);
+                updateStoryboardSketchCell(item.rowIndex, `失败：${message}`);
+              }
+            } finally {
+              setStoryboardProgress((current) => ({
+                ...current,
+                done: Math.min(current.done + 1, current.total),
+              }));
+            }
+          }
+        };
+
+        await Promise.all(
+          Array.from({ length: storyboardSketchConcurrencyLimit }, () =>
+            generateNext(),
+          ),
+        );
+
+        await refreshBalanceInfo();
+        storyboardAbortControllerRef.current = null;
+        setStoryboardGenerating(false);
+        setStoryboardTaskType(null);
+        setStoryboardSketchingRowIndex(null);
+        if (abortController.signal.aborted) {
+          warning(
+            successCount > 0
+              ? `已停止生成草图，已完成 ${successCount} 张，已停止 ${stoppedCount} 张`
+              : "已停止生成草图",
+          );
+          return;
+        }
+
+        if (failedCount === 0) {
+          success(`已生成 ${successCount} 张分镜草图`);
+          setStoryboardSketchDialogOpen(false);
+        } else if (successCount > 0) {
+          warning(`已生成 ${successCount} 张分镜草图，${failedCount} 张失败`);
+        } else {
+          error("生成分镜草图失败", "所有分镜草图都生成失败");
+        }
+      },
+      [
+        cacheStoryboardImageUrl,
+        error,
+        generateStoryboardSketchWithRetry,
+        isStoryboardCapturing,
+        refreshBalanceInfo,
+        storyboardGenerating,
+        storyboardSketchConcurrencyLimit,
+        storyboardSketchRequiredPoints,
+        storyboardSketchRows,
+        success,
+        updateStoryboardSketchCell,
+        validateBalanceBeforeGenerate,
+        warning,
+      ],
+    );
+
+    const storyboardSketchDialogContent = storyboardSketchDialogOpen ? (
+      <div
+        className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) {
+            closeStoryboardSketchDialog();
+          }
+        }}
+      >
+        <div className="flex max-h-[86vh] w-full max-w-[640px] flex-col overflow-hidden rounded-xl border border-white/10 bg-[#141418] shadow-2xl">
+          <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+            <div>
+              <div className="text-sm font-semibold text-white">
+                生成分镜草图
+              </div>
+              <div className="mt-1 text-xs text-white/45">
+                {storyboardSketchRows.length} 个参考分镜
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={closeStoryboardSketchDialog}
+              className="rounded-lg px-2 py-1 text-sm text-white/50 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              关闭
+            </button>
+          </div>
+
+          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            <div className="grid gap-2">
+              <span className="text-xs text-white/45">模型</span>
+              <Select
+                value={String(selectedStoryboardSketchModel.id)}
+                onValueChange={handleStoryboardSketchModelChange}
+                disabled={isStoryboardSketching}
+              >
+                <SelectTrigger className="h-9 border-white/10 bg-white/[0.03] text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={STORYBOARD_SELECT_CONTENT_CLASS}>
+                  {IMAGE_MODELS.map((item) => (
+                    <SelectItem
+                      key={item.id}
+                      value={String(item.id)}
+                      className={STORYBOARD_SELECT_ITEM_CLASS}
+                    >
+                      {item.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <span className="text-xs text-white/45">图片比例</span>
+                <Select
+                  value={storyboardSketchSize}
+                  onValueChange={setStoryboardSketchSize}
+                  disabled={isStoryboardSketching}
+                >
+                  <SelectTrigger className="h-9 border-white/10 bg-white/[0.03] text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className={STORYBOARD_SELECT_CONTENT_CLASS}>
+                    {storyboardSketchSizeOptions.map((item) => (
+                      <SelectItem
+                        key={item.value}
+                        value={item.value}
+                        className={STORYBOARD_SELECT_ITEM_CLASS}
+                      >
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {showStoryboardSketchResolution ? (
+                <div className="grid gap-2">
+                  <span className="text-xs text-white/45">分辨率</span>
+                  <Select
+                    value={storyboardSketchResolution}
+                    onValueChange={setStoryboardSketchResolution}
+                    disabled={isStoryboardSketching}
+                  >
+                    <SelectTrigger className="h-9 border-white/10 bg-white/[0.03] text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className={STORYBOARD_SELECT_CONTENT_CLASS}>
+                      {storyboardSketchResolutionOptions.map((item) => (
+                        <SelectItem
+                          key={item.value}
+                          value={item.value}
+                          className={STORYBOARD_SELECT_ITEM_CLASS}
+                        >
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  <span className="text-xs text-white/45">分辨率</span>
+                  <div className="flex h-9 items-center rounded-md border border-white/10 bg-white/[0.03] px-3 text-xs text-white/35">
+                    模型自动
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-2">
+              <span className="text-xs text-white/45">提示词模板</span>
+              <textarea
+                value={storyboardSketchPromptTemplate}
+                onChange={(event) =>
+                  setStoryboardSketchPromptTemplate(event.target.value)
+                }
+                disabled={isStoryboardSketching}
+                rows={7}
+                className="min-h-[150px] resize-none rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs leading-5 text-white/75 outline-none transition-colors placeholder:text-white/30 focus:border-[#B43FEB]/70 disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+              <div className="text-xs text-white/55">
+                {storyboardSketchRows.length} 张 x {perStoryboardSketchPoints}{" "}
+                积分
+              </div>
+              <ModelPointsBadge
+                totalPoints={totalPoints}
+                requiredPoints={storyboardSketchRequiredPoints}
+                title={`生成草图需要 ${storyboardSketchRequiredPoints} 积分`}
+              />
+            </div>
+
+            {isStoryboardSketching && (
+              <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full bg-[#B43FEB] transition-all"
+                  style={{
+                    width: `${
+                      storyboardProgress.total
+                        ? (storyboardProgress.done / storyboardProgress.total) *
+                          100
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-white/10 px-5 py-4">
+            <button
+              type="button"
+              onClick={closeStoryboardSketchDialog}
+              disabled={isStoryboardSketching}
+              className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/60 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={
+                isStoryboardSketching
+                  ? handleStopStoryboardGeneration
+                  : handleGenerateStoryboardSketches
+              }
+              disabled={storyboardSketchRows.length === 0}
+              className={cn(
+                "rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                isStoryboardSketching
+                  ? "bg-red-500 hover:bg-red-400"
+                  : "bg-[#B43FEB] hover:bg-[#c45bff]",
+              )}
+            >
+              {isStoryboardSketching
+                ? `停止生成 ${storyboardProgress.done}/${storyboardProgress.total}`
+                : "确认生成"}
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null;
 
     const characterProfilesDialogContent = characterProfilesDialogOpen ? (
       <div
@@ -1063,210 +1813,6 @@ export const TableNode = memo(
       </div>
     ) : null;
 
-    const storyboardDialogContent = storyboardDialogOpen ? (
-      <div
-        className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-        onMouseDown={(event) => {
-          if (event.target === event.currentTarget) {
-            closeStoryboardDialog();
-          }
-        }}
-      >
-        <div className="flex max-h-[86vh] w-full max-w-[560px] flex-col overflow-hidden rounded-xl border border-white/10 bg-[#141418] shadow-2xl">
-          <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-            <div>
-              <div className="text-sm font-semibold text-white">
-                生成分镜图
-              </div>
-              <div className="mt-1 text-xs text-white/45">
-                {storyboardRows.length} 个分镜
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={closeStoryboardDialog}
-              className="rounded-lg px-2 py-1 text-sm text-white/50 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              关闭
-            </button>
-          </div>
-
-          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-            <div className="grid gap-2">
-              <span className="text-xs text-white/45">模型</span>
-              <Select
-                value={String(selectedStoryboardModel.id)}
-                onValueChange={handleStoryboardModelChange}
-                disabled={storyboardGenerating}
-              >
-                <SelectTrigger className="h-9 border-white/10 bg-white/[0.03] text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className={STORYBOARD_SELECT_CONTENT_CLASS}>
-                  {IMAGE_MODELS.map((item) => (
-                    <SelectItem
-                      key={item.id}
-                      value={String(item.id)}
-                      className={STORYBOARD_SELECT_ITEM_CLASS}
-                    >
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="grid gap-2">
-                <span className="text-xs text-white/45">图片比例</span>
-                <Select
-                  value={storyboardSize}
-                  onValueChange={setStoryboardSize}
-                  disabled={storyboardGenerating}
-                >
-                  <SelectTrigger className="h-9 border-white/10 bg-white/[0.03] text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className={STORYBOARD_SELECT_CONTENT_CLASS}>
-                    {storyboardSizeOptions.map((item) => (
-                      <SelectItem
-                        key={item.value}
-                        value={item.value}
-                        className={STORYBOARD_SELECT_ITEM_CLASS}
-                      >
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {showStoryboardResolution ? (
-                <div className="grid gap-2">
-                  <span className="text-xs text-white/45">分辨率</span>
-                  <Select
-                    value={storyboardResolution}
-                    onValueChange={setStoryboardResolution}
-                    disabled={storyboardGenerating}
-                  >
-                    <SelectTrigger className="h-9 border-white/10 bg-white/[0.03] text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className={STORYBOARD_SELECT_CONTENT_CLASS}>
-                      {storyboardResolutionOptions.map((item) => (
-                        <SelectItem
-                          key={item.value}
-                          value={item.value}
-                          className={STORYBOARD_SELECT_ITEM_CLASS}
-                        >
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="grid gap-2">
-                  <span className="text-xs text-white/45">分辨率</span>
-                  <div className="flex h-9 items-center rounded-md border border-white/10 bg-white/[0.03] px-3 text-xs text-white/35">
-                    模型自动
-                  </div>
-                </div>
-              )}
-
-              <div className="grid gap-2">
-                <span className="text-xs text-white/45">并发数</span>
-                <Select
-                  value={storyboardConcurrency}
-                  onValueChange={setStoryboardConcurrency}
-                  disabled={storyboardGenerating}
-                >
-                  <SelectTrigger className="h-9 border-white/10 bg-white/[0.03] text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className={STORYBOARD_SELECT_CONTENT_CLASS}>
-                    {STORYBOARD_CONCURRENCY_OPTIONS.map((item) => (
-                      <SelectItem
-                        key={item.value}
-                        value={item.value}
-                        className={STORYBOARD_SELECT_ITEM_CLASS}
-                      >
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <span className="text-xs text-white/45">提示词模板</span>
-              <textarea
-                value={storyboardPromptTemplate}
-                onChange={(event) =>
-                  setStoryboardPromptTemplate(event.target.value)
-                }
-                disabled={storyboardGenerating}
-                rows={8}
-                className="min-h-[180px] resize-none rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs leading-5 text-white/75 outline-none transition-colors placeholder:text-white/30 focus:border-[#B43FEB]/70 disabled:cursor-not-allowed disabled:opacity-60"
-              />
-            </div>
-
-            <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-              <div className="text-xs text-white/55">
-                {storyboardRows.length} 张 × {perStoryboardImagePoints} 积分
-              </div>
-              <ModelPointsBadge
-                totalPoints={totalPoints}
-                requiredPoints={storyboardRequiredPoints}
-                title={`一键生成需要 ${storyboardRequiredPoints} 积分`}
-              />
-            </div>
-
-            {storyboardGenerating && (
-              <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full bg-[#B43FEB] transition-all"
-                  style={{
-                    width: `${storyboardProgress.total ? (storyboardProgress.done / storyboardProgress.total) * 100 : 0}%`,
-                  }}
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center justify-end gap-2 border-t border-white/10 px-5 py-4">
-            <button
-              type="button"
-              onClick={closeStoryboardDialog}
-              className="rounded-lg border border-white/10 px-4 py-2 text-sm text-white/60 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              onClick={
-                storyboardGenerating
-                  ? handleStopStoryboardGeneration
-                  : handleGenerateStoryboardImages
-              }
-              disabled={storyboardRows.length === 0}
-              className={cn(
-                "rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                storyboardGenerating
-                  ? "bg-red-500 hover:bg-red-400"
-                  : "bg-[#B43FEB] hover:bg-[#c45bff]",
-              )}
-            >
-              {storyboardGenerating
-                ? `停止生成 ${storyboardProgress.done}/${storyboardProgress.total}`
-                : "确认生成"}
-            </button>
-          </div>
-        </div>
-      </div>
-    ) : null;
-
     const fullscreenContent = (
       <div className="fixed inset-0 z-[9999] bg-gradient-to-br from-[#141418] to-[#0d0d10] flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
@@ -1278,7 +1824,8 @@ export const TableNode = memo(
               <>
                 <button
                   onClick={handleExportExcel}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-white/5 px-3 text-xs text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                  disabled={isStoryboardSketching}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-white/5 px-3 text-xs text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
                   title="导出 Excel"
                 >
                   <IconDownload size={14} />
@@ -1293,12 +1840,54 @@ export const TableNode = memo(
                   <span>角色档案</span>
                 </button>
                 <button
-                  onClick={openStoryboardDialog}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#B43FEB] px-3 text-xs text-white transition-colors hover:bg-[#c45bff]"
-                  title="生成分镜图"
+                  onClick={
+                    isStoryboardCapturing
+                      ? handleStopStoryboardGeneration
+                      : handleCaptureStoryboardImages
+                  }
+                  disabled={storyboardGenerating && !isStoryboardCapturing}
+                  className={cn(
+                    "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs text-white transition-colors disabled:cursor-not-allowed disabled:opacity-45",
+                    isStoryboardCapturing
+                      ? "bg-red-500 hover:bg-red-400"
+                      : "bg-[#B43FEB] hover:bg-[#c45bff]",
+                  )}
+                  title={isStoryboardCapturing ? "停止截取" : "截取分镜图"}
                 >
                   <IconPhotoPlus size={14} />
-                  <span>生成分镜图</span>
+                  <span>
+                    {isStoryboardCapturing
+                      ? `停止截取 ${storyboardProgress.done}/${storyboardProgress.total}`
+                      : "截取分镜图"}
+                  </span>
+                </button>
+                <button
+                  onClick={
+                    isStoryboardSketching
+                      ? handleStopStoryboardGeneration
+                      : openStoryboardSketchDialog
+                  }
+                  disabled={isStoryboardCapturing}
+                  className={cn(
+                    "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs text-white transition-colors disabled:cursor-not-allowed disabled:opacity-45",
+                    isStoryboardSketching
+                      ? "bg-red-500 hover:bg-red-400"
+                      : "bg-[#B43FEB] hover:bg-[#c45bff]",
+                  )}
+                  title={
+                    isStoryboardCapturing
+                      ? "截取中，暂不可生成草图"
+                      : isStoryboardSketching
+                        ? "停止生成草图"
+                        : "生成分镜草图"
+                  }
+                >
+                  <IconPencil size={14} />
+                  <span>
+                    {isStoryboardSketching
+                      ? `停止草图 ${storyboardProgress.done}/${storyboardProgress.total}`
+                      : "生成分镜草图"}
+                  </span>
                 </button>
               </>
             )}
@@ -1324,7 +1913,7 @@ export const TableNode = memo(
             <table className="border-collapse text-left">
               <thead className="sticky top-0 z-10 bg-[#1A1A1C]">
                 <tr>
-                  {columns.map((col) => (
+                  {displayColumns.map((col) => (
                     <th
                       key={col}
                       className="px-4 py-3 border-b border-r border-white/[0.06] text-[#8D8D8E]/70 font-medium text-sm whitespace-nowrap"
@@ -1337,8 +1926,16 @@ export const TableNode = memo(
               <tbody>
                 <TableBody
                   rows={rows || []}
-                  columns={columns}
+                  columns={displayColumns}
                   onUpdateCell={handleUpdateCell}
+                  onPreviewImage={openImagePreview}
+                  onGenerateStoryboardSketch={
+                    isVideoPullFilmTable
+                      ? handleGenerateSingleStoryboardSketch
+                      : undefined
+                  }
+                  storyboardActionDisabled={storyboardGenerating}
+                  storyboardSketchingRowIndex={storyboardSketchingRowIndex}
                   maxWidth="200px"
                 />
               </tbody>
@@ -1351,14 +1948,24 @@ export const TableNode = memo(
     return (
       <>
         {isFullscreen && createPortal(fullscreenContent, document.body)}
+        {storyboardSketchDialogContent &&
+          createPortal(storyboardSketchDialogContent, document.body)}
         {characterProfilesDialogContent &&
           createPortal(characterProfilesDialogContent, document.body)}
-        {storyboardDialogContent &&
-          createPortal(storyboardDialogContent, document.body)}
+        {previewImageUrl ? (
+          <Lightbox
+            open={Boolean(previewImageUrl)}
+            close={() => setPreviewImageUrl(null)}
+            slides={[{ src: previewImageUrl }]}
+            plugins={[Fullscreen, Slideshow, Zoom, Share, Download]}
+            zoom={{ maxZoomPixelRatio: 4, zoomInMultiplier: 2 }}
+            controller={{ closeOnBackdropClick: true }}
+          />
+        ) : null}
 
         <NodeContextMenu
           onDuplicate={() => duplicateNode(id)}
-          onDelete={() => deleteNode(id)}
+          onDelete={requestDeleteNode}
         >
           <div className="group/node relative">
             <NodeResizer
@@ -1411,7 +2018,8 @@ export const TableNode = memo(
                     <>
                       <button
                         onClick={handleExportExcel}
-                        className="inline-flex h-7 items-center gap-1 rounded-lg bg-black/50 px-2 text-[11px] text-white/70 hover:bg-white/10 hover:text-white backdrop-blur-md border border-white/10 transition-colors cursor-pointer"
+                        disabled={isStoryboardSketching}
+                        className="inline-flex h-7 items-center gap-1 rounded-lg bg-black/50 px-2 text-[11px] text-white/70 hover:bg-white/10 hover:text-white backdrop-blur-md border border-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-45"
                         title="导出 Excel"
                       >
                         <IconDownload size={13} />
@@ -1426,11 +2034,48 @@ export const TableNode = memo(
                         <span>角色档案</span>
                       </button>
                       <button
-                        onClick={openStoryboardDialog}
-                        className="w-7 h-7 rounded-lg bg-[#B43FEB] text-white hover:bg-[#c45bff] flex items-center justify-center backdrop-blur-md border border-[#B43FEB]/70 transition-colors cursor-pointer"
-                        title="生成分镜图"
+                        onClick={
+                          isStoryboardCapturing
+                            ? handleStopStoryboardGeneration
+                            : handleCaptureStoryboardImages
+                        }
+                        disabled={
+                          storyboardGenerating && !isStoryboardCapturing
+                        }
+                        className={cn(
+                          "w-7 h-7 rounded-lg text-white flex items-center justify-center backdrop-blur-md transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-45",
+                          isStoryboardCapturing
+                            ? "bg-red-500 hover:bg-red-400 border border-red-400/70"
+                            : "bg-[#B43FEB] hover:bg-[#c45bff] border border-[#B43FEB]/70",
+                        )}
+                        title={
+                          isStoryboardCapturing ? "停止截取" : "截取分镜图"
+                        }
                       >
                         <IconPhotoPlus size={14} />
+                      </button>
+                      <button
+                        onClick={
+                          isStoryboardSketching
+                            ? handleStopStoryboardGeneration
+                            : openStoryboardSketchDialog
+                        }
+                        disabled={isStoryboardCapturing}
+                        className={cn(
+                          "w-7 h-7 rounded-lg text-white/80 flex items-center justify-center backdrop-blur-md border border-white/10 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-45",
+                          isStoryboardSketching
+                            ? "bg-red-500 text-white hover:bg-red-400 border-red-400/70"
+                            : "bg-[#B43FEB] text-white hover:bg-[#c45bff] border-[#B43FEB]/70",
+                        )}
+                        title={
+                          isStoryboardCapturing
+                            ? "截取中，暂不可生成草图"
+                            : isStoryboardSketching
+                              ? "停止生成草图"
+                              : "生成分镜草图"
+                        }
+                      >
+                        <IconPencil size={14} />
                       </button>
                     </>
                   )}
@@ -1463,7 +2108,7 @@ export const TableNode = memo(
                     <table className="border-collapse text-left">
                       <thead className="sticky top-0 z-10 bg-[#1A1A1C]">
                         <tr>
-                          {columns.map((col) => (
+                          {displayColumns.map((col) => (
                             <th
                               key={col}
                               className="px-3 py-2 border-b border-r border-white/[0.06] text-[#8D8D8E]/70 font-medium text-xs whitespace-nowrap"
@@ -1476,8 +2121,18 @@ export const TableNode = memo(
                       <tbody>
                         <TableBody
                           rows={rows || []}
-                          columns={columns}
+                          columns={displayColumns}
                           onUpdateCell={handleUpdateCell}
+                          onPreviewImage={openImagePreview}
+                          onGenerateStoryboardSketch={
+                            isVideoPullFilmTable
+                              ? handleGenerateSingleStoryboardSketch
+                              : undefined
+                          }
+                          storyboardActionDisabled={storyboardGenerating}
+                          storyboardSketchingRowIndex={
+                            storyboardSketchingRowIndex
+                          }
                           maxWidth="120px"
                         />
                       </tbody>
