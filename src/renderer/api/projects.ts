@@ -15,6 +15,8 @@ import {
   ProjectListResponse,
   SaveCanvasRequest,
   SearchProjectsParams,
+  ShareProjectRequest,
+  ShareProjectResponse,
   UpdateProjectRequest,
   UpdateProjectResponse,
 } from "shared/types/api/projects";
@@ -136,6 +138,22 @@ export function duplicateProject(
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: `/v1/projects/${id}/duplicate`,
+    method: "post",
+    data,
+  });
+}
+
+/**
+ * 分享项目到目标用户
+ * POST /v1/projects/:id/share
+ */
+export function shareProject(
+  id: ApiId,
+  data: ShareProjectRequest,
+): Promise<ShareProjectResponse> {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: `/v1/projects/${id}/share`,
     method: "post",
     data,
   });

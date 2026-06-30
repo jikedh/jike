@@ -14,6 +14,7 @@ import {
 import { ButtonHandle } from "@/components/button-handle";
 import type { TextAgentPresetId } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
+import { GenerationErrorTooltip } from "../../shared/GenerationErrorTooltip";
 
 const PRESET_ICONS: Record<TextAgentPresetId, React.ReactNode> = {
   "novel-to-script-agent": <IconBook size={18} />,
@@ -28,6 +29,7 @@ interface NodeBodyProps {
   presetLabel: string;
   selected: boolean;
   isGenerating: boolean;
+  errorMessage?: string;
 }
 
 export const NodeBody = ({
@@ -35,6 +37,7 @@ export const NodeBody = ({
   presetLabel,
   selected,
   isGenerating,
+  errorMessage,
 }: NodeBodyProps) => {
   // 手柄可见性控制
   const handleVisibilityClass = selected
@@ -79,6 +82,8 @@ export const NodeBody = ({
             </div>
             <span>生成中...</span>
           </>
+        ) : errorMessage ? (
+          <GenerationErrorTooltip message={errorMessage} label="生成失败" />
         ) : (
           // 正常状态
           <>

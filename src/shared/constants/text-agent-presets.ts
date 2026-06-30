@@ -15,35 +15,35 @@ export const TEXT_AGENT_PRESETS: Record<
     id: "novel-to-script-agent",
     label: "小说转剧本",
     description: "将小说片段改写为可直接用于拍摄的分场景剧本",
-    model: "deepseek-v3.2",
+    model: "deepseek-v4-flash",
     systemPrompt: SYSTEM_PROMPTS["novel-to-script-agent"],
   },
   "short-video-storyboard": {
     id: "short-video-storyboard",
     label: "真人短剧分镜（15秒）",
     description: "生成15秒短视频分镜脚本，包含镜头、动作、台词",
-    model: "deepseek-v3.2",
+    model: "deepseek-v4-flash",
     systemPrompt: SYSTEM_PROMPTS["short-video-storyboard"],
   },
   "jimeng-prompt": {
     id: "jimeng-prompt",
     label: "通用即梦分镜",
     description: "将文字描述转换为即梦AI视频生成提示词",
-    model: "deepseek-v3.2",
+    model: "deepseek-v4-flash",
     systemPrompt: SYSTEM_PROMPTS["jimeng-prompt"],
   },
   "novel-character-design": {
     id: "novel-character-design",
     label: "角色设计",
     description: "从小说或剧本中提取并设计角色原画设定表",
-    model: "deepseek-v3.2",
+    model: "deepseek-v4-flash",
     systemPrompt: SYSTEM_PROMPTS["novel-character-design"],
   },
   "script-to-storyboard": {
     id: "script-to-storyboard",
     label: "剧本转分镜",
     description: "将剧本或小说片段转化为AI视频分镜脚本，支持真人短剧和动漫风格",
-    model: "deepseek-v3.2",
+    model: "deepseek-v4-flash",
     systemPrompt: SYSTEM_PROMPTS["script-to-storyboard"],
   },
 };
@@ -76,5 +76,5 @@ export const getTextAgentPresetLabelById = (presetId?: string) => {
 
 export const TEXT_AGENT_MODELS = [
   { value: "claude-sonnet-4.6", label: "Claude Sonnet 4.6" },
-  { value: "deepseek-v3.2", label: "DeepSeek v3.2" },
+  { value: "deepseek-v4-flash", label: "deepseek-v4-flash" },
 ];

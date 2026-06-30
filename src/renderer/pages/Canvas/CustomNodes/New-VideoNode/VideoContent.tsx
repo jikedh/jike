@@ -2,6 +2,7 @@ import { memo, useMemo } from "react";
 import { GenerationStatus } from "shared/constants/enum";
 import type { NewVideoGenerationNode } from "shared/types/flow";
 import { assignMissingMediaSequences } from "shared/utils/mediaSequence";
+import { GenerationErrorTooltip } from "../shared/GenerationErrorTooltip";
 import { CollapsibleVideoGallery } from "./components/CollapsibleVideoGallery";
 
 type VideoContentProps = {
@@ -84,9 +85,10 @@ export const VideoContent = memo(
           <div className="mb-2 text-sm font-medium text-destructive">
             生成失败
           </div>
-          <div className="mb-3 line-clamp-3 max-w-full px-2 text-xs text-muted-foreground">
-            {displayMessage}
-          </div>
+          <GenerationErrorTooltip
+            message={displayMessage}
+            className="mb-3 w-full"
+          />
           {onRetry && (
             <button
               type="button"

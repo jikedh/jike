@@ -132,27 +132,18 @@ export async function downloadImageFromUrl(
     const invoke = w?.__TAURI_INTERNALS__?.invoke;
 
     if (invoke) {
-      // Tauri 环境：通过 Rust 后端下载 + 原生保存对话框
-      // 步骤 1：Rust 端下载图片字节（reqwest 绕过浏览器 CORS）
-      const downloadResult = await invoke("download_image_as_buffer", { url: imageUrl });
-      if (!downloadResult?.success || !downloadResult?.data?.data) {
-        throw new Error(downloadResult?.error || "下载失败");
-      }
-      const buffer = downloadResult.data.data as number[];
-      const mimeType = (downloadResult.data.mimeType as string) || "image/png";
-      const ext = mimeType.split("/")[1] || "png";
-      const saveName = defaultFilename || `image-${Date.now()}.${ext}`;
-
-      // 步骤 2：弹出原生保存对话框，用户选择路径后写入文件
-      const saveResult = await invoke("storage_save_buffer_to_file", {
+      // Tauri 环境：先弹出原生保存对话框，用户确认路径后再由 Rust 下载到目标文件。
+      const saveName = defaultFilename || `image-${Date.now()}.png`;
+      const downloadResult = await invoke("download_image_with_save_dialog", {
+        url: imageUrl,
         defaultName: saveName,
-        buffer,
       });
-      if (!saveResult?.success) {
-        if (saveResult?.canceled) {
+
+      if (!downloadResult?.success) {
+        if (downloadResult?.canceled) {
           throw new Error("取消下载");
         }
-        throw new Error(saveResult?.error || "保存失败");
+        throw new Error(downloadResult?.error || "保存失败");
       }
       return;
     }

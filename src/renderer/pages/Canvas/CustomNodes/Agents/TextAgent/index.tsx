@@ -31,7 +31,8 @@ const areTextAgentNodePropsEqual = (
     prev.data.nickname === next.data.nickname &&
     prev.data.useDefaultSystemPrompt === next.data.useDefaultSystemPrompt &&
     prev.data.customSystemPrompt === next.data.customSystemPrompt &&
-    prev.data.status === next.data.status
+    prev.data.status === next.data.status &&
+    prev.data.error === next.data.error
   );
 };
 
@@ -214,6 +215,7 @@ export const TextAgentNode = memo(
                 presetLabel={presetLabel}
                 selected={selected}
                 isGenerating={isGenerating}
+                errorMessage={data.status === "error" ? data.error : undefined}
               />
 
               {/* 配置面板（选中时显示） */}

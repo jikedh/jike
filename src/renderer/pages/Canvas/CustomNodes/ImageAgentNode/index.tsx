@@ -32,7 +32,8 @@ const areImageAgentNodePropsEqual = (
   prev.data.presetId === next.data.presetId &&
   prev.data.nickname === next.data.nickname &&
   prev.data.customSystemPrompt === next.data.customSystemPrompt &&
-  prev.data.status === next.data.status;
+  prev.data.status === next.data.status &&
+  prev.data.error === next.data.error;
 
 export const ImageAgentNode = memo(
   ({ id, data, selected }: NodeProps<ImageAgentNodeType>) => {
@@ -163,6 +164,7 @@ export const ImageAgentNode = memo(
                 presetLabel={presetLabel}
                 selected={selected}
                 isGenerating={isGenerating}
+                errorMessage={data.status === "error" ? data.error : undefined}
               />
 
               {/* 选中时展开配置面板 */}

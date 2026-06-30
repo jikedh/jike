@@ -127,6 +127,14 @@ export interface DuplicateProjectRequest {
   name?: string;
 }
 
+/** 分享项目请求 */
+export interface ShareProjectRequest {
+  target_uuid: string;
+}
+
+/** 分享项目响应 */
+export type ShareProjectResponse = ApiResponse<ProjectDetail>;
+
 /** 导入项目请求 */
 export interface ImportProjectRequest {
   name: string;

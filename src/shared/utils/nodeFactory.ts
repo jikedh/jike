@@ -177,7 +177,7 @@ export const createTextAgentNode = (
   type: "textAgentNode",
   position,
   data: {
-    model: "deepseek-v3.2",
+    model: "deepseek-v4-flash",
     presetId: undefined,
     useDefaultSystemPrompt: true,
     customSystemPrompt: "",

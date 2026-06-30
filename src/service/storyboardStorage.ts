@@ -547,7 +547,7 @@ const remapSharedAssetReferences = (
 const isLegacySnippetAssetPath = (projectId: string, localPath?: string) =>
   Boolean(
     localPath?.startsWith(`${STORYBOARD_ROOT}/projects/${projectId}/snippets/`) &&
-      localPath.includes("/assets/"),
+    localPath.includes("/assets/"),
   );
 
 const getPathExtension = (path: string, fallback: string) =>
@@ -615,16 +615,16 @@ const migrateProjectAssetLocalPaths = async (
       assets[kind].map(async (asset) => {
         const mediaItems = asset.mediaItems
           ? await Promise.all(
-              asset.mediaItems.map(async (item) => ({
-                ...item,
-                localPath: await copyLegacyPath(
-                  item.localPath,
-                  kind,
-                  item.id,
-                  item.mediaType,
-                ),
-              })),
-            )
+            asset.mediaItems.map(async (item) => ({
+              ...item,
+              localPath: await copyLegacyPath(
+                item.localPath,
+                kind,
+                item.id,
+                item.mediaType,
+              ),
+            })),
+          )
           : asset.mediaItems;
 
         const localPath = await copyLegacyPath(
@@ -1126,7 +1126,7 @@ export const identifyAssetsWithAgent = async (input: {
 }): Promise<StoryboardAgentAssetResult> => {
   try {
     const response = await createChatCompletion({
-      model: "deepseek-v3.2",
+      model: "deepseek-v4-flash",
       stream: false,
       temperature: 0.2,
       messages: [
@@ -1188,7 +1188,7 @@ export const splitScriptWithAgent = async (input: {
 }): Promise<StoryboardAgentSplitResult> => {
   try {
     const response = await createChatCompletion({
-      model: "deepseek-v3.2",
+      model: "deepseek-v4-flash",
       stream: false,
       temperature: 0.3,
       messages: [
@@ -1224,9 +1224,9 @@ export const splitScriptWithAgent = async (input: {
     const parsed = JSON.parse(parseJsonBlock(String(content))) as
       | RawSplitShotItem[]
       | {
-          shots?: RawSplitShotItem[];
-          assets?: unknown;
-        };
+        shots?: RawSplitShotItem[];
+        assets?: unknown;
+      };
     const items = Array.isArray(parsed)
       ? parsed
       : Array.isArray(parsed.shots)

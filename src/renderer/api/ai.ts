@@ -212,7 +212,7 @@ const AGNES_IMAGE_SIZE_BY_RATIO: Record<string, string> = {
 const getAgnesImageApiBaseUrl = () =>
   String(
     (import.meta as any).env?.VITE_AGNES_API_BASE_URL ||
-      "https://apihub.agnes-ai.com",
+    "https://apihub.agnes-ai.com",
   ).replace(/\/+$/, "");
 
 const getAgnesImageApiKey = () =>
@@ -406,7 +406,7 @@ export async function analyzeLightingReferenceImage(
 ): Promise<string> {
   const response = await createChatCompletion(
     {
-      model: "deepseek-v3.2",
+      model: "deepseek-v4-flash",
       stream: false,
       temperature: 0.2,
       messages: [
