@@ -253,8 +253,14 @@ const getEdgePathElements = (edgeId: string) => {
     `.react-flow__edge[data-id="${CSS.escape(edgeId)}"]`,
   ) as SVGGElement | null;
 
+  // 仅同步 React Flow 内置的主路径（`.react-flow__edge-path`），排除
+  // 命中热区等叠加 path，避免拖动期间每帧多写不可见 path 的 `d`。
   return edgeElement
-    ? (Array.from(edgeElement.querySelectorAll("path")) as SVGPathElement[])
+    ? (Array.from(
+      edgeElement.querySelectorAll<SVGPathElement>(
+        ".react-flow__edge-path",
+      ),
+    ) as SVGPathElement[])
     : [];
 };
 

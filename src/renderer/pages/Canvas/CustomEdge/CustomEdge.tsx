@@ -15,12 +15,6 @@ const DEFAULT_EDGE_STYLE = {
   strokeWidth: 1.2,
 };
 
-const SELECTED_EDGE_GLASS_STYLE = {
-  strokeWidth: 0.55,
-  opacity: 0.42,
-  filter: "drop-shadow(0 0 3px rgba(215,155,255,0.18))",
-};
-
 const EDGE_CUT_BUTTON_ANIMATION_MS = 220;
 const EDGE_HOVER_ACTIVATION_MS = 300;
 const EDGE_HOVER_GRACE_MS = 800;
@@ -69,7 +63,6 @@ const CustomEdgeComponent = (props: EdgeProps) => {
       strokeWidth: 3,
       strokeDasharray: "8 6",
       strokeDashoffset: 0,
-      filter: "drop-shadow(0 0 8px rgba(180,63,235,0.85))",
     };
   }, [isConnectedToActiveNode, isHighlighted, isHovered, props.style]);
 
@@ -156,22 +149,9 @@ const CustomEdgeComponent = (props: EdgeProps) => {
     };
   }, [clearHoverActivationTimer]);
 
-  const isEmphasized = isHighlighted || isConnectedToActiveNode || isHovered;
-
   return (
     <>
-      <BaseEdge id={props.id} path={edgePath} style={edgeStyle} className="" />
-      {isEmphasized && !isHighlighted ? (
-        <path
-          d={edgePath}
-          fill="none"
-          pointerEvents="none"
-          stroke="#E9CCFF"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={SELECTED_EDGE_GLASS_STYLE}
-        />
-      ) : null}
+      <BaseEdge id={props.id} path={edgePath} style={edgeStyle} />
       <path
         d={edgePath}
         fill="none"
