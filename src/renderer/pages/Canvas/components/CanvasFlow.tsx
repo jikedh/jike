@@ -655,6 +655,8 @@ export const CanvasFlow = ({
   const suppressDefaultSelectionRef = useRef(false);
   const deferSelectionCalculationRef = useRef(false);
   const suppressInteractiveSelectionTimerRef = useRef<number | null>(null);
+  const suppressNextPaneClickRef = useRef(false);
+  const suppressNextPaneClickTimerRef = useRef<number | null>(null);
   const suppressNextContextMenuRef = useRef(false);
   const suppressContextMenuTimerRef = useRef<number | null>(null);
   const viewportPanStateRef = useRef<{
@@ -1449,6 +1451,9 @@ export const CanvasFlow = ({
       if (suppressInteractiveSelectionTimerRef.current !== null) {
         window.clearTimeout(suppressInteractiveSelectionTimerRef.current);
       }
+      if (suppressNextPaneClickTimerRef.current !== null) {
+        window.clearTimeout(suppressNextPaneClickTimerRef.current);
+      }
     };
   }, []);
 
@@ -1458,6 +1463,19 @@ export const CanvasFlow = ({
       window.clearTimeout(suppressContextMenuTimerRef.current);
       suppressContextMenuTimerRef.current = null;
     }
+  }, []);
+
+  const suppressNextPaneClick = useCallback(() => {
+    suppressNextPaneClickRef.current = true;
+
+    if (suppressNextPaneClickTimerRef.current !== null) {
+      window.clearTimeout(suppressNextPaneClickTimerRef.current);
+    }
+
+    suppressNextPaneClickTimerRef.current = window.setTimeout(() => {
+      suppressNextPaneClickRef.current = false;
+      suppressNextPaneClickTimerRef.current = null;
+    }, 0);
   }, []);
 
   const scheduleContextMenuSuppressionRelease = useCallback((delay = 500) => {
@@ -2100,10 +2118,6 @@ export const CanvasFlow = ({
         return true;
       }
 
-      if (node.type !== "imageNode") {
-        return false;
-      }
-
       const overlapWidth = Math.max(
         0,
         Math.min(rect.right, selectionRect.right) -
@@ -2128,9 +2142,9 @@ export const CanvasFlow = ({
     suppressDefaultSelectionRef.current = false;
     deferSelectionCalculationRef.current = false;
     clearManualSelectionRect();
-    setActiveNodeId(null);
 
     if (!session?.active) {
+      setActiveNodeId(null);
       return;
     }
 
@@ -2162,6 +2176,7 @@ export const CanvasFlow = ({
         .nodes.map((node) => [node.id, Boolean(node.selected)]),
     );
 
+    const nextSelectedNodeIds: string[] = [];
     const changes = displayNodes
       .map((node) => {
         const insideSelection = isNodeInsideSelectionRect(node, selectionRect);
@@ -2169,6 +2184,10 @@ export const CanvasFlow = ({
           insideSelection ||
           (session.additive && session.initialSelectedNodeIds.has(node.id));
         const currentSelected = currentSelectedById.get(node.id) ?? false;
+
+        if (nextSelected) {
+          nextSelectedNodeIds.push(node.id);
+        }
 
         if (
           currentSelected === nextSelected &&
@@ -2184,6 +2203,10 @@ export const CanvasFlow = ({
         };
       })
       .filter(Boolean) as NodeChange<AllNodeType>[];
+
+    setActiveNodeId(
+      nextSelectedNodeIds.length === 1 ? nextSelectedNodeIds[0] : null,
+    );
 
     if (changes.length === 0) {
       return;
@@ -2202,6 +2225,7 @@ export const CanvasFlow = ({
   const handleSelectionEnd = useCallback(() => {
     setSelectionBoxActive(false);
     clearManualSelectionRect();
+    suppressNextPaneClick();
 
     window.requestAnimationFrame(() => {
       flushStoreNodeChanges();
@@ -2211,6 +2235,7 @@ export const CanvasFlow = ({
     applyCenterPointSelection,
     clearManualSelectionRect,
     flushStoreNodeChanges,
+    suppressNextPaneClick,
   ]);
 
   useEffect(() => {
@@ -2227,6 +2252,15 @@ export const CanvasFlow = ({
     }
 
     if (suppressInteractiveSelectionTimerRef.current !== null) {
+      return;
+    }
+
+    if (suppressNextPaneClickRef.current) {
+      suppressNextPaneClickRef.current = false;
+      if (suppressNextPaneClickTimerRef.current !== null) {
+        window.clearTimeout(suppressNextPaneClickTimerRef.current);
+        suppressNextPaneClickTimerRef.current = null;
+      }
       return;
     }
 
@@ -3014,6 +3048,7 @@ export const CanvasFlow = ({
           if (session.selectionStarted) {
             setSelectionBoxActive(false);
             clearManualSelectionRect();
+            suppressNextPaneClick();
             if (isShiftRightButton) {
               scheduleContextMenuSuppressionRelease();
             }
@@ -3063,6 +3098,7 @@ export const CanvasFlow = ({
       scheduleContextMenuSuppressionRelease,
       setActiveNodeId,
       setSelectedGroupId,
+      suppressNextPaneClick,
       updateManualSelectionRect,
     ],
   );
