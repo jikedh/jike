@@ -148,7 +148,7 @@ const AssetThumbnail = ({ asset }: { asset: RemoteAsset }) => {
     const [errored, setErrored] = useState(false);
     const hasThumb = Boolean(asset.thumbnailUrl) && !errored;
 
-    if (asset.mediaType === "audio" || !hasThumb) {
+    if (asset.mediaType === "audio") {
         return (
             <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-[#2a2a30] to-[#1a1a1f] text-white/55">
                 {getMediaIcon(asset.mediaType, 26)}
@@ -160,15 +160,26 @@ const AssetThumbnail = ({ asset }: { asset: RemoteAsset }) => {
     }
 
     return (
-        <img
-            src={asset.thumbnailUrl}
-            alt={asset.name}
-            loading="lazy"
-            decoding="async"
-            draggable={false}
-            onError={() => setErrored(true)}
-            className="h-full w-full object-cover"
-        />
+        <div className="relative h-full w-full">
+            {hasThumb ? (
+                <img
+                    src={asset.thumbnailUrl}
+                    alt={asset.name}
+                    loading="lazy"
+                    decoding="async"
+                    draggable={false}
+                    onError={() => setErrored(true)}
+                    className="h-full w-full object-cover"
+                />
+            ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[#2a2a30] via-[#202027] to-[#18181d] text-white/60">
+                    {getMediaIcon(asset.mediaType, 28)}
+                    <span className="text-[10px] uppercase tracking-wider text-white/40">
+                        {getMediaTypeLabel(asset.mediaType)}
+                    </span>
+                </div>
+            )}
+        </div>
     );
 };
 

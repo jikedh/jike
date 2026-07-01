@@ -1,5 +1,3 @@
-import { generateVideoSnapshotUrl } from "service/oss";
-
 export type VideoPosterFields = {
   url?: string;
   remoteUrl?: string;
@@ -26,11 +24,8 @@ export const buildVideoPosterUrl = (url?: string | null) => {
     return undefined;
   }
 
-  return generateVideoSnapshotUrl(url as string, {
-    time: 0,
-    width: 480,
-    format: "jpg",
-  });
+  const [baseUrl] = (url as string).split("?");
+  return `${baseUrl}?x-oss-process=video/snapshot,t_1000,f_jpg,w_480,h_0,interlace_1`;
 };
 
 export const getVideoPosterUrl = (

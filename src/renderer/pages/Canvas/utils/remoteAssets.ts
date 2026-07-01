@@ -18,6 +18,7 @@ import type {
   MediaType,
   PrimaryCategory,
 } from "shared/types/api/assets";
+import { buildVideoPosterUrl } from "shared/utils/videoPoster";
 
 /** UI 使用的统一资产对象（来自远程 API） */
 export interface RemoteAsset {
@@ -56,6 +57,13 @@ const toStringOrEmpty = (value: unknown): string => {
   return String(value);
 };
 
+const getRemoteAssetThumbnailUrl = (mediaType: MediaType, fileUrl: string, thumbnailUrl: string) => {
+  if (thumbnailUrl) return thumbnailUrl;
+  if (mediaType === "image") return fileUrl;
+  if (mediaType === "video") return buildVideoPosterUrl(fileUrl) || "";
+  return "";
+};
+
 const tagNamesFromList = (tags: string[] | undefined): string[] =>
   Array.isArray(tags) ? tags.filter((tag) => typeof tag === "string" && tag.length > 0) : [];
 
@@ -76,8 +84,11 @@ export const mapListItemToRemoteAsset = (item: AssetListItem): RemoteAsset => ({
   mediaType: item.mediaType,
   primaryCategory: item.primaryCategory,
   fileUrl: toStringOrEmpty(item.fileUrl),
-  thumbnailUrl:
-    toStringOrEmpty(item.thumbnailUrl) || toStringOrEmpty(item.fileUrl),
+  thumbnailUrl: getRemoteAssetThumbnailUrl(
+    item.mediaType,
+    toStringOrEmpty(item.fileUrl),
+    toStringOrEmpty(item.thumbnailUrl),
+  ),
   fileSize: typeof item.fileSize === "number" ? item.fileSize : null,
   width: typeof item.width === "number" ? item.width : null,
   height: typeof item.height === "number" ? item.height : null,
@@ -100,8 +111,11 @@ export const mapDetailToRemoteAsset = (detail: AssetDetail): RemoteAsset => ({
   mediaType: detail.mediaType,
   primaryCategory: detail.primaryCategory,
   fileUrl: toStringOrEmpty(detail.fileUrl),
-  thumbnailUrl:
-    toStringOrEmpty(detail.thumbnailUrl) || toStringOrEmpty(detail.fileUrl),
+  thumbnailUrl: getRemoteAssetThumbnailUrl(
+    detail.mediaType,
+    toStringOrEmpty(detail.fileUrl),
+    toStringOrEmpty(detail.thumbnailUrl),
+  ),
   fileSize: typeof detail.fileSize === "number" ? detail.fileSize : null,
   width: typeof detail.width === "number" ? detail.width : null,
   height: typeof detail.height === "number" ? detail.height : null,
