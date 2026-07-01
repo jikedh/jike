@@ -119,7 +119,7 @@ export const mapDetailToRemoteAsset = (detail: AssetDetail): RemoteAsset => ({
 export const SCOPE_LABEL_MAP: Record<AssetScope, string> = {
   personal: "个人资产",
   project: "项目资产",
-  public: "公开资产",
+  public: "公共资产",
 };
 
 export const MEDIA_LABEL_MAP: Record<MediaType, string> = {
