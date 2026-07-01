@@ -35,6 +35,9 @@ declare global {
         videoUrl: string;
         start: number;
         end: number;
+        authToken?: string;
+        backendBaseUrl?: string;
+        ffmpegPath?: string;
       }) => Promise<{
         success: boolean;
         data?: {

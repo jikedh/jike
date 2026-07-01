@@ -10,6 +10,8 @@ pub struct VideoTrimRequest {
     pub auth_token: Option<String>,
     #[serde(rename = "backendBaseUrl", skip_serializing_if = "Option::is_none", default)]
     pub backend_base_url: Option<String>,
+    #[serde(rename = "ffmpegPath", skip_serializing_if = "Option::is_none", default)]
+    pub ffmpeg_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

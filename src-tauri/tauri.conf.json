@@ -32,7 +32,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' data: blob: https: asset: http://asset.localhost; media-src 'self' data: blob: asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost https: http: ws: wss:; font-src 'self' data:;",
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' data: blob: https: asset: http://asset.localhost; media-src 'self' data: blob: https: asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost https: http: ws: wss:; font-src 'self' data:;",
       "assetProtocol": {
         "enable": true,
         "scope": [
@@ -64,7 +64,9 @@
         "displayLanguageSelector": false
       }
     },
-    "resources": [],
+    "resources": {
+      "resources/ffmpeg/": "ffmpeg/"
+    },
     "publisher": "小明",
     "copyright": "© 2026 小明"
   },

@@ -1230,6 +1230,10 @@ export const VideoToolbar = ({
         const authToken = getJikeingToken();
         const backendBaseUrl =
           import.meta.env.VITE_JIKE_GO_BASE_URL || "http://localhost:9181";
+        const ffmpegPath =
+          import.meta.env.VITE_FFMPEG_PATH ||
+          import.meta.env.VITE_JIKE_FFMPEG_PATH ||
+          undefined;
 
         const response = await window.videoProcessing.trim({
           videoUrl: currentVideoUrl,
@@ -1237,6 +1241,7 @@ export const VideoToolbar = ({
           end: range.end,
           authToken: authToken || undefined,
           backendBaseUrl,
+          ffmpegPath,
         });
 
         if (!response.success || !response.data?.url) {
