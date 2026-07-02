@@ -68,6 +68,7 @@ import {
   RUNNINGHUB_PLATFORM,
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
+import { getVideoGenerationPoints } from "shared/constants/model-points";
 import { formatDuration } from "shared/utils/getVideoDuration";
 import { cn } from "shared/utils/utils";
 import { normalizeVideoTaskResponse } from "shared/utils/video-response-normalizer";
@@ -83,9 +84,11 @@ import {
   getLzVideoTaskStatus,
 } from "@/api/ai";
 import {
+  confirmDesktopProxyScore,
   createWuhenRemovalTask,
   getUploadOssPutUrl,
   queryWuhenRemovalTask,
+  refundDesktopProxyScore,
 } from "@/api/jikeGo";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { Button } from "@/components/ui/button";
@@ -168,6 +171,7 @@ const stepOrder: Record<StoryboardAgentStep, number> = {
 
 const STORY_SHOT_DEFAULT_VIDEO_MODEL = "seedance-2.0-pro";
 const STORY_SHOT_FIXED_DURATION = 15;
+const STORY_VIDEO_GENERATION_FAKE_REQUEST_DELAY_MS = 5000;
 const STORY_ASSET_GENERATION_EVENT = "story-asset-generation-complete";
 
 type StoryAssetGenerationEventDetail = {
@@ -939,6 +943,16 @@ const getAssetMediaItems = (
 const getPrimaryAssetMediaItem = (
   asset: StoryboardAssetItem,
 ): StoryboardAssetMediaItem | undefined => getAssetMediaItems(asset)[0];
+
+const getStoryAssetReferenceMediaType = (asset: StoryboardAssetItem) => {
+  const primaryMedia = getPrimaryAssetMediaItem(asset);
+  return getStoryAssetMediaType({
+    ...asset,
+    mediaType: primaryMedia?.mediaType || asset.mediaType,
+    mediaUrl: primaryMedia?.mediaUrl || asset.mediaUrl,
+    localPath: primaryMedia?.localPath || asset.localPath,
+  });
+};
 
 const appendAssetMediaItem = (
   asset: StoryboardAssetItem,
@@ -4491,11 +4505,48 @@ const StoryAgentPage = ({
   const [removingSubtitleShotId, setRemovingSubtitleShotId] = useState<
     string | null
   >(null);
+  const [pendingShotVideoIds, setPendingShotVideoIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const {
+    totalPoints,
+    fallbackAIGenPrice,
+    normalizeRequiredPoints,
+    refreshBalanceInfo,
+    validateBalanceBeforeGenerate,
+  } = useGenerationPoints();
   const agentRef = useRef(agent);
+  const shotVideoFakeRequestTimersRef = useRef<
+    Map<string, ReturnType<typeof setTimeout>>
+  >(new Map());
 
   useEffect(() => {
     agentRef.current = agent;
   }, [agent]);
+
+  useEffect(() => {
+    return () => {
+      shotVideoFakeRequestTimersRef.current.forEach((timer) => {
+        clearTimeout(timer);
+      });
+      shotVideoFakeRequestTimersRef.current.clear();
+    };
+  }, []);
+
+  const setShotVideoGenerationPending = useCallback(
+    (shotId: string, pending: boolean) => {
+      setPendingShotVideoIds((current) => {
+        const next = new Set(current);
+        if (pending) {
+          next.add(shotId);
+        } else {
+          next.delete(shotId);
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   const assetCallbacksRef = useRef<Record<string, any>>({});
 
@@ -5935,6 +5986,37 @@ const StoryAgentPage = ({
     return selectedAssets;
   };
 
+  const getShotVideoEstimateContext = (shot: StoryboardShot) => {
+    const selectedAssets = getShotAssetsWithBoundAudio(shot);
+    const referenceItems = selectedAssets.map((asset) => ({
+      id: asset.id,
+      mentionId: asset.id,
+      label: asset.name || "未命名资产",
+      displayLabel: asset.name || "未命名资产",
+      originalLabel: asset.name || "未命名资产",
+      value: asset.name || "未命名资产",
+      thumbnail: asset.mediaUrl || "",
+      type: getStoryAssetReferenceMediaType(asset),
+    })) as MentionItem[];
+    const mode = pickStoryVideoMode(
+      shot.modelInfo.videoModel,
+      referenceItems,
+      toVideoModeKey(settings.defaultNewVideoMode),
+    );
+    const generationReferenceItems =
+      mode === "text-to-video"
+        ? []
+        : mode === "image-to-video"
+          ? referenceItems.filter((item) => item.type === "image").slice(0, 1)
+          : referenceItems;
+
+    return {
+      hasVideoInput: generationReferenceItems.some(
+        (item) => item.type === "video",
+      ),
+    };
+  };
+
   const pollStoryVideoTask = async (taskId: string, isSeedance20: boolean) => {
     for (let attempt = 0; attempt < 90; attempt += 1) {
       await wait(4000);
@@ -5962,11 +6044,13 @@ const StoryAgentPage = ({
   const createStoryVideoTask = async (
     apiRequest: ReturnType<typeof buildVideoApiRequest>,
     model: string,
+    scoreCost?: number,
   ) => {
     const isSeedance20 = isSeedanceVideoModel(model);
     const response: any = isSeedance20
-      ? await createLzVideoTask(apiRequest as any)
-      : await createDashscopeVideoSynthesis(apiRequest as any);
+      ? await createLzVideoTask(apiRequest as any, scoreCost)
+      : await createDashscopeVideoSynthesis(apiRequest as any, scoreCost);
+    const ledgerBizId = response?.ledgerBizId as string | undefined;
     const taskId =
       response?.data?.task_id ||
       response?.output?.task_id ||
@@ -5975,10 +6059,47 @@ const StoryAgentPage = ({
       response?.taskId;
 
     if (!taskId) {
+      if (ledgerBizId) {
+        void refundDesktopProxyScore(
+          ledgerBizId,
+          "task creation failed: no task_id",
+        )
+          .catch(() => {})
+          .finally(() => {
+            void refreshBalanceInfo();
+          });
+      }
       throw new Error("video task id is empty");
     }
 
-    return pollStoryVideoTask(String(taskId), isSeedance20);
+    try {
+      const videoUrl = await pollStoryVideoTask(String(taskId), isSeedance20);
+      if (ledgerBizId) {
+        void confirmDesktopProxyScore(ledgerBizId, "video", {
+          scoreModel: model,
+          scoreTaskId: String(taskId),
+        }).catch(() => {});
+      }
+      void refreshBalanceInfo();
+      return videoUrl;
+    } catch (error) {
+      if (ledgerBizId) {
+        void refundDesktopProxyScore(
+          ledgerBizId,
+          error instanceof Error ? error.message : "video generation failed",
+          "video",
+          {
+            scoreModel: model,
+            scoreTaskId: String(taskId),
+          },
+        )
+          .catch(() => {})
+          .finally(() => {
+            void refreshBalanceInfo();
+          });
+      }
+      throw error;
+    }
   };
 
   const generateShotVideo = async (shot: StoryboardShot) => {
@@ -6060,10 +6181,34 @@ const StoryAgentPage = ({
         referenceItems: generationReferenceItems,
         mode,
       };
+      const requiredPoints = normalizeRequiredPoints(
+        getVideoGenerationPoints({
+          model: refreshedShot.modelInfo.videoModel,
+          duration: params.duration,
+          resolution: params.resolution,
+          hasVideoInput: generationReferenceItems.some(
+            (item) => item.type === "video",
+          ),
+          hasAudio: Boolean(params.generateAudio ?? true),
+          fallback: Math.max(fallbackAIGenPrice, 1),
+        }),
+      );
+      if (
+        !(await validateBalanceBeforeGenerate({
+          requiredPoints,
+          warning: toast.warning,
+          insufficientMessage: (points, currentTotalPoints) =>
+            `积分不足，当前剩余 ${currentTotalPoints} 积分，生成当前分镜视频需要 ${points} 积分`,
+        }))
+      ) {
+        await saveShotPatch(shot.id, { videoStatus: "idle" });
+        return;
+      }
       const apiRequest = buildVideoApiRequest(request);
       const videoUrl = await createStoryVideoTask(
         apiRequest,
         refreshedShot.modelInfo.videoModel,
+        requiredPoints,
       );
       await saveShotPatch(shot.id, {
         videoStatus: "ready",
@@ -6075,6 +6220,62 @@ const StoryAgentPage = ({
       await saveShotPatch(shot.id, { videoStatus: "failed" });
       toast.error("生成视频失败，请检查提示词、资产和模型配置");
     }
+  };
+
+  const stopShotVideoGeneration = (shotId: string) => {
+    const timer = shotVideoFakeRequestTimersRef.current.get(shotId);
+    if (!timer) {
+      return;
+    }
+
+    clearTimeout(timer);
+    shotVideoFakeRequestTimersRef.current.delete(shotId);
+    setShotVideoGenerationPending(shotId, false);
+    toast.success("已停止生成");
+  };
+
+  const startShotVideoGeneration = (shot: StoryboardShot) => {
+    if (
+      shot.videoStatus === "generating" ||
+      shotVideoFakeRequestTimersRef.current.has(shot.id)
+    ) {
+      return;
+    }
+
+    const refreshedShot = applyAutoDescToShot(shot, agentRef.current.assets);
+    const basePrompt = (
+      refreshedShot.prompt ||
+      refreshedShot.script ||
+      ""
+    ).trim();
+    if (!basePrompt) {
+      toast.error("请先填写分镜提示词");
+      return;
+    }
+
+    setShotVideoGenerationPending(shot.id, true);
+
+    const existingTimer = shotVideoFakeRequestTimersRef.current.get(shot.id);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const timer = setTimeout(() => {
+      if (shotVideoFakeRequestTimersRef.current.get(shot.id) !== timer) {
+        return;
+      }
+
+      shotVideoFakeRequestTimersRef.current.delete(shot.id);
+      const latestShot = agentRef.current.shots.find(
+        (item) => item.id === shot.id,
+      );
+      if (latestShot) {
+        void generateShotVideo(latestShot);
+      }
+      setShotVideoGenerationPending(shot.id, false);
+    }, STORY_VIDEO_GENERATION_FAKE_REQUEST_DELAY_MS);
+
+    shotVideoFakeRequestTimersRef.current.set(shot.id, timer);
   };
 
   const downloadShotVideo = async (shot: StoryboardShot) => {
@@ -7214,6 +7415,9 @@ const StoryAgentPage = ({
                           key={shot.id}
                           shot={shot}
                           selectedAssets={getShotAssetsWithBoundAudio(shot)}
+                          isVideoGenerationPending={pendingShotVideoIds.has(
+                            shot.id,
+                          )}
                           onChange={(patch) => updateShot(shot.id, patch)}
                           onSelectAssets={() =>
                             openAssetLibraryForShot(shot.id)
@@ -7222,7 +7426,10 @@ const StoryAgentPage = ({
                             removeAssetFromShot(shot.id, assetId)
                           }
                           onEditModelInfo={() => setEditingShotModel(shot)}
-                          onGenerateVideo={() => void generateShotVideo(shot)}
+                          onGenerateVideo={() => startShotVideoGeneration(shot)}
+                          onStopVideoGeneration={() =>
+                            stopShotVideoGeneration(shot.id)
+                          }
                         />
                       ))
                     )}
@@ -7356,6 +7563,13 @@ const StoryAgentPage = ({
           {editingShotModel ? (
             <ShotModelSettingsDialog
               shot={editingShotModel}
+              hasVideoInput={
+                getShotVideoEstimateContext(editingShotModel).hasVideoInput
+              }
+              generateAudio={settings.defaultNewVideoGenerateAudio}
+              totalPoints={totalPoints}
+              fallbackAIGenPrice={fallbackAIGenPrice}
+              normalizeRequiredPoints={normalizeRequiredPoints}
               onClose={() => setEditingShotModel(null)}
               onApplySingle={(value) =>
                 applyShotModelSettings(editingShotModel.id, value, "single")
@@ -8137,11 +8351,21 @@ const VideoEditDrawer = ({
 
 const ShotModelSettingsDialog = ({
   shot,
+  hasVideoInput,
+  generateAudio,
+  totalPoints,
+  fallbackAIGenPrice,
+  normalizeRequiredPoints,
   onClose,
   onApplySingle,
   onApplyAll,
 }: {
   shot: StoryboardShot;
+  hasVideoInput: boolean;
+  generateAudio?: boolean;
+  totalPoints: number;
+  fallbackAIGenPrice: number;
+  normalizeRequiredPoints: (points?: number) => number;
   onClose: () => void;
   onApplySingle: (value: VideoParamState) => void;
   onApplyAll: (value: VideoParamState) => void;
@@ -8165,6 +8389,29 @@ const ShotModelSettingsDialog = ({
   const patchValue = (patch: Partial<VideoParamState>) => {
     setValue((current) => ({ ...current, ...patch, duration: 15 }));
   };
+
+  const requiredPoints = useMemo(
+    () =>
+      normalizeRequiredPoints(
+        getVideoGenerationPoints({
+          model: shot.modelInfo.videoModel,
+          duration: value.duration ?? STORY_SHOT_FIXED_DURATION,
+          resolution: value.resolution,
+          hasVideoInput,
+          hasAudio: Boolean(generateAudio ?? true),
+          fallback: Math.max(fallbackAIGenPrice, 1),
+        }),
+      ),
+    [
+      fallbackAIGenPrice,
+      generateAudio,
+      hasVideoInput,
+      normalizeRequiredPoints,
+      shot.modelInfo.videoModel,
+      value.duration,
+      value.resolution,
+    ],
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -8275,6 +8522,26 @@ const ShotModelSettingsDialog = ({
               </div>
             ) : null}
           </section>
+
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-white/8 bg-black/25 px-3 py-2">
+            <div>
+              <div className="text-xs font-medium text-white/65">
+                当前设置预计消耗
+              </div>
+              <div className="mt-0.5 text-[11px] text-white/35">
+                按固定 15 秒和当前分镜参考素材预估
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <ModelPointsBadge
+                totalPoints={totalPoints}
+                requiredPoints={requiredPoints}
+                className="rounded-lg px-2.5 py-1"
+                title={`预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
+              />
+              <span className="text-xs text-white/45">积分</span>
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-wrap justify-end gap-3 border-t border-white/8 bg-black/20 px-5 py-4">
@@ -8468,19 +8735,23 @@ const ShotVideoPreview = ({ shot }: { shot: StoryboardShot }) => {
 const ShotRow = ({
   shot,
   selectedAssets,
+  isVideoGenerationPending,
   onChange,
   onSelectAssets,
   onRemoveAsset,
   onEditModelInfo,
   onGenerateVideo,
+  onStopVideoGeneration,
 }: {
   shot: StoryboardShot;
   selectedAssets: StoryboardAssetItem[];
+  isVideoGenerationPending: boolean;
   onChange: (patch: Partial<StoryboardShot>) => void;
   onSelectAssets: () => void;
   onRemoveAsset: (assetId: string) => void;
   onEditModelInfo: () => void;
   onGenerateVideo: () => void;
+  onStopVideoGeneration: () => void;
 }) => {
   return (
     <tr className="border-b border-white/5 align-top">
@@ -8568,11 +8839,13 @@ const ShotRow = ({
       <td className="px-3 py-3">
         <div className="mb-3 space-y-2 rounded-lg border border-white/8 bg-black/25 p-3 text-xs text-white/45">
           <ShotVideoPreview shot={shot} />
-          {shot.videoStatus !== "idle" && (
+          {(isVideoGenerationPending || shot.videoStatus !== "idle") && (
             <div className="flex items-center gap-2 text-[#d8b6ff]">
               <Video size={14} />
-              {shot.videoStatus === "generating"
-                ? "视频生成中"
+              {isVideoGenerationPending
+                ? "等待生成，可停止"
+                : shot.videoStatus === "generating"
+                  ? "视频生成中"
                 : shot.videoStatus === "ready"
                   ? "视频已写回"
                   : "生成失败"}
@@ -8582,16 +8855,33 @@ const ShotRow = ({
         <div className="flex flex-wrap gap-2">
           <Button
             size="sm"
-            variant="blue"
-            onClick={onGenerateVideo}
-            disabled={shot.videoStatus === "generating"}
+            variant={isVideoGenerationPending ? "ghost" : "blue"}
+            className={
+              isVideoGenerationPending
+                ? "border border-red-400/20 bg-red-500/10 text-red-200 hover:bg-red-500/15 hover:text-red-100"
+                : undefined
+            }
+            onClick={
+              isVideoGenerationPending
+                ? onStopVideoGeneration
+                : onGenerateVideo
+            }
+            disabled={
+              shot.videoStatus === "generating" && !isVideoGenerationPending
+            }
           >
-            {shot.videoStatus === "generating" ? (
+            {isVideoGenerationPending ? (
+              <Pause size={13} />
+            ) : shot.videoStatus === "generating" ? (
               <Loader2 className="animate-spin" />
             ) : (
               <Play size={13} />
             )}
-            {shot.videoStatus === "ready" ? "重新生成" : "生成视频"}
+            {isVideoGenerationPending
+              ? "停止生成"
+              : shot.videoStatus === "ready"
+                ? "重新生成"
+                : "生成视频"}
           </Button>
         </div>
       </td>
