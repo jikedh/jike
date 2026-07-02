@@ -516,6 +516,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
     if (mode === "mention") {
       const selected = item as (typeof MENTION_MOCK)[number];
+
       editor
         ?.chain()
         .focus()
@@ -525,7 +526,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             attrs: {
               id: selected.id,
               label: selected.label,
-              value: selected.value,
+              value: selected.value || selected.label,
             },
           },
           {
@@ -596,21 +597,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       .run();
   };
 
-  const filteredMentionItems = useMemo(() => {
-    const q = mentionQuery.trim().toLowerCase();
-    const all = [...MENTION_MOCK];
-    if (!q) {
-      return all;
-    }
-    return all.filter((item) => {
-      return (
-        item.label.toLowerCase().includes(q) ||
-        item.value.toLowerCase().includes(q) ||
-        item.description.toLowerCase().includes(q)
-      );
-    });
-  }, [mentionQuery]);
-
   const filteredCommandItems = useMemo(() => {
     const q = commandQuery.trim().toLowerCase();
     const all = [...COMMAND_MOCK];
@@ -625,6 +611,21 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       );
     });
   }, [commandQuery]);
+
+  const filteredMentionItems = useMemo(() => {
+    const q = mentionQuery.trim().toLowerCase();
+    const all = [...MENTION_MOCK];
+    if (!q) {
+      return all;
+    }
+    return all.filter((item) => {
+      return (
+        item.label.toLowerCase().includes(q) ||
+        item.value.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q)
+      );
+    });
+  }, [mentionQuery]);
 
   // 沿着边找所有父节点，并合并其第一张图片作为参考图来源
   const parentImageEntryValues = useCanvasFlowStore(
@@ -1023,24 +1024,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
         if (event.key === "Enter") {
           event.preventDefault();
-          if (activeMode === "mention") {
-            const selected = filteredMentionItems[activeIndex];
-            if (!selected) {
-              return true;
-            }
-
-            insertSuggestionNode("mention", selected);
+          const selected = currentItems[activeIndex];
+          if (!selected) {
+            return true;
           }
 
-          if (activeMode === "command") {
-            const selected = filteredCommandItems[activeIndex];
-            if (!selected) {
-              return true;
-            }
-
-            insertSuggestionNode("command", selected);
-          }
-
+          insertSuggestionNode(activeMode, selected);
           resetSuggestionState();
           return true;
         }
@@ -1129,15 +1118,15 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     editor.commands.setContent(promptDraftHtml, { emitUpdate: false });
   }, [editor, promptDraftHtml]);
 
-  const suggestionItems =
-    activeMode === "mention" ? filteredMentionItems : filteredCommandItems;
+  const mentionSuggestionItems = activeMode === "mention" ? filteredMentionItems : [];
+  const commandSuggestionItems = activeMode === "command" ? filteredCommandItems : [];
 
   // 当 activeIndex 改变时，自动滚动到选中的选项
   useEffect(() => {
     if (
       suggestionPanelRef.current &&
       activeMode &&
-      suggestionItems.length > 0
+      commandSuggestionItems.length > 0
     ) {
       const activeElement = suggestionPanelRef.current.children[
         activeIndex
@@ -1146,7 +1135,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         activeElement.scrollIntoView({ block: "nearest", behavior: "smooth" });
       }
     }
-  }, [activeIndex, activeMode, suggestionItems.length]);
+  }, [activeIndex, activeMode, commandSuggestionItems.length]);
 
   // 点击生成：根据数量多次调用接口创建任务
   const handleGenerate = async () => {
@@ -1459,18 +1448,17 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             />
           )}
         </div>
-        {/* 建议面板 */}
-        {activeMode && suggestionItems.length > 0 && (
+        {/* @ mention 建议面板 */}
+        {activeMode === "mention" && mentionSuggestionItems.length > 0 && (
           <div
             ref={suggestionPanelRef}
             className="nodrag nopan nowheel absolute right-2 bottom-full left-2 z-30 mb-5 max-h-60 overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900 shadow-[0_14px_34px_rgba(0,0,0,0.45)]"
           >
-            {suggestionItems.map((item, index) => {
+            {mentionSuggestionItems.map((item, index) => {
               const isActive = index === activeIndex;
               const title = item.label;
               const desc = item.description;
-              const token =
-                activeMode === "mention" ? `@${item.value}` : item.command;
+              const token = `@${item.value}`;
 
               return (
                 <Button
@@ -1490,11 +1478,57 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                       return;
                     }
 
-                    if (activeMode === "mention") {
-                      insertSuggestionNode("mention", item);
-                    } else {
-                      insertSuggestionNode("command", item);
+                    insertSuggestionNode("mention", item);
+
+                    resetSuggestionState();
+                  }}
+                >
+                  <div>
+                    <div className="text-xs font-medium">{title}</div>
+                    <div className="mt-0.5 text-[11px] text-neutral-400">
+                      {desc}
+                    </div>
+                  </div>
+                  <span className="rounded-md border border-neutral-700 bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300">
+                    {token}
+                  </span>
+                </Button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* / 命令建议面板 */}
+        {activeMode === "command" && commandSuggestionItems.length > 0 && (
+          <div
+            ref={suggestionPanelRef}
+            className="nodrag nopan nowheel absolute right-2 bottom-full left-2 z-30 mb-5 max-h-60 overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900 shadow-[0_14px_34px_rgba(0,0,0,0.45)]"
+          >
+            {commandSuggestionItems.map((item, index) => {
+              const isActive = index === activeIndex;
+              const title = item.label;
+              const desc = item.description;
+              const token = item.command;
+
+              return (
+                <Button
+                  key={item.id}
+                  unstyled
+                  className={cn(
+                    "flex w-full items-start justify-between gap-3 border-b border-neutral-800 px-3 py-2 text-left last:border-b-0",
+                    isActive
+                      ? "bg-neutral-700 text-neutral-100"
+                      : "text-neutral-200 hover:bg-neutral-800",
+                  )}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    setActiveIndex(index);
+
+                    if (!triggerRangeRef.current) {
+                      return;
                     }
+
+                    insertSuggestionNode("command", item);
 
                     resetSuggestionState();
                   }}
@@ -1539,8 +1573,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             <SelectTrigger
               className={cn(
                 PROMPT_PANEL_STYLES.modelSelect,
-                "h-8 min-w-[136px] max-w-[42%] w-[240px] shrink overflow-hidden px-3",
-                "[&_[data-slot=select-value]]:block [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate",
+                "h-8 min-w-34 max-w-[42%] w-60 shrink overflow-hidden px-3",
+                "**:data-[slot=select-value]:block **:data-[slot=select-value]:min-w-0 **:data-[slot=select-value]:truncate",
               )}
               title={
                 visibleImageModels.find((item) => item.id === currentModelId)

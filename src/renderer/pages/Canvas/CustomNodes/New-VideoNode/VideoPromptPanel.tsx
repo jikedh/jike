@@ -328,6 +328,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const setDefaultNewVideoPreset = useChatSettingsStore(
     (state) => state.setDefaultNewVideoPreset,
   );
+  const projectId = useCanvasFlowStore((state) => state.projectId);
   const videoModelOptions = useMemo(
     () => getVideoModelOptions(),
     [],
@@ -1265,6 +1266,8 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
             <VideoPromptEditor
               ref={editorRef}
               promptDraftHtml={promptDraftHtml}
+              nodeId={nodeId}
+              projectId={projectId}
               mentionItems={
                 editorMentionItems.length > 0
                   ? editorMentionItems
