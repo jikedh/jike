@@ -88,12 +88,14 @@ import {
   createImageGeneration,
   extractAgnesImageUrls,
   createLzVideoTask,
+  createOverseasSeedanceVideoTask,
   fetchMjTask,
   generateGeminiContent,
   getAgnesVideoTaskStatus,
   getDashscopeVideoTaskStatus,
   getImageTaskStatus,
   getLzVideoTaskStatus,
+  getOverseasSeedanceVideoTaskStatus,
   submitMjImagine
 } from "@/api/ai";
 import {
@@ -1849,7 +1851,7 @@ const pollNewVideoGeneration = async ({
   taskIndex: number;
   totalTasks: number;
   ledgerBizId?: string;
-  videoProvider?: "seedance" | "dashscope" | "agnes";
+  videoProvider?: "seedance" | "seedance_global" | "dashscope" | "agnes";
 }) => {
   const startTime = Date.now();
   let missingResultUrlStartTime: number | null = null;
@@ -1895,6 +1897,8 @@ const pollNewVideoGeneration = async ({
       const response: any =
         videoProvider === "seedance"
           ? await getLzVideoTaskStatus(taskId)
+          : videoProvider === "seedance_global"
+            ? await getOverseasSeedanceVideoTaskStatus(taskId)
           : videoProvider === "agnes"
             ? await getAgnesVideoTaskStatus(taskId)
             : isSeedance20
@@ -4432,6 +4436,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const model = input?.model ?? requestPayload.model ?? "";
       const isSeedance20 =
         model === "seedance-2.0-fast" || model === "seedance-2.0-pro";
+      const isOverseasSeedance20 =
+        model === "dreamina-seedance-2-0-260128";
 
       set((state) => ({
         nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
@@ -4466,7 +4472,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         const createTask = async () => {
           let response: any;
-          if (isSeedance20) {
+          if (isOverseasSeedance20) {
+            response = await createOverseasSeedanceVideoTask(
+              requestPayload,
+              requiredPoints,
+            );
+          } else if (isSeedance20) {
             response = await createLzVideoTask(requestPayload, requiredPoints);
           } else if (model === "agnes-video-v2.0") {
             // Agnes 走独立桌面代理通道，避免被误归类为 dashscope / kuaizi。
@@ -4546,6 +4557,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             videoProvider:
               model === "agnes-video-v2.0"
                 ? "agnes"
+                : isOverseasSeedance20
+                  ? "seedance_global"
                 : isSeedance20
                   ? "seedance"
                   : "dashscope",

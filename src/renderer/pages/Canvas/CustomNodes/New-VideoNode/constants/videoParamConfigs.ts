@@ -117,6 +117,11 @@ const resolution480720 = [
   { label: "720p", value: "720P" },
 ];
 
+const overseasSeedanceResolutions = resolution480720.concat([
+  { label: "1080p", value: "1080P" },
+  { label: "4K", value: "4K" },
+]);
+
 const resolution7201080 = resolution480720.concat([
   { label: "1080p", value: "1080P" },
 ]);
@@ -226,6 +231,26 @@ const seedance20Config = (
   },
 });
 
+const overseasSeedance20Config = (): VideoParamConfig => ({
+  modelId: "dreamina-seedance-2-0-260128",
+  aspectRatios: seedanceRatios,
+  qualityGroup: {
+    key: "resolution",
+    label: "分辨率",
+    options: overseasSeedanceResolutions,
+  },
+  duration: { type: "slider", min: 4, max: 15, step: 1 },
+  audio,
+  defaults: {
+    aspectRatio: "16:9",
+    resolution: "720P",
+    generationMode: "pro",
+    duration: 5,
+    generateAudio: true,
+    autoDuration: false,
+  },
+});
+
 const viduQ3Config = (
   modelId: "vidu" | "vidu-q3-pro",
   mode: VideoModeKey,
@@ -276,6 +301,7 @@ const happyHorseConfig = (mode: VideoModeKey): VideoParamConfig => ({
 export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
   "seedance-2.0-fast": seedance20Config("seedance-2.0-fast", "fast"),
   "seedance-2.0-pro": seedance20Config("seedance-2.0-pro", "pro"),
+  "dreamina-seedance-2-0-260128": overseasSeedance20Config(),
   [byModeKey("wanxiang", "text-to-video")]:
     wanxiangReferenceConfig("text-to-video"),
   [byModeKey("wanxiang", "all-reference")]:

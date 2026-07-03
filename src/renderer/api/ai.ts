@@ -12,6 +12,17 @@ import {
   queryDesktopProxyTask
 } from "./jikeGo";
 
+type OverseasSeedance20Request = {
+  model: "dreamina-seedance-2-0-260128";
+  content: Array<Record<string, any>>;
+  duration: number;
+  resolution?: string;
+  ratio?: string;
+  generate_audio?: boolean;
+  watermark?: boolean;
+  seed?: number;
+};
+
 /**
  *
  * 为了兼容同一个接口的不同入参，暂定接口的入参和出参都为 any
@@ -70,6 +81,17 @@ function extractReferenceImageUrls(data: unknown): string[] | undefined {
     });
   }
 
+  if (Array.isArray(record.content)) {
+    record.content.forEach((item) => {
+      if (
+        item?.type === "image_url" &&
+        isHttpUrl(item?.image_url?.url)
+      ) {
+        urls.add(item.image_url.url);
+      }
+    });
+  }
+
   return urls.size ? [...urls] : undefined;
 }
 
@@ -106,6 +128,12 @@ function extractPrompt(data: unknown): string {
   const nestedPrompt = record.input?.prompt;
   if (nestedPrompt) {
     return String(nestedPrompt);
+  }
+  if (Array.isArray(record.content)) {
+    const textItem = record.content.find((item: any) => item?.type === "text");
+    if (textItem?.text) {
+      return String(textItem.text);
+    }
   }
 
   return String(record.prompt || "");
@@ -788,6 +816,62 @@ export async function getAgnesVideoTaskStatus(videoId: string) {
     upstreamPath: "/agnesapi",
     method: "GET",
     query: { video_id: videoId, model_name: "agnes-video-v2.0" },
+  });
+
+  return unwrapDesktopProxyData(response);
+}
+
+const OVERSEAS_SEEDANCE_CREATE_PATH =
+  "/ai-open-platform-global/client/support/api/v3/contents/generations/tasks";
+
+/**
+ * 创建海外 Seedance 2.0 Pro 视频生成任务。
+ */
+export async function createOverseasSeedanceVideoTask(
+  data: OverseasSeedance20Request,
+  scoreCost?: number,
+) {
+  const response = await createDesktopProxyTask({
+    platform: "kuaizi_global",
+    upstreamPath: OVERSEAS_SEEDANCE_CREATE_PATH,
+    method: "POST",
+    body: data,
+    scoreCost,
+    scoreBizType: "video",
+    scoreModel: data.model,
+    scoreSource: "kuaizi_global",
+    scoreSourceLabel: "海外 Seedance 2.0 Pro",
+  });
+
+  const rawData = unwrapDesktopProxyData(response);
+  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
+  const taskId = responseData?.id ?? responseData?.task_id ?? "";
+  const status = responseData?.status;
+
+  await aiVideoTrackingService.track({
+    apiName: OVERSEAS_SEEDANCE_CREATE_PATH,
+    model: data.model,
+    taskId,
+    prompt: extractPrompt(data),
+    duration: extractDurationSeconds(data),
+    referenceImageUrls: extractReferenceImageUrls(data),
+    provider: "kuaizi_global",
+    requestParams: data as unknown as Record<string, unknown>,
+    status: status === "failed" || !taskId ? "FAIL" : "PENDING",
+    scoreCost,
+  });
+
+  return { ...responseData, ledgerBizId };
+}
+
+/**
+ * 查询海外 Seedance 2.0 Pro 视频生成任务状态。
+ */
+export async function getOverseasSeedanceVideoTaskStatus(taskId: string) {
+  const response = await queryDesktopProxyTask({
+    platform: "kuaizi_global",
+    upstreamPath: `${OVERSEAS_SEEDANCE_CREATE_PATH}/${taskId}`,
+    method: "GET",
   });
 
   return unwrapDesktopProxyData(response);

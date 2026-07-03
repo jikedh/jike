@@ -135,6 +135,22 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
     ],
   },
   {
+    id: "dreamina-seedance-2-0-260128",
+    label: "海外 Seedance 2.0 Pro",
+    variants: [
+      {
+        id: "dreamina-seedance-2-0-260128",
+        supportedModes: [
+          "text-to-video",
+          "all-reference",
+          "image-to-video",
+          "first-last-frame",
+        ],
+        defaultParams: { generationMode: "pro" },
+      },
+    ],
+  },
+  {
     id: "wanxiang",
     label: "Wan2.7",
     variants: [

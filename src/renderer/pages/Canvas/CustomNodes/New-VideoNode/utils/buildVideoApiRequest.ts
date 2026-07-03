@@ -19,9 +19,42 @@ import type { VideoModeKey } from "../constants/videoModelCapabilities";
 
 export type NewVideoApiRequest =
   | Seedance20Request
+  | OverseasSeedance20Request
   | BailianVideoGenerationRequest
   | ViduQ3Image2VideoRequest
   | AgnesVideoRequest;
+
+type OverseasSeedance20ContentItem =
+  | {
+    type: "text";
+    text: string;
+  }
+  | {
+    type: "image_url";
+    role: "reference_image" | "first_frame" | "last_frame";
+    image_url: { url: string };
+  }
+  | {
+    type: "video_url";
+    role: "reference_video";
+    video_url: { url: string };
+  }
+  | {
+    type: "audio_url";
+    role: "reference_audio";
+    audio_url: { url: string };
+  };
+
+export type OverseasSeedance20Request = {
+  model: "dreamina-seedance-2-0-260128";
+  content: OverseasSeedance20ContentItem[];
+  resolution: "480p" | "720p" | "1080p" | "4k";
+  ratio: "16:9" | "4:3" | "1:1" | "3:4" | "9:16" | "21:9" | "adaptive";
+  duration: number;
+  generate_audio: boolean;
+  watermark: false;
+  seed: -1;
+};
 
 // Agnes-Video-V2.0 请求体：完全对齐 apihub.agnes-ai.com 的 POST /v1/videos 入参。
 type AgnesVideoRequest = {
@@ -153,6 +186,9 @@ const isViduQ2FastModel = (model: string) => model === "vidu-q2-fast";
 
 const isViduQ3ProModel = (model: string) => model === "vidu-q3-pro";
 
+export const isOverseasSeedanceModel = (model: string) =>
+  model === "dreamina-seedance-2-0-260128";
+
 const buildSize = (
   resolution: string | undefined,
   ratio: string | undefined,
@@ -272,6 +308,76 @@ const buildSeedanceRequest = (
   }
 
   return body;
+};
+
+const buildOverseasSeedanceImages = (
+  mode: VideoModeKey,
+  images: string[],
+): OverseasSeedance20ContentItem[] => {
+  if (mode === "text-to-video") {
+    return [];
+  }
+
+  if (mode === "first-last-frame") {
+    return images.slice(0, 2).map((url, index) => ({
+      type: "image_url" as const,
+      role: index === 0 ? ("first_frame" as const) : ("last_frame" as const),
+      image_url: { url },
+    }));
+  }
+
+  return images.slice(0, 9).map((url) => ({
+    type: "image_url" as const,
+    role: "reference_image" as const,
+    image_url: { url },
+  }));
+};
+
+const buildOverseasSeedanceRequest = (
+  request: VideoGenerateRequest,
+): OverseasSeedance20Request => {
+  const supportsReferenceMedia =
+    request.mode !== "text-to-video" && request.mode !== "first-last-frame";
+  const content: OverseasSeedance20ContentItem[] = [
+    {
+      type: "text",
+      text: getPrompt(request.prompt),
+    },
+    ...buildOverseasSeedanceImages(request.mode, getImages(request)),
+    ...(supportsReferenceMedia
+      ? getVideos(request).slice(0, 3).map((url) => ({
+        type: "video_url" as const,
+        role: "reference_video" as const,
+        video_url: { url },
+      }))
+      : []),
+    ...(supportsReferenceMedia
+      ? getAudios(request).slice(0, 3).map((url) => ({
+        type: "audio_url" as const,
+        role: "reference_audio" as const,
+        audio_url: { url },
+      }))
+      : []),
+  ];
+
+  return {
+    model: "dreamina-seedance-2-0-260128",
+    content,
+    resolution: isOneOf(
+      request.params.resolution?.toLowerCase(),
+      ["480p", "720p", "1080p", "4k"] as const,
+      "720p",
+    ),
+    ratio: isOneOf(
+      getRatio(request),
+      ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive"] as const,
+      "16:9",
+    ),
+    duration: clampNumber(request.params.duration, 4, 15, 5),
+    generate_audio: request.params.generateAudio,
+    watermark: false,
+    seed: -1,
+  };
 };
 
 const buildWanxiangRequest = (request: VideoGenerateRequest) => {
@@ -763,6 +869,8 @@ export const buildVideoApiRequest = (
   }
 
   switch (request.model) {
+    case "dreamina-seedance-2-0-260128":
+      return buildOverseasSeedanceRequest(request);
     case "seedance-2.0-fast":
     case "seedance-2.0-pro":
       return buildSeedanceRequest(request);

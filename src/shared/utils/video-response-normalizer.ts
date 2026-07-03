@@ -97,6 +97,24 @@ const extractAgnesVideoItems = (response: any) => {
   }));
 };
 
+const extractOverseasSeedanceVideoItems = (response: any) => {
+  const content = response?.content ?? response?.data?.content ?? {};
+  const resultUrls = [
+    content?.kz_video_url,
+    content?.video_url,
+    ...(Array.isArray(content?.video_urls) ? content.video_urls : []),
+  ].filter((url): url is string => typeof url === "string" && url.length > 0);
+
+  if (resultUrls.length === 0) {
+    return [];
+  }
+
+  return Array.from(new Set(resultUrls)).map((url) => ({
+    url,
+    format: "mp4",
+  }));
+};
+
 const getErrorMessage = (response: any, fallbackMessage: string) => {
   const message =
     response?.error?.message ||
@@ -139,6 +157,19 @@ const isAgnesVideoResponse = (response: any): boolean => {
   );
 };
 
+const isOverseasSeedanceResponse = (response: any): boolean => {
+  const status = response?.status ?? response?.data?.status;
+  const hasAgnesVideoId = Boolean(response?.video_id ?? response?.data?.video_id);
+  return (
+    !hasAgnesVideoId &&
+    (status === "queued" ||
+      status === "running" ||
+      status === "succeeded" ||
+      status === "failed" ||
+      status === "expired")
+  );
+};
+
 const agnesVideoStatusMap: Record<string, GenerationStatus> = {
   queued: GenerationStatus.QUEUED,
   in_progress: GenerationStatus.IN_PROGRESS,
@@ -147,6 +178,50 @@ const agnesVideoStatusMap: Record<string, GenerationStatus> = {
 };
 
 export const normalizeVideoTaskResponse = (response: any) => {
+  if (isOverseasSeedanceResponse(response)) {
+    const rawStatus = String(response?.status ?? response?.data?.status ?? "");
+    const taskId = response?.id ?? response?.data?.id ?? response?.task_id;
+    const progress =
+      rawStatus === "succeeded"
+        ? 100
+        : response?.progress ?? response?.data?.progress ?? 0;
+    const videoItems = extractOverseasSeedanceVideoItems(response);
+
+    if (rawStatus === "succeeded") {
+      return {
+        status: GenerationStatus.COMPLETED,
+        progress: 100,
+        taskId,
+        videoItems,
+        missingResultUrl: videoItems.length === 0,
+        errorMessage: undefined,
+      };
+    }
+
+    if (rawStatus === "failed" || rawStatus === "expired") {
+      return {
+        status: GenerationStatus.FAILED,
+        progress,
+        taskId,
+        videoItems: [],
+        missingResultUrl: false,
+        errorMessage: getErrorMessage(response, "生成失败，请稍后再试"),
+      };
+    }
+
+    return {
+      status:
+        rawStatus === "queued"
+          ? GenerationStatus.QUEUED
+          : GenerationStatus.IN_PROGRESS,
+      progress,
+      taskId,
+      videoItems,
+      missingResultUrl: false,
+      errorMessage: undefined,
+    };
+  }
+
   // Agnes-Video-V2.0 优先识别，避免与 kuaizi/dashscope 格式混淆
   if (isAgnesVideoResponse(response)) {
     const rawStatus = String(response?.status ?? "");

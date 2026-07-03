@@ -16,6 +16,7 @@ const getJikeGoAiProxyHeaders = () => ({
 
 export type DesktopProxyPlatform =
   | "kuaizi"
+  | "kuaizi_global"
   | "dashscope"
   | "toapi"
   | "zeakai"

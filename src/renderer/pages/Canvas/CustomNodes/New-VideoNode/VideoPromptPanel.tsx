@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GenerationStatus } from "shared/constants/enum";
 import { getVideoGenerationPoints } from "shared/constants/model-points";
 import type { NewVideoGenerationNode } from "shared/types/flow";
+import { getVideoDuration } from "shared/utils/getVideoDuration";
 import { toChineseNumber } from "shared/utils/utils";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { PresetDropdown } from "@/components/PresetDropdown";
@@ -59,6 +60,8 @@ const isVideoModeKey = (value: unknown): value is VideoModeKey => {
     typeof value === "string" && ALL_MODE_KEYS.includes(value as VideoModeKey)
   );
 };
+
+const OVERSEAS_SEEDANCE_MODEL = "dreamina-seedance-2-0-260128";
 
 const escapeHtml = (value: string) => {
   return value
@@ -574,6 +577,14 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   ]);
 
   const sortableReferenceItems = generationReferenceItems;
+  const generationVideoReferenceUrls = useMemo(
+    () =>
+      generationReferenceItems
+        .filter((item) => item.type === "video")
+        .map((item) => item.url ?? item.thumbnail ?? item.value)
+        .filter((url): url is string => Boolean(url)),
+    [generationReferenceItems],
+  );
 
   const editorMentionItems = useMemo(() => {
     return generationReferenceItems.map((item) => ({
@@ -1017,13 +1028,90 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     ],
   );
 
+  const [
+    overseasReferenceDurationSeconds,
+    setOverseasReferenceDurationSeconds,
+  ] = useState(0);
+  const [
+    isLoadingOverseasReferenceDuration,
+    setIsLoadingOverseasReferenceDuration,
+  ] = useState(false);
+  const [
+    overseasReferenceDurationError,
+    setOverseasReferenceDurationError,
+  ] = useState<string | null>(null);
+  const overseasReferenceDurationKey = useMemo(
+    () => generationVideoReferenceUrls.join("\n"),
+    [generationVideoReferenceUrls],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (
+      selectedModel !== OVERSEAS_SEEDANCE_MODEL ||
+      generationVideoReferenceUrls.length === 0
+    ) {
+      setOverseasReferenceDurationSeconds(0);
+      setIsLoadingOverseasReferenceDuration(false);
+      setOverseasReferenceDurationError(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setIsLoadingOverseasReferenceDuration(true);
+    setOverseasReferenceDurationError(null);
+
+    Promise.all(generationVideoReferenceUrls.map((url) => getVideoDuration(url)))
+      .then((durations) => {
+        if (cancelled) return;
+        if (
+          durations.some(
+            (duration) =>
+              duration === null ||
+              !Number.isFinite(duration) ||
+              duration <= 0,
+          )
+        ) {
+          setOverseasReferenceDurationSeconds(0);
+          setOverseasReferenceDurationError("无法读取视频参考时长，暂不能生成");
+          return;
+        }
+
+        setOverseasReferenceDurationSeconds(
+          durations.reduce((total, duration) => total + Math.ceil(duration!), 0),
+        );
+        setOverseasReferenceDurationError(null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setOverseasReferenceDurationSeconds(0);
+        setOverseasReferenceDurationError("无法读取视频参考时长，暂不能生成");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingOverseasReferenceDuration(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    generationVideoReferenceUrls.length,
+    overseasReferenceDurationKey,
+    selectedModel,
+  ]);
+
   const requiredPoints = useMemo(() => {
     const perTaskPoints = normalizeRequiredPoints(
       getVideoGenerationPoints({
         model: selectedModel,
         duration: selectedParams.duration,
         resolution: selectedParams.resolution,
-        hasVideoInput: mergedVideoUrls.length > 0,
+        hasVideoInput: generationVideoReferenceUrls.length > 0,
+        videoReferenceDuration: overseasReferenceDurationSeconds,
         hasAudio: Boolean(selectedParams.generateAudio ?? true),
         fallback: Math.max(fallbackAIGenPrice, 1),
       }),
@@ -1031,8 +1119,9 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     return perTaskPoints;
   }, [
     fallbackAIGenPrice,
-    mergedVideoUrls.length,
+    generationVideoReferenceUrls.length,
     normalizeRequiredPoints,
+    overseasReferenceDurationSeconds,
     selectedModel,
     selectedParams.duration,
     selectedParams.generateAudio,
@@ -1117,6 +1206,19 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       if (!mergedPrompt) {
         warning("请输入提示词");
         return;
+      }
+      if (
+        request.model === OVERSEAS_SEEDANCE_MODEL &&
+        generationVideoReferenceUrls.length > 0
+      ) {
+        if (isLoadingOverseasReferenceDuration) {
+          warning("正在读取视频参考时长，请稍后");
+          return;
+        }
+        if (overseasReferenceDurationError) {
+          warning(overseasReferenceDurationError);
+          return;
+        }
       }
       if (
         !(await validateBalanceBeforeGenerate({
@@ -1208,8 +1310,11 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       currentData?.metadata,
       currentData?.result?.data,
       generationReferenceItems,
+      generationVideoReferenceUrls.length,
       isGenerating,
+      isLoadingOverseasReferenceDuration,
       nodeId,
+      overseasReferenceDurationError,
       parentNoteContents,
       refreshBalanceInfo,
       requiredPoints,
