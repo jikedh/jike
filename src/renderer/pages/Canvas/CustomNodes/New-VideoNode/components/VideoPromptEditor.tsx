@@ -62,30 +62,12 @@ export interface VideoPromptEditorProps {
 interface AssetMentionSuggestionProps {
   nodeId: string;
   projectId?: string | null;
-  mentionItems: VideoPromptEditorProps["mentionItems"];
   command: (item: Record<string, unknown>) => void;
 }
 
 interface AssetMentionSuggestionHandle {
   onKeyDown: (payload: { event: KeyboardEvent }) => boolean;
 }
-
-const buildLegacyMentionOption = (
-  item: VideoPromptEditorProps["mentionItems"][number],
-): MentionAssetOption => ({
-  key: `legacy:${item.id}:${item.type}`,
-  id: item.id,
-  label: item.originalLabel || item.label,
-  value: item.value,
-  description: item.label,
-  mediaType: item.type,
-  thumbnailUrl: item.thumbnail,
-  fileUrl: item.thumbnail,
-  source: "connected-node",
-  nodeId: item.id,
-  disabled: !item.thumbnail,
-  disabledReason: item.thumbnail ? undefined : "资源地址缺失",
-});
 
 const toMentionCommandPayload = (option: MentionAssetOption) => ({
   id: option.nodeId || option.assetId || option.id,
@@ -114,15 +96,10 @@ const buildLegacyMentionListItems = (items: Array<Record<string, unknown>>) =>
 const AssetMentionSuggestion = forwardRef<
   AssetMentionSuggestionHandle,
   AssetMentionSuggestionProps
->(({ nodeId, projectId, mentionItems, command }, ref) => {
-  const additionalConnectedOptions = useMemo(
-    () => mentionItems.map(buildLegacyMentionOption),
-    [mentionItems],
-  );
+>(({ nodeId, projectId, command }, ref) => {
   const menu = useAssetMentionMenu({
     nodeId,
     projectId,
-    additionalConnectedOptions,
   });
 
   const selectOption = (option: MentionAssetOption | null) => {
@@ -464,7 +441,6 @@ export const VideoPromptEditor = forwardRef<
                   props: {
                     nodeId: nodeIdRef.current,
                     projectId: projectIdRef.current,
-                    mentionItems: mentionItemsRef.current,
                     command: (item: any) => {
                       props.command(item);
                     },
@@ -518,7 +494,6 @@ export const VideoPromptEditor = forwardRef<
                 component.updateProps({
                   nodeId: nodeIdRef.current,
                   projectId: projectIdRef.current,
-                  mentionItems: mentionItemsRef.current,
                   command: (item: any) => {
                     props.command(item);
                   },
