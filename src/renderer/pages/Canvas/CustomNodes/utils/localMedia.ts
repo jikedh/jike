@@ -1,54 +1,16 @@
-type MediaType = "image" | "video" | "generate_image" | "generate_video";
+/**
+ * 远端媒体引用工具
+ *
+ * 本项目图片资源统一使用 URL 形式引用，不再生成或持久化本地图片路径。
+ * 这里仅保留一个“合并远程 URL 引用”的最小工具，原本的本地保存占位实现
+ * 已被全部移除，调用点统一改为只写 url / remoteUrl。
+ */
 
-type MediaRef = {
-  url: string;
-  remoteUrl?: string;
-  localName?: string;
-  localPath?: string;
-};
-
-export const mergeLocalMediaRef = <T extends { url: string; remoteUrl?: string }>(
+export const withRemoteMediaRef = <
+  T extends { url: string; remoteUrl?: string },
+>(
   item: T,
-  localRef: MediaRef,
-): T & Pick<MediaRef, "remoteUrl" | "localName" | "localPath"> => ({
+): T => ({
   ...item,
-  remoteUrl: item.remoteUrl ?? localRef.remoteUrl ?? item.url,
-  localName: localRef.localName,
-  localPath: localRef.localPath,
+  remoteUrl: item.remoteUrl ?? item.url,
 });
-
-export const saveToolMediaFileToProject = async <T extends { url: string }>(
-  projectId: string | null | undefined,
-  item: T,
-  file: File,
-  mediaType: MediaType,
-  extension: string,
-  fileNamePrefix?: string,
-): Promise<T & Pick<MediaRef, "remoteUrl" | "localName" | "localPath">> => {
-  if (!projectId) {
-    return item;
-  }
-
-  void file;
-  void mediaType;
-  void extension;
-  void fileNamePrefix;
-  return mergeLocalMediaRef(item, { url: item.url, remoteUrl: item.url });
-};
-
-export const saveToolMediaUrlToProject = async <T extends { url: string }>(
-  projectId: string | null | undefined,
-  item: T,
-  mediaType: MediaType,
-  extension?: string,
-  fileNamePrefix?: string,
-): Promise<T & Pick<MediaRef, "remoteUrl" | "localName" | "localPath">> => {
-  if (!projectId) {
-    return item;
-  }
-
-  void mediaType;
-  void extension;
-  void fileNamePrefix;
-  return mergeLocalMediaRef(item, { url: item.url, remoteUrl: item.url });
-};

@@ -6,7 +6,7 @@ import type { NewVideoGenerationNode } from "shared/types/flow";
 import { getVideoDuration } from "shared/utils/getVideoDuration";
 import { toast } from "sonner";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { saveToolMediaFileToProject } from "../../utils/localMedia";
+import { withRemoteMediaRef } from "../../utils/localMedia";
 
 const SNAPSHOT_NODE_HORIZONTAL_GAP = 0;
 const SNAPSHOT_NODE_VERTICAL_GAP = 16;
@@ -39,7 +39,6 @@ export const useVideoFrameCapture = () => {
       snapshotUrl: string,
       sourceVideoNodeId?: string,
       badgeLabel?: string,
-      snapshotFile?: File,
     ) => {
       const centerPosition = screenToFlowPosition({
         x: window.innerWidth / 2,
@@ -53,12 +52,12 @@ export const useVideoFrameCapture = () => {
       const nodeById = new Map(flowState.nodes.map((node) => [node.id, node]));
       const outputIndex = sourceVideoNodeId
         ? flowState.edges.filter((edge) => {
-            const targetNode = nodeById.get(edge.target);
-            return (
-              edge.source === sourceVideoNodeId &&
-              targetNode?.type === "imageNode"
-            );
-          }).length
+          const targetNode = nodeById.get(edge.target);
+          return (
+            edge.source === sourceVideoNodeId &&
+            targetNode?.type === "imageNode"
+          );
+        }).length
         : 0;
       const sourceVideoWidth =
         sourceVideoNode?.width ??
@@ -72,15 +71,15 @@ export const useVideoFrameCapture = () => {
         "image",
         sourceVideoNode
           ? {
-              x:
-                sourceVideoNode.position.x +
-                sourceVideoWidth +
-                SNAPSHOT_NODE_HORIZONTAL_GAP,
-              y:
-                sourceVideoNode.position.y +
-                outputIndex *
-                  (sourceVideoHeight + SNAPSHOT_NODE_VERTICAL_GAP),
-            }
+            x:
+              sourceVideoNode.position.x +
+              sourceVideoWidth +
+              SNAPSHOT_NODE_HORIZONTAL_GAP,
+            y:
+              sourceVideoNode.position.y +
+              outputIndex *
+              (sourceVideoHeight + SNAPSHOT_NODE_VERTICAL_GAP),
+          }
           : centerPosition,
       );
       const sourceAspectRatio = (() => {
@@ -90,15 +89,10 @@ export const useVideoFrameCapture = () => {
         }
         return undefined;
       })();
-      const resultItem = snapshotFile
-        ? await saveToolMediaFileToProject(
-            projectId,
-            { url: snapshotUrl, remoteUrl: snapshotUrl },
-            snapshotFile,
-            "image",
-            "jpg",
-          )
-        : { url: snapshotUrl, remoteUrl: snapshotUrl };
+      const resultItem = withRemoteMediaRef({
+        url: snapshotUrl,
+        remoteUrl: snapshotUrl,
+      });
 
       updateImageNodeData(newNodeId, {
         ...(badgeLabel ? { badgeLabel } : {}),
@@ -161,7 +155,7 @@ export const useVideoFrameCapture = () => {
           throw new Error("上传首帧图片失败");
         }
 
-        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId, undefined, file);
+        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId, undefined);
 
         toast.success("首帧提取成功，已创建图片节点");
       } catch (error) {
@@ -218,7 +212,7 @@ export const useVideoFrameCapture = () => {
           throw new Error("上传尾帧图片失败");
         }
 
-        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId, "尾帧", file);
+        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId, "尾帧");
 
         toast.success("尾帧提取成功，已创建图片节点");
       } catch (error) {
@@ -272,7 +266,7 @@ export const useVideoFrameCapture = () => {
           throw new Error("上传截帧图片失败");
         }
 
-        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId, "截帧", file);
+        await createImageNodeFromSnapshot(uploadResult.url, videoNodeId, "截帧");
 
         toast.success(
           `截取 ${(timeMs / 1000).toFixed(1)}s 成功，已创建图片节点`,

@@ -648,8 +648,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         return [
           edge.source,
           firstItem.url,
-          firstItem.relativePath ?? "",
-          firstItem.localFileName ?? "",
         ];
       });
     }),
@@ -660,24 +658,18 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       return [] as {
         id: string;
         url: string;
-        relativePath?: string;
-        fileName?: string;
       }[];
     }
 
     const result: {
       id: string;
       url: string;
-      relativePath?: string;
-      fileName?: string;
     }[] = [];
 
-    for (let i = 0; i < parentImageEntryValues.length; i += 4) {
+    for (let i = 0; i < parentImageEntryValues.length; i += 2) {
       result.push({
         id: String(parentImageEntryValues[i] ?? ""),
         url: String(parentImageEntryValues[i + 1] ?? ""),
-        relativePath: String(parentImageEntryValues[i + 2] ?? "") || undefined,
-        fileName: String(parentImageEntryValues[i + 3] ?? "") || undefined,
       });
     }
 
@@ -808,7 +800,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       items.push({
         id: `parent-image-${node.id}`,
         url: node.url,
-        label: node.fileName || node.relativePath?.split("/").pop() || "参考图",
+        label: "参考图",
         thumbnail: node.url,
         isLocalImage: false,
       });

@@ -33,7 +33,7 @@ import Share from "yet-another-react-lightbox/plugins/share";
 import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { saveToolMediaFileToProject } from "../utils/localMedia";
+import { withRemoteMediaRef } from "../utils/localMedia";
 import { ImageCropDialog } from "./ImageCropDialog";
 import { ImageLightingDialog } from "./ImageLightingDialog";
 import { InpaintDialog } from "./InpaintDialog";
@@ -218,13 +218,10 @@ export const ImageToolbar = memo(
         }
 
         const currentData = data.result?.data ?? [];
-        const resultItem = await saveToolMediaFileToProject(
-          projectId,
-          { url: uploadedUrl, remoteUrl: uploadedUrl },
-          fileToUpload,
-          "image",
-          "png",
-        );
+        const resultItem = withRemoteMediaRef({
+          url: uploadedUrl,
+          remoteUrl: uploadedUrl,
+        });
 
         // 检测图片尺寸并更新节点比例（仅当节点还没有图片时设置 size）
         const updatePatch: Record<string, any> = {

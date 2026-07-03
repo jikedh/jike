@@ -31,7 +31,7 @@ import {
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
-import { saveToolMediaFileToProject } from "../utils/localMedia";
+import { withRemoteMediaRef } from "../utils/localMedia";
 import {
   GeminiParamsPanel,
   NANO_BANANA_RESOLUTIONS,
@@ -1625,13 +1625,10 @@ export const ImageAnnotationWorkspace = ({
         throw new Error("标注图片上传失败");
       }
 
-      const resultItem = await saveToolMediaFileToProject(
-        projectId,
-        { url: uploadResult.url, remoteUrl: uploadResult.url },
-        file,
-        "image",
-        "png",
-      );
+      const resultItem = withRemoteMediaRef({
+        url: uploadResult.url,
+        remoteUrl: uploadResult.url,
+      });
 
       const sourceNode = useCanvasFlowStore
         .getState()

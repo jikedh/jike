@@ -34,7 +34,7 @@ import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { NodeNameBadge } from "../shared/NodeNameBadge";
-import { saveToolMediaFileToProject } from "../utils/localMedia";
+import { withRemoteMediaRef } from "../utils/localMedia";
 import { updateProject } from "@/api/projects";
 import { ImageAnnotationWorkspace } from "./ImageAnnotationWorkspace";
 import { ImageContent } from "./ImageContent";
@@ -394,13 +394,10 @@ export const ImageNode = memo(
           if (!uploadResult.url) {
             throw new Error("裁剪图片上传失败");
           }
-          const resultItem = await saveToolMediaFileToProject(
-            projectId,
-            { url: uploadResult.url, remoteUrl: uploadResult.url },
-            fileToUpload,
-            "image",
-            "png",
-          );
+          const resultItem = withRemoteMediaRef({
+            url: uploadResult.url,
+            remoteUrl: uploadResult.url,
+          });
           const croppedSize =
             cropRatio && cropRatio !== "custom" && cropRatio !== "original"
               ? cropRatio
@@ -463,8 +460,6 @@ export const ImageNode = memo(
             resultItem: {
               url: string;
               remoteUrl?: string;
-              localName?: string;
-              localPath?: string;
             };
             size?: string;
           }> = [];
@@ -486,13 +481,10 @@ export const ImageNode = memo(
                 fileToUpload,
                 "image",
               );
-              const resultItem = await saveToolMediaFileToProject(
-                projectId,
-                { url: uploadResult.url, remoteUrl: uploadResult.url },
-                fileToUpload,
-                "image",
-                "png",
-              );
+              const resultItem = withRemoteMediaRef({
+                url: uploadResult.url,
+                remoteUrl: uploadResult.url,
+              });
               uploadedItems.push({ resultItem, size: croppedSize });
             } catch (error) {
               failedCount += 1;

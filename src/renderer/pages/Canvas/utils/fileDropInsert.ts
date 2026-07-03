@@ -135,8 +135,6 @@ export function insertFileDropIntoCanvas(
         data: [
           {
             url: uploadResult.url,
-            localPath: uploadResult.key,
-            localName,
           },
         ],
       },
