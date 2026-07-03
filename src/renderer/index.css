@@ -639,7 +639,7 @@
   animation-delay: 4s;
 }
 
-/* 画布光标样式 - 优先级：空格(抓手) > Ctrl(放大镜) > 节点(小手) > 默认(箭头) */
+/* 画布光标样式 - 优先级：空格(抓手) > 节点(小手) > 默认(箭头) */
 
 /* 默认：画布空白区域显示小箭头 */
 .react-flow__pane {
@@ -649,18 +649,6 @@
 /* 节点悬停光标样式：小手 */
 .react-flow__node {
   cursor: pointer !important;
-}
-
-/* Ctrl 按下时：放大镜 */
-.react-flow[data-ctrl-pressed="true"] {
-  cursor: zoom-in !important;
-}
-
-.react-flow[data-ctrl-pressed="true"] .react-flow__pane,
-.react-flow[data-ctrl-pressed="true"] .react-flow__node,
-.react-flow[data-ctrl-pressed="true"] .nodrag,
-.react-flow[data-ctrl-pressed="true"] * {
-  cursor: zoom-in !important;
 }
 
 /* 空格键按下时：抓手（最高优先级）。

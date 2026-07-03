@@ -36,7 +36,6 @@ import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
-import { handlePromptEditorWheelCapture } from "../shared/wheelEvents";
 import {
   GeminiParamsPanel,
   GEMINI_RESOLUTIONS,
@@ -1404,10 +1403,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   return (
     <div className={PROMPT_PANEL_STYLES.container}>
       <div className={PROMPT_PANEL_STYLES.inputArea}>
-        <div
-          className={PROMPT_PANEL_STYLES.textAreaWrap}
-          onWheelCapture={handlePromptEditorWheelCapture}
-        >
+        <div className={PROMPT_PANEL_STYLES.textAreaWrap}>
           <EditorContent editor={editor} />
         </div>
 

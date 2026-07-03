@@ -16,7 +16,6 @@ import {
   updateSuggestionPosition,
 } from "shared/utils/utils";
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
-import { handlePromptEditorWheelCapture } from "../../shared/wheelEvents";
 import { AssetMentionMenu } from "../../shared/AssetMentionMenu";
 import type { MentionAssetOption } from "../../shared/assetMentionTypes";
 import { useAssetMentionMenu } from "../../shared/useAssetMentionMenu";
@@ -790,12 +789,7 @@ export const VideoPromptEditor = forwardRef<
     };
   }, [editor]);
 
-  return (
-    <EditorContent
-      editor={editor}
-      onWheelCapture={handlePromptEditorWheelCapture}
-    />
-  );
+  return <EditorContent editor={editor} />;
 });
 
 VideoPromptEditor.displayName = "VideoPromptEditor";

@@ -53,11 +53,6 @@ import {
 } from "./utils/lighting";
 
 const DRAG_UI_RESTORE_DELAY = 140;
-const FALLBACK_NODE_WIDTH = 350;
-const FALLBACK_NODE_HEIGHT = 250;
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(Math.max(value, min), max);
 
 /**
  * 图片节点组件
@@ -348,31 +343,11 @@ export const ImageNode = memo(
           reactFlowInstanceRef.current.getViewport();
       }
 
-      const flowElement = document.querySelector(
-        ".react-flow",
-      ) as HTMLElement | null;
-      const bounds = flowElement?.getBoundingClientRect();
-      const viewportWidth = bounds?.width ?? window.innerWidth;
-      const viewportHeight = bounds?.height ?? window.innerHeight;
-      const nodeWidth = sourceNode.width ?? FALLBACK_NODE_WIDTH;
-      const nodeHeight = sourceNode.height ?? FALLBACK_NODE_HEIGHT;
-      const targetZoom = clamp(
-        Math.min(
-          (viewportWidth * 0.7) / nodeWidth,
-          (viewportHeight * 0.64) / nodeHeight,
-        ),
-        0.45,
-        1.85,
-      );
-      const centerX = sourceNode.position.x + nodeWidth / 2;
-      const centerY = sourceNode.position.y + nodeHeight / 2;
-      const nextViewport = {
-        x: viewportWidth / 2 - centerX * targetZoom,
-        y: viewportHeight / 2 - centerY * targetZoom + viewportHeight * 0.035,
-        zoom: targetZoom,
-      };
-
-      reactFlowInstanceRef.current.setViewport(nextViewport, { duration: 280 });
+      void reactFlowInstanceRef.current.fitView({
+        nodes: [{ id: sourceNode.id }],
+        padding: 0.18,
+        duration: 280,
+      });
     }, [id]);
 
     const handleLightingDialogOpenChange = useCallback(
