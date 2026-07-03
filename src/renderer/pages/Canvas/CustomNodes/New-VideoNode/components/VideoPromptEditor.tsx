@@ -3,6 +3,7 @@ import { EditorContent, ReactRenderer, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
   forwardRef,
+  type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -16,10 +17,15 @@ import {
 } from "shared/utils/utils";
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
 import { handlePromptEditorWheelCapture } from "../../shared/wheelEvents";
+import { AssetMentionMenu } from "../../shared/AssetMentionMenu";
+import type { MentionAssetOption } from "../../shared/assetMentionTypes";
+import { useAssetMentionMenu } from "../../shared/useAssetMentionMenu";
 import { MentionList } from "./MentionList";
 
 export interface VideoPromptEditorHandle {
   getPlainText: () => string;
+  /** 获取 TipTap ProseMirror doc 的 JSON 结构，供归一化系统读取 mention 节点 */
+  getDocumentJSON: () => unknown | null;
   insertContent: (content: string) => void;
   removeReferenceMentions: (
     matchers: Array<{
@@ -35,6 +41,13 @@ export interface VideoPromptEditorHandle {
       originalLabel?: string;
       value?: string;
       thumbnail?: string;
+      url?: string;
+      fileUrl?: string;
+      source?: string;
+      scope?: string;
+      assetId?: string;
+      nodeId?: string;
+      primaryCategory?: string;
       type?: "image" | "video" | "audio";
     }>,
   ) => number;
@@ -42,6 +55,8 @@ export interface VideoPromptEditorHandle {
 
 export interface VideoPromptEditorProps {
   promptDraftHtml: string;
+  nodeId?: string;
+  projectId?: string | null;
   mentionItems: {
     id: string;
     label: string;
@@ -53,15 +68,128 @@ export interface VideoPromptEditorProps {
   onDraftChange: (payload: { text: string; html: string }) => void;
 }
 
+interface AssetMentionSuggestionProps {
+  nodeId: string;
+  projectId?: string | null;
+  command: (item: Record<string, unknown>) => void;
+}
+
+interface AssetMentionSuggestionHandle {
+  onKeyDown: (payload: { event: KeyboardEvent }) => boolean;
+}
+
+const toMentionCommandPayload = (option: MentionAssetOption) => ({
+  id: option.nodeId || option.assetId || option.id,
+  label: option.label,
+  displayLabel: option.label,
+  originalLabel: option.label,
+  value: option.value || option.label,
+  thumbnail: option.thumbnailUrl || option.fileUrl,
+  type: option.mediaType,
+  source: option.source,
+  scope: option.scope,
+  assetId: option.assetId,
+  nodeId: option.nodeId,
+  primaryCategory: option.primaryCategory,
+  fileUrl: option.fileUrl,
+});
+
+const buildLegacyMentionListItems = (items: Array<Record<string, unknown>>) =>
+  items.map((item) => ({
+    ...item,
+    originalLabel:
+      (item.originalLabel as string | undefined) ??
+      (item.label as string | undefined),
+  }));
+
+const AssetMentionSuggestion = forwardRef<
+  AssetMentionSuggestionHandle,
+  AssetMentionSuggestionProps
+>(({ nodeId, projectId, command }, ref) => {
+  const menu = useAssetMentionMenu({
+    nodeId,
+    projectId,
+  });
+
+  const selectOption = (option: MentionAssetOption | null) => {
+    if (!option || option.disabled) return;
+    command(toMentionCommandPayload(option));
+  };
+
+  useImperativeHandle(ref, () => ({
+    onKeyDown: ({ event }) => {
+      if (event.key === "ArrowUp") {
+        menu.moveSelection(-1);
+        return true;
+      }
+
+      if (event.key === "ArrowDown") {
+        menu.moveSelection(1);
+        return true;
+      }
+
+      if (event.key === "Enter") {
+        selectOption(menu.selectCurrent());
+        return true;
+      }
+
+      return false;
+    },
+  }));
+
+  const handleInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      menu.moveSelection(-1);
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      menu.moveSelection(1);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      selectOption(menu.selectCurrent());
+    }
+  };
+
+  return (
+    <AssetMentionMenu
+      query={menu.query}
+      groups={menu.groups}
+      selectedKey={menu.selectedKey}
+      loading={menu.loading}
+      error={menu.error}
+      autoFocus
+      onQueryChange={menu.setQuery}
+      onSelect={selectOption}
+      onHoverOption={menu.setSelectedByKey}
+      onInputKeyDown={handleInputKeyDown}
+    />
+  );
+});
+
+AssetMentionSuggestion.displayName = "AssetMentionSuggestion";
+
 export const VideoPromptEditor = forwardRef<
   VideoPromptEditorHandle,
   VideoPromptEditorProps
->(({ promptDraftHtml, mentionItems, onDraftChange }, ref) => {
+>(({ promptDraftHtml, nodeId, projectId, mentionItems, onDraftChange }, ref) => {
   const mentionItemsRef = useRef(mentionItems);
+  const nodeIdRef = useRef(nodeId);
+  const projectIdRef = useRef(projectId);
 
   useEffect(() => {
     mentionItemsRef.current = mentionItems;
   }, [mentionItems]);
+
+  useEffect(() => {
+    nodeIdRef.current = nodeId;
+    projectIdRef.current = projectId;
+  }, [nodeId, projectId]);
 
   const mentionExtension = useMemo(() => {
     return Mention.extend({
@@ -134,6 +262,54 @@ export const VideoPromptEditor = forwardRef<
               return {
                 "data-mention-kind": attributes.type || "image",
               };
+            },
+          },
+          source: {
+            default: null,
+            parseHTML: (element) => element.getAttribute("data-mention-source"),
+            renderHTML: (attributes) => {
+              if (!attributes.source) return {};
+              return { "data-mention-source": attributes.source };
+            },
+          },
+          scope: {
+            default: null,
+            parseHTML: (element) => element.getAttribute("data-mention-scope"),
+            renderHTML: (attributes) => {
+              if (!attributes.scope) return {};
+              return { "data-mention-scope": attributes.scope };
+            },
+          },
+          assetId: {
+            default: null,
+            parseHTML: (element) => element.getAttribute("data-asset-id"),
+            renderHTML: (attributes) => {
+              if (!attributes.assetId) return {};
+              return { "data-asset-id": attributes.assetId };
+            },
+          },
+          nodeId: {
+            default: null,
+            parseHTML: (element) => element.getAttribute("data-node-id"),
+            renderHTML: (attributes) => {
+              if (!attributes.nodeId) return {};
+              return { "data-node-id": attributes.nodeId };
+            },
+          },
+          primaryCategory: {
+            default: null,
+            parseHTML: (element) => element.getAttribute("data-primary-category"),
+            renderHTML: (attributes) => {
+              if (!attributes.primaryCategory) return {};
+              return { "data-primary-category": attributes.primaryCategory };
+            },
+          },
+          fileUrl: {
+            default: null,
+            parseHTML: (element) => element.getAttribute("data-file-url"),
+            renderHTML: (attributes) => {
+              if (!attributes.fileUrl) return {};
+              return { "data-file-url": attributes.fileUrl };
             },
           },
         };
@@ -209,6 +385,12 @@ export const VideoPromptEditor = forwardRef<
             "data-mention-display-label": mentionLabel,
             "data-mention-original-label": originalLabel,
             "data-mention-kind": mentionType || "image",
+            "data-mention-source": node.attrs.source,
+            "data-mention-scope": node.attrs.scope,
+            "data-asset-id": node.attrs.assetId,
+            "data-node-id": node.attrs.nodeId,
+            "data-primary-category": node.attrs.primaryCategory,
+            "data-file-url": node.attrs.fileUrl,
             contenteditable: "false",
             draggable: "true",
             title: originalLabel,
@@ -263,25 +445,31 @@ export const VideoPromptEditor = forwardRef<
 
               editorDom = props.editor.view.dom;
 
-              component = new ReactRenderer(MentionList, {
-                props: {
-                  ...props,
-                  // 为浮层补回 originalLabel：props.items 已被替换为 displayLabel（中文数字），
-                  // 这里映射原始名，让 MentionList 列表行能展示原始名。
-                  items: (props.items as Array<Record<string, unknown>>).map(
-                    (item) => ({
-                      ...item,
-                      originalLabel:
-                        (item.originalLabel as string | undefined) ??
-                        (item.label as string | undefined),
-                    }),
-                  ),
-                  command: (item: any) => {
-                    props.command(item);
+              if (nodeIdRef.current) {
+                component = new ReactRenderer(AssetMentionSuggestion, {
+                  props: {
+                    nodeId: nodeIdRef.current,
+                    projectId: projectIdRef.current,
+                    command: (item: any) => {
+                      props.command(item);
+                    },
                   },
-                },
-                editor: props.editor,
-              });
+                  editor: props.editor,
+                });
+              } else {
+                component = new ReactRenderer(MentionList, {
+                  props: {
+                    ...props,
+                    items: buildLegacyMentionListItems(
+                      props.items as Array<Record<string, unknown>>,
+                    ),
+                    command: (item: any) => {
+                      props.command(item);
+                    },
+                  },
+                  editor: props.editor,
+                });
+              }
 
               component.element.style.position = "absolute";
               component.element.style.zIndex = "9999";
@@ -311,17 +499,22 @@ export const VideoPromptEditor = forwardRef<
                 return;
               }
 
-              component.updateProps({
-                ...props,
-                items: (props.items as Array<Record<string, unknown>>).map(
-                  (item) => ({
-                    ...item,
-                    originalLabel:
-                      (item.originalLabel as string | undefined) ??
-                      (item.label as string | undefined),
-                  }),
-                ),
-              });
+              if (nodeIdRef.current) {
+                component.updateProps({
+                  nodeId: nodeIdRef.current,
+                  projectId: projectIdRef.current,
+                  command: (item: any) => {
+                    props.command(item);
+                  },
+                });
+              } else {
+                component.updateProps({
+                  ...props,
+                  items: buildLegacyMentionListItems(
+                    props.items as Array<Record<string, unknown>>,
+                  ),
+                });
+              }
               updateSuggestionPosition(props.editor, component.element);
             },
 
@@ -404,6 +597,7 @@ export const VideoPromptEditor = forwardRef<
     ref,
     () => ({
       getPlainText: () => editor?.getText().trim() ?? "",
+      getDocumentJSON: () => editor?.getJSON() ?? null,
       insertContent: (content: string) => {
         if (!editor) return;
         const { from } = editor.state.selection;
@@ -509,6 +703,14 @@ export const VideoPromptEditor = forwardRef<
               update.originalLabel ?? node.attrs.originalLabel ?? update.label,
             value: update.value ?? update.label,
             thumbnail: update.thumbnail ?? node.attrs.thumbnail,
+            url: update.url ?? node.attrs.url,
+            fileUrl: update.fileUrl ?? node.attrs.fileUrl,
+            source: update.source ?? node.attrs.source,
+            scope: update.scope ?? node.attrs.scope,
+            assetId: update.assetId ?? node.attrs.assetId,
+            nodeId: update.nodeId ?? node.attrs.nodeId,
+            primaryCategory:
+              update.primaryCategory ?? node.attrs.primaryCategory,
             type: update.type ?? node.attrs.type,
           });
           updatedCount += 1;
