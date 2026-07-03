@@ -19,6 +19,7 @@ export type MediaKind = "image" | "video" | "audio";
 export interface MentionLike {
     id?: string | null;
     type?: string | null;
+    mediaType?: string | null;
     label?: string | null;
     displayLabel?: string | null;
     originalLabel?: string | null;
@@ -31,6 +32,7 @@ export interface MentionLike {
     assetId?: string | null;
     nodeId?: string | null;
     primaryCategory?: string | null;
+    category?: string | null;
 }
 
 export interface NormalizedMediaEntry {
@@ -107,6 +109,7 @@ const toMentionItem = (
         url: entry.url,
         fileUrl: entry.url,
         type: entry.type,
+        mediaType: entry.type,
     };
 };
 
@@ -128,6 +131,7 @@ export const extractMentionsFromProseMirrorDoc = (
             mentions.push({
                 id: (attrs.id as string | null) ?? null,
                 type: (attrs.type as string | null) ?? null,
+                mediaType: (attrs.mediaType as string | null) ?? null,
                 label: (attrs.label as string | null) ?? null,
                 displayLabel: (attrs.displayLabel as string | null) ?? null,
                 originalLabel: (attrs.originalLabel as string | null) ?? null,
@@ -140,6 +144,7 @@ export const extractMentionsFromProseMirrorDoc = (
                 assetId: (attrs.assetId as string | null) ?? null,
                 nodeId: (attrs.nodeId as string | null) ?? null,
                 primaryCategory: (attrs.primaryCategory as string | null) ?? null,
+                category: (attrs.category as string | null) ?? null,
             });
             return;
         }
@@ -190,6 +195,13 @@ const replaceMentionsInDoc = (
     return visit(doc);
 };
 
+const resolveMentionKind = (
+    mention: MentionLike,
+): MediaKind | null => {
+    const raw = mention.type ?? mention.mediaType;
+    return isMediaKind(raw) ? raw : null;
+};
+
 const buildOrderedMentions = (
     mentions: MentionLike[],
 ): NormalizedMediaEntry[] => {
@@ -202,7 +214,8 @@ const buildOrderedMentions = (
     const ordered: NormalizedMediaEntry[] = [];
 
     mentions.forEach((mention, index) => {
-        if (!isMediaKind(mention.type)) return;
+        const kind = resolveMentionKind(mention);
+        if (!kind) return;
 
         const key = buildDedupeKey(mention, index);
         if (seenKeys.has(key)) return;
@@ -211,10 +224,10 @@ const buildOrderedMentions = (
         const url = pickRealUrl(mention);
         if (!url) return;
 
-        counters[mention.type] += 1;
+        counters[kind] += 1;
         ordered.push({
-            type: mention.type,
-            index: counters[mention.type],
+            type: kind,
+            index: counters[kind],
             url,
             key,
             mentionId: typeof mention.id === "string" ? mention.id : null,
@@ -342,9 +355,10 @@ export const normalizeVideoMediaReferences = ({
     docMentions.forEach((mention) => {
         const mentionId = mention.id ?? "";
         if (!mentionId || replacements.has(mentionId)) return;
-        if (!isMediaKind(mention.type)) return;
-        fallbackCounters[mention.type] += 1;
-        const placeholder = `${PLACEHOLDER_PREFIX[mention.type]}${fallbackCounters[mention.type]}`;
+        const kind = resolveMentionKind(mention);
+        if (!kind) return;
+        fallbackCounters[kind] += 1;
+        const placeholder = `${PLACEHOLDER_PREFIX[kind]}${fallbackCounters[kind]}`;
         replacements.set(mentionId, placeholder);
     });
 

@@ -15,6 +15,14 @@ import {
   getMentionLabel,
   updateSuggestionPosition,
 } from "shared/utils/utils";
+
+const escapeHtmlFallback = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
 import { AssetMentionMenu } from "../../shared/AssetMentionMenu";
 import type { MentionAssetOption } from "../../shared/assetMentionTypes";
@@ -47,9 +55,16 @@ export interface VideoPromptEditorHandle {
       assetId?: string;
       nodeId?: string;
       primaryCategory?: string;
+      category?: string;
       type?: "image" | "video" | "audio";
+      mediaType?: "image" | "video" | "audio";
     }>,
   ) => number;
+  /**
+   * 把普通文本回填进编辑器，同时保留所有原有的 mention 节点 attrs，
+   * 供“优化提示词”功能使用，避免回写后丢失媒体资产字段。
+   */
+  replaceTextPreservingMentions: (nextText: string) => void;
 }
 
 export interface VideoPromptEditorProps {
@@ -63,6 +78,15 @@ export interface VideoPromptEditorProps {
     value: string;
     thumbnail: string;
     type: "image" | "video" | "audio";
+    mediaType?: "image" | "video" | "audio";
+    url?: string;
+    fileUrl?: string;
+    source?: string;
+    scope?: string;
+    category?: string;
+    primaryCategory?: string;
+    assetId?: string;
+    nodeId?: string;
   }[];
   onDraftChange: (payload: { text: string; html: string }) => void;
 }
@@ -85,11 +109,14 @@ const toMentionCommandPayload = (option: MentionAssetOption) => ({
   value: option.value || option.label,
   thumbnail: option.thumbnailUrl || option.fileUrl,
   type: option.mediaType,
+  mediaType: option.mediaType,
   source: option.source,
   scope: option.scope,
   assetId: option.assetId,
   nodeId: option.nodeId,
   primaryCategory: option.primaryCategory,
+  category: option.primaryCategory,
+  url: option.fileUrl,
   fileUrl: option.fileUrl,
 });
 
@@ -250,6 +277,11 @@ export const VideoPromptEditor = forwardRef<
                 return mentionKind;
               }
 
+              const mediaTypeAttr = element.getAttribute("data-media-type");
+              if (mediaTypeAttr) {
+                return mediaTypeAttr;
+              }
+
               const legacyType = element.getAttribute("data-type");
               if (legacyType && legacyType !== "mention") {
                 return legacyType;
@@ -309,6 +341,33 @@ export const VideoPromptEditor = forwardRef<
             renderHTML: (attributes) => {
               if (!attributes.fileUrl) return {};
               return { "data-file-url": attributes.fileUrl };
+            },
+          },
+          // 与 type 等价的另一份媒体类型字段，便于内容回写和后续归一化识别。
+          mediaType: {
+            default: null,
+            parseHTML: (element) => element.getAttribute("data-media-type"),
+            renderHTML: (attributes) => {
+              if (!attributes.mediaType) return {};
+              return { "data-media-type": attributes.mediaType };
+            },
+          },
+          // 媒体真实 URL，可能与 fileUrl / thumbnail 不同；提交归一化优先用它。
+          url: {
+            default: null,
+            parseHTML: (element) => element.getAttribute("data-url"),
+            renderHTML: (attributes) => {
+              if (!attributes.url) return {};
+              return { "data-url": attributes.url };
+            },
+          },
+          // 资产主分类，兼容 primaryCategory。
+          category: {
+            default: null,
+            parseHTML: (element) => element.getAttribute("data-category"),
+            renderHTML: (attributes) => {
+              if (!attributes.category) return {};
+              return { "data-category": attributes.category };
             },
           },
         };
@@ -384,11 +443,15 @@ export const VideoPromptEditor = forwardRef<
             "data-mention-display-label": mentionLabel,
             "data-mention-original-label": originalLabel,
             "data-mention-kind": mentionType || "image",
+            "data-media-type": node.attrs.mediaType || mentionType || "image",
             "data-mention-source": node.attrs.source,
             "data-mention-scope": node.attrs.scope,
             "data-asset-id": node.attrs.assetId,
             "data-node-id": node.attrs.nodeId,
             "data-primary-category": node.attrs.primaryCategory,
+            "data-category":
+              node.attrs.category || node.attrs.primaryCategory,
+            "data-url": node.attrs.url || node.attrs.fileUrl,
             "data-file-url": node.attrs.fileUrl,
             contenteditable: "false",
             draggable: "true",
@@ -710,7 +773,13 @@ export const VideoPromptEditor = forwardRef<
             nodeId: update.nodeId ?? node.attrs.nodeId,
             primaryCategory:
               update.primaryCategory ?? node.attrs.primaryCategory,
+            category:
+              update.category ??
+              node.attrs.category ??
+              update.primaryCategory ??
+              node.attrs.primaryCategory,
             type: update.type ?? node.attrs.type,
+            mediaType: update.mediaType ?? update.type ?? node.attrs.mediaType,
           });
           updatedCount += 1;
           return true;
@@ -721,6 +790,195 @@ export const VideoPromptEditor = forwardRef<
         }
 
         return updatedCount;
+      },
+      /**
+       * 把“优化后的纯文本”回填到编辑器，同时保留原 doc 中的 mention 节点 attrs。
+       *
+       * 思路：
+       * 1) 解析原 doc，记录所有 mention 节点（按出现顺序）的 attrs；
+       * 2) 解析优化后文本，按 `ImageN / AudioN / VideoN` 占位符顺序与原 mention 对位；
+       *    找不到占位符的 mention 节点会排在文本末尾。
+       * 3) 在编辑器中按段重建新 doc：
+       *    - 段落内把 mention id 列表与占位符位置拼回 paragraph children；
+       *    - 同一段落额外填入占位符之间的普通文本。
+       *
+       * 这样视觉上仍看到 @ 资产 pill，且归一化系统（基于 doc attrs）能继续读到
+       * `image_urls / video_urls / audio_urls` 与上方参考列表一起参与合并。
+       */
+      replaceTextPreservingMentions: (nextText: string) => {
+        if (!editor) return;
+
+        const sourceDoc = editor.state.doc;
+        const mentionQueue: Array<Record<string, unknown>> = [];
+        sourceDoc.descendants((node) => {
+          if (node.type.name === "mention") {
+            mentionQueue.push({ ...node.attrs });
+          }
+          return true;
+        });
+
+        // 提取优化后文本中的 `ImageN / AudioN / VideoN` 占位符位置。
+        const PLACEHOLDER_REGEX = /(Image|Audio|Video)\s*(\d+)/g;
+        const segments: Array<
+          | { kind: "text"; text: string }
+          | { kind: "mention"; kindType: "image" | "audio" | "video"; index: number }
+        > = [];
+        let lastIndex = 0;
+        let cursor = 0;
+        for (const match of nextText.matchAll(PLACEHOLDER_REGEX)) {
+          const matched = match[0];
+          const start = match.index ?? 0;
+          if (start > lastIndex) {
+            segments.push({
+              kind: "text",
+              text: nextText.slice(lastIndex, start),
+            });
+          }
+          segments.push({
+            kind: "mention",
+            kindType: match[1].toLowerCase() as
+              | "image"
+              | "audio"
+              | "video",
+            index: Number.parseInt(match[2], 10),
+          });
+          lastIndex = start + matched.length;
+          cursor += 1;
+        }
+        if (lastIndex < nextText.length) {
+          segments.push({ kind: "text", text: nextText.slice(lastIndex) });
+        }
+
+        // 计算每种类型 mention 在原 doc 中的出现顺序（保持归一化规则：type 独立编号）。
+        const orderedByType: Record<
+          "image" | "audio" | "video",
+          Array<Record<string, unknown>>
+        > = {
+          image: [],
+          audio: [],
+          video: [],
+        };
+        mentionQueue.forEach((attrs) => {
+          const kindRaw = (attrs.type as string | null) ??
+            (attrs.mediaType as string | null) ??
+            "";
+          if (kindRaw === "image" || kindRaw === "audio" || kindRaw === "video") {
+            orderedByType[kindRaw].push(attrs);
+          }
+        });
+
+        const mentionSchema = editor.schema.nodes.mention;
+        type ProseNode = {
+          type: string;
+          content?: ProseNode[];
+          attrs?: Record<string, unknown>;
+          text?: string;
+        };
+        const nodes: ProseNode[] = [];
+
+        segments.forEach((segment) => {
+          if (segment.kind === "text") {
+            // 注意上面 pushText 已经支持多段；在这里直接合并连续 text。
+            const paragraphs = segment.text.split(/\n+/);
+            paragraphs.forEach((paragraph) => {
+              if (paragraph.length === 0) return;
+              nodes.push({
+                type: "paragraph",
+                content: [{ type: "text", text: paragraph }],
+              });
+            });
+            return;
+          }
+          const sameKind = orderedByType[segment.kindType];
+          const target = sameKind[Math.max(segment.index - 1, 0)];
+          const appendMention = (attrs: Record<string, unknown>) => {
+            const last = nodes[nodes.length - 1];
+            if (!last || last.type !== "paragraph") {
+              nodes.push({
+                type: "paragraph",
+                content: [{ type: "mention", attrs }],
+              });
+            } else {
+              last.content = [
+                ...(last.content ?? []),
+                { type: "mention", attrs },
+              ];
+            }
+          };
+          if (!target) {
+            // 找不到对位 mention → 当成普通文本占位符写入。
+            nodes.push({
+              type: "paragraph",
+              content: [
+                { type: "text", text: `Image${segment.index}` },
+              ],
+            });
+            return;
+          }
+          appendMention(target);
+        });
+
+        // 把所有未能对位的旧 mention 追加到正文末尾，确保不缺资产。
+        const usedMentionIds = new Set(
+          orderedByType.image
+            .concat(orderedByType.audio)
+            .concat(orderedByType.video)
+            .map((m) => m.id as string),
+        );
+        mentionQueue.forEach((attrs) => {
+          if (usedMentionIds.has(attrs.id as string)) {
+            return;
+          }
+          const last = nodes[nodes.length - 1];
+          if (!last || last.type !== "paragraph") {
+            nodes.push({
+              type: "paragraph",
+              content: [{ type: "mention", attrs }],
+            });
+          } else {
+            last.content = [
+              ...(last.content ?? []),
+              { type: "mention", attrs },
+            ];
+          }
+        });
+
+        const finalContent = nodes.length > 0
+          ? nodes
+          : [{ type: "paragraph" }];
+
+        // 给每个 mention 节点补 schema 必需的 attrs，避免老 Schema 报错。
+        const sanitized = JSON.parse(JSON.stringify(finalContent));
+        const walk = (entry: unknown) => {
+          if (!entry || typeof entry !== "object") return;
+          const record = entry as Record<string, unknown>;
+          if (record.type === "mention") {
+            const attrs = (record.attrs ?? {}) as Record<string, unknown>;
+            attrs.id ??= "";
+            attrs.label ??= attrs.displayLabel ?? "";
+            attrs.type ??= "image";
+          }
+          if (Array.isArray(record.content)) {
+            record.content.forEach(walk);
+          }
+        };
+        sanitized.forEach(walk);
+
+        // 通过 schema 直接设置内容。mention 可能因 schema 不允许属性而抛错，
+        // 失败时回退成纯文本，保持编辑体验可用。
+        try {
+          editor.commands.setContent(sanitized, { emitUpdate: true });
+        } catch (error) {
+          console.warn(
+            "[VideoPromptEditor] mention schema 写入失败，改为纯文本回填：",
+            error,
+          );
+          editor.commands.setContent(
+            `<p>${escapeHtmlFallback(nextText)}</p>`,
+            { emitUpdate: true },
+          );
+          void mentionSchema; // 保留 schema 引用以避免 lint 警告。
+        }
       },
     }),
     [editor],
