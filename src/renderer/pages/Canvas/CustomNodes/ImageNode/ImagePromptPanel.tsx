@@ -36,7 +36,6 @@ import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
-import { handlePromptEditorWheelCapture } from "../shared/wheelEvents";
 import {
   GeminiParamsPanel,
   GEMINI_RESOLUTIONS,
@@ -649,8 +648,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         return [
           edge.source,
           firstItem.url,
-          firstItem.relativePath ?? "",
-          firstItem.localFileName ?? "",
         ];
       });
     }),
@@ -661,24 +658,18 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       return [] as {
         id: string;
         url: string;
-        relativePath?: string;
-        fileName?: string;
       }[];
     }
 
     const result: {
       id: string;
       url: string;
-      relativePath?: string;
-      fileName?: string;
     }[] = [];
 
-    for (let i = 0; i < parentImageEntryValues.length; i += 4) {
+    for (let i = 0; i < parentImageEntryValues.length; i += 2) {
       result.push({
         id: String(parentImageEntryValues[i] ?? ""),
         url: String(parentImageEntryValues[i + 1] ?? ""),
-        relativePath: String(parentImageEntryValues[i + 2] ?? "") || undefined,
-        fileName: String(parentImageEntryValues[i + 3] ?? "") || undefined,
       });
     }
 
@@ -809,7 +800,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       items.push({
         id: `parent-image-${node.id}`,
         url: node.url,
-        label: node.fileName || node.relativePath?.split("/").pop() || "参考图",
+        label: "参考图",
         thumbnail: node.url,
         isLocalImage: false,
       });
@@ -1404,10 +1395,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   return (
     <div className={PROMPT_PANEL_STYLES.container}>
       <div className={PROMPT_PANEL_STYLES.inputArea}>
-        <div
-          className={PROMPT_PANEL_STYLES.textAreaWrap}
-          onWheelCapture={handlePromptEditorWheelCapture}
-        >
+        <div className={PROMPT_PANEL_STYLES.textAreaWrap}>
           <EditorContent editor={editor} />
         </div>
 

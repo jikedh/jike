@@ -51,10 +51,7 @@ import { getAspectRatioFromMediaFile } from "@/pages/Canvas/CustomNodes/ImageNod
 import { aiVideoEnhanceTrackingService } from "@/services/aiVideoEnhanceTracking";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useUserStore } from "@/stores/useUserStore";
-import {
-  saveToolMediaFileToProject,
-  saveToolMediaUrlToProject,
-} from "../utils/localMedia";
+import { withRemoteMediaRef } from "../utils/localMedia";
 import type { VideoEnhanceParams } from "./components/VideoEnhancePanel";
 import { VideoEnhancePanel } from "./components/VideoEnhancePanel";
 import { VideoSnapshotPanel } from "./components/VideoSnapshotPanel";
@@ -1014,7 +1011,6 @@ export const VideoToolbar = ({
 
     const urls = await Promise.all(
       videoItems.map(async (item) => {
-        void item.localPath;
         return item.displayUrl || item.remoteUrl || item.url || "";
       }),
     );
@@ -1053,16 +1049,12 @@ export const VideoToolbar = ({
 
       const fileExt = file.name.split(".").pop()?.toLowerCase() || "mp4";
       const currentData = data.result?.data ?? [];
-      const resultItem = await saveToolMediaFileToProject(
-        projectId,
+      const resultItem = withRemoteMediaRef(
         withVideoPosterFields({
           url: uploadedUrl,
           remoteUrl: uploadedUrl,
           format: fileExt,
         }),
-        file,
-        "video",
-        fileExt,
       );
 
       const updatePatch: Record<string, unknown> = {
@@ -1264,15 +1256,12 @@ export const VideoToolbar = ({
           targetHandle: "input",
         });
 
-        const resultItem = await saveToolMediaUrlToProject(
-          projectId,
+        const resultItem = withRemoteMediaRef(
           withVideoPosterFields({
             url: response.data.url,
             remoteUrl: response.data.url,
             format: response.data.format,
           }),
-          "video",
-          response.data.format || "mp4",
         );
 
         updateNewVideoNodeData(childId, {
@@ -1356,16 +1345,12 @@ export const VideoToolbar = ({
           const progress = Number(payload.progress ?? 0);
 
           if (["SUCCEEDED", "SUCCESS", "COMPLETED"].includes(taskStatus)) {
-            const resultItem = await saveToolMediaUrlToProject(
-              projectId,
+            const resultItem = withRemoteMediaRef(
               withVideoPosterFields({
                 url: accessUrl,
                 remoteUrl: accessUrl,
                 format: "mp4",
               }),
-              "video",
-              "mp4",
-              "去字幕",
             );
             updateNewVideoNodeData(targetNodeId, {
               status: GenerationStatus.COMPLETED,
@@ -1456,16 +1441,12 @@ export const VideoToolbar = ({
             });
 
             if (resultUrl) {
-              const resultItem = await saveToolMediaUrlToProject(
-                projectId,
+              const resultItem = withRemoteMediaRef(
                 withVideoPosterFields({
                   url: resultUrl,
                   remoteUrl: resultUrl,
                   format: "mp4",
                 }),
-                "video",
-                "mp4",
-                "视频超清",
               );
               updateNewVideoNodeData(targetNodeId, {
                 status: GenerationStatus.COMPLETED,
@@ -1717,16 +1698,12 @@ export const VideoToolbar = ({
         } as any);
 
         if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
-          const resultItem = await saveToolMediaUrlToProject(
-            projectId,
+          const resultItem = withRemoteMediaRef(
             withVideoPosterFields({
               url: accessUrl,
               remoteUrl: accessUrl,
               format: "mp4",
             }),
-            "video",
-            "mp4",
-            "去字幕",
           );
           updateNewVideoNodeData(newNodeId, {
             status: GenerationStatus.COMPLETED,

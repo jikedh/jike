@@ -1,5 +1,4 @@
 import type { AssetMediaType, AssetRecord, AssetScope } from "service/assetStorage";
-import { getAssetFileUrl, getAssetStoragePath } from "service/assetStorage";
 import type { AllNodeType } from "shared/types/flow";
 
 type MediaItem = {
@@ -10,21 +9,6 @@ type MediaItem = {
   thumbnailUrl?: string;
   posterUrl?: string;
   coverUrl?: string;
-  localPath?: string;
-  relativePath?: string;
-  localName?: string;
-  localFileName?: string;
-};
-
-const getProjectStoragePath = () => {
-  try {
-    const raw = localStorage.getItem("canvas-chat-settings");
-    if (!raw) return "";
-    const parsed = JSON.parse(raw);
-    return parsed.state?.storagePath || "";
-  } catch {
-    return "";
-  }
 };
 
 const normalizePath = (value: string) =>
@@ -38,10 +22,6 @@ const stripQueryAndHash = (value: string) => value.split("?")[0].split("#")[0];
 const getFileName = (item: MediaItem, fallback: string) => {
   const candidate =
     item.assetName ||
-    item.localName ||
-    item.localFileName ||
-    item.localPath ||
-    item.relativePath ||
     item.remoteUrl ||
     item.url ||
     item.displayUrl ||
@@ -58,37 +38,19 @@ const getNodeMediaType = (node: AllNodeType): AssetMediaType | null => {
   return null;
 };
 
-const getDisplayUrl = (item: MediaItem) => {
-  const localPath = item.localPath || item.relativePath;
-  const remoteUrl =
-    item.thumbnailUrl ||
-    item.posterUrl ||
-    item.coverUrl ||
-    item.displayUrl ||
-    item.remoteUrl ||
-    item.url;
-
-  if (remoteUrl) {
-    return remoteUrl;
-  }
-
-  if (localPath) {
-    const basePath = localPath.startsWith("assets/")
-      ? getAssetStoragePath()
-      : getProjectStoragePath();
-    if (basePath) return getAssetFileUrl(basePath, localPath);
-  }
-
-  return localPath || "";
-};
+const getDisplayUrl = (item: MediaItem) =>
+  item.thumbnailUrl ||
+  item.posterUrl ||
+  item.coverUrl ||
+  item.displayUrl ||
+  item.remoteUrl ||
+  item.url ||
+  "";
 
 const getCoverUrl = (item: MediaItem) =>
   item.thumbnailUrl || item.posterUrl || item.coverUrl || "";
 
 const getDedupKey = (item: MediaItem) => {
-  const localPath = item.localPath || item.relativePath;
-  if (localPath) return `local:${normalizePath(localPath).toLowerCase()}`;
-
   const sourceUrl = item.remoteUrl || item.url || item.displayUrl;
   if (sourceUrl) return `url:${sourceUrl.trim()}`;
 
@@ -108,28 +70,19 @@ const getAssetDedupKey = (asset: AssetRecord) => {
 };
 
 const getSourcePath = (item: MediaItem) =>
-  item.localPath ||
-  item.relativePath ||
-  item.remoteUrl ||
-  item.url ||
-  item.displayUrl ||
-  "";
+  item.remoteUrl || item.url || item.displayUrl || "";
 
 const getMediaItems = (node: AllNodeType): MediaItem[] => {
   const data = node.data as Record<string, any>;
   const resultData = data.result?.data;
   return Array.isArray(resultData)
     ? resultData.filter((item): item is MediaItem =>
-        Boolean(
-          item &&
-            typeof item === "object" &&
-            (item.url ||
-              item.remoteUrl ||
-              item.displayUrl ||
-              item.localPath ||
-              item.relativePath),
-        ),
-      )
+      Boolean(
+        item &&
+        typeof item === "object" &&
+        (item.url || item.remoteUrl || item.displayUrl),
+      ),
+    )
     : [];
 };
 

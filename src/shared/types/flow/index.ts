@@ -57,10 +57,6 @@ export interface ImageGenerationNode {
       posterUrl?: string;
       coverUrl?: string;
       mediaType?: "image" | "video";
-      relativePath?: string; // 本地相对路径（Tauri asset 协议备用访问）
-      localPath?: string; // 本地相对路径（Tauri asset 协议备用访问）
-      localFileName?: string; // 本地文件名（Tauri asset 协议备用访问）
-      localName?: string; // 本地文件名（Tauri asset 协议备用访问）
       assetName?: string; // 资产库显示名称
       [key: string]: any;
     }[]; // 图片数据列表（支持多张图片累积）

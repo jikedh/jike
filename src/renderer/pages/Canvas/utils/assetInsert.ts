@@ -121,8 +121,6 @@ export const insertAssetIntoCanvas = async (
         data: [
           {
             url: fileUrl,
-            ...(localPath ? { localPath } : {}),
-            localName,
             assetName: asset.name,
           },
         ],

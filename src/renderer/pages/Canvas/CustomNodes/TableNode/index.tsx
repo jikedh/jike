@@ -504,12 +504,6 @@ const EditableCell = memo(
           autoFocus
           className="absolute inset-0 w-full h-full bg-[#1A1A1C] text-[#8D8D8E] text-xs resize-none outline-none border border-[#B43FEB]/50 leading-relaxed p-3 nodrag nopan noflow nowheel"
           onClick={(e) => e.stopPropagation()}
-          onWheel={(e) => {
-            if (e.ctrlKey || e.metaKey) {
-              e.preventDefault();
-            }
-            e.stopPropagation();
-          }}
         />
       );
     }
@@ -724,7 +718,7 @@ export const TableNode = memo(
     const storyboardImageCache = useMemo<StoryboardImageCacheMap>(
       () =>
         data.storyboardImageCache &&
-        typeof data.storyboardImageCache === "object"
+          typeof data.storyboardImageCache === "object"
           ? data.storyboardImageCache
           : {},
       [data.storyboardImageCache],
@@ -746,10 +740,10 @@ export const TableNode = memo(
             return captureTimeMs == null
               ? null
               : {
-                  row,
-                  rowIndex,
-                  captureTimeMs,
-                };
+                row,
+                rowIndex,
+                captureTimeMs,
+              };
           })
           .filter((item): item is StoryboardCaptureRow => item != null),
       [rows],
@@ -763,9 +757,9 @@ export const TableNode = memo(
             ).trim();
             return isImageSource(referenceImageUrl)
               ? {
-                  rowIndex,
-                  referenceImageUrl,
-                }
+                rowIndex,
+                referenceImageUrl,
+              }
               : null;
           })
           .filter((item): item is StoryboardSketchRow => item != null),
@@ -1138,7 +1132,7 @@ export const TableNode = memo(
             updateTableNodeData(id, ((prevData: any) => {
               const prevCache =
                 prevData.storyboardImageCache &&
-                typeof prevData.storyboardImageCache === "object"
+                  typeof prevData.storyboardImageCache === "object"
                   ? prevData.storyboardImageCache
                   : {};
               return {
@@ -1673,12 +1667,11 @@ export const TableNode = memo(
                 <div
                   className="h-full bg-[#B43FEB] transition-all"
                   style={{
-                    width: `${
-                      storyboardProgress.total
+                    width: `${storyboardProgress.total
                         ? (storyboardProgress.done / storyboardProgress.total) *
-                          100
+                        100
                         : 0
-                    }%`,
+                      }%`,
                   }}
                 />
               </div>

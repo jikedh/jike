@@ -1,7 +1,7 @@
 import { IconHelpCircle, IconMap2 } from "@tabler/icons-react";
-import { type ReactFlowInstance, useReactFlow, useStore } from "@xyflow/react";
+import { useReactFlow, useStore } from "@xyflow/react";
 import { Grid3X3, Maximize2 } from "lucide-react";
-import { type ChangeEvent, useEffect, useState } from "react";
+import { type ChangeEvent, useState } from "react";
 import { cn } from "shared/utils/utils";
 import {
   Dialog,
@@ -21,22 +21,6 @@ const TOOLBAR_BUTTON_CLASSNAME =
 
 const clampZoom = (zoom: number) => Math.min(2, Math.max(0.05, zoom));
 
-const setFlowZoom = (
-  reactFlowInstance: ReactFlowInstance,
-  zoom: number,
-  duration?: number,
-) => {
-  const { x, y } = reactFlowInstance.getViewport();
-  reactFlowInstance.setViewport(
-    {
-      x,
-      y,
-      zoom: clampZoom(Number(zoom.toFixed(2))),
-    },
-    { duration },
-  );
-};
-
 export const CanvasChatToolbar = ({
   isMiniMapVisible,
   onToggleMiniMap,
@@ -44,15 +28,10 @@ export const CanvasChatToolbar = ({
   const reactFlowInstance = useReactFlow();
   const snapToGrid = useChatSettingsStore((state) => state.snapToGrid);
   const setSnapToGrid = useChatSettingsStore((state) => state.setSnapToGrid);
-  // 使用 useStore 订阅视口缩放变化，实时更新进度条
-  const rawZoom = useStore((s) => s.transform[2]);
-  const [zoomLevel, setZoomLevel] = useState(1);
+  const zoomLevel = useStore((s) =>
+    clampZoom(Math.round(s.transform[2] * 20) / 20),
+  );
   const [helpOpen, setHelpOpen] = useState(false);
-
-  // 当 rawZoom 变化时更新 zoomLevel
-  useEffect(() => {
-    setZoomLevel(clampZoom(rawZoom));
-  }, [rawZoom]);
 
   const handleFitView = () => {
     reactFlowInstance.fitView({ padding: 0.1, duration: 300 });
@@ -60,8 +39,7 @@ export const CanvasChatToolbar = ({
 
   const handleZoomChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextZoom = clampZoom(Number(event.target.value));
-    setZoomLevel(nextZoom);
-    setFlowZoom(reactFlowInstance, nextZoom);
+    void reactFlowInstance.zoomTo(nextZoom);
   };
 
   return (

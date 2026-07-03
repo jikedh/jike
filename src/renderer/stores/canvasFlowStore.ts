@@ -338,22 +338,6 @@ const toCanvasSaveRequest = (state: CanvasPersistedState) => ({
   },
 });
 
-const saveGeneratedImageToLocal = async (
-  _projectId?: string,
-  _url?: string,
-  _extension?: string,
-) => "";
-const saveGeneratedVideoToLocal = async (
-  _projectId?: string,
-  _url?: string,
-  _extension?: string,
-) => "";
-const getLocalFilePath = (
-  _projectId?: string,
-  _fileType?: string,
-  _fileName?: string,
-) => "";
-
 const removeNodeIdsFromGroups = (
   groups: CanvasGroup[],
   nodeIds: string[],
@@ -1009,45 +993,10 @@ const pollImageGeneration = async (
         taskStatus === "SUCCEEDED" ||
         taskStatus === "COMPLETED"
       ) {
-        const projectId = getState().projectId;
-
         // 处理每张生成的图片
-        const processedResultData = await Promise.all(
-          images.map(async (url: string) => {
-            if (url && projectId) {
-              try {
-                const urlPath = new URL(url).pathname;
-                const ext = urlPath.split(".").pop()?.toLowerCase() || "png";
-
-                const fileName = await saveGeneratedImageToLocal(
-                  projectId,
-                  url,
-                  ext,
-                );
-
-                if (fileName) {
-                  const relativePath = getLocalFilePath(
-                    projectId,
-                    "generate_image",
-                    fileName,
-                  );
-
-                  return {
-                    url,
-                    localName: fileName,
-                    localPath: relativePath,
-                  };
-                }
-              } catch (saveError) {
-                console.error(
-                  "[pollImageGeneration] 保存图片到本地失败:",
-                  saveError,
-                );
-              }
-            }
-            return { url };
-          }),
-        );
+        const processedResultData = images.map((url: string) => ({
+          url,
+        }));
 
         setState((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
@@ -1322,7 +1271,6 @@ const pollMjImageGeneration = async (
 
       // SUCCESS 状态表示完成
       if (response.status === "SUCCESS") {
-        const projectId = getState().projectId;
         // imageUrls 可能是字符串数组或对象数组 { url: string }[]
         const rawImageUrls = response.imageUrls ?? [];
         const newImageUrls: string[] = rawImageUrls
@@ -1331,42 +1279,9 @@ const pollMjImageGeneration = async (
           .map((url: string) => url.trim().replace(/^`|`$/g, ""));
 
         // 处理每张生成的图片
-        const processedResultData = await Promise.all(
-          newImageUrls.map(async (url: string) => {
-            if (url && projectId) {
-              try {
-                const urlPath = new URL(url).pathname;
-                const ext = urlPath.split(".").pop()?.toLowerCase() || "png";
-
-                const fileName = await saveGeneratedImageToLocal(
-                  projectId,
-                  url,
-                  ext,
-                );
-
-                if (fileName) {
-                  const relativePath = getLocalFilePath(
-                    projectId,
-                    "generate_image",
-                    fileName,
-                  );
-
-                  return {
-                    url,
-                    localName: fileName,
-                    localPath: relativePath,
-                  };
-                }
-              } catch (saveError) {
-                console.error(
-                  "[pollMjImageGeneration] 保存图片到本地失败:",
-                  saveError,
-                );
-              }
-            }
-            return { url };
-          }),
-        );
+        const processedResultData = newImageUrls.map((url: string) => ({
+          url,
+        }));
 
         setState((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
@@ -1641,39 +1556,8 @@ const pollVideoTaskGeneration = async (
 
         missingResultUrlStartTime = null;
 
-        const projectId = getState().projectId;
         const processedResultData = await Promise.all(
           normalized.videoItems.map(async (item: any) => {
-            let localName = item.localName;
-            let localPath = item.localPath;
-
-            // 1. 保存到本地
-            if (item.url && projectId) {
-              try {
-                const ext = item.format || "mp4";
-                const fileName = await saveGeneratedVideoToLocal(
-                  projectId,
-                  item.url,
-                  ext,
-                );
-
-                if (fileName) {
-                  localName = fileName;
-                  localPath = getLocalFilePath(
-                    projectId,
-                    "generate_video",
-                    fileName,
-                  );
-                }
-              } catch (saveError) {
-                console.error(
-                  "[pollVideoTaskGeneration] 保存视频到本地失败:",
-                  saveError,
-                );
-              }
-            }
-
-            // 2. 转存到用户 OSS
             let ossUrl = item.url;
             if (item.url) {
               try {
@@ -1693,8 +1577,6 @@ const pollVideoTaskGeneration = async (
               ...item,
               url: ossUrl,
               remoteUrl: ossUrl,
-              localName,
-              localPath,
             });
           }),
         );
@@ -1899,11 +1781,11 @@ const pollNewVideoGeneration = async ({
           ? await getLzVideoTaskStatus(taskId)
           : videoProvider === "seedance_global"
             ? await getOverseasSeedanceVideoTaskStatus(taskId)
-          : videoProvider === "agnes"
-            ? await getAgnesVideoTaskStatus(taskId)
-            : isSeedance20
-              ? await getLzVideoTaskStatus(taskId)
-              : await getDashscopeVideoTaskStatus(taskId);
+            : videoProvider === "agnes"
+              ? await getAgnesVideoTaskStatus(taskId)
+              : isSeedance20
+                ? await getLzVideoTaskStatus(taskId)
+                : await getDashscopeVideoTaskStatus(taskId);
 
       const normalized = normalizeVideoTaskResponse(response);
       const normalizedTaskId = normalized.taskId ?? taskId;
@@ -1952,39 +1834,8 @@ const pollNewVideoGeneration = async ({
           return;
         }
 
-        const projectId = getState().projectId;
         const processedResultData = await Promise.all(
           normalized.videoItems.map(async (item: any) => {
-            let localName = item.localName;
-            let localPath = item.localPath;
-
-            // 1. 保存到本地
-            if (item.url && projectId) {
-              try {
-                const ext = item.format || "mp4";
-                const fileName = await saveGeneratedVideoToLocal(
-                  projectId,
-                  item.url,
-                  ext,
-                );
-
-                if (fileName) {
-                  localName = fileName;
-                  localPath = getLocalFilePath(
-                    projectId,
-                    "generate_video",
-                    fileName,
-                  );
-                }
-              } catch (saveError) {
-                console.error(
-                  "[pollNewVideoGeneration] 保存视频到本地失败:",
-                  saveError,
-                );
-              }
-            }
-
-            // 2. 转存到用户 OSS
             let ossUrl = item.url;
             if (item.url) {
               try {
@@ -2004,8 +1855,6 @@ const pollNewVideoGeneration = async ({
               ...item,
               url: ossUrl,
               remoteUrl: ossUrl,
-              localName,
-              localPath,
             });
           }),
         );
@@ -3463,32 +3312,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                       : { originalUrl: resultUrl }),
                   } as any;
 
-                  if (projectId) {
-                    try {
-                      const fileName = await saveGeneratedImageToLocal(
-                        projectId,
-                        ossUrl,
-                        extractExtensionFromUrl(resultUrl, "png"),
-                      );
-                      if (fileName) {
-                        resultItem = {
-                          ...resultItem,
-                          localName: fileName,
-                          localPath: getLocalFilePath(
-                            projectId,
-                            "generate_image",
-                            fileName,
-                          ),
-                        };
-                      }
-                    } catch (saveError) {
-                      console.error(
-                        "[startImageGeneration] 保存 Agnes 图片到本地失败:",
-                        saveError,
-                      );
-                    }
-                  }
-
                   return resultItem;
                 }),
               );
@@ -3563,38 +3386,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               });
 
               const ossUrl = await mirrorGeneratedImageUrlToOss(resultUrl);
-              const projectId = get().projectId;
-              let resultItem = {
+              const resultItem = {
                 url: ossUrl,
                 remoteUrl: ossUrl,
                 ...(ossUrl === resultUrl ? {} : { originalUrl: resultUrl }),
               } as any;
-
-              if (projectId) {
-                try {
-                  const fileName = await saveGeneratedImageToLocal(
-                    projectId,
-                    ossUrl,
-                    extractExtensionFromUrl(resultUrl, "png"),
-                  );
-                  if (fileName) {
-                    resultItem = {
-                      ...resultItem,
-                      localName: fileName,
-                      localPath: getLocalFilePath(
-                        projectId,
-                        "generate_image",
-                        fileName,
-                      ),
-                    };
-                  }
-                } catch (saveError) {
-                  console.error(
-                    "[startImageGeneration] 保存 RunningHub 图片到本地失败:",
-                    saveError,
-                  );
-                }
-              }
 
               set((state) => ({
                 nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
@@ -4560,9 +4356,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                 ? "agnes"
                 : isOverseasSeedance20
                   ? "seedance_global"
-                : isSeedance20
-                  ? "seedance"
-                  : "dashscope",
+                  : isSeedance20
+                    ? "seedance"
+                    : "dashscope",
           });
         });
       } catch (startError) {

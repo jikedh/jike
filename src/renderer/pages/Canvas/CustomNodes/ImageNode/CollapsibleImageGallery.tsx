@@ -14,8 +14,6 @@ import { ImageTile } from "./ImageTile";
 
 type ImageItem = {
   url: string; // 远程 OSS URL
-  localPath?: string; // 本地相对路径
-  localName?: string; // 本地文件名
   remoteUrl?: string; // 远程持久化 URL
 };
 
@@ -170,15 +168,14 @@ export const CollapsibleImageGallery = memo(
 
     const totalCount = images.length;
 
-    // 优先使用本地路径，否则使用远程 URL - 用 useMemo 缓存
+    // 使用远程 URL - 用 useMemo 缓存
     // OSS 图片使用缩略图展示，减少带宽占用，提升加载速度
     const displayUrls = useMemo(() => {
       return images.map((item) => {
         const originalUrl = item.url ?? "";
 
         // OSS 图片生成缩略图（使用 WIDTH_200 + webp，体积最小）
-        // 本地图片不需要缩略图优化（已经是本地文件路径）
-        if (originalUrl && !item.localPath && originalUrl.includes("oss-cn-")) {
+        if (originalUrl && originalUrl.includes("oss-cn-")) {
           return generateThumbnailWithFormat(originalUrl, "WIDTH_200", "webp");
         }
 
@@ -296,7 +293,7 @@ export const CollapsibleImageGallery = memo(
         try {
           const response = await fetch(item.url);
           const blob = await response.blob();
-          let file = new File([blob], item.localName || `image-${index}.png`, {
+          let file = new File([blob], `image-${index}.png`, {
             type: blob.type || "image/png",
           });
 
@@ -399,7 +396,7 @@ export const CollapsibleImageGallery = memo(
             const shouldUseCardChrome =
               totalCount > 1 && (!isExpanded || isSecondary);
             const cardKey =
-              item.remoteUrl || item.localPath || item.url || `image-${index}`;
+              item.remoteUrl || item.url || `image-${index}`;
             const expandedLayout = expandedLayouts[index];
             const stackStyle = getStackCardStyle(
               index,
@@ -554,7 +551,7 @@ export const CollapsibleImageGallery = memo(
                     )}
                   </div>
 
-                  {nodeId && updateImageNodeData && item.localPath && (
+                  {nodeId && updateImageNodeData && (
                     <button
                       type="button"
                       onClick={(e) => handleRefreshImage(e, index)}

@@ -34,7 +34,7 @@ import { requestCanvasDeleteConfirm } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { NodeNameBadge } from "../shared/NodeNameBadge";
-import { saveToolMediaFileToProject } from "../utils/localMedia";
+import { withRemoteMediaRef } from "../utils/localMedia";
 import { updateProject } from "@/api/projects";
 import { ImageAnnotationWorkspace } from "./ImageAnnotationWorkspace";
 import { ImageContent } from "./ImageContent";
@@ -53,11 +53,6 @@ import {
 } from "./utils/lighting";
 
 const DRAG_UI_RESTORE_DELAY = 140;
-const FALLBACK_NODE_WIDTH = 350;
-const FALLBACK_NODE_HEIGHT = 250;
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(Math.max(value, min), max);
 
 /**
  * 图片节点组件
@@ -348,31 +343,11 @@ export const ImageNode = memo(
           reactFlowInstanceRef.current.getViewport();
       }
 
-      const flowElement = document.querySelector(
-        ".react-flow",
-      ) as HTMLElement | null;
-      const bounds = flowElement?.getBoundingClientRect();
-      const viewportWidth = bounds?.width ?? window.innerWidth;
-      const viewportHeight = bounds?.height ?? window.innerHeight;
-      const nodeWidth = sourceNode.width ?? FALLBACK_NODE_WIDTH;
-      const nodeHeight = sourceNode.height ?? FALLBACK_NODE_HEIGHT;
-      const targetZoom = clamp(
-        Math.min(
-          (viewportWidth * 0.7) / nodeWidth,
-          (viewportHeight * 0.64) / nodeHeight,
-        ),
-        0.45,
-        1.85,
-      );
-      const centerX = sourceNode.position.x + nodeWidth / 2;
-      const centerY = sourceNode.position.y + nodeHeight / 2;
-      const nextViewport = {
-        x: viewportWidth / 2 - centerX * targetZoom,
-        y: viewportHeight / 2 - centerY * targetZoom + viewportHeight * 0.035,
-        zoom: targetZoom,
-      };
-
-      reactFlowInstanceRef.current.setViewport(nextViewport, { duration: 280 });
+      void reactFlowInstanceRef.current.fitView({
+        nodes: [{ id: sourceNode.id }],
+        padding: 0.18,
+        duration: 280,
+      });
     }, [id]);
 
     const handleLightingDialogOpenChange = useCallback(
@@ -419,13 +394,10 @@ export const ImageNode = memo(
           if (!uploadResult.url) {
             throw new Error("裁剪图片上传失败");
           }
-          const resultItem = await saveToolMediaFileToProject(
-            projectId,
-            { url: uploadResult.url, remoteUrl: uploadResult.url },
-            fileToUpload,
-            "image",
-            "png",
-          );
+          const resultItem = withRemoteMediaRef({
+            url: uploadResult.url,
+            remoteUrl: uploadResult.url,
+          });
           const croppedSize =
             cropRatio && cropRatio !== "custom" && cropRatio !== "original"
               ? cropRatio
@@ -488,8 +460,6 @@ export const ImageNode = memo(
             resultItem: {
               url: string;
               remoteUrl?: string;
-              localName?: string;
-              localPath?: string;
             };
             size?: string;
           }> = [];
@@ -511,13 +481,10 @@ export const ImageNode = memo(
                 fileToUpload,
                 "image",
               );
-              const resultItem = await saveToolMediaFileToProject(
-                projectId,
-                { url: uploadResult.url, remoteUrl: uploadResult.url },
-                fileToUpload,
-                "image",
-                "png",
-              );
+              const resultItem = withRemoteMediaRef({
+                url: uploadResult.url,
+                remoteUrl: uploadResult.url,
+              });
               uploadedItems.push({ resultItem, size: croppedSize });
             } catch (error) {
               failedCount += 1;

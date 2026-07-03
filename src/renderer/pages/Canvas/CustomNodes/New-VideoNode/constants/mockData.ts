@@ -49,6 +49,8 @@ export interface MentionItem {
   mentionId?: string;
   preserveLabel?: boolean;
   type: "image" | "video" | "audio";
+  /** 与 type 等价的别名，便于编辑器兼容字段传递 */
+  mediaType?: "image" | "video" | "audio";
   /** 资产来源（TipTap mention 携带）：连接节点 / 远程资产 */
   source?: "connected-node" | "remote-asset" | "local-upload";
   /** 资产作用域 */
@@ -59,6 +61,8 @@ export interface MentionItem {
   nodeId?: string;
   /** 资产主分类 */
   primaryCategory?: string;
+  /** 资产分类别名 */
+  category?: string;
   /** 真实媒体资源地址，优先于 thumbnail 用于归一化与请求体 */
   fileUrl?: string;
 }

@@ -1,10 +1,13 @@
 import { arrayMove } from "@dnd-kit/sortable";
+import { IconSparkles, IconWand } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createChatCompletion } from "@/api/ai";
 import { GenerationStatus } from "shared/constants/enum";
 import { getVideoGenerationPoints } from "shared/constants/model-points";
 import type { NewVideoGenerationNode } from "shared/types/flow";
 import { getVideoDuration } from "shared/utils/getVideoDuration";
 import { toChineseNumber } from "shared/utils/utils";
+import { cn } from "shared/utils/utils";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { PresetDropdown } from "@/components/PresetDropdown";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -24,7 +27,6 @@ import { useVideoReferenceActions } from "./hooks/useVideoReferenceActions";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
-import { handlePromptEditorWheelCapture } from "../shared/wheelEvents";
 import {
   BottomParamsBar,
   type VideoGenerateRequest
@@ -294,7 +296,15 @@ const areStringRecordsEqual = (
 
 const VIDEO_GENERATION_FAKE_REQUEST_DELAY_MS = 5000;
 const VIDEO_FAKE_REQUEST_PENDING_KEY = "fakeRequestPending";
+const VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT_KEY =
+  "promptOptimizeSystemPrompt";
 const videoFakeRequestTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+const DEFAULT_VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT = `你是资深视频生成提示词工程师。请把用户提供的提示词改写得更专业、更具画面感、便于 AI 视频模型理解。要求：
+1. 保持原意，不得删减用户提到的具体动作、节奏、镜头感等关键词。
+2. 严格保留文本中的 \`ImageN / AudioN / VideoN\` 占位符及其顺序，禁止新增、删除或改写这些占位符。
+3. 不得删除、加号位置或引用任何媒体资产；只优化纯文本描述。
+4. 使用中文回复，输出仅包含改写后的最终提示词，不要解释过程。`;
 
 const isVideoFakeRequestPending = (data?: NewVideoGenerationNode) =>
   data?.metadata?.[VIDEO_FAKE_REQUEST_PENDING_KEY] === true;
@@ -308,7 +318,7 @@ const getCurrentNewVideoData = (nodeId: string) => {
 
 export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const editorRef = useRef<VideoPromptEditorHandle | null>(null);
-  const { success, warning } = useMessage();
+  const { success, warning, error } = useMessage();
   const {
     pointsEnabled,
     totalPoints,
@@ -381,6 +391,34 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const [selectedParams, setSelectedParams] = useState<VideoParamState>(() =>
     normalizeVideoParams(model, metadataParams, initialMode),
   );
+
+  const storedOptimizeSystemPrompt = useMemo(() => {
+    const value = (currentData?.metadata ?? {})[
+      VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT_KEY
+    ];
+    return typeof value === "string"
+      ? value
+      : DEFAULT_VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT;
+  }, [currentData?.metadata]);
+  const [isPromptOptimizePopoverOpen, setIsPromptOptimizePopoverOpen] =
+    useState(false);
+  const [draftOptimizeSystemPrompt, setDraftOptimizeSystemPrompt] =
+    useState(storedOptimizeSystemPrompt);
+  const [isOptimizingPrompt, setIsOptimizingPrompt] = useState(false);
+  const promptOptimizeAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!isPromptOptimizePopoverOpen) {
+      setDraftOptimizeSystemPrompt(storedOptimizeSystemPrompt);
+    }
+  }, [isPromptOptimizePopoverOpen, storedOptimizeSystemPrompt]);
+
+  useEffect(() => {
+    return () => {
+      promptOptimizeAbortRef.current?.abort();
+      promptOptimizeAbortRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     setSelectedModel(model);
@@ -1192,6 +1230,132 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     updateNewVideoNodeData,
   ]);
 
+  const handleSaveOptimizeSystemPrompt = useCallback(() => {
+    const trimmed = draftOptimizeSystemPrompt.trim();
+    if (!trimmed) {
+      warning("系统提示词不能为空");
+      return;
+    }
+    updateNewVideoNodeData(nodeId, {
+      metadata: {
+        ...(currentData?.metadata ?? {}),
+        [VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT_KEY]: trimmed,
+      },
+    });
+    setIsPromptOptimizePopoverOpen(false);
+  }, [
+    currentData?.metadata,
+    draftOptimizeSystemPrompt,
+    nodeId,
+    updateNewVideoNodeData,
+    warning,
+  ]);
+
+  const handleResetOptimizeSystemPrompt = useCallback(() => {
+    setDraftOptimizeSystemPrompt(DEFAULT_VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT);
+  }, []);
+
+  const extractOptimizedText = (response: unknown): string => {
+    if (!response || typeof response !== "object") return "";
+    const record = response as Record<string, unknown>;
+    const data = record.data ?? record;
+    const choices = (data as { choices?: unknown }).choices;
+    if (!Array.isArray(choices)) return "";
+    const first = choices[0] as { message?: { content?: unknown } };
+    const content = first?.message?.content;
+    if (typeof content === "string") return content.trim();
+    if (Array.isArray(content)) {
+      return content
+        .map((item) => {
+          if (!item || typeof item !== "object") return "";
+          const text = (item as { text?: unknown }).text;
+          return typeof text === "string" ? text : "";
+        })
+        .join("")
+        .trim();
+    }
+    if (typeof (data as { output_text?: unknown }).output_text === "string") {
+      return ((data as { output_text: string }).output_text ?? "").trim();
+    }
+    return "";
+  };
+
+  const handleOptimizePrompt = useCallback(async () => {
+    if (isOptimizingPrompt) return;
+    const editorDoc = editorRef.current?.getDocumentJSON() ?? null;
+    const editorText = editorRef.current?.getPlainText() ?? promptText;
+    if (!editorText.trim() && !editorDoc) {
+      warning("请输入提示词后再优化");
+      return;
+    }
+    // 先把正文 @ 提及和上方参考列表归一化为 ImageN/AudioN/VideoN，
+    // 提示词模型只能看到稳定占位符文本，回写时再按位置还原 mention 节点。
+    const normalized = normalizeVideoMediaReferences({
+      promptDoc: editorDoc,
+      referenceItems: generationReferenceItems,
+      promptText: editorText,
+    });
+    if (!normalized.prompt.trim()) {
+      warning("提示词为空，无可优化内容");
+      return;
+    }
+
+    const systemPrompt =
+      (typeof (currentData?.metadata ?? {})[
+        VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT_KEY
+      ] === "string"
+        ? (currentData?.metadata as Record<string, string>)[
+            VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT_KEY
+          ]
+        : DEFAULT_VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT) ||
+      DEFAULT_VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT;
+
+    const abortController = new AbortController();
+    promptOptimizeAbortRef.current?.abort();
+    promptOptimizeAbortRef.current = abortController;
+
+    setIsOptimizingPrompt(true);
+    try {
+      const response = await createChatCompletion(
+        {
+          model: "deepseek-v4-flash",
+          stream: false,
+          temperature: 0.3,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: normalized.prompt },
+          ],
+        },
+        abortController.signal,
+      );
+      if (abortController.signal.aborted) return;
+      const optimizedText = extractOptimizedText(response);
+      if (!optimizedText) {
+        error("优化失败", "模型未返回有效内容");
+        return;
+      }
+      editorRef.current?.replaceTextPreservingMentions(optimizedText);
+      success("已优化提示词");
+    } catch (reason) {
+      if (abortController.signal.aborted) return;
+      const message =
+        reason instanceof Error ? reason.message : "提示词优化失败";
+      error("优化失败", message);
+    } finally {
+      promptOptimizeAbortRef.current = null;
+      setIsOptimizingPrompt(false);
+    }
+  }, [
+    currentData?.metadata,
+    editorRef,
+    error,
+    generationReferenceItems,
+    isOptimizingPrompt,
+    promptText,
+    success,
+    warning,
+  ]);
+
   const handleGenerate = useCallback(
     async (request: VideoGenerateRequest) => {
       if (isGenerating) {
@@ -1387,10 +1551,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
             onReferenceHoverChange={handleReferenceHoverChange}
           />
 
-          <div
-            className={PROMPT_PANEL_STYLES.textAreaWrap}
-            onWheelCapture={handlePromptEditorWheelCapture}
-          >
+          <div className={cn(PROMPT_PANEL_STYLES.textAreaWrap, "relative")}>
             <VideoPromptEditor
               ref={editorRef}
               promptDraftHtml={promptDraftHtml}
@@ -1403,6 +1564,96 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
               }
               onDraftChange={handleDraftChange}
             />
+
+            <div
+              className="nodrag nopan nowheel pointer-events-auto absolute bottom-2 right-2 z-10"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <div className="relative">
+                <button
+                  type="button"
+                  aria-label="优化提示词"
+                  title="左键：优化提示词；右键：编辑系统提示词"
+                  disabled={isOptimizingPrompt}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (event.button === 2) return;
+                    void handleOptimizePrompt();
+                  }}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsPromptOptimizePopoverOpen((prev) => !prev);
+                  }}
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-full border text-white/80 transition-colors",
+                    "border-white/[0.08] bg-white/[0.04] hover:border-[#B43FEB]/40 hover:bg-[#B43FEB]/15 hover:text-white",
+                    isOptimizingPrompt
+                      ? "cursor-wait opacity-60"
+                      : "active:scale-95",
+                  )}
+                >
+                  {isOptimizingPrompt ? (
+                    <IconSparkles
+                      size={14}
+                      className="animate-pulse text-[#B43FEB]"
+                    />
+                  ) : (
+                    <IconWand size={14} />
+                  )}
+                </button>
+
+                {isPromptOptimizePopoverOpen ? (
+                  <div
+                    role="dialog"
+                    aria-label="优化系统提示词配置"
+                    className="nodrag nopan nowheel absolute bottom-12 right-0 z-20 w-[320px] rounded-xl border border-white/[0.08] bg-[#1e1e20] p-3 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <div className="mb-2 text-xs font-medium text-white/80">
+                      优化系统提示词
+                    </div>
+                    <textarea
+                      className="nodrag nopan nowheel min-h-[160px] max-h-[280px] w-full resize-none rounded-lg border border-white/[0.06] bg-white/[0.02] p-2 text-xs leading-6 text-white/90 outline-none placeholder:text-white/30 focus:border-[#B43FEB]/40"
+                      value={draftOptimizeSystemPrompt}
+                      onChange={(event) =>
+                        setDraftOptimizeSystemPrompt(event.target.value)
+                      }
+                      onClick={(event) => event.stopPropagation()}
+                      onMouseDown={(event) => event.stopPropagation()}
+                      placeholder="输入优化提示词时使用的系统提示词"
+                    />
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={handleResetOptimizeSystemPrompt}
+                        className="text-[11px] text-white/50 transition-colors hover:text-white/80"
+                      >
+                        恢复默认
+                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsPromptOptimizePopoverOpen(false)}
+                          className="rounded-md border border-white/[0.08] bg-transparent px-3 py-1 text-[11px] text-white/60 transition-colors hover:border-white/20 hover:text-white"
+                        >
+                          取消
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveOptimizeSystemPrompt}
+                          className="rounded-md border border-[#B43FEB]/40 bg-[#B43FEB] px-3 py-1 text-[11px] font-medium text-white transition-colors hover:bg-[#B43FEB]/80"
+                        >
+                          保存
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
 

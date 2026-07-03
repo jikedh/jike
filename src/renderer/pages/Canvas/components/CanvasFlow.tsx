@@ -988,33 +988,26 @@ export const CanvasFlow = ({
     }
   }, [historyVersion, saveToHistory, lastSavedVersionRef]);
 
-  // 画布光标交互：空格=抓手，Ctrl=放大镜，节点=小手，默认=箭头
+  // 画布光标交互：空格=抓手，节点=小手，默认=箭头。
+  // Ctrl + Wheel 缩放交给 React Flow 的 zoomActivationKeyCode 处理，避免自定义接管滚轮/缩放行为。
   useEffect(() => {
     const reactFlowEl = document.querySelector(".react-flow");
     if (!reactFlowEl) return;
 
     let isSpacePressed = false;
-    let isCtrlPressed = false;
 
     const updateCursorState = () => {
       if (annotationWorkspace.open || hasActiveCanvasModal()) {
         reactFlowEl.removeAttribute("data-space-pressed");
-        reactFlowEl.removeAttribute("data-ctrl-pressed");
         spacePressedRef.current = false;
         return;
       }
 
       if (isSpacePressed) {
         reactFlowEl.setAttribute("data-space-pressed", "true");
-        reactFlowEl.removeAttribute("data-ctrl-pressed");
         spacePressedRef.current = true;
-      } else if (isCtrlPressed) {
-        reactFlowEl.setAttribute("data-ctrl-pressed", "true");
-        reactFlowEl.removeAttribute("data-space-pressed");
-        spacePressedRef.current = false;
       } else {
         reactFlowEl.removeAttribute("data-space-pressed");
-        reactFlowEl.removeAttribute("data-ctrl-pressed");
         spacePressedRef.current = false;
       }
     };
@@ -1033,10 +1026,6 @@ export const CanvasFlow = ({
         isSpacePressed = true;
         updateCursorState();
       }
-      if ((e.ctrlKey || e.metaKey) && !isCtrlPressed) {
-        isCtrlPressed = true;
-        updateCursorState();
-      }
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -1044,15 +1033,10 @@ export const CanvasFlow = ({
         isSpacePressed = false;
         updateCursorState();
       }
-      if (!e.ctrlKey && !e.metaKey) {
-        isCtrlPressed = false;
-        updateCursorState();
-      }
     };
 
     const onBlur = () => {
       isSpacePressed = false;
-      isCtrlPressed = false;
       updateCursorState();
     };
 
@@ -1065,7 +1049,6 @@ export const CanvasFlow = ({
       document.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
       reactFlowEl.removeAttribute("data-space-pressed");
-      reactFlowEl.removeAttribute("data-ctrl-pressed");
       spacePressedRef.current = false;
     };
   }, [annotationWorkspace.open]);
@@ -3880,44 +3863,11 @@ export const CanvasFlow = ({
       annotationWasOpenRef.current = true;
     }
 
-    const viewportElement = document.querySelector(
-      ".react-flow__viewport",
-    ) as HTMLElement | null;
-    const flowElement = document.querySelector(
-      ".react-flow",
-    ) as HTMLElement | null;
-    const bounds = flowElement?.getBoundingClientRect();
-    const viewportWidth = bounds?.width ?? window.innerWidth;
-    const viewportHeight = bounds?.height ?? window.innerHeight;
-
-    const nodeWidth = annotationTargetNode.width ?? FALLBACK_NODE_WIDTH;
-    const nodeHeight = annotationTargetNode.height ?? FALLBACK_NODE_HEIGHT;
-    const targetZoom = clamp(
-      Math.min(
-        (viewportWidth * 0.7) / nodeWidth,
-        (viewportHeight * 0.64) / nodeHeight,
-      ),
-      0.45,
-      1.85,
-    );
-    const centerX = annotationTargetNode.position.x + nodeWidth / 2;
-    const centerY = annotationTargetNode.position.y + nodeHeight / 2;
-    const offsetY = viewportHeight * 0.035;
-    const nextViewport = {
-      x: viewportWidth / 2 - centerX * targetZoom,
-      y: viewportHeight / 2 - centerY * targetZoom + offsetY,
-      zoom: targetZoom,
-    };
-
-    reactFlowInstance.setViewport(nextViewport, { duration: 280 });
-    viewportStateRef.current = nextViewport;
-    pendingViewportRef.current = nextViewport;
-    setViewportState(nextViewport);
-    viewportElement?.classList.add(
-      "transition-transform",
-      "duration-300",
-      "ease-out",
-    );
+    void reactFlowInstance.fitView({
+      nodes: [{ id: annotationTargetNode.id }],
+      padding: 0.18,
+      duration: 280,
+    });
   }, [
     annotationTargetNode,
     annotationWorkspace.open,
@@ -4757,16 +4707,16 @@ export const CanvasFlow = ({
             panOnDrag={panOnDrag}
             panActivationKeyCode={isAnnotationLocked ? null : "Space"}
             noPanClassName={NO_PAN_CLASS_NAME}
-            noWheelClassName="__canvas-tools-allow-wheel"
             selectionOnDrag={false}
             selectionKeyCode={null}
             selectionMode={SelectionMode.Full}
             multiSelectionKeyCode={multiSelectionKeyCode}
-            panOnScroll={false}
+            panOnScroll={!isAnnotationLocked}
             zoomOnDoubleClick={false}
-            zoomOnScroll={!isAnnotationLocked}
+            zoomOnScroll={false}
+            zoomActivationKeyCode={isAnnotationLocked ? null : "Control"}
             zoomOnPinch={!isAnnotationLocked}
-            preventScrolling
+            preventScrolling={false}
             connectionLineStyle={connectionLineStyle}
             // 吸附开关与网格尺寸由设置中心驱动
             snapToGrid={snapToGrid}

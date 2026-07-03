@@ -2,10 +2,6 @@ type MediaLike = Record<string, unknown> & {
   url?: string;
   remoteUrl?: string;
   displayUrl?: string;
-  localPath?: string;
-  relativePath?: string;
-  localName?: string;
-  localFileName?: string;
 };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -48,40 +44,14 @@ export function getDisplayMediaUrl(
 }
 
 function hasMediaShape(value: Record<string, unknown>): value is MediaLike {
-  return (
-    "url" in value ||
-    "remoteUrl" in value ||
-    "displayUrl" in value ||
-    "localPath" in value ||
-    "relativePath" in value ||
-    "localName" in value ||
-    "localFileName" in value
-  );
-}
-
-function syncCompatibilityFields<T extends MediaLike>(item: T): T {
-  const next = { ...item };
-  const localPath = next.localPath || next.relativePath;
-  const localName = next.localName || next.localFileName;
-
-  if (localPath) {
-    next.localPath = String(localPath);
-    next.relativePath = String(localPath);
-  }
-
-  if (localName) {
-    next.localName = String(localName);
-    next.localFileName = String(localName);
-  }
-
-  return next;
+  return "url" in value || "remoteUrl" in value || "displayUrl" in value;
 }
 
 export function hydrateMediaForRuntime<T extends MediaLike>(
   item: T,
   displayUrl?: string,
 ): T {
-  const normalized = syncCompatibilityFields(item);
+  const normalized = { ...item };
   const remoteUrl = getRemoteMediaUrl(normalized);
   const nextDisplayUrl = displayUrl || getDisplayMediaUrl(normalized);
 
@@ -94,7 +64,7 @@ export function hydrateMediaForRuntime<T extends MediaLike>(
 }
 
 export function sanitizeMediaForPersistence<T extends MediaLike>(item: T): T {
-  const normalized = syncCompatibilityFields(item);
+  const normalized = { ...item };
   const remoteUrl = getRemoteMediaUrl(normalized);
   const persistedUrl =
     remoteUrl ||
