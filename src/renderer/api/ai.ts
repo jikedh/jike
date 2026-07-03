@@ -845,7 +845,11 @@ export async function createOverseasSeedanceVideoTask(
 
   const rawData = unwrapDesktopProxyData(response);
   const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
-  const taskId = responseData?.id ?? responseData?.task_id ?? "";
+  const taskId =
+    responseData?.data?.id ??
+    responseData?.id ??
+    responseData?.task_id ??
+    "";
   const status = responseData?.status;
 
   await aiVideoTrackingService.track({

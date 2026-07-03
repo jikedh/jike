@@ -1,12 +1,9 @@
 import {
   BookOpenText,
-  Film,
-  Folder,
   House,
-  Mic,
   Settings,
   SquareDashedMousePointer,
-  Type,
+  Video,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -98,6 +95,12 @@ export const SidebarCeBianLan = () => {
       icon: <BookOpenText size={24} />,
       label: "故事创作",
       path: "/story",
+    },
+    {
+      id: "video-to-script",
+      icon: <Video size={24} />,
+      label: "视频转剧本",
+      path: "/video-to-script",
     },
     // {
     //   id: "assets",

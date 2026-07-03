@@ -1,5 +1,5 @@
 use crate::domain;
-use crate::models::VideoTrimRequest;
+use crate::models::{M3u8ToMp4Request, VideoTrimRequest};
 use std::path::PathBuf;
 use tauri::Manager;
 
@@ -9,6 +9,17 @@ pub async fn video_processing_trim(
     request: VideoTrimRequest,
 ) -> Result<serde_json::Value, String> {
     match domain::trim_video(request, ffmpeg_resource_dirs(&app)).await {
+        Ok(r) => Ok(serde_json::json!({ "success": true, "data": r })),
+        Err(e) => Ok(serde_json::json!({ "success": false, "error": e.to_string() })),
+    }
+}
+
+#[tauri::command]
+pub async fn video_download_m3u8_to_mp4(
+    app: tauri::AppHandle,
+    request: M3u8ToMp4Request,
+) -> Result<serde_json::Value, String> {
+    match domain::download_m3u8_to_mp4(request, ffmpeg_resource_dirs(&app)).await {
         Ok(r) => Ok(serde_json::json!({ "success": true, "data": r })),
         Err(e) => Ok(serde_json::json!({ "success": false, "error": e.to_string() })),
     }

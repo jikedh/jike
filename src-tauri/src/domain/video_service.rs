@@ -3,8 +3,11 @@
 // Rust 端等价实现：调用阿里云 ICE REST API 提交裁剪作业，等待完成，下载到本地，
 // 通过后端 /v1/oss/upload 上传。ffmpeg 方案降级为调用本地 ffmpeg 二进制。
 
-use crate::models::{VideoTrimRequest, VideoTrimResult};
-use reqwest::Client;
+use crate::models::{M3u8ToMp4Request, M3u8ToMp4Result, VideoTrimRequest, VideoTrimResult};
+use reqwest::{
+    header::{HeaderMap, HeaderValue, ORIGIN, REFERER, USER_AGENT},
+    Client,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
@@ -12,11 +15,16 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+use tokio::time::{sleep, Duration};
+use url::Url;
 
 #[cfg(windows)]
 use winreg::{enums::*, RegKey};
 
 const FFMPEG_PATH_ENV: &str = "JIKE_FFMPEG_PATH";
+const HLS_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
+const HLS_REFERER: &str = "https://www.hongguostudio.com/";
+const HLS_ORIGIN: &str = "https://www.hongguostudio.com";
 
 #[derive(Debug, thiserror::Error)]
 pub enum VideoError {
@@ -87,6 +95,235 @@ pub async fn trim_video(
 
     // 降级到 ffmpeg sidecar
     trim_via_ffmpeg(&req, bundled_ffmpeg_dirs).await
+}
+
+pub async fn download_m3u8_to_mp4(
+    req: M3u8ToMp4Request,
+    bundled_ffmpeg_dirs: Vec<PathBuf>,
+) -> Result<M3u8ToMp4Result, VideoError> {
+    let m3u8_url = req.m3u8_url.trim().to_string();
+    if m3u8_url.is_empty() {
+        return Err(VideoError::Config("m3u8Url is empty".into()));
+    }
+    if !m3u8_url.starts_with("http://") && !m3u8_url.starts_with("https://") {
+        return Err(VideoError::Config("仅支持 http/https m3u8 地址".into()));
+    }
+    if !m3u8_url.contains(".m3u8") {
+        return Err(VideoError::Config("输入地址不是 m3u8 播放列表".into()));
+    }
+
+    let output_path = ensure_mp4_output_path(&req.output_path)?;
+    let result_path = output_path.clone();
+    if let Some(parent) = output_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let ffmpeg = resolve_ffmpeg_path(req.ffmpeg_path.as_deref(), bundled_ffmpeg_dirs)?;
+    let skipped_urls = download_hls_segments_and_mux(&m3u8_url, &output_path, &ffmpeg).await?;
+    let skipped_segments = skipped_urls.len();
+
+    Ok(M3u8ToMp4Result {
+        path: result_path.to_string_lossy().to_string(),
+        format: "mp4".to_string(),
+        method: "ffmpeg-segmented".to_string(),
+        skipped_segments: (skipped_segments > 0).then_some(skipped_segments),
+        skipped_urls: (!skipped_urls.is_empty()).then_some(skipped_urls),
+    })
+}
+
+async fn download_hls_segments_and_mux(
+    m3u8_url: &str,
+    output_path: &Path,
+    ffmpeg: &Path,
+) -> Result<Vec<String>, VideoError> {
+    let tmp_dir = std::env::temp_dir().join(format!("jike-hls-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&tmp_dir)?;
+
+    let client = build_hls_client()?;
+    let master_text = fetch_text_with_retry(&client, m3u8_url, 8).await?;
+    let media_url = select_media_playlist_url(m3u8_url, &master_text)?;
+    let media_text = if media_url == m3u8_url {
+        master_text
+    } else {
+        fetch_text_with_retry(&client, &media_url, 8).await?
+    };
+    let segment_urls = parse_segment_urls(&media_url, &media_text)?;
+    if segment_urls.is_empty() {
+        return Err(VideoError::Config("m3u8 播放列表中没有视频分片".into()));
+    }
+
+    let mut concat_list = String::new();
+    let mut downloaded_segments = 0usize;
+    let mut skipped_urls = Vec::new();
+    for (index, segment_url) in segment_urls.iter().enumerate() {
+        let bytes = match fetch_bytes_with_retry(&client, segment_url, 12).await {
+            Ok(bytes) => bytes,
+            Err(_) => {
+                skipped_urls.push(segment_url.clone());
+                continue;
+            }
+        };
+        let segment_path = tmp_dir.join(format!("segment-{index:06}.ts"));
+        std::fs::write(&segment_path, &bytes)?;
+        downloaded_segments += 1;
+        concat_list.push_str("file '");
+        concat_list.push_str(&segment_path.to_string_lossy().replace('\\', "/").replace('\'', "'\\''"));
+        concat_list.push_str("'\n");
+    }
+
+    if downloaded_segments == 0 {
+        return Err(VideoError::Http("所有视频分片都下载失败".into()));
+    }
+
+    let concat_path = tmp_dir.join("concat.txt");
+    std::fs::write(&concat_path, concat_list)?;
+    mux_segments_to_mp4(ffmpeg, &concat_path, output_path).await?;
+
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+    Ok(skipped_urls)
+}
+
+fn build_hls_client() -> Result<Client, VideoError> {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        USER_AGENT,
+        HeaderValue::from_static(HLS_USER_AGENT),
+    );
+    headers.insert(REFERER, HeaderValue::from_static(HLS_REFERER));
+    headers.insert(ORIGIN, HeaderValue::from_static(HLS_ORIGIN));
+
+    Client::builder()
+        .default_headers(headers)
+        .connect_timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(45))
+        .build()
+        .map_err(|e| VideoError::Http(e.to_string()))
+}
+
+async fn fetch_text_with_retry(
+    client: &Client,
+    url: &str,
+    attempts: usize,
+) -> Result<String, VideoError> {
+    let bytes = fetch_bytes_with_retry(client, url, attempts).await?;
+    String::from_utf8(bytes).map_err(|e| VideoError::Http(e.to_string()))
+}
+
+async fn fetch_bytes_with_retry(
+    client: &Client,
+    url: &str,
+    attempts: usize,
+) -> Result<Vec<u8>, VideoError> {
+    let mut last_error = String::new();
+    for attempt in 1..=attempts {
+        match client.get(url).send().await {
+            Ok(response) if response.status().is_success() => match response.bytes().await {
+                Ok(bytes) => return Ok(bytes.to_vec()),
+                Err(error) => last_error = error.to_string(),
+            },
+            Ok(response) => {
+                last_error = format!("HTTP {}", response.status());
+            }
+            Err(error) => {
+                last_error = error.to_string();
+            }
+        }
+
+        if attempt < attempts {
+            let delay_ms = (attempt as u64 * 700).min(5_000);
+            sleep(Duration::from_millis(delay_ms)).await;
+        }
+    }
+
+    Err(VideoError::Http(format!("下载失败：{} ({})", url, last_error)))
+}
+
+fn select_media_playlist_url(master_url: &str, playlist: &str) -> Result<String, VideoError> {
+    let mut expect_variant = false;
+    for line in playlist.lines().map(str::trim) {
+        if line.starts_with("#EXT-X-STREAM-INF") {
+            expect_variant = true;
+            continue;
+        }
+        if expect_variant && !line.is_empty() && !line.starts_with('#') {
+            return join_hls_url(master_url, line);
+        }
+    }
+
+    Ok(master_url.to_string())
+}
+
+fn parse_segment_urls(media_url: &str, playlist: &str) -> Result<Vec<String>, VideoError> {
+    for line in playlist.lines().map(str::trim) {
+        if line.starts_with("#EXT-X-KEY") && !line.contains("METHOD=NONE") {
+            return Err(VideoError::Config("暂不支持加密 HLS 播放列表".into()));
+        }
+        if line.starts_with("#EXT-X-MAP") {
+            return Err(VideoError::Config("暂不支持 fMP4 HLS 播放列表".into()));
+        }
+    }
+
+    playlist
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(|line| join_hls_url(media_url, line))
+        .collect()
+}
+
+fn join_hls_url(base_url: &str, value: &str) -> Result<String, VideoError> {
+    Url::parse(base_url)
+        .map_err(|e| VideoError::Config(e.to_string()))?
+        .join(value)
+        .map(|url| url.to_string())
+        .map_err(|e| VideoError::Config(e.to_string()))
+}
+
+async fn mux_segments_to_mp4(
+    ffmpeg: &Path,
+    concat_path: &Path,
+    output_path: &Path,
+) -> Result<(), VideoError> {
+    let ffmpeg = ffmpeg.to_path_buf();
+    let concat_path = concat_path.to_path_buf();
+    let output_path = output_path.to_path_buf();
+
+    let ffmpeg_output = tokio::task::spawn_blocking(move || {
+        Command::new(&ffmpeg)
+            .args([
+                "-y",
+                "-hide_banner",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                concat_path.to_string_lossy().as_ref(),
+                "-c",
+                "copy",
+                "-bsf:a",
+                "aac_adtstoasc",
+                "-movflags",
+                "+faststart",
+                output_path.to_string_lossy().as_ref(),
+            ])
+            .output()
+    })
+    .await
+    .map_err(|e| VideoError::JobFailed(e.to_string()))?
+    .map_err(|e| VideoError::JobFailed(e.to_string()))?;
+
+    if ffmpeg_output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&ffmpeg_output.stderr);
+    let message = stderr
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or("ffmpeg exit non-zero");
+    Err(VideoError::JobFailed(message.to_string()))
 }
 
 async fn trim_via_ice(cfg: &AliyunRuntimeConfig, _req: &VideoTrimRequest) -> Result<VideoTrimResult, VideoError> {
@@ -231,6 +468,19 @@ fn normalize_configured_ffmpeg_path(value: &str) -> PathBuf {
     } else {
         path
     }
+}
+
+fn ensure_mp4_output_path(value: &str) -> Result<PathBuf, VideoError> {
+    let trimmed = value.trim().trim_matches('"');
+    if trimmed.is_empty() {
+        return Err(VideoError::Config("outputPath is empty".into()));
+    }
+
+    let mut path = PathBuf::from(trimmed);
+    if path.extension().and_then(|ext| ext.to_str()) != Some("mp4") {
+        path.set_extension("mp4");
+    }
+    Ok(path)
 }
 
 fn is_usable_ffmpeg_path(path: &Path) -> bool {

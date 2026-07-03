@@ -4494,6 +4494,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           // 通用 taskId 提取：兼容 dashscope/kuaizi 的 data/output 嵌套，
           // 以及 agnes-video-v2.0 的顶层 video_id / id / task_id 字段。
           const taskId =
+            response?.data?.id ??
             response?.data?.task_id ??
             response?.output?.task_id ??
             response?.video_id ??

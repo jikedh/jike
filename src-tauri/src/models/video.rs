@@ -23,3 +23,28 @@ pub struct VideoTrimResult {
     #[serde(rename = "jobId", skip_serializing_if = "Option::is_none", default)]
     pub job_id: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct M3u8ToMp4Request {
+    #[serde(rename = "m3u8Url")]
+    pub m3u8_url: String,
+    #[serde(rename = "outputPath")]
+    pub output_path: String,
+    #[serde(
+        rename = "ffmpegPath",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub ffmpeg_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct M3u8ToMp4Result {
+    pub path: String,
+    pub format: String,
+    pub method: String,
+    #[serde(rename = "skippedSegments", skip_serializing_if = "Option::is_none", default)]
+    pub skipped_segments: Option<usize>,
+    #[serde(rename = "skippedUrls", skip_serializing_if = "Option::is_none", default)]
+    pub skipped_urls: Option<Vec<String>>,
+}

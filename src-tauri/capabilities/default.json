@@ -65,7 +65,10 @@
       ]
     },
 
-    "http:default",
+    {
+      "identifier": "http:default",
+      "allow": ["https://www.hongguostudio.com/vodplay/*"]
+    },
 
     "notification:default",
     "notification:allow-notify",

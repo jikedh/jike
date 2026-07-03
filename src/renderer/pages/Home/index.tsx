@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
+  BookOpenText,
   Folder,
   Mic,
   SquareDashedMousePointer,
-  Type,
+  Video,
 } from "lucide-react";
 import ProjectDialog from "@/components/ProjectDialog";
 import FirstLoginGuideDialog, {
@@ -74,11 +75,18 @@ const HomePage = () => {
       icon: SquareDashedMousePointer,
     },
     {
-      id: "script",
-      title: "剧本生成",
+      id: "story",
+      title: "故事创作",
       description:
         "由 AI Agent 驱动。从一句话灵感扩展为完整故事板、分镜脚本与影视级提示词序列。",
-      icon: Type,
+      icon: BookOpenText,
+    },
+    {
+      id: "video-to-script",
+      title: "视频转剧本",
+      description:
+        "从授权播放页解析视频链路，沉淀为后续转写、拆分分镜与剧本重构的素材入口。",
+      icon: Video,
     },
     {
       id: "assets",
