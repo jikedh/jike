@@ -174,9 +174,9 @@ export const CollapsibleImageGallery = memo(
       return images.map((item) => {
         const originalUrl = item.url ?? "";
 
-        // OSS 图片生成缩略图（使用 WIDTH_115 + webp，像素面积约为 WIDTH_200 的 1/3）
+        // OSS 图片生成缩略图（使用 WIDTH_200 + webp，体积最小）
         if (originalUrl && originalUrl.includes("oss-cn-")) {
-          return generateThumbnailWithFormat(originalUrl, "WIDTH_115", "webp");
+          return generateThumbnailWithFormat(originalUrl, "WIDTH_200", "webp");
         }
 
         return originalUrl;
