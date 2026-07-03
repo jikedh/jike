@@ -15,6 +15,8 @@ export const THUMBNAIL_SIZES = {
   RATIO_9_16: { width: 180, height: 320 },
   /** 缩放至宽度 200 */
   WIDTH_200: { width: 200 },
+  /** 缩放至宽度 115，约为 WIDTH_200 像素面积的 1/3 */
+  WIDTH_115: { width: 115 },
   /** 缩放至宽度 400 */
   WIDTH_400: { width: 400 },
 } as const;
