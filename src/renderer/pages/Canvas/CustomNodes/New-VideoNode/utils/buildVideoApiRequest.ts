@@ -93,7 +93,11 @@ const getReferenceUrl = (
   item: VideoGenerateRequest["referenceItems"][number],
 ) => {
   const optionalUrl = (item as { url?: string }).url;
-  return [item.thumbnail, optionalUrl, item.value].find(isUrl);
+  const optionalFileUrl = (item as { fileUrl?: string }).fileUrl;
+  // 真实媒体资源 URL 优先：避免把缩略图误传给模型。
+  return [optionalFileUrl, optionalUrl, item.value, item.thumbnail].find(
+    isUrl,
+  );
 };
 
 const getReferenceUrls = (

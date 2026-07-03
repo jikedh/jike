@@ -48,6 +48,7 @@ import {
 import { useModeAvailability } from "./hooks/useModeAvailability";
 import { useVideoGenerationAvailability } from "./hooks/useVideoGenerationAvailability";
 import { buildVideoApiRequest } from "./utils/buildVideoApiRequest";
+import { normalizeVideoMediaReferences } from "./utils/normalizeVideoMediaReferences";
 import { validateVideoGenerationCapability } from "./constants/videoModelGenerationCapabilities";
 
 interface VideoPromptPanelProps {
@@ -584,6 +585,14 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       originalLabel: item.label,
       value: item.displayLabel,
       thumbnail: item.thumbnail,
+      // 真实资源地址写入 mention attrs：归一化阶段会优先使用 fileUrl/value/url。
+      url: item.url ?? item.value,
+      fileUrl: item.fileUrl ?? item.url ?? item.value,
+      source: item.source,
+      scope: item.scope,
+      assetId: item.assetId,
+      nodeId: item.nodeId,
+      primaryCategory: item.primaryCategory,
       type: item.type,
     }));
   }, [generationReferenceItems]);
@@ -1110,8 +1119,19 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         return;
       }
       const editorText = editorRef.current?.getPlainText() ?? request.prompt;
-      const mergedPrompt = [...parentNoteContents, editorText]
+      const editorDoc = editorRef.current?.getDocumentJSON() ?? null;
+      // 媒体引用归一化：把正文 @ 提及和上方参考列表合并去重，
+      // 生成 Image1/Image2/Audio1/Video1 占位符 prompt 与对应顺序的请求数组。
+      const normalized = normalizeVideoMediaReferences({
+        promptDoc: editorDoc,
+        referenceItems: generationReferenceItems,
+        promptText: editorText,
+      });
+      const normalizedNotePrompt = parentNoteContents
         .map((content) => content.trim())
+        .filter((content) => content.length > 0)
+        .join(" ");
+      const mergedPrompt = [normalizedNotePrompt, normalized.prompt]
         .filter((content) => content.length > 0)
         .join(" ");
 
@@ -1131,7 +1151,10 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       const fullRequest: VideoGenerateRequest = {
         ...request,
         prompt: mergedPrompt,
-        referenceItems: generationReferenceItems,
+        referenceItems:
+          normalized.referenceItems.length > 0
+            ? normalized.referenceItems
+            : generationReferenceItems,
       };
       const apiRequest = buildVideoApiRequest(fullRequest);
 

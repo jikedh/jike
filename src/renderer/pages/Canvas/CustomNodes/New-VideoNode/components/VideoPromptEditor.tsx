@@ -24,6 +24,8 @@ import { MentionList } from "./MentionList";
 
 export interface VideoPromptEditorHandle {
   getPlainText: () => string;
+  /** 获取 TipTap ProseMirror doc 的 JSON 结构，供归一化系统读取 mention 节点 */
+  getDocumentJSON: () => unknown | null;
   insertContent: (content: string) => void;
   removeReferenceMentions: (
     matchers: Array<{
@@ -39,6 +41,13 @@ export interface VideoPromptEditorHandle {
       originalLabel?: string;
       value?: string;
       thumbnail?: string;
+      url?: string;
+      fileUrl?: string;
+      source?: string;
+      scope?: string;
+      assetId?: string;
+      nodeId?: string;
+      primaryCategory?: string;
       type?: "image" | "video" | "audio";
     }>,
   ) => number;
@@ -588,6 +597,7 @@ export const VideoPromptEditor = forwardRef<
     ref,
     () => ({
       getPlainText: () => editor?.getText().trim() ?? "",
+      getDocumentJSON: () => editor?.getJSON() ?? null,
       insertContent: (content: string) => {
         if (!editor) return;
         const { from } = editor.state.selection;
@@ -693,6 +703,14 @@ export const VideoPromptEditor = forwardRef<
               update.originalLabel ?? node.attrs.originalLabel ?? update.label,
             value: update.value ?? update.label,
             thumbnail: update.thumbnail ?? node.attrs.thumbnail,
+            url: update.url ?? node.attrs.url,
+            fileUrl: update.fileUrl ?? node.attrs.fileUrl,
+            source: update.source ?? node.attrs.source,
+            scope: update.scope ?? node.attrs.scope,
+            assetId: update.assetId ?? node.attrs.assetId,
+            nodeId: update.nodeId ?? node.attrs.nodeId,
+            primaryCategory:
+              update.primaryCategory ?? node.attrs.primaryCategory,
             type: update.type ?? node.attrs.type,
           });
           updatedCount += 1;

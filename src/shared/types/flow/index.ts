@@ -88,6 +88,7 @@ export interface NewVideoGenerationNode {
   model: string; // 使用的模型
   prompt: string; // 生成提示词
   promptDraft?: string; // 输入面板草稿文本
+  promptDraftHtml?: string; // 输入面板富文本草稿（TipTap HTML）
   duration?: number; // 视频时长（秒）
   aspect_ratio: string; // 宽高比，如 "16:9"
   image_urls?: string[]; // 参考图像 URL 列表
