@@ -10,7 +10,7 @@ export const PROMPT_PANEL_STYLES = {
   inputArea: "relative flex flex-col gap-3",
 
   textAreaWrap:
-    "w-full bg-white/[0.02] border border-white/[0.05] rounded-xl overflow-hidden focus-within:border-[#B43FEB]/50 focus-within:shadow-[0_0_15px_rgba(180,63,235,0.15)] transition-all shadow-inner",
+    "w-full bg-white/[0.02] border border-white/[0.05] rounded-xl overflow-visible focus-within:border-[#B43FEB]/50 focus-within:shadow-[0_0_15px_rgba(180,63,235,0.15)] transition-all shadow-inner",
 
   editorContent:
     "nodrag nopan nowheel w-full bg-transparent p-4 pb-8 text-sm text-white/90 outline-none cursor-text min-h-[100px] max-h-[220px] overflow-y-auto",

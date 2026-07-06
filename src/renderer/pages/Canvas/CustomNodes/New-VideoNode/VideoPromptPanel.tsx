@@ -1305,8 +1305,8 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT_KEY
       ] === "string"
         ? (currentData?.metadata as Record<string, string>)[
-            VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT_KEY
-          ]
+        VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT_KEY
+        ]
         : DEFAULT_VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT) ||
       DEFAULT_VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT;
 
@@ -1608,7 +1608,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
                   <div
                     role="dialog"
                     aria-label="优化系统提示词配置"
-                    className="nodrag nopan nowheel absolute bottom-12 right-0 z-20 w-[320px] rounded-xl border border-white/[0.08] bg-[#1e1e20] p-3 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]"
+                    className="nodrag nopan nowheel absolute bottom-12 right-0 z-[9999] w-[320px] rounded-xl border border-white/[0.08] bg-[#1e1e20] p-3 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]"
                     onMouseDown={(event) => event.stopPropagation()}
                     onClick={(event) => event.stopPropagation()}
                   >
