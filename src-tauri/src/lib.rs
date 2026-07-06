@@ -95,6 +95,7 @@ pub fn run() {
             commands::video_processing_trim,
             commands::video_download_m3u8_to_mp4,
             commands::copy_video_url_to_oss,
+            commands::copy_media_url_to_oss,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

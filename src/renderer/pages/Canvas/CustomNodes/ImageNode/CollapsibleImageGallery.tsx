@@ -5,8 +5,7 @@ import {
   IconRefresh,
 } from "@tabler/icons-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { generateThumbnailWithFormat, uploadFileToOSS } from "service/oss";
-import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
+import { copyMediaUrlToOss, generateThumbnailWithFormat } from "service/oss";
 import { getMediaSequence } from "shared/utils/mediaSequence";
 import { cn, downloadImageFromUrl } from "shared/utils/utils";
 import { toast } from "sonner";
@@ -291,20 +290,8 @@ export const CollapsibleImageGallery = memo(
         forceRefreshUpdate((n) => n + 1);
 
         try {
-          const response = await fetch(item.url);
-          const blob = await response.blob();
-          let file = new File([blob], `image-${index}.png`, {
-            type: blob.type || "image/png",
-          });
-
-          // 检查文件大小，大于10MB时压缩
-          if (file.size > MAX_IMAGE_SIZE_MB) {
-            file = await compressImage(file);
-          }
-
-          // 上传到 OSS
-          const ossResult = await uploadFileToOSS(file);
-          if (!ossResult.url) {
+          const ossUrl = await copyMediaUrlToOss(item.url);
+          if (!ossUrl) {
             throw new Error("上传到 OSS 失败");
           }
 
@@ -312,8 +299,8 @@ export const CollapsibleImageGallery = memo(
           const newImages = [...images];
           newImages[index] = {
             ...newImages[index],
-            url: ossResult.url,
-            remoteUrl: ossResult.url,
+            url: ossUrl,
+            remoteUrl: ossUrl,
           };
 
           updateImageNodeData(nodeId, {
@@ -327,6 +314,7 @@ export const CollapsibleImageGallery = memo(
           brokenIndexesRef.current.delete(index);
         } catch (error) {
           console.error("[刷新图片] 刷新失败:", error);
+          toast.error("刷新图片失败，请稍后再试");
         } finally {
           refreshingIndexesRef.current.delete(index);
           forceRefreshUpdate((n) => n + 1);
@@ -551,29 +539,18 @@ export const CollapsibleImageGallery = memo(
                     )}
                   </div>
 
-                  {nodeId && updateImageNodeData && (
-                    <button
-                      type="button"
-                      onClick={(e) => handleRefreshImage(e, index)}
-                      disabled={isRefreshing(index)}
-                      className={cn(
-                        "nodrag absolute left-2 top-2 z-30 cursor-pointer rounded-lg bg-black/60 p-2 text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-50",
-                        isExpanded
-                          ? isSecondary && isFocused
-                            ? "opacity-100"
-                            : "opacity-0"
-                          : isPrimary
-                            ? "opacity-0 group-hover/card:opacity-100"
-                            : "opacity-0",
-                      )}
-                      aria-label="刷新图片"
-                    >
-                      <IconRefresh
-                        size={14}
-                        className={isRefreshing(index) ? "animate-spin" : ""}
-                      />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => handleRefreshImage(e, index)}
+                    disabled={isRefreshing(index)}
+                    className="nodrag absolute left-2 top-2 z-30 cursor-pointer rounded-lg bg-black/60 p-2 text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label="刷新图片"
+                  >
+                    <IconRefresh
+                      size={14}
+                      className={isRefreshing(index) ? "animate-spin" : ""}
+                    />
+                  </button>
 
                   <div
                     className={cn(

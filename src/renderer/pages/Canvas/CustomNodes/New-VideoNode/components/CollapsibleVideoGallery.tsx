@@ -4,13 +4,14 @@ import {
   IconVideo,
 } from "@tabler/icons-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { uploadFileToOSS } from "service/oss";
+import { copyMediaUrlToOss } from "service/oss";
 import { getMediaSequence } from "shared/utils/mediaSequence";
 import { cn } from "shared/utils/utils";
 import {
   getVideoPosterUrl,
   withVideoPosterFields,
 } from "shared/utils/videoPoster";
+import { toast } from "sonner";
 import { VideoPlayer } from "@/components/ui/video-player";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
@@ -328,22 +329,16 @@ export const CollapsibleVideoGallery = memo(
         forceRefreshUpdate((n) => n + 1);
 
         try {
-          const response = await fetch(item.url);
-          const blob = await response.blob();
-          const file = new File([blob], item.localName || `video-${index}.mp4`, {
-            type: blob.type || "video/mp4",
-          });
-
-          const ossResult = await uploadFileToOSS(file);
-          if (!ossResult.url) {
+          const ossUrl = await copyMediaUrlToOss(item.url);
+          if (!ossUrl) {
             throw new Error("上传到 OSS 失败");
           }
 
           const newVideos = [...videos];
           newVideos[index] = {
             ...newVideos[index],
-            url: ossResult.url,
-            remoteUrl: ossResult.url,
+            url: ossUrl,
+            remoteUrl: ossUrl,
           };
           newVideos[index] = withVideoPosterFields(newVideos[index]);
 
@@ -358,6 +353,7 @@ export const CollapsibleVideoGallery = memo(
           brokenPosterIndexesRef.current.delete(index);
         } catch (error) {
           console.error("[刷新视频] 刷新失败:", error);
+          toast.error("刷新视频失败，请稍后再试");
         } finally {
           refreshingIndexesRef.current.delete(index);
           forceRefreshUpdate((n) => n + 1);
@@ -632,34 +628,20 @@ export const CollapsibleVideoGallery = memo(
                     )}
                   </div>
 
-                  {nodeId &&
-                    updateNewVideoNodeData &&
-                    item.localPath &&
-                    !isPending && (
-                      <button
-                        type="button"
-                        onClick={(e) => handleRefreshVideo(e, index)}
-                        disabled={isRefreshing(index)}
-                        className={cn(
-                          "nodrag absolute left-2 top-2 z-30 cursor-pointer rounded-lg bg-black/60 p-2 text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-50",
-                          isBroken(index)
-                            ? "opacity-100"
-                            : isExpanded
-                              ? isSecondary && isFocused
-                                ? "opacity-100"
-                                : "opacity-0"
-                              : isPrimary
-                                ? "opacity-0 group-hover/card:opacity-100"
-                                : "opacity-0",
-                        )}
-                        aria-label="刷新视频"
-                      >
-                        <IconRefresh
-                          size={14}
-                          className={isRefreshing(index) ? "animate-spin" : ""}
-                        />
-                      </button>
-                    )}
+                  {!isPending && item.url && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleRefreshVideo(e, index)}
+                      disabled={isRefreshing(index)}
+                      className="nodrag absolute left-2 top-2 z-30 cursor-pointer rounded-lg bg-black/60 p-2 text-white backdrop-blur-sm transition-all duration-200 hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label="刷新视频"
+                    >
+                      <IconRefresh
+                        size={14}
+                        className={isRefreshing(index) ? "animate-spin" : ""}
+                      />
+                    </button>
+                  )}
                 </div>
               </div>
             );
