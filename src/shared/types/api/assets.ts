@@ -160,7 +160,6 @@ export interface AssetDetail {
   description: string | null;
   fileKey: string;
   fileUrl: string;
-  fileHash: string | null;
   fileSize: number | null;
   fileName: string | null;
   mimeType: string | null;
@@ -199,26 +198,6 @@ export interface UploadOssFileResult {
   content_type: string;
 }
 
-// ===================== 文件重复检测 =====================
-
-export interface CheckDuplicateRequest {
-  fileHash: string;
-}
-
-export interface ExistingDuplicateAsset {
-  id: string;
-  name: string;
-  mediaType: MediaType;
-  primaryCategory: PrimaryCategory;
-  fileUrl: string;
-  thumbnailUrl: string;
-  scope: AssetScope;
-}
-
-export type CheckDuplicateResponse =
-  | { isDuplicate: false; existingAsset: null }
-  | { isDuplicate: true; existingAsset: ExistingDuplicateAsset };
-
 // ===================== 创建资产 =====================
 
 export interface CreateAssetRequest {
@@ -231,7 +210,6 @@ export interface CreateAssetRequest {
   conditions?: AssetConditions | null;
   description?: string | null;
   fileKey: string;
-  fileHash?: string | null;
   fileSize?: number | null;
   fileName?: string | null;
   mimeType?: string | null;

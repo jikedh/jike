@@ -23,8 +23,6 @@ import type {
   AssetTagsRequest,
   ChangeAssetScopeRequest,
   ChangeAssetScopeResult,
-  CheckDuplicateRequest,
-  CheckDuplicateResponse,
   CreateAssetRequest,
   DeleteAssetResult,
   PaginatedData,
@@ -65,17 +63,6 @@ export const uploadAssetFile = (file: File | Blob) =>
   jikeGoUploadOssFile(file as File) as unknown as Promise<
     ApiEnvelope<UploadOssFileResult>
   >;
-
-/**
- * 文件重复检测
- * POST /v1/assets/check-duplicate
- */
-export const checkAssetDuplicate = (data: CheckDuplicateRequest) =>
-  request<CheckDuplicateResponse>({
-    url: "/v1/assets/check-duplicate",
-    method: "post",
-    data,
-  });
 
 // ===================== 资产 CRUD =====================
 
