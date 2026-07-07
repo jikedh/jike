@@ -7,6 +7,31 @@
 
 use crate::domain;
 
+fn append_default_extension_if_missing(path: String, default_name: &str) -> String {
+    let Some(default_extension) = std::path::Path::new(default_name)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .filter(|extension| !extension.is_empty())
+    else {
+        return path;
+    };
+
+    let path_buffer = std::path::PathBuf::from(&path);
+    if path_buffer
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .filter(|extension| !extension.is_empty())
+        .is_some()
+    {
+        return path;
+    }
+
+    path_buffer
+        .with_extension(default_extension)
+        .to_string_lossy()
+        .to_string()
+}
+
 #[tauri::command]
 pub async fn storage_select_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
@@ -95,14 +120,32 @@ pub async fn storage_download_media(base: String, url: String, relative_path: St
 pub async fn storage_save_buffer_to_file(default_name: String, buffer: Vec<u8>, app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     use tauri_plugin_dialog::DialogExt;
     let (tx, rx) = tokio::sync::oneshot::channel();
-    app.dialog()
+    let dialog = app.dialog()
         .file()
         .set_title("保存文件")
-        .set_file_name(&default_name)
-        .save_file(move |path| {
-            let s = path.and_then(|p| p.into_path().ok()).map(|pb| pb.to_string_lossy().to_string());
-            let _ = tx.send(s);
-        });
+        .set_file_name(&default_name);
+    let dialog = match std::path::Path::new(&default_name)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| extension.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("xlsx") => dialog.add_filter("Excel 工作簿", &["xlsx"]),
+        Some("xls") => dialog.add_filter("Excel 97-2003 工作簿", &["xls"]),
+        _ => dialog,
+    };
+    let default_name_for_path = default_name.clone();
+    dialog.save_file(move |path| {
+        let s = path
+            .and_then(|p| p.into_path().ok())
+            .map(|pb| {
+                append_default_extension_if_missing(
+                    pb.to_string_lossy().to_string(),
+                    &default_name_for_path,
+                )
+            });
+        let _ = tx.send(s);
+    });
     let target = rx.await.map_err(|e| e.to_string())?;
     match target {
         None => Ok(serde_json::json!({ "success": false, "canceled": true })),

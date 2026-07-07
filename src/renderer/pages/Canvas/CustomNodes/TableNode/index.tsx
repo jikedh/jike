@@ -17,7 +17,7 @@ import {
 import { getImageGenerationPoints } from "shared/constants/model-points";
 import { VIDEO_PULL_FILM_COLUMNS } from "shared/constants/video-agent-presets";
 import type { CharacterTableRow, TableNodeType } from "shared/types/flow";
-import { cn } from "shared/utils/utils";
+import { cn, downloadImageFromUrl } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import {
@@ -41,7 +41,7 @@ import { generateTableStoryboardImage } from "@/services/tableStoryboardImageGen
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { getPrimaryRemoteVideoUrlFromNodeData } from "../New-VideoNode/utils/video-url";
 import { NodeNameBadge } from "../shared/NodeNameBadge";
-import Lightbox from "yet-another-react-lightbox";
+import Lightbox, { type LightboxProps } from "yet-another-react-lightbox";
 import Download from "yet-another-react-lightbox/plugins/download";
 import Fullscreen from "yet-another-react-lightbox/plugins/fullscreen";
 import Share from "yet-another-react-lightbox/plugins/share";
@@ -132,6 +132,19 @@ const isStoryboardMediaColumn = (column: string) =>
 
 const isStoryboardActionColumn = (column: string) =>
   column === STORYBOARD_ACTION_COLUMN;
+
+const getStoryboardDownloadFilename = (imageUrl: string) => {
+  try {
+    const url = new URL(imageUrl);
+    const filename = url.pathname.split("/").pop();
+    if (filename && filename.includes(".")) {
+      return filename;
+    }
+  } catch {
+  }
+
+  return `storyboard-${Date.now()}.jpg`;
+};
 
 type StoryboardCaptureRow = {
   row: Record<string, unknown>;
@@ -238,6 +251,17 @@ const getDisplayColumns = (columns: string[], showActions: boolean) => {
     (column) => column !== STORYBOARD_ACTION_COLUMN,
   );
   return showActions ? [...dataColumns, STORYBOARD_ACTION_COLUMN] : dataColumns;
+};
+
+const orderVideoPullFilmColumns = (columns: string[]) => {
+  const uniqueColumns = Array.from(new Set(columns));
+  const orderedColumns = VIDEO_PULL_FILM_COLUMNS.filter((column) =>
+    uniqueColumns.includes(column),
+  );
+  const extraColumns = uniqueColumns.filter(
+    (column) => !(VIDEO_PULL_FILM_COLUMNS as readonly string[]).includes(column),
+  );
+  return [...orderedColumns, ...extraColumns];
 };
 
 const buildStoryboardSketchPrompt = (
@@ -729,7 +753,7 @@ export const TableNode = memo(
         dataColumns.includes(column),
       );
     const columns = isVideoPullFilmTable
-      ? ensureStoryboardColumns(dataColumns)
+      ? orderVideoPullFilmColumns(ensureStoryboardColumns(dataColumns))
       : dataColumns;
     const displayColumns = getDisplayColumns(columns, isVideoPullFilmTable);
     const storyboardRows = useMemo(
@@ -985,6 +1009,33 @@ export const TableNode = memo(
         setPreviewImageUrl(imageUrl);
       },
       [],
+    );
+
+    const handlePreviewImageDownload: NonNullable<
+      NonNullable<LightboxProps["download"]>["download"]
+    > = useCallback(
+      ({ slide }) => {
+        const imageUrl = String(
+          "src" in slide ? slide.src : previewImageUrl || "",
+        ).trim();
+        if (!imageUrl) {
+          warning("没有可下载的图片");
+          return;
+        }
+
+        void downloadImageFromUrl(
+          imageUrl,
+          getStoryboardDownloadFilename(imageUrl),
+        ).catch((downloadError) => {
+          const message =
+            downloadError instanceof Error
+              ? downloadError.message
+              : "下载失败";
+          if (message === "取消下载") return;
+          error("图片下载失败", message);
+        });
+      },
+      [error, previewImageUrl, warning],
     );
 
     const openStoryboardSketchDialog = useCallback(
@@ -1951,6 +2002,7 @@ export const TableNode = memo(
             close={() => setPreviewImageUrl(null)}
             slides={[{ src: previewImageUrl }]}
             plugins={[Fullscreen, Slideshow, Zoom, Share, Download]}
+            download={{ download: handlePreviewImageDownload }}
             zoom={{ maxZoomPixelRatio: 4, zoomInMultiplier: 2 }}
             controller={{ closeOnBackdropClick: true }}
           />

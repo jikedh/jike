@@ -99,20 +99,21 @@ const extractAgnesVideoItems = (response: any) => {
 
 const extractOverseasSeedanceVideoItems = (response: any) => {
   const content = response?.content ?? response?.data?.content ?? {};
-  const resultUrls = [
-    content?.kz_video_url,
-    content?.video_url,
-    ...(Array.isArray(content?.video_urls) ? content.video_urls : []),
-  ].filter((url): url is string => typeof url === "string" && url.length > 0);
+  const resultUrl =
+    typeof content?.kz_video_url === "string" && content.kz_video_url.length > 0
+      ? content.kz_video_url
+      : typeof content?.video_url === "string" && content.video_url.length > 0
+        ? content.video_url
+        : undefined;
 
-  if (resultUrls.length === 0) {
+  if (!resultUrl) {
     return [];
   }
 
-  return Array.from(new Set(resultUrls)).map((url) => ({
-    url,
+  return [{
+    url: resultUrl,
     format: "mp4",
-  }));
+  }];
 };
 
 const getErrorMessage = (response: any, fallbackMessage: string) => {
@@ -160,8 +161,12 @@ const isAgnesVideoResponse = (response: any): boolean => {
 const isOverseasSeedanceResponse = (response: any): boolean => {
   const status = response?.status ?? response?.data?.status;
   const hasAgnesVideoId = Boolean(response?.video_id ?? response?.data?.video_id);
+  const hasOverseasSeedanceShape = Boolean(
+    response?.id ?? response?.data?.id ?? response?.content ?? response?.data?.content,
+  );
   return (
     !hasAgnesVideoId &&
+    hasOverseasSeedanceShape &&
     (status === "queued" ||
       status === "running" ||
       status === "succeeded" ||

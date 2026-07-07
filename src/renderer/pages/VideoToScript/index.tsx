@@ -397,6 +397,17 @@ const joinPath = (dir: string, filename: string) => {
   return `${dir.replace(/[\\/]+$/, "")}${separator}${filename}`;
 };
 
+const appendExtensionIfMissing = (path: string, extension: string) => {
+  const normalizedExtension = extension.startsWith(".")
+    ? extension.slice(1)
+    : extension;
+  const filename = path.split(/[\\/]/).pop() || "";
+  if (filename.includes(".") || !normalizedExtension) {
+    return path;
+  }
+  return `${path}.${normalizedExtension}`;
+};
+
 const getItemKey = (item: Pick<EpisodeM3u8Result, "episode" | "pageUrl">) =>
   `${item.episode}-${item.pageUrl}`;
 
@@ -1010,6 +1021,7 @@ export default function VideoToScriptPage() {
       filters: [{ name: "MP4 视频", extensions: ["mp4"] }],
     });
     if (!outputPath) return;
+    const finalOutputPath = appendExtensionIfMissing(outputPath, "mp4");
 
     const itemKey = getItemKey(item);
     setDownloadingMap((current) => ({ ...current, [itemKey]: true }));
@@ -1018,7 +1030,7 @@ export default function VideoToScriptPage() {
       downloadMessage: "正在保存 MP4",
     });
     try {
-      const result = await convertM3u8ToMp4(item.m3u8Url, outputPath, {
+      const result = await convertM3u8ToMp4(item.m3u8Url, finalOutputPath, {
         referer: item.referer,
         origin: item.origin,
       });
@@ -1567,11 +1579,12 @@ export default function VideoToScriptPage() {
       filters: [{ name: "Word 文档", extensions: ["docx"] }],
     });
     if (!outputPath) return;
+    const finalOutputPath = appendExtensionIfMissing(outputPath, "docx");
 
     try {
       const docx = createScriptsDocx(scriptItems);
-      await writeFile(outputPath, docx);
-      toast.success(`已导出 Word：${outputPath}`);
+      await writeFile(finalOutputPath, docx);
+      toast.success(`已导出 Word：${finalOutputPath}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "导出 Word 失败");
     }
