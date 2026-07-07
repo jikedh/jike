@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { getAssetList, searchAssets } from "@/api/assets";
+import { getAssetList, getAssetPrimaryCategories, searchAssets } from "@/api/assets";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import type {
   ApiEnvelope,
+  AssetCategory,
   AssetListItem,
   AssetScope,
   PaginatedData,
+  PrimaryCategory,
 } from "shared/types/api/assets";
 import type { AllNodeType } from "shared/types/flow";
 import {
@@ -16,6 +18,7 @@ import {
 import type { AssetMentionGroup, MentionAssetOption } from "./assetMentionTypes";
 import {
   ASSET_MENTION_SCOPE_ORDER,
+  buildAssetScopeFolderOption,
   buildAssetMentionGroups,
   getSelectableAssetMentionOptions,
   normalizeCanvasNodeMentionOption,
@@ -43,6 +46,7 @@ export interface UseAssetMentionMenuResult {
   setQuery: (query: string) => void;
   moveSelection: (delta: -1 | 1) => void;
   selectCurrent: () => MentionAssetOption | null;
+  activateOption: (option: MentionAssetOption | null) => boolean;
   setSelectedByKey: (key: string) => void;
   reload: () => Promise<void>;
 }
@@ -73,48 +77,36 @@ const toRemoteOptions = (list: AssetListItem[] | unknown[]) =>
     .map((item) => mapListItemToRemoteAsset(item as AssetListItem))
     .map((asset: RemoteAsset) => normalizeRemoteAssetMentionOption(asset));
 
-const loadDefaultRemoteOptions = async ({
+const loadCategoryRemoteOptions = async ({
+  scope,
+  primaryCategory,
   projectId,
   pageSize,
 }: {
+  scope: AssetScope;
+  primaryCategory: PrimaryCategory;
   projectId?: string | null;
   pageSize: number;
 }) => {
-  const requests = ASSET_MENTION_SCOPE_ORDER.flatMap((scope) => {
-    if (scope === "project" && !projectId) return [];
-
-    return [
-      getAssetList({
-        scope,
-        projectId: scope === "project" ? projectId ?? undefined : undefined,
-        page: 1,
-        pageSize,
-        sortBy: "createTime",
-        sortOrder: "desc",
-      }).then((envelope) => ({ scope, envelope })),
-    ];
+  const envelope = await getAssetList({
+    scope,
+    projectId: scope === "project" ? projectId ?? undefined : undefined,
+    mediaType: "image",
+    primaryCategory,
+    page: 1,
+    pageSize,
+    sortBy: "createTime",
+    sortOrder: "desc",
   });
+  const data = unwrapEnvelope<PaginatedData<AssetListItem>>(envelope);
+  const list = Array.isArray(data?.list) ? data.list : [];
+  return toRemoteOptions(list);
+};
 
-  const results = await Promise.allSettled(requests);
-  const options: MentionAssetOption[] = [];
-  let firstError: string | null = null;
-
-  results.forEach((result) => {
-    if (result.status === "rejected") {
-      firstError ??= formatError(result.reason);
-      return;
-    }
-
-    try {
-      const data = unwrapEnvelope(result.value.envelope);
-      const list = Array.isArray(data?.list) ? data.list : [];
-      options.push(...toRemoteOptions(list));
-    } catch (error) {
-      firstError ??= formatError(error);
-    }
-  });
-
-  return { options, error: firstError };
+const loadCategoryOptions = async () => {
+  const envelope = await getAssetPrimaryCategories();
+  const categories = unwrapEnvelope<AssetCategory[]>(envelope);
+  return Array.isArray(categories) ? categories : [];
 };
 
 const searchRemoteOptions = async ({
@@ -131,7 +123,7 @@ const searchRemoteOptions = async ({
   });
   const data = unwrapEnvelope<PaginatedData<AssetListItem>>(envelope);
   const list = Array.isArray(data?.list) ? data.list : [];
-  return toRemoteOptions(list);
+  return toRemoteOptions(list).filter((option) => option.scope !== "public");
 };
 
 export const useAssetMentionMenu = ({
@@ -144,6 +136,9 @@ export const useAssetMentionMenu = ({
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [remoteOptions, setRemoteOptions] = useState<MentionAssetOption[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<AssetCategory[]>([]);
+  const [activeScope, setActiveScope] = useState<AssetScope | null>(null);
+  const [activeCategory, setActiveCategory] = useState<PrimaryCategory | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -170,6 +165,18 @@ export const useAssetMentionMenu = ({
     [additionalConnectedOptions, connectedNodes],
   );
 
+  const folderOptions = useMemo(
+    () =>
+      ASSET_MENTION_SCOPE_ORDER.map((scope) =>
+        buildAssetScopeFolderOption({
+          scope,
+          disabled: scope === "project" && !projectId,
+          disabledReason: "当前画布未绑定项目",
+        }),
+      ),
+    [projectId],
+  );
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setDebouncedQuery(query.trim());
@@ -194,10 +201,27 @@ export const useAssetMentionMenu = ({
         return;
       }
 
-      const result = await loadDefaultRemoteOptions({ projectId, pageSize });
+      if (activeScope && !activeCategory) {
+        const categories = await loadCategoryOptions();
+        if (requestId !== requestIdRef.current) return;
+        setCategoryOptions(categories);
+        setRemoteOptions([]);
+        return;
+      }
+
+      if (!activeScope || !activeCategory) {
+        setRemoteOptions([]);
+        return;
+      }
+
+      const options = await loadCategoryRemoteOptions({
+        scope: activeScope,
+        primaryCategory: activeCategory,
+        projectId,
+        pageSize,
+      });
       if (requestId !== requestIdRef.current) return;
-      setRemoteOptions(result.options);
-      setError(result.error);
+      setRemoteOptions(options);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       setRemoteOptions([]);
@@ -207,7 +231,7 @@ export const useAssetMentionMenu = ({
         setLoading(false);
       }
     }
-  }, [debouncedQuery, pageSize, projectId]);
+  }, [activeCategory, activeScope, debouncedQuery, pageSize, projectId]);
 
   useEffect(() => {
     void reload();
@@ -217,10 +241,14 @@ export const useAssetMentionMenu = ({
     () =>
       buildAssetMentionGroups({
         connectedOptions,
+        folderOptions,
         remoteOptions,
+        categoryOptions,
+        activeScope,
+        activeCategory,
         projectUnavailable: !projectId,
       }),
-    [connectedOptions, projectId, remoteOptions],
+    [activeCategory, activeScope, categoryOptions, connectedOptions, folderOptions, projectId, remoteOptions],
   );
 
   const flatOptions = useMemo(
@@ -249,6 +277,28 @@ export const useAssetMentionMenu = ({
     return flatOptions[selectedIndex] ?? null;
   }, [flatOptions, selectedIndex]);
 
+  const activateOption = useCallback((option: MentionAssetOption | null) => {
+    if (!option || option.disabled) return false;
+
+    if (option.optionType === "scope-folder" && option.scope) {
+      setActiveScope(option.scope);
+      setActiveCategory(null);
+      setQuery("");
+      setSelectedIndex(0);
+      return true;
+    }
+
+    if (option.optionType === "category-folder" && option.scope && option.primaryCategory) {
+      setActiveScope(option.scope);
+      setActiveCategory(option.primaryCategory);
+      setQuery("");
+      setSelectedIndex(0);
+      return true;
+    }
+
+    return false;
+  }, []);
+
   const setSelectedByKey = useCallback(
     (key: string) => {
       const nextIndex = flatOptions.findIndex((option) => option.key === key);
@@ -274,6 +324,7 @@ export const useAssetMentionMenu = ({
     setQuery,
     moveSelection,
     selectCurrent,
+    activateOption,
     setSelectedByKey,
     reload,
   };

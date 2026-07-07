@@ -139,6 +139,7 @@ const AssetMentionSuggestion = forwardRef<
 
   const selectOption = (option: MentionAssetOption | null) => {
     if (!option || option.disabled) return;
+    if (menu.activateOption(option)) return;
     command(toMentionCommandPayload(option));
   };
 
