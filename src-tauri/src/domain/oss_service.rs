@@ -6,15 +6,15 @@ use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
 pub enum OssCopyError {
-    #[error("invalid video url")]
+    #[error("invalid media url")]
     InvalidUrl,
-    #[error("unsupported video url protocol")]
+    #[error("unsupported media url protocol")]
     UnsupportedProtocol,
-    #[error("unsafe video url host")]
+    #[error("unsafe media url host")]
     UnsafeHost,
-    #[error("download video failed: {0}")]
+    #[error("download media failed: {0}")]
     Download(String),
-    #[error("upload video failed: {0}")]
+    #[error("upload media failed: {0}")]
     Upload(String),
     #[error("upload response missing url")]
     MissingUrl,
@@ -38,7 +38,15 @@ pub async fn copy_video_url_to_oss(
     upload_api_url: &str,
     auth_token: Option<String>,
 ) -> Result<String, OssCopyError> {
-    let source_url = validate_remote_video_url(video_url)?;
+    copy_media_url_to_oss(video_url, upload_api_url, auth_token).await
+}
+
+pub async fn copy_media_url_to_oss(
+    media_url: &str,
+    upload_api_url: &str,
+    auth_token: Option<String>,
+) -> Result<String, OssCopyError> {
+    let source_url = validate_remote_media_url(media_url)?;
     let upload_url = validate_upload_api_url(upload_api_url)?;
 
     let client = Client::builder()
@@ -71,7 +79,7 @@ pub async fn copy_video_url_to_oss(
         .unwrap_or("video/mp4")
         .trim()
         .to_string();
-    let file_name = build_video_file_name(&source_url, &content_type);
+    let file_name = build_media_file_name(&source_url, &content_type);
 
     let stream = response.bytes_stream();
     let part = multipart::Part::stream(Body::wrap_stream(stream))
@@ -117,8 +125,8 @@ pub async fn copy_video_url_to_oss(
         .ok_or(OssCopyError::MissingUrl)
 }
 
-fn validate_remote_video_url(video_url: &str) -> Result<Url, OssCopyError> {
-    let url = Url::parse(video_url).map_err(|_| OssCopyError::InvalidUrl)?;
+fn validate_remote_media_url(media_url: &str) -> Result<Url, OssCopyError> {
+    let url = Url::parse(media_url).map_err(|_| OssCopyError::InvalidUrl)?;
     if url.scheme() != "https" {
         return Err(OssCopyError::UnsupportedProtocol);
     }
@@ -169,19 +177,23 @@ fn is_unsafe_ip(ip: IpAddr) -> bool {
     }
 }
 
-fn build_video_file_name(source_url: &Url, content_type: &str) -> String {
+fn build_media_file_name(source_url: &Url, content_type: &str) -> String {
     let ext = source_url
         .path_segments()
         .and_then(|mut segments| segments.next_back())
         .and_then(|name| name.rsplit_once('.').map(|(_, ext)| ext.to_string()))
         .filter(|ext| !ext.is_empty())
-        .unwrap_or_else(|| default_video_ext(content_type).to_string());
+        .unwrap_or_else(|| default_media_ext(content_type).to_string());
 
-    format!("copied-video-{}.{}", Uuid::new_v4(), ext)
+    format!("copied-media-{}.{}", Uuid::new_v4(), ext)
 }
 
-fn default_video_ext(content_type: &str) -> &'static str {
+fn default_media_ext(content_type: &str) -> &'static str {
     match content_type {
+        "image/jpeg" => "jpg",
+        "image/png" => "png",
+        "image/webp" => "webp",
+        "image/gif" => "gif",
         "video/webm" => "webm",
         "video/quicktime" => "mov",
         "video/x-msvideo" => "avi",

@@ -280,6 +280,43 @@ export async function uploadFileToOSS(file: File) {
 }
 
 /**
+ * 将远程媒体 URL 转存到用户 OSS。
+ * 远程 http(s) 资源走 Tauri 后端下载，避免 WebView CORS；非远程 URL 保留前端 fetch 兜底。
+ */
+export async function copyMediaUrlToOss(mediaUrl: string): Promise<string | null> {
+  try {
+    if (/^https?:\/\//i.test(mediaUrl)) {
+      const invoke = getTauriInvoke();
+      if (!invoke) {
+        console.error("[OSS] Tauri invoke unavailable for media copy");
+        return null;
+      }
+
+      const result = await invoke<{ success?: boolean; url?: string }>(
+        "copy_media_url_to_oss",
+        {
+          mediaUrl,
+          uploadApiUrl: `${getJikeGoBaseUrl()}/v1/oss/upload`,
+          authToken: getJikeingToken() || null,
+        },
+      );
+
+      return result?.url || null;
+    }
+
+    const response = await fetch(mediaUrl);
+    const blob = await response.blob();
+    const file = new File([blob], "copied-media", {
+      type: blob.type || "application/octet-stream",
+    });
+    return (await uploadFileToOSS(file)).url || null;
+  } catch (error) {
+    console.error("[OSS] copyMediaUrlToOss error:", error);
+    return null;
+  }
+}
+
+/**
  * 将远程视频 URL 转存到用户 OSS
  * 1. 从源 URL 获取视频 blob
  * 2. 上传到用户 OSS
@@ -288,27 +325,7 @@ export async function uploadFileToOSS(file: File) {
 export async function copyVideoUrlToOss(
   videoUrl: string,
 ): Promise<string | null> {
-  try {
-    const invoke = getTauriInvoke();
-    if (!invoke) {
-      console.error("[OSS] Tauri invoke unavailable for video copy");
-      return null;
-    }
-
-    const result = await invoke<{ success?: boolean; url?: string }>(
-      "copy_video_url_to_oss",
-      {
-        videoUrl,
-        uploadApiUrl: `${getJikeGoBaseUrl()}/v1/oss/upload`,
-        authToken: getJikeingToken() || null,
-      },
-    );
-
-    return result?.url || null;
-  } catch (error) {
-    console.error("[OSS] copyVideoUrlToOss error:", error);
-    return null;
-  }
+  return copyMediaUrlToOss(videoUrl);
 }
 
 type TauriInvoke = <T = unknown>(

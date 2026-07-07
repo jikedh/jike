@@ -302,8 +302,8 @@ const videoFakeRequestTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 const DEFAULT_VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT = `你是资深视频生成提示词工程师。请把用户提供的提示词改写得更专业、更具画面感、便于 AI 视频模型理解。要求：
 1. 保持原意，不得删减用户提到的具体动作、节奏、镜头感等关键词。
-2. 严格保留文本中的 \`ImageN / AudioN / VideoN\` 占位符及其顺序，禁止新增、删除或改写这些占位符。
-3. 不得删除、加号位置或引用任何媒体资产；只优化纯文本描述。
+2. 保留所有 \`ImageN / AudioN / VideoN\` 占位符，但允许调整其出现顺序和出现次数；禁止新增除此之外的其他占位符，禁止删除任何占位符（即原提示词中出现的每一个占位符都必须保留，且只能在这些占位符之间调整顺序/重复次数）。
+3. 不得删除、添加或引用任何媒体资产；只优化纯文本描述。
 4. 使用中文回复，输出仅包含改写后的最终提示词，不要解释过程。`;
 
 const isVideoFakeRequestPending = (data?: NewVideoGenerationNode) =>
@@ -1305,8 +1305,8 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT_KEY
       ] === "string"
         ? (currentData?.metadata as Record<string, string>)[
-            VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT_KEY
-          ]
+        VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT_KEY
+        ]
         : DEFAULT_VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT) ||
       DEFAULT_VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT;
 
@@ -1608,7 +1608,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
                   <div
                     role="dialog"
                     aria-label="优化系统提示词配置"
-                    className="nodrag nopan nowheel absolute bottom-12 right-0 z-20 w-[320px] rounded-xl border border-white/[0.08] bg-[#1e1e20] p-3 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]"
+                    className="nodrag nopan nowheel absolute bottom-12 right-0 z-[9999] w-[320px] rounded-xl border border-white/[0.08] bg-[#1e1e20] p-3 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]"
                     onMouseDown={(event) => event.stopPropagation()}
                     onClick={(event) => event.stopPropagation()}
                   >

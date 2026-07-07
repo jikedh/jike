@@ -3,11 +3,9 @@
  *
  * 流程：
  *   1. 从 File / URL 拿到 Blob + 元数据（mediaType、宽高、时长、mime、size）
- *   2. SHA-256 哈希文件，调用 checkAssetDuplicate
- *      - 若重复且当前用户可见：直接复用已有资产
- *   3. POST /v1/oss/upload（multipart）由后端转存到 OSS，返回 fileKey 与访问 URL
+ *   2. POST /v1/oss/upload（multipart）由后端转存到 OSS，返回 fileKey 与访问 URL
  *      - 上传链路全程走自家后端，无需预签名 URL
- *   4. createAsset 落库（携带 scope / projectId / 媒体元数据 / 标签）
+ *   3. createAsset 落库（携带 scope / projectId / 媒体元数据 / 标签）
  *
  * 安全注意：
  * - 预签名 URL 已移除：上传链路完全在后端控制，文件仅通过受信任的反向代理流转。
@@ -16,16 +14,12 @@
  */
 
 import { toast } from "sonner";
-import {
-  checkAssetDuplicate,
-  createAsset,
-} from "@/api/assets";
+import { createAsset } from "@/api/assets";
 import type {
   ApiEnvelope,
   AssetConditions,
   AssetDetail,
   AssetScope,
-  CheckDuplicateResponse,
   MediaType,
   PrimaryCategory,
   UploadOssFileResult,
@@ -61,23 +55,6 @@ const NAME_MAX_LENGTH = 255;
 const DESCRIPTION_MAX_LENGTH = 1024;
 const TAG_MAX_LENGTH = 64;
 const TAG_MAX_COUNT = 20;
-
-// ===================== Hash =====================
-
-/**
- * 使用 Web Crypto SHA-256 计算文件哈希（hex）。
- * 后端 `fileHash` 支持 MD5 / SHA-256，浏览器原生 crypto 没有 MD5，因此采用 SHA-256。
- */
-export const computeFileHashSha256 = async (file: Blob): Promise<string> => {
-  const buffer = await file.arrayBuffer();
-  const digest = await crypto.subtle.digest("SHA-256", buffer);
-  const bytes = new Uint8Array(digest);
-  let hex = "";
-  for (const byte of bytes) {
-    hex += byte.toString(16).padStart(2, "0");
-  }
-  return hex;
-};
 
 // ===================== Blob 获取与元数据 =====================
 
@@ -394,8 +371,6 @@ export interface UploadAndCreateInput {
 
 export interface UploadAndCreateResult {
   asset: AssetDetail;
-  /** 是否复用已有资产（重复检测命中） */
-  reused: boolean;
 }
 
 export const uploadAndCreateAsset = async (
@@ -433,67 +408,10 @@ export const uploadAndCreateAsset = async (
     throw new Error("项目资产必须指定项目");
   }
 
-  // 2. 元数据 + 哈希
+  // 2. 元数据
   const metadata = await extractBlobMetadata(blob, mediaType, fileName);
 
-  let fileHash = "";
-  try {
-    fileHash = await computeFileHashSha256(blob);
-  } catch (error) {
-    console.warn("[remoteAssetUpload] hash failed", error);
-  }
-
-  // 3. 重复检测：命中且对当前用户可见 → 直接复用，不再上传
-  if (fileHash) {
-    try {
-      const dup: CheckDuplicateResponse = unwrapEnvelope(
-        await checkAssetDuplicate({ fileHash }),
-      );
-      if (dup.isDuplicate && dup.existingAsset) {
-        toast.info("已存在相同资产，已自动复用");
-        // 复用：使用现有资产的最小展示信息构造 AssetDetail-like 结构
-        return {
-          asset: {
-            id: dup.existingAsset.id,
-            userId: "",
-            scope: dup.existingAsset.scope,
-            projectId: null,
-            name: dup.existingAsset.name,
-            mediaType: dup.existingAsset.mediaType,
-            primaryCategory: dup.existingAsset.primaryCategory,
-            conditions: null,
-            description: null,
-            fileKey: "",
-            fileUrl: dup.existingAsset.fileUrl,
-            fileHash,
-            fileSize: metadata.size,
-            fileName: metadata.fileName,
-            mimeType: metadata.mimeType,
-            width: metadata.width,
-            height: metadata.height,
-            duration: metadata.duration,
-            thumbnailKey: "",
-            thumbnailUrl: dup.existingAsset.thumbnailUrl,
-            sourceProjectId: null,
-            sourceCanvasId: null,
-            sourceNodeId: null,
-            sourceTaskId: null,
-            status: 1,
-            createTime: Date.now(),
-            updateTime: Date.now(),
-            tags: [],
-            refCount: 0,
-          },
-          reused: true,
-        };
-      }
-    } catch (error) {
-      // 重复检测失败不阻断主流程
-      console.warn("[remoteAssetUpload] duplicate check failed", error);
-    }
-  }
-
-  // 4. 上传
+  // 3. 上传
   const { fileKey } = await uploadAssetBinary({
     blob,
     fileName: metadata.fileName,
@@ -502,7 +420,7 @@ export const uploadAndCreateAsset = async (
     signal,
   });
 
-  // 5. 创建
+  // 4. 创建
   const asset: AssetDetail = unwrapEnvelope(
     await createAsset({
       name: name.trim(),
@@ -513,7 +431,6 @@ export const uploadAndCreateAsset = async (
       conditions: conditions || undefined,
       description: description?.trim() || undefined,
       fileKey,
-      fileHash: fileHash || undefined,
       fileSize: metadata.size,
       fileName: metadata.fileName,
       mimeType: metadata.mimeType,
@@ -528,5 +445,5 @@ export const uploadAndCreateAsset = async (
     }),
   );
 
-  return { asset, reused: false };
+  return { asset };
 };
