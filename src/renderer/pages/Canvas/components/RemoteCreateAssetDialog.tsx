@@ -67,7 +67,6 @@ export interface RemoteCreateAssetDialogProps {
 const SCOPE_OPTIONS: Array<{ id: AssetScope; label: string; hint: string }> = [
   { id: "project", label: "项目资产", hint: "归属当前项目，项目成员可见" },
   { id: "personal", label: "个人资产", hint: "仅自己可见，可后续升级" },
-  { id: "public", label: "公共资产", hint: "公开可见，可作为公共素材" },
 ];
 
 const FALLBACK_CATEGORY_OPTIONS: AssetCategory[] = [
@@ -328,7 +327,7 @@ export const RemoteCreateAssetDialog = ({
               <div className="mb-1.5 text-xs text-white/45">
                 范围 <span className="text-red-400">*</span>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {SCOPE_OPTIONS.map((option) => {
                   const disabled =
                     submitting ||
