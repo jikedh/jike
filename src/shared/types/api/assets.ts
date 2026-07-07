@@ -39,9 +39,17 @@ export type AssetScope = "personal" | "project" | "public";
 
 export type MediaType = "image" | "video" | "audio";
 
-export type PrimaryCategory = "character" | "scene" | "prop";
+export type PrimaryCategory = string;
 
 export type AssetStatus = 0 | 1;
+
+export interface AssetCategory {
+  id: string;
+  code: PrimaryCategory;
+  name: string;
+  sort: number;
+  status: AssetStatus;
+}
 
 // ===================== Conditions 结构化筛选 =====================
 
@@ -130,7 +138,9 @@ export interface AssetListItem {
   projectId: string | null;
   name: string;
   mediaType: MediaType;
+  categoryId?: string | null;
   primaryCategory: PrimaryCategory;
+  categoryName?: string;
   conditions: AssetConditions | null;
   description: string | null;
   fileUrl: string;
@@ -155,7 +165,9 @@ export interface AssetDetail {
   projectName?: string | null;
   name: string;
   mediaType: MediaType;
+  categoryId?: string | null;
   primaryCategory: PrimaryCategory;
+  categoryName?: string;
   conditions: AssetConditions | null;
   description: string | null;
   fileKey: string;

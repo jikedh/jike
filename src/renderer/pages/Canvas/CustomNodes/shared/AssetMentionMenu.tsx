@@ -1,5 +1,6 @@
 import {
   IconAlertCircle,
+  IconFolder,
   IconLoader2,
   IconMusic,
   IconPhoto,
@@ -43,6 +44,14 @@ const getOptionClassName = (option: MentionAssetOption, selected: boolean) => {
 };
 
 const AssetPreview = ({ option }: { option: MentionAssetOption }) => {
+  if (option.optionType === "scope-folder" || option.optionType === "category-folder") {
+    return (
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-white/10 bg-white/[0.07] text-white/72">
+        <IconFolder size={17} stroke={1.8} />
+      </div>
+    );
+  }
+
   const Icon = mediaIconMap[option.mediaType];
   const showImage = option.mediaType === "image" && option.thumbnailUrl;
 
@@ -125,7 +134,7 @@ export const AssetMentionMenu = ({
   selectedKey,
   loading = false,
   error,
-  placeholder = "搜索图片、视频、音频资产",
+  placeholder = "搜索图片、视频资产",
   autoFocus = false,
   onQueryChange,
   onSelect,

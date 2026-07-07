@@ -215,7 +215,6 @@ const seedance20Config = (
   },
   duration: { type: "slider", min: 4, max: 15, step: 1 },
   audio,
-  autoDuration: { label: "自动选择时长" },
   ...(generationMode === "pro"
     ? { webSearch: { label: "联网搜索增强" } }
     : {}),

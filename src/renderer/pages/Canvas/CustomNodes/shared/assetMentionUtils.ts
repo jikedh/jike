@@ -1,4 +1,5 @@
 import type {
+  AssetCategory,
   AssetScope,
   MediaType,
   PrimaryCategory,
@@ -19,6 +20,11 @@ import type {
 } from "./assetMentionTypes";
 
 export const ASSET_MENTION_SCOPE_ORDER = [
+  "project",
+  "personal",
+] as const satisfies readonly AssetScope[];
+
+const ASSET_MENTION_VALID_SCOPES = [
   "project",
   "personal",
   "public",
@@ -55,8 +61,7 @@ export const ASSET_MENTION_CATEGORY_LABEL: Record<PrimaryCategory, string> = {
 };
 
 const MEDIA_TYPE_SET = new Set<string>(ASSET_MENTION_MEDIA_ORDER);
-const SCOPE_SET = new Set<string>(ASSET_MENTION_SCOPE_ORDER);
-const CATEGORY_SET = new Set<string>(ASSET_MENTION_IMAGE_CATEGORY_ORDER);
+const SCOPE_SET = new Set<string>(ASSET_MENTION_VALID_SCOPES);
 
 const SOURCE_LABEL_MAP: Record<MentionAssetOption["source"], string> = {
   "connected-node": "已连接节点",
@@ -73,7 +78,10 @@ const isAssetScope = (value: unknown): value is AssetScope =>
   typeof value === "string" && SCOPE_SET.has(value);
 
 const isPrimaryCategory = (value: unknown): value is PrimaryCategory =>
-  typeof value === "string" && CATEGORY_SET.has(value);
+  typeof value === "string" && value.trim().length > 0;
+
+const getCategoryLabel = (category: PrimaryCategory) =>
+  ASSET_MENTION_CATEGORY_LABEL[category] ?? category;
 
 const asRecord = (value: unknown): Record<string, unknown> => {
   if (value && typeof value === "object") {
@@ -209,10 +217,53 @@ export const normalizeConnectedAssetMentionOption = (
     thumbnailUrl: input.thumbnailUrl,
     fileUrl,
     source: "connected-node",
+    optionType: "asset",
     nodeId: input.nodeId,
     ...buildDisabledPatch({ mediaType: input.mediaType, fileUrl }),
   };
 };
+
+export const buildAssetScopeFolderOption = ({
+  scope,
+  disabled,
+  disabledReason,
+}: {
+  scope: AssetScope;
+  disabled?: boolean;
+  disabledReason?: string;
+}): MentionAssetOption => ({
+  key: `scope-folder:${scope}`,
+  id: `scope-folder-${scope}`,
+  label: ASSET_MENTION_SCOPE_LABEL[scope],
+  value: ASSET_MENTION_SCOPE_LABEL[scope],
+  description: "点击展开资产分类",
+  mediaType: "image",
+  source: "remote-asset",
+  optionType: "scope-folder",
+  scope,
+  disabled,
+  disabledReason,
+});
+
+export const buildAssetCategoryFolderOption = ({
+  scope,
+  category,
+}: {
+  scope: AssetScope;
+  category: AssetCategory;
+}): MentionAssetOption => ({
+  key: `category-folder:${scope}:${category.code}`,
+  id: `category-folder-${scope}-${category.id}`,
+  label: category.name,
+  value: category.name,
+  description: "点击查看该分类下的图片资产",
+  mediaType: "image",
+  source: "remote-asset",
+  optionType: "category-folder",
+  scope,
+  primaryCategory: category.code,
+  categoryName: category.name,
+});
 
 export const normalizeCanvasNodeMentionOption = (
   node: AllNodeType,
@@ -252,6 +303,7 @@ export const normalizeRemoteAssetMentionOption = (
     thumbnailUrl: toStringValue(asset.thumbnailUrl),
     fileUrl,
     source: "remote-asset",
+    optionType: "asset",
     scope,
     primaryCategory,
     assetId,
@@ -261,6 +313,7 @@ export const normalizeRemoteAssetMentionOption = (
 
 const buildConnectedGroup = (
   connectedOptions: MentionAssetOption[],
+  folderOptions: MentionAssetOption[] = [],
 ): AssetMentionGroup => ({
   key: "connected",
   label: "已经连接的节点",
@@ -271,6 +324,34 @@ const buildConnectedGroup = (
       label: "媒体节点",
       options: connectedOptions,
       emptyText: "暂无通过连接线关联的图片、视频或音频",
+    },
+    {
+      key: "connected:asset-folders",
+      label: "资产库",
+      options: folderOptions,
+      emptyText: "暂无可用资产库",
+    },
+  ],
+});
+
+const buildCategoryFolderGroup = ({
+  scope,
+  categoryOptions = [],
+}: {
+  scope: AssetScope;
+  categoryOptions?: AssetCategory[];
+}): AssetMentionGroup => ({
+  key: `scope:${scope}:categories`,
+  label: ASSET_MENTION_SCOPE_LABEL[scope],
+  kind: "scope",
+  children: [
+    {
+      key: `${scope}:category-folders`,
+      label: "资产分类",
+      options: categoryOptions.map((category) =>
+        buildAssetCategoryFolderOption({ scope, category }),
+      ),
+      emptyText: "暂无资产分类",
     },
   ],
 });
@@ -283,11 +364,11 @@ const buildImageCategorySections = (
 
   return ASSET_MENTION_IMAGE_CATEGORY_ORDER.map((category) => ({
     key: `${scope}:image:${category}`,
-    label: ASSET_MENTION_CATEGORY_LABEL[category],
+    label: getCategoryLabel(category),
     mediaType: "image",
     primaryCategory: category,
     options: imageOptions.filter((item) => item.primaryCategory === category),
-    emptyText: `暂无${ASSET_MENTION_CATEGORY_LABEL[category]}图片`,
+    emptyText: `暂无${getCategoryLabel(category)}图片`,
   }));
 };
 
@@ -337,18 +418,48 @@ const buildScopeGroup = ({
 
 export const buildAssetMentionGroups = ({
   connectedOptions = [],
+  folderOptions = [],
   remoteOptions = [],
+  categoryOptions = [],
+  activeScope,
+  activeCategory,
   projectUnavailable,
-}: BuildAssetMentionGroupsInput): AssetMentionGroup[] => [
-    buildConnectedGroup(connectedOptions),
-    ...ASSET_MENTION_SCOPE_ORDER.map((scope) =>
-      buildScopeGroup({
-        scope,
+}: BuildAssetMentionGroupsInput): AssetMentionGroup[] => {
+  if (!activeScope) {
+    return [buildConnectedGroup(connectedOptions, folderOptions)];
+  }
+
+  if (!activeCategory) {
+    return [buildCategoryFolderGroup({ scope: activeScope, categoryOptions })];
+  }
+
+  return [
+    {
+      ...buildScopeGroup({
+        scope: activeScope,
         remoteOptions,
-        projectUnavailable: scope === "project" && projectUnavailable,
+        projectUnavailable: activeScope === "project" && projectUnavailable,
       }),
-    ),
+      children: [
+        {
+          key: `${activeScope}:assets:${activeCategory}`,
+          label:
+            categoryOptions.find((category) => category.code === activeCategory)?.name ??
+            activeCategory,
+          mediaType: "image",
+          primaryCategory: activeCategory,
+          options: remoteOptions.filter(
+            (item) =>
+              item.scope === activeScope &&
+              item.primaryCategory === activeCategory &&
+              item.mediaType === "image",
+          ),
+          emptyText: "暂无该分类下的图片资产",
+        },
+      ],
+    },
   ];
+};
 
 export const getSelectableAssetMentionOptions = (
   groups: AssetMentionGroup[],
@@ -360,12 +471,14 @@ export const getSelectableAssetMentionOptions = (
   );
 
 export const getAssetMentionOptionSourceLabel = (option: MentionAssetOption) => {
+  if (option.optionType === "scope-folder") return "资产库";
+  if (option.optionType === "category-folder") return "资产分类";
   if (option.source === "connected-node") return SOURCE_LABEL_MAP[option.source];
   const scopeLabel = option.scope ? ASSET_MENTION_SCOPE_LABEL[option.scope] : "来源未知";
   const mediaLabel = ASSET_MENTION_MEDIA_LABEL[option.mediaType];
   const categoryLabel =
     option.mediaType === "image" && option.primaryCategory
-      ? ` / ${ASSET_MENTION_CATEGORY_LABEL[option.primaryCategory]}`
+      ? ` / ${getCategoryLabel(option.primaryCategory)}`
       : "";
   return `${scopeLabel} / ${mediaLabel}${categoryLabel}`;
 };

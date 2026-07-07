@@ -1,4 +1,5 @@
 import type {
+  AssetCategory,
   AssetScope,
   MediaType,
   PrimaryCategory,
@@ -6,6 +7,8 @@ import type {
 
 /** 资源 mention 的来源：连接节点或远程资产库。 */
 export type AssetMentionSource = "connected-node" | "remote-asset";
+
+export type AssetMentionOptionType = "asset" | "scope-folder" | "category-folder";
 
 /** 资产 mention 菜单中可被选择或展示为禁用态的单项资源。 */
 export interface MentionAssetOption {
@@ -18,8 +21,10 @@ export interface MentionAssetOption {
   thumbnailUrl?: string;
   fileUrl?: string;
   source: AssetMentionSource;
+  optionType?: AssetMentionOptionType;
   scope?: AssetScope;
   primaryCategory?: PrimaryCategory;
+  categoryName?: string;
   nodeId?: string;
   assetId?: string;
   disabled?: boolean;
@@ -47,7 +52,11 @@ export interface AssetMentionSection {
 /** 归组工具的输入，后续 Hook 会把已连接节点和远程资产汇总到这里。 */
 export interface BuildAssetMentionGroupsInput {
   connectedOptions?: MentionAssetOption[];
+  folderOptions?: MentionAssetOption[];
   remoteOptions?: MentionAssetOption[];
+  categoryOptions?: AssetCategory[];
+  activeScope?: AssetScope | null;
+  activeCategory?: PrimaryCategory | null;
   projectUnavailable?: boolean;
 }
 

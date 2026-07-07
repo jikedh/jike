@@ -20,7 +20,9 @@ import {
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { getAssetPrimaryCategories } from "@/api/assets";
 import type {
+  AssetCategory,
   AssetScope,
   MediaType,
   PrimaryCategory,
@@ -65,13 +67,12 @@ export interface RemoteCreateAssetDialogProps {
 const SCOPE_OPTIONS: Array<{ id: AssetScope; label: string; hint: string }> = [
   { id: "project", label: "项目资产", hint: "归属当前项目，项目成员可见" },
   { id: "personal", label: "个人资产", hint: "仅自己可见，可后续升级" },
-  { id: "public", label: "公共资产", hint: "公开可见，可作为公共素材" },
 ];
 
-const CATEGORY_OPTIONS: Array<{ id: PrimaryCategory; label: string }> = [
-  { id: "character", label: "角色" },
-  { id: "scene", label: "场景" },
-  { id: "prop", label: "道具" },
+const FALLBACK_CATEGORY_OPTIONS: AssetCategory[] = [
+  { id: "character", code: "character", name: "角色", sort: 10, status: 1 },
+  { id: "scene", code: "scene", name: "场景", sort: 20, status: 1 },
+  { id: "prop", code: "prop", name: "道具", sort: 30, status: 1 },
 ];
 
 const getDefaultName = (request: RemoteCreateAssetRequest | null) => {
@@ -119,6 +120,9 @@ export const RemoteCreateAssetDialog = ({
   const [primaryCategory, setPrimaryCategory] = useState<PrimaryCategory>(
     "character",
   );
+  const [categoryOptions, setCategoryOptions] = useState<AssetCategory[]>(
+    FALLBACK_CATEGORY_OPTIONS,
+  );
   const [tagsInput, setTagsInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -149,12 +153,26 @@ export const RemoteCreateAssetDialog = ({
   // 初始化表单
   useEffect(() => {
     if (!open || !request) return;
+    let cancelled = false;
+    void getAssetPrimaryCategories()
+      .then((envelope) => {
+        if (cancelled) return;
+        if ((envelope.code === 0 || envelope.code === 200) && Array.isArray(envelope.data) && envelope.data.length > 0) {
+          setCategoryOptions(envelope.data);
+          const defaultCategory = getDefaultPrimaryCategory(request.mediaType);
+          setPrimaryCategory(envelope.data.some((item) => item.code === defaultCategory) ? defaultCategory : envelope.data[0].code);
+        }
+      })
+      .catch(() => undefined);
     setName(getDefaultName(request));
     setDescription("");
     setScope(getDefaultScope(request));
     setPrimaryCategory(getDefaultPrimaryCategory(request.mediaType));
     setTagsInput("");
     setProgress(0);
+    return () => {
+      cancelled = true;
+    };
   }, [open, request]);
 
   // 关闭时中断上传
@@ -309,7 +327,7 @@ export const RemoteCreateAssetDialog = ({
               <div className="mb-1.5 text-xs text-white/45">
                 范围 <span className="text-red-400">*</span>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {SCOPE_OPTIONS.map((option) => {
                   const disabled =
                     submitting ||
@@ -343,20 +361,20 @@ export const RemoteCreateAssetDialog = ({
                   主分类 <span className="text-red-400">*</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {CATEGORY_OPTIONS.map((option) => (
+                  {categoryOptions.map((option) => (
                     <button
                       type="button"
-                      key={option.id}
+                      key={option.code}
                       disabled={submitting}
-                      onClick={() => setPrimaryCategory(option.id)}
+                      onClick={() => setPrimaryCategory(option.code)}
                       className={cn(
                         "h-9 rounded-md border text-sm transition-colors disabled:opacity-40",
-                        primaryCategory === option.id
+                        primaryCategory === option.code
                           ? "border-[#B43FEB] bg-[#B43FEB]/15 text-white"
                           : "border-white/8 bg-white/[0.03] text-white/65 hover:text-white",
                       )}
                     >
-                      {option.label}
+                      {option.name}
                     </button>
                   ))}
                 </div>
