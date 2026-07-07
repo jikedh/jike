@@ -15,6 +15,7 @@ import type {
   AddProjectAssetRefRequest,
   AddProjectAssetRefResult,
   ApiEnvelope,
+  AssetCategory,
   AssetDetail,
   AssetListItem,
   AssetListParams,
@@ -65,6 +66,16 @@ export const uploadAssetFile = (file: File | Blob) =>
   >;
 
 // ===================== 资产 CRUD =====================
+
+/**
+ * 获取资产主分类
+ * GET /v1/assets/primary-categories
+ */
+export const getAssetPrimaryCategories = () =>
+  request<AssetCategory[]>({
+    url: "/v1/assets/primary-categories",
+    method: "get",
+  });
 
 /**
  * 创建资产

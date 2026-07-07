@@ -1,3 +1,5 @@
+import type { PrimaryCategory } from "shared/types/api/assets";
+
 export const CANVAS_IMAGE_DRAG_MIME = "application/x-jike-canvas-image";
 export const CANVAS_IMAGE_DRAG_TYPE = "jike-canvas-image";
 
@@ -49,7 +51,7 @@ export type CanvasRemoteAssetDragItem = {
   name: string;
   scope: "personal" | "project" | "public";
   mediaType: "image" | "video" | "audio";
-  primaryCategory: "character" | "scene" | "prop";
+  primaryCategory: PrimaryCategory;
   fileUrl: string;
   thumbnailUrl: string;
   projectId?: string | null;

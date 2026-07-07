@@ -35,6 +35,7 @@ import {
     type MouseEvent,
 } from "react";
 import { toast } from "sonner";
+import { getAssetPrimaryCategories } from "@/api/assets";
 import {
     CANVAS_REMOTE_ASSET_DRAG_MIME,
     CANVAS_REMOTE_ASSET_DRAG_TYPE,
@@ -42,6 +43,7 @@ import {
 } from "shared/constants/canvasDrag";
 import type {
     AssetScope,
+    AssetCategory,
     MediaType,
     PrimaryCategory,
 } from "shared/types/api/assets";
@@ -52,7 +54,7 @@ import {
     CATEGORY_LABEL_MAP,
     formatFileSize,
     formatTimestamp,
-    getCategoryLabel,
+    getRemoteAssetCategoryLabel,
     getMediaTypeLabel,
     MEDIA_LABEL_MAP,
     SCOPE_LABEL_MAP,
@@ -111,10 +113,10 @@ const MEDIA_OPTIONS: Array<{ id: MediaType; label: string }> = [
     { id: "audio", label: MEDIA_LABEL_MAP.audio },
 ];
 
-const CATEGORY_OPTIONS: Array<{ id: PrimaryCategory; label: string }> = [
-    { id: "character", label: CATEGORY_LABEL_MAP.character },
-    { id: "scene", label: CATEGORY_LABEL_MAP.scene },
-    { id: "prop", label: CATEGORY_LABEL_MAP.prop },
+const FALLBACK_CATEGORY_OPTIONS: AssetCategory[] = [
+    { id: "character", code: "character", name: CATEGORY_LABEL_MAP.character, sort: 10, status: 1 },
+    { id: "scene", code: "scene", name: CATEGORY_LABEL_MAP.scene, sort: 20, status: 1 },
+    { id: "prop", code: "prop", name: CATEGORY_LABEL_MAP.prop, sort: 30, status: 1 },
 ];
 
 const PAGE_SIZE = 24;
@@ -285,7 +287,7 @@ const AssetDetailPanel = ({
                         <div>
                             <div className="text-xs text-white/35">分类</div>
                             <div className="mt-1 text-white/80">
-                                {getCategoryLabel(asset.primaryCategory)}
+                                {getRemoteAssetCategoryLabel(asset)}
                             </div>
                         </div>
                         <div>
@@ -387,6 +389,7 @@ export const RemoteAssetLibraryDialog = ({
     const [activeCategory, setActiveCategory] = useState<PrimaryCategory | "all">(
         "all",
     );
+    const [categoryOptions, setCategoryOptions] = useState<AssetCategory[]>(FALLBACK_CATEGORY_OPTIONS);
     const [keyword, setKeyword] = useState("");
     const [keywordInput, setKeywordInput] = useState("");
     const [page, setPage] = useState(1);
@@ -461,6 +464,25 @@ export const RemoteAssetLibraryDialog = ({
             selectionAnchorRef.current = null;
         }
     }, [open]);
+
+    useEffect(() => {
+        if (!open) return;
+        let cancelled = false;
+        void getAssetPrimaryCategories()
+            .then((envelope) => {
+                if (cancelled) return;
+                if ((envelope.code === 0 || envelope.code === 200) && Array.isArray(envelope.data) && envelope.data.length > 0) {
+                    setCategoryOptions(envelope.data);
+                    if (activeCategory !== "all" && !envelope.data.some((item) => item.code === activeCategory)) {
+                        setActiveCategory("all");
+                    }
+                }
+            })
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, [activeCategory, open]);
 
     useEffect(() => {
         // 切换条件时重置选择 / 翻页
@@ -843,19 +865,19 @@ export const RemoteAssetLibraryDialog = ({
                             >
                                 全部
                             </button>
-                            {CATEGORY_OPTIONS.map((option) => (
+                            {categoryOptions.map((option) => (
                                 <button
                                     type="button"
-                                    key={option.id}
-                                    onClick={() => setActiveCategory(option.id)}
+                                    key={option.code}
+                                    onClick={() => setActiveCategory(option.code)}
                                     className={cn(
                                         "rounded-md px-2 py-1 text-xs transition-colors",
-                                        activeCategory === option.id
+                                        activeCategory === option.code
                                             ? "bg-white/10 text-white"
                                             : "text-white/55 hover:text-white",
                                     )}
                                 >
-                                    {option.label}
+                                    {option.name}
                                 </button>
                             ))}
                         </div>
