@@ -161,13 +161,13 @@ export const IMAGE_MODELS = [
     model: "doubao-seedream-5-0",
     platform: "Seedream",
   },
-  { id: 5, name: "Midjourney", model: "midjourney", platform: "midjourney" },
-  {
-    id: 6,
-    name: "Midjourney Niji7",
-    model: "midjourney-niji7",
-    platform: "midjourney",
-  },
+  // { id: 5, name: "Midjourney", model: "midjourney", platform: "midjourney" },
+  // {
+  //   id: 6,
+  //   name: "Midjourney Niji7",
+  //   model: "midjourney-niji7",
+  //   platform: "midjourney",
+  // },
   {
     id: 19,
     name: "GPT-Image-2（RunningHub版本）",
