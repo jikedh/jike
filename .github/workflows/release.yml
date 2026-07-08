@@ -106,7 +106,7 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $tag = "v$version"
           $releaseTitle = "即刻 v$version"
-          $releaseNotes = "自动发布 Windows 安装包和 Tauri updater manifest。"
+          $releaseNotes = "做了一些优化，更新了已知Bug"
           $bundleRoot = Join-Path $PWD "src-tauri/target/release/bundle"
           $manifestDir = Join-Path $env:RUNNER_TEMP "tauri-updater-manifest"
           $assetUploadDir = Join-Path $env:RUNNER_TEMP "tauri-release-assets"
