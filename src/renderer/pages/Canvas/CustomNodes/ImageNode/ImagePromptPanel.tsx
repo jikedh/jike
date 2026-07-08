@@ -725,25 +725,58 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     [nodeId, deleteEdge, updateImageNodeData],
   );
 
-  // 收集父级便签内容：按入边顺序去重后提取 content
-  const parentNoteContents = useCanvasFlowStore(
+  // 收集父级便签节点：selector 只返回扁平 primitive 数组，避免 React 19 对新对象快照触发无限更新。
+  const parentNoteEntryValues = useCanvasFlowStore(
     useShallow((state) => {
       const seenParentIds = new Set<string>();
 
-      return state.edges
-        .filter((edge) => {
-          if (edge.target !== nodeId || seenParentIds.has(edge.source)) {
-            return false;
-          }
+      return state.edges.flatMap((edge) => {
+        if (edge.target !== nodeId || seenParentIds.has(edge.source)) {
+          return [];
+        }
 
-          seenParentIds.add(edge.source);
-          return true;
-        })
-        .map((edge) => state.nodes.find((node) => node.id === edge.source))
-        .filter((node) => node?.type === "noteNode")
-        .map((node) => (node?.data as NoteNodeData).content?.trim())
-        .filter((content): content is string => Boolean(content));
+        seenParentIds.add(edge.source);
+        const sourceNode = state.nodes.find(
+          (node) => node.id === edge.source,
+        );
+        if (sourceNode?.type !== "noteNode") {
+          return [];
+        }
+        const data = sourceNode.data as NoteNodeData;
+        const content = data?.content?.trim() ?? "";
+        if (!content) {
+          return [];
+        }
+        const nickname =
+          (data as { nickname?: string })?.nickname?.trim() ||
+          "便签节点";
+
+        return [sourceNode.id, content, nickname];
+      });
     }),
+  );
+
+  const parentNoteNodes = useMemo(() => {
+    const result: Array<{
+      id: string;
+      content: string;
+      label: string;
+    }> = [];
+
+    for (let i = 0; i < parentNoteEntryValues.length; i += 3) {
+      result.push({
+        id: String(parentNoteEntryValues[i] ?? ""),
+        content: String(parentNoteEntryValues[i + 1] ?? ""),
+        label: String(parentNoteEntryValues[i + 2] ?? "便签节点"),
+      });
+    }
+
+    return result.filter((item) => item.id && item.content);
+  }, [parentNoteEntryValues]);
+
+  const parentNoteContents = useMemo(
+    () => parentNoteNodes.map((item) => item.content),
+    [parentNoteNodes],
   );
 
   // 构建参考图列表：区分本地上传图片和父节点图片
@@ -781,6 +814,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       label?: string;
       thumbnail?: string;
       isLocalImage?: boolean;
+      type?: "image" | "note";
+      content?: string;
     }> = [];
 
     // 本地上传的图片
@@ -792,6 +827,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         label,
         thumbnail: url,
         isLocalImage: true,
+        type: "image",
       });
     });
 
@@ -803,13 +839,39 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         label: "参考图",
         thumbnail: node.url,
         isLocalImage: false,
+        type: "image",
       });
     });
 
-    return items;
-  }, [localReferenceImageUrls, localReferenceImageIndexes, parentImageNodes]);
+    // 父级便签（文本参考）
+    parentNoteNodes.forEach((note) => {
+      const summary = note.content.length > 12
+        ? `${note.content.slice(0, 12)}…`
+        : note.content;
+      items.push({
+        id: `parent-note-${note.id}`,
+        url: "",
+        label: note.label || "便签节点",
+        thumbnail: undefined,
+        isLocalImage: false,
+        type: "note",
+        content: note.content,
+      });
+      // 摘要暂存到首个元素的 label：用于无 content 场景显示
+      if (!summary) {
+        // no-op
+      }
+    });
 
-  // 参考图排序
+    return items;
+  }, [
+    localReferenceImageUrls,
+    localReferenceImageIndexes,
+    parentImageNodes,
+    parentNoteNodes,
+  ]);
+
+  // 参考图排序：纯图片按 image_urls 持久化；混合图文顺序写入 metadata.referenceOrder
   const handleReferenceReorder = useCallback(
     (fromIndex: number, toIndex: number) => {
       if (fromIndex === toIndex) return;
@@ -824,18 +886,40 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       }
 
       const nextItems = arrayMove(generationReferenceItems, fromIndex, toIndex);
-      const nextUrls = nextItems.map((item) => item.url);
+
+      const hasNonImageItem = nextItems.some((item) => item.type !== "image");
+      const nextImageUrls = nextItems
+        .filter((item) => item.type === "image")
+        .map((item) => item.url);
+
+      const currentMetadata =
+        (currentImageData as { metadata?: Record<string, unknown> } | null)
+          ?.metadata ?? {};
 
       updateImageNodeData(nodeId, {
-        image_urls: nextUrls,
+        image_urls: hasNonImageItem
+          ? Array.from(new Set(nextImageUrls))
+          : nextImageUrls,
+        metadata: hasNonImageItem
+          ? {
+            ...currentMetadata,
+            referenceOrder: nextItems.map((item) => item.id),
+          }
+          : currentMetadata,
       });
     },
-    [generationReferenceItems, nodeId, updateImageNodeData],
+    [generationReferenceItems, currentImageData, nodeId, updateImageNodeData],
   );
 
   // 参考图删除
   const handleReferenceRemove = useCallback(
     (item: (typeof generationReferenceItems)[number]) => {
+      if (item.type === "note") {
+        const noteId = item.id.replace("parent-note-", "");
+        handleDisconnectNode(noteId);
+        return;
+      }
+
       if (item.isLocalImage) {
         // 本地上传的图片：从 image_urls 中移除
         const localIndex = localReferenceImageUrls.findIndex(
@@ -872,7 +956,15 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         return;
       }
 
-      const parentNodeId = item.id.replace("parent-image-", "");
+      let parentNodeId = "";
+      if (item.type === "note") {
+        parentNodeId = item.id.replace("parent-note-", "");
+      } else {
+        parentNodeId = item.id.replace("parent-image-", "");
+      }
+      if (!parentNodeId) {
+        return;
+      }
       setReferenceHoverHighlight(parentNodeId, nodeId, isHovering);
     },
     [nodeId],
@@ -1131,7 +1223,30 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   // 点击生成：根据数量多次调用接口创建任务
   const handleGenerate = async () => {
     const promptText = editor?.getText().trim() ?? "";
-    const mergedPrompt = [...parentNoteContents, promptText]
+    // 优先使用最新 store 中的便签内容，避免父级便签节点刚连接时 parentNoteNodes 缓存未刷新。
+    const liveNoteContents = (() => {
+      const { nodes, edges } = useCanvasFlowStore.getState();
+      const seen = new Set<string>();
+      return edges
+        .filter((edge) => {
+          if (edge.target !== nodeId || seen.has(edge.source)) return false;
+          seen.add(edge.source);
+          return true;
+        })
+        .map((edge) =>
+          nodes.find((node) => node.id === edge.source),
+        )
+        .filter((node): node is NonNullable<typeof node> => Boolean(node))
+        .filter((node) => node.type === "noteNode")
+        .map(
+          (node) =>
+            ((node.data as NoteNodeData)?.content ?? "").toString().trim(),
+        )
+        .filter((content) => content.length > 0);
+    })();
+    const noteContents =
+      liveNoteContents.length > 0 ? liveNoteContents : parentNoteContents;
+    const mergedPrompt = [...noteContents, promptText]
       .map((content) => content.trim())
       .filter((content) => content.length > 0)
       .join(" ");
