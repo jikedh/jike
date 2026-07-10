@@ -35,7 +35,7 @@ import {
     type MouseEvent,
 } from "react";
 import { toast } from "sonner";
-import { getAssetPrimaryCategories } from "@/api/assets";
+import { getAssetCategories } from "@/api/assets";
 import {
     CANVAS_REMOTE_ASSET_DRAG_MIME,
     CANVAS_REMOTE_ASSET_DRAG_TYPE,
@@ -60,6 +60,7 @@ import {
     SCOPE_LABEL_MAP,
     type RemoteAsset,
 } from "../utils/remoteAssets";
+import { AssetCategoryCascadeSelect } from "./AssetCategoryCascadeSelect";
 
 export interface RemoteAssetLibraryDialogProps {
     open: boolean;
@@ -118,6 +119,19 @@ const FALLBACK_CATEGORY_OPTIONS: AssetCategory[] = [
     { id: "scene", code: "scene", name: CATEGORY_LABEL_MAP.scene, sort: 20, status: 1 },
     { id: "prop", code: "prop", name: CATEGORY_LABEL_MAP.prop, sort: 30, status: 1 },
 ];
+
+const getCategoryValue = (category: AssetCategory): PrimaryCategory =>
+    category.code || String(category.id);
+
+const hasCategoryValue = (
+    categories: AssetCategory[],
+    value: PrimaryCategory,
+): boolean =>
+    categories.some(
+        (category) =>
+            getCategoryValue(category) === value ||
+            hasCategoryValue(category.children || [], value),
+    );
 
 const PAGE_SIZE = 24;
 
@@ -468,21 +482,23 @@ export const RemoteAssetLibraryDialog = ({
     useEffect(() => {
         if (!open) return;
         let cancelled = false;
-        void getAssetPrimaryCategories()
+        void getAssetCategories()
             .then((envelope) => {
                 if (cancelled) return;
                 if ((envelope.code === 0 || envelope.code === 200) && Array.isArray(envelope.data) && envelope.data.length > 0) {
                     setCategoryOptions(envelope.data);
-                    if (activeCategory !== "all" && !envelope.data.some((item) => item.code === activeCategory)) {
-                        setActiveCategory("all");
-                    }
+                    setActiveCategory((current) =>
+                        current !== "all" && !hasCategoryValue(envelope.data, current)
+                            ? "all"
+                            : current,
+                    );
                 }
             })
             .catch(() => undefined);
         return () => {
             cancelled = true;
         };
-    }, [activeCategory, open]);
+    }, [open]);
 
     useEffect(() => {
         // 切换条件时重置选择 / 翻页
@@ -853,33 +869,12 @@ export const RemoteAssetLibraryDialog = ({
                     {supportsCategory ? (
                         <div className="flex items-center gap-1.5">
                             <span className="text-xs text-white/35">分类</span>
-                            <button
-                                type="button"
-                                onClick={() => setActiveCategory("all")}
-                                className={cn(
-                                    "rounded-md px-2 py-1 text-xs transition-colors",
-                                    activeCategory === "all"
-                                        ? "bg-white/10 text-white"
-                                        : "text-white/55 hover:text-white",
-                                )}
-                            >
-                                全部
-                            </button>
-                            {categoryOptions.map((option) => (
-                                <button
-                                    type="button"
-                                    key={option.code}
-                                    onClick={() => setActiveCategory(option.code)}
-                                    className={cn(
-                                        "rounded-md px-2 py-1 text-xs transition-colors",
-                                        activeCategory === option.code
-                                            ? "bg-white/10 text-white"
-                                            : "text-white/55 hover:text-white",
-                                    )}
-                                >
-                                    {option.name}
-                                </button>
-                            ))}
+                            <AssetCategoryCascadeSelect
+                                categories={categoryOptions}
+                                value={activeCategory}
+                                onChange={setActiveCategory}
+                                includeAll
+                            />
                         </div>
                     ) : null}
 

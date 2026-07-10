@@ -45,10 +45,14 @@ export type AssetStatus = 0 | 1;
 
 export interface AssetCategory {
   id: string;
+  parentId?: string | number;
+  level?: number;
+  path?: string;
   code: PrimaryCategory;
   name: string;
   sort: number;
   status: AssetStatus;
+  children?: AssetCategory[];
 }
 
 // ===================== Conditions 结构化筛选 =====================
@@ -141,6 +145,8 @@ export interface AssetListItem {
   categoryId?: string | null;
   primaryCategory: PrimaryCategory;
   categoryName?: string;
+  categoryPath?: AssetCategory[];
+  categoryPathName?: string;
   conditions: AssetConditions | null;
   description: string | null;
   fileUrl: string;
@@ -168,6 +174,8 @@ export interface AssetDetail {
   categoryId?: string | null;
   primaryCategory: PrimaryCategory;
   categoryName?: string;
+  categoryPath?: AssetCategory[];
+  categoryPathName?: string;
   conditions: AssetConditions | null;
   description: string | null;
   fileKey: string;

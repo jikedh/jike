@@ -20,7 +20,7 @@ import {
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { getAssetPrimaryCategories } from "@/api/assets";
+import { getAssetCategories } from "@/api/assets";
 import type {
   AssetCategory,
   AssetScope,
@@ -38,6 +38,7 @@ import {
   getDefaultPrimaryCategory,
   guessExtensionFromUrl,
 } from "../utils/remoteAssets";
+import { AssetCategoryCascadeSelect } from "./AssetCategoryCascadeSelect";
 
 export interface RemoteCreateAssetRequest {
   mediaType: MediaType;
@@ -74,6 +75,13 @@ const FALLBACK_CATEGORY_OPTIONS: AssetCategory[] = [
   { id: "scene", code: "scene", name: "场景", sort: 20, status: 1 },
   { id: "prop", code: "prop", name: "道具", sort: 30, status: 1 },
 ];
+
+const flattenLeafCategories = (categories: AssetCategory[]): AssetCategory[] =>
+  categories.flatMap((category) =>
+    category.children && category.children.length > 0
+      ? flattenLeafCategories(category.children)
+      : [category],
+  );
 
 const getDefaultName = (request: RemoteCreateAssetRequest | null) => {
   if (!request) return "";
@@ -154,13 +162,14 @@ export const RemoteCreateAssetDialog = ({
   useEffect(() => {
     if (!open || !request) return;
     let cancelled = false;
-    void getAssetPrimaryCategories()
+    void getAssetCategories()
       .then((envelope) => {
         if (cancelled) return;
         if ((envelope.code === 0 || envelope.code === 200) && Array.isArray(envelope.data) && envelope.data.length > 0) {
           setCategoryOptions(envelope.data);
+          const leafCategories = flattenLeafCategories(envelope.data);
           const defaultCategory = getDefaultPrimaryCategory(request.mediaType);
-          setPrimaryCategory(envelope.data.some((item) => item.code === defaultCategory) ? defaultCategory : envelope.data[0].code);
+          setPrimaryCategory(leafCategories.some((item) => item.code === defaultCategory) ? defaultCategory : leafCategories[0].code);
         }
       })
       .catch(() => undefined);
@@ -250,7 +259,7 @@ export const RemoteCreateAssetDialog = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 px-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-80 flex items-center justify-center bg-black/55 px-6 backdrop-blur-sm">
       <div className="noflow nodrag nopan nowheel w-[min(720px,94vw)] overflow-hidden rounded-xl border border-white/10 bg-[#171719] text-white shadow-2xl">
         {/* Header */}
         <div className="flex h-13 items-center justify-between border-b border-white/8 px-5">
@@ -274,7 +283,7 @@ export const RemoteCreateAssetDialog = ({
           {/* Preview */}
           <div>
             <div className="mb-2 text-xs text-white/40">预览</div>
-            <div className="flex aspect-[4/5] items-center justify-center overflow-hidden rounded-md border border-white/8 bg-[#1c1c20]">
+            <div className="flex aspect-4/5 items-center justify-center overflow-hidden rounded-md border border-white/8 bg-[#1c1c20]">
               {request.mediaType === "image" && previewUrl ? (
                 <img
                   src={previewUrl}
@@ -342,7 +351,7 @@ export const RemoteCreateAssetDialog = ({
                         "rounded-md border px-2 py-2 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40",
                         scope === option.id
                           ? "border-[#B43FEB] bg-[#B43FEB]/15 text-white"
-                          : "border-white/8 bg-white/[0.03] text-white/65 hover:text-white",
+                          : "border-white/8 bg-white/3 text-white/65 hover:text-white",
                       )}
                     >
                       <div className="text-sm">{option.label}</div>
@@ -360,24 +369,15 @@ export const RemoteCreateAssetDialog = ({
                 <div className="mb-1.5 text-xs text-white/45">
                   主分类 <span className="text-red-400">*</span>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {categoryOptions.map((option) => (
-                    <button
-                      type="button"
-                      key={option.code}
-                      disabled={submitting}
-                      onClick={() => setPrimaryCategory(option.code)}
-                      className={cn(
-                        "h-9 rounded-md border text-sm transition-colors disabled:opacity-40",
-                        primaryCategory === option.code
-                          ? "border-[#B43FEB] bg-[#B43FEB]/15 text-white"
-                          : "border-white/8 bg-white/[0.03] text-white/65 hover:text-white",
-                      )}
-                    >
-                      {option.name}
-                    </button>
-                  ))}
-                </div>
+                <AssetCategoryCascadeSelect
+                  categories={categoryOptions}
+                  value={primaryCategory}
+                  onChange={(value) => {
+                    if (value !== "all") setPrimaryCategory(value);
+                  }}
+                  includeAll={false}
+                  disabled={submitting}
+                />
               </div>
             ) : null}
 

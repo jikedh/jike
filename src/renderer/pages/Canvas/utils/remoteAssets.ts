@@ -31,6 +31,7 @@ export interface RemoteAsset {
   mediaType: MediaType;
   primaryCategory: PrimaryCategory;
   categoryName: string;
+  categoryPathName: string;
   fileUrl: string;
   thumbnailUrl: string;
   fileSize: number | null;
@@ -85,6 +86,7 @@ export const mapListItemToRemoteAsset = (item: AssetListItem): RemoteAsset => ({
   mediaType: item.mediaType,
   primaryCategory: item.primaryCategory,
   categoryName: toStringOrEmpty(item.categoryName),
+  categoryPathName: toStringOrEmpty(item.categoryPathName),
   fileUrl: toStringOrEmpty(item.fileUrl),
   thumbnailUrl: getRemoteAssetThumbnailUrl(
     item.mediaType,
@@ -113,6 +115,7 @@ export const mapDetailToRemoteAsset = (detail: AssetDetail): RemoteAsset => ({
   mediaType: detail.mediaType,
   primaryCategory: detail.primaryCategory,
   categoryName: toStringOrEmpty(detail.categoryName),
+  categoryPathName: toStringOrEmpty(detail.categoryPathName),
   fileUrl: toStringOrEmpty(detail.fileUrl),
   thumbnailUrl: getRemoteAssetThumbnailUrl(
     detail.mediaType,
@@ -160,8 +163,8 @@ export const getMediaTypeLabel = (mediaType: MediaType) =>
 export const getCategoryLabel = (category: PrimaryCategory) =>
   CATEGORY_LABEL_MAP[category] || category;
 
-export const getRemoteAssetCategoryLabel = (asset: Pick<RemoteAsset, "primaryCategory" | "categoryName">) =>
-  asset.categoryName || getCategoryLabel(asset.primaryCategory);
+export const getRemoteAssetCategoryLabel = (asset: Pick<RemoteAsset, "primaryCategory" | "categoryName" | "categoryPathName">) =>
+  asset.categoryPathName || asset.categoryName || getCategoryLabel(asset.primaryCategory);
 
 /** 字节大小格式化：1.2 MB / 32 KB */
 export const formatFileSize = (size: number | null | undefined): string => {
