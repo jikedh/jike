@@ -85,7 +85,22 @@ const FRAME_STEP_SECONDS = 1 / DEFAULT_FPS;
 const TIMELINE_STEP_MS = 100;
 const SUBTITLE_REMOVAL_POINTS_PER_SECOND = 0.5;
 const WUHEI_MAX_RECT_AREA = 480_000;
+const PROCESSED_VIDEO_NODE_GAP = 48;
 const subtitlePollers: Record<string, number> = {};
+
+const getProcessedVideoNodePosition = (sourceNode: any) => {
+  const basePosition = sourceNode?.position ?? { x: 0, y: 0 };
+  const sourceWidth =
+    sourceNode?.measured?.width ??
+    sourceNode?.width ??
+    sourceNode?.initialWidth ??
+    350;
+
+  return {
+    x: basePosition.x + sourceWidth + PROCESSED_VIDEO_NODE_GAP,
+    y: basePosition.y,
+  };
+};
 
 const normalizeTaskStatus = (value?: string) => {
   return String(value || "")
@@ -1510,19 +1525,11 @@ export const VideoToolbar = ({
         const sourceNode = useCanvasFlowStore
           .getState()
           .nodes.find((n) => n.id === nodeId);
-        const basePosition = sourceNode?.position ?? { x: 0, y: 0 };
-        const outputIndex = useCanvasFlowStore
-          .getState()
-          .edges.filter((edge) => edge.source === nodeId).length;
 
-        const newNodeId = addNode("newVideo", {
-          x: basePosition.x - 390,
-          y:
-            basePosition.y +
-            (sourceNode?.height ?? 250) +
-            48 +
-            outputIndex * 298,
-        } as any);
+        const newNodeId = addNode(
+          "newVideo",
+          getProcessedVideoNodePosition(sourceNode),
+        );
 
         updateNewVideoNodeData(newNodeId, {
           badgeLabel: "视频超清",
@@ -1612,10 +1619,6 @@ export const VideoToolbar = ({
         const sourceNode = useCanvasFlowStore
           .getState()
           .nodes.find((n) => n.id === nodeId);
-        const basePosition = sourceNode?.position ?? { x: 0, y: 0 };
-        const outputIndex = useCanvasFlowStore
-          .getState()
-          .edges.filter((edge) => edge.source === nodeId).length;
 
         const putUrlResponse = await getUploadOssPutUrl({
           blob_type: "video",
@@ -1631,14 +1634,10 @@ export const VideoToolbar = ({
           throw new Error("未获取到预签名上传地址");
         }
 
-        const newNodeId = addNode("newVideo", {
-          x: basePosition.x - 390,
-          y:
-            basePosition.y +
-            (sourceNode?.height ?? 250) +
-            48 +
-            outputIndex * 298,
-        } as any);
+        const newNodeId = addNode(
+          "newVideo",
+          getProcessedVideoNodePosition(sourceNode),
+        );
 
         updateNewVideoNodeData(newNodeId, {
           badgeLabel: "去字幕",
