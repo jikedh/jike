@@ -117,7 +117,7 @@ const pickDuration = <T extends number>(
   fallback: T,
 ): T => (allowed.includes(value as T) ? (value as T) : fallback);
 
-const getPrompt = (prompt: string) => prompt.trim();
+const getPrompt = (prompt: string) => prompt;
 
 const isUrl = (value: string | undefined) =>
   Boolean(value?.match(/^https?:\/\//));

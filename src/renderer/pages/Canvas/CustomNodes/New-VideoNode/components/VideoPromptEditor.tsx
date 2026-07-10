@@ -659,7 +659,7 @@ export const VideoPromptEditor = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
-      getPlainText: () => editor?.getText().trim() ?? "",
+      getPlainText: () => editor?.getText({ blockSeparator: "\n" }) ?? "",
       getDocumentJSON: () => editor?.getJSON() ?? null,
       insertContent: (content: string) => {
         if (!editor) return;
