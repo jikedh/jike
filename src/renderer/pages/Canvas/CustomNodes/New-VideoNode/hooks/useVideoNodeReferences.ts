@@ -48,6 +48,10 @@ export const getVideoParentAudioMentionId = (nodeId: string) => {
   return `parent-audio-${nodeId}`;
 };
 
+export const getVideoParentNoteMentionId = (nodeId: string) => {
+  return `parent-note-${nodeId}`;
+};
+
 const getNodeDisplayLabel = (node: Pick<AllNodeType, "type" | "data">) => {
   if (!node.data || typeof node.data !== "object") {
     return "";
@@ -170,21 +174,40 @@ export const useVideoNodeReferences = ({
       .filter((item) => item.url) as VideoReferenceItem[];
   }, [parentNodeEntries]);
 
-  const parentNoteContents = useMemo(() => {
-    const seenParentIds = new Set<string>();
+  const parentNoteNodes = useMemo(
+    () =>
+      parentNodeEntries
+        .filter((entry) => entry.type === "noteNode")
+        .map((entry) => {
+          const data = entry.data as NoteNodeData;
+          const content = data?.content?.trim() ?? "";
+          if (!content) {
+            return null;
+          }
+          const nickname =
+            (data as { nickname?: string })?.nickname?.trim() ||
+            entry.label ||
+            "便签节点";
+          return {
+            id: entry.id,
+            content,
+            label: nickname,
+          };
+        })
+        .filter(
+          (item): item is {
+            id: string;
+            content: string;
+            label: string;
+          } => Boolean(item),
+        ),
+    [parentNodeEntries],
+  );
 
-    return parentNodeEntries
-      .filter((entry) => {
-        if (seenParentIds.has(entry.id)) {
-          return false;
-        }
-
-        seenParentIds.add(entry.id);
-        return entry.type === "noteNode";
-      })
-      .map((entry) => (entry.data as NoteNodeData).content?.trim())
-      .filter((content) => Boolean(content)) as string[];
-  }, [parentNodeEntries]);
+  const parentNoteContents = useMemo(
+    () => parentNoteNodes.map((item) => item.content),
+    [parentNoteNodes],
+  );
 
   const localReferenceImageItems = useMemo(() => {
     const parentUrlCounts = new Map<string, number>();
@@ -288,6 +311,7 @@ export const useVideoNodeReferences = ({
     parentVideoNodes,
     parentAudioNodes,
     parentImageNodes,
+    parentNoteNodes,
     localReferenceImageUrls,
     localReferenceImageIndexes,
     parentNoteContents,

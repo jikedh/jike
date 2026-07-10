@@ -473,6 +473,10 @@ const getCanvasNodeTypeFromFlowNode = (
     return "audio";
   }
 
+  if (node.type === "noteNode") {
+    return "note";
+  }
+
   return null;
 };
 
@@ -484,6 +488,11 @@ const canPassMediaToNodeType = (
 
   if (!sourceNodeType || !targetNodeType) {
     return false;
+  }
+
+  // 文本节点的内容会作为提示词被下游节点消费，因此可以连到任意接收 prompt 的目标。
+  if (sourceNodeType === "note") {
+    return targetNodeType === "image" || targetNodeType === "newVideo";
   }
 
   if (targetNodeType === "image") {

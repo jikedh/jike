@@ -1,6 +1,8 @@
+import { useMemo, useState } from "react";
 import { Wallet } from "lucide-react";
 import { cn } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { RechargePackage } from "../lib/types";
 
 const PageTitle = () => (
@@ -81,12 +83,71 @@ const RechargePackageCard = ({
     </article>
 );
 
+const CustomRechargeCard = ({
+    onRecharge,
+}: {
+    onRecharge: (amountYuan: number) => void;
+}) => {
+    const [amount, setAmount] = useState("");
+    const amountYuan = Number(amount);
+    // 1 元 = 60 积分，按比例预估；前端允许两位小数
+    const points = useMemo(
+        () => (Number.isFinite(amountYuan) && amountYuan > 0 ? Math.round(amountYuan * 60) : 0),
+        [amountYuan],
+    );
+    const isValidAmount = Number.isFinite(amountYuan) && amountYuan >= 0.01 && amountYuan <= 1_000_000;
+
+    return (
+        <article className="rounded-[24px] border border-white/5 bg-[#121214] p-7 transition-all duration-500 hover:border-[#B43FEB]/40 hover:bg-[#161618]">
+            <header className="mb-6 space-y-3">
+                <div>
+                    <h3 className="text-2xl font-black tracking-tighter">自定义金额</h3>
+                    <p className="mt-1 text-xs text-white/35">1元 = 60积分，最低 0.01 元，最高 100 万元</p>
+                </div>
+            </header>
+
+            <div className="mb-5 space-y-3">
+                <Input
+                    id="custom-recharge-amount"
+                    type="number"
+                    min={0.01}
+                    step={0.01}
+                    inputMode="decimal"
+                    value={amount}
+                    placeholder="请输入充值金额(单位元)"
+                    className="h-12 rounded-2xl border-white/10 bg-white/5 text-white placeholder:text-white/25 focus-visible:ring-[#B43FEB]"
+                    onChange={(event) => setAmount(event.target.value)}
+                />
+                <p className="text-xs text-white/35">
+                    预计到账 <span className="font-bold text-[#B43FEB]">{points}</span> 积分
+                </p>
+            </div>
+
+            <Button
+                unstyled
+                disabled={!isValidAmount}
+                className={cn(
+                    "w-full rounded-2xl py-3.5 text-sm font-bold transition-all duration-300",
+                    isValidAmount
+                        ? "bg-[#B43FEB] text-white shadow-xl shadow-[#B43FEB]/20 hover:scale-[1.02]"
+                        : "cursor-not-allowed bg-white/5 text-white/30",
+                )}
+                onClick={() => onRecharge(amountYuan)}
+            >
+                自定义充值
+            </Button>
+        </article>
+    );
+};
+
 export const RechargeGrid = ({
     packages,
     onRecharge,
+    onCustomRecharge,
 }: {
     packages: RechargePackage[];
     onRecharge: (pkg: RechargePackage) => void;
+    onCustomRecharge: (amountYuan: number) => void;
 }) => (
     <section>
         <PageTitle />
@@ -96,6 +157,9 @@ export const RechargeGrid = ({
                     <RechargePackageCard pkg={pkg} onRecharge={onRecharge} />
                 </li>
             ))}
+            <li>
+                <CustomRechargeCard onRecharge={onCustomRecharge} />
+            </li>
         </ul>
     </section>
 );

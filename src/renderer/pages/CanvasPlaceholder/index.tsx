@@ -371,6 +371,12 @@ export default function CanvasPlaceholderPage() {
     }
   };
 
+  const handleCopyProjectId = async (e: React.MouseEvent, project: ProjectListItem) => {
+    e.stopPropagation();
+    await navigator.clipboard.writeText(String(project.id));
+    toast.success("项目ID已复制");
+  };
+
   // 格式化时间
   const formatTime = (timestamp: number) => {
     const now = Date.now();
@@ -522,26 +528,34 @@ export default function CanvasPlaceholderPage() {
                     </span>
                   </div>
                 </div>
-                <div className="mt-3 flex justify-end gap-2">
+                <div className="mt-3 flex items-center justify-between gap-2">
                   <button
-                    onClick={(e) => openShareDialog(e, project)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/25 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:border-[#B43FEB]/40 hover:text-[#d8b6ff] hover:bg-[#B43FEB]/10 cursor-pointer"
+                    onClick={(e) => handleCopyProjectId(e, project)}
+                    className="min-w-0 truncate text-xs text-white/40 transition-colors hover:text-white/70 cursor-pointer"
                   >
-                    <Share2 className="w-3.5 h-3.5" />
-                    分享
+                    项目ID: {project.id}
                   </button>
-                  <button
-                    onClick={(e) => handleExportProject(e, project)}
-                    disabled={exportingProjectId === String(project.id)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/25 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:border-[#B43FEB]/40 hover:text-[#d8b6ff] hover:bg-[#B43FEB]/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {exportingProjectId === String(project.id) ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Download className="w-3.5 h-3.5" />
-                    )}
-                    {exportingProjectId === String(project.id) ? "导出中..." : "导出"}
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      onClick={(e) => openShareDialog(e, project)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/25 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:border-[#B43FEB]/40 hover:text-[#d8b6ff] hover:bg-[#B43FEB]/10 cursor-pointer"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      分享
+                    </button>
+                    <button
+                      onClick={(e) => handleExportProject(e, project)}
+                      disabled={exportingProjectId === String(project.id)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-black/25 px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:border-[#B43FEB]/40 hover:text-[#d8b6ff] hover:bg-[#B43FEB]/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {exportingProjectId === String(project.id) ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5" />
+                      )}
+                      {exportingProjectId === String(project.id) ? "导出中..." : "导出"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

@@ -12,12 +12,9 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  defaultPresets,
-  type PresetItem,
-  type PresetsMap,
-  presetsService,
-} from "service/localStorageService";
+import { defaultPresets, type PresetsMap } from "shared/constants/preset-prompts";
+import type { PresetItem } from "service/presetStorage";
+import { presetStorage } from "service/presetStorage";
 import { CANVAS_CHAT_MODELS } from "shared/constants/ai-models";
 import {
   CANVAS_CHAT_PERSONAS,
@@ -161,10 +158,8 @@ export const SettingsModal = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 预设提示词库状态 — 按类型分组
-  // 懒初始化：优先读取已保存的预设，避免组件首次挂载时把空值写回 localStorage。
-  const [presets, setPresets] = useState<PresetsMap>(
-    () => presetsService.load() ?? defaultPresets,
-  );
+  // 懒初始化：使用 defaultPresets 作为占位，弹窗打开后再异步拉取后端数据。
+  const [presets, setPresets] = useState<PresetsMap>(() => defaultPresets);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -208,19 +203,17 @@ export const SettingsModal = ({
     clearNewAnnouncementMarks();
   }, [open, clearNewAnnouncementMarks]);
 
-  // 弹窗打开时从 localStorage 加载预设，首次无数据则写入默认预设
+  // 弹窗打开时从后端拉取预设
   useEffect(() => {
     if (!open) return;
-    const saved = presetsService.load();
-    setPresets(saved ?? defaultPresets);
+    let cancelled = false;
+    void presetStorage.loadPresets().then((next) => {
+      if (!cancelled) setPresets(next);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [open]);
-
-  // presets 变化时自动持久化
-  // 仅在弹窗打开期间持久化，避免页面初始化/项目切换时出现无意义覆盖。
-  useEffect(() => {
-    if (!open) return;
-    presetsService.save(presets);
-  }, [open, presets]);
 
   useEffect(() => {
     if (!open) return;
@@ -263,21 +256,25 @@ export const SettingsModal = ({
     setFormData({ name: "", content: "", type: "general" });
   };
 
-  const confirmAddPreset = () => {
-    const newPreset = {
+  const confirmAddPreset = async () => {
+    const result = await presetStorage.createPreset({
+      category: formData.type,
       name: formData.name.trim(),
       content: formData.content,
       enabled: true,
-      id: Math.random().toString(36).substring(2, 11),
-    };
-    setPresets((prev) => {
-      const updated = {
-        ...prev,
-        [formData.type]: [newPreset, ...(prev[formData.type] ?? [])],
-      };
-      presetsService.save(updated);
-      return updated;
     });
+    if (!result.success) {
+      error(result.error || "创建预设失败");
+      setConfirmDialogOpen(false);
+      setConfirmDialogAction(null);
+      return;
+    }
+    if (result.preset) {
+      setPresets((prev) => ({
+        ...prev,
+        [formData.type]: [result.preset!, ...(prev[formData.type] ?? [])],
+      }));
+    }
     setIsAdding(false);
     resetPresetForm();
     setConfirmDialogOpen(false);
@@ -285,29 +282,28 @@ export const SettingsModal = ({
     success("预设创建成功");
   };
 
-  const handleUpdatePreset = () => {
+  const handleUpdatePreset = async () => {
     if (!editingId) return;
     if (!formData.name.trim()) {
       error("请输入预设名称");
       return;
     }
-    setPresets((prev) => {
-      const updated = {
-        ...prev,
-        [formData.type]: prev[formData.type].map((p) =>
-          p.id === editingId
-            ? {
-              name: formData.name.trim(),
-              content: formData.content,
-              enabled: p.enabled,
-              id: editingId,
-            }
-            : p,
-        ),
-      };
-      presetsService.save(updated);
-      return updated;
+    const result = await presetStorage.updatePreset({
+      id: editingId,
+      name: formData.name.trim(),
+      content: formData.content,
+      category: formData.type,
     });
+    if (!result.success) {
+      error(result.error || "更新预设失败");
+      return;
+    }
+    setPresets((prev) => ({
+      ...prev,
+      [formData.type]: prev[formData.type].map((p) =>
+        p.id === editingId ? { ...p, ...result.preset! } : p,
+      ),
+    }));
     setEditingId(null);
     resetPresetForm();
     success("预设更新成功");
@@ -320,18 +316,23 @@ export const SettingsModal = ({
     setConfirmDialogOpen(true);
   };
 
-  const confirmDeletePreset = () => {
+  const confirmDeletePreset = async () => {
     if (pendingDeleteId && pendingDeleteType) {
-      setPresets((prev) => {
-        const updated = {
-          ...prev,
-          [pendingDeleteType]: prev[pendingDeleteType].filter(
-            (p: PresetItem) => p.id !== pendingDeleteId,
-          ),
-        };
-        presetsService.save(updated);
-        return updated;
-      });
+      const result = await presetStorage.deletePreset(pendingDeleteId);
+      if (!result.success) {
+        error(result.error || "删除预设失败");
+        setConfirmDialogOpen(false);
+        setConfirmDialogAction(null);
+        setPendingDeleteId(null);
+        setPendingDeleteType(null);
+        return;
+      }
+      setPresets((prev) => ({
+        ...prev,
+        [pendingDeleteType]: prev[pendingDeleteType].filter(
+          (p: PresetItem) => p.id !== pendingDeleteId,
+        ),
+      }));
       success("预设删除成功");
     }
     setConfirmDialogOpen(false);
@@ -340,17 +341,18 @@ export const SettingsModal = ({
     setPendingDeleteType(null);
   };
 
-  const togglePresetEnabled = (type: string, id: string) => {
-    setPresets((prev) => {
-      const updated = {
-        ...prev,
-        [type]: prev[type].map((p: PresetItem) =>
-          p.id === id ? { ...p, enabled: !p.enabled } : p,
-        ),
-      };
-      presetsService.save(updated);
-      return updated;
-    });
+  const togglePresetEnabled = async (type: string, id: string, enabled: boolean) => {
+    const result = await presetStorage.updatePreset({ id, enabled });
+    if (!result.success) {
+      error(result.error || "更新预设失败");
+      return;
+    }
+    setPresets((prev) => ({
+      ...prev,
+      [type]: prev[type].map((p: PresetItem) =>
+        p.id === id ? { ...p, enabled } : p,
+      ),
+    }));
   };
 
   const startEditPreset = (
@@ -867,6 +869,7 @@ export const SettingsModal = ({
                                               togglePresetEnabled(
                                                 type,
                                                 preset.id,
+                                                !preset.enabled,
                                               )
                                             }
                                             className={cn(

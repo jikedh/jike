@@ -28,6 +28,7 @@ import {
   getVideoLocalImageMentionId,
   getVideoParentAudioMentionId,
   getVideoParentImageMentionId,
+  getVideoParentNoteMentionId,
   getVideoParentVideoMentionId,
   useVideoNodeReferences
 } from "./hooks/useVideoNodeReferences";
@@ -46,6 +47,21 @@ import {
   VIDEO_MODEL_OPTIONS,
   getVideoModelOptions
 } from "./constants/mockData";
+
+// 视频节点参考缩略图统一类型：独立于 MentionItem，方便承载便签扩展字段
+// （MentionItem.type 严格限定为 image/video/audio，不能反向扩展为 note）。
+export type VideoReferenceDisplayItem = {
+  id: string;
+  label: string;
+  displayLabel: string;
+  value: string;
+  thumbnail: string;
+  url?: string;
+  mentionId?: string;
+  preserveLabel?: boolean;
+  type: "image" | "video" | "audio" | "note";
+  content?: string;
+};
 import {
   ALL_MODE_KEYS,
   MODE_LABELS,
@@ -464,6 +480,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     parentVideoNodes,
     parentAudioNodes,
     parentImageNodes,
+    parentNoteNodes,
     parentNoteContents,
     videoMentionItems,
     localReferenceImageUrls,
@@ -647,7 +664,67 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     videoReferenceSources,
   ]);
 
-  const sortableReferenceItems = generationReferenceItems;
+  // 视频参考缩略图展示类型：包含文本便签项，type 字段扩展为 "note"。
+  const displayReferenceItems = useMemo<VideoReferenceDisplayItem[]>(() => {
+    const mediaItems: VideoReferenceDisplayItem[] = generationReferenceItems
+      .filter((item) => item.type !== "image" || item.url)
+      .map((item) => ({
+        id: item.id,
+        label: item.label,
+        displayLabel: item.displayLabel,
+        value: item.value,
+        thumbnail: item.thumbnail,
+        url: item.url,
+        mentionId: item.mentionId,
+        preserveLabel: item.preserveLabel,
+        type: item.type,
+      }));
+
+    const noteItems: VideoReferenceDisplayItem[] = parentNoteNodes.map(
+      (note, index) => {
+        return {
+          id: `parent-note-${note.id}`,
+          mentionId: getVideoParentNoteMentionId(note.id),
+          label: note.label,
+          displayLabel: `便签${toChineseNumber(index + 1)}`,
+          value: note.content,
+          thumbnail: "",
+          url: undefined,
+          type: "note",
+          content: note.content,
+          preserveLabel: true,
+        };
+      },
+    );
+
+    const merged = [...mediaItems, ...noteItems];
+    const order = currentData?.metadata?.referenceOrder as
+      | string[]
+      | undefined;
+    if (Array.isArray(order) && order.length > 0) {
+      const map = new Map(merged.map((item) => [item.id, item]));
+      const used = new Set<string>();
+      const sorted: VideoReferenceDisplayItem[] = [];
+      order.forEach((id) => {
+        if (typeof id !== "string" || used.has(id)) {
+          return;
+        }
+        const item = map.get(id);
+        if (item) {
+          sorted.push(item);
+          used.add(id);
+        }
+      });
+      merged.forEach((item) => {
+        if (!used.has(item.id)) {
+          sorted.push(item);
+          used.add(item.id);
+        }
+      });
+      return sorted;
+    }
+    return merged;
+  }, [generationReferenceItems, parentNoteNodes, currentData?.metadata?.referenceOrder]);
   const generationVideoReferenceUrls = useMemo(
     () =>
       generationReferenceItems
@@ -1006,6 +1083,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         "parent-image-",
         "parent-video-",
         "parent-audio-",
+        "parent-note-",
       ];
       const matchedPrefix = parentPrefixes.find((prefix) =>
         item.id.startsWith(prefix),
@@ -1031,17 +1109,20 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       if (
         fromIndex < 0 ||
         toIndex < 0 ||
-        fromIndex >= sortableReferenceItems.length ||
-        toIndex >= sortableReferenceItems.length
+        fromIndex >= displayReferenceItems.length ||
+        toIndex >= displayReferenceItems.length
       ) {
         return;
       }
 
-      const nextItems = relabelReferenceItemsByOrder(
-        arrayMove(sortableReferenceItems, fromIndex, toIndex),
+      const moved = arrayMove(displayReferenceItems, fromIndex, toIndex);
+      // 仅将媒体项的顺序回写到 editor mention 与 metadata.referenceOrder，便签参考保持在原位即可，避免影响后续 prompt 拼接。
+      const movedMedia = moved.filter((item) => item.type !== "note");
+      const nextMedia = relabelReferenceItemsByOrder(
+        movedMedia as MentionItem[],
       );
       editorRef.current?.updateReferenceMentions(
-        nextItems.map((item) => ({
+        nextMedia.map((item) => ({
           id: item.mentionId ?? item.id,
           label: item.displayLabel,
           originalLabel: item.label,
@@ -1054,20 +1135,27 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       updateNewVideoNodeData(nodeId, {
         metadata: {
           ...(currentData?.metadata ?? {}),
-          referenceOrder: nextItems.map((item) => item.id),
+          referenceOrder: moved.map((item) => item.id),
         },
       });
     },
     [
       currentData?.metadata,
+      displayReferenceItems,
       nodeId,
-      sortableReferenceItems,
       updateNewVideoNodeData,
     ],
   );
 
   const handleSortableReferenceRemove = useCallback(
     (item: MentionItem) => {
+      // 便签参考：直接断开对应便签边。
+      if (item.id.startsWith("parent-note-")) {
+        const noteId = item.id.slice("parent-note-".length);
+        handleDisconnectNode(noteId);
+        return;
+      }
+
       const localImageIndex = localReferenceImageUrls.findIndex(
         (url, index) => {
           return (
@@ -1510,10 +1598,30 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         referenceItems: generationReferenceItems,
         promptText: editorText,
       });
-      const normalizedNotePrompt = parentNoteContents
-        .map((content) => content.trim())
-        .filter((content) => content.length > 0)
-        .join(" ");
+      const normalizedNotePrompt = (() => {
+        const { nodes, edges } = useCanvasFlowStore.getState();
+        const seen = new Set<string>();
+        const live = edges
+          .filter((edge) => {
+            if (edge.target !== nodeId || seen.has(edge.source)) return false;
+            seen.add(edge.source);
+            return true;
+          })
+          .map((edge) => nodes.find((node) => node.id === edge.source))
+          .filter((node): node is NonNullable<typeof node> => Boolean(node))
+          .filter((node) => node.type === "noteNode")
+          .map(
+            (node) =>
+              ((node.data as { content?: string })?.content ?? "").trim(),
+          )
+          .filter((content) => content.length > 0);
+        const noteContents =
+          live.length > 0 ? live : parentNoteContents;
+        return noteContents
+          .map((content) => content.trim())
+          .filter((content) => content.length > 0)
+          .join(" ");
+      })();
       const mergedPrompt = [normalizedNotePrompt, normalized.prompt]
         .filter((content) => content.length > 0)
         .join(" ");
@@ -1617,9 +1725,9 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
             parentAudioNodes={parentAudioNodes}
             parentVideoNodes={parentVideoNodes}
             referenceContent={
-              sortableReferenceItems.length > 0 ? (
+              displayReferenceItems.length > 0 ? (
                 <ReferenceThumbnails
-                  items={sortableReferenceItems}
+                  items={displayReferenceItems}
                   onReorder={handleReferenceReorder}
                   onRemove={handleSortableReferenceRemove}
                   onHoverChange={handleSortableReferenceHoverChange}
@@ -1668,7 +1776,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
                   }}
                   className={cn(
                     "flex h-8 w-8 items-center justify-center rounded-full border text-white/80 transition-colors",
-                    "border-white/[0.08] bg-white/[0.04] hover:border-[#B43FEB]/40 hover:bg-[#B43FEB]/15 hover:text-white",
+                    "border-white/8 bg-white/4 hover:border-[#B43FEB]/40 hover:bg-[#B43FEB]/15 hover:text-white",
                     isOptimizingPrompt
                       ? "cursor-wait opacity-60"
                       : "active:scale-95",
@@ -1688,7 +1796,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
                   <div
                     role="dialog"
                     aria-label="优化系统提示词配置"
-                    className="nodrag nopan nowheel absolute bottom-12 right-0 z-[9999] w-[320px] rounded-xl border border-white/[0.08] bg-[#1e1e20] p-3 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]"
+                    className="nodrag nopan nowheel absolute bottom-12 right-0 z-9999 w-[320px] rounded-xl border border-white/8 bg-[#1e1e20] p-3 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]"
                     onMouseDown={(event) => event.stopPropagation()}
                     onClick={(event) => event.stopPropagation()}
                   >
@@ -1696,7 +1804,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
                       优化系统提示词
                     </div>
                     <textarea
-                      className="nodrag nopan nowheel min-h-[160px] max-h-[280px] w-full resize-none rounded-lg border border-white/[0.06] bg-white/[0.02] p-2 text-xs leading-6 text-white/90 outline-none placeholder:text-white/30 focus:border-[#B43FEB]/40"
+                      className="nodrag nopan nowheel min-h-40 max-h-70 w-full resize-none rounded-lg border border-white/6 bg-white/2 p-2 text-xs leading-6 text-white/90 outline-none placeholder:text-white/30 focus:border-[#B43FEB]/40"
                       value={draftOptimizeSystemPrompt}
                       onChange={(event) =>
                         setDraftOptimizeSystemPrompt(event.target.value)
@@ -1717,7 +1825,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
                         <button
                           type="button"
                           onClick={() => setIsPromptOptimizePopoverOpen(false)}
-                          className="rounded-md border border-white/[0.08] bg-transparent px-3 py-1 text-[11px] text-white/60 transition-colors hover:border-white/20 hover:text-white"
+                          className="rounded-md border border-white/8 bg-transparent px-3 py-1 text-[11px] text-white/60 transition-colors hover:border-white/20 hover:text-white"
                         >
                           取消
                         </button>

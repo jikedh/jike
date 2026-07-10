@@ -734,3 +734,96 @@ export function getAnnouncementList(): any {
     method: "get",
   });
 }
+
+// ===================== 预设提示词相关 =====================
+
+export type PresetPromptItem = {
+  id: string;
+  category: string;
+  name: string;
+  content: string;
+  enabled: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PresetPromptListResponse = {
+  presets: PresetPromptItem[];
+};
+
+export type CreatePresetPromptPayload = {
+  category: string;
+  name: string;
+  content: string;
+  enabled?: boolean;
+  sort_order?: number;
+};
+
+export type UpdatePresetPromptPayload = {
+  id: string;
+  category?: string;
+  name?: string;
+  content?: string;
+  enabled?: boolean;
+  sort_order?: number;
+};
+
+export type DeletePresetPromptPayload = {
+  id: string;
+};
+
+/**
+ * 获取当前登录用户的全部预设提示词
+ * GET /v1/preset/list
+ */
+export function listPresetPrompts(): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/preset/list",
+    method: "get",
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+/**
+ * 新增预设提示词
+ * POST /v1/preset/create
+ */
+export function createPresetPrompt(payload: CreatePresetPromptPayload): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/preset/create",
+    method: "post",
+    headers: getJikeGoAuthHeaders(),
+    data: payload,
+  });
+}
+
+/**
+ * 更新预设提示词
+ * POST /v1/preset/update
+ */
+export function updatePresetPrompt(payload: UpdatePresetPromptPayload): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/preset/update",
+    method: "post",
+    headers: getJikeGoAuthHeaders(),
+    data: payload,
+  });
+}
+
+/**
+ * 删除预设提示词
+ * POST /v1/preset/delete
+ */
+export function deletePresetPrompt(payload: DeletePresetPromptPayload): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/preset/delete",
+    method: "post",
+    headers: getJikeGoAuthHeaders(),
+    data: payload,
+  });
+}

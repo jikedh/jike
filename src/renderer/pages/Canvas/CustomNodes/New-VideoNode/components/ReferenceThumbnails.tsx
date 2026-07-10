@@ -13,6 +13,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  IconFileText,
   IconGripVertical,
   IconMusic,
   IconPhoto,
@@ -21,20 +22,29 @@ import {
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn, getVideoThumbnail } from "shared/utils/utils";
+import { NotePreviewPopover } from "@/components/NotePreviewPopover";
 import { ThumbnailPreviewPopover } from "@/components/ThumbnailPreviewPopover";
 import type { MentionItem } from "../constants/mockData";
 
+type ReferenceItemType = "image" | "video" | "audio" | "note";
+
+type ReferenceItem = Omit<MentionItem, "type"> & {
+  type: ReferenceItemType;
+  content?: string;
+};
+
 interface ReferenceThumbnailsProps {
-  items: MentionItem[];
+  items: ReferenceItem[];
   onReorder?: (fromIndex: number, toIndex: number) => void;
-  onRemove?: (item: MentionItem) => void;
-  onHoverChange?: (item: MentionItem, isHovering: boolean) => void;
+  onRemove?: (item: ReferenceItem) => void;
+  onHoverChange?: (item: ReferenceItem, isHovering: boolean) => void;
 }
 
-const TYPE_LABELS: Record<MentionItem["type"], string> = {
+const TYPE_LABELS: Record<ReferenceItemType, string> = {
   image: "图片",
   video: "视频",
   audio: "音频",
+  note: "便签",
 };
 
 const MediaBadge = ({
@@ -43,7 +53,7 @@ const MediaBadge = ({
   index,
 }: {
   label?: string;
-  type: MentionItem["type"];
+  type: ReferenceItemType;
   index: number;
 }) => (
   <div className="pointer-events-none absolute inset-x-1 top-1 flex items-center justify-between">
@@ -58,6 +68,34 @@ const MediaBadge = ({
     </span>
   </div>
 );
+
+const NoteCard = ({ item }: { item: { label?: string; content?: string } }) => {
+  const trimmed = item.content?.trim() ?? "";
+  const summary = trimmed
+    ? trimmed.length > 24
+      ? `${trimmed.slice(0, 24)}…`
+      : trimmed
+    : "便签";
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[#B43FEB]/12 px-1 py-1 text-[#B43FEB]">
+      <IconFileText size={16} stroke={1.8} />
+      <span
+        className="max-w-full truncate px-1 text-[9px] font-medium leading-none"
+        title={summary}
+      >
+        {summary}
+      </span>
+      {item.label && item.label !== "便签节点" && (
+        <span
+          className="max-w-full truncate px-1 text-[8px] text-white/65 leading-none"
+          title={item.label}
+        >
+          {item.label}
+        </span>
+      )}
+    </div>
+  );
+};
 
 const Placeholder = ({
   type,
@@ -136,11 +174,16 @@ const ReferenceCard = ({
   item,
   index,
 }: {
-  item: MentionItem;
+  item: ReferenceItem;
   index: number;
 }) => {
   const card = (
-    <div className="relative h-15 w-15 shrink-0 overflow-hidden rounded-xl border border-white/8 bg-white/3 shadow-sm transition-colors group-hover:border-white/18">
+    <div
+      className={cn(
+        "relative h-15 w-15 shrink-0 overflow-hidden rounded-xl border border-white/8 bg-white/3 shadow-sm transition-colors group-hover:border-white/18",
+        item.type === "note" && "border-[#B43FEB]/40",
+      )}
+    >
       {item.type === "image" ? (
         item.thumbnail ? (
           <img
@@ -157,12 +200,26 @@ const ReferenceCard = ({
         )
       ) : item.type === "video" ? (
         <VideoThumbnail url={item.thumbnail} label={item.label} />
+      ) : item.type === "note" ? (
+        <NoteCard item={item} />
       ) : (
         <Placeholder type="audio" label={item.label} />
       )}
       <MediaBadge label={item.label} type={item.type} index={index} />
     </div>
   );
+
+  if (item.type === "note") {
+    return (
+      <NotePreviewPopover
+        content={item.content ?? ""}
+        label={item.label}
+        index={index}
+      >
+        {card}
+      </NotePreviewPopover>
+    );
+  }
 
   if (item.type !== "image" || !item.thumbnail) {
     return card;
@@ -182,11 +239,11 @@ const SortableReferenceItem = ({
   onRemove,
   onHoverChange,
 }: {
-  item: MentionItem;
+  item: ReferenceItem;
   index: number;
   displayIndex: number;
-  onRemove?: (item: MentionItem) => void;
-  onHoverChange?: (item: MentionItem, isHovering: boolean) => void;
+  onRemove?: (item: ReferenceItem) => void;
+  onHoverChange?: (item: ReferenceItem, isHovering: boolean) => void;
 }) => {
   const {
     attributes,
@@ -256,11 +313,11 @@ const StaticReferenceItem = ({
   onRemove,
   onHoverChange,
 }: {
-  item: MentionItem;
+  item: ReferenceItem;
   index: number;
   displayIndex: number;
-  onRemove?: (item: MentionItem) => void;
-  onHoverChange?: (item: MentionItem, isHovering: boolean) => void;
+  onRemove?: (item: ReferenceItem) => void;
+  onHoverChange?: (item: ReferenceItem, isHovering: boolean) => void;
 }) => {
   return (
     <div
@@ -301,10 +358,11 @@ export const ReferenceThumbnails = ({
   );
 
   const sortableItems = useMemo(() => {
-    const typeIndexes: Record<MentionItem["type"], number> = {
+    const typeIndexes: Record<ReferenceItemType, number> = {
       image: 0,
       video: 0,
       audio: 0,
+      note: 0,
     };
 
     return items.map((item, index) => {

@@ -3,10 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   CANVAS_PRESETS_UPDATED_EVENT,
-  defaultPresets,
   type PresetItem,
-  presetsService,
-} from "service/localStorageService";
+  presetStorage,
+} from "service/presetStorage";
 import { cn } from "shared/utils/utils";
 import {
   Tooltip,
@@ -41,8 +40,8 @@ export const PresetDropdown = ({
 
   // 加载预设
   useEffect(() => {
-    const loadPresets = () => {
-      const loaded = presetsService.load() ?? defaultPresets;
+    const loadPresets = async () => {
+      const loaded = await presetStorage.loadPresets();
       const filtered = [
         ...(loaded.general ?? []),
         ...(loaded[presetType] ?? []),
@@ -51,7 +50,7 @@ export const PresetDropdown = ({
       setPresets(filtered);
     };
 
-    loadPresets();
+    void loadPresets();
     window.addEventListener(CANVAS_PRESETS_UPDATED_EVENT, loadPresets);
 
     return () => {
@@ -137,54 +136,54 @@ export const PresetDropdown = ({
       </button>
       {isOpen && menuStyle && typeof document !== "undefined"
         ? createPortal(
-            <div
-              ref={menuRef}
-              className="z-9999 overflow-hidden rounded-lg border-white/10 bg-[#1a1a1c] shadow-xl animate-in fade-in slide-in-from-bottom-1 duration-200"
-              style={{
-                position: "fixed",
-                left: menuStyle.left,
-                top: menuStyle.top,
-                width: menuStyle.width,
-                transform: "translateY(-100%)",
-              }}
-            >
-              <div className="max-h-60 overflow-y-auto py-1">
-                {presets.length === 0 ? (
-                  <div className="px-3 py-2 text-center text-xs text-white/40">
-                    暂无可用预设
-                  </div>
-                ) : (
-                  <TooltipProvider delayDuration={120}>
-                    {presets.map((preset) => (
-                      <Tooltip key={preset.id}>
-                        {/* 使用 Portal Tooltip，避免被下拉容器的 overflow 裁剪 */}
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            className="w-full cursor-pointer px-3 py-2 text-left hover:bg-white/5"
-                            onClick={() => handleSelect(preset)}
-                          >
-                            <div className="truncate text-sm text-white/80">
-                              {preset.name}
-                            </div>
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent
-                          side="right"
-                          align="end"
-                          sideOffset={8}
-                          className="max-w-64 whitespace-normal wrap-break-word border-white/10 bg-black/90 text-xs text-white/80"
+          <div
+            ref={menuRef}
+            className="z-9999 overflow-hidden rounded-lg border-white/10 bg-[#1a1a1c] shadow-xl animate-in fade-in slide-in-from-bottom-1 duration-200"
+            style={{
+              position: "fixed",
+              left: menuStyle.left,
+              top: menuStyle.top,
+              width: menuStyle.width,
+              transform: "translateY(-100%)",
+            }}
+          >
+            <div className="max-h-60 overflow-y-auto py-1">
+              {presets.length === 0 ? (
+                <div className="px-3 py-2 text-center text-xs text-white/40">
+                  暂无可用预设
+                </div>
+              ) : (
+                <TooltipProvider delayDuration={120}>
+                  {presets.map((preset) => (
+                    <Tooltip key={preset.id}>
+                      {/* 使用 Portal Tooltip，避免被下拉容器的 overflow 裁剪 */}
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="w-full cursor-pointer px-3 py-2 text-left hover:bg-white/5"
+                          onClick={() => handleSelect(preset)}
                         >
-                          {preset.content}
-                        </TooltipContent>
-                      </Tooltip>
-                    ))}
-                  </TooltipProvider>
-                )}
-              </div>
-            </div>,
-            document.body,
-          )
+                          <div className="truncate text-sm text-white/80">
+                            {preset.name}
+                          </div>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="right"
+                        align="end"
+                        sideOffset={8}
+                        className="max-w-64 whitespace-normal wrap-break-word border-white/10 bg-black/90 text-xs text-white/80"
+                      >
+                        {preset.content}
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                </TooltipProvider>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )
         : null}
     </div>
   );

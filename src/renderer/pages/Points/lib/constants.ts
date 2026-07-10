@@ -35,14 +35,6 @@ export const RECHARGE_PACKAGES = [
     originalPrice: 300,
     tag: "创作达人",
   },
-  {
-    id: 4,
-    packageId: "pkg_60000",
-    points: 60000,
-    price: 1000,
-    originalPrice: 1000,
-    tag: "专业工作室",
-  },
 ];
 
 export const usageHistory = [

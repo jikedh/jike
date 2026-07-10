@@ -20,7 +20,7 @@ import { generateAvatarUrl, getRandomStyle } from "./lib/utils";
 export function PointsView() {
     const [activeTab, setActiveTab] = useState<ActiveTab>("transaction");
     const [userId, setUserId] = useState<string>("");
-    const [selectedPackageId, setSelectedPackageId] = useState<number | null>(
+    const [selectedPackage, setSelectedPackage] = useState<RechargePackage | null>(
         null,
     );
     const [isCreatingOrder, setIsCreatingOrder] = useState(false);
@@ -131,11 +131,6 @@ export function PointsView() {
         }
     }, [activeTab, fetchTransactions]);
 
-    const selectedPackage =
-        selectedPackageId === null
-            ? null
-            : (RECHARGE_PACKAGES.find((pkg) => pkg.id === selectedPackageId) ?? null);
-
     const totalScore =
         (balanceInfo?.forScore ?? 0) + (balanceInfo?.vipScore ?? 0);
 
@@ -163,6 +158,48 @@ export function PointsView() {
         } catch (error: any) {
             console.error(error);
             toast.error(error instanceof Error ? error.message : "创建充值订单失败");
+        } finally {
+            setIsCreatingOrder(false);
+        }
+    };
+
+    const createNativeCustomRechargeOrder = async (amountYuan: number) => {
+        if (!userId) {
+            toast.error("请先登录后再充值");
+            return;
+        }
+
+        const points = Math.round(amountYuan * 60);
+        const customPackage: RechargePackage = {
+            id: 0,
+            packageId: "pkg_custom",
+            points,
+            price: amountYuan,
+            originalPrice: amountYuan,
+            tag: "自定义充值",
+        };
+
+        setSelectedPackage(customPackage);
+        setNativePayOrder(null);
+        setIsCreatingOrder(true);
+        try {
+            const result = await createRechargeOrder({
+                userId,
+                customAmountFen: Math.round(amountYuan * 100),
+            });
+
+            if (!result?.data?.codeUrl) {
+                throw new Error(result?.msg || "创建充值订单失败");
+            }
+
+            setNativePayOrder({
+                orderId: result.data.orderId,
+                codeUrl: result.data.codeUrl,
+            });
+        } catch (error: any) {
+            console.error(error);
+            toast.error(error instanceof Error ? error.message : "创建充值订单失败");
+            setSelectedPackage(null);
         } finally {
             setIsCreatingOrder(false);
         }
@@ -207,11 +244,11 @@ export function PointsView() {
                         toast.error("充值成功但积分更新失败，请刷新页面");
                     }
 
-                    setSelectedPackageId(null);
+                    setSelectedPackage(null);
                     setNativePayOrder(null);
                 } else if (result?.data?.status === "CLOSED") {
                     toast.error("支付失败或已取消");
-                    setSelectedPackageId(null);
+                    setSelectedPackage(null);
                     setNativePayOrder(null);
                     if (timer) {
                         clearInterval(timer);
@@ -223,7 +260,7 @@ export function PointsView() {
                 pollingCount++;
                 if (pollingCount >= MAX_POLLING_COUNT) {
                     toast.info("支付超时，请重新尝试");
-                    setSelectedPackageId(null);
+                    setSelectedPackage(null);
                     setNativePayOrder(null);
                     if (timer) {
                         clearInterval(timer);
@@ -252,14 +289,18 @@ export function PointsView() {
     ]);
 
     const handleRecharge = (pkg: RechargePackage) => {
-        setSelectedPackageId(pkg.id);
+        setSelectedPackage(pkg);
         setNativePayOrder(null);
         void createNativeRechargeOrder(pkg);
     };
 
+    const handleCustomRecharge = (amountYuan: number) => {
+        void createNativeCustomRechargeOrder(amountYuan);
+    };
+
     const handleDialogOpenChange = (open: boolean) => {
         if (!open) {
-            setSelectedPackageId(null);
+            setSelectedPackage(null);
             setNativePayOrder(null);
         }
     };
@@ -273,7 +314,11 @@ export function PointsView() {
             />
 
             <section className="mx-auto grid max-w-6xl gap-12 px-8 py-12">
-                <RechargeGrid packages={RECHARGE_PACKAGES} onRecharge={handleRecharge} />
+                <RechargeGrid
+                    packages={RECHARGE_PACKAGES}
+                    onRecharge={handleRecharge}
+                    onCustomRecharge={handleCustomRecharge}
+                />
                 <HistorySection
                     activeTab={activeTab}
                     onTabChange={setActiveTab}
