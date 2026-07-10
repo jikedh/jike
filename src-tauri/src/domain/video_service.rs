@@ -5,7 +5,8 @@
 
 use crate::models::{
     FetchShot4uPlaylistRequest, FetchShot4uPlaylistResult, FetchVideoPageRequest,
-    FetchVideoPageResult, M3u8ToMp4Request, M3u8ToMp4Result, SplitMp4Request, SplitMp4Result,
+    FetchVideoPageResult, HongguoApiRequest, HongguoDecryptRequest, M3u8ToMp4Request,
+    M3u8ToMp4Result, Mp4DownloadRequest, Mp4DownloadResult, SplitMp4Request, SplitMp4Result,
     VideoTrimRequest, VideoTrimResult,
 };
 use reqwest::{
@@ -143,6 +144,32 @@ pub async fn download_m3u8_to_mp4(
     })
 }
 
+pub async fn download_mp4_url(req: Mp4DownloadRequest) -> Result<Mp4DownloadResult, VideoError> {
+    let url = req.url.trim().to_string();
+    if url.is_empty() {
+        return Err(VideoError::Config("url is empty".into()));
+    }
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err(VideoError::Config("仅支持 http/https MP4 地址".into()));
+    }
+
+    let output_path = ensure_mp4_output_path(&req.output_path)?;
+    let result_path = output_path.clone();
+    if let Some(parent) = output_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let client = build_http_client(req.referer.as_deref(), req.origin.as_deref())?;
+    let bytes = fetch_bytes_with_retry(&client, &url, 8).await?;
+    std::fs::write(&output_path, bytes)?;
+
+    Ok(Mp4DownloadResult {
+        path: result_path.to_string_lossy().to_string(),
+        format: "mp4".to_string(),
+        method: "direct-http".to_string(),
+    })
+}
+
 pub async fn split_mp4_by_seconds(
     req: SplitMp4Request,
     bundled_ffmpeg_dirs: Vec<PathBuf>,
@@ -204,6 +231,76 @@ pub async fn fetch_shot4u_playlist(
     }
 
     Ok(FetchShot4uPlaylistResult { ass_url, m3u8_urls })
+}
+
+pub async fn fetch_hongguo_api(req: HongguoApiRequest) -> Result<Value, VideoError> {
+    let key = req.key.trim();
+    if key.is_empty() {
+        return Err(VideoError::Config("红果 API key 为空".into()));
+    }
+
+    let client = build_http_client(None, None)?;
+    let mut params = vec![
+        ("key".to_string(), key.to_string()),
+        ("type".to_string(), req.action.trim().to_string()),
+    ];
+    if let Some(value) = req.keyword.filter(|value| !value.trim().is_empty()) {
+        params.push(("keyword".to_string(), value));
+    }
+    if let Some(value) = req.page.filter(|value| !value.trim().is_empty()) {
+        params.push(("page".to_string(), value));
+    }
+    if let Some(value) = req.id.filter(|value| !value.trim().is_empty()) {
+        params.push(("id".to_string(), value));
+    }
+    if let Some(value) = req.video_id.filter(|value| !value.trim().is_empty()) {
+        params.push(("video_id".to_string(), value));
+    }
+
+    let response = client
+        .get("https://www.52api.cn/api/hg_new")
+        .query(&params)
+        .send()
+        .await
+        .map_err(|e| VideoError::Http(e.to_string()))?;
+    if !response.status().is_success() {
+        return Err(VideoError::Http(format!("HTTP {}", response.status())));
+    }
+
+    response
+        .json::<Value>()
+        .await
+        .map_err(|e| VideoError::Http(e.to_string()))
+}
+
+pub async fn decrypt_hongguo_video(req: HongguoDecryptRequest) -> Result<Value, VideoError> {
+    let key = req.key.trim();
+    if key.is_empty() {
+        return Err(VideoError::Config("红果 API key 为空".into()));
+    }
+    if req.url.trim().is_empty() || req.decrypt_key.trim().is_empty() {
+        return Err(VideoError::Config("云解析参数不完整".into()));
+    }
+
+    let client = build_http_client(None, None)?;
+    let response = client
+        .post("https://www.52api.cn/api/hg_decrypt")
+        .form(&[
+            ("key", key),
+            ("url", req.url.trim()),
+            ("decrypt_key", req.decrypt_key.trim()),
+        ])
+        .send()
+        .await
+        .map_err(|e| VideoError::Http(e.to_string()))?;
+    if !response.status().is_success() {
+        return Err(VideoError::Http(format!("HTTP {}", response.status())));
+    }
+
+    response
+        .json::<Value>()
+        .await
+        .map_err(|e| VideoError::Http(e.to_string()))
 }
 
 fn normalize_existing_file_path(value: &str, field_name: &str) -> Result<PathBuf, VideoError> {

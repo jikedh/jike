@@ -1,7 +1,7 @@
 use crate::domain;
 use crate::models::{
-    FetchShot4uPlaylistRequest, FetchVideoPageRequest, M3u8ToMp4Request, SplitMp4Request,
-    VideoTrimRequest,
+    FetchShot4uPlaylistRequest, FetchVideoPageRequest, HongguoApiRequest,
+    HongguoDecryptRequest, M3u8ToMp4Request, Mp4DownloadRequest, SplitMp4Request, VideoTrimRequest,
 };
 use std::path::PathBuf;
 use tauri::Manager;
@@ -23,6 +23,16 @@ pub async fn video_download_m3u8_to_mp4(
     request: M3u8ToMp4Request,
 ) -> Result<serde_json::Value, String> {
     match domain::download_m3u8_to_mp4(request, ffmpeg_resource_dirs(&app)).await {
+        Ok(r) => Ok(serde_json::json!({ "success": true, "data": r })),
+        Err(e) => Ok(serde_json::json!({ "success": false, "error": e.to_string() })),
+    }
+}
+
+#[tauri::command]
+pub async fn video_download_mp4_url(
+    request: Mp4DownloadRequest,
+) -> Result<serde_json::Value, String> {
+    match domain::download_mp4_url(request).await {
         Ok(r) => Ok(serde_json::json!({ "success": true, "data": r })),
         Err(e) => Ok(serde_json::json!({ "success": false, "error": e.to_string() })),
     }
@@ -54,6 +64,26 @@ pub async fn video_fetch_shot4u_playlist(
     request: FetchShot4uPlaylistRequest,
 ) -> Result<serde_json::Value, String> {
     match domain::fetch_shot4u_playlist(request).await {
+        Ok(r) => Ok(serde_json::json!({ "success": true, "data": r })),
+        Err(e) => Ok(serde_json::json!({ "success": false, "error": e.to_string() })),
+    }
+}
+
+#[tauri::command]
+pub async fn video_fetch_hongguo_api(
+    request: HongguoApiRequest,
+) -> Result<serde_json::Value, String> {
+    match domain::fetch_hongguo_api(request).await {
+        Ok(r) => Ok(serde_json::json!({ "success": true, "data": r })),
+        Err(e) => Ok(serde_json::json!({ "success": false, "error": e.to_string() })),
+    }
+}
+
+#[tauri::command]
+pub async fn video_decrypt_hongguo_video(
+    request: HongguoDecryptRequest,
+) -> Result<serde_json::Value, String> {
+    match domain::decrypt_hongguo_video(request).await {
         Ok(r) => Ok(serde_json::json!({ "success": true, "data": r })),
         Err(e) => Ok(serde_json::json!({ "success": false, "error": e.to_string() })),
     }

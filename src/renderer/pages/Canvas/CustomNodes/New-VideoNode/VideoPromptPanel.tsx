@@ -10,6 +10,14 @@ import { toChineseNumber } from "shared/utils/utils";
 import { cn } from "shared/utils/utils";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { PresetDropdown } from "@/components/PresetDropdown";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
@@ -40,6 +48,7 @@ import {
 } from "./constants/mockData";
 import {
   ALL_MODE_KEYS,
+  MODE_LABELS,
   getFirstSupportedModeForModel,
   getSupportedModesForModel,
   type VideoModeKey
@@ -57,6 +66,23 @@ import { validateVideoGenerationCapability } from "./constants/videoModelGenerat
 interface VideoPromptPanelProps {
   nodeId: string;
 }
+
+type PendingVideoGenerateContext = {
+  fullRequest: VideoGenerateRequest;
+  apiRequest: ReturnType<typeof buildVideoApiRequest>;
+  requiredPoints: number;
+  modelLabel: string;
+  modeLabel: string;
+  resolution?: string;
+  duration: number;
+  generateAudio: boolean;
+  referenceCounts: {
+    image: number;
+    video: number;
+    audio: number;
+  };
+  overseasReferenceDurationSeconds: number;
+};
 
 const isVideoModeKey = (value: unknown): value is VideoModeKey => {
   return (
@@ -391,6 +417,11 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   const [selectedParams, setSelectedParams] = useState<VideoParamState>(() =>
     normalizeVideoParams(model, metadataParams, initialMode),
   );
+  const [
+    pendingGenerateContext,
+    setPendingGenerateContext,
+  ] = useState<PendingVideoGenerateContext | null>(null);
+  const isGenerateConfirmOpen = pendingGenerateContext !== null;
 
   const storedOptimizeSystemPrompt = useMemo(() => {
     const value = (currentData?.metadata ?? {})[
@@ -1356,6 +1387,105 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     warning,
   ]);
 
+  const executeConfirmedGenerate = useCallback(
+    async (context: PendingVideoGenerateContext) => {
+      if (isGenerating) {
+        return;
+      }
+      if (
+        !(await validateBalanceBeforeGenerate({
+          requiredPoints: context.requiredPoints,
+          warning,
+        }))
+      ) {
+        return;
+      }
+      setPendingGenerateContext(null);
+      const { fullRequest, apiRequest } = context;
+      updateNewVideoNodeData(nodeId, {
+        model: fullRequest.model,
+        prompt: fullRequest.prompt,
+        promptDraft: fullRequest.prompt,
+        duration: fullRequest.params.duration,
+        aspect_ratio: fullRequest.params.aspectRatio,
+        requiredPoints: context.requiredPoints,
+        status: GenerationStatus.QUEUED,
+        progress: 0,
+        result: {
+          type: "video",
+          data: currentData?.result?.data ?? [],
+        },
+        error: undefined,
+        metadata: {
+          ...(currentData?.metadata ?? {}),
+          params: fullRequest.params,
+          mode: fullRequest.mode,
+          count: 1,
+          tasks: [],
+          failedTasks: [],
+          [VIDEO_FAKE_REQUEST_PENDING_KEY]: true,
+        },
+      });
+
+      const existingTimer = videoFakeRequestTimers.get(nodeId);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+      }
+
+      const timer = setTimeout(() => {
+        if (videoFakeRequestTimers.get(nodeId) !== timer) {
+          return;
+        }
+        const latestData = getCurrentNewVideoData(nodeId);
+        if (!isVideoFakeRequestPending(latestData)) {
+          videoFakeRequestTimers.delete(nodeId);
+          return;
+        }
+        videoFakeRequestTimers.delete(nodeId);
+        updateNewVideoNodeData(nodeId, {
+          metadata: {
+            ...(latestData?.metadata ?? {}),
+            params: fullRequest.params,
+            mode: fullRequest.mode,
+            count: 1,
+            tasks: [],
+            failedTasks: [],
+            [VIDEO_FAKE_REQUEST_PENDING_KEY]: false,
+          },
+        });
+        void startNewVideoGeneration(
+          nodeId,
+          {
+            ...apiRequest,
+            requiredPoints: context.requiredPoints,
+            __newVideoInput: fullRequest,
+          },
+          1,
+        )
+          .then(() => {
+            success("已开始生成视频");
+            void refreshBalanceInfo();
+          })
+          .catch(() => {
+            // 失败状态已由 startNewVideoGeneration 写回节点。
+          });
+      }, VIDEO_GENERATION_FAKE_REQUEST_DELAY_MS);
+      videoFakeRequestTimers.set(nodeId, timer);
+    },
+    [
+      currentData?.metadata,
+      currentData?.result?.data,
+      isGenerating,
+      nodeId,
+      refreshBalanceInfo,
+      startNewVideoGeneration,
+      success,
+      updateNewVideoNodeData,
+      validateBalanceBeforeGenerate,
+      warning,
+    ],
+  );
+
   const handleGenerate = useCallback(
     async (request: VideoGenerateRequest) => {
       if (isGenerating) {
@@ -1423,93 +1553,43 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
             : generationReferenceItems,
       };
       const apiRequest = buildVideoApiRequest(fullRequest);
+      const referenceCounts = fullRequest.referenceItems.reduce(
+        (counts, item) => ({
+          ...counts,
+          [item.type]: counts[item.type] + 1,
+        }),
+        { image: 0, video: 0, audio: 0 },
+      );
 
-      updateNewVideoNodeData(nodeId, {
-        model: fullRequest.model,
-        prompt: fullRequest.prompt,
-        promptDraft: fullRequest.prompt,
-        duration: fullRequest.params.duration,
-        aspect_ratio: fullRequest.params.aspectRatio,
+      setPendingGenerateContext({
+        fullRequest,
+        apiRequest,
         requiredPoints,
-        status: GenerationStatus.QUEUED,
-        progress: 0,
-        result: {
-          type: "video",
-          data: currentData?.result?.data ?? [],
-        },
-        error: undefined,
-        metadata: {
-          ...(currentData?.metadata ?? {}),
-          params: fullRequest.params,
-          mode: fullRequest.mode,
-          count: 1,
-          tasks: [],
-          failedTasks: [],
-          [VIDEO_FAKE_REQUEST_PENDING_KEY]: true,
-        },
+        modelLabel:
+          videoModelOptions.find((option) => option.value === fullRequest.model)
+            ?.label ?? fullRequest.model,
+        modeLabel: MODE_LABELS[fullRequest.mode],
+        resolution: fullRequest.params.resolution,
+        duration: fullRequest.params.duration,
+        generateAudio: Boolean(fullRequest.params.generateAudio),
+        referenceCounts,
+        overseasReferenceDurationSeconds:
+          fullRequest.model === OVERSEAS_SEEDANCE_MODEL
+            ? overseasReferenceDurationSeconds
+            : 0,
       });
-
-      const existingTimer = videoFakeRequestTimers.get(nodeId);
-      if (existingTimer) {
-        clearTimeout(existingTimer);
-      }
-
-      const timer = setTimeout(() => {
-        if (videoFakeRequestTimers.get(nodeId) !== timer) {
-          return;
-        }
-        const latestData = getCurrentNewVideoData(nodeId);
-        if (!isVideoFakeRequestPending(latestData)) {
-          videoFakeRequestTimers.delete(nodeId);
-          return;
-        }
-        videoFakeRequestTimers.delete(nodeId);
-        updateNewVideoNodeData(nodeId, {
-          metadata: {
-            ...(latestData?.metadata ?? {}),
-            params: fullRequest.params,
-            mode: fullRequest.mode,
-            count: 1,
-            tasks: [],
-            failedTasks: [],
-            [VIDEO_FAKE_REQUEST_PENDING_KEY]: false,
-          },
-        });
-        void startNewVideoGeneration(
-          nodeId,
-          {
-            ...apiRequest,
-            requiredPoints,
-            __newVideoInput: fullRequest,
-          },
-          1,
-        )
-          .then(() => {
-            success("已开始生成视频");
-            void refreshBalanceInfo();
-          })
-          .catch(() => {
-            // 失败状态已由 startNewVideoGeneration 写回节点。
-          });
-      }, VIDEO_GENERATION_FAKE_REQUEST_DELAY_MS);
-      videoFakeRequestTimers.set(nodeId, timer);
     },
     [
-      currentData?.metadata,
-      currentData?.result?.data,
       generationReferenceItems,
       generationVideoReferenceUrls.length,
       isGenerating,
       isLoadingOverseasReferenceDuration,
-      nodeId,
       overseasReferenceDurationError,
+      overseasReferenceDurationSeconds,
       parentNoteContents,
-      refreshBalanceInfo,
       requiredPoints,
-      startNewVideoGeneration,
-      success,
-      updateNewVideoNodeData,
       validateBalanceBeforeGenerate,
+      videoModelOptions,
       warning,
     ],
   );
@@ -1703,6 +1783,105 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
             </>
           }
         />
+        <Dialog
+          open={isGenerateConfirmOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setPendingGenerateContext(null);
+            }
+          }}
+        >
+          <DialogContent className="w-[min(520px,92vw)] rounded-lg border border-white/[0.08] bg-[#1e1e20] p-0 text-white shadow-[0_25px_80px_-30px_rgba(0,0,0,0.8)]">
+            <DialogHeader className="border-b border-white/[0.08] px-5 py-4">
+              <DialogTitle className="text-base font-medium text-white">
+                确认生成视频
+              </DialogTitle>
+              <DialogDescription className="text-xs text-white/50">
+                确认后将进入 5 秒可停止窗口，窗口结束后才会创建任务并扣除积分。
+              </DialogDescription>
+            </DialogHeader>
+
+            {pendingGenerateContext ? (
+              <div className="px-5 py-4">
+                <div className="grid grid-cols-2 gap-x-5 gap-y-3 text-sm">
+                  <div>
+                    <div className="mb-1 text-xs text-white/40">模型</div>
+                    <div className="truncate text-white/90">
+                      {pendingGenerateContext.modelLabel}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-1 text-xs text-white/40">模式</div>
+                    <div className="text-white/90">
+                      {pendingGenerateContext.modeLabel}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-1 text-xs text-white/40">分辨率</div>
+                    <div className="text-white/90">
+                      {pendingGenerateContext.resolution ?? "-"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-1 text-xs text-white/40">时长</div>
+                    <div className="text-white/90">
+                      {pendingGenerateContext.duration}s
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-1 text-xs text-white/40">生成音频</div>
+                    <div className="text-white/90">
+                      {pendingGenerateContext.generateAudio ? "是" : "否"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-1 text-xs text-white/40">预计消耗</div>
+                    <div className="font-medium text-[#B43FEB]">
+                      {pendingGenerateContext.requiredPoints} 积分
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-white/65">
+                  参考素材：图片 {pendingGenerateContext.referenceCounts.image}，
+                  视频 {pendingGenerateContext.referenceCounts.video}，音频{" "}
+                  {pendingGenerateContext.referenceCounts.audio}
+                </div>
+
+                {pendingGenerateContext.fullRequest.model ===
+                  OVERSEAS_SEEDANCE_MODEL &&
+                pendingGenerateContext.referenceCounts.video > 0 ? (
+                  <div className="mt-2 rounded-lg border border-[#B43FEB]/20 bg-[#B43FEB]/10 px-3 py-2 text-xs leading-5 text-white/70">
+                    海外 Seedance 视频参考计费：生成{" "}
+                    {pendingGenerateContext.duration}s + 参考视频{" "}
+                    {pendingGenerateContext.overseasReferenceDurationSeconds}s。
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <DialogFooter className="mt-0 border-t border-white/[0.08] px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setPendingGenerateContext(null)}
+                className="rounded-md border border-white/[0.08] bg-transparent px-4 py-2 text-sm text-white/65 transition-colors hover:border-white/20 hover:text-white"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (pendingGenerateContext) {
+                    void executeConfirmedGenerate(pendingGenerateContext);
+                  }
+                }}
+                className="rounded-md bg-[#B43FEB] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#9F35D4]"
+              >
+                确认生成
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );

@@ -70,6 +70,47 @@ pub struct M3u8ToMp4Result {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Mp4DownloadRequest {
+    pub url: String,
+    #[serde(rename = "outputPath")]
+    pub output_path: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub referer: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub origin: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Mp4DownloadResult {
+    pub path: String,
+    pub format: String,
+    pub method: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HongguoApiRequest {
+    pub key: String,
+    #[serde(rename = "type")]
+    pub action: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub keyword: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub page: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub id: Option<String>,
+    #[serde(rename = "video_id", skip_serializing_if = "Option::is_none", default)]
+    pub video_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HongguoDecryptRequest {
+    pub key: String,
+    pub url: String,
+    #[serde(rename = "decrypt_key")]
+    pub decrypt_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SplitMp4Request {
     #[serde(rename = "inputPath")]
     pub input_path: String,

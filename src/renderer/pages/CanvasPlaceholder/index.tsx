@@ -41,17 +41,20 @@ const escapeRegExp = (value: string) => {
 
 const getImportedProjectName = (
   rawName: string,
-  existingProjects: ProjectListItem[],
+  existingProjectNames: Iterable<string>,
 ) => {
   const baseName = rawName.trim() || "导入项目";
-  const existingNames = new Set(existingProjects.map((project) => project.name));
+  const existingNames = new Set(existingProjectNames);
 
   if (baseName.toLowerCase() !== "canvas" && !existingNames.has(baseName)) {
     return baseName;
   }
 
-  const namePattern = new RegExp(`^${escapeRegExp(baseName)}(\\d+)$`);
-  let maxIndex = 0;
+  const suffixMatch = baseName.match(/^(.*?)(\d+)$/);
+  const suffixBaseName = suffixMatch?.[1] || baseName;
+  const baseIndex = suffixMatch ? Number(suffixMatch[2]) : 0;
+  const namePattern = new RegExp(`^${escapeRegExp(suffixBaseName)}(\\d+)$`);
+  let maxIndex = baseIndex;
 
   existingNames.forEach((name) => {
     const match = name.match(namePattern);
@@ -61,15 +64,43 @@ const getImportedProjectName = (
   });
 
   let nextIndex = maxIndex + 1;
-  let nextName = `${baseName}${nextIndex}`;
+  let nextName = `${suffixBaseName}${nextIndex}`;
 
   while (existingNames.has(nextName)) {
     nextIndex += 1;
-    nextName = `${baseName}${nextIndex}`;
+    nextName = `${suffixBaseName}${nextIndex}`;
   }
 
   return nextName;
 };
+
+const createImportTimestamp = () => {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return [
+    now.getFullYear(),
+    pad(now.getMonth() + 1),
+    pad(now.getDate()),
+    "-",
+    pad(now.getHours()),
+    pad(now.getMinutes()),
+    pad(now.getSeconds()),
+  ].join("");
+};
+
+const isDuplicateProjectNameError = (error: any) => {
+  const message = String(
+    error?.response?.data?.msg || error?.msg || error?.message || "",
+  ).toLowerCase();
+  return (
+    message.includes("duplicate entry") ||
+    message.includes("1062") ||
+    message.includes("uk_projects_user_name")
+  );
+};
+
+const isSuccessResponseCode = (code?: number) =>
+  code === 0 || code === 200 || code === 10000;
 
 export default function CanvasPlaceholderPage() {
   const navigate = useNavigate();
@@ -236,18 +267,59 @@ export default function CanvasPlaceholderPage() {
       const latestProjectResult = await getProjectList({ page: 1, page_size: 100 });
       const rawProjectName =
         sourceProject.name || file.name.replace(/\.json$/i, "") || "导入项目";
-      const importedProjectName = getImportedProjectName(
-        rawProjectName,
-        latestProjectResult.data.list,
+      const occupiedProjectNames = new Set(
+        latestProjectResult.data.list.map((project) => project.name),
       );
+      const baseImportedProjectName = getImportedProjectName(
+        rawProjectName,
+        occupiedProjectNames,
+      );
+      const importTimestamp = createImportTimestamp();
+      let lastImportError: unknown = null;
+      let result: Awaited<ReturnType<typeof importProject>> | null = null;
 
-      const result = await importProject({
-        name: importedProjectName,
-        description: sourceProject.description || "",
-        type: sourceProject.type || "video",
-        cover_url: sourceProject.cover_url || sourceProject.coverUrl || "",
-        data: sourceCanvas.data || sourceCanvas,
-      });
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const importedProjectName =
+          attempt === 0
+            ? baseImportedProjectName
+            : attempt === 1
+              ? `${baseImportedProjectName}-${importTimestamp}`
+              : `${baseImportedProjectName}-${importTimestamp}-${attempt}`;
+
+        if (occupiedProjectNames.has(importedProjectName)) {
+          continue;
+        }
+
+        try {
+          const importResult = await importProject({
+            name: importedProjectName,
+            description: sourceProject.description || "",
+            type: sourceProject.type || "video",
+            cover_url: sourceProject.cover_url || sourceProject.coverUrl || "",
+            data: sourceCanvas.data || sourceCanvas,
+          });
+          if (!isSuccessResponseCode(importResult.code)) {
+            lastImportError = importResult;
+            if (isDuplicateProjectNameError(importResult)) {
+              occupiedProjectNames.add(importedProjectName);
+              continue;
+            }
+            throw new Error(importResult.msg || "导入项目失败");
+          }
+          result = importResult;
+          break;
+        } catch (importError) {
+          lastImportError = importError;
+          if (!isDuplicateProjectNameError(importError)) {
+            throw importError;
+          }
+          occupiedProjectNames.add(importedProjectName);
+        }
+      }
+
+      if (!result) {
+        throw lastImportError || new Error("导入项目失败");
+      }
 
       await refreshProjects();
       toast.success("导入成功", {

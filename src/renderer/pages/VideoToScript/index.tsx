@@ -14,6 +14,7 @@ import {
   PlayCircle,
   RotateCcw,
   Scissors,
+  Search,
   UploadCloud,
   Video,
 } from "lucide-react";
@@ -29,10 +30,20 @@ import {
   ModalDescription,
   ModalTitle,
 } from "@/components/ui/modal";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { uploadAssetBinary } from "@/pages/Canvas/utils/remoteAssetUpload";
 
 type ProbeStatus = "success" | "error";
 type InputMode = "hongguo" | "shot4u";
+type ProbeScope = "first10" | "all";
+type InputChannel = "shot4u" | "localMp4" | "search";
+type VideoToScriptModel = "qwen3.5-flash" | "qwen3.7-plus";
 type DownloadStatus = "idle" | "pending" | "success" | "error" | "skipped";
 type UploadStatus = "idle" | "pending" | "success" | "error";
 type ScriptStatus = "idle" | "pending" | "success" | "error";
@@ -42,6 +53,7 @@ type EpisodeM3u8Result = {
   episode: number;
   pageUrl: string;
   m3u8Url: string;
+  mp4Url?: string;
   title: string;
   nextPageUrl: string;
   status: ProbeStatus;
@@ -132,6 +144,39 @@ type FetchShot4uPlaylistResult = {
   m3u8Urls: string[];
 };
 
+type Mp4DownloadResult = {
+  path: string;
+  format: string;
+  method: string;
+};
+
+type HongguoSearchItem = {
+  id: string;
+  cover?: string;
+  title?: string;
+  rec?: string;
+  intro?: string;
+  episode_num?: number;
+  role?: string;
+  type?: string;
+  score?: string;
+  record_number?: string;
+};
+
+type HongguoEpisodeItem = {
+  index: number;
+  title?: string;
+  video_id: string;
+};
+
+type HongguoVideoListItem = {
+  decrypt_key?: string;
+  definition?: string;
+  height?: number;
+  type?: string;
+  url?: string;
+};
+
 type ModeDraft = {
   startUrl: string;
   maxEpisodes: string;
@@ -148,17 +193,46 @@ type PersistedState = {
   results?: EpisodeM3u8Result[];
 };
 
-const DEFAULT_HONGGUO_URL =
-  "https://www.hongguostudio.com/vodplay/29962-1-1.html";
 const DEFAULT_SHOT4U_URL = "https://m.shot4u.com/play/2656-0-22.html";
 const DEFAULT_MAX_EPISODES = 80;
-const DEFAULT_BULK_CONCURRENCY = 2;
-const SCRIPT_BULK_CONCURRENCY = 5;
+const FIRST_PROBE_EPISODE_COUNT = 10;
+const DEFAULT_BULK_CONCURRENCY = 10;
+const SCRIPT_BULK_CONCURRENCY = 10;
+const OSS_UPLOAD_CONCURRENCY = 2;
 const CLIP_SEGMENT_SECONDS = 14;
 const HARD_MAX_EPISODES = 200;
-const MAX_BULK_CONCURRENCY = 5;
-const VIDEO_TO_SCRIPT_MODEL = "qwen3.7-plus";
+const MAX_BULK_CONCURRENCY = 10;
+const DEFAULT_VIDEO_TO_SCRIPT_MODEL: VideoToScriptModel = "qwen3.5-flash";
+const VIDEO_TO_SCRIPT_MODELS: Array<{
+  value: VideoToScriptModel;
+  label: string;
+}> = [
+  { value: "qwen3.5-flash", label: "qwen3.5-flash" },
+  { value: "qwen3.7-plus", label: "qwen3.7-plus" },
+];
+const INPUT_CHANNELS: Array<{
+  value: InputChannel;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "shot4u",
+    label: "Shot4u",
+    description: "播放页解析",
+  },
+  {
+    value: "localMp4",
+    label: "导入 MP4",
+    description: "本地视频上传",
+  },
+  {
+    value: "search",
+    label: "搜索",
+    description: "搜索短剧",
+  },
+];
 const STORAGE_KEY = "jike.videoToScript.state.v1";
+const HONGGUO_API_KEY = import.meta.env.VITE_HONGGUO_API_KEY || "";
 const VIDEO_TO_SCRIPT_SYSTEM_PROMPT = `你是短剧剧本整理师。你的任务是观看用户提供的单集短剧视频，只整理“剧情正文”，按影视剧本文本格式还原本集内容。
 
 只输出剧情正文，不要输出剧情梗概、人物表、二创改写要点、分析说明、Markdown 标题、表格或项目符号。
@@ -171,7 +245,7 @@ X-1 日、外、地点
 人物：角色A、角色B、群演若干
 △画面动作、人物走位、表情反应或剧情推进。
 角色A：台词。
-角色B（动作/语气）：台词。
+角色B（动作｜语气｜情绪）：台词。
 【OS】角色A：内心独白。
 【VO】角色B：画外音或广播。
 
@@ -187,7 +261,7 @@ X-2 夜、内、地点
 2. 每场场头使用“X-Y 日/夜、内/外、地点”格式；X 是集数，Y 是本集场次序号，从 1 开始递增。
 3. 场头下一行必须写“人物：”，列出本场出现或发声的角色。群体角色可写“护士*2”“随从若干”“路人若干”。
 4. 叙事、动作、表情、转场、画面信息统一用“△”开头。
-5. 对话格式为“角色：台词”；带动作或语气时写成“角色（动作/语气）：台词”。
+5. 对话格式必须严格为“角色（具体标注）：台词”。括号标注必须放在角色名之后、冒号之前。标注只能写视频中能判断出的具体动作、语气或情绪词，多标签用竖线“｜”分隔，例如“唐竹筠（压低声音｜急切｜紧张）：快走！”。严禁输出“动作”“语气”“情绪”这三个占位词，严禁写成“角色（动作｜语气｜情绪）：台词”。无法确认具体标注时，直接写“角色：台词”，不要为了填格式强行编造。
 6. 内心独白用“【OS】角色：台词”；画外音、广播、旁白用“【VO】角色：台词”。
 7. 回忆、闪回或插入片段可用“【闪入】”“【闪出】”单独成行。
 8. 分场依据是实际剧情节点、地点变化、时间变化、人物进出或冲突升级，不按固定时长硬拆。
@@ -199,10 +273,10 @@ const SOURCE_CONFIG: Record<
   { label: string; placeholder: string; referer: string; origin: string }
 > = {
   hongguo: {
-    label: "红果播放页",
-    placeholder: DEFAULT_HONGGUO_URL,
-    referer: "https://www.hongguostudio.com/",
-    origin: "https://www.hongguostudio.com",
+    label: "Shot4u 播放页",
+    placeholder: DEFAULT_SHOT4U_URL,
+    referer: "https://m.shot4u.com/",
+    origin: "https://m.shot4u.com",
   },
   shot4u: {
     label: "Shot4u 播放页",
@@ -219,7 +293,7 @@ type NormalizedPersistedState = {
 };
 
 const isInputMode = (value: unknown): value is InputMode =>
-  value === "hongguo" || value === "shot4u";
+  value === "shot4u";
 
 const createDefaultModeDraft = (mode: InputMode): ModeDraft => ({
   startUrl: SOURCE_CONFIG[mode].placeholder,
@@ -247,7 +321,7 @@ const normalizeModeDraft = (
 
 const loadPersistedState = (): NormalizedPersistedState => {
   const fallback: NormalizedPersistedState = {
-    activeMode: "hongguo",
+    activeMode: "shot4u",
     modes: {
       hongguo: createDefaultModeDraft("hongguo"),
       shot4u: createDefaultModeDraft("shot4u"),
@@ -282,7 +356,12 @@ const loadPersistedState = (): NormalizedPersistedState => {
       modes,
       bulkConcurrency:
         typeof parsed.bulkConcurrency === "string"
-          ? String(normalizeBulkConcurrency(parsed.bulkConcurrency))
+          ? String(
+              Math.max(
+                DEFAULT_BULK_CONCURRENCY,
+                normalizeBulkConcurrency(parsed.bulkConcurrency),
+              ),
+            )
           : fallback.bulkConcurrency,
     };
   } catch {
@@ -313,6 +392,38 @@ const normalizeBulkConcurrency = (value: string) => {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return DEFAULT_BULK_CONCURRENCY;
   return Math.max(1, Math.min(MAX_BULK_CONCURRENCY, Math.floor(numericValue)));
+};
+
+let activeOssUploads = 0;
+const pendingOssUploadStarters: Array<() => void> = [];
+
+const acquireOssUploadSlot = () =>
+  new Promise<() => void>((resolve) => {
+    const start = () => {
+      activeOssUploads += 1;
+      let released = false;
+      resolve(() => {
+        if (released) return;
+        released = true;
+        activeOssUploads = Math.max(0, activeOssUploads - 1);
+        pendingOssUploadStarters.shift()?.();
+      });
+    };
+
+    if (activeOssUploads < OSS_UPLOAD_CONCURRENCY) {
+      start();
+    } else {
+      pendingOssUploadStarters.push(start);
+    }
+  });
+
+const runWithOssUploadSlot = async <T,>(task: () => Promise<T>) => {
+  const release = await acquireOssUploadSlot();
+  try {
+    return await task();
+  } finally {
+    release();
+  }
 };
 
 const toAbsoluteUrl = (value: string | undefined, baseUrl: string) => {
@@ -374,6 +485,88 @@ const requestShot4uPlaylist = async (pageUrl: string) => {
   return response.data;
 };
 
+const requestHongguoApi = async <T,>(
+  request: Record<string, string | undefined>,
+) => {
+  const response = await invoke<CommandResponse<T>>("video_fetch_hongguo_api", {
+    request,
+  });
+
+  if (!response.success || !response.data) {
+    throw new Error(response.error || "红果 API 请求失败");
+  }
+
+  return response.data;
+};
+
+const requestHongguoDecrypt = async (
+  url: string,
+  decryptKey: string,
+) => {
+  const response = await invoke<CommandResponse<{ data?: { url?: string } }>>(
+    "video_decrypt_hongguo_video",
+    {
+      request: {
+        key: HONGGUO_API_KEY,
+        url: window.btoa(url),
+        decrypt_key: decryptKey,
+      },
+    },
+  );
+
+  if (!response.success || !response.data) {
+    throw new Error(response.error || "红果云解析失败");
+  }
+
+  const mp4Url = response.data.data?.url;
+  if (!mp4Url) {
+    throw new Error("红果云解析未返回 MP4 地址");
+  }
+
+  return mp4Url;
+};
+
+const downloadMp4Url = async (
+  url: string,
+  outputPath: string,
+  options?: { referer?: string; origin?: string },
+) => {
+  const response = await invoke<CommandResponse<Mp4DownloadResult>>(
+    "video_download_mp4_url",
+    {
+      request: {
+        url,
+        outputPath,
+        referer: options?.referer,
+        origin: options?.origin,
+      },
+    },
+  );
+
+  if (!response.success || !response.data) {
+    throw new Error(response.error || "MP4 下载失败");
+  }
+
+  return response.data;
+};
+
+const definitionRank = (definition: string | undefined) => {
+  const match = String(definition || "").match(/(\d+)/);
+  return match?.[1] ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+};
+
+const selectLowestQualityMp4 = (items: HongguoVideoListItem[]) => {
+  const candidates = items
+    .filter((item) => item.type === "mp4" && item.url && item.decrypt_key)
+    .sort((a, b) => {
+      const aHeight = Number.isFinite(a.height) ? Number(a.height) : definitionRank(a.definition);
+      const bHeight = Number.isFinite(b.height) ? Number(b.height) : definitionRank(b.definition);
+      return aHeight - bHeight;
+    });
+
+  return candidates[0];
+};
+
 const buildPlainText = (results: EpisodeM3u8Result[]) =>
   results
     .filter((item) => item.status === "success" && item.m3u8Url)
@@ -406,6 +599,28 @@ const appendExtensionIfMissing = (path: string, extension: string) => {
     return path;
   }
   return `${path}.${normalizedExtension}`;
+};
+
+const getPathFileName = (path: string) => path.split(/[\\/]/).pop() || path;
+
+const stripFileExtension = (filename: string) =>
+  filename.replace(/\.[^.\\/]+$/, "");
+
+const inferEpisodeFromFilePath = (path: string, fallbackEpisode: number) => {
+  const filename = stripFileExtension(getPathFileName(path));
+  const patterns = [
+    /第\s*0*(\d+)\s*集/i,
+    /(?:ep|episode|e)\s*0*(\d+)/i,
+    /(?:^|[^\d])0*(\d{1,4})(?:[^\d]|$)/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = filename.match(pattern);
+    const episode = match?.[1] ? Number(match[1]) : 0;
+    if (Number.isFinite(episode) && episode > 0) return episode;
+  }
+
+  return fallbackEpisode;
 };
 
 const getItemKey = (item: Pick<EpisodeM3u8Result, "episode" | "pageUrl">) =>
@@ -667,12 +882,39 @@ export default function VideoToScriptPage() {
     useState<ScriptBulkProgress | null>(null);
   const [viewingScriptItem, setViewingScriptItem] =
     useState<EpisodeM3u8Result | null>(null);
+  const [missingScriptEpisodes, setMissingScriptEpisodes] = useState<number[]>(
+    [],
+  );
+  const [probeScopeDialogOpen, setProbeScopeDialogOpen] = useState(false);
+  const [selectedProbeScope, setSelectedProbeScope] =
+    useState<ProbeScope>("first10");
+  const [scriptWorkflowDialogOpen, setScriptWorkflowDialogOpen] =
+    useState(false);
+  const [selectedScriptWorkflowScope, setSelectedScriptWorkflowScope] =
+    useState<ProbeScope>("first10");
+  const [scriptWorkflowRunning, setScriptWorkflowRunning] = useState(false);
+  const [videoToScriptModel, setVideoToScriptModel] =
+    useState<VideoToScriptModel>(DEFAULT_VIDEO_TO_SCRIPT_MODEL);
+  const [activeChannel, setActiveChannel] = useState<InputChannel>("shot4u");
+  const [hongguoKeyword, setHongguoKeyword] = useState("乌龙假扮恋");
+  const [hongguoPage, setHongguoPage] = useState("1");
+  const [hongguoSearching, setHongguoSearching] = useState(false);
+  const [hongguoSearchResults, setHongguoSearchResults] = useState<
+    HongguoSearchItem[]
+  >([]);
+  const [hongguoSearchDialogOpen, setHongguoSearchDialogOpen] =
+    useState(false);
+  const [selectedHongguoItem, setSelectedHongguoItem] =
+    useState<HongguoSearchItem | null>(null);
   const stopRequestedRef = useRef(false);
   const bulkStopRequestedRef = useRef(false);
   const splitBulkStopRequestedRef = useRef(false);
   const scriptBulkStopRequestedRef = useRef(false);
   const currentDraft = modeDrafts[inputMode] || createDefaultModeDraft(inputMode);
   const { startUrl, maxEpisodes, results } = currentDraft;
+  const activeChannelConfig =
+    INPUT_CHANNELS.find((channel) => channel.value === activeChannel) ||
+    INPUT_CHANNELS[0];
 
   const updateModeDraft = (
     mode: InputMode,
@@ -748,116 +990,140 @@ export default function VideoToScriptPage() {
     });
   }, [bulkConcurrency, inputMode, modeDrafts]);
 
-  const runProbe = async () => {
-    const modeAtStart = inputMode;
-    let nextPageUrl = startUrl.trim();
+  const probeEpisodeResults = async (
+    scope: ProbeScope,
+    modeAtStart: InputMode,
+    rawStartUrl: string,
+    options?: {
+      onCurrentPage?: (url: string) => void;
+      onItem?: (item: EpisodeM3u8Result) => void;
+    },
+  ) => {
+    let nextPageUrl = rawStartUrl.trim();
     if (!nextPageUrl) {
-      toast.error("请输入播放页链接");
-      return;
+      throw new Error("请输入播放页链接");
     }
 
     try {
       nextPageUrl = new URL(nextPageUrl).toString();
     } catch {
-      toast.error("播放页链接格式不正确");
-      return;
+      throw new Error("播放页链接格式不正确");
     }
 
-    const limit = normalizeMaxEpisodes(maxEpisodes);
+    const limit =
+      scope === "first10" ? FIRST_PROBE_EPISODE_COUNT : HARD_MAX_EPISODES;
     const sourceConfig = SOURCE_CONFIG[modeAtStart];
     const visited = new Set<string>();
+    const parsedItems: EpisodeM3u8Result[] = [];
+
+    options?.onCurrentPage?.(nextPageUrl);
+
+    if (modeAtStart === "shot4u") {
+      const playlist = await requestShot4uPlaylist(nextPageUrl);
+      if (stopRequestedRef.current) return parsedItems;
+
+      const items = (scope === "first10"
+        ? playlist.m3u8Urls.slice(0, FIRST_PROBE_EPISODE_COUNT)
+        : playlist.m3u8Urls
+      ).map((m3u8Url, index) => ({
+        episode: index + 1,
+        pageUrl: nextPageUrl,
+        m3u8Url,
+        title: "",
+        nextPageUrl: "",
+        status: "success" as const,
+        source: modeAtStart,
+        referer: sourceConfig.referer,
+        origin: sourceConfig.origin,
+      }));
+      parsedItems.push(...items);
+      options?.onCurrentPage?.(playlist.assUrl);
+      return parsedItems;
+    }
+
+    for (let index = 0; index < limit; index += 1) {
+      if (stopRequestedRef.current) break;
+      if (!nextPageUrl || visited.has(nextPageUrl)) break;
+
+      visited.add(nextPageUrl);
+      options?.onCurrentPage?.(nextPageUrl);
+
+      try {
+        const html = await requestPageHtml(nextPageUrl);
+        if (stopRequestedRef.current) break;
+        const payload = extractPlayerPayload(html);
+        const m3u8Url = String(payload.url || "").replace(/\\\//g, "/");
+        const absoluteNextPageUrl = toAbsoluteUrl(
+          payload.link_next,
+          nextPageUrl,
+        );
+        const episode =
+          Number(payload.nid) || extractEpisodeFromUrl(nextPageUrl) || index + 1;
+
+        if (!m3u8Url || !m3u8Url.includes(".m3u8")) {
+          throw new Error("当前集未解析到明文 .m3u8 地址");
+        }
+
+        const item: EpisodeM3u8Result = {
+          episode,
+          pageUrl: nextPageUrl,
+          m3u8Url,
+          title: payload.vod_data?.vod_name || "",
+          nextPageUrl: absoluteNextPageUrl,
+          status: "success",
+          source: modeAtStart,
+          referer: sourceConfig.referer,
+          origin: sourceConfig.origin,
+        };
+
+        parsedItems.push(item);
+        options?.onItem?.(item);
+
+        if (!absoluteNextPageUrl || absoluteNextPageUrl === nextPageUrl) {
+          break;
+        }
+
+        nextPageUrl = absoluteNextPageUrl;
+      } catch (error) {
+        if (stopRequestedRef.current) break;
+
+        const item: EpisodeM3u8Result = {
+          episode: extractEpisodeFromUrl(nextPageUrl) || index + 1,
+          pageUrl: nextPageUrl,
+          m3u8Url: "",
+          title: "",
+          nextPageUrl: "",
+          status: "error",
+          source: modeAtStart,
+          referer: sourceConfig.referer,
+          origin: sourceConfig.origin,
+          message: error instanceof Error ? error.message : "解析失败",
+        };
+        parsedItems.push(item);
+        options?.onItem?.(item);
+        break;
+      }
+    }
+
+    return parsedItems;
+  };
+
+  const runProbe = async (scope: ProbeScope) => {
+    const modeAtStart = inputMode;
     stopRequestedRef.current = false;
     setRunning(true);
     setModeResults(modeAtStart, []);
-    setCurrentPageUrl(nextPageUrl);
 
     try {
-      if (modeAtStart === "shot4u") {
-        const playlist = await requestShot4uPlaylist(nextPageUrl);
-        if (stopRequestedRef.current) return;
-
-        setModeResults(
-          modeAtStart,
-          playlist.m3u8Urls.map((m3u8Url, index) => ({
-            episode: index + 1,
-            pageUrl: nextPageUrl,
-            m3u8Url,
-            title: "",
-            nextPageUrl: "",
-            status: "success",
-            source: modeAtStart,
-            referer: sourceConfig.referer,
-            origin: sourceConfig.origin,
-          })),
-        );
-        setCurrentPageUrl(playlist.assUrl);
-        return;
-      }
-
-      for (let index = 0; index < limit; index += 1) {
-        if (stopRequestedRef.current) break;
-        if (!nextPageUrl || visited.has(nextPageUrl)) break;
-
-        visited.add(nextPageUrl);
-        setCurrentPageUrl(nextPageUrl);
-
-        try {
-          const html = await requestPageHtml(nextPageUrl);
-          if (stopRequestedRef.current) break;
-          const payload = extractPlayerPayload(html);
-          const m3u8Url = String(payload.url || "").replace(/\\\//g, "/");
-          const absoluteNextPageUrl = toAbsoluteUrl(
-            payload.link_next,
-            nextPageUrl,
-          );
-          const episode =
-            Number(payload.nid) ||
-            extractEpisodeFromUrl(nextPageUrl) ||
-            index + 1;
-
-          if (!m3u8Url || !m3u8Url.includes(".m3u8")) {
-            throw new Error("当前集未解析到明文 .m3u8 地址");
-          }
-
-          const item: EpisodeM3u8Result = {
-            episode,
-            pageUrl: nextPageUrl,
-            m3u8Url,
-            title: payload.vod_data?.vod_name || "",
-            nextPageUrl: absoluteNextPageUrl,
-            status: "success",
-            source: modeAtStart,
-            referer: sourceConfig.referer,
-            origin: sourceConfig.origin,
-          };
-
+      const parsedItems = await probeEpisodeResults(scope, modeAtStart, startUrl, {
+        onCurrentPage: setCurrentPageUrl,
+        onItem: (item) => {
           setModeResults(modeAtStart, (current) => [...current, item]);
+        },
+      });
 
-          if (!absoluteNextPageUrl || absoluteNextPageUrl === nextPageUrl) {
-            break;
-          }
-
-          nextPageUrl = absoluteNextPageUrl;
-        } catch (error) {
-          if (stopRequestedRef.current) break;
-
-          setModeResults(modeAtStart, (current) => [
-            ...current,
-            {
-              episode: extractEpisodeFromUrl(nextPageUrl) || index + 1,
-              pageUrl: nextPageUrl,
-              m3u8Url: "",
-              title: "",
-              nextPageUrl: "",
-              status: "error",
-              source: modeAtStart,
-              referer: sourceConfig.referer,
-              origin: sourceConfig.origin,
-              message: error instanceof Error ? error.message : "解析失败",
-            },
-          ]);
-          break;
-        }
+      if (modeAtStart === "shot4u") {
+        setModeResults(modeAtStart, parsedItems);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "解析失败");
@@ -872,6 +1138,13 @@ export default function VideoToScriptPage() {
     stopRequestedRef.current = true;
     setRunning(false);
     setCurrentPageUrl("");
+  };
+
+  const startProbeWithScope = (scope: ProbeScope) => {
+    setProbeScopeDialogOpen(false);
+    void runProbe(scope).catch((error) => {
+      toast.error(error instanceof Error ? error.message : "解析失败");
+    });
   };
 
   const copyText = async (format: "text" | "json") => {
@@ -894,16 +1167,23 @@ export default function VideoToScriptPage() {
     updateResultItem(item, {
       localMp4Path: localPath,
       uploadStatus: "pending",
-      uploadMessage: "正在上传 OSS",
+      uploadMessage: `等待上传 OSS（最多同时 ${OSS_UPLOAD_CONCURRENCY} 个）`,
     });
 
     try {
-      const bytes = await readFile(localPath);
-      const blob = new Blob([bytes], { type: "video/mp4" });
-      const uploaded = await uploadAssetBinary({
-        blob,
-        fileName: getEpisodeFileName(item),
-        mimeType: "video/mp4",
+      const uploaded = await runWithOssUploadSlot(async () => {
+        updateResultItem(item, {
+          localMp4Path: localPath,
+          uploadStatus: "pending",
+          uploadMessage: "正在上传 OSS",
+        });
+        const bytes = await readFile(localPath);
+        const blob = new Blob([bytes], { type: "video/mp4" });
+        return uploadAssetBinary({
+          blob,
+          fileName: getEpisodeFileName(item),
+          mimeType: "video/mp4",
+        });
       });
       updateResultItem(item, {
         localMp4Path: localPath,
@@ -951,7 +1231,7 @@ export default function VideoToScriptPage() {
     try {
       const videoUrl = await ensureRemoteVideoUrl(item);
       const response = await createDashscopeChatCompletion({
-        model: VIDEO_TO_SCRIPT_MODEL,
+        model: videoToScriptModel,
         stream: false,
         messages: [
           { role: "system", content: VIDEO_TO_SCRIPT_SYSTEM_PROMPT },
@@ -1121,30 +1401,61 @@ export default function VideoToScriptPage() {
     }
   };
 
-  const downloadAll = async () => {
-    const allDownloadableItems = results.filter(
+  const downloadItemsToFolder = async (
+    sourceItems: EpisodeM3u8Result[],
+    selected: string,
+    options?: {
+      autoUpload?: boolean;
+      onItemSaved?: (item: EpisodeM3u8Result) => void;
+      silent?: boolean;
+    },
+  ) => {
+    const autoUpload = options?.autoUpload ?? true;
+    const allDownloadableItems = sourceItems.filter(
       (item) => item.status === "success" && item.m3u8Url,
+    );
+    const mutableItems = allDownloadableItems.map((item) => ({ ...item }));
+    const itemIndexByKey = new Map(
+      mutableItems.map((item, index) => [getItemKey(item), index]),
     );
 
     if (allDownloadableItems.length === 0) {
       toast.error("暂无可下载的 m3u8 结果");
-      return;
+      return mutableItems;
     }
     if (allDownloadableItems.every((item) => item.localMp4Path)) {
       toast.success("当前表格里的 MP4 都已保存");
-      return;
+      return mutableItems;
     }
 
-    const selected = await open({
-      title: "选择保存文件夹",
-      directory: true,
-      multiple: false,
-    });
-    if (!selected || Array.isArray(selected)) return;
+    const patchMutableItem = (
+      item: EpisodeM3u8Result,
+      patch: Partial<EpisodeM3u8Result>,
+    ) => {
+      const itemKey = getItemKey(item);
+      const itemIndex = itemIndexByKey.get(itemKey);
+      if (itemIndex !== undefined) {
+        mutableItems[itemIndex] = { ...mutableItems[itemIndex], ...patch };
+      }
+      updateResultItemByKey(item.source, itemKey, patch);
+    };
+
+    const handleSavedItem = (item: EpisodeM3u8Result) => {
+      options?.onItemSaved?.(item);
+      if (!autoUpload || !item.localMp4Path) return;
+
+      void uploadLocalMp4(item, item.localMp4Path)
+        .then((remoteVideoUrl) => {
+          patchMutableItem(item, { remoteVideoUrl });
+        })
+        .catch(() => {
+          // 本地 MP4 已保存，OSS 上传失败交给行状态显示并允许手动重试。
+        });
+    };
 
     const syncedKeys = new Set<string>();
     await Promise.all(
-      allDownloadableItems
+      mutableItems
         .filter((item) => !item.localMp4Path)
         .map(async (item) => {
           const expectedPath = joinPath(selected, getEpisodeFileName(item));
@@ -1153,20 +1464,23 @@ export default function VideoToScriptPage() {
 
           const itemKey = getItemKey(item);
           syncedKeys.add(itemKey);
-          updateResultItemByKey(item.source, itemKey, {
+          patchMutableItem(item, {
             localMp4Path: expectedPath,
             downloadStatus: "skipped",
             downloadMessage: "目录中已存在 MP4，已自动同步",
           });
+          handleSavedItem({ ...item, localMp4Path: expectedPath });
         }),
     );
 
-    const downloadableItems = allDownloadableItems.filter(
+    const downloadableItems = mutableItems.filter(
       (item) => !item.localMp4Path && !syncedKeys.has(getItemKey(item)),
     );
     if (downloadableItems.length === 0) {
-      toast.success(`已从保存目录同步 ${syncedKeys.size} 个 MP4`);
-      return;
+      if (!options?.silent) {
+        toast.success(`已从保存目录同步 ${syncedKeys.size} 个 MP4`);
+      }
+      return mutableItems;
     }
 
     const concurrency = normalizeBulkConcurrency(bulkConcurrency);
@@ -1239,7 +1553,7 @@ export default function VideoToScriptPage() {
         activeEpisodes.add(item.episode);
         syncBulkProgress();
         setDownloadingMap((current) => ({ ...current, [itemKey]: true }));
-        updateResultItem(item, {
+        patchMutableItem(item, {
           downloadStatus: "pending",
           downloadMessage: "正在批量保存",
         });
@@ -1253,24 +1567,20 @@ export default function VideoToScriptPage() {
               origin: item.origin,
             },
           );
-          updateResultItem(item, {
+          patchMutableItem(item, {
             localMp4Path: result.path,
             downloadStatus: "success",
             downloadMessage: result.skippedSegments
               ? `已保存，跳过 ${result.skippedSegments} 个坏分片`
               : "已保存",
           });
-          try {
-            await uploadLocalMp4(item, result.path);
-          } catch {
-            // 本地 MP4 已保存，OSS 上传失败交给行状态显示并允许手动重试。
-          }
+          handleSavedItem({ ...item, localMp4Path: result.path });
           skippedTotal += result.skippedSegments || 0;
           successTotal += 1;
         } catch (error) {
           failedTotal += 1;
           const message = error instanceof Error ? error.message : "保存失败";
-          updateResultItem(item, {
+          patchMutableItem(item, {
             downloadStatus: "error",
             downloadMessage: message,
           });
@@ -1299,6 +1609,8 @@ export default function VideoToScriptPage() {
         toast.info(
           `已停止派发，已开始的任务已完成：成功 ${successTotal} 个，失败 ${failedTotal} 个`,
         );
+      } else if (options?.silent) {
+        // 一键流程自己汇总提示。
       } else if (failedTotal > 0) {
         toast.error(`批量保存完成，成功 ${successTotal} 个，失败 ${failedTotal} 个`);
       } else {
@@ -1312,6 +1624,32 @@ export default function VideoToScriptPage() {
       setBulkDownloading(false);
       bulkStopRequestedRef.current = false;
     }
+
+    return mutableItems;
+  };
+
+  const downloadAll = async () => {
+    const allDownloadableItems = results.filter(
+      (item) => item.status === "success" && item.m3u8Url,
+    );
+
+    if (allDownloadableItems.length === 0) {
+      toast.error("暂无可下载的 m3u8 结果");
+      return;
+    }
+    if (allDownloadableItems.every((item) => item.localMp4Path)) {
+      toast.success("当前表格里的 MP4 都已保存");
+      return;
+    }
+
+    const selected = await open({
+      title: "选择保存文件夹",
+      directory: true,
+      multiple: false,
+    });
+    if (!selected || Array.isArray(selected)) return;
+
+    await downloadItemsToFolder(results, selected);
   };
 
   const stopBulkDownload = () => {
@@ -1448,8 +1786,8 @@ export default function VideoToScriptPage() {
     toast.info("已停止派发新裁切任务，等待运行中的任务完成");
   };
 
-  const generateAllScripts = async () => {
-    const allScriptableItems = results.filter(
+  const generateScriptsForItems = async (sourceItems: EpisodeM3u8Result[]) => {
+    const allScriptableItems = sourceItems.filter(
       (item) => item.status === "success" && (item.remoteVideoUrl || item.localMp4Path),
     );
     const scriptableItems = allScriptableItems.filter(
@@ -1555,6 +1893,268 @@ export default function VideoToScriptPage() {
     }
   };
 
+  const generateAllScripts = async () => {
+    await generateScriptsForItems(results);
+  };
+
+  const importLocalMp4Files = async (options?: { generateAfterUpload?: boolean }) => {
+    const selected = await open({
+      title: options?.generateAfterUpload
+        ? "选择要导入并生成剧本的 MP4"
+        : "选择要导入的 MP4",
+      multiple: true,
+      filters: [{ name: "MP4 视频", extensions: ["mp4"] }],
+    });
+    if (!selected) return;
+
+    const paths = (Array.isArray(selected) ? selected : [selected]).filter(
+      (path) => path.toLowerCase().endsWith(".mp4"),
+    );
+    if (paths.length === 0) {
+      toast.error("请选择 MP4 文件");
+      return;
+    }
+
+    const usedEpisodes = new Set<number>();
+    const takeEpisode = (path: string, index: number) => {
+      let fallbackEpisode = index + 1;
+      while (usedEpisodes.has(fallbackEpisode)) fallbackEpisode += 1;
+      let episode = inferEpisodeFromFilePath(path, fallbackEpisode);
+      if (usedEpisodes.has(episode)) episode = fallbackEpisode;
+      usedEpisodes.add(episode);
+      return episode;
+    };
+
+    const importedItems = paths
+      .map((path, index): EpisodeM3u8Result => {
+        const episode = takeEpisode(path, index);
+        return {
+          episode,
+          pageUrl: path,
+          m3u8Url: "",
+          title: "",
+          nextPageUrl: "",
+          status: "success",
+          source: "shot4u",
+          localMp4Path: path,
+          downloadStatus: "skipped",
+          downloadMessage: "本地导入 MP4",
+          uploadStatus: "idle",
+        };
+      })
+      .sort((a, b) => a.episode - b.episode);
+
+    setInputMode("shot4u");
+    setModeResults("shot4u", importedItems);
+    toast.success(`已导入 ${importedItems.length} 个 MP4，开始上传 OSS`);
+
+    const uploadedItems = await Promise.all(
+      importedItems.map(async (item) => {
+        try {
+          const remoteVideoUrl = await uploadLocalMp4(item, item.localMp4Path || "");
+          return { ...item, remoteVideoUrl, uploadStatus: "success" as const };
+        } catch {
+          return { ...item, uploadStatus: "error" as const };
+        }
+      }),
+    );
+
+    const successCount = uploadedItems.filter(
+      (item) => item.uploadStatus === "success",
+    ).length;
+    if (successCount === uploadedItems.length) {
+      toast.success(`已上传 ${successCount} 个 MP4 到 OSS`);
+    } else {
+      toast.error(
+        `OSS 上传完成，成功 ${successCount} 个，失败 ${
+          uploadedItems.length - successCount
+        } 个`,
+      );
+    }
+
+    if (options?.generateAfterUpload) {
+      await generateScriptsForItems(uploadedItems);
+    }
+  };
+
+  const runScriptWorkflow = async (scope: ProbeScope) => {
+    const modeAtStart = inputMode;
+    const rawStartUrl = startUrl;
+    const selected = await open({
+      title: "选择 MP4 保存文件夹",
+      directory: true,
+      multiple: false,
+    });
+    if (!selected || Array.isArray(selected)) return;
+
+    setScriptWorkflowDialogOpen(false);
+    setScriptWorkflowRunning(true);
+    stopRequestedRef.current = false;
+    setRunning(true);
+    setModeResults(modeAtStart, []);
+
+    try {
+      const parsedItems = await probeEpisodeResults(scope, modeAtStart, rawStartUrl, {
+        onCurrentPage: setCurrentPageUrl,
+        onItem: (item) => {
+          setModeResults(modeAtStart, (current) => [...current, item]);
+        },
+      });
+
+      if (modeAtStart === "shot4u") {
+        setModeResults(modeAtStart, parsedItems);
+      }
+
+      if (stopRequestedRef.current) {
+        toast.info("已停止一键生成剧本流程");
+        return;
+      }
+
+      const parsedSuccessItems = parsedItems.filter(
+        (item) => item.status === "success" && item.m3u8Url,
+      );
+      if (parsedSuccessItems.length === 0) {
+        toast.error("解析完成，但没有可下载的视频链接");
+        return;
+      }
+
+      setRunning(false);
+      setCurrentPageUrl("");
+
+      scriptBulkStopRequestedRef.current = false;
+      setScriptBulkGenerating(true);
+      setScriptBulkProgress({
+        current: 0,
+        total: parsedSuccessItems.length,
+        success: 0,
+        failed: 0,
+        skipped: 0,
+        concurrency: SCRIPT_BULK_CONCURRENCY,
+        activeEpisodes: [],
+        stopRequested: false,
+      });
+
+      let scriptSuccessTotal = 0;
+      let scriptFailedTotal = 0;
+      let scriptCompletedTotal = 0;
+      const scriptActiveEpisodes = new Set<number>();
+      const pipelinePromises: Array<Promise<void>> = [];
+      let activeScriptGenerations = 0;
+      const pendingScriptGenerationStarters: Array<() => void> = [];
+
+      const acquireScriptGenerationSlot = () =>
+        new Promise<() => void>((resolve) => {
+          const start = () => {
+            activeScriptGenerations += 1;
+            let released = false;
+            resolve(() => {
+              if (released) return;
+              released = true;
+              activeScriptGenerations = Math.max(0, activeScriptGenerations - 1);
+              pendingScriptGenerationStarters.shift()?.();
+            });
+          };
+
+          if (activeScriptGenerations < SCRIPT_BULK_CONCURRENCY) {
+            start();
+          } else {
+            pendingScriptGenerationStarters.push(start);
+          }
+        });
+
+      const syncScriptPipelineProgress = () => {
+        setScriptBulkProgress({
+          current: scriptCompletedTotal,
+          total: parsedSuccessItems.length,
+          success: scriptSuccessTotal,
+          failed: scriptFailedTotal,
+          skipped: 0,
+          concurrency: SCRIPT_BULK_CONCURRENCY,
+          activeEpisodes: Array.from(scriptActiveEpisodes).sort((a, b) => a - b),
+          stopRequested: scriptBulkStopRequestedRef.current,
+        });
+      };
+
+      const enqueueScriptPipeline = (savedItem: EpisodeM3u8Result) => {
+        const pipelineTask = (async () => {
+          scriptActiveEpisodes.add(savedItem.episode);
+          syncScriptPipelineProgress();
+          try {
+            if (scriptBulkStopRequestedRef.current) {
+              scriptFailedTotal += 1;
+              return;
+            }
+            const remoteVideoUrl = savedItem.remoteVideoUrl
+              ? savedItem.remoteVideoUrl
+              : await uploadLocalMp4(savedItem, savedItem.localMp4Path || "");
+            if (scriptBulkStopRequestedRef.current) {
+              scriptFailedTotal += 1;
+              return;
+            }
+            const releaseScriptSlot = await acquireScriptGenerationSlot();
+            let ok = false;
+            try {
+              if (scriptBulkStopRequestedRef.current) {
+                scriptFailedTotal += 1;
+                return;
+              }
+              ok = await generateScript(
+                { ...savedItem, remoteVideoUrl },
+                { silent: true },
+              );
+            } finally {
+              releaseScriptSlot();
+            }
+            if (ok) {
+              scriptSuccessTotal += 1;
+            } else {
+              scriptFailedTotal += 1;
+            }
+          } catch {
+            scriptFailedTotal += 1;
+          } finally {
+            scriptCompletedTotal += 1;
+            scriptActiveEpisodes.delete(savedItem.episode);
+            syncScriptPipelineProgress();
+          }
+        })();
+        pipelinePromises.push(pipelineTask);
+      };
+
+      await downloadItemsToFolder(parsedItems, selected, {
+        autoUpload: false,
+        onItemSaved: enqueueScriptPipeline,
+        silent: true,
+      });
+      const notStartedTotal = parsedSuccessItems.length - pipelinePromises.length;
+      if (notStartedTotal > 0) {
+        scriptFailedTotal += notStartedTotal;
+        scriptCompletedTotal += notStartedTotal;
+        syncScriptPipelineProgress();
+      }
+      await Promise.all(pipelinePromises);
+
+      if (scriptSuccessTotal === 0) {
+        toast.error("MP4 保存或 OSS 上传失败，没有成功生成剧本");
+      } else if (scriptFailedTotal > 0) {
+        toast.error(
+          `一键生成完成，成功 ${scriptSuccessTotal} 集，失败 ${scriptFailedTotal} 集`,
+        );
+      } else {
+        toast.success(`一键生成完成，已生成 ${scriptSuccessTotal} 集剧本`);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "一键生成剧本失败");
+    } finally {
+      setRunning(false);
+      setCurrentPageUrl("");
+      setScriptBulkGenerating(false);
+      setScriptWorkflowRunning(false);
+      stopRequestedRef.current = false;
+      scriptBulkStopRequestedRef.current = false;
+    }
+  };
+
   const stopScriptBulkGenerate = () => {
     scriptBulkStopRequestedRef.current = true;
     setScriptBulkProgress((current) =>
@@ -1563,7 +2163,21 @@ export default function VideoToScriptPage() {
     toast.info("已停止派发新剧本任务，等待运行中的任务完成");
   };
 
-  const exportScriptsToWord = async () => {
+  const exportScriptsToWord = async (options?: { skipMissingCheck?: boolean }) => {
+    if (!options?.skipMissingCheck) {
+      const exportableRows = results
+        .filter((item) => item.status === "success")
+        .sort((a, b) => a.episode - b.episode);
+      const missingEpisodes = exportableRows
+        .filter((item) => !item.scriptContent)
+        .map((item) => item.episode);
+
+      if (missingEpisodes.length > 0) {
+        setMissingScriptEpisodes(missingEpisodes);
+        return;
+      }
+    }
+
     const scriptItems = results
       .filter((item) => item.scriptContent)
       .sort((a, b) => a.episode - b.episode);
@@ -1590,6 +2204,380 @@ export default function VideoToScriptPage() {
     }
   };
 
+  const searchHongguoShortDrama = async () => {
+    const keyword = hongguoKeyword.trim();
+    if (!HONGGUO_API_KEY) {
+      toast.error("未配置 VITE_HONGGUO_API_KEY");
+      return;
+    }
+    if (!keyword) {
+      toast.error("请输入搜索关键词");
+      return;
+    }
+
+    setHongguoSearching(true);
+    try {
+      const response = await requestHongguoApi<{
+        code?: number;
+        msg?: string;
+        data?: HongguoSearchItem[];
+      }>({
+        key: HONGGUO_API_KEY,
+        type: "search",
+        keyword,
+        page: hongguoPage.trim() || "1",
+      });
+
+      if (response.code !== 200) {
+        throw new Error(response.msg || "搜索失败");
+      }
+
+      const items = Array.isArray(response.data) ? response.data : [];
+      setHongguoSearchResults(items);
+      setHongguoSearchDialogOpen(true);
+      if (items.length === 0) {
+        toast.info("没有搜索到结果");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "搜索失败");
+    } finally {
+      setHongguoSearching(false);
+    }
+  };
+
+  const runHongguoSearchWorkflow = async (item: HongguoSearchItem) => {
+    if (!HONGGUO_API_KEY) {
+      toast.error("未配置 VITE_HONGGUO_API_KEY");
+      return;
+    }
+    if (!item.id) {
+      toast.error("搜索结果缺少剧集 ID");
+      return;
+    }
+
+    const selected = await open({
+      title: "选择 MP4 保存文件夹",
+      directory: true,
+      multiple: false,
+    });
+    if (!selected || Array.isArray(selected)) return;
+
+    setSelectedHongguoItem(null);
+    setHongguoSearchDialogOpen(false);
+    setScriptWorkflowRunning(true);
+    setBulkDownloading(true);
+    setScriptBulkGenerating(true);
+    bulkStopRequestedRef.current = false;
+    scriptBulkStopRequestedRef.current = false;
+
+    try {
+      const detailResponse = await requestHongguoApi<{
+        code?: number;
+        msg?: string;
+        data?: {
+          title?: string;
+          lists?: HongguoEpisodeItem[];
+        };
+      }>({
+        key: HONGGUO_API_KEY,
+        type: "detail",
+        id: item.id,
+      });
+
+      if (detailResponse.code !== 200) {
+        throw new Error(detailResponse.msg || "获取剧集详情失败");
+      }
+
+      const dramaTitle = detailResponse.data?.title || item.title || "红果短剧";
+      const episodes = (detailResponse.data?.lists || [])
+        .filter((episode) => episode.video_id)
+        .sort((a, b) => a.index - b.index);
+
+      if (episodes.length === 0) {
+        throw new Error("剧集详情中没有可解析的 video_id");
+      }
+
+      const rows = episodes.map((episode): EpisodeM3u8Result => ({
+        episode: episode.index,
+        pageUrl: `hongguo:${item.id}:${episode.video_id}`,
+        m3u8Url: "",
+        title: dramaTitle,
+        nextPageUrl: "",
+        status: "success",
+        source: "shot4u",
+        downloadStatus: "idle",
+        uploadStatus: "idle",
+        scriptStatus: "idle",
+      }));
+      setInputMode("shot4u");
+      setModeResults("shot4u", rows);
+
+      const concurrency = normalizeBulkConcurrency(bulkConcurrency);
+      setBulkProgress({
+        current: 0,
+        total: episodes.length,
+        success: 0,
+        failed: 0,
+        skipped: 0,
+        concurrency,
+        activeEpisodes: [],
+        stopRequested: false,
+      });
+      setScriptBulkProgress({
+        current: 0,
+        total: episodes.length,
+        success: 0,
+        failed: 0,
+        skipped: 0,
+        concurrency: SCRIPT_BULK_CONCURRENCY,
+        activeEpisodes: [],
+        stopRequested: false,
+      });
+
+      let downloadSuccessTotal = 0;
+      let downloadFailedTotal = 0;
+      let downloadCompletedTotal = 0;
+      let scriptSuccessTotal = 0;
+      let scriptFailedTotal = 0;
+      let scriptCompletedTotal = 0;
+      let nextIndex = 0;
+      let activeScriptGenerations = 0;
+      const downloadActiveEpisodes = new Set<number>();
+      const scriptActiveEpisodes = new Set<number>();
+      const pipelinePromises: Array<Promise<void>> = [];
+      const pendingScriptGenerationStarters: Array<() => void> = [];
+
+      const syncDownloadProgress = () => {
+        setBulkProgress({
+          current: downloadCompletedTotal,
+          total: episodes.length,
+          success: downloadSuccessTotal,
+          failed: downloadFailedTotal,
+          skipped: 0,
+          concurrency,
+          activeEpisodes: Array.from(downloadActiveEpisodes).sort((a, b) => a - b),
+          stopRequested: bulkStopRequestedRef.current,
+        });
+      };
+
+      const syncScriptProgress = () => {
+        setScriptBulkProgress({
+          current: scriptCompletedTotal,
+          total: episodes.length,
+          success: scriptSuccessTotal,
+          failed: scriptFailedTotal,
+          skipped: 0,
+          concurrency: SCRIPT_BULK_CONCURRENCY,
+          activeEpisodes: Array.from(scriptActiveEpisodes).sort((a, b) => a - b),
+          stopRequested: scriptBulkStopRequestedRef.current,
+        });
+      };
+
+      const acquireScriptGenerationSlot = () =>
+        new Promise<() => void>((resolve) => {
+          const start = () => {
+            activeScriptGenerations += 1;
+            let released = false;
+            resolve(() => {
+              if (released) return;
+              released = true;
+              activeScriptGenerations = Math.max(0, activeScriptGenerations - 1);
+              pendingScriptGenerationStarters.shift()?.();
+            });
+          };
+
+          if (activeScriptGenerations < SCRIPT_BULK_CONCURRENCY) {
+            start();
+          } else {
+            pendingScriptGenerationStarters.push(start);
+          }
+        });
+
+      const patchRow = (
+        episode: HongguoEpisodeItem,
+        patch: Partial<EpisodeM3u8Result>,
+      ) => {
+        updateResultItemByKey(
+          "shot4u",
+          `${episode.index}-hongguo:${item.id}:${episode.video_id}`,
+          patch,
+        );
+      };
+
+      const enqueueUploadAndScript = (
+        episode: HongguoEpisodeItem,
+        savedItem: EpisodeM3u8Result,
+      ) => {
+        const task = (async () => {
+          scriptActiveEpisodes.add(episode.index);
+          syncScriptProgress();
+          try {
+            if (scriptBulkStopRequestedRef.current) {
+              scriptFailedTotal += 1;
+              return;
+            }
+            const remoteVideoUrl = await uploadLocalMp4(
+              savedItem,
+              savedItem.localMp4Path || "",
+            );
+            if (scriptBulkStopRequestedRef.current) {
+              scriptFailedTotal += 1;
+              return;
+            }
+            const releaseScriptSlot = await acquireScriptGenerationSlot();
+            let ok = false;
+            try {
+              if (scriptBulkStopRequestedRef.current) {
+                scriptFailedTotal += 1;
+                return;
+              }
+              ok = await generateScript(
+                { ...savedItem, remoteVideoUrl },
+                { silent: true },
+              );
+            } finally {
+              releaseScriptSlot();
+            }
+            if (ok) {
+              scriptSuccessTotal += 1;
+            } else {
+              scriptFailedTotal += 1;
+            }
+          } catch {
+            scriptFailedTotal += 1;
+          } finally {
+            scriptCompletedTotal += 1;
+            scriptActiveEpisodes.delete(episode.index);
+            syncScriptProgress();
+          }
+        })();
+        pipelinePromises.push(task);
+      };
+
+      const takeNextEpisode = () => {
+        if (bulkStopRequestedRef.current) return null;
+        const episode = episodes[nextIndex];
+        nextIndex += 1;
+        return episode || null;
+      };
+
+      const runDownloadWorker = async () => {
+        while (true) {
+          const episode = takeNextEpisode();
+          if (!episode) break;
+          const rowKey = `${episode.index}-hongguo:${item.id}:${episode.video_id}`;
+          downloadActiveEpisodes.add(episode.index);
+          setDownloadingMap((current) => ({ ...current, [rowKey]: true }));
+          syncDownloadProgress();
+          patchRow(episode, {
+            downloadStatus: "pending",
+            downloadMessage: "正在解析最低画质 MP4",
+          });
+
+          try {
+            const videoResponse = await requestHongguoApi<{
+              code?: number;
+              msg?: string;
+              data?: { video_lists?: HongguoVideoListItem[] };
+            }>({
+              key: HONGGUO_API_KEY,
+              type: "video",
+              video_id: episode.video_id,
+            });
+            if (videoResponse.code !== 200) {
+              throw new Error(videoResponse.msg || "获取分集播放链接失败");
+            }
+
+            const video = selectLowestQualityMp4(
+              videoResponse.data?.video_lists || [],
+            );
+            if (!video?.url || !video.decrypt_key) {
+              throw new Error("未找到可用 MP4 播放链接");
+            }
+
+            const mp4Url = await requestHongguoDecrypt(
+              video.url,
+              video.decrypt_key,
+            );
+            patchRow(episode, {
+              mp4Url,
+              downloadStatus: "pending",
+              downloadMessage: `正在下载最低画质 ${video.definition || ""}`.trim(),
+            });
+
+            const row: EpisodeM3u8Result = {
+              episode: episode.index,
+              pageUrl: `hongguo:${item.id}:${episode.video_id}`,
+              m3u8Url: "",
+              mp4Url,
+              title: dramaTitle,
+              nextPageUrl: "",
+              status: "success",
+              source: "shot4u",
+            };
+            const result = await downloadMp4Url(
+              mp4Url,
+              joinPath(selected, getEpisodeFileName(row)),
+            );
+            const savedItem = {
+              ...row,
+              localMp4Path: result.path,
+              downloadStatus: "success" as const,
+              downloadMessage: "已保存",
+            };
+            patchRow(episode, savedItem);
+            downloadSuccessTotal += 1;
+            enqueueUploadAndScript(episode, savedItem);
+          } catch (error) {
+            downloadFailedTotal += 1;
+            scriptFailedTotal += 1;
+            scriptCompletedTotal += 1;
+            patchRow(episode, {
+              downloadStatus: "error",
+              downloadMessage:
+                error instanceof Error ? error.message : "下载失败",
+            });
+            syncScriptProgress();
+          } finally {
+            downloadCompletedTotal += 1;
+            downloadActiveEpisodes.delete(episode.index);
+            syncDownloadProgress();
+            setDownloadingMap((current) => {
+              const next = { ...current };
+              delete next[rowKey];
+              return next;
+            });
+          }
+        }
+      };
+
+      await Promise.all(
+        Array.from({ length: Math.min(concurrency, episodes.length) }, () =>
+          runDownloadWorker(),
+        ),
+      );
+      await Promise.all(pipelinePromises);
+
+      if (scriptSuccessTotal === 0) {
+        toast.error("搜索渠道处理完成，但没有成功生成剧本");
+      } else if (scriptFailedTotal > 0) {
+        toast.error(
+          `搜索渠道处理完成，生成成功 ${scriptSuccessTotal} 集，失败 ${scriptFailedTotal} 集`,
+        );
+      } else {
+        toast.success(`搜索渠道处理完成，已生成 ${scriptSuccessTotal} 集剧本`);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "搜索渠道处理失败");
+    } finally {
+      setBulkDownloading(false);
+      setScriptBulkGenerating(false);
+      setScriptWorkflowRunning(false);
+      bulkStopRequestedRef.current = false;
+      scriptBulkStopRequestedRef.current = false;
+    }
+  };
+
   return (
     <div className="video-to-script-scrollbar-scope h-full flex-1 overflow-y-auto bg-[#09090b] text-white">
       <div className="mx-auto flex min-h-full w-full max-w-7xl flex-col px-8 py-8">
@@ -1600,11 +2588,11 @@ export default function VideoToScriptPage() {
               视频转剧本
             </div>
             <h1 className="text-3xl font-semibold tracking-wide text-white">
-              播放页视频链接解析
+              视频转剧本
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/45">
-              支持红果播放页逐集提取 player_aaaa.url，也支持 Shot4u
-              播放页请求 ass.php 后按出现顺序提取 index.m3u8。
+              支持 Shot4u 播放页请求 ass.php 后按出现顺序提取
+              index.m3u8，也支持直接导入本地 MP4 上传 OSS 后生成剧本。
             </p>
           </div>
 
@@ -1623,107 +2611,205 @@ export default function VideoToScriptPage() {
             </div>
             <div>
               <div className="text-lg font-semibold text-white">
-                {inputMode === "hongguo"
-                  ? normalizeMaxEpisodes(maxEpisodes)
-                  : "全部"}
+                {activeChannelConfig.label}
               </div>
-              <div className="mt-0.5 text-[11px] text-white/35">
-                {inputMode === "hongguo" ? "上限" : "范围"}
-              </div>
+              <div className="mt-0.5 text-[11px] text-white/35">当前入口</div>
             </div>
           </div>
         </header>
 
         <section className="mb-5 rounded-xl border border-white/8 bg-[#121214] p-5">
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            {(["hongguo", "shot4u"] as const).map((mode) => (
+          <div className="mb-5 flex flex-wrap gap-2">
+            {INPUT_CHANNELS.map((channel) => (
               <Button
-                key={mode}
+                key={channel.value}
                 size="sm"
-                variant={inputMode === mode ? "blue" : "default"}
-                disabled={running}
-                onClick={() => {
-                  setInputMode(mode);
-                }}
+                variant={activeChannel === channel.value ? "blue" : "default"}
+                disabled={running || scriptWorkflowRunning}
+                onClick={() => setActiveChannel(channel.value)}
               >
-                {SOURCE_CONFIG[mode].label}
+                {channel.value === "shot4u" ? <PlayCircle size={14} /> : null}
+                {channel.value === "localMp4" ? <UploadCloud size={14} /> : null}
+                {channel.value === "search" ? <Search size={14} /> : null}
+                <span>{channel.label}</span>
+                <span className="text-[11px] opacity-55">
+                  {channel.description}
+                </span>
               </Button>
             ))}
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[1fr_140px_auto]">
-            <label className="min-w-0">
-              <span className="mb-2 block text-xs font-medium text-white/50">
-                {inputMode === "hongguo" ? "第一集播放页" : "Shot4u 播放页"}
-              </span>
-              <Input
-                value={startUrl}
-                onChange={(event) => setCurrentStartUrl(event.target.value)}
-                disabled={running}
-                placeholder={SOURCE_CONFIG[inputMode].placeholder}
-                className="h-10 border-white/10 bg-black/35 text-white placeholder:text-white/25"
-              />
-            </label>
-
-            <label>
-              <span className="mb-2 block text-xs font-medium text-white/50">
-                {inputMode === "hongguo" ? "最大集数" : "列表上限"}
-              </span>
-              {inputMode === "hongguo" ? (
+          {activeChannel === "shot4u" ? (
+            <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+              <label className="min-w-0">
+                <span className="mb-2 block text-xs font-medium text-white/50">
+                  Shot4u 播放页
+                </span>
                 <Input
-                  type="number"
-                  min={1}
-                  max={HARD_MAX_EPISODES}
-                  value={maxEpisodes}
-                  onChange={(event) =>
-                    setCurrentMaxEpisodes(event.target.value)
-                  }
-                  disabled={running}
-                  className="h-10 border-white/10 bg-black/35 text-white"
+                  value={startUrl}
+                  onChange={(event) => setCurrentStartUrl(event.target.value)}
+                  disabled={running || scriptWorkflowRunning}
+                  placeholder={SOURCE_CONFIG[inputMode].placeholder}
+                  className="h-10 border-white/10 bg-black/35 text-white placeholder:text-white/25"
                 />
-              ) : (
-                <div className="flex h-10 items-center rounded-md border border-white/10 bg-black/20 px-3 text-sm text-white/55">
-                  按 ass.php 返回全部
-                </div>
-              )}
-            </label>
+              </label>
 
-            <div className="flex items-end gap-2">
-              {running ? (
-                <Button
-                  variant="default"
-                  className="h-10 border-red-400/20 bg-red-500/10 text-red-100 hover:bg-red-500/15"
-                  onClick={stopProbe}
-                >
-                  停止
-                </Button>
-              ) : (
+              <div className="flex items-end gap-2">
+                {running ? (
+                  <Button
+                    variant="default"
+                    className="h-10 border-red-400/20 bg-red-500/10 text-red-100 hover:bg-red-500/15"
+                    onClick={stopProbe}
+                  >
+                    停止
+                  </Button>
+                ) : (
+                  <Button
+                    variant="blue"
+                    className="h-10"
+                    disabled={scriptWorkflowRunning}
+                    onClick={() => setProbeScopeDialogOpen(true)}
+                  >
+                    <PlayCircle size={16} />
+                    开始解析
+                  </Button>
+                )}
                 <Button
                   variant="blue"
                   className="h-10"
+                  loading={scriptWorkflowRunning}
+                  disabled={
+                    scriptWorkflowRunning ||
+                    scriptBulkGenerating ||
+                    running ||
+                    bulkDownloading
+                  }
+                  onClick={() => setScriptWorkflowDialogOpen(true)}
+                >
+                  <FileText size={16} />
+                  一键生成剧本
+                </Button>
+                <Button
+                  variant="default"
+                  className="h-10"
+                  disabled={running || results.length === 0}
+                  onClick={() => setCurrentResults([])}
+                  title="清空结果"
+                >
+                  <RotateCcw size={16} />
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {activeChannel === "localMp4" ? (
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="max-w-2xl">
+                <div className="text-sm font-medium text-white/80">
+                  导入本地 MP4
+                </div>
+                <div className="mt-1 text-xs leading-5 text-white/42">
+                  支持多选 MP4。系统会优先按文件名识别集数，识别不到时按选择顺序从 1 开始。
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="default"
+                  className="h-10"
+                  disabled={running || bulkDownloading || scriptBulkGenerating}
                   onClick={() => {
-                    void runProbe().catch((error) => {
+                    void importLocalMp4Files().catch((error) => {
                       toast.error(
-                        error instanceof Error ? error.message : "解析失败",
+                        error instanceof Error ? error.message : "导入 MP4 失败",
                       );
                     });
                   }}
                 >
-                  <PlayCircle size={16} />
-                  开始解析
+                  <UploadCloud size={16} />
+                  导入 MP4
                 </Button>
-              )}
-              <Button
-                variant="default"
-                className="h-10"
-                disabled={running || results.length === 0}
-                onClick={() => setCurrentResults([])}
-                title="清空结果"
-              >
-                <RotateCcw size={16} />
-              </Button>
+                <Button
+                  variant="blue"
+                  className="h-10"
+                  disabled={running || bulkDownloading || scriptBulkGenerating}
+                  onClick={() => {
+                    void importLocalMp4Files({
+                      generateAfterUpload: true,
+                    }).catch((error) => {
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : "导入并生成剧本失败",
+                      );
+                    });
+                  }}
+                >
+                  <FileText size={16} />
+                  导入并生成
+                </Button>
+                <Button
+                  variant="default"
+                  className="h-10"
+                  disabled={running || results.length === 0}
+                  onClick={() => setCurrentResults([])}
+                  title="清空结果"
+                >
+                  <RotateCcw size={16} />
+                </Button>
+              </div>
             </div>
-          </div>
+          ) : null}
+
+          {activeChannel === "search" ? (
+            <div className="grid gap-4 lg:grid-cols-[1fr_120px_auto]">
+              <label className="min-w-0">
+                <span className="mb-2 block text-xs font-medium text-white/50">
+                  短剧关键词
+                </span>
+                <Input
+                  value={hongguoKeyword}
+                  onChange={(event) => setHongguoKeyword(event.target.value)}
+                  disabled={hongguoSearching || scriptWorkflowRunning}
+                  placeholder="乌龙假扮恋"
+                  className="h-10 border-white/10 bg-black/35 text-white placeholder:text-white/25"
+                />
+              </label>
+              <label>
+                <span className="mb-2 block text-xs font-medium text-white/50">
+                  页码
+                </span>
+                <Input
+                  value={hongguoPage}
+                  onChange={(event) => setHongguoPage(event.target.value)}
+                  disabled={hongguoSearching || scriptWorkflowRunning}
+                  className="h-10 border-white/10 bg-black/35 text-white"
+                />
+              </label>
+              <div className="flex items-end gap-2">
+                <Button
+                  variant="blue"
+                  className="h-10"
+                  loading={hongguoSearching}
+                  disabled={hongguoSearching || scriptWorkflowRunning}
+                  onClick={() => {
+                    void searchHongguoShortDrama();
+                  }}
+                >
+                  <Search size={16} />
+                  搜索
+                </Button>
+                <Button
+                  variant="default"
+                  className="h-10"
+                  disabled={running || results.length === 0}
+                  onClick={() => setCurrentResults([])}
+                  title="清空结果"
+                >
+                  <RotateCcw size={16} />
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           {running && currentPageUrl ? (
             <div className="mt-4 flex min-w-0 items-center gap-2 rounded-lg border border-[#B43FEB]/20 bg-[#B43FEB]/8 px-3 py-2 text-xs text-[#E9C7FF]">
@@ -1819,7 +2905,10 @@ export default function VideoToScriptPage() {
                 size="sm"
                 variant="blue"
                 loading={bulkDownloading}
-                disabled={results.length === 0 || bulkDownloading}
+                disabled={
+                  !results.some((item) => item.status === "success" && item.m3u8Url) ||
+                  bulkDownloading
+                }
                 onClick={() => {
                   void downloadAll().catch((error) => {
                     toast.error(
@@ -1867,6 +2956,27 @@ export default function VideoToScriptPage() {
                   停止裁切
                 </Button>
               ) : null}
+              <label className="flex items-center gap-2 text-xs text-white/45">
+                模型
+                <Select
+                  value={videoToScriptModel}
+                  onValueChange={(value) =>
+                    setVideoToScriptModel(value as VideoToScriptModel)
+                  }
+                  disabled={scriptBulkGenerating || scriptWorkflowRunning}
+                >
+                  <SelectTrigger className="h-8 w-40 border-white/10 bg-black/35 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border border-white/10 bg-[#18181a] text-white">
+                    {VIDEO_TO_SCRIPT_MODELS.map((model) => (
+                      <SelectItem key={model.value} value={model.value}>
+                        {model.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
               <Button
                 size="sm"
                 variant="blue"
@@ -1883,7 +2993,7 @@ export default function VideoToScriptPage() {
                 }}
               >
                 <FileText size={14} />
-                一键生成剧本
+                生成剧本
               </Button>
               {scriptBulkGenerating ? (
                 <Button
@@ -1929,7 +3039,7 @@ export default function VideoToScriptPage() {
                     <th className="w-64 px-4 py-3 font-medium">MP4 视频</th>
                     <th className="w-80 px-4 py-3 font-medium">剧本</th>
                     <th className="px-4 py-3 font-medium">m3u8</th>
-                    <th className="px-4 py-3 font-medium">播放页</th>
+                    <th className="px-4 py-3 font-medium">来源</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5 text-sm">
@@ -2240,6 +3350,304 @@ export default function VideoToScriptPage() {
           )}
         </section>
       </div>
+      <Modal
+        open={scriptWorkflowDialogOpen}
+        onOpenChange={(open) => {
+          if (!scriptWorkflowRunning) setScriptWorkflowDialogOpen(open);
+        }}
+      >
+        <ModalContent className="max-w-md">
+          <div className="border-b border-white/8 px-5 py-4">
+            <ModalTitle>一键生成剧本</ModalTitle>
+            <ModalDescription>
+              选择范围后会依次解析播放页、保存 MP4、上传 OSS，并生成剧本。
+            </ModalDescription>
+          </div>
+          <div className="space-y-3 px-5 py-4">
+            <Button
+              variant={
+                selectedScriptWorkflowScope === "first10" ? "blue" : "default"
+              }
+              className="h-auto w-full justify-start px-4 py-3 text-left"
+              disabled={scriptWorkflowRunning}
+              onClick={() => setSelectedScriptWorkflowScope("first10")}
+            >
+              <div>
+                <div className="text-sm font-medium">
+                  生成前 {FIRST_PROBE_EPISODE_COUNT} 集
+                </div>
+                <div className="mt-1 text-xs font-normal text-white/55">
+                  适合先验证下载、上传和模型生成是否正常。
+                </div>
+              </div>
+            </Button>
+            <Button
+              variant={
+                selectedScriptWorkflowScope === "all" ? "blue" : "default"
+              }
+              className="h-auto w-full justify-start px-4 py-3 text-left"
+              disabled={scriptWorkflowRunning}
+              onClick={() => setSelectedScriptWorkflowScope("all")}
+            >
+              <div>
+                <div className="text-sm font-medium">生成全部</div>
+                <div className="mt-1 text-xs font-normal text-white/55">
+                  使用 ass.php 返回的全部 m3u8，随后自动保存 MP4 并生成剧本。
+                </div>
+              </div>
+            </Button>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-white/8 px-5 py-4">
+            <Button
+              size="sm"
+              variant="default"
+              disabled={scriptWorkflowRunning}
+              onClick={() => setScriptWorkflowDialogOpen(false)}
+            >
+              取消
+            </Button>
+            <Button
+              size="sm"
+              variant="blue"
+              loading={scriptWorkflowRunning}
+              disabled={scriptWorkflowRunning}
+              onClick={() => {
+                void runScriptWorkflow(selectedScriptWorkflowScope);
+              }}
+            >
+              确认
+            </Button>
+          </div>
+        </ModalContent>
+      </Modal>
+      <Modal
+        open={hongguoSearchDialogOpen}
+        onOpenChange={(open) => setHongguoSearchDialogOpen(open)}
+      >
+        <ModalContent className="flex max-h-[86vh] max-w-4xl flex-col">
+          <div className="border-b border-white/8 px-5 py-4">
+            <ModalTitle>搜索结果</ModalTitle>
+            <ModalDescription>
+              选择短剧后会再次确认，再进入下载、上传和生成剧本流程。
+            </ModalDescription>
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
+            {hongguoSearchResults.length === 0 ? (
+              <div className="flex h-40 items-center justify-center text-sm text-white/35">
+                没有搜索结果
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {hongguoSearchResults.map((item) => (
+                  <div
+                    key={item.id}
+                    className="grid gap-4 rounded-lg border border-white/8 bg-black/20 p-3 md:grid-cols-[96px_1fr_auto]"
+                  >
+                    <div className="h-32 overflow-hidden rounded-md bg-white/5">
+                      {item.cover ? (
+                        <img
+                          src={item.cover}
+                          alt={item.title || ""}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : null}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="truncate text-base font-medium text-white/90">
+                          {item.title || "未命名短剧"}
+                        </div>
+                        {item.rec ? (
+                          <span className="rounded border border-[#B43FEB]/25 bg-[#B43FEB]/10 px-2 py-0.5 text-xs text-[#E9C7FF]">
+                            {item.rec}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-1 text-xs text-white/45">
+                        总集数：{item.episode_num || "-"} · 角色：
+                        {item.role || "-"}
+                      </div>
+                      <div className="mt-1 text-xs text-white/35">
+                        {item.type || ""}
+                        {item.score ? ` · 评分 ${item.score}` : ""}
+                        {item.record_number ? ` · ${item.record_number}` : ""}
+                      </div>
+                      <div className="mt-2 line-clamp-3 text-xs leading-5 text-white/55">
+                        {item.intro || "暂无简介"}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-end">
+                      <Button
+                        size="sm"
+                        variant="blue"
+                        onClick={() => setSelectedHongguoItem(item)}
+                      >
+                        确认选择
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end border-t border-white/8 px-5 py-4">
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => setHongguoSearchDialogOpen(false)}
+            >
+              关闭
+            </Button>
+          </div>
+        </ModalContent>
+      </Modal>
+      <Modal
+        open={Boolean(selectedHongguoItem)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedHongguoItem(null);
+        }}
+      >
+        <ModalContent className="max-w-md">
+          <div className="border-b border-white/8 px-5 py-4">
+            <ModalTitle>
+              确认选择《{selectedHongguoItem?.title || "未命名短剧"}》
+            </ModalTitle>
+            <ModalDescription>
+              确认后会获取全部剧集，优先最低画质 MP4，并开始下载、上传 OSS 和生成剧本。
+            </ModalDescription>
+          </div>
+          <div className="px-5 py-4 text-sm leading-6 text-white/65">
+            总集数：{selectedHongguoItem?.episode_num || "-"}
+            <br />
+            热度：{selectedHongguoItem?.rec || "-"}
+          </div>
+          <div className="flex justify-end gap-2 border-t border-white/8 px-5 py-4">
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => setSelectedHongguoItem(null)}
+            >
+              取消
+            </Button>
+            <Button
+              size="sm"
+              variant="blue"
+              disabled={scriptWorkflowRunning}
+              onClick={() => {
+                if (!selectedHongguoItem) return;
+                void runHongguoSearchWorkflow(selectedHongguoItem);
+              }}
+            >
+              确认
+            </Button>
+          </div>
+        </ModalContent>
+      </Modal>
+      <Modal
+        open={probeScopeDialogOpen}
+        onOpenChange={(open) => {
+          if (!running) setProbeScopeDialogOpen(open);
+        }}
+      >
+        <ModalContent className="max-w-md">
+          <div className="border-b border-white/8 px-5 py-4">
+            <ModalTitle>选择解析范围</ModalTitle>
+            <ModalDescription>
+              Shot4u 播放页会先读取 ass.php 返回的播放列表。
+            </ModalDescription>
+          </div>
+          <div className="space-y-3 px-5 py-4">
+            <Button
+              variant={selectedProbeScope === "first10" ? "blue" : "default"}
+              className="h-auto w-full justify-start px-4 py-3 text-left"
+              onClick={() => setSelectedProbeScope("first10")}
+            >
+              <div>
+                <div className="text-sm font-medium">
+                  解析前 {FIRST_PROBE_EPISODE_COUNT} 集
+                </div>
+                <div className="mt-1 text-xs font-normal text-white/55">
+                  快速验证链接和后续下载流程。
+                </div>
+              </div>
+            </Button>
+            <Button
+              variant={selectedProbeScope === "all" ? "blue" : "default"}
+              className="h-auto w-full justify-start px-4 py-3 text-left"
+              onClick={() => setSelectedProbeScope("all")}
+            >
+              <div>
+                <div className="text-sm font-medium">解析全部</div>
+                <div className="mt-1 text-xs font-normal text-white/55">
+                  保留 ass.php 返回的全部 m3u8。
+                </div>
+              </div>
+            </Button>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-white/8 px-5 py-4">
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => setProbeScopeDialogOpen(false)}
+            >
+              取消
+            </Button>
+            <Button
+              size="sm"
+              variant="blue"
+              disabled={running}
+              onClick={() => startProbeWithScope(selectedProbeScope)}
+            >
+              确认
+            </Button>
+          </div>
+        </ModalContent>
+      </Modal>
+      <Modal
+        open={missingScriptEpisodes.length > 0}
+        onOpenChange={(open) => {
+          if (!open) setMissingScriptEpisodes([]);
+        }}
+      >
+        <ModalContent className="max-w-md">
+          <div className="border-b border-white/8 px-5 py-4">
+            <ModalTitle>还有剧本未生成</ModalTitle>
+            <ModalDescription>
+              当前表格存在未生成剧本的集数，补齐后才能导出 Word。
+            </ModalDescription>
+          </div>
+          <div className="px-5 py-4">
+            <div className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm leading-6 text-red-100">
+              缺少剧本：第 {missingScriptEpisodes.join("、")} 集
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-white/8 px-5 py-4">
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => setMissingScriptEpisodes([])}
+            >
+              取消
+            </Button>
+            <Button
+              size="sm"
+              variant="blue"
+              onClick={() => {
+                setMissingScriptEpisodes([]);
+                void exportScriptsToWord({ skipMissingCheck: true }).catch(
+                  (error) => {
+                    toast.error(
+                      error instanceof Error ? error.message : "导出 Word 失败",
+                    );
+                  },
+                );
+              }}
+            >
+              继续导出
+            </Button>
+          </div>
+        </ModalContent>
+      </Modal>
       <Modal
         open={Boolean(viewingScriptItem)}
         onOpenChange={(open) => {

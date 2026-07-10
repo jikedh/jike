@@ -94,9 +94,12 @@ pub fn run() {
             commands::debug_capture_page,
             commands::video_processing_trim,
             commands::video_download_m3u8_to_mp4,
+            commands::video_download_mp4_url,
             commands::video_split_mp4_by_seconds,
             commands::video_fetch_play_page,
             commands::video_fetch_shot4u_playlist,
+            commands::video_fetch_hongguo_api,
+            commands::video_decrypt_hongguo_video,
             commands::copy_video_url_to_oss,
             commands::copy_media_url_to_oss,
         ])
