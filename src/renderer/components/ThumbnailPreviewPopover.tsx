@@ -75,11 +75,11 @@ export const ThumbnailPreviewPopover = ({
               transform: "translate(-50%, -100%)",
             }}
           >
-            <div className="w-60 h-60 rounded-xl overflow-hidden border border-white/10 shadow-2xl bg-neutral-900 transition-opacity duration-150">
+            <div className="flex w-60 items-center justify-center rounded-xl border border-white/10 bg-neutral-900 shadow-2xl transition-opacity duration-150">
               <img
                 src={src}
                 alt={`预览 ${index + 1}`}
-                className="w-full h-full object-cover"
+                className="h-auto w-full rounded-xl object-contain"
               />
               {/* 序号角标 */}
               <span className="absolute left-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-xs font-medium text-white">
