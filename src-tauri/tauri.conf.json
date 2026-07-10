@@ -74,7 +74,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFFRUVGREFFMDM3NjQyMTUKUldRVlFuWURydjN1SGhKUVRuMlM3ZGl2Tml1Vzg4eVg0RHcvWVRwMGpGaFBRdStLT2RkdDRnMGQK",
       "endpoints": [
-        "https://github.com/hangzhou-yunqi_1/jike-release/releases/latest/download/latest.json"
+        "https://github.com/jikedh/jike-release/releases/latest/download/latest.json"
       ]
     }
   }
