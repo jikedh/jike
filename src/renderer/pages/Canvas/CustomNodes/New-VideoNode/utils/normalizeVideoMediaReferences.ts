@@ -171,6 +171,17 @@ const replaceMentionsInDoc = (
 ): string => {
     if (!doc || typeof doc !== "object") return "";
 
+    const BLOCK_TYPES = new Set([
+        "doc",
+        "paragraph",
+        "heading",
+        "blockquote",
+        "bulletList",
+        "orderedList",
+        "listItem",
+        "codeBlock",
+    ]);
+
     const visit = (node: unknown): string => {
         const record = node as Record<string, unknown>;
         if (!record || typeof record !== "object") return "";
@@ -185,8 +196,13 @@ const replaceMentionsInDoc = (
             return replacements.get(mentionId) ?? "";
         }
 
+        if (record.type === "hardBreak") {
+            return "\n";
+        }
+
         if (Array.isArray(record.content)) {
-            return record.content.map(visit).join("");
+            const separator = BLOCK_TYPES.has(String(record.type)) ? "\n" : "";
+            return record.content.map(visit).join(separator);
         }
 
         return "";
@@ -364,7 +380,7 @@ export const normalizeVideoMediaReferences = ({
 
     const normalizedPrompt = promptDoc
         ? replaceMentionsInDoc(promptDoc, replacements)
-        : promptText?.trim() ?? "";
+        : promptText ?? "";
 
     const splitByKind = (kind: MediaKind) =>
         allEntries.filter((entry) => entry.type === kind);

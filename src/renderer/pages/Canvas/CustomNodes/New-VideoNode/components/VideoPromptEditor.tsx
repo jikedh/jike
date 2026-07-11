@@ -8,7 +8,9 @@ import {
   useImperativeHandle,
   useMemo,
   useRef,
+  useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
   cn,
@@ -208,6 +210,12 @@ export const VideoPromptEditor = forwardRef<
   const mentionItemsRef = useRef(mentionItems);
   const nodeIdRef = useRef(nodeId);
   const projectIdRef = useRef(projectId);
+  const [preview, setPreview] = useState<{
+    src: string;
+    label: string;
+    left: number;
+    top: number;
+  } | null>(null);
 
   useEffect(() => {
     mentionItemsRef.current = mentionItems;
@@ -437,6 +445,10 @@ export const VideoPromptEditor = forwardRef<
           "span",
           {
             ...options.HTMLAttributes,
+            class: cn(
+              options.HTMLAttributes.class,
+              mentionType === "image" && thumbnail && "cursor-pointer",
+            ),
             "data-type": "mention",
             "data-mention-id": node.attrs.id,
             "data-mention-value": node.attrs.value,
@@ -445,6 +457,7 @@ export const VideoPromptEditor = forwardRef<
             "data-mention-original-label": originalLabel,
             "data-mention-kind": mentionType || "image",
             "data-media-type": node.attrs.mediaType || mentionType || "image",
+            "data-thumbnail": thumbnail,
             "data-mention-source": node.attrs.source,
             "data-mention-scope": node.attrs.scope,
             "data-asset-id": node.attrs.assetId,
@@ -659,7 +672,7 @@ export const VideoPromptEditor = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
-      getPlainText: () => editor?.getText().trim() ?? "",
+      getPlainText: () => editor?.getText({ blockSeparator: "\n" }) ?? "",
       getDocumentJSON: () => editor?.getJSON() ?? null,
       insertContent: (content: string) => {
         if (!editor) return;
@@ -1005,6 +1018,74 @@ export const VideoPromptEditor = forwardRef<
 
     const editorDom = editor.view.dom;
 
+    const getImageMentionPill = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) {
+        return null;
+      }
+
+      const mentionPill = target.closest(".video-node-mention-pill");
+      if (!(mentionPill instanceof HTMLElement)) {
+        return null;
+      }
+
+      const mentionType =
+        mentionPill.dataset.mentionKind || mentionPill.dataset.mediaType;
+      const thumbnail =
+        mentionPill.dataset.thumbnail ||
+        mentionPill.querySelector<HTMLImageElement>(
+          ".video-node-mention-pill__thumbnail",
+        )?.src;
+
+      if (mentionType !== "image" || !thumbnail) {
+        return null;
+      }
+
+      return mentionPill;
+    };
+
+    const handleMouseOver = (event: MouseEvent) => {
+      const mentionPill = getImageMentionPill(event.target);
+      if (!mentionPill) {
+        return;
+      }
+
+      if (
+        event.relatedTarget instanceof Node &&
+        mentionPill.contains(event.relatedTarget)
+      ) {
+        return;
+      }
+
+      const rect = mentionPill.getBoundingClientRect();
+      setPreview({
+        src:
+          mentionPill.dataset.thumbnail ||
+          mentionPill.querySelector<HTMLImageElement>(
+            ".video-node-mention-pill__thumbnail",
+          )?.src ||
+          "",
+        label: mentionPill.dataset.mentionOriginalLabel || "提及图片",
+        left: rect.left + rect.width / 2,
+        top: Math.max(12, rect.top - 8),
+      });
+    };
+
+    const handleMouseOut = (event: MouseEvent) => {
+      const mentionPill = getImageMentionPill(event.target);
+      if (!mentionPill) {
+        return;
+      }
+
+      if (
+        event.relatedTarget instanceof Node &&
+        mentionPill.contains(event.relatedTarget)
+      ) {
+        return;
+      }
+
+      setPreview(null);
+    };
+
     const handleDragStart = (event: DragEvent) => {
       const target = event.target;
       if (!(target instanceof Element)) {
@@ -1041,14 +1122,42 @@ export const VideoPromptEditor = forwardRef<
 
     editorDom.addEventListener("dragstart", handleDragStart);
     editorDom.addEventListener("dragend", handleDragEnd);
+    editorDom.addEventListener("mouseover", handleMouseOver);
+    editorDom.addEventListener("mouseout", handleMouseOut);
 
     return () => {
       editorDom.removeEventListener("dragstart", handleDragStart);
       editorDom.removeEventListener("dragend", handleDragEnd);
+      editorDom.removeEventListener("mouseover", handleMouseOver);
+      editorDom.removeEventListener("mouseout", handleMouseOut);
     };
   }, [editor]);
 
-  return <EditorContent editor={editor} />;
+  return (
+    <>
+      <EditorContent editor={editor} />
+      {preview &&
+        createPortal(
+          <div
+            className="pointer-events-none fixed z-[9999]"
+            style={{
+              left: preview.left,
+              top: preview.top,
+              transform: "translate(-50%, -100%)",
+            }}
+          >
+            <div className="flex w-60 items-center justify-center rounded-xl border border-white/10 bg-neutral-900 shadow-2xl transition-opacity duration-150">
+              <img
+                src={preview.src}
+                alt={preview.label}
+                className="h-auto w-full rounded-xl object-contain"
+              />
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
+  );
 });
 
 VideoPromptEditor.displayName = "VideoPromptEditor";

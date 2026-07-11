@@ -21,7 +21,6 @@ import {
   deleteAsset as apiDeleteAsset,
   getAssetList,
   removeProjectAssetRef as apiRemoveProjectAssetRef,
-  searchAssets,
   updateAsset,
 } from "@/api/assets";
 import type {
@@ -110,6 +109,7 @@ const buildListParams = (
 
   if (options.mediaType) params.mediaType = options.mediaType;
   if (options.primaryCategory) params.primaryCategory = options.primaryCategory;
+  if (options.keyword?.trim()) params.keyword = options.keyword.trim();
 
   return params;
 };
@@ -167,17 +167,9 @@ export const useRemoteAssetLibrary = (
     setError(null);
 
     try {
-      const keyword = options.keyword?.trim() ?? "";
       const params = buildListParams(options);
       const envelope: ApiEnvelope<PaginatedData<unknown>> =
-        keyword.length > 0
-          ? await searchAssets({
-            q: keyword,
-            scope: options.scope,
-            page: options.page,
-            pageSize: options.pageSize,
-          })
-          : await getAssetList(params);
+        await getAssetList(params);
 
       if (requestId !== requestIdRef.current) return;
 

@@ -1516,12 +1516,8 @@ export const VideoToolbar = ({
           .edges.filter((edge) => edge.source === nodeId).length;
 
         const newNodeId = addNode("newVideo", {
-          x: basePosition.x - 390,
-          y:
-            basePosition.y +
-            (sourceNode?.height ?? 250) +
-            48 +
-            outputIndex * 298,
+          x: basePosition.x + (sourceNode?.width ?? 350) + 80,
+          y: basePosition.y + outputIndex * 298,
         } as any);
 
         updateNewVideoNodeData(newNodeId, {

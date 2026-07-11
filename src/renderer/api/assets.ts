@@ -78,6 +78,16 @@ export const getAssetPrimaryCategories = () =>
   });
 
 /**
+ * 获取资产级联分类树
+ * GET /v1/assets/categories
+ */
+export const getAssetCategories = () =>
+  request<AssetCategory[]>({
+    url: "/v1/assets/categories",
+    method: "get",
+  });
+
+/**
  * 创建资产
  * POST /v1/assets
  */

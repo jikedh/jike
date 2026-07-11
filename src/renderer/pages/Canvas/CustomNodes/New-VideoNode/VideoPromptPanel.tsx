@@ -1612,21 +1612,20 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
           .filter((node) => node.type === "noteNode")
           .map(
             (node) =>
-              ((node.data as { content?: string })?.content ?? "").trim(),
+              (node.data as { content?: string })?.content ?? "",
           )
-          .filter((content) => content.length > 0);
+          .filter((content) => content.trim().length > 0);
         const noteContents =
           live.length > 0 ? live : parentNoteContents;
         return noteContents
-          .map((content) => content.trim())
-          .filter((content) => content.length > 0)
-          .join(" ");
+          .filter((content) => content.trim().length > 0)
+          .join("\n");
       })();
       const mergedPrompt = [normalizedNotePrompt, normalized.prompt]
-        .filter((content) => content.length > 0)
-        .join(" ");
+        .filter((content) => content.trim().length > 0)
+        .join("\n");
 
-      if (!mergedPrompt) {
+      if (!mergedPrompt.trim()) {
         warning("请输入提示词");
         return;
       }
@@ -1958,7 +1957,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
 
                 {pendingGenerateContext.fullRequest.model ===
                   OVERSEAS_SEEDANCE_MODEL &&
-                pendingGenerateContext.referenceCounts.video > 0 ? (
+                  pendingGenerateContext.referenceCounts.video > 0 ? (
                   <div className="mt-2 rounded-lg border border-[#B43FEB]/20 bg-[#B43FEB]/10 px-3 py-2 text-xs leading-5 text-white/70">
                     海外 Seedance 视频参考计费：生成{" "}
                     {pendingGenerateContext.duration}s + 参考视频{" "}
