@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState } from "react";
 import { cn, getVideoThumbnail } from "shared/utils/utils";
 import { NotePreviewPopover } from "@/components/NotePreviewPopover";
 import { ThumbnailPreviewPopover } from "@/components/ThumbnailPreviewPopover";
+import { VideoPreviewPopover } from "@/components/VideoPreviewPopover";
 import type { MentionItem } from "../constants/mockData";
 
 type ReferenceItemType = "image" | "video" | "audio" | "note";
@@ -218,6 +219,14 @@ const ReferenceCard = ({
       >
         {card}
       </NotePreviewPopover>
+    );
+  }
+
+  if (item.type === "video" && item.thumbnail) {
+    return (
+      <VideoPreviewPopover src={item.thumbnail} index={index}>
+        {card}
+      </VideoPreviewPopover>
     );
   }
 
