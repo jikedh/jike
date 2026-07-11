@@ -2256,6 +2256,14 @@ export const CanvasFlow = ({
       return;
     }
 
+    // 先让当前聚焦的可编辑元素失焦，触发 NoteEditor blur → 保存内容 → 退出编辑
+    const activeEl = document.activeElement;
+    if (activeEl instanceof HTMLElement && activeEl.isContentEditable) {
+      activeEl.blur();
+    }
+    // 清理残留的便签编辑态（未通过 blur 正常退出的节点）
+    useCanvasFlowStore.getState().clearAllNoteNodeEditing();
+
     setSelectionBoxActive(false);
     clearManualSelectionRect();
     setActiveNodeId(null);

@@ -191,7 +191,9 @@ export type CanvasFlowStoreType = {
 
   // ── 便签节点 ─────────────────────────────────
   setNoteNodeEditing: (nodeId: string, isEditing: boolean) => void;
+  clearAllNoteNodeEditing: () => void;
   updateNoteNodeContent: (nodeId: string, content: string) => void;
+  updateNoteNodeHtml: (nodeId: string, html: string) => void;
   resizeNoteNode: (nodeId: string, width: number, height: number) => void;
 
   // ── 各类型节点数据更新 ─────────────────────────
