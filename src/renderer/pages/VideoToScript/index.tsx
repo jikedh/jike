@@ -37,7 +37,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { uploadAssetBinary } from "@/pages/Canvas/utils/remoteAssetUpload";
+import {
+  getUploadOssPutUrl,
+  type UploadOssPutUrlResp,
+} from "@/api/jikeGo";
 
 type ProbeStatus = "success" | "error";
 type InputMode = "hongguo" | "shot4u";
@@ -198,7 +201,7 @@ const DEFAULT_MAX_EPISODES = 80;
 const FIRST_PROBE_EPISODE_COUNT = 10;
 const DEFAULT_BULK_CONCURRENCY = 10;
 const SCRIPT_BULK_CONCURRENCY = 10;
-const OSS_UPLOAD_CONCURRENCY = 2;
+const OSS_UPLOAD_CONCURRENCY = 5;
 const CLIP_SEGMENT_SECONDS = 14;
 const HARD_MAX_EPISODES = 200;
 const MAX_BULK_CONCURRENCY = 10;
@@ -233,6 +236,7 @@ const INPUT_CHANNELS: Array<{
 ];
 const STORAGE_KEY = "jike.videoToScript.state.v1";
 const HONGGUO_API_KEY = import.meta.env.VITE_HONGGUO_API_KEY || "";
+const OSS_DIRECT_UPLOAD_TTL = 12 * 60 * 60;
 const VIDEO_TO_SCRIPT_SYSTEM_PROMPT = `你是短剧剧本整理师。你的任务是观看用户提供的单集短剧视频，只整理“剧情正文”，按影视剧本文本格式还原本集内容。
 
 只输出剧情正文，不要输出剧情梗概、人物表、二创改写要点、分析说明、Markdown 标题、表格或项目符号。
@@ -424,6 +428,81 @@ const runWithOssUploadSlot = async <T,>(task: () => Promise<T>) => {
   } finally {
     release();
   }
+};
+
+const unwrapJikeGoData = <T,>(response: any): T => {
+  if (!response) {
+    throw new Error("请求无响应数据");
+  }
+  if (typeof response.code === "number") {
+    if (response.code !== 0 && response.code !== 200) {
+      throw new Error(response.msg || response.message || "请求失败");
+    }
+    return response.data as T;
+  }
+  return response as T;
+};
+
+const uploadBlobToSignedPutUrl = (
+  putUrl: string,
+  headers: Record<string, string> | undefined,
+  blob: Blob,
+  onProgress?: (percent: number) => void,
+) =>
+  new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", putUrl, true);
+
+    Object.entries(headers || {}).forEach(([key, value]) => {
+      if (value) {
+        xhr.setRequestHeader(key, value);
+      }
+    });
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+        return;
+      }
+      reject(new Error(`OSS 直传失败：HTTP ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error("OSS 直传失败：网络异常或跨域配置错误"));
+    xhr.onabort = () => reject(new Error("OSS 直传已取消"));
+    xhr.send(blob.slice(0, blob.size, ""));
+  });
+
+const uploadVideoToOssDirect = async (
+  blob: Blob,
+  fileName: string,
+  onProgress?: (percent: number) => void,
+) => {
+  const ext = fileName.split(".").pop()?.toLowerCase() || "mp4";
+  const signed = unwrapJikeGoData<UploadOssPutUrlResp>(
+    await getUploadOssPutUrl({
+      blob_type: "video",
+      ext,
+      content_type: "video/mp4",
+      ttl: OSS_DIRECT_UPLOAD_TTL,
+    }),
+  );
+
+  if (!signed.put_url || !signed.access_url) {
+    throw new Error("获取 OSS 直传地址失败");
+  }
+
+  await uploadBlobToSignedPutUrl(
+    signed.put_url,
+    signed.headers,
+    blob,
+    onProgress,
+  );
+
+  return { fileKey: signed.key, url: signed.access_url };
 };
 
 const toAbsoluteUrl = (value: string | undefined, baseUrl: string) => {
@@ -1175,15 +1254,21 @@ export default function VideoToScriptPage() {
         updateResultItem(item, {
           localMp4Path: localPath,
           uploadStatus: "pending",
-          uploadMessage: "正在上传 OSS",
+          uploadMessage: "正在获取 OSS 直传地址",
         });
         const bytes = await readFile(localPath);
         const blob = new Blob([bytes], { type: "video/mp4" });
-        return uploadAssetBinary({
+        return uploadVideoToOssDirect(
           blob,
-          fileName: getEpisodeFileName(item),
-          mimeType: "video/mp4",
-        });
+          getEpisodeFileName(item),
+          (percent) => {
+            updateResultItem(item, {
+              localMp4Path: localPath,
+              uploadStatus: "pending",
+              uploadMessage: `正在直传 OSS ${percent}%`,
+            });
+          },
+        );
       });
       updateResultItem(item, {
         localMp4Path: localPath,
@@ -1948,6 +2033,130 @@ export default function VideoToScriptPage() {
     setModeResults("shot4u", importedItems);
     toast.success(`已导入 ${importedItems.length} 个 MP4，开始上传 OSS`);
 
+    if (options?.generateAfterUpload) {
+      scriptBulkStopRequestedRef.current = false;
+      setScriptBulkGenerating(true);
+      setScriptBulkProgress({
+        current: 0,
+        total: importedItems.length,
+        success: 0,
+        failed: 0,
+        skipped: 0,
+        concurrency: SCRIPT_BULK_CONCURRENCY,
+        activeEpisodes: [],
+        stopRequested: false,
+      });
+
+      let uploadSuccessTotal = 0;
+      let uploadFailedTotal = 0;
+      let scriptSuccessTotal = 0;
+      let scriptFailedTotal = 0;
+      let scriptCompletedTotal = 0;
+      const scriptActiveEpisodes = new Set<number>();
+      let activeScriptGenerations = 0;
+      const pendingScriptGenerationStarters: Array<() => void> = [];
+
+      const acquireImportScriptSlot = () =>
+        new Promise<() => void>((resolve) => {
+          const start = () => {
+            activeScriptGenerations += 1;
+            let released = false;
+            resolve(() => {
+              if (released) return;
+              released = true;
+              activeScriptGenerations = Math.max(0, activeScriptGenerations - 1);
+              pendingScriptGenerationStarters.shift()?.();
+            });
+          };
+
+          if (activeScriptGenerations < SCRIPT_BULK_CONCURRENCY) {
+            start();
+          } else {
+            pendingScriptGenerationStarters.push(start);
+          }
+        });
+
+      const syncImportScriptProgress = () => {
+        setScriptBulkProgress({
+          current: scriptCompletedTotal,
+          total: importedItems.length,
+          success: scriptSuccessTotal,
+          failed: scriptFailedTotal,
+          skipped: 0,
+          concurrency: SCRIPT_BULK_CONCURRENCY,
+          activeEpisodes: Array.from(scriptActiveEpisodes).sort((a, b) => a - b),
+          stopRequested: scriptBulkStopRequestedRef.current,
+        });
+      };
+
+      try {
+        await Promise.all(
+          importedItems.map(async (item) => {
+            let remoteVideoUrl = "";
+            try {
+              remoteVideoUrl = await uploadLocalMp4(item, item.localMp4Path || "");
+              uploadSuccessTotal += 1;
+            } catch {
+              uploadFailedTotal += 1;
+              scriptFailedTotal += 1;
+              scriptCompletedTotal += 1;
+              syncImportScriptProgress();
+              return;
+            }
+
+            if (scriptBulkStopRequestedRef.current) {
+              scriptFailedTotal += 1;
+              scriptCompletedTotal += 1;
+              syncImportScriptProgress();
+              return;
+            }
+
+            const releaseScriptSlot = await acquireImportScriptSlot();
+            scriptActiveEpisodes.add(item.episode);
+            syncImportScriptProgress();
+
+            try {
+              if (scriptBulkStopRequestedRef.current) {
+                scriptFailedTotal += 1;
+                return;
+              }
+              const ok = await generateScript(
+                { ...item, remoteVideoUrl, uploadStatus: "success" },
+                { silent: true },
+              );
+              if (ok) {
+                scriptSuccessTotal += 1;
+              } else {
+                scriptFailedTotal += 1;
+              }
+            } finally {
+              scriptCompletedTotal += 1;
+              scriptActiveEpisodes.delete(item.episode);
+              releaseScriptSlot();
+              syncImportScriptProgress();
+            }
+          }),
+        );
+
+        const wasStopped = scriptBulkStopRequestedRef.current;
+        if (wasStopped) {
+          toast.info(
+            `已停止派发剧本任务，上传成功 ${uploadSuccessTotal} 个，上传失败 ${uploadFailedTotal} 个，剧本成功 ${scriptSuccessTotal} 个，失败 ${scriptFailedTotal} 个`,
+          );
+        } else if (uploadFailedTotal > 0 || scriptFailedTotal > 0) {
+          toast.error(
+            `导入并生成完成，上传成功 ${uploadSuccessTotal} 个，上传失败 ${uploadFailedTotal} 个，剧本成功 ${scriptSuccessTotal} 个，失败 ${scriptFailedTotal} 个`,
+          );
+        } else {
+          toast.success(`已上传并生成 ${scriptSuccessTotal} 个 MP4 剧本`);
+        }
+      } finally {
+        setScriptBulkGenerating(false);
+        scriptBulkStopRequestedRef.current = false;
+      }
+      return;
+    }
+
     const uploadedItems = await Promise.all(
       importedItems.map(async (item) => {
         try {
@@ -1972,9 +2181,6 @@ export default function VideoToScriptPage() {
       );
     }
 
-    if (options?.generateAfterUpload) {
-      await generateScriptsForItems(uploadedItems);
-    }
   };
 
   const runScriptWorkflow = async (scope: ProbeScope) => {

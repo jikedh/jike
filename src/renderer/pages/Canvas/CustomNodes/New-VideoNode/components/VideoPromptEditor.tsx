@@ -215,6 +215,7 @@ export const VideoPromptEditor = forwardRef<
     label: string;
     left: number;
     top: number;
+    type?: "image" | "video";
   } | null>(null);
 
   useEffect(() => {
@@ -1018,7 +1019,7 @@ export const VideoPromptEditor = forwardRef<
 
     const editorDom = editor.view.dom;
 
-    const getImageMentionPill = (target: EventTarget | null) => {
+    const getMediaMentionPill = (target: EventTarget | null) => {
       if (!(target instanceof Element)) {
         return null;
       }
@@ -1036,49 +1037,57 @@ export const VideoPromptEditor = forwardRef<
           ".video-node-mention-pill__thumbnail",
         )?.src;
 
+      if (mentionType === "video") {
+        const videoUrl = mentionPill.dataset.url || mentionPill.dataset.fileUrl;
+        if (!videoUrl && !thumbnail) {
+          return null;
+        }
+        return { element: mentionPill, type: "video" as const, thumbnail, videoUrl };
+      }
+
       if (mentionType !== "image" || !thumbnail) {
         return null;
       }
 
-      return mentionPill;
+      return { element: mentionPill, type: "image" as const, thumbnail };
     };
 
     const handleMouseOver = (event: MouseEvent) => {
-      const mentionPill = getImageMentionPill(event.target);
-      if (!mentionPill) {
+      const result = getMediaMentionPill(event.target);
+      if (!result) {
         return;
       }
 
       if (
         event.relatedTarget instanceof Node &&
-        mentionPill.contains(event.relatedTarget)
+        result.element.contains(event.relatedTarget)
       ) {
         return;
       }
 
-      const rect = mentionPill.getBoundingClientRect();
+      const rect = result.element.getBoundingClientRect();
       setPreview({
-        src:
-          mentionPill.dataset.thumbnail ||
-          mentionPill.querySelector<HTMLImageElement>(
-            ".video-node-mention-pill__thumbnail",
-          )?.src ||
-          "",
-        label: mentionPill.dataset.mentionOriginalLabel || "提及图片",
+        src: result.type === "video" && result.videoUrl
+          ? result.videoUrl
+          : result.thumbnail || "",
+        label:
+          result.element.dataset.mentionOriginalLabel ||
+          (result.type === "video" ? "提及视频" : "提及图片"),
         left: rect.left + rect.width / 2,
         top: Math.max(12, rect.top - 8),
+        type: result.type,
       });
     };
 
     const handleMouseOut = (event: MouseEvent) => {
-      const mentionPill = getImageMentionPill(event.target);
-      if (!mentionPill) {
+      const result = getMediaMentionPill(event.target);
+      if (!result) {
         return;
       }
 
       if (
         event.relatedTarget instanceof Node &&
-        mentionPill.contains(event.relatedTarget)
+        result.element.contains(event.relatedTarget)
       ) {
         return;
       }
@@ -1146,12 +1155,23 @@ export const VideoPromptEditor = forwardRef<
               transform: "translate(-50%, -100%)",
             }}
           >
-            <div className="flex w-60 items-center justify-center rounded-xl border border-white/10 bg-neutral-900 shadow-2xl transition-opacity duration-150">
-              <img
-                src={preview.src}
-                alt={preview.label}
-                className="h-auto w-full rounded-xl object-contain"
-              />
+            <div className="flex w-60 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-neutral-900 shadow-2xl transition-opacity duration-150">
+              {preview.type === "video" ? (
+                <video
+                  src={preview.src}
+                  muted
+                  autoPlay
+                  loop
+                  playsInline
+                  className="h-auto w-full object-contain"
+                />
+              ) : (
+                <img
+                  src={preview.src}
+                  alt={preview.label}
+                  className="h-auto w-full rounded-xl object-contain"
+                />
+              )}
             </div>
           </div>,
           document.body,
