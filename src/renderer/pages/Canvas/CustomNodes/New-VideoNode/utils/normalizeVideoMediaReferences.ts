@@ -201,7 +201,14 @@ const replaceMentionsInDoc = (
         }
 
         if (Array.isArray(record.content)) {
-            const separator = BLOCK_TYPES.has(String(record.type)) ? "\n" : "";
+            const nodeType = String(record.type);
+            // 段落内的文本与 mention 都是内联内容，应以空格相连；
+            // 仅在段落等块级节点之间保留换行，避免生成 prompt 时给 @ 资源前后插入 \n。
+            const separator = nodeType === "paragraph"
+                ? " "
+                : BLOCK_TYPES.has(nodeType)
+                    ? "\n"
+                    : "";
             return record.content.map(visit).join(separator);
         }
 

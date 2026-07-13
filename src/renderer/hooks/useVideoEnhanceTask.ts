@@ -163,7 +163,7 @@ export function useVideoEnhanceTask() {
     async (
       taskId: string,
       intervalMs = 5000,
-      timeoutMs = 600000,
+      timeoutMs = 2 * 60 * 60 * 1000,
     ): Promise<VideoEnhanceTaskResponse | null> => {
       const startTime = Date.now();
 

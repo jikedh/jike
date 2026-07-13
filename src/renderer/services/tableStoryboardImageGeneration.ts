@@ -37,7 +37,7 @@ type GenerateStoryboardImageOptions = {
   signal?: AbortSignal;
 };
 
-const IMAGE_TASK_TIMEOUT = 5 * 60 * 1000;
+const IMAGE_TASK_TIMEOUT = 2 * 60 * 60 * 1000;
 const IMAGE_TASK_POLL_INTERVAL = 5000;
 
 const createAbortError = () => {
@@ -157,9 +157,9 @@ const pollStandardImageTask = async (taskId: string, signal?: AbortSignal) => {
     if (isFailureStatus(status)) {
       throw new Error(
         response?.message ||
-          response?.data?.message ||
-          response?.result?.message ||
-          "图片生成失败",
+        response?.data?.message ||
+        response?.result?.message ||
+        "图片生成失败",
       );
     }
   }
@@ -259,19 +259,19 @@ const generateRunningHubImage = async ({
     imageUrls.length > 0
       ? model === RUNNINGHUB_GPT_IMAGE2_MODEL
         ? [
-            (data) => createRhartImageG2ImageToImage(data),
-            (data) => createRhartImageG2OfficialImageToImage(data),
-          ]
+          (data) => createRhartImageG2ImageToImage(data),
+          (data) => createRhartImageG2OfficialImageToImage(data),
+        ]
         : [
-            (data) => createRhartImageNProImageToImage(data),
-            (data) => createRhartImageNProOfficialImageToImage(data),
-          ]
+          (data) => createRhartImageNProImageToImage(data),
+          (data) => createRhartImageNProOfficialImageToImage(data),
+        ]
       : model === RUNNINGHUB_GPT_IMAGE2_MODEL
         ? [createRhartImageG2TextToImage, createRhartImageG2OfficialTextToImage]
         : [
-            createRhartImageNProTextToImage,
-            createRhartImageNProOfficialTextToImage,
-          ];
+          createRhartImageNProTextToImage,
+          createRhartImageNProOfficialTextToImage,
+        ];
 
   let lastError: unknown = null;
   for (const route of routes) {
@@ -286,7 +286,7 @@ const generateRunningHubImage = async ({
       if (immediateUrl) {
         if (ledgerBizId) {
           confirmDesktopProxyScore(ledgerBizId, "runninghub_v2").catch(
-            () => {},
+            () => { },
           );
         }
         return immediateUrl;
@@ -300,7 +300,7 @@ const generateRunningHubImage = async ({
         const resultUrl = await pollRunningHubImageTask(data.taskId, signal);
         if (ledgerBizId) {
           confirmDesktopProxyScore(ledgerBizId, "runninghub_v2").catch(
-            () => {},
+            () => { },
           );
         }
         return resultUrl;
@@ -310,7 +310,7 @@ const generateRunningHubImage = async ({
             ledgerBizId,
             getRequestErrorMessage(error) || "RunningHub 生图失败",
             "runninghub_v2",
-          ).catch(() => {});
+          ).catch(() => { });
         }
         throw error;
       }
@@ -378,7 +378,7 @@ export const generateTableStoryboardImage = async (
           ledgerBizId,
           response?.description || "Midjourney 任务提交失败",
           "image",
-        ).catch(() => {});
+        ).catch(() => { });
       }
       throw new Error(response?.description || "Midjourney 任务提交失败");
     }
@@ -389,7 +389,7 @@ export const generateTableStoryboardImage = async (
         options.signal,
       );
       if (ledgerBizId) {
-        confirmDesktopProxyScore(ledgerBizId, "image").catch(() => {});
+        confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
       }
       return resultUrl;
     } catch (error) {
@@ -398,7 +398,7 @@ export const generateTableStoryboardImage = async (
           ledgerBizId,
           getRequestErrorMessage(error) || "Midjourney 图片生成失败",
           "image",
-        ).catch(() => {});
+        ).catch(() => { });
       }
       throw error;
     }
@@ -426,7 +426,7 @@ export const generateTableStoryboardImage = async (
         ledgerBizId,
         "image task creation failed: no task_id",
         "image",
-      ).catch(() => {});
+      ).catch(() => { });
     }
     throw new Error("未返回图片生成任务 ID，请稍后再试");
   }
@@ -437,7 +437,7 @@ export const generateTableStoryboardImage = async (
       options.signal,
     );
     if (ledgerBizId) {
-      confirmDesktopProxyScore(ledgerBizId, "image").catch(() => {});
+      confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
     }
     return resultUrl;
   } catch (error) {
@@ -446,7 +446,7 @@ export const generateTableStoryboardImage = async (
         ledgerBizId,
         getRequestErrorMessage(error) || "图片生成失败",
         "image",
-      ).catch(() => {});
+      ).catch(() => { });
     }
     throw error;
   }

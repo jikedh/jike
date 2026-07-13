@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
 import { handleRequestError } from "shared/utils/requestErrorHandler";
 import { getJikeingToken } from "shared/utils/utils";
 
-const REQUEST_TIMEOUT = 300000;
+const REQUEST_TIMEOUT = 2 * 60 * 60 * 1000;
 
 const DEFAULT_HEADERS = {
   Accept: "application/json",

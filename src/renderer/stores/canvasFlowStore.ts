@@ -2581,6 +2581,26 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     },
 
     /**
+     * 一次清空所有便签节点编辑态
+     */
+    clearAllNoteNodeEditing: () => {
+      set((state) => ({
+        nodes: state.nodes.map((node) => {
+          if (node.type !== "noteNode" || !node.data.isEditing) {
+            return node;
+          }
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              isEditing: false,
+            },
+          };
+        }),
+      }));
+    },
+
+    /**
      * 更新便签节点内容
      */
     updateNoteNodeContent: (nodeId: string, content: string) => {
@@ -2595,6 +2615,27 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             data: {
               ...node.data,
               content,
+            },
+          };
+        }),
+      }));
+    },
+
+    /**
+     * 更新便签节点富文本 HTML
+     */
+    updateNoteNodeHtml: (nodeId: string, html: string) => {
+      set((state) => ({
+        nodes: state.nodes.map((node) => {
+          if (node.id !== nodeId || node.type !== "noteNode") {
+            return node;
+          }
+
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              contentHtml: html,
             },
           };
         }),

@@ -26,7 +26,7 @@ import { uploadBase64ToOSS } from "shared/utils/base64ToImage";
 import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
 
 const CHAT_IMAGE_POLL_INTERVAL = 10000;
-const CHAT_IMAGE_TIMEOUT = 5 * 60 * 1000;
+const CHAT_IMAGE_TIMEOUT = 2 * 60 * 60 * 1000;
 const CHAT_IMAGE_PRELOAD_TIMEOUT = 12000;
 const CHAT_IMAGE_MIRROR_TIMEOUT = 15000;
 const DEFAULT_CHAT_IMAGE_SIZE = "1:1";
