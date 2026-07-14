@@ -229,6 +229,10 @@ main { flex: 1; display: flex; min-height: 0; }
   background: #1c1c20; border: 1px solid var(--line2); border-radius: 12px; padding: 6px; min-width: 150px;
   box-shadow: 0 14px 40px rgba(0,0,0,.6);
 }
+/* 覆盖一级菜单与二级面板间的 4px 定位间距，保证鼠标移动期间 hover 链不断开。 */
+.menu-item.has-sub > .submenu::before {
+  content: ''; position: absolute; inset-block: 0; right: 100%; width: 8px;
+}
 .menu-item.has-sub:hover > .submenu { display: block; }
 .menu-item input[type=file] { display: none; }
 .menu-item .mi-label { flex: 1; }

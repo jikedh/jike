@@ -8,6 +8,7 @@ import { toast, el } from '../util/dom.js';
 import { worldBox } from '../util/measure.js';
 import { ShotManager } from './ShotManager.js';
 import { DIRECTOR_DESK_STATE_VERSION } from '../../../../shared/types/DirectorDeskMessage.ts';
+import { uploadFileToOSS } from 'service/oss';
 
 // 体型素体注册表（单一事实来源）：一期全部由中性 Xbot 派生，按 height(身高) + girth(横向围度)
 // 程序化缩放出 高/矮/胖/瘦 等"简单区分"。全部为 mixamorig 骨骼 → 姿势/动画对每种都生效。
@@ -69,7 +70,7 @@ export class App {
 
     // 全景背景状态
     this.panoActive = false;
-    this.panoramaInfo = null;     // { thumb, title }
+    this.panoramaInfo = null;     // { thumb, title, url }，url 为可持久化远程地址
     this._panoObjURL = null;      // 本地上传时的 ObjectURL（替换/清除时回收）
 
     // 场景级状态（供 ScenePanel 读取/回写）
@@ -528,28 +529,46 @@ export class App {
     this.ui?.scenePanel?.render?.();
     return recommendedRatio;
   }
-  setPanoramaFromFile(file) {
-    const objURL = URL.createObjectURL(file);
-    new THREE.TextureLoader().load(
-      objURL,
-      (tex) => {
-        const recommended = this._applyPanoramaTexture(tex, { thumb: objURL, title: file.name || '本地全景图' }, objURL);
-        toast(recommended ? '已设置全景背景' : '已设置全景背景；建议使用 2:1 全景图以减少拉伸');
-      },
-      undefined,
-      () => { URL.revokeObjectURL(objURL); toast('全景图加载失败'); },
-    );
+  _loadPanorama(url, info, showToast = true) {
+    return new Promise((resolve, reject) => {
+      new THREE.TextureLoader().load(
+        url,
+        (tex) => {
+          const recommended = this._applyPanoramaTexture(tex, info, null);
+          if (showToast) {
+            toast(recommended ? '已设置全景背景' : '已设置全景背景；建议使用 2:1 全景图以减少拉伸');
+          }
+          resolve(recommended);
+        },
+        undefined,
+        reject,
+      );
+    });
+  }
+  async setPanoramaFromFile(file) {
+    try {
+      toast('正在上传全景图…');
+      const uploaded = await uploadFileToOSS(file);
+      if (!uploaded.url) throw new Error('上传接口未返回图片地址');
+      await this._loadPanorama(uploaded.url, {
+        url: uploaded.url,
+        thumb: uploaded.url,
+        title: file.name || uploaded.name || '本地全景图',
+      });
+    } catch (err) {
+      console.error('全景图上传失败', err);
+      toast('全景图上传失败：' + (err?.message || err));
+    }
   }
   setPanoramaFromAsset(asset) {
-    new THREE.TextureLoader().load(
-      asset.url,
-      (tex) => {
-        const recommended = this._applyPanoramaTexture(tex, { thumb: asset.thumb || asset.url, title: asset.title || '全景图' }, null);
-        toast(`已设置全景背景：${asset.title || ''}${recommended ? '' : '；建议使用 2:1 图片以减少拉伸'}`);
-      },
-      undefined,
-      () => toast('全景图加载失败'),
-    );
+    this._loadPanorama(asset.url, {
+      url: asset.url,
+      thumb: asset.thumb || asset.url,
+      title: asset.title || '全景图',
+    }).catch((err) => {
+      console.error('全景图加载失败', err);
+      toast('全景图加载失败');
+    });
   }
   clearPanorama() {
     this.stage.clearPanorama(this.sceneState.sky);
@@ -631,6 +650,9 @@ export class App {
         labels: s.labels, panoRot: s.panoRot, panoRadius: s.panoRadius,
         ground: { ...s.ground },
       },
+      panorama: /^https?:\/\//i.test(this.panoramaInfo?.url || '')
+        ? { url: this.panoramaInfo.url, title: this.panoramaInfo.title || '全景图' }
+        : null,
       entities,
     };
   }
@@ -747,6 +769,18 @@ export class App {
     this.setGroundHeight(s.ground.height);
     this.setPanoramaRotation(s.panoRot);
     this.setPanoramaRadius(s.panoRadius);
+    if (saved.panorama?.url) {
+      try {
+        await this._loadPanorama(
+          saved.panorama.url,
+          { url: saved.panorama.url, thumb: saved.panorama.url, title: saved.panorama.title },
+          false,
+        );
+      } catch (err) {
+        console.error('恢复全景图失败', err);
+        toast('已恢复场景，但全景图加载失败');
+      }
+    }
 
     this.stage.camera.position.fromArray(saved.directorCamera.position);
     this.stage.camera.quaternion.fromArray(saved.directorCamera.quaternion);

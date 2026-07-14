@@ -82,6 +82,8 @@ export type DirectorDeskState = {
         panoRadius: number;
         ground: { visible: boolean; opacity: number; height: number };
     };
+    /** 本地图片上传后的远程地址；旧快照可能没有此字段。 */
+    panorama?: { url: string; title: string } | null;
     entities: DirectorDeskEntityState[];
 };
 
@@ -141,6 +143,16 @@ const isPoseValues = (value: unknown): value is Record<string, number> => {
 const isNullableShortString = (value: unknown) =>
     value === null || (typeof value === "string" && value.length <= 100);
 
+const isRemoteImageUrl = (value: unknown) => {
+    if (typeof value !== "string" || value.length === 0 || value.length > 2048) return false;
+    try {
+        const url = new URL(value);
+        return url.protocol === "https:" || url.protocol === "http:";
+    } catch {
+        return false;
+    }
+};
+
 const isCharacterState = (value: unknown): value is DirectorDeskCharacterState =>
     isRecord(value) && value.type === "character" &&
     isShortString(value.id, 100) && isShortString(value.name) &&
@@ -180,7 +192,10 @@ export const isDirectorDeskState = (value: unknown): value is DirectorDeskState 
         !isQuaternion(value.directorCamera.quaternion) || !isVector3(value.directorCamera.target) ||
         typeof value.directorCamera.gridOn !== "boolean" || !isRecord(value.scene)) return false;
     const scene = value.scene;
-    return isFiniteNumber(scene.scale, 0.01, 100) && isRecord(scene.pos) &&
+    const panoramaValid = value.panorama === undefined || value.panorama === null ||
+        (isRecord(value.panorama) && isRemoteImageUrl(value.panorama.url) &&
+            isShortString(value.panorama.title));
+    return panoramaValid && isFiniteNumber(scene.scale, 0.01, 100) && isRecord(scene.pos) &&
         [scene.pos.x, scene.pos.y, scene.pos.z].every((item) => isFiniteNumber(item, -10_000, 10_000)) &&
         isRecord(scene.rot) && [scene.rot.x, scene.rot.y, scene.rot.z].every((item) => isFiniteNumber(item, -360_000, 360_000)) &&
         isFiniteNumber(scene.sky, 0, 0xffffff) && typeof scene.labels === "boolean" &&
