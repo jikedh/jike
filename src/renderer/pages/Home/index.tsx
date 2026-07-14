@@ -81,13 +81,13 @@ const HomePage = () => {
         "由 AI Agent 驱动。从一句话灵感扩展为完整故事板、分镜脚本与影视级提示词序列。",
       icon: BookOpenText,
     },
-    {
-      id: "video-to-script",
-      title: "视频转剧本",
-      description:
-        "从授权播放页解析视频链路，沉淀为后续转写、拆分分镜与剧本重构的素材入口。",
-      icon: Video,
-    },
+    // {
+    //   id: "video-to-script",
+    //   title: "视频转剧本",
+    //   description:
+    //     "从授权播放页解析视频链路，沉淀为后续转写、拆分分镜与剧本重构的素材入口。",
+    //   icon: Video,
+    // },
     {
       id: "assets",
       title: "资产库",

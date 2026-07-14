@@ -2894,10 +2894,10 @@ export default function VideoToScriptPage() {
       <div className="mx-auto flex min-h-full w-full max-w-7xl flex-col px-8 py-8">
         <header className="mb-7 flex flex-wrap items-end justify-between gap-5">
           <div>
-            <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[#B43FEB]">
+            {/* <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[#B43FEB]">
               <Video size={18} />
               视频转剧本
-            </div>
+            </div> */}
             <h1 className="text-3xl font-semibold tracking-wide text-white">
               视频转剧本
             </h1>
