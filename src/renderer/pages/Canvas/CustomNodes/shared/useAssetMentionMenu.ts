@@ -20,6 +20,7 @@ import {
   ASSET_MENTION_SCOPE_ORDER,
   buildAssetScopeFolderOption,
   buildAssetMentionGroups,
+  getAssetCategoryValue,
   getSelectableAssetMentionOptions,
   normalizeCanvasNodeMentionOption,
   normalizeRemoteAssetMentionOption,
@@ -48,6 +49,9 @@ export interface UseAssetMentionMenuResult {
   selectCurrent: () => MentionAssetOption | null;
   activateOption: (option: MentionAssetOption | null) => boolean;
   setSelectedByKey: (key: string) => void;
+  breadcrumbs: string[];
+  canGoBack: boolean;
+  goBack: () => void;
   reload: () => Promise<void>;
 }
 
@@ -138,7 +142,7 @@ export const useAssetMentionMenu = ({
   const [remoteOptions, setRemoteOptions] = useState<MentionAssetOption[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<AssetCategory[]>([]);
   const [activeScope, setActiveScope] = useState<AssetScope | null>(null);
-  const [activeCategory, setActiveCategory] = useState<PrimaryCategory | null>(null);
+  const [categoryPath, setCategoryPath] = useState<AssetCategory[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -177,6 +181,9 @@ export const useAssetMentionMenu = ({
     [projectId],
   );
 
+  const activeCategory = categoryPath[categoryPath.length - 1] ?? null;
+  const visibleCategoryOptions = activeCategory?.children ?? categoryOptions;
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setDebouncedQuery(query.trim());
@@ -209,14 +216,18 @@ export const useAssetMentionMenu = ({
         return;
       }
 
-      if (!activeScope || !activeCategory) {
+      if (
+        !activeScope ||
+        !activeCategory ||
+        (activeCategory.children?.length ?? 0) > 0
+      ) {
         setRemoteOptions([]);
         return;
       }
 
       const options = await loadCategoryRemoteOptions({
         scope: activeScope,
-        primaryCategory: activeCategory,
+        primaryCategory: getAssetCategoryValue(activeCategory),
         projectId,
         pageSize,
       });
@@ -243,12 +254,20 @@ export const useAssetMentionMenu = ({
         connectedOptions,
         folderOptions,
         remoteOptions,
-        categoryOptions,
+        categoryOptions: visibleCategoryOptions,
         activeScope,
         activeCategory,
         projectUnavailable: !projectId,
       }),
-    [activeCategory, activeScope, categoryOptions, connectedOptions, folderOptions, projectId, remoteOptions],
+    [
+      activeCategory,
+      activeScope,
+      connectedOptions,
+      folderOptions,
+      projectId,
+      remoteOptions,
+      visibleCategoryOptions,
+    ],
   );
 
   const flatOptions = useMemo(
@@ -282,15 +301,15 @@ export const useAssetMentionMenu = ({
 
     if (option.optionType === "scope-folder" && option.scope) {
       setActiveScope(option.scope);
-      setActiveCategory(null);
+      setCategoryPath([]);
       setQuery("");
       setSelectedIndex(0);
       return true;
     }
 
-    if (option.optionType === "category-folder" && option.scope && option.primaryCategory) {
+    if (option.optionType === "category-folder" && option.scope && option.folderCategory) {
       setActiveScope(option.scope);
-      setActiveCategory(option.primaryCategory);
+      setCategoryPath((current) => [...current, option.folderCategory!]);
       setQuery("");
       setSelectedIndex(0);
       return true;
@@ -298,6 +317,16 @@ export const useAssetMentionMenu = ({
 
     return false;
   }, []);
+
+  const goBack = useCallback(() => {
+    if (categoryPath.length > 0) {
+      setCategoryPath((current) => current.slice(0, -1));
+    } else {
+      setActiveScope(null);
+    }
+    setQuery("");
+    setSelectedIndex(0);
+  }, [categoryPath.length]);
 
   const setSelectedByKey = useCallback(
     (key: string) => {
@@ -326,6 +355,14 @@ export const useAssetMentionMenu = ({
     selectCurrent,
     activateOption,
     setSelectedByKey,
+    breadcrumbs: [
+      ...(activeScope
+        ? [activeScope === "project" ? "项目资产" : "个人资产"]
+        : []),
+      ...categoryPath.map((category) => category.name),
+    ],
+    canGoBack: Boolean(activeScope),
+    goBack,
     reload,
   };
 };

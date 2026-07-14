@@ -1,5 +1,6 @@
 import {
   IconAlertCircle,
+  IconChevronLeft,
   IconFolder,
   IconLoader2,
   IconMusic,
@@ -18,12 +19,15 @@ interface AssetMentionMenuProps {
   selectedKey?: string | null;
   loading?: boolean;
   error?: string | null;
+  breadcrumbs?: string[];
+  canGoBack?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
   onQueryChange: (query: string) => void;
   onSelect: (option: MentionAssetOption) => void;
   onHoverOption?: (key: string) => void;
   onInputKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
+  onBack?: () => void;
 }
 
 const mediaIconMap = {
@@ -134,12 +138,15 @@ export const AssetMentionMenu = ({
   selectedKey,
   loading = false,
   error,
+  breadcrumbs = [],
+  canGoBack = false,
   placeholder = "搜索图片、视频资产",
   autoFocus = false,
   onQueryChange,
   onSelect,
   onHoverOption,
   onInputKeyDown,
+  onBack,
 }: AssetMentionMenuProps) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -152,6 +159,23 @@ export const AssetMentionMenu = ({
   return (
     <div className="w-90 overflow-hidden rounded-xl border border-white/12 bg-[#111217]/95 text-white shadow-2xl shadow-black/35 backdrop-blur-xl">
       <div className="border-b border-white/10 p-2">
+        {breadcrumbs.length > 0 ? (
+          <div className="mb-1.5 flex min-w-0 items-center gap-1 text-[11px] text-white/50">
+            {canGoBack ? (
+              <button
+                type="button"
+                className="rounded p-0.5 text-white/65 hover:bg-white/10 hover:text-white"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  onBack?.();
+                }}
+              >
+                <IconChevronLeft size={14} />
+              </button>
+            ) : null}
+            <span className="truncate">{breadcrumbs.join(" / ")}</span>
+          </div>
+        ) : null}
         <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/24 px-2.5 py-1.5 text-white/70">
           <IconSearch size={15} stroke={1.8} />
           <input

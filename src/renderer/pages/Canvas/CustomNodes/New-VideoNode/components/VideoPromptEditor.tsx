@@ -27,7 +27,11 @@ const escapeHtmlFallback = (value: string) =>
     .replace(/'/g, "&#39;");
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
 import { AssetMentionMenu } from "../../shared/AssetMentionMenu";
-import type { MentionAssetOption } from "../../shared/assetMentionTypes";
+import {
+  isAssetMentionFile,
+  isAssetMentionFolder,
+  type MentionAssetOption,
+} from "../../shared/assetMentionTypes";
 import { useAssetMentionMenu } from "../../shared/useAssetMentionMenu";
 import { MentionList } from "./MentionList";
 
@@ -141,7 +145,12 @@ const AssetMentionSuggestion = forwardRef<
 
   const selectOption = (option: MentionAssetOption | null) => {
     if (!option || option.disabled) return;
-    if (menu.activateOption(option)) return;
+    // 目录只改变资产选择器的当前位置，绝不能被写入提示词。
+    if (isAssetMentionFolder(option)) {
+      menu.activateOption(option);
+      return;
+    }
+    if (!isAssetMentionFile(option)) return;
     command(toMentionCommandPayload(option));
   };
 
@@ -192,11 +201,14 @@ const AssetMentionSuggestion = forwardRef<
       selectedKey={menu.selectedKey}
       loading={menu.loading}
       error={menu.error}
+      breadcrumbs={menu.breadcrumbs}
+      canGoBack={menu.canGoBack}
       autoFocus
       onQueryChange={menu.setQuery}
       onSelect={selectOption}
       onHoverOption={menu.setSelectedByKey}
       onInputKeyDown={handleInputKeyDown}
+      onBack={menu.goBack}
     />
   );
 });
