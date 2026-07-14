@@ -12,7 +12,10 @@ import {
   AGNES_IMAGE_2_FLASH_MODEL,
   IMAGE_MODELS,
   NANO_BANANA_LOCAL_MODEL,
-  NANO_BANANA_LOCAL_PLATFORM
+  NANO_BANANA_LOCAL_PLATFORM,
+  RUNNINGHUB_GPT_IMAGE2_MODEL,
+  RUNNINGHUB_NANO_BANANA_PRO_MODEL,
+  RUNNINGHUB_PLATFORM
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import { getImageGenerationPoints } from "shared/constants/model-points";
@@ -269,8 +272,16 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const isNanoBananaLocalModel =
     model === NANO_BANANA_LOCAL_MODEL &&
     currentImageData?.platform === NANO_BANANA_LOCAL_PLATFORM;
+  const isRunningHubGptImage2Model =
+    model === RUNNINGHUB_GPT_IMAGE2_MODEL &&
+    currentImageData?.platform === RUNNINGHUB_PLATFORM;
+  const isRunningHubNanoBananaProModel =
+    model === RUNNINGHUB_NANO_BANANA_PRO_MODEL &&
+    currentImageData?.platform === RUNNINGHUB_PLATFORM;
+  const isNanoBananaParamsModel =
+    isNanoBananaLocalModel || isRunningHubNanoBananaProModel;
   // 判断是否为 GPT-Image-2 模型
-  const isGptImage2Model = model === "gpt-image-2";
+  const isGptImage2Model = model === "gpt-image-2" || isRunningHubGptImage2Model;
   const isAgnesImageModel = model === AGNES_IMAGE_2_FLASH_MODEL;
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
@@ -296,7 +307,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       };
     }
 
-    if (isNanoBananaLocalModel) {
+    if (isNanoBananaParamsModel) {
       return {
         sizes: NANO_BANANA_SIZE_VALUES,
         resolutions: NANO_BANANA_RESOLUTION_VALUES,
@@ -345,7 +356,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     isAgnesImageModel,
     isMidjourneyModel,
     isLocalGeminiDirectModel,
-    isNanoBananaLocalModel,
+    isNanoBananaParamsModel,
     isSeedreamModel,
   ]);
 
@@ -543,12 +554,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     const commandSizeMap: Record<string, string> = {
       "c-1": "4:3", // 角色参考图
       "c-2":
-        isNanoBananaLocalModel
+        isNanoBananaParamsModel
           ? "16:9"
           : "21:9", // 角色三视图
       "c-3": "16:9", // 多宫格电影分镜
       "c-4":
-        isNanoBananaLocalModel
+        isNanoBananaParamsModel
           ? "16:9"
           : "21:9", // VR图
     };
@@ -567,7 +578,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     const commandResolutionMap: Record<string, string | undefined> = {
       "c-3": isSeedreamModel ? "2K" : "1K", // 多宫格电影分镜
       "c-4":
-        isNanoBananaLocalModel ||
+        isNanoBananaParamsModel ||
           isGptImage2Model
           ? "4K"
           : "3K",
@@ -1362,7 +1373,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         };
       } else if (
         isGeminiModel ||
-        isNanoBananaLocalModel
+        isNanoBananaParamsModel
       ) {
         // Gemini 3 Pro: size 作为画面比例
         basePayload.size = size;
@@ -1745,7 +1756,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               }}
             />
           )}
-          {isNanoBananaLocalModel && (
+          {isNanoBananaParamsModel && (
             <GeminiParamsPanel
               size={size}
               resolution={resolution}
@@ -1796,39 +1807,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               }}
             />
           )}
-
-          {isGeminiModel && (
-            <GeminiParamsPanel
-              size={size}
-              resolution={resolution}
-              onSizeChange={(value) => {
-                persistImageDefaultPreset({ size: value });
-                updateImageNodeData(nodeId, { size: value });
-              }}
-              onResolutionChange={(value) => {
-                persistImageDefaultPreset({ resolution: value });
-                updateImageNodeData(nodeId, { resolution: value });
-              }}
-            />
-          )}
-
-          {isNanoBananaLocalModel && (
-            <GeminiParamsPanel
-              size={size}
-              resolution={resolution}
-              sizeOptions={NANO_BANANA_LOCAL_SIZES}
-              resolutionOptions={NANO_BANANA_RESOLUTIONS}
-              onSizeChange={(value) => {
-                persistImageDefaultPreset({ size: value });
-                updateImageNodeData(nodeId, { size: value });
-              }}
-              onResolutionChange={(value) => {
-                persistImageDefaultPreset({ resolution: value });
-                updateImageNodeData(nodeId, { resolution: value });
-              }}
-            />
-          )}
-
           {isMidjourneyModel && (
             <MidjourneyParamsPanel
               size={size}
