@@ -21,10 +21,13 @@ export interface MentionAssetOption {
   thumbnailUrl?: string;
   fileUrl?: string;
   source: AssetMentionSource;
-  optionType?: AssetMentionOptionType;
+  /** 目录节点与真实媒体文件必须显式区分，目录不能写入提示词。 */
+  optionType: AssetMentionOptionType;
   scope?: AssetScope;
   primaryCategory?: PrimaryCategory;
   categoryName?: string;
+  /** 分类目录对应的原始分类对象，用于继续进入其子目录。 */
+  folderCategory?: AssetCategory;
   nodeId?: string;
   assetId?: string;
   disabled?: boolean;
@@ -56,7 +59,7 @@ export interface BuildAssetMentionGroupsInput {
   remoteOptions?: MentionAssetOption[];
   categoryOptions?: AssetCategory[];
   activeScope?: AssetScope | null;
-  activeCategory?: PrimaryCategory | null;
+  activeCategory?: AssetCategory | null;
   projectUnavailable?: boolean;
 }
 
@@ -69,3 +72,10 @@ export interface ConnectedAssetMentionInput {
   fileUrl?: string;
   thumbnailUrl?: string;
 }
+
+export const isAssetMentionFolder = (option: MentionAssetOption) =>
+  option.optionType === "scope-folder" ||
+  option.optionType === "category-folder";
+
+export const isAssetMentionFile = (option: MentionAssetOption) =>
+  option.optionType === "asset";

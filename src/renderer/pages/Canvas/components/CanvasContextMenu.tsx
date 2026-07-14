@@ -1,6 +1,7 @@
 import {
   IconBrain,
   IconEye,
+  IconLayersLinked,
   IconMusic,
   IconNote,
   IconPhoto,
@@ -26,6 +27,7 @@ export type CanvasNodeType =
   | "image"
   | "newVideo"
   | "panorama"
+  | "directorDesk"
   | "audio"
   | "textAgent"
   | "imageAgent"
@@ -112,6 +114,13 @@ export const CanvasContextMenu = ({
         >
           <IconEye size={16} />
           新建全景图节点
+        </ContextMenuItem>
+        <ContextMenuItem
+          className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-white/80 transition-colors hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB]"
+          onSelect={() => onCreateNode("directorDesk")}
+        >
+          <IconLayersLinked size={16} />
+          导演台节点
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

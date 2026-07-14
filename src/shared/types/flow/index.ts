@@ -236,6 +236,17 @@ export interface PanoramaNodeData {
 }
 
 /**
+ * 导演台入口节点数据。
+ * 编辑器的运行时状态完全位于独立 iframe，画布只持久化节点创建时间。
+ */
+export interface DirectorDeskNodeData {
+  createdAt?: number;
+  /** 独立导演台的版本化场景快照，随当前画布项目保存。 */
+  directorDeskState?: import("shared/types/DirectorDeskMessage").DirectorDeskState;
+  [key: string]: any;
+}
+
+/**
  * 音频生成节点数据结构
  * 用于 AI 音频生成任务
  */
@@ -395,6 +406,7 @@ export type ImageAgentNodeType = Node<ImageAgentNodeData, "imageAgentNode">;
 export type VideoAgentNodeType = Node<VideoAgentNodeData, "videoAgentNode">;
 // 全景图节点
 export type PanoramaNodeType = Node<PanoramaNodeData, "panoramaNode">;
+export type DirectorDeskNodeType = Node<DirectorDeskNodeData, "directorDeskNode">;
 // 音频节点
 export type AudioNodeType = Node<AudioGenerationNode, "audioNode">;
 // 表格节点
@@ -413,6 +425,7 @@ export type AllNodeType =
   | ImageAgentNodeType
   | VideoAgentNodeType
   | PanoramaNodeType
+  | DirectorDeskNodeType
   | AudioNodeType
   | TableNodeType
   | DefaultNodeType

@@ -83,6 +83,10 @@ const isPrimaryCategory = (value: unknown): value is PrimaryCategory =>
 const getCategoryLabel = (category: PrimaryCategory) =>
   ASSET_MENTION_CATEGORY_LABEL[category] ?? category;
 
+/** 后端允许分类 code 为空，此时分类 ID 是唯一且可用于 `primaryCategory` 筛选的值。 */
+export const getAssetCategoryValue = (category: AssetCategory): PrimaryCategory =>
+  category.code.trim() || String(category.id);
+
 const asRecord = (value: unknown): Record<string, unknown> => {
   if (value && typeof value === "object") {
     return value as Record<string, unknown>;
@@ -251,19 +255,24 @@ export const buildAssetCategoryFolderOption = ({
 }: {
   scope: AssetScope;
   category: AssetCategory;
-}): MentionAssetOption => ({
-  key: `category-folder:${scope}:${category.code}`,
-  id: `category-folder-${scope}-${category.id}`,
-  label: category.name,
-  value: category.name,
-  description: "点击查看该分类下的图片资产",
-  mediaType: "image",
-  source: "remote-asset",
-  optionType: "category-folder",
-  scope,
-  primaryCategory: category.code,
-  categoryName: category.name,
-});
+}): MentionAssetOption => {
+  const categoryValue = getAssetCategoryValue(category);
+
+  return {
+    key: `category-folder:${scope}:${categoryValue}`,
+    id: `category-folder-${scope}-${category.id}`,
+    label: category.name,
+    value: category.name,
+    description: "点击查看该分类下的图片资产",
+    mediaType: "image",
+    source: "remote-asset",
+    optionType: "category-folder",
+    scope,
+    primaryCategory: categoryValue,
+    categoryName: category.name,
+    folderCategory: category,
+  };
+};
 
 export const normalizeCanvasNodeMentionOption = (
   node: AllNodeType,
@@ -429,7 +438,7 @@ export const buildAssetMentionGroups = ({
     return [buildConnectedGroup(connectedOptions, folderOptions)];
   }
 
-  if (!activeCategory) {
+  if (!activeCategory || (activeCategory.children?.length ?? 0) > 0) {
     return [buildCategoryFolderGroup({ scope: activeScope, categoryOptions })];
   }
 
@@ -442,16 +451,14 @@ export const buildAssetMentionGroups = ({
       }),
       children: [
         {
-          key: `${activeScope}:assets:${activeCategory}`,
-          label:
-            categoryOptions.find((category) => category.code === activeCategory)?.name ??
-            activeCategory,
+          key: `${activeScope}:assets:${getAssetCategoryValue(activeCategory)}`,
+          label: activeCategory.name,
           mediaType: "image",
-          primaryCategory: activeCategory,
+          primaryCategory: getAssetCategoryValue(activeCategory),
           options: remoteOptions.filter(
             (item) =>
               item.scope === activeScope &&
-              item.primaryCategory === activeCategory &&
+              item.primaryCategory === getAssetCategoryValue(activeCategory) &&
               item.mediaType === "image",
           ),
           emptyText: "暂无该分类下的图片资产",

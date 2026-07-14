@@ -27,6 +27,10 @@ import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GenerationStatus } from "shared/constants/enum";
+import type {
+  DirectorDeskImage,
+  DirectorDeskState,
+} from "shared/types/DirectorDeskMessage";
 import type { AllNodeType, EdgeType } from "shared/types/flow";
 import type { CanvasGroup } from "shared/types/zustand/canvas-flow";
 import {
@@ -68,6 +72,8 @@ import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { edgeTypes, nodeTypes } from "../constants/canvasConfig";
 import { CanvasBatchToolbar } from "./CanvasBatchToolbar";
 import { CanvasContextMenu, type CanvasNodeType } from "./CanvasContextMenu";
+import { DIRECTOR_DESK_OPEN_EVENT } from "../CustomNodes/DirectorDeskNode";
+import { DirectorDeskWorkspace } from "./DirectorDeskWorkspace";
 import { CanvasGroupNameBadge } from "./CanvasGroupNameBadge";
 import { MultiSelectQuickCreate } from "./MultiSelectQuickCreate";
 
@@ -189,6 +195,23 @@ const shortenLineEnd = (
 
 const clamp = (value: number, min: number, max: number) => {
   return Math.min(Math.max(value, min), max);
+};
+
+/** 将截图像素尺寸规范化为画布图片节点可展示的宽高比。 */
+const getScreenshotAspectRatio = (width?: number, height?: number) => {
+  if (!width || !height || width <= 0 || height <= 0) {
+    return "16:9";
+  }
+
+  const divisor = (left: number, right: number): number =>
+    right ? divisor(right, left % right) : left;
+  const normalizedWidth = Math.round(width);
+  const normalizedHeight = Math.round(height);
+  if (!normalizedWidth || !normalizedHeight) {
+    return "16:9";
+  }
+  const factor = divisor(normalizedWidth, normalizedHeight);
+  return `${normalizedWidth / factor}:${normalizedHeight / factor}`;
 };
 
 const getNodeSize = (node: AllNodeType) => {
@@ -631,6 +654,9 @@ export const CanvasFlow = ({
 
   // 确认对话框状态
   const [showExitDialog, setShowExitDialog] = useState(false);
+  const [directorDeskNodeId, setDirectorDeskNodeId] = useState<string | null>(
+    null,
+  );
   const [generatingCount, setGeneratingCount] = useState(0);
   const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{
     open: boolean;
@@ -751,6 +777,102 @@ export const CanvasFlow = ({
 
   // 获取复制/粘贴方法（通过 useCopyPaste hook）
   const { copySelectedNodes, pasteNodes } = useCopyPaste();
+
+  useEffect(() => {
+    const handleDirectorDeskOpen = (event: Event) => {
+      const nodeId = (event as CustomEvent<{ nodeId?: unknown }>).detail
+        ?.nodeId;
+      const node =
+        typeof nodeId === "string"
+          ? useCanvasFlowStore
+            .getState()
+            .nodes.find((item) => item.id === nodeId)
+          : undefined;
+
+      if (node?.type === "directorDeskNode") {
+        setDirectorDeskNodeId(node.id);
+      }
+    };
+
+    window.addEventListener(DIRECTOR_DESK_OPEN_EVENT, handleDirectorDeskOpen);
+    return () =>
+      window.removeEventListener(
+        DIRECTOR_DESK_OPEN_EVENT,
+        handleDirectorDeskOpen,
+      );
+  }, []);
+
+  const closeDirectorDesk = useCallback(() => {
+    setDirectorDeskNodeId(null);
+  }, []);
+
+  const handleDirectorDeskImages = useCallback(
+    (sourceNodeId: string, images: DirectorDeskImage[]) => {
+      const store = useCanvasFlowStore.getState();
+      const sourceNode = store.nodes.find((node) => node.id === sourceNodeId);
+      if (sourceNode?.type !== "directorDeskNode") {
+        return;
+      }
+
+      const sourceWidth = sourceNode.width ?? sourceNode.measured?.width ?? 320;
+      const startPosition = {
+        x: sourceNode.position.x + sourceWidth + 48,
+        y: sourceNode.position.y,
+      };
+
+      images.forEach((image, index) => {
+        const nodeId = store.addNode("image", {
+          x: startPosition.x,
+          y: startPosition.y + index * 280,
+        });
+        store.updateImageNodeData(nodeId, {
+          nickname: image.name,
+          status: GenerationStatus.COMPLETED,
+          progress: 100,
+          isUpload: true,
+          size: getScreenshotAspectRatio(image.width, image.height),
+          result: {
+            type: "image",
+            data: [
+              {
+                url: image.dataUrl,
+                displayUrl: image.dataUrl,
+                assetName: image.name,
+              },
+            ],
+          },
+        });
+      });
+
+      store.requestHistorySave();
+      store.saveGraph();
+      toast.success(`已添加 ${images.length} 张导演台截图到画布`);
+    },
+    [],
+  );
+
+  const handleDirectorDeskState = useCallback(
+    (sourceNodeId: string, directorDeskState: DirectorDeskState) => {
+      const store = useCanvasFlowStore.getState();
+      const sourceNode = store.nodes.find((node) => node.id === sourceNodeId);
+      if (sourceNode?.type !== "directorDeskNode") {
+        return;
+      }
+
+      // iframe 已做尾随去重；父页面再拦截相同快照，避免无效历史与保存请求。
+      if (
+        JSON.stringify(sourceNode.data.directorDeskState) ===
+        JSON.stringify(directorDeskState)
+      ) {
+        return;
+      }
+
+      store.updateDirectorDeskNodeData(sourceNodeId, { directorDeskState });
+      store.requestHistorySave();
+      store.saveGraph();
+    },
+    [],
+  );
 
   useEffect(() => {
     return scheduleIdleWork(() => {
@@ -5199,6 +5321,22 @@ export const CanvasFlow = ({
           ) : null}
         </div>
       </CanvasContextMenu>
+
+      {directorDeskNodeId ? (
+        <DirectorDeskWorkspace
+          sourceNodeId={directorDeskNodeId}
+          initialState={
+            displayNodes.find(
+              (node) =>
+                node.id === directorDeskNodeId &&
+                node.type === "directorDeskNode",
+            )?.data.directorDeskState ?? null
+          }
+          onClose={closeDirectorDesk}
+          onSendImages={handleDirectorDeskImages}
+          onStateChange={handleDirectorDeskState}
+        />
+      ) : null}
 
       {/* 确认退出对话框 */}
       <Dialog open={showExitDialog} onOpenChange={setShowExitDialog}>

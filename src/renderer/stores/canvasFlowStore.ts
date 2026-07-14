@@ -210,6 +210,7 @@ const EMPTY_NODE_ID_COUNTERS = {
   video: 1,
   agent: 1,
   panorama: 1,
+  directorDesk: 1,
   audio: 1,
   textAgent: 1,
   imageAgent: 1,
@@ -230,6 +231,8 @@ const getNodeCounterKey = (node: AllNodeType): NodeType => {
       return "agent";
     case "panoramaNode":
       return "panorama";
+    case "directorDeskNode":
+      return "directorDesk";
     case "audioNode":
       return "audio";
     case "textAgentNode":
@@ -3239,6 +3242,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           ...data,
           ...patch,
         })),
+      }));
+    },
+
+    /** 更新导演台节点的可序列化场景快照。 */
+    updateDirectorDeskNodeData: (nodeId, patch) => {
+      set((state) => ({
+        nodes: state.nodes.map((node) =>
+          node.id === nodeId && node.type === "directorDeskNode"
+            ? { ...node, data: { ...node.data, ...patch } }
+            : node,
+        ),
       }));
     },
 
