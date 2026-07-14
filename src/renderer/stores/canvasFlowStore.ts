@@ -3245,6 +3245,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }));
     },
 
+    /** 更新导演台节点的可序列化场景快照。 */
+    updateDirectorDeskNodeData: (nodeId, patch) => {
+      set((state) => ({
+        nodes: state.nodes.map((node) =>
+          node.id === nodeId && node.type === "directorDeskNode"
+            ? { ...node, data: { ...node.data, ...patch } }
+            : node,
+        ),
+      }));
+    },
+
     /**
      * 创建图片生成任务并启动轮询
      */

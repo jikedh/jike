@@ -1,6 +1,7 @@
 import {
   DIRECTOR_DESK_MESSAGE_PROTOCOL,
   DIRECTOR_DESK_MESSAGE_VERSION,
+  isCanvasToDirectorDeskMessage,
 } from '../../../../shared/types/DirectorDeskMessage.ts';
 
 // 截图：按当前取景比例裁剪、隐藏辅助物（§5.7）
@@ -75,6 +76,30 @@ const postToCanvas = (message) => {
 
 /** 通知父页面 iframe 已经可以接收交互。 */
 export const notifyDirectorDeskReady = () => postToCanvas({ type: 'ready' });
+
+/** 等待父画布发送当前节点的场景快照；独立打开时直接使用空状态。 */
+export const waitForDirectorDeskState = () => {
+  if (window.parent === window) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      window.removeEventListener('message', handleMessage);
+      resolve(null);
+    }, 2000);
+    const handleMessage = (event) => {
+      if (event.source !== window.parent || event.origin !== window.location.origin) return;
+      if (!isCanvasToDirectorDeskMessage(event.data)) return;
+      window.clearTimeout(timer);
+      window.removeEventListener('message', handleMessage);
+      resolve(event.data.state);
+    };
+    window.addEventListener('message', handleMessage);
+    notifyDirectorDeskReady();
+  });
+};
+
+/** 将去除大体积媒体后的场景快照写回来源导演台节点。 */
+export const sendDirectorDeskState = (state) =>
+  postToCanvas({ type: 'state-changed', state });
 
 /** 请求父页面关闭导演台工作区。 */
 export const closeDirectorDesk = () => postToCanvas({ type: 'close' });

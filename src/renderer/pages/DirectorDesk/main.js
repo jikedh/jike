@@ -9,7 +9,7 @@ import { Outliner } from './ui/Outliner.js';
 import { Inspector } from './ui/Inspector.js';
 import { ScenePanel } from './ui/ScenePanel.js';
 import { toast } from './util/dom.js';
-import { closeDirectorDesk, notifyDirectorDeskReady } from './util/capture.js';
+import { closeDirectorDesk, sendDirectorDeskState, waitForDirectorDeskState } from './util/capture.js';
 
 const viewport = document.getElementById('viewport');
 const frameEl = document.getElementById('frame');
@@ -49,6 +49,7 @@ document.getElementById('viewtabs').addEventListener('click', (e) => {
 document.getElementById('helpBtn').onclick = () =>
   toast('空白拖动=环绕视角 · 拖三色 gizmo=变换选中 · 底部「＋」加角色/模型 · 右侧「姿势」摆全身');
 document.getElementById('closeBtn').onclick = () => {
+  sendDirectorDeskState(app.exportState());
   if (!closeDirectorDesk()) toast('请使用画布中的关闭按钮');
 };
 
@@ -67,19 +68,40 @@ window.addEventListener('keydown', (e) => {
 
 // 调试句柄
 window.__app = app;
-notifyDirectorDeskReady();
 
 // ---- loop ----
 stage.startLoop((dt) => { app.tick(dt); navGizmo.update(); });
 
-// ---- seed：两个角色，默认未选中（右侧显示 3D场景面板，贴合截图）----
+// ---- hydration / seed：节点有快照时恢复，否则创建默认双角色场景 ----
 (async () => {
   try {
-    await app.addCharacter('standard');
-    await app.addCharacter('standard');
-    app.entities[0]?.root.position.set(-1.1, 0, 0.2);
-    app.entities[1]?.root.position.set(1.1, 0, 0.2);
-    app.frameSubjects(); // 自动对准主体，主体占满画面（不被背景比下去）
-    app.select(null);
+    const saved = await waitForDirectorDeskState();
+    if (saved) await app.restoreState(saved);
+    else {
+      await app.addCharacter('standard');
+      await app.addCharacter('standard');
+      app.entities[0]?.root.position.set(-1.1, 0, 0.2);
+      app.entities[1]?.root.position.set(1.1, 0, 0.2);
+      app.frameSubjects(); // 自动对准主体，主体占满画面（不被背景比下去）
+      app.select(null);
+    }
+
+    // 高频操作只在停止变化 700ms 后上报一次，并跳过内容相同的快照。
+    let persistedSnapshot = JSON.stringify(app.exportState());
+    let observedSnapshot = persistedSnapshot;
+    let dirtyAt = 0;
+    window.setInterval(() => {
+      const nextSnapshot = JSON.stringify(app.exportState());
+      if (nextSnapshot !== observedSnapshot) {
+        observedSnapshot = nextSnapshot;
+        dirtyAt = Date.now();
+        return;
+      }
+      if (dirtyAt && Date.now() - dirtyAt >= 700 && observedSnapshot !== persistedSnapshot) {
+        sendDirectorDeskState(JSON.parse(observedSnapshot));
+        persistedSnapshot = observedSnapshot;
+        dirtyAt = 0;
+      }
+    }, 250);
   } catch (e) { console.error('seed failed', e); }
 })();

@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
+    DIRECTOR_DESK_MESSAGE_PROTOCOL,
+    DIRECTOR_DESK_MESSAGE_VERSION,
     isDirectorDeskMessage,
     type DirectorDeskImage,
+    type DirectorDeskState,
 } from "shared/types/DirectorDeskMessage";
 
 type DirectorDeskWorkspaceProps = {
     sourceNodeId: string | null;
+    initialState: DirectorDeskState | null;
     onClose: () => void;
     onSendImages: (sourceNodeId: string, images: DirectorDeskImage[]) => void;
+    onStateChange: (sourceNodeId: string, state: DirectorDeskState) => void;
 };
 
 /**
@@ -17,8 +22,10 @@ type DirectorDeskWorkspaceProps = {
  */
 export const DirectorDeskWorkspace = ({
     sourceNodeId,
+    initialState,
     onClose,
     onSendImages,
+    onStateChange,
 }: DirectorDeskWorkspaceProps) => {
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const directorDeskUrl = useMemo(
@@ -41,6 +48,19 @@ export const DirectorDeskWorkspace = ({
                 return;
             }
 
+            if (event.data.type === "ready") {
+                iframeRef.current?.contentWindow?.postMessage(
+                    {
+                        protocol: DIRECTOR_DESK_MESSAGE_PROTOCOL,
+                        version: DIRECTOR_DESK_MESSAGE_VERSION,
+                        type: "hydrate-state",
+                        state: initialState,
+                    },
+                    expectedOrigin,
+                );
+                return;
+            }
+
             if (event.data.type === "close") {
                 onClose();
                 return;
@@ -48,12 +68,17 @@ export const DirectorDeskWorkspace = ({
 
             if (event.data.type === "send-images" && sourceNodeId) {
                 onSendImages(sourceNodeId, event.data.images);
+                return;
+            }
+
+            if (event.data.type === "state-changed" && sourceNodeId) {
+                onStateChange(sourceNodeId, event.data.state);
             }
         };
 
         window.addEventListener("message", handleMessage);
         return () => window.removeEventListener("message", handleMessage);
-    }, [directorDeskUrl, onClose, onSendImages, sourceNodeId]);
+    }, [directorDeskUrl, initialState, onClose, onSendImages, onStateChange, sourceNodeId]);
 
     if (typeof document === "undefined") {
         return null;

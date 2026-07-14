@@ -7,6 +7,7 @@ import { CAMERA_PRESETS } from '../core/cameraPresets.js';
 import { toast, el } from '../util/dom.js';
 import { worldBox } from '../util/measure.js';
 import { ShotManager } from './ShotManager.js';
+import { DIRECTOR_DESK_STATE_VERSION } from '../../../../shared/types/DirectorDeskMessage.ts';
 
 // 体型素体注册表（单一事实来源）：一期全部由中性 Xbot 派生，按 height(身高) + girth(横向围度)
 // 程序化缩放出 高/矮/胖/瘦 等"简单区分"。全部为 mixamorig 骨骼 → 姿势/动画对每种都生效。
@@ -26,8 +27,7 @@ export const RATIO_OPTIONS = [
   ['4:3', '4:3'], ['1:1', '1:1'], ['3:4', '3:4'], ['9:16', '9:16'],
 ];
 
-// 全景图限制（一期）：仅接受等距柱状（equirectangular）全景，宽:高 = 2:1。
-// 非 2:1（局部/柱面全景、普通照片）贴到全景球会上下拉伸且盖不住天地，故拒绝并提示。
+// 2:1 等距柱状图在全景球上效果最佳；其他比例允许使用，但会提示可能拉伸。
 export const PANO_RATIO = 2;
 export const PANO_RATIO_TOL = 0.05; // 相对容差 ±5% → 宽高比落在 [1.9, 2.1] 视为合法
 // 按宽高判定是否 2:1 全景。拿不到尺寸时放行（极少见，避免误杀）。
@@ -132,7 +132,7 @@ export class App {
   addCharacter(key) {
     const b = BODY_TYPES[key];
     if (!b) { toast('未知素体：' + key); return; }
-    return this._addCharacter('角色' + String.fromCharCode(65 + this._charLetter++), b.url, { height: b.height, girth: b.girth });
+    return this._addCharacter('角色' + String.fromCharCode(65 + this._charLetter++), b.url, { height: b.height, girth: b.girth, bodyType: key });
   }
 
   addProp(kind) {
@@ -158,7 +158,7 @@ export class App {
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++, i++) {
         let ch;
-        try { ch = await Character.load('角色' + String.fromCharCode(65 + this._charLetter++), b.url, { height: b.height, girth: b.girth }); }
+        try { ch = await Character.load('角色' + String.fromCharCode(65 + this._charLetter++), b.url, { height: b.height, girth: b.girth, bodyType: 'standard' }); }
         catch (err) { console.error(err); continue; }
         ch.setColor(PALETTE[i % PALETTE.length]);
         ch.root.position.set(c * spacing - w / 2, 0, r * spacing - d / 2);
@@ -514,16 +514,9 @@ export class App {
   setGroundHeight(v) { this.sceneState.ground.height = v; this.stage.setGroundHeight(v); }
 
   // ---- 全景背景（§3.c）----
-  // 统一入口：校验 2:1 后再应用。非 2:1 直接拒绝并提示，返回 false（由调用方决定成功 toast）。
+  // 任意图片都可应用；返回值仅表示是否为推荐的 2:1 比例，供调用方组合提示。
   _applyPanoramaTexture(tex, info, objURL) {
-    if (!isEquirectImage(tex.image)) {
-      const w = tex.image?.naturalWidth || tex.image?.width || 0;
-      const h = tex.image?.naturalHeight || tex.image?.height || 0;
-      tex.dispose?.();
-      if (objURL) URL.revokeObjectURL(objURL);
-      toast(`仅支持 2:1 全景图（如 2048×1024）${w && h ? `，当前为 ${w}×${h}` : ''}`);
-      return false;
-    }
+    const recommendedRatio = isEquirectImage(tex.image);
     tex.colorSpace = THREE.SRGBColorSpace;
     if (this._panoObjURL && this._panoObjURL !== objURL) URL.revokeObjectURL(this._panoObjURL);
     this._panoObjURL = objURL || null;
@@ -533,13 +526,16 @@ export class App {
     // 设背景后自动对准主体，避免主体被宏大背景比成小不点（导演视角下才动相机）
     if (!this.cameraView) this.frameSubjects();
     this.ui?.scenePanel?.render?.();
-    return true;
+    return recommendedRatio;
   }
   setPanoramaFromFile(file) {
     const objURL = URL.createObjectURL(file);
     new THREE.TextureLoader().load(
       objURL,
-      (tex) => { if (this._applyPanoramaTexture(tex, { thumb: objURL, title: file.name || '本地全景图' }, objURL)) toast('已设置全景背景'); },
+      (tex) => {
+        const recommended = this._applyPanoramaTexture(tex, { thumb: objURL, title: file.name || '本地全景图' }, objURL);
+        toast(recommended ? '已设置全景背景' : '已设置全景背景；建议使用 2:1 全景图以减少拉伸');
+      },
       undefined,
       () => { URL.revokeObjectURL(objURL); toast('全景图加载失败'); },
     );
@@ -547,7 +543,10 @@ export class App {
   setPanoramaFromAsset(asset) {
     new THREE.TextureLoader().load(
       asset.url,
-      (tex) => { if (this._applyPanoramaTexture(tex, { thumb: asset.thumb || asset.url, title: asset.title || '全景图' }, null)) toast('已设置全景背景：' + (asset.title || '')); },
+      (tex) => {
+        const recommended = this._applyPanoramaTexture(tex, { thumb: asset.thumb || asset.url, title: asset.title || '全景图' }, null);
+        toast(`已设置全景背景：${asset.title || ''}${recommended ? '' : '；建议使用 2:1 图片以减少拉伸'}`);
+      },
       undefined,
       () => toast('全景图加载失败'),
     );
@@ -583,6 +582,187 @@ export class App {
   frameSubjects() { this.rig.frameAll(this.entities); }
 
   resetView() { this.rig.resetView(); toast('已重置视角'); }
+
+  // ---- 场景持久化 ----
+  /** 把 Three.js 运行时对象压缩为可随画布节点保存的纯 JSON。 */
+  exportState() {
+    const vector3 = (v) => [v.x, v.y, v.z];
+    const quaternion = (q) => [q.x, q.y, q.z, q.w];
+    const transform = (root) => ({
+      position: vector3(root.position),
+      quaternion: quaternion(root.quaternion),
+      scale: vector3(root.scale),
+    });
+    const character = (ent) => ({
+      type: 'character', id: ent.id, name: ent.name, visible: ent.visible,
+      bodyType: BODY_TYPES[ent._opts?.bodyType] ? ent._opts.bodyType : 'standard',
+      transform: transform(ent.root), color: ent.color,
+      poseValues: { ...ent.values },
+      currentPreset: ent.currentPreset || null,
+      currentClip: ent.currentClip || null,
+    });
+    const entities = this.entities.map((ent) => {
+      const base = { id: ent.id, name: ent.name, visible: ent.visible, transform: transform(ent.root) };
+      if (ent.type === 'character') return character(ent);
+      if (ent.type === 'prop') return { type: 'prop', ...base, kind: ent.kind, color: ent.color };
+      if (ent.type === 'camera') {
+        return { type: 'camera', ...base, fov: ent.cam.fov, lookTarget: vector3(ent.lookTarget) };
+      }
+      return {
+        type: 'crowd', ...base, rows: ent.rows, cols: ent.cols,
+        members: ent.members.map(character),
+      };
+    });
+    const s = this.sceneState;
+    return {
+      version: DIRECTOR_DESK_STATE_VERSION,
+      ratio: this.ratio,
+      transformMode: this.transformMode,
+      cameraView: this.cameraView,
+      activeCameraId: this.activeCameraId,
+      directorCamera: {
+        position: vector3(this.stage.camera.position),
+        quaternion: quaternion(this.stage.camera.quaternion),
+        target: vector3(this.rig.controls.target),
+        gridOn: this.rig.gridOn,
+      },
+      scene: {
+        scale: s.scale, pos: { ...s.pos }, rot: { ...s.rot }, sky: s.sky,
+        labels: s.labels, panoRot: s.panoRot, panoRadius: s.panoRadius,
+        ground: { ...s.ground },
+      },
+      entities,
+    };
+  }
+
+  _applySavedTransform(root, saved) {
+    root.position.fromArray(saved.position);
+    root.quaternion.fromArray(saved.quaternion);
+    root.scale.fromArray(saved.scale);
+    root.updateMatrixWorld(true);
+  }
+
+  async _restoreCharacter(saved) {
+    const bodyType = BODY_TYPES[saved.bodyType] ? saved.bodyType : 'standard';
+    const body = BODY_TYPES[bodyType];
+    const opts = { height: body.height, girth: body.girth, bodyType };
+    const ent = await Character.load(saved.name, body.url, opts);
+    ent._srcUrl = body.url;
+    ent._opts = opts;
+    this._applySavedTransform(ent.root, saved.transform);
+    ent.setColor(saved.color);
+    for (const key of Object.keys(ent.values)) {
+      if (Number.isFinite(saved.poseValues[key])) ent.values[key] = saved.poseValues[key];
+    }
+    if (saved.currentClip && ent.clips[saved.currentClip]) ent.playClip(saved.currentClip);
+    else {
+      ent.enterManual();
+      ent.applyPose();
+      ent.currentPreset = saved.currentPreset;
+    }
+    ent.setVisible(saved.visible);
+    return ent;
+  }
+
+  _clearEntitiesForRestore() {
+    this.select(null);
+    for (const ent of this.entities) {
+      this.stage.remove(ent.root);
+      if (ent.type === 'crowd') ent.members.forEach((member) => member.labelEl?.remove());
+      ent.labelEl?.remove();
+      ent.dispose();
+    }
+    this.entities = [];
+    this.activeCameraId = null;
+    this.cameraView = false;
+    this.stage.activeCamera = null;
+    this._charLetter = 0;
+    this._propCount = {};
+    this._camCount = 0;
+    this._groupCount = 0;
+  }
+
+  /** 从经过共享协议校验的快照重建场景；损坏的单个实体不会阻断其余场景恢复。 */
+  async restoreState(saved) {
+    this._clearEntitiesForRestore();
+    const idMap = new Map();
+    for (const item of saved.entities) {
+      try {
+        let ent;
+        if (item.type === 'character') {
+          ent = await this._restoreCharacter(item);
+          this.stage.add(ent.root);
+          this._makeLabel(ent);
+          this._charLetter++;
+        } else if (item.type === 'prop') {
+          ent = new Prop(item.kind, item.name);
+          this._applySavedTransform(ent.root, item.transform);
+          ent.setColor(item.color);
+          ent.setVisible(item.visible);
+          this.stage.add(ent.root);
+          this._propCount[item.kind] = (this._propCount[item.kind] || 0) + 1;
+        } else if (item.type === 'camera') {
+          ent = new CameraEntity(item.name, { fov: item.fov, aspect: this._viewportAspect(), scene: this.stage.scene });
+          this._applySavedTransform(ent.root, item.transform);
+          ent.lookTarget.fromArray(item.lookTarget);
+          ent.setVisible(item.visible);
+          ent.update();
+          this.stage.add(ent.root);
+          this._makeLabel(ent);
+          this._camCount++;
+        } else {
+          const group = new THREE.Group();
+          const members = [];
+          for (const memberState of item.members) {
+            const member = await this._restoreCharacter(memberState);
+            group.add(member.root);
+            members.push(member);
+          }
+          ent = new Crowd(item.name, group, members, { rows: item.rows, cols: item.cols });
+          for (const member of members) {
+            member.root.userData.entityId = ent.id;
+            this._makeLabel(member);
+          }
+          this._applySavedTransform(ent.root, item.transform);
+          ent.setVisible(item.visible);
+          this.stage.add(ent.root);
+          this._charLetter += members.length;
+          this._groupCount++;
+        }
+        this.entities.push(ent);
+        idMap.set(item.id, ent.id);
+      } catch (err) {
+        console.error('恢复导演台实体失败', err);
+      }
+    }
+
+    const s = saved.scene;
+    this.setSceneScale(s.scale);
+    for (const axis of ['x', 'y', 'z']) this.setScenePos(axis, s.pos[axis]);
+    for (const axis of ['x', 'y', 'z']) this.setSceneRot(axis, s.rot[axis]);
+    this.setSkyColor(s.sky);
+    this.setLabelsVisible(s.labels);
+    this.setGroundVisible(s.ground.visible);
+    this.setGroundOpacity(s.ground.opacity);
+    this.setGroundHeight(s.ground.height);
+    this.setPanoramaRotation(s.panoRot);
+    this.setPanoramaRadius(s.panoRadius);
+
+    this.stage.camera.position.fromArray(saved.directorCamera.position);
+    this.stage.camera.quaternion.fromArray(saved.directorCamera.quaternion);
+    this.rig.controls.target.fromArray(saved.directorCamera.target);
+    this.rig.controls.update();
+    this.rig._home.pos.copy(this.stage.camera.position);
+    this.rig._home.target.copy(this.rig.controls.target);
+    if (this.rig.gridOn !== saved.directorCamera.gridOn) this.rig.toggleGrid();
+    this.setTransformMode(saved.transformMode);
+    this.setRatio(saved.ratio);
+    this.activeCameraId = saved.activeCameraId ? idMap.get(saved.activeCameraId) || null : null;
+    if (saved.cameraView && this.activeCameraId) this.setCameraView(true);
+    else { this.setCameraView(false); this.select(null); }
+    this.ui?.outliner?.refresh();
+    this.ui?.scenePanel?.render?.();
+  }
 
   // ---- labels ----
   _makeLabel(ent) {

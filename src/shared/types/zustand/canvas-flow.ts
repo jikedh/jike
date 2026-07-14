@@ -3,6 +3,7 @@ import type { AgentPresetId } from "shared/constants/agent-presets";
 import type {
   AllNodeType,
   AudioGenerationNode,
+  DirectorDeskNodeData,
   EdgeType,
   ImageGenerationNode,
   NewVideoGenerationNode,
@@ -201,6 +202,10 @@ export type CanvasFlowStoreType = {
   updateImageNodeData: (
     nodeId: string,
     patch: Partial<ImageGenerationNode>,
+  ) => void;
+  updateDirectorDeskNodeData: (
+    nodeId: string,
+    patch: Partial<DirectorDeskNodeData>,
   ) => void;
   updateNewVideoNodeData: (
     nodeId: string,

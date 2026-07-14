@@ -3,7 +3,7 @@ import { DockMenu } from './dockMenu.js';
 import { HistoryModal } from './HistoryModal.js';
 import { groupedPresets } from '../core/cameraPresets.js';
 import { listCanvasAssets } from '../util/assetLibrary.js';
-import { RATIO_OPTIONS, isPanoRatio, BODY_TYPES } from '../app/App.js';
+import { RATIO_OPTIONS, BODY_TYPES } from '../app/App.js';
 
 // 内联图标
 const IC = {
@@ -43,9 +43,9 @@ export class Dock {
     this._history = new HistoryModal({
       getAssets: () => this._assets,
       onPick: (a) => app.setPanoramaFromAsset(a),
-      // 仅 2:1 图片可作全景；其余（非 2:1、视频）在弹层中置灰禁用
-      isEligible: (a) => a.type === 'image' && isPanoRatio(a.w, a.h),
-      ineligibleReason: (a) => (a.type !== 'image' ? '视频不可作全景' : '需 2:1 全景图'),
+      // 图片比例不做限制；视频不是全景球纹理，仍保持不可选。
+      isEligible: (a) => a.type === 'image',
+      ineligibleReason: () => '视频不可作全景',
     });
     this.render();
   }
@@ -205,8 +205,8 @@ export class Dock {
       el('span', { class: 'mi-label', text: '本地上传' }),
       fileInput,
     ]));
-    // 一期限制：仅支持 2:1 等距柱状全景，提前告知避免无效上传
-    items.push(el('div', { class: 'menu-hint', text: '仅支持 2:1 全景图（如 2048×1024）' }));
+    // 2:1 是避免球面拉伸的建议，不阻止用户使用其他比例图片。
+    items.push(el('div', { class: 'menu-hint', text: '建议使用 2:1 全景图（如 2048×1024），其他比例也可上传' }));
 
     // 历史记录 → 打开全屏历史记录弹层（含预设全景资产）
     items.push(el('div', { class: 'menu-item', onclick: () => { this.menu.close(); this._openHistory(); } }, [

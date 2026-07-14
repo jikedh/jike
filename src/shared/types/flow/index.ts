@@ -241,6 +241,8 @@ export interface PanoramaNodeData {
  */
 export interface DirectorDeskNodeData {
   createdAt?: number;
+  /** 独立导演台的版本化场景快照，随当前画布项目保存。 */
+  directorDeskState?: import("shared/types/DirectorDeskMessage").DirectorDeskState;
   [key: string]: any;
 }
 

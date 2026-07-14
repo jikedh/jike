@@ -27,7 +27,10 @@ import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { GenerationStatus } from "shared/constants/enum";
-import type { DirectorDeskImage } from "shared/types/DirectorDeskMessage";
+import type {
+  DirectorDeskImage,
+  DirectorDeskState,
+} from "shared/types/DirectorDeskMessage";
 import type { AllNodeType, EdgeType } from "shared/types/flow";
 import type { CanvasGroup } from "shared/types/zustand/canvas-flow";
 import {
@@ -844,6 +847,29 @@ export const CanvasFlow = ({
       store.requestHistorySave();
       store.saveGraph();
       toast.success(`已添加 ${images.length} 张导演台截图到画布`);
+    },
+    [],
+  );
+
+  const handleDirectorDeskState = useCallback(
+    (sourceNodeId: string, directorDeskState: DirectorDeskState) => {
+      const store = useCanvasFlowStore.getState();
+      const sourceNode = store.nodes.find((node) => node.id === sourceNodeId);
+      if (sourceNode?.type !== "directorDeskNode") {
+        return;
+      }
+
+      // iframe 已做尾随去重；父页面再拦截相同快照，避免无效历史与保存请求。
+      if (
+        JSON.stringify(sourceNode.data.directorDeskState) ===
+        JSON.stringify(directorDeskState)
+      ) {
+        return;
+      }
+
+      store.updateDirectorDeskNodeData(sourceNodeId, { directorDeskState });
+      store.requestHistorySave();
+      store.saveGraph();
     },
     [],
   );
@@ -5299,8 +5325,16 @@ export const CanvasFlow = ({
       {directorDeskNodeId ? (
         <DirectorDeskWorkspace
           sourceNodeId={directorDeskNodeId}
+          initialState={
+            displayNodes.find(
+              (node) =>
+                node.id === directorDeskNodeId &&
+                node.type === "directorDeskNode",
+            )?.data.directorDeskState ?? null
+          }
           onClose={closeDirectorDesk}
           onSendImages={handleDirectorDeskImages}
+          onStateChange={handleDirectorDeskState}
         />
       ) : null}
 
