@@ -83,6 +83,34 @@ const flattenLeafCategories = (categories: AssetCategory[]): AssetCategory[] =>
       : [category],
   );
 
+/** 后端允许分类 code 为空，此处优先以 code 作为分类值，缺省回退到分类 ID。 */
+const getCategoryValue = (category: AssetCategory): PrimaryCategory =>
+  category.code.trim() || String(category.id);
+
+/** 在分类树中按分类值查找节点；找不到时回退到首个叶子分类。 */
+const getAssetCategoryValueFromTree = (
+  categories: AssetCategory[],
+  preferredValue: PrimaryCategory,
+): PrimaryCategory => {
+  const stack: AssetCategory[] = [...categories];
+  let firstLeaf: AssetCategory | null = null;
+  while (stack.length > 0) {
+    const node = stack.pop() as AssetCategory;
+    if (getCategoryValue(node) === preferredValue) {
+      return getCategoryValue(node);
+    }
+    if (node.children && node.children.length > 0) {
+      stack.push(...node.children);
+    } else if (!firstLeaf) {
+      firstLeaf = node;
+    }
+  }
+  if (firstLeaf) {
+    return getCategoryValue(firstLeaf);
+  }
+  return preferredValue;
+};
+
 const getDefaultName = (request: RemoteCreateAssetRequest | null) => {
   if (!request) return "";
   if (request.initialName?.trim()) return request.initialName.trim();
@@ -167,16 +195,22 @@ export const RemoteCreateAssetDialog = ({
         if (cancelled) return;
         if ((envelope.code === 0 || envelope.code === 200) && Array.isArray(envelope.data) && envelope.data.length > 0) {
           setCategoryOptions(envelope.data);
-          const leafCategories = flattenLeafCategories(envelope.data);
           const defaultCategory = getDefaultPrimaryCategory(request.mediaType);
-          setPrimaryCategory(leafCategories.some((item) => item.code === defaultCategory) ? defaultCategory : leafCategories[0].code);
+          setPrimaryCategory(getAssetCategoryValueFromTree(envelope.data, defaultCategory));
         }
       })
       .catch(() => undefined);
     setName(getDefaultName(request));
     setDescription("");
     setScope(getDefaultScope(request));
-    setPrimaryCategory(getDefaultPrimaryCategory(request.mediaType));
+    setPrimaryCategory((current) =>
+      current
+        ? current
+        : getAssetCategoryValueFromTree(
+          categoryOptions,
+          getDefaultPrimaryCategory(request.mediaType),
+        ),
+    );
     setTagsInput("");
     setProgress(0);
     return () => {
@@ -364,22 +398,20 @@ export const RemoteCreateAssetDialog = ({
               </div>
             </div>
 
-            {request.mediaType !== "audio" ? (
-              <div>
-                <div className="mb-1.5 text-xs text-white/45">
-                  主分类 <span className="text-red-400">*</span>
-                </div>
-                <AssetCategoryCascadeSelect
-                  categories={categoryOptions}
-                  value={primaryCategory}
-                  onChange={(value) => {
-                    if (value !== "all") setPrimaryCategory(value);
-                  }}
-                  includeAll={false}
-                  disabled={submitting}
-                />
+            <div>
+              <div className="mb-1.5 text-xs text-white/45">
+                主分类 <span className="text-red-400">*</span>
               </div>
-            ) : null}
+              <AssetCategoryCascadeSelect
+                categories={categoryOptions}
+                value={primaryCategory}
+                onChange={(value) => {
+                  if (value !== "all") setPrimaryCategory(value);
+                }}
+                includeAll={false}
+                disabled={submitting}
+              />
+            </div>
 
             <label className="block">
               <div className="mb-1.5 text-xs text-white/45">描述</div>
