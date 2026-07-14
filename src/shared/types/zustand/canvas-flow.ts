@@ -17,6 +17,7 @@ export type NodeType =
   | "newVideo"
   | "agent"
   | "panorama"
+  | "directorDesk"
   | "audio"
   | "textAgent"
   | "imageAgent"

@@ -17,6 +17,10 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        directorDesk: path.resolve(__dirname, "director-desk.html"),
+      },
       output: {
         // 修复 Tauri 打包后白屏报错：
         // "Cannot access 'ge' before initialization"

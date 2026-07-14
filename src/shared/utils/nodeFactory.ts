@@ -106,6 +106,21 @@ export const createPanoramaNode = (
   },
 });
 
+/** 创建导演台入口节点。 */
+export const createDirectorDeskNode = (
+  id: string,
+  position: NodePosition,
+): AllNodeType => ({
+  id,
+  type: "directorDeskNode",
+  position,
+  width: 320,
+  height: 320,
+  data: {
+    createdAt: Date.now(),
+  },
+});
+
 /**
  * 创建新版视频节点
  */
@@ -274,6 +289,7 @@ export const nodeFactoryMap: Record<NodeType, NodeFactory> = {
   image: createImageNode,
   agent: createAgentNode,
   panorama: createPanoramaNode,
+  directorDesk: createDirectorDeskNode,
   newVideo: createNewVideoNode,
   audio: createAudioNode,
   textAgent: createTextAgentNode,

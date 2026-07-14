@@ -1,6 +1,7 @@
 import { CustomEdge } from "../CustomEdge/CustomEdge";
 import { AgentNode } from "../CustomNodes/AgentNode";
 import { AudioNode } from "../CustomNodes/AudioNode";
+import { DirectorDeskNode } from "../CustomNodes/DirectorDeskNode";
 import { ImageAgentNode } from "../CustomNodes/ImageAgentNode";
 import { ImageNode } from "../CustomNodes/ImageNode";
 import { NoteNode } from "../CustomNodes/NoteNode";
@@ -19,6 +20,7 @@ export const nodeTypes = {
   imageAgentNode: ImageAgentNode,
   videoAgentNode: VideoAgentNode,
   panoramaNode: PanoramaNode,
+  directorDeskNode: DirectorDeskNode,
   audioNode: AudioNode,
   tableNode: TableNode,
 };
