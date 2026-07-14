@@ -219,14 +219,14 @@ const INPUT_CHANNELS: Array<{
   description: string;
 }> = [
   {
-    value: "shot4u",
-    label: "Shot4u",
-    description: "播放页解析",
-  },
-  {
     value: "localMp4",
     label: "导入 MP4",
     description: "本地视频上传",
+  },
+  {
+  value: "shot4u",
+  label: "Shot4u",
+  description: "播放页解析",
   },
   {
     value: "search",
@@ -237,41 +237,44 @@ const INPUT_CHANNELS: Array<{
 const STORAGE_KEY = "jike.videoToScript.state.v1";
 const HONGGUO_API_KEY = import.meta.env.VITE_HONGGUO_API_KEY || "";
 const OSS_DIRECT_UPLOAD_TTL = 12 * 60 * 60;
-const VIDEO_TO_SCRIPT_SYSTEM_PROMPT = `你是短剧剧本整理师。你的任务是观看用户提供的单集短剧视频，只整理“剧情正文”，按影视剧本文本格式还原本集内容。
+const VIDEO_TO_SCRIPT_SYSTEM_PROMPT = `你是短剧成片拉片剧本整理师。你的任务是观看用户提供的单集短剧视频，只整理“剧情正文”，按短剧成片还原稿的方式整理本集内容。
 
 只输出剧情正文，不要输出剧情梗概、人物表、二创改写要点、分析说明、Markdown 标题、表格或项目符号。
 
+输出目标：
+尽量还原成片内容，而不是写摘要。重点保留人物动作、表情反应、镜头切换、转场、屏幕文字、音效、旁白、内心 OS 和完整对白。宁可多写动作、反应和转场，也不要省略成概括句。
+
 输出格式必须严格参照下面的样式：
 
-第X集
+第一集
 
-X-1 日、外、地点
-人物：角色A、角色B、群演若干
-△画面动作、人物走位、表情反应或剧情推进。
+1-1 山林小道 日 外
+出场人物：姜晚，程泽舟，云瑶，散修头目，散修数名
+▲急促的脚步声和喘息声打破林间寂静。
+▲姜晚架着重伤的程泽舟，踉跄前行，额角沁汗，衣裙染血带尘。
 角色A：台词。
-角色B（动作｜语气｜情绪）：台词。
-【OS】角色A：内心独白。
-【VO】角色B：画外音或广播。
-
-【闪入】
-X-2 夜、内、地点
-人物：角色A、角色C
-△回忆或插入画面内容。
-角色C：台词。
-【闪出】
+角色B（VO）（动作｜语气｜情绪）：台词。
+▲身后传来杂乱的脚步声和狞笑。散修头目带着几名散修围上。
+散修头目（目光逡巡，猥琐大笑）：哈哈哈！又来个细皮嫩肉的小美人！
+▲闪回
+1-2 现代卧室 日 内
+出场人物：姜晚
+▲电脑屏幕亮着，文档标题：《斗破星河》。
+姜晚（VO）（动作｜语气｜情绪）：我叫姜晚，一个勤勤恳恳的网文编辑。
+▲闪回结束
 
 具体规则：
-1. 第一行必须是本集标题，格式为“第X集”，X 使用用户提供的当前集数。
-2. 每场场头使用“X-Y 日/夜、内/外、地点”格式；X 是集数，Y 是本集场次序号，从 1 开始递增。
-3. 场头下一行必须写“人物：”，列出本场出现或发声的角色。群体角色可写“护士*2”“随从若干”“路人若干”。
-4. 叙事、动作、表情、转场、画面信息统一用“△”开头。
-5. 对话格式必须严格为“角色（具体标注）：台词”。括号标注必须放在角色名之后、冒号之前。标注只能写视频中能判断出的具体动作、语气或情绪词，多标签用竖线“｜”分隔，例如“唐竹筠（压低声音｜急切｜紧张）：快走！”。严禁输出“动作”“语气”“情绪”这三个占位词，严禁写成“角色（动作｜语气｜情绪）：台词”。无法确认具体标注时，直接写“角色：台词”，不要为了填格式强行编造。
-6. 内心独白用“【OS】角色：台词”；画外音、广播、旁白用“【VO】角色：台词”。
-7. 回忆、闪回或插入片段可用“【闪入】”“【闪出】”单独成行。
-8. 分场依据是实际剧情节点、地点变化、时间变化、人物进出或冲突升级，不按固定时长硬拆。
-9. 台词优先还原字幕和人物原话；听不清或看不清时用“【听不清】”标记，不要编造。
-10. 严格基于视频内容输出。无法确认姓名时，可用“男主”“女主”“母亲”“反派男”“路人”等临时称呼，但全文必须保持一致。
-11. 不要补写视频之外的剧情，不要解释你的判断，不要在结尾另写总结或钩子说明。`;
+1. 第一行必须是本集标题，格式为“第一集”“第二集”，集数使用用户提供的当前集数并转为中文数字。
+2. 场头使用“X-Y 地点 日/夜 内/外”格式；X 是集数，Y 是本集场次序号，从 1 开始递增。
+3. 场头下一行必须写“出场人物：”，列出本场出现或发声的角色，角色之间用中文逗号分隔。群体角色可写“护士2人”“随从若干”“路人若干”。
+4. 叙事、动作、表情、镜头、转场、屏幕文字、音效、BGM 统一用“▲”开头。动作描写要具体、连续，尽量还原画面，不要只写一句概括。
+5. 不要按固定时长或每个镜头硬拆场。只有地点、时间、剧情阶段、人物关系、冲突升级或闪回/想象明显变化时才新开一场。
+6. 对话格式必须严格为“角色（具体标注）：台词”。括号标注必须放在角色名之后、冒号之前。标注只能写视频中能判断出的具体动作、语气或情绪词，多标签用竖线“｜”分隔，例如“唐竹筠（压低声音｜急切｜紧张）：快走！”。严禁输出“动作”“语气”“情绪”这三个占位词，严禁写成“角色（动作｜语气｜情绪）：台词”。无法确认具体标注时，直接写“角色：台词”，不要为了填格式强行编造。
+7. 内心独白、画外音、旁白、广播写在角色括号里，例如“姜晚（OS）：台词”“系统（VO）：台词”“广播（VO）：台词”。不要写成“【OS】角色：台词”。
+8. 回忆、闪回、想象或插入片段可用“▲闪回”“▲闪回结束”“▲想象”“▲想象结束”单独成行。
+9. 台词优先还原字幕和人物原话，网络梗、口头禅、停顿、省略号、语气词也要保留；听不清或看不清时用“【听不清】”标记，不要编造。
+10. 已知角色名必须保持一致。画面姓名牌、字幕或上下文已经确认姓名后，不要再写“男主”“女主”“系统猫”等泛称。无法确认姓名时，可用“男主”“女主”“母亲”“反派男”“路人”等临时称呼，但全文必须保持一致。
+11. 严格基于视频内容输出，不要补写视频之外的剧情，不要解释你的判断，不要在结尾另写总结或钩子说明。`;
 const SOURCE_CONFIG: Record<
   InputMode,
   { label: string; placeholder: string; referer: string; origin: string }
@@ -705,6 +708,15 @@ const inferEpisodeFromFilePath = (path: string, fallbackEpisode: number) => {
 const getItemKey = (item: Pick<EpisodeM3u8Result, "episode" | "pageUrl">) =>
   `${item.episode}-${item.pageUrl}`;
 
+const parseHongguoPageUrl = (pageUrl: string) => {
+  const match = pageUrl.match(/^hongguo:([^:]+):(.+)$/);
+  if (!match) return null;
+  return {
+    dramaId: match[1],
+    videoId: match[2],
+  };
+};
+
 const convertM3u8ToMp4 = async (
   m3u8Url: string,
   outputPath: string,
@@ -983,8 +995,6 @@ export default function VideoToScriptPage() {
   >([]);
   const [hongguoSearchDialogOpen, setHongguoSearchDialogOpen] =
     useState(false);
-  const [selectedHongguoItem, setSelectedHongguoItem] =
-    useState<HongguoSearchItem | null>(null);
   const stopRequestedRef = useRef(false);
   const bulkStopRequestedRef = useRef(false);
   const splitBulkStopRequestedRef = useRef(false);
@@ -1418,6 +1428,96 @@ export default function VideoToScriptPage() {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "保存失败";
+      updateResultItem(item, {
+        downloadStatus: "error",
+        downloadMessage: message,
+      });
+      toast.error(message);
+    } finally {
+      setDownloadingMap((current) => {
+        const next = { ...current };
+        delete next[itemKey];
+        return next;
+      });
+    }
+  };
+
+  const retryHongguoDownloadOne = async (item: EpisodeM3u8Result) => {
+    if (!HONGGUO_API_KEY) {
+      toast.error("未配置 VITE_HONGGUO_API_KEY");
+      return;
+    }
+    const hongguoInfo = parseHongguoPageUrl(item.pageUrl);
+    if (!hongguoInfo?.videoId) {
+      toast.error("当前行缺少红果 video_id，无法重新解析");
+      return;
+    }
+
+    const outputPath = await save({
+      title: "保存 MP4",
+      defaultPath: getEpisodeFileName(item),
+      filters: [{ name: "MP4 视频", extensions: ["mp4"] }],
+    });
+    if (!outputPath) return;
+    const finalOutputPath = appendExtensionIfMissing(outputPath, "mp4");
+
+    const itemKey = getItemKey(item);
+    setDownloadingMap((current) => ({ ...current, [itemKey]: true }));
+    updateResultItem(item, {
+      downloadStatus: "pending",
+      downloadMessage: "正在重新解析最低画质 MP4",
+    });
+
+    try {
+      const videoResponse = await requestHongguoApi<{
+        code?: number;
+        msg?: string;
+        data?: { video_lists?: HongguoVideoListItem[] };
+      }>({
+        key: HONGGUO_API_KEY,
+        type: "video",
+        video_id: hongguoInfo.videoId,
+      });
+      if (videoResponse.code !== 200) {
+        throw new Error(videoResponse.msg || "获取分集播放链接失败");
+      }
+
+      const video = selectLowestQualityMp4(
+        videoResponse.data?.video_lists || [],
+      );
+      if (!video?.url || !video.decrypt_key) {
+        throw new Error("未找到可用 MP4 播放链接");
+      }
+
+      const mp4Url = await requestHongguoDecrypt(
+        video.url,
+        video.decrypt_key,
+      );
+      const savedItem: EpisodeM3u8Result = {
+        ...item,
+        mp4Url,
+        downloadStatus: "pending",
+        downloadMessage: `正在下载最低画质 ${video.definition || ""}`.trim(),
+      };
+      updateResultItem(item, savedItem);
+
+      const result = await downloadMp4Url(mp4Url, finalOutputPath);
+      const downloadedItem: EpisodeM3u8Result = {
+        ...savedItem,
+        localMp4Path: result.path,
+        downloadStatus: "success",
+        downloadMessage: "已保存",
+      };
+      updateResultItem(item, downloadedItem);
+
+      try {
+        await uploadLocalMp4(downloadedItem, result.path);
+      } catch {
+        toast.error(`第${item.episode}集 MP4 已保存，但上传 OSS 失败`);
+      }
+      toast.success(`第${item.episode}集已重新解析并保存：${result.path}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "重新解析失败";
       updateResultItem(item, {
         downloadStatus: "error",
         downloadMessage: message,
@@ -2451,7 +2551,10 @@ export default function VideoToScriptPage() {
     }
   };
 
-  const runHongguoSearchWorkflow = async (item: HongguoSearchItem) => {
+  const runHongguoSearchWorkflow = async (
+    item: HongguoSearchItem,
+    episodeLimit?: number,
+  ) => {
     if (!HONGGUO_API_KEY) {
       toast.error("未配置 VITE_HONGGUO_API_KEY");
       return;
@@ -2468,7 +2571,6 @@ export default function VideoToScriptPage() {
     });
     if (!selected || Array.isArray(selected)) return;
 
-    setSelectedHongguoItem(null);
     setHongguoSearchDialogOpen(false);
     setScriptWorkflowRunning(true);
     setBulkDownloading(true);
@@ -2495,12 +2597,15 @@ export default function VideoToScriptPage() {
       }
 
       const dramaTitle = detailResponse.data?.title || item.title || "红果短剧";
-      const episodes = (detailResponse.data?.lists || [])
+      let episodes = (detailResponse.data?.lists || [])
         .filter((episode) => episode.video_id)
         .sort((a, b) => a.index - b.index);
 
       if (episodes.length === 0) {
         throw new Error("剧集详情中没有可解析的 video_id");
+      }
+      if (typeof episodeLimit === "number") {
+        episodes = episodes.slice(0, episodeLimit);
       }
 
       const rows = episodes.map((episode): EpisodeM3u8Result => ({
@@ -3385,6 +3490,33 @@ export default function VideoToScriptPage() {
                             <Download size={13} />
                             {item.localMp4Path ? "重新保存" : "保存 MP4"}
                           </Button>
+                          {parseHongguoPageUrl(item.pageUrl) &&
+                          item.downloadStatus === "error" ? (
+                            <Button
+                              size="sm"
+                              variant="default"
+                              loading={Boolean(downloadingMap[getItemKey(item)])}
+                              disabled={
+                                item.status !== "success" ||
+                                Boolean(downloadingMap[getItemKey(item)]) ||
+                                bulkDownloading
+                              }
+                              onClick={() => {
+                                void retryHongguoDownloadOne(item).catch(
+                                  (error) => {
+                                    toast.error(
+                                      error instanceof Error
+                                        ? error.message
+                                        : "重新解析失败",
+                                    );
+                                  },
+                                );
+                              }}
+                            >
+                              <RotateCcw size={13} />
+                              重新解析
+                            </Button>
+                          ) : null}
                           <Button
                             size="sm"
                             variant="default"
@@ -3634,7 +3766,7 @@ export default function VideoToScriptPage() {
           <div className="border-b border-white/8 px-5 py-4">
             <ModalTitle>搜索结果</ModalTitle>
             <ModalDescription>
-              选择短剧后会再次确认，再进入下载、上传和生成剧本流程。
+              选择短剧后可解析前 10 集或全部剧集，并进入下载、上传和生成剧本流程。
             </ModalDescription>
           </div>
           <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
@@ -3682,13 +3814,26 @@ export default function VideoToScriptPage() {
                         {item.intro || "暂无简介"}
                       </div>
                     </div>
-                    <div className="flex items-center justify-end">
+                    <div className="flex flex-col items-stretch justify-center gap-2">
                       <Button
                         size="sm"
                         variant="blue"
-                        onClick={() => setSelectedHongguoItem(item)}
+                        disabled={scriptWorkflowRunning}
+                        onClick={() => {
+                          void runHongguoSearchWorkflow(item);
+                        }}
                       >
-                        确认选择
+                        解析全部
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="default"
+                        disabled={scriptWorkflowRunning}
+                        onClick={() => {
+                          void runHongguoSearchWorkflow(item, 10);
+                        }}
+                      >
+                        前10集
                       </Button>
                     </div>
                   </div>
@@ -3703,48 +3848,6 @@ export default function VideoToScriptPage() {
               onClick={() => setHongguoSearchDialogOpen(false)}
             >
               关闭
-            </Button>
-          </div>
-        </ModalContent>
-      </Modal>
-      <Modal
-        open={Boolean(selectedHongguoItem)}
-        onOpenChange={(open) => {
-          if (!open) setSelectedHongguoItem(null);
-        }}
-      >
-        <ModalContent className="max-w-md">
-          <div className="border-b border-white/8 px-5 py-4">
-            <ModalTitle>
-              确认选择《{selectedHongguoItem?.title || "未命名短剧"}》
-            </ModalTitle>
-            <ModalDescription>
-              确认后会获取全部剧集，优先最低画质 MP4，并开始下载、上传 OSS 和生成剧本。
-            </ModalDescription>
-          </div>
-          <div className="px-5 py-4 text-sm leading-6 text-white/65">
-            总集数：{selectedHongguoItem?.episode_num || "-"}
-            <br />
-            热度：{selectedHongguoItem?.rec || "-"}
-          </div>
-          <div className="flex justify-end gap-2 border-t border-white/8 px-5 py-4">
-            <Button
-              size="sm"
-              variant="default"
-              onClick={() => setSelectedHongguoItem(null)}
-            >
-              取消
-            </Button>
-            <Button
-              size="sm"
-              variant="blue"
-              disabled={scriptWorkflowRunning}
-              onClick={() => {
-                if (!selectedHongguoItem) return;
-                void runHongguoSearchWorkflow(selectedHongguoItem);
-              }}
-            >
-              确认
             </Button>
           </div>
         </ModalContent>
