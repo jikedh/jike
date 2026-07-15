@@ -31,6 +31,15 @@ import {
 import { toast } from "sonner";
 import ProjectDialog from "@/components/ProjectDialog";
 import { openCanvasProjectWindow } from "@/services/projectWindowService";
+import {
+  Pagination,
+  PaginationButton,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import type { ProjectListItem } from "shared/types/api/projects";
 
 const SHARE_UUID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -102,10 +111,14 @@ const isDuplicateProjectNameError = (error: any) => {
 const isSuccessResponseCode = (code?: number) =>
   code === 0 || code === 200 || code === 10000;
 
+const PROJECTS_PAGE_SIZE = 12;
+
 export default function CanvasPlaceholderPage() {
   const navigate = useNavigate();
   const importFileInputRef = useRef<HTMLInputElement>(null);
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<ProjectListItem | null>(
@@ -124,9 +137,42 @@ export default function CanvasPlaceholderPage() {
     null,
   );
 
-  const refreshProjects = async () => {
-    const result = await getProjectList({ page: 1, page_size: 100 });
+  const refreshProjects = async (page = currentPage) => {
+    const result = await getProjectList({
+      page,
+      page_size: PROJECTS_PAGE_SIZE,
+    });
+    const nextTotalPages = Math.max(
+      1,
+      result.data.pagination?.totalPages ||
+      Math.ceil(result.data.total / result.data.page_size),
+    );
+    const safePage = Math.min(page, nextTotalPages);
+
+    if (safePage !== page) {
+      setCurrentPage(safePage);
+      return;
+    }
+
     setProjects(result.data.list);
+    setCurrentPage(result.data.page || safePage);
+    setTotalPages(nextTotalPages);
+  };
+
+  const visiblePages = Array.from(
+    { length: Math.min(5, totalPages) },
+    (_, index) => {
+      const startPage = Math.min(
+        Math.max(1, currentPage - 2),
+        Math.max(1, totalPages - 4),
+      );
+      return startPage + index;
+    },
+  );
+
+  const handlePageChange = (page: number) => {
+    if (page === currentPage || page < 1 || page > totalPages) return;
+    refreshProjects(page);
   };
 
   const handleProjectSuccess = (projectId: string) => {
@@ -138,7 +184,7 @@ export default function CanvasPlaceholderPage() {
   };
 
   useEffect(() => {
-    refreshProjects();
+    refreshProjects(1);
   }, []);
 
   // 处理项目卡片点击
@@ -561,6 +607,49 @@ export default function CanvasPlaceholderPage() {
             </div>
           ))}
         </div>
+
+        {totalPages > 1 && (
+          <Pagination className="mt-8">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  disabled={currentPage === 1}
+                  onClick={() => handlePageChange(currentPage - 1)}
+                />
+              </PaginationItem>
+
+              {visiblePages[0] > 1 && (
+                <PaginationItem>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              )}
+
+              {visiblePages.map((page) => (
+                <PaginationItem key={page}>
+                  <PaginationButton
+                    isActive={page === currentPage}
+                    onClick={() => handlePageChange(page)}
+                  >
+                    {page}
+                  </PaginationButton>
+                </PaginationItem>
+              ))}
+
+              {visiblePages[visiblePages.length - 1] < totalPages && (
+                <PaginationItem>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              )}
+
+              <PaginationItem>
+                <PaginationNext
+                  disabled={currentPage === totalPages}
+                  onClick={() => handlePageChange(currentPage + 1)}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        )}
       </div>
 
       {/* 项目弹窗（创建/编辑） */}
