@@ -202,12 +202,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download platform bundles
+      # 分目录下载，避免 macOS .app 内嵌的 ffmpeg.exe 被误识别为 Windows 安装包。
+      - name: Download Windows bundles
         uses: actions/download-artifact@v4
         with:
-          pattern: '*-tauri-bundles'
-          path: ${{ runner.temp }}/tauri-platform-bundles
-          merge-multiple: true
+          name: windows-tauri-bundles
+          path: ${{ runner.temp }}/tauri-platform-bundles/windows
+
+      - name: Download macOS bundles
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-universal-tauri-bundles
+          path: ${{ runner.temp }}/tauri-platform-bundles/macos
 
       - name: Publish release assets and latest.json
         shell: pwsh
@@ -220,31 +226,36 @@ jobs:
           $tag = "v$version"
           $releaseTitle = "即刻 v$version"
           $releaseNotes = "做了一些优化，更新了已知Bug"
-          $artifactRoot = Join-Path $env:RUNNER_TEMP "tauri-platform-bundles"
+          $windowsArtifactRoot = Join-Path $env:RUNNER_TEMP "tauri-platform-bundles\windows"
+          $macArtifactRoot = Join-Path $env:RUNNER_TEMP "tauri-platform-bundles\macos"
           $manifestDir = Join-Path $env:RUNNER_TEMP "tauri-updater-manifest"
           $assetUploadDir = Join-Path $env:RUNNER_TEMP "tauri-release-assets"
           $manifestPath = Join-Path $manifestDir "latest.json"
 
-          if (-not (Test-Path $artifactRoot)) {
-            throw "Downloaded platform artifacts were not found: $artifactRoot"
+          if (-not (Test-Path $windowsArtifactRoot)) {
+            throw "Downloaded Windows artifacts were not found: $windowsArtifactRoot"
+          }
+
+          if (-not (Test-Path $macArtifactRoot)) {
+            throw "Downloaded macOS artifacts were not found: $macArtifactRoot"
           }
 
           New-Item -ItemType Directory -Force -Path $manifestDir | Out-Null
           New-Item -ItemType Directory -Force -Path $assetUploadDir | Out-Null
 
-          $windowsInstaller = Get-ChildItem $artifactRoot -Recurse -File -Filter "*.exe" |
+          $windowsInstaller = Get-ChildItem $windowsArtifactRoot -Recurse -File -Filter "*.exe" |
             Where-Object { $_.Name -notmatch "webview2|WebView2" } |
             Sort-Object LastWriteTime -Descending |
             Select-Object -First 1
 
           if (-not $windowsInstaller) {
-            $windowsInstaller = Get-ChildItem $artifactRoot -Recurse -File -Filter "*.msi" |
+            $windowsInstaller = Get-ChildItem $windowsArtifactRoot -Recurse -File -Filter "*.msi" |
               Sort-Object LastWriteTime -Descending |
               Select-Object -First 1
           }
 
           if (-not $windowsInstaller) {
-            throw "No Windows installer was found under $artifactRoot."
+            throw "No Windows installer was found under $windowsArtifactRoot."
           }
 
           $windowsSignatureFile = Get-ChildItem $windowsInstaller.DirectoryName -File |
@@ -258,12 +269,12 @@ jobs:
             throw "No signature file was found for Windows installer '$($windowsInstaller.FullName)'."
           }
 
-          $macUpdater = Get-ChildItem $artifactRoot -Recurse -File -Filter "*.app.tar.gz" |
+          $macUpdater = Get-ChildItem $macArtifactRoot -Recurse -File -Filter "*.app.tar.gz" |
             Sort-Object LastWriteTime -Descending |
             Select-Object -First 1
 
           if (-not $macUpdater) {
-            throw "No macOS updater archive was found under $artifactRoot."
+            throw "No macOS updater archive was found under $macArtifactRoot."
           }
 
           $macSignatureFile = Get-ChildItem $macUpdater.DirectoryName -File |
@@ -274,12 +285,12 @@ jobs:
             throw "No signature file was found for macOS updater archive '$($macUpdater.FullName)'."
           }
 
-          $macDmg = Get-ChildItem $artifactRoot -Recurse -File -Filter "*.dmg" |
+          $macDmg = Get-ChildItem $macArtifactRoot -Recurse -File -Filter "*.dmg" |
               Sort-Object LastWriteTime -Descending |
               Select-Object -First 1
 
           if (-not $macDmg) {
-            throw "No macOS DMG installer was found under $artifactRoot."
+            throw "No macOS DMG installer was found under $macArtifactRoot."
           }
 
           $windowsSignature = (Get-Content $windowsSignatureFile.FullName -Raw).Trim()
