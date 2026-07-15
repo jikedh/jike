@@ -1,5 +1,5 @@
 ﻿import { addEdge, applyEdgeChanges, applyNodeChanges } from "@xyflow/react";
-import { copyVideoUrlToOss } from "service/oss";
+import { copyMediaUrlToOss, copyVideoUrlToOss } from "service/oss";
 import {
   AGNES_IMAGE_2_FLASH_MODEL,
   getVisibleImageModels,
@@ -732,53 +732,29 @@ const extractExtensionFromUrl = (url: string, fallback: string) => {
   }
 };
 
-const isOssImageUrl = (url: string) => {
+/**
+ * 统一刷新入口：将单张图片 URL 转存 OSS 并写回节点数据。
+ * 等价于模拟点击左上角刷新按钮。
+ */
+export const refreshImageToOss = async (
+  nodeId: string,
+  images: { url: string; remoteUrl?: string }[],
+  index: number,
+  updateImageNodeData: (nodeId: string, patch: unknown) => void,
+) => {
+  const item = images[index];
+  if (!item?.url) return;
+
   try {
-    return new URL(url).hostname.includes("aliyuncs.com");
-  } catch {
-    return false;
+    const ossUrl = await copyMediaUrlToOss(item.url);
+    if (!ossUrl) return;
+
+    const newImages = [...images];
+    newImages[index] = { ...newImages[index], url: ossUrl, remoteUrl: ossUrl };
+    updateImageNodeData(nodeId, { result: { type: "image", data: newImages } });
+  } catch (error) {
+    console.warn("[refreshImageToOss] OSS 转存失败，保留原始 URL:", error);
   }
-};
-
-const mirrorGeneratedImageUrlToOss = async (url: string) => {
-  if (isOssImageUrl(url)) {
-    return url;
-  }
-
-  if (!window.download?.imageAsBase64) {
-    throw new Error("图片已生成，但当前环境不支持转存 OSS");
-  }
-
-  const downloadResult = await window.download.imageAsBase64(url);
-  if (!downloadResult.success || !downloadResult.data?.base64) {
-    throw new Error(downloadResult.error || "图片已生成，但下载转存素材失败");
-  }
-
-  const ossResult = await uploadBase64ToOSS(
-    downloadResult.data.base64,
-    `generated-image-${Date.now()}`,
-  );
-  if (!ossResult.url) {
-    throw new Error("图片已生成，但转存 OSS 失败，请重试");
-  }
-
-  return ossResult.url;
-};
-
-const mirrorGeneratedImageResultToOss = async (url: string) => {
-  const dataUriMatch = url.match(/^data:image\/[a-z0-9.+-]+;base64,(.+)$/i);
-  if (dataUriMatch?.[1]) {
-    const ossResult = await uploadBase64ToOSS(
-      dataUriMatch[1],
-      `generated-image-${Date.now()}`,
-    );
-    if (!ossResult.url) {
-      throw new Error("图片已生成，但转存 OSS 失败，请重试");
-    }
-    return ossResult.url;
-  }
-
-  return mirrorGeneratedImageUrlToOss(url);
 };
 
 const inferImageMimeTypeFromUri = (uri: string): string | undefined => {
@@ -996,7 +972,7 @@ const pollImageGeneration = async (
         taskStatus === "SUCCEEDED" ||
         taskStatus === "COMPLETED"
       ) {
-        // 处理每张生成的图片
+        // 处理每张生成的图片（先写入原始 URL，再统一刷新转存 OSS）
         const processedResultData = images.map((url: string) => ({
           url,
         }));
@@ -1033,6 +1009,23 @@ const pollImageGeneration = async (
         saveCurrentCanvasToHistory();
         if (useChatSettingsStore.getState().autoSaveEnabled) {
           getState().saveGraph();
+        }
+
+        // 刷新 OSS 转存
+        const pollingCurrentImages =
+          (
+            getState().nodes.find((n) => n.id === nodeId)
+              ?.data as ImageGenerationNode
+          )?.result?.data ?? [];
+        const pollingStartIndex =
+          pollingCurrentImages.length - processedResultData.length;
+        for (let i = 0; i < processedResultData.length; i++) {
+          void refreshImageToOss(
+            nodeId,
+            pollingCurrentImages,
+            pollingStartIndex + i,
+            getState().updateImageNodeData,
+          );
         }
 
         stopImagePollingInternal(taskId);
@@ -1281,7 +1274,7 @@ const pollMjImageGeneration = async (
           .filter(Boolean)
           .map((url: string) => url.trim().replace(/^`|`$/g, ""));
 
-        // 处理每张生成的图片
+        // 先写入原始 URL，再统一刷新转存 OSS
         const processedResultData = newImageUrls.map((url: string) => ({
           url,
         }));
@@ -1318,6 +1311,23 @@ const pollMjImageGeneration = async (
         saveCurrentCanvasToHistory();
         if (useChatSettingsStore.getState().autoSaveEnabled) {
           getState().saveGraph();
+        }
+
+        // 刷新 OSS 转存
+        const mjCurrentImages =
+          (
+            getState().nodes.find((n) => n.id === nodeId)
+              ?.data as ImageGenerationNode
+          )?.result?.data ?? [];
+        const mjStartIndex =
+          mjCurrentImages.length - processedResultData.length;
+        for (let i = 0; i < processedResultData.length; i++) {
+          void refreshImageToOss(
+            nodeId,
+            mjCurrentImages,
+            mjStartIndex + i,
+            getState().updateImageNodeData,
+          );
         }
 
         stopImagePollingInternal(taskId);
@@ -3354,29 +3364,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               }
 
               const projectId = get().projectId;
-              const processedResultData = await Promise.all(
-                resultUrls.map(async (resultUrl) => {
-                  const ossUrl = await mirrorGeneratedImageResultToOss(
-                    resultUrl,
-                  );
-                  let resultItem = {
-                    url: ossUrl,
-                    remoteUrl: ossUrl,
-                    ...(ossUrl === resultUrl
-                      ? {}
-                      : { originalUrl: resultUrl }),
-                  } as any;
+              const rawResultData = resultUrls.map((resultUrl) => ({
+                url: resultUrl,
+              }));
 
-                  return resultItem;
-                }),
-              );
-
+              // 先写入原始 URL，再统一刷新转存 OSS（等价于模拟点击刷新按钮）
               set((state) => ({
                 nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
                   const existingData = data.result?.data ?? [];
                   const mergedData = appendMediaSequences(
                     existingData,
-                    processedResultData,
+                    rawResultData,
                   );
                   return {
                     ...data,
@@ -3390,6 +3388,22 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               saveCurrentCanvasToHistory();
               if (useChatSettingsStore.getState().autoSaveEnabled) {
                 get().saveGraph();
+              }
+
+              // 刷新 OSS 转存
+              const currentImages =
+                (
+                  get().nodes.find((n) => n.id === nodeId)
+                    ?.data as ImageGenerationNode
+                )?.result?.data ?? [];
+              const startIndex = currentImages.length - rawResultData.length;
+              for (let i = 0; i < rawResultData.length; i++) {
+                void refreshImageToOss(
+                  nodeId,
+                  currentImages,
+                  startIndex + i,
+                  get().updateImageNodeData,
+                );
               }
               if (ledgerBizId) {
                 confirmDesktopProxyScore(ledgerBizId, "agnes").catch(() => { });
@@ -3440,18 +3454,14 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                 scoreCost,
               });
 
-              const ossUrl = await mirrorGeneratedImageUrlToOss(resultUrl);
-              const resultItem = {
-                url: ossUrl,
-                remoteUrl: ossUrl,
-                ...(ossUrl === resultUrl ? {} : { originalUrl: resultUrl }),
-              } as any;
+              const rawResultItem = { url: resultUrl };
 
+              // 先写入原始 URL，再统一刷新转存 OSS
               set((state) => ({
                 nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
                   const existingData = data.result?.data ?? [];
                   const mergedData = appendMediaSequences(existingData, [
-                    resultItem,
+                    rawResultItem,
                   ]);
                   return {
                     ...data,
@@ -3466,6 +3476,21 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               if (useChatSettingsStore.getState().autoSaveEnabled) {
                 get().saveGraph();
               }
+
+              // 刷新 OSS 转存
+              const currentImages =
+                (
+                  get().nodes.find((n) => n.id === nodeId)
+                    ?.data as ImageGenerationNode
+                )?.result?.data ?? [];
+              const lastIndex = currentImages.length - 1;
+              void refreshImageToOss(
+                nodeId,
+                currentImages,
+                lastIndex,
+                get().updateImageNodeData,
+              );
+
               await refreshBalanceAfterGeneration({
                 scene: "image",
                 nodeId,
