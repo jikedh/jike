@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-windows:
     name: Build Windows release
@@ -94,7 +98,116 @@ jobs:
             src-tauri/target/release/bundle/**/*.exe
             src-tauri/target/release/bundle/**/*.msi
             src-tauri/target/release/bundle/**/*.sig
-          if-no-files-found: warn
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macOS universal release
+    runs-on: macos-14
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      # Universal 应用同时包含 Apple Silicon 与 Intel 原生代码。
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: true
+          cache-all-crates: true
+          key: macos-universal
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Validate release version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tauriVersion = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $cargoVersion = Select-String -Path src-tauri/Cargo.toml -Pattern '^version\s*=\s*"(.+)"' | Select-Object -First 1
+          $cargoVersion = $cargoVersion.Matches[0].Groups[1].Value
+
+          if ($packageVersion -ne $tauriVersion) {
+            throw "package.json version '$packageVersion' does not match src-tauri/tauri.conf.json version '$tauriVersion'."
+          }
+
+          if ($packageVersion -ne $cargoVersion) {
+            throw "package.json version '$packageVersion' does not match src-tauri/Cargo.toml version '$cargoVersion'."
+          }
+
+          $expectedTag = "v$packageVersion"
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne $expectedTag) {
+            throw "Git tag '$env:GITHUB_REF_NAME' does not match app version '$packageVersion'. Expected tag: '$expectedTag'."
+          }
+
+          Write-Host "Release version validated: $packageVersion / $expectedTag"
+
+      # 未配置 Apple Developer 证书时，使用 ad-hoc 签名避免 Apple Silicon 将下载的应用视为已损坏。
+      # 该签名不会通过 Gatekeeper 验证，用户首次打开仍需在“隐私与安全性”中手动允许。
+      - name: Build ad-hoc signed Tauri bundles
+        shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: '-'
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          npm run build:tauri -- --target universal-apple-darwin
+
+      - name: Print generated bundle files
+        if: always()
+        shell: bash
+        run: |
+          bundle_root="src-tauri/target/universal-apple-darwin/release/bundle"
+          if [[ -d "$bundle_root" ]]; then
+            find "$bundle_root" -type f -print | sort
+          else
+            echo "Bundle output directory does not exist: $bundle_root"
+          fi
+
+      - name: Upload workflow artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal-tauri-bundles
+          path: |
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/**/*.app
+            src-tauri/target/universal-apple-darwin/release/bundle/**/*.dmg
+            src-tauri/target/universal-apple-darwin/release/bundle/**/*.app.tar.gz
+            src-tauri/target/universal-apple-darwin/release/bundle/**/*.app.tar.gz.sig
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish cross-platform release
+    needs:
+      - build-windows
+      - build-macos
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download platform bundles
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*-tauri-bundles'
+          path: ${{ runner.temp }}/tauri-platform-bundles
+          merge-multiple: true
 
       - name: Publish release assets and latest.json
         shell: pwsh
@@ -107,59 +220,93 @@ jobs:
           $tag = "v$version"
           $releaseTitle = "即刻 v$version"
           $releaseNotes = "做了一些优化，更新了已知Bug"
-          $bundleRoot = Join-Path $PWD "src-tauri/target/release/bundle"
+          $artifactRoot = Join-Path $env:RUNNER_TEMP "tauri-platform-bundles"
           $manifestDir = Join-Path $env:RUNNER_TEMP "tauri-updater-manifest"
           $assetUploadDir = Join-Path $env:RUNNER_TEMP "tauri-release-assets"
           $manifestPath = Join-Path $manifestDir "latest.json"
 
-          if (-not (Test-Path $bundleRoot)) {
-            throw "Tauri bundle output directory was not found: $bundleRoot"
+          if (-not (Test-Path $artifactRoot)) {
+            throw "Downloaded platform artifacts were not found: $artifactRoot"
           }
 
           New-Item -ItemType Directory -Force -Path $manifestDir | Out-Null
           New-Item -ItemType Directory -Force -Path $assetUploadDir | Out-Null
 
-          $nsisDir = Join-Path $bundleRoot "nsis"
-          $msiDir = Join-Path $bundleRoot "msi"
-
-          $installer = $null
-          if (Test-Path $nsisDir) {
-            $installer = Get-ChildItem $nsisDir -Recurse -File -Filter "*.exe" |
-              Where-Object { $_.Name -notmatch "webview2|WebView2" } |
-              Sort-Object LastWriteTime -Descending |
-              Select-Object -First 1
-          }
-
-          if (-not $installer -and (Test-Path $msiDir)) {
-            $installer = Get-ChildItem $msiDir -Recurse -File -Filter "*.msi" |
-              Sort-Object LastWriteTime -Descending |
-              Select-Object -First 1
-          }
-
-          if (-not $installer) {
-            throw "No Windows installer was found under $bundleRoot."
-          }
-
-          $signatureFile = Get-ChildItem $installer.DirectoryName -File |
-            Where-Object { $_.Name -eq "$($installer.Name).sig" -or $_.Name -eq "$($installer.BaseName).sig" } |
+          $windowsInstaller = Get-ChildItem $artifactRoot -Recurse -File -Filter "*.exe" |
+            Where-Object { $_.Name -notmatch "webview2|WebView2" } |
+            Sort-Object LastWriteTime -Descending |
             Select-Object -First 1
 
-          if (-not $signatureFile) {
-            throw "No signature file was found for installer '$($installer.FullName)'. Expected '$($installer.Name).sig' or '$($installer.BaseName).sig'."
+          if (-not $windowsInstaller) {
+            $windowsInstaller = Get-ChildItem $artifactRoot -Recurse -File -Filter "*.msi" |
+              Sort-Object LastWriteTime -Descending |
+              Select-Object -First 1
           }
 
-          $signature = (Get-Content $signatureFile.FullName -Raw).Trim()
-          if ([string]::IsNullOrWhiteSpace($signature)) {
-            throw "Signature file is empty: $($signatureFile.FullName)"
+          if (-not $windowsInstaller) {
+            throw "No Windows installer was found under $artifactRoot."
           }
 
-          $releaseInstallerSuffix = if ($installer.Extension -ieq ".exe") { "x64-setup.exe" } else { "x64_zh-CN.msi" }
-          $releaseInstallerName = "jike_${version}_$releaseInstallerSuffix"
-          $releaseInstallerPath = Join-Path $assetUploadDir $releaseInstallerName
-          $releaseSignaturePath = "$releaseInstallerPath.sig"
+          $windowsSignatureFile = Get-ChildItem $windowsInstaller.DirectoryName -File |
+            Where-Object {
+              $_.Name -eq "$($windowsInstaller.Name).sig" -or
+              $_.Name -eq "$($windowsInstaller.BaseName).sig"
+            } |
+            Select-Object -First 1
 
-          Copy-Item $installer.FullName $releaseInstallerPath -Force
-          Copy-Item $signatureFile.FullName $releaseSignaturePath -Force
+          if (-not $windowsSignatureFile) {
+            throw "No signature file was found for Windows installer '$($windowsInstaller.FullName)'."
+          }
+
+          $macUpdater = Get-ChildItem $artifactRoot -Recurse -File -Filter "*.app.tar.gz" |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+          if (-not $macUpdater) {
+            throw "No macOS updater archive was found under $artifactRoot."
+          }
+
+          $macSignatureFile = Get-ChildItem $macUpdater.DirectoryName -File |
+            Where-Object { $_.Name -eq "$($macUpdater.Name).sig" } |
+            Select-Object -First 1
+
+          if (-not $macSignatureFile) {
+            throw "No signature file was found for macOS updater archive '$($macUpdater.FullName)'."
+          }
+
+          $macDmg = Get-ChildItem $artifactRoot -Recurse -File -Filter "*.dmg" |
+              Sort-Object LastWriteTime -Descending |
+              Select-Object -First 1
+
+          if (-not $macDmg) {
+            throw "No macOS DMG installer was found under $artifactRoot."
+          }
+
+          $windowsSignature = (Get-Content $windowsSignatureFile.FullName -Raw).Trim()
+          $macSignature = (Get-Content $macSignatureFile.FullName -Raw).Trim()
+          if ([string]::IsNullOrWhiteSpace($windowsSignature)) {
+            throw "Windows signature file is empty: $($windowsSignatureFile.FullName)"
+          }
+          if ([string]::IsNullOrWhiteSpace($macSignature)) {
+            throw "macOS signature file is empty: $($macSignatureFile.FullName)"
+          }
+
+          $windowsInstallerSuffix = if ($windowsInstaller.Extension -ieq ".exe") { "x64-setup.exe" } else { "x64_zh-CN.msi" }
+          $windowsInstallerName = "jike_${version}_$windowsInstallerSuffix"
+          $windowsInstallerPath = Join-Path $assetUploadDir $windowsInstallerName
+          $windowsSignaturePath = "$windowsInstallerPath.sig"
+
+          $macDmgName = "jike_${version}_macos_universal.dmg"
+          $macDmgPath = Join-Path $assetUploadDir $macDmgName
+          $macUpdaterName = "jike_${version}_macos_universal.app.tar.gz"
+          $macUpdaterPath = Join-Path $assetUploadDir $macUpdaterName
+          $macSignaturePath = "$macUpdaterPath.sig"
+
+          Copy-Item $windowsInstaller.FullName $windowsInstallerPath -Force
+          Copy-Item $windowsSignatureFile.FullName $windowsSignaturePath -Force
+          Copy-Item $macDmg.FullName $macDmgPath -Force
+          Copy-Item $macUpdater.FullName $macUpdaterPath -Force
+          Copy-Item $macSignatureFile.FullName $macSignaturePath -Force
 
           $releaseExists = $true
           gh release view $tag --json tagName,isDraft,isPrerelease 1>$null 2>$null
@@ -180,8 +327,10 @@ jobs:
             gh release upload $tag $asset.FullName --clobber
           }
 
-          $encodedInstallerName = [System.Uri]::EscapeDataString($releaseInstallerName)
-          $installerUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/$encodedInstallerName"
+          $encodedWindowsInstallerName = [System.Uri]::EscapeDataString($windowsInstallerName)
+          $encodedMacUpdaterName = [System.Uri]::EscapeDataString($macUpdaterName)
+          $windowsInstallerUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/$encodedWindowsInstallerName"
+          $macUpdaterUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/$encodedMacUpdaterName"
 
           $manifest = [ordered]@{
             version = $version
@@ -189,8 +338,16 @@ jobs:
             pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
             platforms = [ordered]@{
               "windows-x86_64" = [ordered]@{
-                signature = $signature
-                url = $installerUrl
+                signature = $windowsSignature
+                url = $windowsInstallerUrl
+              }
+              "darwin-aarch64" = [ordered]@{
+                signature = $macSignature
+                url = $macUpdaterUrl
+              }
+              "darwin-x86_64" = [ordered]@{
+                signature = $macSignature
+                url = $macUpdaterUrl
               }
             }
           }
@@ -202,7 +359,9 @@ jobs:
           Get-Content $manifestPath -Raw
 
           gh release upload $tag $manifestPath --clobber
-          Write-Host "Uploaded latest.json for $tag -> $installerUrl"
+          Write-Host "Uploaded latest.json for $tag"
+          Write-Host "Windows updater: $windowsInstallerUrl"
+          Write-Host "macOS updater: $macUpdaterUrl"
 
       - name: Verify latest.json release asset
         shell: pwsh
@@ -224,17 +383,29 @@ jobs:
 
           $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
           $windows = $manifest.platforms.'windows-x86_64'
+          $macArm64 = $manifest.platforms.'darwin-aarch64'
+          $macX64 = $manifest.platforms.'darwin-x86_64'
 
           if ($manifest.version -ne $version) {
             throw "latest.json version '$($manifest.version)' does not match package version '$version'."
           }
 
-          if ([string]::IsNullOrWhiteSpace($windows.url)) {
-            throw "latest.json is missing platforms.windows-x86_64.url."
+          $requiredPlatforms = [ordered]@{
+            'windows-x86_64' = $windows
+            'darwin-aarch64' = $macArm64
+            'darwin-x86_64' = $macX64
           }
 
-          if ([string]::IsNullOrWhiteSpace($windows.signature)) {
-            throw "latest.json is missing platforms.windows-x86_64.signature."
-          }
+          foreach ($entry in $requiredPlatforms.GetEnumerator()) {
+            if ($null -eq $entry.Value) {
+              throw "latest.json is missing platforms.$($entry.Key)."
+            }
+            if ([string]::IsNullOrWhiteSpace($entry.Value.url)) {
+              throw "latest.json is missing platforms.$($entry.Key).url."
+            }
+            if ([string]::IsNullOrWhiteSpace($entry.Value.signature)) {
+              throw "latest.json is missing platforms.$($entry.Key).signature."
+            }
 
-          Write-Host "Verified latest.json for $tag -> $($windows.url)"
+            Write-Host "Verified $($entry.Key) updater -> $($entry.Value.url)"
+          }
