@@ -21,7 +21,7 @@ export type VideoParamState = {
   aspectRatio?: string;
   resolution?: string;
   quality?: string;
-  generationMode?: "fast" | "pro";
+  generationMode?: "fast" | "mini" | "pro";
   duration: number;
   generateAudio: boolean;
   promptExtend?: boolean;
@@ -203,8 +203,11 @@ const pixverseSizeConfig = (mode: VideoModeKey): VideoParamConfig => ({
 });
 
 const seedance20Config = (
-  modelId: "seedance-2.0-fast" | "seedance-2.0-pro",
-  generationMode: "fast" | "pro",
+  modelId:
+    | "seedance-2.0-fast"
+    | "seedance-2.0-mini"
+    | "seedance-2.0-pro",
+  generationMode: "fast" | "mini" | "pro",
 ): VideoParamConfig => ({
   modelId,
   aspectRatios: seedanceRatios,
@@ -299,6 +302,7 @@ const happyHorseConfig = (mode: VideoModeKey): VideoParamConfig => ({
 
 export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
   "seedance-2.0-fast": seedance20Config("seedance-2.0-fast", "fast"),
+  "seedance-2.0-mini": seedance20Config("seedance-2.0-mini", "mini"),
   "seedance-2.0-pro": seedance20Config("seedance-2.0-pro", "pro"),
   "dreamina-seedance-2-0-260128": overseasSeedance20Config(),
   [byModeKey("wanxiang", "text-to-video")]:

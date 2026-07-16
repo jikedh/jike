@@ -93,11 +93,11 @@ export const updateSuggestionPosition = (
 
 /**
  * Seedance 2.0 时长裁剪工具函数。
- * fast 模式：4-12 秒；pro 模式：4-15 秒。
+ * fast/mini 模式：4-12 秒；pro 模式：4-15 秒。
  */
 export const clampSeedance20Duration = (
   value: number,
-  mode: "fast" | "pro",
+  mode: "fast" | "mini" | "pro",
 ) => {
   const min = 4;
   const max = mode === "pro" ? 15 : 12;

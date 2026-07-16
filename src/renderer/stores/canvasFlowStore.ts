@@ -2512,6 +2512,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                   model:
                     [
                       "seedance-2.0-fast",
+                      "seedance-2.0-mini",
                       "seedance-2.0-pro",
                       "wanxiang",
                       "vidu-q3-pro",
@@ -4286,7 +4287,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const totalTasks = 1;
       const model = input?.model ?? requestPayload.model ?? "";
       const isSeedance20 =
-        model === "seedance-2.0-fast" || model === "seedance-2.0-pro";
+        model === "seedance-2.0-fast" ||
+        model === "seedance-2.0-mini" ||
+        model === "seedance-2.0-pro";
       const isOverseasSeedance20 =
         model === "dreamina-seedance-2-0-260128";
 

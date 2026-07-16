@@ -415,7 +415,10 @@ export const VideoParamsPopover = ({
                       type="button"
                       onClick={() =>
                         patch({
-                          generationMode: option.value as "fast" | "pro",
+                          generationMode: option.value as
+                            | "fast"
+                            | "mini"
+                            | "pro",
                         })
                       }
                       className={optionButtonClass(active, "h-8 px-3")}

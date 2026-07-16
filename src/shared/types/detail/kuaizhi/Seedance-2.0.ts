@@ -4,7 +4,7 @@ export interface Seedance20Request {
   prompt: string; // 文本提示词：文生素材时条件必填；可在提示词中引用 images 素材
   generation_type: "video"; // 生成类型：视频任务可填写 "video"（条件必填）
   input_type?: "reference" | "first_last_frame"; // 输入类型："reference"（全能参考）| "first_last_frame"（首尾帧）
-  mode?: "fast" | "pro"; // 生成模式："fast"（默认）| "pro"
+  mode?: "fast" | "mini" | "pro"; // 生成模式："fast"（默认）| "mini" | "pro"
 
   images?: {
     url: string; // 图片参考图 URL（必填）
@@ -14,12 +14,12 @@ export interface Seedance20Request {
   videos?: {
     url: string; // 视频 URL（必填）
     role?: "reference_video"; // 固定为参考视频角色
-  }[]; // 视频输入列表（仅 pro），最多 3 段，总时长 <= 15s
+  }[]; // 视频输入列表（mini/pro），最多 3 段，总时长 <= 15s
 
   audios?: {
     url: string; // 音频 URL（必填）
     role?: "reference_audio"; // 固定为参考音频角色
-  }[]; // 音频输入列表（仅 pro），最多 3 段，总时长 <= 15s，不能单独输入,需要大沛图片和视频
+  }[]; // 音频输入列表（mini/pro），最多 3 段，总时长 <= 15s，不能单独输入，需要搭配图片或视频
 
   resolution?: "480p" | "720p"; // 分辨率："480P" | "720P"（默认 "720P"）
   ratio?: "16:9" | "4:3" | "1:1" | "3:4" | "9:16" | "21:9" | "adaptive"; // 宽高比（默认 "adaptive"）

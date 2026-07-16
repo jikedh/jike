@@ -74,6 +74,22 @@ export const VIDEO_MODEL_GENERATION_CAPABILITIES: Record<
       "first-last-frame": { references: firstLastFrame },
     },
   },
+  "seedance-2.0-mini": {
+    modes: {
+      "text-to-video": { references: emptyReferences },
+      "all-reference": {
+        references: {
+          image: { max: 9 },
+          video: { max: 3 },
+          audio: { max: 3 },
+          requireAnyReference: true,
+          audioRequiresVisualReference: true,
+        },
+      },
+      "image-to-video": { references: onlyImages(1, 9) },
+      "first-last-frame": { references: firstLastFrame },
+    },
+  },
   "seedance-2.0-pro": {
     modes: {
       "text-to-video": { references: emptyReferences },

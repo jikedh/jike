@@ -3,6 +3,7 @@ export const VIDEO_MODEL_POINTS: Record<string, number> = {
   "doubao-seedance-2.0-fast": 48, // 默认 720p 基础分
   "doubao-seedance-2.0-pro": 60, // 默认 720p 基础分
   "seedance-2.0-fast": 48, // 新版视频节点 Seedance 2.0 Fast
+  "seedance-2.0-mini": 30, // 新版视频节点 Seedance 2.0 Mini，按 Pro 半价计费
   "seedance-2.0-pro": 60, // 新版视频节点 Seedance 2.0 Pro
   "dreamina-seedance-2-0-260128": 72, // 海外 Seedance 2.0 Pro 默认 720p 基础分
   "wan2.7-r2v": 36, // 默认 720p 基础分
@@ -64,9 +65,13 @@ export const getVideoGenerationPoints = ({
     model?.startsWith("seedance-2.0")
   ) {
     const isFast = model.includes("-fast");
+    const isMini = model.includes("-mini");
     const res = resolution.toLowerCase();
 
-    if (isFast) {
+    if (isMini) {
+      // Seedance 2.0 Mini 为 Pro 半价：720p -> 30, 480p -> 15
+      basePointsPerSecond = res === "480p" ? 15 : 30;
+    } else if (isFast) {
       // Seedance 2.0 Fast: 720p -> 48, 480p -> 24
       basePointsPerSecond = res === "480p" ? 24 : 48;
     } else {

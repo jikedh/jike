@@ -169,10 +169,13 @@ const getHappyHorseResolution = (request: VideoGenerateRequest) =>
 
 const getSeedanceGenerationMode = (
   request: VideoGenerateRequest,
-): "fast" | "pro" => {
-  // 新节点现在与旧版一致：Seedance Fast/Pro 是两个模型，接口里的 mode 由模型 ID 固定。
+): "fast" | "mini" | "pro" => {
+  // Seedance 各档位作为独立模型展示，接口里的 mode 由模型 ID 固定。
   if (request.model === "seedance-2.0-fast") {
     return "fast";
+  }
+  if (request.model === "seedance-2.0-mini") {
+    return "mini";
   }
   if (request.model === "seedance-2.0-pro") {
     return "pro";
@@ -876,6 +879,7 @@ export const buildVideoApiRequest = (
     case "dreamina-seedance-2-0-260128":
       return buildOverseasSeedanceRequest(request);
     case "seedance-2.0-fast":
+    case "seedance-2.0-mini":
     case "seedance-2.0-pro":
       return buildSeedanceRequest(request);
     case "wanxiang":

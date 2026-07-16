@@ -143,17 +143,30 @@ function getSeedance20Model(data: Seedance20Request): string {
   const record = data as unknown as Record<string, unknown>;
   const model = String(record.model || "");
 
-  if (model === "seedance-2.0-fast" || model === "seedance-2.0-pro") {
+  if (
+    model === "seedance-2.0-fast" ||
+    model === "seedance-2.0-mini" ||
+    model === "seedance-2.0-pro"
+  ) {
     return model;
   }
   if (model === "doubao-seedance-2.0-fast") {
     return "seedance-2.0-fast";
   }
+  if (model === "doubao-seedance-2.0-mini") {
+    return "seedance-2.0-mini";
+  }
   if (model === "doubao-seedance-2.0-pro") {
     return "seedance-2.0-pro";
   }
 
-  return data.mode === "fast" ? "seedance-2.0-fast" : "seedance-2.0-pro";
+  if (data.mode === "fast") {
+    return "seedance-2.0-fast";
+  }
+  if (data.mode === "mini") {
+    return "seedance-2.0-mini";
+  }
+  return "seedance-2.0-pro";
 }
 
 function unwrapDesktopProxyData(response: any) {

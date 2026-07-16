@@ -118,6 +118,22 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
     ],
   },
   {
+    id: "seedance-2.0-mini",
+    label: "Seedance 2.0 Mini",
+    variants: [
+      {
+        id: "seedance-2.0-mini",
+        supportedModes: [
+          "text-to-video",
+          "all-reference",
+          "image-to-video",
+          "first-last-frame",
+        ],
+        defaultParams: { generationMode: "mini" },
+      },
+    ],
+  },
+  {
     id: "seedance-2.0-pro",
     label: "Seedance 2.0 Pro",
     variants: [

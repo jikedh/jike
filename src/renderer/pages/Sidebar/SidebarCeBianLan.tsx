@@ -97,12 +97,12 @@ export const SidebarCeBianLan = () => {
       label: "故事创作",
       path: "/story",
     },
-    // {
-    //   id: "video-to-script",
-    //   icon: <Video size={24} />,
-    //   label: "视频转剧本",
-    //   path: "/video-to-script",
-    // },
+    {
+      id: "video-to-script",
+      icon: <Video size={24} />,
+      label: "视频转剧本",
+      path: "/video-to-script",
+    },
     {
       id: "assets",
       icon: <Folder size={24} />,

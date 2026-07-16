@@ -57,6 +57,9 @@ type EpisodeM3u8Result = {
   pageUrl: string;
   m3u8Url: string;
   mp4Url?: string;
+  hongguoSourceUrl?: string;
+  hongguoDecryptKey?: string;
+  hongguoDefinition?: string;
   title: string;
   nextPageUrl: string;
   status: ProbeStatus;
@@ -1392,7 +1395,7 @@ export default function VideoToScriptPage() {
 
     const outputPath = await save({
       title: "保存 MP4",
-      defaultPath: getEpisodeFileName(item),
+      defaultPath: item.localMp4Path || getEpisodeFileName(item),
       filters: [{ name: "MP4 视频", extensions: ["mp4"] }],
     });
     if (!outputPath) return;
@@ -1469,35 +1472,59 @@ export default function VideoToScriptPage() {
     });
 
     try {
-      const videoResponse = await requestHongguoApi<{
-        code?: number;
-        msg?: string;
-        data?: { video_lists?: HongguoVideoListItem[] };
-      }>({
-        key: HONGGUO_API_KEY,
-        type: "video",
-        video_id: hongguoInfo.videoId,
+      let sourceUrl = item.hongguoSourceUrl;
+      let decryptKey = item.hongguoDecryptKey;
+      let definition = item.hongguoDefinition;
+
+      if (!sourceUrl || !decryptKey) {
+        updateResultItem(item, {
+          downloadStatus: "pending",
+          downloadMessage: "正在补取红果播放信息",
+        });
+        const videoResponse = await requestHongguoApi<{
+          code?: number;
+          msg?: string;
+          data?: { video_lists?: HongguoVideoListItem[] };
+        }>({
+          key: HONGGUO_API_KEY,
+          type: "video",
+          video_id: hongguoInfo.videoId,
+        });
+        if (videoResponse.code !== 200) {
+          throw new Error(videoResponse.msg || "获取分集播放链接失败");
+        }
+
+        const video = selectLowestQualityMp4(
+          videoResponse.data?.video_lists || [],
+        );
+        if (!video?.url || !video.decrypt_key) {
+          throw new Error("未找到可用 MP4 播放链接");
+        }
+        sourceUrl = video.url;
+        decryptKey = video.decrypt_key;
+        definition = video.definition;
+      }
+
+      updateResultItem(item, {
+        hongguoSourceUrl: sourceUrl,
+        hongguoDecryptKey: decryptKey,
+        hongguoDefinition: definition,
+        downloadStatus: "pending",
+        downloadMessage: "正在重新调用红果云解析接口",
       });
-      if (videoResponse.code !== 200) {
-        throw new Error(videoResponse.msg || "获取分集播放链接失败");
-      }
-
-      const video = selectLowestQualityMp4(
-        videoResponse.data?.video_lists || [],
-      );
-      if (!video?.url || !video.decrypt_key) {
-        throw new Error("未找到可用 MP4 播放链接");
-      }
-
       const mp4Url = await requestHongguoDecrypt(
-        video.url,
-        video.decrypt_key,
+        sourceUrl,
+        decryptKey,
       );
       const savedItem: EpisodeM3u8Result = {
         ...item,
         mp4Url,
+        hongguoSourceUrl: sourceUrl,
+        hongguoDecryptKey: decryptKey,
+        hongguoDefinition: definition,
+        remoteVideoUrl: undefined,
         downloadStatus: "pending",
-        downloadMessage: `正在下载最低画质 ${video.definition || ""}`.trim(),
+        downloadMessage: `正在下载重新解析的最低画质 ${definition || ""}`.trim(),
       };
       updateResultItem(item, savedItem);
 
@@ -2806,6 +2833,13 @@ export default function VideoToScriptPage() {
               throw new Error("未找到可用 MP4 播放链接");
             }
 
+            patchRow(episode, {
+              hongguoSourceUrl: video.url,
+              hongguoDecryptKey: video.decrypt_key,
+              hongguoDefinition: video.definition,
+              downloadStatus: "pending",
+              downloadMessage: "正在调用红果云解析接口",
+            });
             const mp4Url = await requestHongguoDecrypt(
               video.url,
               video.decrypt_key,
@@ -2821,6 +2855,9 @@ export default function VideoToScriptPage() {
               pageUrl: `hongguo:${item.id}:${episode.video_id}`,
               m3u8Url: "",
               mp4Url,
+              hongguoSourceUrl: video.url,
+              hongguoDecryptKey: video.decrypt_key,
+              hongguoDefinition: video.definition,
               title: dramaTitle,
               nextPageUrl: "",
               status: "success",
@@ -3490,8 +3527,7 @@ export default function VideoToScriptPage() {
                             <Download size={13} />
                             {item.localMp4Path ? "重新保存" : "保存 MP4"}
                           </Button>
-                          {parseHongguoPageUrl(item.pageUrl) &&
-                          item.downloadStatus === "error" ? (
+                          {parseHongguoPageUrl(item.pageUrl) ? (
                             <Button
                               size="sm"
                               variant="default"
