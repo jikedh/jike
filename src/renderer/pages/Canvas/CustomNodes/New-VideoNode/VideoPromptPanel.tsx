@@ -1054,12 +1054,8 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   );
 
   const {
-    isUploading,
-    fileInputRef,
     handleDisconnectNode,
     handleRemoveReferenceImage,
-    handleUploadClick,
-    handleFileChange,
   } = useVideoReferenceActions({
     nodeId,
     currentImageUrls: currentData?.image_urls ?? [],
@@ -1714,10 +1710,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
           </div>
 
           <VideoReferenceAssetsBar
-            isUploading={isUploading}
-            fileInputRef={fileInputRef}
-            onUploadClick={handleUploadClick}
-            onFileChange={handleFileChange}
             referenceImageUrls={localReferenceImageUrls}
             referenceImageIndexes={localReferenceImageIndexes}
             parentImageNodes={parentImageNodes}
@@ -1861,22 +1853,18 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
           isGenerating={isGenerating}
           canStop={isFakeRequestPending}
           disabled={
-            isUploading ||
             !generationAvailability.canGenerate ||
             (selectedModel === "agnes-video-v2.0" && agnesParamHasError)
           }
           disabledReason={
-            isUploading
-              ? "素材正在上传中，请稍后再生成"
-              : selectedModel === "agnes-video-v2.0" && agnesParamHasError
-                ? "Agnes 参数不合法，请修正后再提交"
-                : generationAvailability.summaryReason
+            selectedModel === "agnes-video-v2.0" && agnesParamHasError
+              ? "Agnes 参数不合法，请修正后再提交"
+              : generationAvailability.summaryReason
           }
           accessory={
             <>
               <PresetDropdown
                 presetType="video"
-                disabled={isUploading}
                 onSelect={(content) => {
                   editorRef.current?.insertContent(content);
                 }}

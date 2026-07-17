@@ -1,31 +1,27 @@
-import { IconUpload, IconX } from "@tabler/icons-react";
-import type { ChangeEvent, ReactNode, RefObject } from "react";
+import { IconX } from "@tabler/icons-react";
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { cn, getVideoThumbnail } from "shared/utils/utils";
-import { Button } from "@/components/ui/button";
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
 
 const VideoThumbnailButton = ({
   videoUrl,
-  label,
 }: {
   videoUrl: string;
-  label?: string;
 }) => {
   const [thumbnail, setThumbnail] = useState<string | null>(null);
-  const displayLabel = label?.trim() || "视频";
 
   useEffect(() => {
     getVideoThumbnail(videoUrl)
       .then(setThumbnail)
-      .catch(() => {});
+      .catch(() => { });
   }, [videoUrl]);
 
   if (thumbnail) {
     return (
       <img
         src={thumbnail}
-        alt={displayLabel}
+        alt="视频参考"
         className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
         loading="lazy"
       />
@@ -33,7 +29,7 @@ const VideoThumbnailButton = ({
   }
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] text-[#B43FEB]">
+    <div className="flex h-full w-full items-center justify-center text-[#B43FEB]">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="16"
@@ -48,9 +44,6 @@ const VideoThumbnailButton = ({
         <polygon points="23 7 16 12 23 17 23 7" />
         <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
       </svg>
-      <span className="max-w-full truncate px-1" title={displayLabel}>
-        {displayLabel}
-      </span>
     </div>
   );
 };
@@ -96,10 +89,6 @@ const ReferenceItemWrapper = ({
 };
 
 export const VideoReferenceAssetsBar = ({
-  isUploading,
-  fileInputRef,
-  onUploadClick,
-  onFileChange,
   referenceImageUrls,
   referenceImageIndexes,
   parentImageNodes,
@@ -110,10 +99,6 @@ export const VideoReferenceAssetsBar = ({
   onRemoveReferenceImage,
   onReferenceHoverChange,
 }: {
-  isUploading: boolean;
-  fileInputRef: RefObject<HTMLInputElement | null>;
-  onUploadClick: () => void;
-  onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   referenceImageUrls: string[];
   referenceImageIndexes?: number[];
   parentImageNodes: {
@@ -130,28 +115,7 @@ export const VideoReferenceAssetsBar = ({
   onReferenceHoverChange: (sourceNodeId: string, isHovering: boolean) => void;
 }) => {
   return (
-    <div className="nodrag nopan nowheel no-scrollbar flex h-[60px] items-center gap-2 overflow-x-auto overflow-y-hidden">
-      <Button
-        unstyled
-        className={cn(PROMPT_PANEL_STYLES.uploadButton, "shrink-0")}
-        onClick={onUploadClick}
-        title={isUploading ? "上传中..." : "上传参考图"}
-        disabled={isUploading}
-      >
-        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px]">
-          <IconUpload size={16} />
-          {isUploading ? "上传中" : "上传"}
-        </div>
-      </Button>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={onFileChange}
-      />
-
+    <div className="nodrag nopan nowheel no-scrollbar flex h-15 items-center gap-2 overflow-x-auto overflow-y-hidden">
       {referenceContent ? (
         referenceContent
       ) : (
@@ -194,8 +158,6 @@ export const VideoReferenceAssetsBar = ({
           ))}
 
           {parentAudioNodes.map((item, index) => {
-            const displayLabel = item.label?.trim() || "音频";
-
             return (
               <ReferenceItemWrapper
                 key={`audio-${item.id}-${index}`}
@@ -204,7 +166,7 @@ export const VideoReferenceAssetsBar = ({
                 onMouseEnter={() => onReferenceHoverChange(item.id, true)}
                 onMouseLeave={() => onReferenceHoverChange(item.id, false)}
               >
-                <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px] text-[#B43FEB]">
+                <div className="flex h-full w-full items-center justify-center text-[#B43FEB]">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="16"
@@ -220,12 +182,6 @@ export const VideoReferenceAssetsBar = ({
                     <circle cx="6" cy="18" r="3" />
                     <circle cx="18" cy="16" r="3" />
                   </svg>
-                  <span
-                    className="max-w-full truncate px-1"
-                    title={displayLabel}
-                  >
-                    {displayLabel}
-                  </span>
                 </div>
               </ReferenceItemWrapper>
             );
@@ -239,7 +195,7 @@ export const VideoReferenceAssetsBar = ({
               onMouseEnter={() => onReferenceHoverChange(item.id, true)}
               onMouseLeave={() => onReferenceHoverChange(item.id, false)}
             >
-              <VideoThumbnailButton videoUrl={item.url} label={item.label} />
+              <VideoThumbnailButton videoUrl={item.url} />
             </ReferenceItemWrapper>
           ))}
         </>
