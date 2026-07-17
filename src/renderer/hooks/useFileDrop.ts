@@ -163,7 +163,7 @@ export function useFileDrop(
                 }
 
                 if (oversizeCount > 0) {
-                    toast.warning(`已跳过 ${oversizeCount} 个超过 500MB 的文件`);
+                    toast.warning(`已跳过 ${oversizeCount} 个超过 2GB 的文件`);
                 }
                 if (unsupported.length > 0) {
                     toast.warning(
