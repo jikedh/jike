@@ -5,7 +5,8 @@ import {
   IconRefresh,
 } from "@tabler/icons-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { copyMediaUrlToOss, generateThumbnailWithFormat } from "service/oss";
+import { refreshImageToOss } from "@/stores/canvasFlowStore";
+import { generateThumbnailWithFormat } from "service/oss";
 import { getMediaSequence } from "shared/utils/mediaSequence";
 import { cn, downloadImageFromUrl } from "shared/utils/utils";
 import { toast } from "sonner";
@@ -274,47 +275,18 @@ export const CollapsibleImageGallery = memo(
       return refreshingIndexesRef.current.has(index);
     }, []);
 
-    // 刷新图片：重新上传到 OSS
+    // 刷新图片：统一入口，等价于模拟点击左上角刷新按钮
     const handleRefreshImage = useCallback(
       async (e: React.MouseEvent, index: number) => {
         e.stopPropagation();
+        if (!nodeId || !updateImageNodeData) return;
 
-        if (!nodeId || !updateImageNodeData || !images[index]?.url) {
-          return;
-        }
-
-        const item = images[index];
-
-        // 使用 ref 追踪刷新状态，避免频繁 setState
         refreshingIndexesRef.current.add(index);
         forceRefreshUpdate((n) => n + 1);
 
         try {
-          const ossUrl = await copyMediaUrlToOss(item.url);
-          if (!ossUrl) {
-            throw new Error("上传到 OSS 失败");
-          }
-
-          // 更新节点数据
-          const newImages = [...images];
-          newImages[index] = {
-            ...newImages[index],
-            url: ossUrl,
-            remoteUrl: ossUrl,
-          };
-
-          updateImageNodeData(nodeId, {
-            result: {
-              type: "image",
-              data: newImages,
-            },
-          });
-
-          // 移除加载失败标记
+          await refreshImageToOss(nodeId, images, index, updateImageNodeData);
           brokenIndexesRef.current.delete(index);
-        } catch (error) {
-          console.error("[刷新图片] 刷新失败:", error);
-          toast.error("刷新图片失败，请稍后再试");
         } finally {
           refreshingIndexesRef.current.delete(index);
           forceRefreshUpdate((n) => n + 1);
