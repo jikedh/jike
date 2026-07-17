@@ -69,7 +69,11 @@ import {
 } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
-import { edgeTypes, nodeTypes } from "../constants/canvasConfig";
+import {
+  edgeTypes,
+  getCanvasNodeColor,
+  nodeTypes,
+} from "../constants/canvasConfig";
 import { CanvasBatchToolbar } from "./CanvasBatchToolbar";
 import { CanvasContextMenu, type CanvasNodeType } from "./CanvasContextMenu";
 import { DIRECTOR_DESK_OPEN_EVENT } from "../CustomNodes/DirectorDeskNode";
@@ -5089,7 +5093,7 @@ export const CanvasFlow = ({
                 position="bottom-left"
                 style={miniMapStyle}
                 nodeStrokeWidth={0}
-                nodeColor="#B43FEB"
+                nodeColor={getCanvasNodeColor}
                 maskColor="rgba(0,0,0,0.5)"
               />
             ) : null}
