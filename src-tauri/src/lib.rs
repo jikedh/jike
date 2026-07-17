@@ -101,6 +101,8 @@ pub fn run() {
             commands::video_fetch_hongguo_api,
             commands::video_fetch_hongguo_play,
             commands::video_decrypt_hongguo_video,
+            commands::get_local_file_info,
+            commands::upload_local_file_to_signed_url,
             commands::copy_video_url_to_oss,
             commands::copy_media_url_to_oss,
         ])

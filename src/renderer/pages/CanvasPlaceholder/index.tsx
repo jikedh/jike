@@ -770,7 +770,7 @@ export default function CanvasPlaceholderPage() {
                 <span className="font-medium text-white">
                   「{projectToDelete?.name}」
                 </span>{" "}
-                吗？删除后无法恢复。
+                吗？删除后可联系管理员帮你恢复 🐶
               </p>
             </div>
 
