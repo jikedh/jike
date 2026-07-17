@@ -1,5 +1,6 @@
 import { getAgentPresetById } from "shared/constants/agent-presets";
 import { GenerationStatus } from "shared/constants/enum";
+import { MINIMAX_SPEECH_28_HD_MODEL } from "shared/constants/audio-models";
 import type { AllNodeType } from "shared/types/flow";
 import type {
   AddNodeOptions,
@@ -167,7 +168,7 @@ export const createAudioNode = (
   width: 350,
   height: 250,
   data: {
-    model: "audio-upload",
+    model: MINIMAX_SPEECH_28_HD_MODEL,
     prompt: "",
     promptDraft: "",
     promptDraftHtml: "<p></p>",

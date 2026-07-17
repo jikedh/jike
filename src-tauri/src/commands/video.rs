@@ -1,7 +1,7 @@
 use crate::domain;
 use crate::models::{
-    FetchShot4uPlaylistRequest, FetchVideoPageRequest, HongguoApiRequest,
-    HongguoDecryptRequest, M3u8ToMp4Request, Mp4DownloadRequest, SplitMp4Request, VideoTrimRequest,
+    FetchShot4uPlaylistRequest, FetchVideoPageRequest, HongguoApiRequest, HongguoDecryptRequest,
+    HongguoPlayRequest, M3u8ToMp4Request, Mp4DownloadRequest, SplitMp4Request, VideoTrimRequest,
 };
 use std::path::PathBuf;
 use tauri::Manager;
@@ -74,6 +74,16 @@ pub async fn video_fetch_hongguo_api(
     request: HongguoApiRequest,
 ) -> Result<serde_json::Value, String> {
     match domain::fetch_hongguo_api(request).await {
+        Ok(r) => Ok(serde_json::json!({ "success": true, "data": r })),
+        Err(e) => Ok(serde_json::json!({ "success": false, "error": e.to_string() })),
+    }
+}
+
+#[tauri::command]
+pub async fn video_fetch_hongguo_play(
+    request: HongguoPlayRequest,
+) -> Result<serde_json::Value, String> {
+    match domain::fetch_hongguo_play(request).await {
         Ok(r) => Ok(serde_json::json!({ "success": true, "data": r })),
         Err(e) => Ok(serde_json::json!({ "success": false, "error": e.to_string() })),
     }

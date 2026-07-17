@@ -25,8 +25,13 @@ pub async fn debug_get_app_version() -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn debug_capture_page(_app: tauri::AppHandle, _rect: Option<serde_json::Value>) -> Result<serde_json::Value, String> {
+pub async fn debug_capture_page(
+    _app: tauri::AppHandle,
+    _rect: Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
     // 截图能力在 Tauri 2 中需要 webview screenshot 插件（tauri-plugin-screenshot 第三方）
     // 此处先返回不支持错误，调用方会走前端 html2canvas 兜底
-    Ok(serde_json::json!({ "success": false, "error": "screenshot not supported in Tauri skeleton" }))
+    Ok(
+        serde_json::json!({ "success": false, "error": "screenshot not supported in Tauri skeleton" }),
+    )
 }

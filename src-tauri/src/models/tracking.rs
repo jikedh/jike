@@ -16,13 +16,25 @@ pub struct AIVideoTrackData {
     pub prompt: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub duration: Option<f64>,
-    #[serde(rename = "referenceImageUrl", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "referenceImageUrl",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub reference_image_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub provider: Option<String>,
-    #[serde(rename = "requestParams", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "requestParams",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub request_params: Option<serde_json::Value>,
-    #[serde(rename = "generatedVideoUrl", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "generatedVideoUrl",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub generated_video_url: Option<String>,
     pub status: String, // SUCCESS | FAIL | PENDING
     pub timestamp: i64,

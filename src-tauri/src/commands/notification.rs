@@ -1,7 +1,12 @@
 use tauri::Manager;
 
 #[tauri::command]
-pub async fn notification_show(app: tauri::AppHandle, title: Option<String>, body: Option<String>, when_window_focused: Option<bool>) -> Result<serde_json::Value, String> {
+pub async fn notification_show(
+    app: tauri::AppHandle,
+    title: Option<String>,
+    body: Option<String>,
+    when_window_focused: Option<bool>,
+) -> Result<serde_json::Value, String> {
     use tauri_plugin_notification::NotificationExt;
     let title = title.unwrap_or_else(|| "即刻".to_string());
     let body = body.unwrap_or_else(|| "任务已完成".to_string());

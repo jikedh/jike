@@ -57,9 +57,6 @@ type EpisodeM3u8Result = {
   pageUrl: string;
   m3u8Url: string;
   mp4Url?: string;
-  hongguoSourceUrl?: string;
-  hongguoDecryptKey?: string;
-  hongguoDefinition?: string;
   title: string;
   nextPageUrl: string;
   status: ProbeStatus;
@@ -176,11 +173,14 @@ type HongguoEpisodeItem = {
 };
 
 type HongguoVideoListItem = {
-  decrypt_key?: string;
   definition?: string;
-  height?: number;
-  type?: string;
-  url?: string;
+  vwidth?: number;
+  vheight?: number;
+  size?: string;
+  codec_type?: string;
+  url_expire?: string;
+  video_duration?: string;
+  main_url?: string;
 };
 
 type ModeDraft = {
@@ -584,31 +584,27 @@ const requestHongguoApi = async <T,>(
   return response.data;
 };
 
-const requestHongguoDecrypt = async (
-  url: string,
-  decryptKey: string,
-) => {
-  const response = await invoke<CommandResponse<{ data?: { url?: string } }>>(
-    "video_decrypt_hongguo_video",
+const requestHongguoPlay = async (videoId: string) => {
+  const response = await invoke<
+    CommandResponse<{
+      code?: number;
+      msg?: string;
+      data?: { lists?: HongguoVideoListItem[] };
+    }>
+  >(
+    "video_fetch_hongguo_play",
     {
       request: {
         key: HONGGUO_API_KEY,
-        url: window.btoa(url),
-        decrypt_key: decryptKey,
+        video_id: videoId,
       },
     },
   );
 
   if (!response.success || !response.data) {
-    throw new Error(response.error || "红果云解析失败");
+    throw new Error(response.error || "红果播放地址请求失败");
   }
-
-  const mp4Url = response.data.data?.url;
-  if (!mp4Url) {
-    throw new Error("红果云解析未返回 MP4 地址");
-  }
-
-  return mp4Url;
+  return response.data;
 };
 
 const downloadMp4Url = async (
@@ -642,10 +638,14 @@ const definitionRank = (definition: string | undefined) => {
 
 const selectLowestQualityMp4 = (items: HongguoVideoListItem[]) => {
   const candidates = items
-    .filter((item) => item.type === "mp4" && item.url && item.decrypt_key)
+    .filter((item) => item.main_url)
     .sort((a, b) => {
-      const aHeight = Number.isFinite(a.height) ? Number(a.height) : definitionRank(a.definition);
-      const bHeight = Number.isFinite(b.height) ? Number(b.height) : definitionRank(b.definition);
+      const aHeight = Number.isFinite(a.vheight)
+        ? Number(a.vheight)
+        : definitionRank(a.definition);
+      const bHeight = Number.isFinite(b.vheight)
+        ? Number(b.vheight)
+        : definitionRank(b.definition);
       return aHeight - bHeight;
     });
 
@@ -1468,63 +1468,28 @@ export default function VideoToScriptPage() {
     setDownloadingMap((current) => ({ ...current, [itemKey]: true }));
     updateResultItem(item, {
       downloadStatus: "pending",
-      downloadMessage: "正在重新解析最低画质 MP4",
+      downloadMessage: "正在重新获取红果可播放链接",
     });
 
     try {
-      let sourceUrl = item.hongguoSourceUrl;
-      let decryptKey = item.hongguoDecryptKey;
-      let definition = item.hongguoDefinition;
-
-      if (!sourceUrl || !decryptKey) {
-        updateResultItem(item, {
-          downloadStatus: "pending",
-          downloadMessage: "正在补取红果播放信息",
-        });
-        const videoResponse = await requestHongguoApi<{
-          code?: number;
-          msg?: string;
-          data?: { video_lists?: HongguoVideoListItem[] };
-        }>({
-          key: HONGGUO_API_KEY,
-          type: "video",
-          video_id: hongguoInfo.videoId,
-        });
-        if (videoResponse.code !== 200) {
-          throw new Error(videoResponse.msg || "获取分集播放链接失败");
-        }
-
-        const video = selectLowestQualityMp4(
-          videoResponse.data?.video_lists || [],
-        );
-        if (!video?.url || !video.decrypt_key) {
-          throw new Error("未找到可用 MP4 播放链接");
-        }
-        sourceUrl = video.url;
-        decryptKey = video.decrypt_key;
-        definition = video.definition;
+      const playResponse = await requestHongguoPlay(hongguoInfo.videoId);
+      if (playResponse.code !== 200) {
+        throw new Error(playResponse.msg || "获取红果可播放链接失败");
       }
 
-      updateResultItem(item, {
-        hongguoSourceUrl: sourceUrl,
-        hongguoDecryptKey: decryptKey,
-        hongguoDefinition: definition,
-        downloadStatus: "pending",
-        downloadMessage: "正在重新调用红果云解析接口",
-      });
-      const mp4Url = await requestHongguoDecrypt(
-        sourceUrl,
-        decryptKey,
+      const video = selectLowestQualityMp4(
+        playResponse.data?.lists || [],
       );
+      if (!video?.main_url) {
+        throw new Error("红果播放接口未返回可用 MP4 地址");
+      }
+      const mp4Url = video.main_url;
       const savedItem: EpisodeM3u8Result = {
         ...item,
         mp4Url,
-        hongguoSourceUrl: sourceUrl,
-        hongguoDecryptKey: decryptKey,
-        hongguoDefinition: definition,
         remoteVideoUrl: undefined,
         downloadStatus: "pending",
-        downloadMessage: `正在下载重新解析的最低画质 ${definition || ""}`.trim(),
+        downloadMessage: `正在下载最新最低画质 ${video.definition || ""}`.trim(),
       };
       updateResultItem(item, savedItem);
 
@@ -2809,41 +2774,22 @@ export default function VideoToScriptPage() {
           syncDownloadProgress();
           patchRow(episode, {
             downloadStatus: "pending",
-            downloadMessage: "正在解析最低画质 MP4",
+            downloadMessage: "正在获取红果可播放链接",
           });
 
           try {
-            const videoResponse = await requestHongguoApi<{
-              code?: number;
-              msg?: string;
-              data?: { video_lists?: HongguoVideoListItem[] };
-            }>({
-              key: HONGGUO_API_KEY,
-              type: "video",
-              video_id: episode.video_id,
-            });
-            if (videoResponse.code !== 200) {
-              throw new Error(videoResponse.msg || "获取分集播放链接失败");
+            const playResponse = await requestHongguoPlay(episode.video_id);
+            if (playResponse.code !== 200) {
+              throw new Error(playResponse.msg || "获取红果可播放链接失败");
             }
 
             const video = selectLowestQualityMp4(
-              videoResponse.data?.video_lists || [],
+              playResponse.data?.lists || [],
             );
-            if (!video?.url || !video.decrypt_key) {
-              throw new Error("未找到可用 MP4 播放链接");
+            if (!video?.main_url) {
+              throw new Error("红果播放接口未返回可用 MP4 地址");
             }
-
-            patchRow(episode, {
-              hongguoSourceUrl: video.url,
-              hongguoDecryptKey: video.decrypt_key,
-              hongguoDefinition: video.definition,
-              downloadStatus: "pending",
-              downloadMessage: "正在调用红果云解析接口",
-            });
-            const mp4Url = await requestHongguoDecrypt(
-              video.url,
-              video.decrypt_key,
-            );
+            const mp4Url = video.main_url;
             patchRow(episode, {
               mp4Url,
               downloadStatus: "pending",
@@ -2855,9 +2801,6 @@ export default function VideoToScriptPage() {
               pageUrl: `hongguo:${item.id}:${episode.video_id}`,
               m3u8Url: "",
               mp4Url,
-              hongguoSourceUrl: video.url,
-              hongguoDecryptKey: video.decrypt_key,
-              hongguoDefinition: video.definition,
               title: dramaTitle,
               nextPageUrl: "",
               status: "success",

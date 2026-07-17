@@ -20,7 +20,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
 import type { AudioNodeType } from "shared/types/flow";
-import { cn } from "shared/utils/utils";
+import { cn, downloadImageFromUrl } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
 import useMessage from "@/hooks/useMessage";
 import { useNodeScale } from "@/hooks/useNodeScale";
@@ -29,6 +29,7 @@ import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { GenerationErrorTooltip } from "../shared/GenerationErrorTooltip";
 import { NodeNameBadge } from "../shared/NodeNameBadge";
+import { AudioPromptPanel } from "./AudioPromptPanel";
 
 const formatTime = (time: number) => {
   const minutes = Math.floor(time / 60);
@@ -579,6 +580,7 @@ const AudioToolbar = memo(
     canConfirmTrim: boolean;
   }) => {
     const [isUploading, setIsUploading] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const updateAudioNodeData = useCanvasFlowStore(
       (state) => state.updateAudioNodeData,
@@ -645,13 +647,32 @@ const AudioToolbar = memo(
       [nodeId, updateAudioNodeData, success, warning, error],
     );
 
-    const handleDownload = useCallback(() => {
-      if (!audioUrl) return;
-      const link = document.createElement("a");
-      link.href = audioUrl;
-      link.download = `audio_${nodeId}.mp3`;
-      link.click();
-    }, [audioUrl, nodeId]);
+    const handleDownload = useCallback(async () => {
+      if (!audioUrl || isDownloading) return;
+
+      const format = data.result?.data?.[0]?.format;
+      const extension =
+        typeof format === "string" && /^(mp3|wav|ogg|aac)$/i.test(format)
+          ? format.toLowerCase()
+          : "mp3";
+
+      setIsDownloading(true);
+      try {
+        await downloadImageFromUrl(
+          audioUrl,
+          `audio_${nodeId}.${extension}`,
+        );
+        success("下载成功");
+      } catch (downloadError) {
+        const message =
+          downloadError instanceof Error ? downloadError.message : "下载失败";
+        if (message !== "取消下载") {
+          error(message);
+        }
+      } finally {
+        setIsDownloading(false);
+      }
+    }, [audioUrl, data.result, error, isDownloading, nodeId, success]);
 
     return (
       <>
@@ -715,17 +736,17 @@ const AudioToolbar = memo(
                 <span>裁剪</span>
               </button>
               <button
-                onClick={handleDownload}
-                disabled={!hasAudio}
+                onClick={() => void handleDownload()}
+                disabled={!hasAudio || isDownloading}
                 className={cn(
                   "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all",
-                  !hasAudio
+                  !hasAudio || isDownloading
                     ? "cursor-not-allowed text-white/30"
                     : "text-white/70 hover:bg-white/10 hover:text-white",
                 )}
               >
                 <IconDownload size={14} />
-                <span>下载</span>
+                <span>{isDownloading ? "下载中" : "下载"}</span>
               </button>
               <button
                 onClick={onDelete}
@@ -1063,6 +1084,9 @@ export const AudioNode = memo(
               />
             </div>
           </div>
+          {selected && !isDragging && !isTrimming ? (
+            <AudioPromptPanel nodeId={id} />
+          ) : null}
         </div>
       </NodeContextMenu>
     );

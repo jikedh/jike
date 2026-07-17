@@ -104,7 +104,9 @@ pub async fn copy_media_url_to_oss(
         .map_err(|e| OssCopyError::Upload(e.to_string()))?;
 
     if !status.is_success() {
-        return Err(OssCopyError::Upload(format!("http status {status}: {body}")));
+        return Err(OssCopyError::Upload(format!(
+            "http status {status}: {body}"
+        )));
     }
 
     let envelope: UploadEnvelope = serde_json::from_str(&body)
@@ -112,7 +114,9 @@ pub async fn copy_media_url_to_oss(
     if let Some(code) = envelope.code {
         if code >= 400 {
             return Err(OssCopyError::Upload(
-                envelope.msg.unwrap_or_else(|| format!("server code {code}")),
+                envelope
+                    .msg
+                    .unwrap_or_else(|| format!("server code {code}")),
             ));
         }
     }

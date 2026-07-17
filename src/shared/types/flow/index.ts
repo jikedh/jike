@@ -253,6 +253,7 @@ export interface DirectorDeskNodeData {
 export interface AudioGenerationNode {
   // ---- 核心输入参数 ----
   model: string; // 使用的模型
+  voiceProfileId?: string; // 内部音色档案 ID，由后端解析外部 voice_id
   prompt?: string; // 生成提示词
   promptDraft?: string; // 输入面板草稿文本
   promptDraftHtml?: string; // 输入面板草稿富文本
@@ -262,6 +263,7 @@ export interface AudioGenerationNode {
   status?: GenerationStatus; // 当前生成状态
   progress?: number; // 进度百分比（0-100）
   isUpload?: boolean; // 是否为上传音频
+  requiredPoints?: number; // 最近一次生成的积分估算
 
   // ---- 输出结果 ----
   task_id?: string; // 任务 ID（用于轮询）

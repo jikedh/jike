@@ -68,14 +68,18 @@ fn write_json<T: serde::Serialize>(path: &Path, data: &T) -> Result<(), StorageE
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let raw = serde_json::to_string_pretty(data).map_err(|e| StorageError::InvalidPath(e.to_string()))?;
+    let raw =
+        serde_json::to_string_pretty(data).map_err(|e| StorageError::InvalidPath(e.to_string()))?;
     std::fs::write(path, raw)?;
     Ok(())
 }
 
 fn read_index(base: &Path) -> ProjectIndex {
     let p = base.join(INDEX_FILE);
-    read_json(&p).unwrap_or(ProjectIndex { version: 1, projects: Default::default() })
+    read_json(&p).unwrap_or(ProjectIndex {
+        version: 1,
+        projects: Default::default(),
+    })
 }
 
 fn write_index(base: &Path, idx: &ProjectIndex) -> Result<(), StorageError> {
@@ -97,7 +101,10 @@ fn ensure_project(base: &Path, project: &str) -> Result<ProjectMeta, StorageErro
     let mut idx = read_index(base);
     let now = now_ms();
     let meta = match idx.projects.get(project) {
-        Some(m) => ProjectMeta { updated_at: now, ..m.clone() },
+        Some(m) => ProjectMeta {
+            updated_at: now,
+            ..m.clone()
+        },
         None => ProjectMeta {
             name: project.to_string(),
             created_at: now,
@@ -130,7 +137,10 @@ fn path_to_buf(p: &str) -> PathBuf {
     PathBuf::from(p)
 }
 
-pub fn ensure_project_handler(base: &str, project: &str) -> Result<StorageResult<serde_json::Value>, StorageError> {
+pub fn ensure_project_handler(
+    base: &str,
+    project: &str,
+) -> Result<StorageResult<serde_json::Value>, StorageError> {
     if base.is_empty() || project.is_empty() {
         return Ok(StorageResult::err("Missing basePath or projectName"));
     }
@@ -146,7 +156,11 @@ pub fn ensure_project_handler(base: &str, project: &str) -> Result<StorageResult
 
 pub fn list_projects_handler(base: &str) -> Result<StorageResult<serde_json::Value>, StorageError> {
     if base.is_empty() || !path_to_buf(base).exists() {
-        return Ok(StorageResult { success: true, error: None, data: serde_json::json!({ "projects": [] }) });
+        return Ok(StorageResult {
+            success: true,
+            error: None,
+            data: serde_json::json!({ "projects": [] }),
+        });
     }
     let base_path = path_to_buf(base);
     let mut idx = read_index(&base_path);
@@ -164,12 +178,16 @@ pub fn list_projects_handler(base: &str) -> Result<StorageResult<serde_json::Val
 
     if let Ok(entries) = std::fs::read_dir(&base_path) {
         for e in entries.flatten() {
-            if !e.file_type().map(|t| t.is_dir()).unwrap_or(false) { continue; }
+            if !e.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue;
+            }
             let name = e.file_name().to_string_lossy().to_string();
             let dir = e.path();
             let meta_path = dir.join(PROJECT_META_FILE);
             let canvas_path = dir.join(CANVAS_FILE);
-            if !meta_path.exists() && !canvas_path.exists() { continue; }
+            if !meta_path.exists() && !canvas_path.exists() {
+                continue;
+            }
             let meta_disk = read_json::<ProjectMeta>(&meta_path);
             let canvas = read_json::<Value>(&canvas_path);
 
@@ -177,24 +195,56 @@ pub fn list_projects_handler(base: &str) -> Result<StorageResult<serde_json::Val
                 let p = ProjectMeta {
                     name: name.clone(),
                     created_at: meta_disk.as_ref().map(|m| m.created_at).unwrap_or_else(|| {
-                        canvas.as_ref().and_then(|c| c.get("savedAt").and_then(|v| v.as_u64())).unwrap_or_else(now_ms)
+                        canvas
+                            .as_ref()
+                            .and_then(|c| c.get("savedAt").and_then(|v| v.as_u64()))
+                            .unwrap_or_else(now_ms)
                     }),
                     updated_at: meta_disk.as_ref().map(|m| m.updated_at).unwrap_or_else(|| {
-                        canvas.as_ref().and_then(|c| c.get("savedAt").and_then(|v| v.as_u64())).unwrap_or_else(now_ms)
+                        canvas
+                            .as_ref()
+                            .and_then(|c| c.get("savedAt").and_then(|v| v.as_u64()))
+                            .unwrap_or_else(now_ms)
                     }),
-                    cover_url: meta_disk.as_ref().and_then(|m| m.cover_url.clone())
-                        .or_else(|| canvas.as_ref().and_then(|c| c.get("coverUrl").and_then(|v| v.as_str()).map(String::from))),
-                    cover_local_path: meta_disk.as_ref().and_then(|m| m.cover_local_path.clone())
-                        .or_else(|| canvas.as_ref().and_then(|c| c.get("coverLocalPath").and_then(|v| v.as_str()).map(String::from))),
+                    cover_url: meta_disk
+                        .as_ref()
+                        .and_then(|m| m.cover_url.clone())
+                        .or_else(|| {
+                            canvas.as_ref().and_then(|c| {
+                                c.get("coverUrl").and_then(|v| v.as_str()).map(String::from)
+                            })
+                        }),
+                    cover_local_path: meta_disk
+                        .as_ref()
+                        .and_then(|m| m.cover_local_path.clone())
+                        .or_else(|| {
+                            canvas.as_ref().and_then(|c| {
+                                c.get("coverLocalPath")
+                                    .and_then(|v| v.as_str())
+                                    .map(String::from)
+                            })
+                        }),
                 };
                 disk_only.push(p.clone());
                 idx.projects.insert(name.clone(), p);
                 changed = true;
             } else if let Some(existing) = idx.projects.get_mut(&name) {
-                let cu = canvas.as_ref().and_then(|c| c.get("coverUrl").and_then(|v| v.as_str()).map(String::from));
-                let cl = canvas.as_ref().and_then(|c| c.get("coverLocalPath").and_then(|v| v.as_str()).map(String::from));
-                if existing.cover_url.is_none() && cu.is_some() { existing.cover_url = cu; changed = true; }
-                if existing.cover_local_path.is_none() && cl.is_some() { existing.cover_local_path = cl; changed = true; }
+                let cu = canvas
+                    .as_ref()
+                    .and_then(|c| c.get("coverUrl").and_then(|v| v.as_str()).map(String::from));
+                let cl = canvas.as_ref().and_then(|c| {
+                    c.get("coverLocalPath")
+                        .and_then(|v| v.as_str())
+                        .map(String::from)
+                });
+                if existing.cover_url.is_none() && cu.is_some() {
+                    existing.cover_url = cu;
+                    changed = true;
+                }
+                if existing.cover_local_path.is_none() && cl.is_some() {
+                    existing.cover_local_path = cl;
+                    changed = true;
+                }
             }
         }
     }
@@ -229,20 +279,34 @@ pub fn save_canvas_handler(
     let meta_path = base_path.join(project).join(PROJECT_META_FILE);
     write_json(&canvas_path, &data)?;
 
-    let cover_url = data.get("coverUrl").and_then(|v| v.as_str()).map(String::from);
-    let cover_local = data.get("coverLocalPath").and_then(|v| v.as_str()).map(String::from);
+    let cover_url = data
+        .get("coverUrl")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let cover_local = data
+        .get("coverLocalPath")
+        .and_then(|v| v.as_str())
+        .map(String::from);
 
     let _ = touch_updated_at(&base_path, project);
     let mut idx = read_index(&base_path);
     if let Some(m) = idx.projects.get_mut(project) {
-        if cover_url.is_some() { m.cover_url = cover_url.clone(); }
-        if cover_local.is_some() { m.cover_local_path = cover_local.clone(); }
+        if cover_url.is_some() {
+            m.cover_url = cover_url.clone();
+        }
+        if cover_local.is_some() {
+            m.cover_local_path = cover_local.clone();
+        }
         m.updated_at = now_ms();
         write_index(&base_path, &idx)?;
     }
     if let Some(mut meta) = read_json::<ProjectMeta>(&meta_path) {
-        if cover_url.is_some() { meta.cover_url = cover_url; }
-        if cover_local.is_some() { meta.cover_local_path = cover_local; }
+        if cover_url.is_some() {
+            meta.cover_url = cover_url;
+        }
+        if cover_local.is_some() {
+            meta.cover_local_path = cover_local;
+        }
         meta.updated_at = now_ms();
         let _ = write_json(&meta_path, &meta);
     }
@@ -254,12 +318,24 @@ pub fn load_canvas_handler(
     project: &str,
 ) -> Result<StorageResult<serde_json::Value>, StorageError> {
     if base.is_empty() || project.is_empty() {
-        return Ok(StorageResult { success: false, error: Some("Missing basePath or projectName".into()), data: serde_json::json!({ "data": Value::Null }) });
+        return Ok(StorageResult {
+            success: false,
+            error: Some("Missing basePath or projectName".into()),
+            data: serde_json::json!({ "data": Value::Null }),
+        });
     }
     let canvas_path = path_to_buf(base).join(project).join(CANVAS_FILE);
     match read_json::<Value>(&canvas_path) {
-        Some(v) => Ok(StorageResult { success: true, error: None, data: serde_json::json!({ "data": v }) }),
-        None => Ok(StorageResult { success: false, error: Some("Canvas not found".into()), data: serde_json::json!({ "data": Value::Null }) }),
+        Some(v) => Ok(StorageResult {
+            success: true,
+            error: None,
+            data: serde_json::json!({ "data": v }),
+        }),
+        None => Ok(StorageResult {
+            success: false,
+            error: Some("Canvas not found".into()),
+            data: serde_json::json!({ "data": Value::Null }),
+        }),
     }
 }
 
@@ -285,7 +361,11 @@ pub fn save_media_handler(
     }
     std::fs::write(&abs, &bytes)?;
     let _ = touch_updated_at(&base_path, project);
-    Ok(StorageResult { success: true, error: None, data: serde_json::json!({ "path": rel }) })
+    Ok(StorageResult {
+        success: true,
+        error: None,
+        data: serde_json::json!({ "path": rel }),
+    })
 }
 
 pub fn read_media_handler(
@@ -294,14 +374,28 @@ pub fn read_media_handler(
 ) -> Result<StorageResult<serde_json::Value>, StorageError> {
     let rel = match safe_rel(rel) {
         Some(r) => r,
-        None => return Ok(StorageResult { success: false, error: Some("Invalid path".into()), data: serde_json::json!({ "data": Value::Null }) }),
+        None => {
+            return Ok(StorageResult {
+                success: false,
+                error: Some("Invalid path".into()),
+                data: serde_json::json!({ "data": Value::Null }),
+            })
+        }
     };
     let abs = path_to_buf(base).join(&rel);
     if !abs.exists() {
-        return Ok(StorageResult { success: false, error: Some("Media not found".into()), data: serde_json::json!({ "data": Value::Null }) });
+        return Ok(StorageResult {
+            success: false,
+            error: Some("Media not found".into()),
+            data: serde_json::json!({ "data": Value::Null }),
+        });
     }
     let bytes = std::fs::read(&abs)?;
-    Ok(StorageResult { success: true, error: None, data: serde_json::json!({ "data": bytes }) })
+    Ok(StorageResult {
+        success: true,
+        error: None,
+        data: serde_json::json!({ "data": bytes }),
+    })
 }
 
 pub fn write_raw_file_handler(
@@ -321,7 +415,11 @@ pub fn write_raw_file_handler(
         std::fs::create_dir_all(p)?;
     }
     std::fs::write(&abs, &bytes)?;
-    Ok(StorageResult { success: true, error: None, data: serde_json::json!({ "path": rel }) })
+    Ok(StorageResult {
+        success: true,
+        error: None,
+        data: serde_json::json!({ "path": rel }),
+    })
 }
 
 pub fn read_raw_file_handler(
@@ -330,21 +428,39 @@ pub fn read_raw_file_handler(
 ) -> Result<StorageResult<serde_json::Value>, StorageError> {
     let rel = match safe_rel(rel) {
         Some(r) => r,
-        None => return Ok(StorageResult { success: false, error: Some("Invalid path".into()), data: serde_json::json!({ "data": Value::Null }) }),
+        None => {
+            return Ok(StorageResult {
+                success: false,
+                error: Some("Invalid path".into()),
+                data: serde_json::json!({ "data": Value::Null }),
+            })
+        }
     };
     let abs = path_to_buf(base).join(&rel);
     if !abs.exists() {
-        return Ok(StorageResult { success: false, error: Some("File not found".into()), data: serde_json::json!({ "data": Value::Null }) });
+        return Ok(StorageResult {
+            success: false,
+            error: Some("File not found".into()),
+            data: serde_json::json!({ "data": Value::Null }),
+        });
     }
     let bytes = std::fs::read(&abs)?;
-    Ok(StorageResult { success: true, error: None, data: serde_json::json!({ "data": bytes }) })
+    Ok(StorageResult {
+        success: true,
+        error: None,
+        data: serde_json::json!({ "data": bytes }),
+    })
 }
 
 pub fn scan_asset_library_handler(
     base: &str,
 ) -> Result<StorageResult<serde_json::Value>, StorageError> {
     if base.is_empty() || !path_to_buf(base).exists() {
-        return Ok(StorageResult { success: true, error: None, data: serde_json::json!({ "projects": [], "files": [] }) });
+        return Ok(StorageResult {
+            success: true,
+            error: None,
+            data: serde_json::json!({ "projects": [], "files": [] }),
+        });
     }
     let base_path = path_to_buf(base);
     let mut projects: Vec<AssetDiskProjectInfo> = Vec::new();
@@ -352,14 +468,36 @@ pub fn scan_asset_library_handler(
 
     if let Ok(entries) = std::fs::read_dir(&base_path) {
         for e in entries.flatten() {
-            if !e.file_type().map(|t| t.is_dir()).unwrap_or(false) { continue; }
+            if !e.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue;
+            }
             let name = e.file_name().to_string_lossy().to_string();
-            if name == ASSET_CACHE_DIR || name == INTERNAL_ASSET_DIR || name.starts_with('.') { continue; }
+            if name == ASSET_CACHE_DIR || name == INTERNAL_ASSET_DIR || name.starts_with('.') {
+                continue;
+            }
             let project_dir = e.path();
             let stat = e.metadata().ok();
             let (created, modified) = stat
-                .map(|s| (s.created().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_millis() as u64)).unwrap_or(0),
-                          s.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_millis() as u64)).unwrap_or(0)))
+                .map(|s| {
+                    (
+                        s.created()
+                            .ok()
+                            .and_then(|t| {
+                                t.duration_since(std::time::UNIX_EPOCH)
+                                    .ok()
+                                    .map(|d| d.as_millis() as u64)
+                            })
+                            .unwrap_or(0),
+                        s.modified()
+                            .ok()
+                            .and_then(|t| {
+                                t.duration_since(std::time::UNIX_EPOCH)
+                                    .ok()
+                                    .map(|d| d.as_millis() as u64)
+                            })
+                            .unwrap_or(0),
+                    )
+                })
                 .unwrap_or((0, 0));
             projects.push(AssetDiskProjectInfo {
                 name: name.clone(),
@@ -369,18 +507,34 @@ pub fn scan_asset_library_handler(
             });
             if let Ok(cats) = std::fs::read_dir(&project_dir) {
                 for c in cats.flatten() {
-                    if !c.file_type().map(|t| t.is_dir()).unwrap_or(false) { continue; }
-                    if c.file_name().to_string_lossy().starts_with('.') { continue; }
+                    if !c.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                        continue;
+                    }
+                    if c.file_name().to_string_lossy().starts_with('.') {
+                        continue;
+                    }
                     let category = c.file_name().to_string_lossy().to_string();
                     if let Ok(items) = std::fs::read_dir(c.path()) {
                         for it in items.flatten() {
-                            if !it.file_type().map(|t| t.is_file()).unwrap_or(false) { continue; }
+                            if !it.file_type().map(|t| t.is_file()).unwrap_or(false) {
+                                continue;
+                            }
                             let file_name = it.file_name().to_string_lossy().to_string();
                             let ext = get_extension(&file_name);
                             let ext_trim = ext.trim_start_matches('.');
-                            if !SUPPORTED_ASSET_EXTS.contains(&ext_trim) { continue; }
+                            if !SUPPORTED_ASSET_EXTS.contains(&ext_trim) {
+                                continue;
+                            }
                             let stat = it.metadata().ok();
-                            let m = stat.as_ref().and_then(|s| s.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_millis() as u64)).unwrap_or(0);
+                            let m = stat
+                                .as_ref()
+                                .and_then(|s| s.modified().ok())
+                                .and_then(|t| {
+                                    t.duration_since(std::time::UNIX_EPOCH)
+                                        .ok()
+                                        .map(|d| d.as_millis() as u64)
+                                })
+                                .unwrap_or(0);
                             let size = stat.as_ref().map(|s| s.len()).unwrap_or(0);
                             files.push(AssetDiskFileInfo {
                                 project_name: name.clone(),
@@ -431,16 +585,28 @@ pub fn rename_raw_path_handler(
     old_rel: &str,
     new_rel: &str,
 ) -> Result<StorageResult, StorageError> {
-    let o = match safe_rel(old_rel) { Some(r) => r, None => return Ok(StorageResult::err("Invalid path")) };
-    let n = match safe_rel(new_rel) { Some(r) => r, None => return Ok(StorageResult::err("Invalid path")) };
+    let o = match safe_rel(old_rel) {
+        Some(r) => r,
+        None => return Ok(StorageResult::err("Invalid path")),
+    };
+    let n = match safe_rel(new_rel) {
+        Some(r) => r,
+        None => return Ok(StorageResult::err("Invalid path")),
+    };
     if base.is_empty() {
         return Ok(StorageResult::err("Invalid basePath"));
     }
     let old = path_to_buf(base).join(&o);
     let new = path_to_buf(base).join(&n);
-    if !old.exists() { return Ok(StorageResult::err("Source path not found")); }
-    if new.exists() { return Ok(StorageResult::err("Target path already exists")); }
-    if let Some(p) = new.parent() { std::fs::create_dir_all(p).ok(); }
+    if !old.exists() {
+        return Ok(StorageResult::err("Source path not found"));
+    }
+    if new.exists() {
+        return Ok(StorageResult::err("Target path already exists"));
+    }
+    if let Some(p) = new.parent() {
+        std::fs::create_dir_all(p).ok();
+    }
     std::fs::rename(&old, &new)?;
     Ok(StorageResult::ok())
 }
@@ -451,19 +617,37 @@ pub fn list_media_handler(
     media_type: &str,
 ) -> Result<StorageResult<serde_json::Value>, StorageError> {
     if base.is_empty() || project.is_empty() || media_type.is_empty() {
-        return Ok(StorageResult { success: false, error: Some("Missing params".into()), data: serde_json::json!({ "files": [] }) });
+        return Ok(StorageResult {
+            success: false,
+            error: Some("Missing params".into()),
+            data: serde_json::json!({ "files": [] }),
+        });
     }
     let dir = path_to_buf(base).join(project).join(media_type);
     if !dir.exists() {
-        return Ok(StorageResult { success: true, error: None, data: serde_json::json!({ "files": [] }) });
+        return Ok(StorageResult {
+            success: true,
+            error: None,
+            data: serde_json::json!({ "files": [] }),
+        });
     }
     let mut files: Vec<FileInfo> = Vec::new();
     if let Ok(entries) = std::fs::read_dir(&dir) {
         for e in entries.flatten() {
-            if !e.file_type().map(|t| t.is_file()).unwrap_or(false) { continue; }
+            if !e.file_type().map(|t| t.is_file()).unwrap_or(false) {
+                continue;
+            }
             let name = e.file_name().to_string_lossy().to_string();
             let m = e.metadata().ok();
-            let modified = m.as_ref().and_then(|s| s.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_millis() as u64)).unwrap_or(0);
+            let modified = m
+                .as_ref()
+                .and_then(|s| s.modified().ok())
+                .and_then(|t| {
+                    t.duration_since(std::time::UNIX_EPOCH)
+                        .ok()
+                        .map(|d| d.as_millis() as u64)
+                })
+                .unwrap_or(0);
             let size = m.as_ref().map(|s| s.len()).unwrap_or(0);
             files.push(FileInfo {
                 name: name.clone(),
@@ -477,18 +661,27 @@ pub fn list_media_handler(
         }
     }
     files.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
-    Ok(StorageResult { success: true, error: None, data: serde_json::json!({ "files": files }) })
+    Ok(StorageResult {
+        success: true,
+        error: None,
+        data: serde_json::json!({ "files": files }),
+    })
 }
 
 pub fn delete_media_handler(base: &str, rel: &str) -> Result<StorageResult, StorageError> {
-    let rel = match safe_rel(rel) { Some(r) => r, None => return Ok(StorageResult::err("Invalid path")) };
+    let rel = match safe_rel(rel) {
+        Some(r) => r,
+        None => return Ok(StorageResult::err("Invalid path")),
+    };
     let parts: Vec<&str> = rel.split('/').filter(|s| !s.is_empty()).collect();
     let project = parts.first().copied().unwrap_or("");
     if base.is_empty() || project.is_empty() {
         return Ok(StorageResult::err("Invalid basePath or relativePath"));
     }
     let abs = path_to_buf(base).join(&rel);
-    if abs.exists() { let _ = std::fs::remove_file(&abs); }
+    if abs.exists() {
+        let _ = std::fs::remove_file(&abs);
+    }
     let _ = touch_updated_at(&path_to_buf(base), project);
     Ok(StorageResult::ok())
 }
@@ -498,7 +691,10 @@ pub async fn download_media_handler(
     url: &str,
     rel: &str,
 ) -> Result<StorageResult<serde_json::Value>, StorageError> {
-    let rel = match safe_rel(rel) { Some(r) => r, None => return Ok(StorageResult::err("Invalid path")) };
+    let rel = match safe_rel(rel) {
+        Some(r) => r,
+        None => return Ok(StorageResult::err("Invalid path")),
+    };
     let parts: Vec<&str> = rel.split('/').filter(|s| !s.is_empty()).collect();
     let project = parts.first().copied().unwrap_or("");
     if base.is_empty() || project.is_empty() || parts.len() < 2 {
@@ -506,24 +702,48 @@ pub async fn download_media_handler(
     }
     let base_path = path_to_buf(base);
     let _ = ensure_project(&base_path, project);
-    let bytes = reqwest::get(url).await.map_err(|e| StorageError::InvalidPath(e.to_string()))?
-        .bytes().await.map_err(|e| StorageError::InvalidPath(e.to_string()))?;
+    let bytes = reqwest::get(url)
+        .await
+        .map_err(|e| StorageError::InvalidPath(e.to_string()))?
+        .bytes()
+        .await
+        .map_err(|e| StorageError::InvalidPath(e.to_string()))?;
     let abs = base_path.join(&rel);
-    if let Some(p) = abs.parent() { std::fs::create_dir_all(p)?; }
+    if let Some(p) = abs.parent() {
+        std::fs::create_dir_all(p)?;
+    }
     std::fs::write(&abs, &bytes)?;
     let _ = touch_updated_at(&base_path, project);
-    Ok(StorageResult { success: true, error: None, data: serde_json::json!({ "path": rel }) })
+    Ok(StorageResult {
+        success: true,
+        error: None,
+        data: serde_json::json!({ "path": rel }),
+    })
 }
 
-pub fn write_bytes_to_path(path: &str, bytes: &[u8]) -> Result<StorageResult<serde_json::Value>, StorageError> {
-    if let Some(p) = Path::new(path).parent() { std::fs::create_dir_all(p)?; }
+pub fn write_bytes_to_path(
+    path: &str,
+    bytes: &[u8],
+) -> Result<StorageResult<serde_json::Value>, StorageError> {
+    if let Some(p) = Path::new(path).parent() {
+        std::fs::create_dir_all(p)?;
+    }
     std::fs::write(path, bytes)?;
-    Ok(StorageResult { success: true, error: None, data: serde_json::json!({ "path": path }) })
+    Ok(StorageResult {
+        success: true,
+        error: None,
+        data: serde_json::json!({ "path": path }),
+    })
 }
 
 pub fn media_exists_handler(base: &str, rel: &str) -> bool {
-    let rel = match safe_rel(rel) { Some(r) => r, None => return false };
-    if base.is_empty() { return false; }
+    let rel = match safe_rel(rel) {
+        Some(r) => r,
+        None => return false,
+    };
+    if base.is_empty() {
+        return false;
+    }
     path_to_buf(base).join(&rel).exists()
 }
 
@@ -535,14 +755,22 @@ pub fn rename_project_handler(
     if base.is_empty() || old.is_empty() || new.is_empty() {
         return Ok(StorageResult::err("Missing params"));
     }
-    if old == new { return Ok(StorageResult::ok()); }
+    if old == new {
+        return Ok(StorageResult::ok());
+    }
     let base_path = path_to_buf(base);
     let mut idx = read_index(&base_path);
-    if !idx.projects.contains_key(old) { return Ok(StorageResult::err("Source project does not exist")); }
-    if idx.projects.contains_key(new) { return Ok(StorageResult::err("Target project already exists")); }
+    if !idx.projects.contains_key(old) {
+        return Ok(StorageResult::err("Source project does not exist"));
+    }
+    if idx.projects.contains_key(new) {
+        return Ok(StorageResult::err("Target project already exists"));
+    }
     let old_dir = base_path.join(old);
     let new_dir = base_path.join(new);
-    if !old_dir.exists() { return Ok(StorageResult::err("Source project directory not found")); }
+    if !old_dir.exists() {
+        return Ok(StorageResult::err("Source project directory not found"));
+    }
     std::fs::rename(&old_dir, &new_dir)?;
     if let Some(mut meta) = idx.projects.remove(old) {
         meta.name = new.to_string();
@@ -559,7 +787,9 @@ pub fn delete_project_handler(base: &str, project: &str) -> Result<StorageResult
     }
     let base_path = path_to_buf(base);
     let dir = base_path.join(project);
-    if dir.exists() { let _ = std::fs::remove_dir_all(&dir); }
+    if dir.exists() {
+        let _ = std::fs::remove_dir_all(&dir);
+    }
     let mut idx = read_index(&base_path);
     idx.projects.remove(project);
     write_index(&base_path, &idx)?;
@@ -577,8 +807,12 @@ pub fn copy_project_handler(
     let base_path = path_to_buf(base);
     let src_dir = base_path.join(src);
     let dest_dir = base_path.join(dest);
-    if !src_dir.exists() { return Ok(StorageResult::err("Source project not found")); }
-    if dest_dir.exists() { return Ok(StorageResult::err("Target project already exists")); }
+    if !src_dir.exists() {
+        return Ok(StorageResult::err("Source project not found"));
+    }
+    if dest_dir.exists() {
+        return Ok(StorageResult::err("Target project already exists"));
+    }
     copy_dir_recursive(&src_dir, &dest_dir)?;
     let _ = ensure_project(&base_path, dest);
     Ok(StorageResult::ok())
@@ -590,16 +824,30 @@ pub fn export_project_handler(
     export_base: &str,
 ) -> Result<StorageResult<serde_json::Value>, StorageError> {
     if base.is_empty() || project.is_empty() || export_base.is_empty() {
-        return Ok(StorageResult { success: false, error: Some("Missing params".into()), data: serde_json::json!({}) });
+        return Ok(StorageResult {
+            success: false,
+            error: Some("Missing params".into()),
+            data: serde_json::json!({}),
+        });
     }
     let src = path_to_buf(base).join(project);
-    if !src.exists() { return Ok(StorageResult { success: false, error: Some("Project directory not found".into()), data: serde_json::json!({}) }); }
+    if !src.exists() {
+        return Ok(StorageResult {
+            success: false,
+            error: Some("Project directory not found".into()),
+            data: serde_json::json!({}),
+        });
+    }
     let export_base = path_to_buf(export_base);
     std::fs::create_dir_all(&export_base)?;
     let dest_name = unique_dir_name(&export_base, project);
     let dest = export_base.join(&dest_name);
     copy_dir_recursive(&src, &dest)?;
-    Ok(StorageResult { success: true, error: None, data: serde_json::json!({ "path": dest.to_string_lossy(), "projectName": dest_name }) })
+    Ok(StorageResult {
+        success: true,
+        error: None,
+        data: serde_json::json!({ "path": dest.to_string_lossy(), "projectName": dest_name }),
+    })
 }
 
 pub fn import_project_handler(
@@ -607,23 +855,46 @@ pub fn import_project_handler(
     src_dir: &str,
 ) -> Result<StorageResult<serde_json::Value>, StorageError> {
     if base.is_empty() || src_dir.is_empty() {
-        return Ok(StorageResult { success: false, error: Some("Missing params".into()), data: serde_json::json!({}) });
+        return Ok(StorageResult {
+            success: false,
+            error: Some("Missing params".into()),
+            data: serde_json::json!({}),
+        });
     }
     let base_path = path_to_buf(base);
-    if !base_path.exists() { std::fs::create_dir_all(&base_path)?; }
+    if !base_path.exists() {
+        std::fs::create_dir_all(&base_path)?;
+    }
     let src = path_to_buf(src_dir);
-    if !src.exists() { return Ok(StorageResult { success: false, error: Some("Source not found".into()), data: serde_json::json!({}) }); }
-    let src_name = src.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "imported".into());
+    if !src.exists() {
+        return Ok(StorageResult {
+            success: false,
+            error: Some("Source not found".into()),
+            data: serde_json::json!({}),
+        });
+    }
+    let src_name = src
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "imported".into());
     let meta_path = src.join(PROJECT_META_FILE);
     let canvas_path = src.join(CANVAS_FILE);
     if !meta_path.exists() && !canvas_path.exists() {
-        return Ok(StorageResult { success: false, error: Some("Invalid project directory".into()), data: serde_json::json!({}) });
+        return Ok(StorageResult {
+            success: false,
+            error: Some("Invalid project directory".into()),
+            data: serde_json::json!({}),
+        });
     }
     let dest_name = unique_dir_name(&base_path, &src_name);
     let dest = base_path.join(&dest_name);
     copy_dir_recursive(&src, &dest)?;
     let _ = ensure_project(&base_path, &dest_name);
-    Ok(StorageResult { success: true, error: None, data: serde_json::json!({ "projectName": dest_name, "path": dest.to_string_lossy() }) })
+    Ok(StorageResult {
+        success: true,
+        error: None,
+        data: serde_json::json!({ "projectName": dest_name, "path": dest.to_string_lossy() }),
+    })
 }
 
 pub fn get_default_path_handler(documents_dir: &str) -> String {
@@ -634,12 +905,20 @@ pub fn get_default_path_handler(documents_dir: &str) -> String {
 // 工具
 fn unique_dir_name(base: &Path, preferred: &str) -> String {
     let normalized = preferred.trim();
-    let normalized = if normalized.is_empty() { "export" } else { normalized };
-    if !base.join(normalized).exists() { return normalized.to_string(); }
+    let normalized = if normalized.is_empty() {
+        "export"
+    } else {
+        normalized
+    };
+    if !base.join(normalized).exists() {
+        return normalized.to_string();
+    }
     let mut counter = 1u32;
     loop {
         let candidate = format!("{}-{}", normalized, counter);
-        if !base.join(&candidate).exists() { return candidate; }
+        if !base.join(&candidate).exists() {
+            return candidate;
+        }
         counter += 1;
     }
 }

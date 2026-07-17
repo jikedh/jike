@@ -5,9 +5,9 @@
 
 use crate::models::{
     FetchShot4uPlaylistRequest, FetchShot4uPlaylistResult, FetchVideoPageRequest,
-    FetchVideoPageResult, HongguoApiRequest, HongguoDecryptRequest, M3u8ToMp4Request,
-    M3u8ToMp4Result, Mp4DownloadRequest, Mp4DownloadResult, SplitMp4Request, SplitMp4Result,
-    VideoTrimRequest, VideoTrimResult,
+    FetchVideoPageResult, HongguoApiRequest, HongguoDecryptRequest, HongguoPlayRequest,
+    M3u8ToMp4Request, M3u8ToMp4Result, Mp4DownloadRequest, Mp4DownloadResult, SplitMp4Request,
+    SplitMp4Result, VideoTrimRequest, VideoTrimResult,
 };
 use reqwest::{
     header::{HeaderMap, HeaderValue, ORIGIN, REFERER, USER_AGENT},
@@ -260,6 +260,33 @@ pub async fn fetch_hongguo_api(req: HongguoApiRequest) -> Result<Value, VideoErr
     let response = client
         .get("https://www.52api.cn/api/hg_new")
         .query(&params)
+        .send()
+        .await
+        .map_err(|e| VideoError::Http(e.to_string()))?;
+    if !response.status().is_success() {
+        return Err(VideoError::Http(format!("HTTP {}", response.status())));
+    }
+
+    response
+        .json::<Value>()
+        .await
+        .map_err(|e| VideoError::Http(e.to_string()))
+}
+
+pub async fn fetch_hongguo_play(req: HongguoPlayRequest) -> Result<Value, VideoError> {
+    let key = req.key.trim();
+    let video_id = req.video_id.trim();
+    if key.is_empty() {
+        return Err(VideoError::Config("红果 API key 为空".into()));
+    }
+    if video_id.is_empty() {
+        return Err(VideoError::Config("红果 video_id 为空".into()));
+    }
+
+    let client = build_http_client(None, None)?;
+    let response = client
+        .get("https://www.52api.cn/api/hg_play")
+        .query(&[("key", key), ("video_id", video_id)])
         .send()
         .await
         .map_err(|e| VideoError::Http(e.to_string()))?;

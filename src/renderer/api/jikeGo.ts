@@ -1,5 +1,11 @@
 import { jikeingService, SKIP_AUTH_HEADER } from "service/aiRequest";
 import { getJikeingToken } from "shared/utils/utils";
+import type {
+  AudioSynthesisResponse,
+  AudioTtsModelId,
+  AudioTtsModelInfo,
+  AudioVoiceCloneResponse,
+} from "shared/types/audio";
 
 const JIKE_GO_BASE_URL =
   import.meta.env.VITE_JIKE_GO_BASE_URL || "http://localhost:9181";
@@ -78,6 +84,7 @@ export type EstimateEnhanceCostResponse = {
 export type DesktopProxyScoreBizType =
   | "image"
   | "video"
+  | "audio"
   | "runninghub_v2"
   | "agnes";
 
@@ -248,6 +255,59 @@ export function createDesktopChatCompletions(
     signal,
     headers: getJikeGoAiProxyHeaders(),
   });
+}
+
+export function getDesktopAudioVoices(syncMiniMax = false): Promise<{
+  data?: { models: AudioTtsModelInfo[]; syncWarning?: string };
+  models?: AudioTtsModelInfo[];
+  syncWarning?: string;
+}> {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/desktop/v1/ai/audio/voices",
+    method: "get",
+    params: syncMiniMax ? { syncMiniMax: 1 } : undefined,
+    headers: getJikeGoAiProxyHeaders(),
+  }) as Promise<{
+    data?: { models: AudioTtsModelInfo[]; syncWarning?: string };
+    models?: AudioTtsModelInfo[];
+    syncWarning?: string;
+  }>;
+}
+
+export function cloneDesktopAudioVoice(data: {
+  name: string;
+  audioUrl: string;
+  previewText: string;
+  needNoiseReduction: boolean;
+  needVolumeNormalization: boolean;
+  consentConfirmed: boolean;
+}): Promise<{ data?: AudioVoiceCloneResponse } & AudioVoiceCloneResponse> {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/desktop/v1/ai/audio/voices/clone",
+    method: "post",
+    data,
+    headers: getJikeGoAiProxyHeaders(),
+  }) as Promise<{ data?: AudioVoiceCloneResponse } & AudioVoiceCloneResponse>;
+}
+
+export function synthesizeDesktopAudio(data: {
+  model: AudioTtsModelId;
+  voiceProfileId: string;
+  text: string;
+  speed?: number;
+  volume?: number;
+  pitch?: number;
+  emotion?: string;
+}): Promise<{ data?: AudioSynthesisResponse } & AudioSynthesisResponse> {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/desktop/v1/ai/audio/synthesize",
+    method: "post",
+    data,
+    headers: getJikeGoAiProxyHeaders(),
+  }) as Promise<{ data?: AudioSynthesisResponse } & AudioSynthesisResponse>;
 }
 
 export function getDigitalCaptcha(): any {

@@ -11,7 +11,11 @@ pub struct ProjectMeta {
     pub updated_at: u64,
     #[serde(rename = "coverUrl", skip_serializing_if = "Option::is_none", default)]
     pub cover_url: Option<String>,
-    #[serde(rename = "coverLocalPath", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "coverLocalPath",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub cover_local_path: Option<String>,
 }
 
@@ -72,10 +76,18 @@ pub struct StorageResult<T = ()> {
 
 impl<T: Default> StorageResult<T> {
     pub fn ok() -> Self {
-        Self { success: true, error: None, data: T::default() }
+        Self {
+            success: true,
+            error: None,
+            data: T::default(),
+        }
     }
 
     pub fn err(msg: impl Into<String>) -> Self {
-        Self { success: false, error: Some(msg.into()), data: T::default() }
+        Self {
+            success: false,
+            error: Some(msg.into()),
+            data: T::default(),
+        }
     }
 }

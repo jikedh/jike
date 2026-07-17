@@ -103,6 +103,13 @@ pub struct HongguoApiRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HongguoPlayRequest {
+    pub key: String,
+    #[serde(rename = "video_id")]
+    pub video_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HongguoDecryptRequest {
     pub key: String,
     pub url: String,
