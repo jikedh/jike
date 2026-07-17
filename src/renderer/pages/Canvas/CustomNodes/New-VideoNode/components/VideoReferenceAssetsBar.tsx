@@ -78,7 +78,7 @@ const ReferenceItemWrapper = ({
             event.stopPropagation();
             onDisconnect();
           }}
-          className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-neutral-800 text-neutral-400 opacity-0 transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100"
+          className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-neutral-800 text-neutral-400 opacity-0 transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100"
           title="断开连接"
         >
           <IconX size={10} />

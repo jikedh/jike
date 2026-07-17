@@ -286,7 +286,7 @@ const SortableReferenceItem = ({
             event.stopPropagation();
             onRemove(item);
           }}
-          className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-neutral-900 text-neutral-300 opacity-0 shadow-sm transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100"
+          className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-neutral-900 text-neutral-300 opacity-0 shadow-sm transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100"
           title="移除参考素材"
         >
           <IconX size={10} />
@@ -332,7 +332,7 @@ const StaticReferenceItem = ({
             event.stopPropagation();
             onRemove(item);
           }}
-          className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-neutral-900 text-neutral-300 opacity-0 shadow-sm transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100"
+          className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-neutral-900 text-neutral-300 opacity-0 shadow-sm transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100"
           title="移除参考素材"
         >
           <IconX size={10} />
