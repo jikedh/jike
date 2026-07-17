@@ -1742,6 +1742,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
             <VideoPromptEditor
               ref={editorRef}
               promptDraftHtml={promptDraftHtml}
+              isEditable={!isOptimizingPrompt}
               nodeId={nodeId}
               projectId={projectId}
               mentionItems={
