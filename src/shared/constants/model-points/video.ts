@@ -75,8 +75,14 @@ export const getVideoGenerationPoints = ({
       // Seedance 2.0 Fast: 720p -> 48, 480p -> 24
       basePointsPerSecond = res === "480p" ? 24 : 48;
     } else {
-      // Seedance 2.0 (Standard/Pro): 720p -> 60, 480p -> 30
-      basePointsPerSecond = res === "480p" ? 30 : 60;
+      // Seedance 2.0 Standard/Pro 按分辨率计费。
+      const proRates: Record<string, number> = {
+        "480p": 30,
+        "720p": 60,
+        "1080p": 150,
+        "4k": 306,
+      };
+      basePointsPerSecond = proRates[res] ?? proRates["720p"];
     }
 
     // 按秒计算

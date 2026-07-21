@@ -282,7 +282,7 @@ const buildSeedanceRequest = (
     // Seedance 2.0 接口类型使用小写 p，前端历史配置可能仍是大写，传参前统一归一化。
     resolution: isOneOf(
       request.params.resolution?.toLowerCase(),
-      ["480p", "720p"] as const,
+      ["480p", "720p", "1080p", "4k"] as const,
       "720p",
     ),
     ratio: isOneOf(

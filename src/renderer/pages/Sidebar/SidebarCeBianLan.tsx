@@ -1,5 +1,6 @@
 import {
   BookOpenText,
+  Clapperboard,
   Folder,
   House,
   Settings,
@@ -109,6 +110,12 @@ export const SidebarCeBianLan = () => {
       label: "资产库",
       path: "/assets",
     },
+    // {
+    //   id: "short-drama-commentary",
+    //   icon: <Clapperboard size={24} />,
+    //   label: "短剧解说",
+    //   path: "/short-drama-commentary",
+    // },
     // {
     //   id: "voice",
     //   icon: <Mic size={24} />,

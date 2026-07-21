@@ -67,7 +67,10 @@
 
     {
       "identifier": "http:default",
-      "allow": ["https://www.hongguostudio.com/vodplay/*"]
+      "allow": [
+        "https://www.hongguostudio.com/vodplay/*",
+        "https://openapi.jieshuo.cn/**"
+      ]
     },
 
     "notification:default",

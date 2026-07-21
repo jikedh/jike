@@ -31,7 +31,15 @@
         "dragDropEnabled": true
       }
     ],
-    "security": {}
+    "security": {
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "**/*.mp4",
+          "**/*.MP4"
+        ]
+      }
+    }
   },
   "bundle": {
     "active": true,

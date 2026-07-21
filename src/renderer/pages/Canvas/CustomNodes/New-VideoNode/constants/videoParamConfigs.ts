@@ -117,10 +117,12 @@ const resolution480720 = [
   { label: "720p", value: "720P" },
 ];
 
-const overseasSeedanceResolutions = resolution480720.concat([
+const seedanceProResolutions = resolution480720.concat([
   { label: "1080p", value: "1080P" },
   { label: "4K", value: "4K" },
 ]);
+
+const overseasSeedanceResolutions = seedanceProResolutions;
 
 const resolution7201080 = resolution480720.concat([
   { label: "1080p", value: "1080P" },
@@ -214,7 +216,8 @@ const seedance20Config = (
   qualityGroup: {
     key: "resolution",
     label: "分辨率",
-    options: resolution480720,
+    options:
+      generationMode === "pro" ? seedanceProResolutions : resolution480720,
   },
   duration: { type: "slider", min: 4, max: 15, step: 1 },
   audio,
