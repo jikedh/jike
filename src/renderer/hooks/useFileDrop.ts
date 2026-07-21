@@ -10,9 +10,12 @@ import {
     FILE_DROP_MAX_SIZE,
 } from "shared/constants/fileDrop";
 import {
+    getLocalFileInfo,
+    uploadLocalFilePathToOSS,
+} from "service/oss";
+import {
     insertFileDropIntoCanvas,
     applyAspectRatioToNode,
-    uploadFilesToOss,
 } from "@/pages/Canvas/utils/fileDropInsert";
 
 export type FileDragState = {
@@ -75,9 +78,11 @@ const inferMimeType = (fileName: string): string => {
     return MIME_MAP[ext] || "application/octet-stream";
 };
 
+const getNameFromPath = (path: string) => path.split(/[/\\]/).pop() || "file";
+
 /** 从绝对路径读取文件并返回 File 对象 */
 const readFileFromPath = async (path: string): Promise<File> => {
-    const name = path.split(/[/\\]/).pop() || "file";
+    const name = getNameFromPath(path);
     const bytes: number[] = await (window as any).storage.readAbsoluteFile(path);
     const buffer = new Uint8Array(bytes);
     const mime = inferMimeType(name);
@@ -128,30 +133,37 @@ export function useFileDrop(
                     toast.warning(`最多支持一次拖入 ${FILE_DROP_MAX_COUNT} 个文件，已截断`);
                 }
 
-                const files: File[] = [];
                 const unsupported: string[] = [];
                 let oversizeCount = 0;
+                let createdCount = 0;
+                let failCount = 0;
+                let validCount = 0;
+                const flowPosition = screenToFlowPosition({
+                    x: cssPos.x - PLACEHOLDER_OFFSET.x,
+                    y: cssPos.y - PLACEHOLDER_OFFSET.y,
+                });
 
                 for (const path of toProcess) {
                     try {
-                        const file = await readFileFromPath(path);
-                        if (file.size > FILE_DROP_MAX_SIZE) {
+                        const fileInfo = await getLocalFileInfo(path);
+                        if (fileInfo.size > FILE_DROP_MAX_SIZE) {
                             oversizeCount++;
                             continue;
                         }
-                        const mediaType = detectMediaType(file.name, file.type);
+                        const mediaType = detectMediaType(fileInfo.name, "");
                         if (mediaType === "unknown") {
-                            unsupported.push(file.name);
-                        } else {
-                            files.push(file);
+                            unsupported.push(fileInfo.name);
+                            continue;
                         }
-                    } catch (err) {
-                        console.warn(`[useFileDrop] failed to read ${path}:`, err);
+                        validCount++;
+                    } catch (error: any) {
+                        console.warn(`[useFileDrop] failed to inspect ${path}:`, error);
+                        failCount++;
                     }
                 }
 
                 if (oversizeCount > 0) {
-                    toast.warning(`已跳过 ${oversizeCount} 个超过 500MB 的文件`);
+                    toast.warning(`已跳过 ${oversizeCount} 个超过 2GB 的文件`);
                 }
                 if (unsupported.length > 0) {
                     toast.warning(
@@ -159,46 +171,59 @@ export function useFileDrop(
                         }`,
                     );
                 }
-                if (files.length === 0) {
+                if (validCount === 0) {
                     resetDragState();
                     return;
                 }
 
                 const toastId = toast.loading(
-                    `正在上传 ${files.length} 个文件...`,
+                    `正在上传 ${validCount} 个文件...`,
                     { duration: Infinity },
                 );
 
                 try {
-                    const uploadResults = await uploadFilesToOss(files);
-                    toast.dismiss(toastId);
+                    for (const path of toProcess) {
+                        try {
+                            const fileInfo = await getLocalFileInfo(path);
+                            if (fileInfo.size > FILE_DROP_MAX_SIZE) continue;
+                            const mediaType = detectMediaType(fileInfo.name, "");
+                            if (mediaType === "unknown") continue;
 
-                    const flowPosition = screenToFlowPosition({
-                        x: cssPos.x - PLACEHOLDER_OFFSET.x,
-                        y: cssPos.y - PLACEHOLDER_OFFSET.y,
-                    });
-
-                    let createdCount = 0;
-                    for (const result of uploadResults) {
-                        if (!result) continue;
-                        const nodeId = insertFileDropIntoCanvas(
-                            result.file,
-                            result.uploadResult,
-                            flowPosition,
-                        );
-                        if (nodeId) {
-                            createdCount++;
-                            const mediaType = detectMediaType(result.file.name, result.file.type);
-                            void applyAspectRatioToNode(nodeId, mediaType, result.uploadResult.url);
+                            const contentType = inferMimeType(fileInfo.name);
+                            const uploadResult = await uploadLocalFilePathToOSS({
+                                path,
+                                name: fileInfo.name,
+                                size: fileInfo.size,
+                                contentType,
+                                blobType: mediaType,
+                                maxSize: FILE_DROP_MAX_SIZE,
+                            });
+                            const nodeId = insertFileDropIntoCanvas(
+                                { ...fileInfo, contentType, mediaType },
+                                uploadResult,
+                                flowPosition,
+                            );
+                            if (nodeId) {
+                                createdCount++;
+                                void applyAspectRatioToNode(nodeId, mediaType, uploadResult.url);
+                            }
+                        } catch (error: any) {
+                            console.warn(`[useFileDrop] upload failed: ${path}`, error);
+                            failCount++;
                         }
                     }
+
+                    toast.dismiss(toastId);
 
                     if (createdCount > 0) {
                         toast.success(`已创建 ${createdCount} 个节点`);
                     }
-                } catch (uploadErr) {
+                    if (failCount > 0) {
+                        toast.warning(`${failCount} 个文件上传失败，请重试`);
+                    }
+                } catch (error: any) {
                     toast.dismiss(toastId);
-                    throw uploadErr;
+                    throw error;
                 }
             } catch (error) {
                 console.error("[useFileDrop] drop processing failed:", error);
@@ -235,12 +260,17 @@ export function useFileDrop(
                         dragStateRef.current.fileCount = paths.length;
 
                         if (paths.length > 0 && !dragStateRef.current.previewUrl) {
-                            void createPreviewFromPath(paths[0]).then((url) => {
+                            const name = getNameFromPath(paths[0]);
+                            const mediaType = detectMediaType(name, "");
+                            dragStateRef.current.fileType = mediaType;
+
+                            if (mediaType !== "image") return;
+                            void getLocalFileInfo(paths[0]).then((fileInfo) => {
+                                if (fileInfo.size > FILE_DROP_MAX_SIZE) return "";
+                                return createPreviewFromPath(paths[0]);
+                            }).catch(() => "").then((url) => {
                                 if (!cancelled && dragStateRef.current.active) {
                                     dragStateRef.current.previewUrl = url;
-                                    dragStateRef.current.fileType = detectMediaType(
-                                        paths[0].split(/[/\\]/).pop() || "", "",
-                                    );
                                 }
                             });
                         }

@@ -49,23 +49,13 @@ const TYPE_LABELS: Record<ReferenceItemType, string> = {
 };
 
 const MediaBadge = ({
-  label,
-  type,
   index,
 }: {
-  label?: string;
-  type: ReferenceItemType;
   index: number;
 }) => (
-  <div className="pointer-events-none absolute inset-x-1 top-1 flex items-center justify-between">
+  <div className="pointer-events-none absolute left-1 top-1">
     <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-black/65 px-1 text-[10px] font-medium text-white">
       {index + 1}
-    </span>
-    <span
-      className="max-w-12 truncate rounded-full bg-black/55 px-1.5 py-0.5 text-[9px] font-medium leading-none text-white/85"
-      title={label || TYPE_LABELS[type]}
-    >
-      {label || TYPE_LABELS[type]}
     </span>
   </div>
 );
@@ -206,7 +196,7 @@ const ReferenceCard = ({
       ) : (
         <Placeholder type="audio" label={item.label} />
       )}
-      <MediaBadge label={item.label} type={item.type} index={index} />
+      <MediaBadge index={index} />
     </div>
   );
 
@@ -296,7 +286,7 @@ const SortableReferenceItem = ({
             event.stopPropagation();
             onRemove(item);
           }}
-          className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-neutral-900 text-neutral-300 opacity-0 shadow-sm transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100"
+          className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-neutral-900 text-neutral-300 opacity-0 shadow-sm transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100"
           title="移除参考素材"
         >
           <IconX size={10} />
@@ -342,7 +332,7 @@ const StaticReferenceItem = ({
             event.stopPropagation();
             onRemove(item);
           }}
-          className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-neutral-900 text-neutral-300 opacity-0 shadow-sm transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100"
+          className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-neutral-900 text-neutral-300 opacity-0 shadow-sm transition-opacity hover:bg-red-500 hover:text-white group-hover:opacity-100"
           title="移除参考素材"
         >
           <IconX size={10} />
@@ -389,7 +379,7 @@ export const ReferenceThumbnails = ({
   if (!onReorder) {
     // 新版视频节点暂时禁用拖拽排序，避免缩略图长按/拖动时把素材区域向下拉伸。
     return (
-      <div className="flex h-[60px] items-center gap-2 overflow-visible">
+      <div className="flex h-15 items-center gap-2 overflow-visible">
         {sortableItems.map(({ item, index, displayIndex }) => (
           <StaticReferenceItem
             key={item.id}
@@ -440,7 +430,7 @@ export const ReferenceThumbnails = ({
         items={sortableItems.map(({ item }) => item.id)}
         strategy={horizontalListSortingStrategy}
       >
-        <div className="flex h-[60px] items-center gap-2 overflow-visible">
+        <div className="flex h-15 items-center gap-2 overflow-visible">
           {sortableItems.map(({ item, index, displayIndex }) => (
             <SortableReferenceItem
               key={item.id}

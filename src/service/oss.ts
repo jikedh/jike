@@ -1,4 +1,8 @@
-import { uploadOssFile } from "@/api/jikeGo";
+import {
+  getUploadOssPutUrl,
+  uploadOssFile,
+  type UploadOssPutUrlResp,
+} from "@/api/jikeGo";
 import { getJikeingToken } from "shared/utils/utils";
 
 // ===================== 预设缩略图尺寸 =====================
@@ -276,6 +280,85 @@ export async function uploadFileToOSS(file: File) {
     key: data?.key || "",
     size: data?.size || file.size,
     contentType: data?.content_type || data?.contentType || file.type,
+  };
+}
+
+export type LocalOssFileInfo = {
+  name: string;
+  size: number;
+};
+
+export type LocalOssUploadResult = LocalOssFileInfo & {
+  url: string;
+  key: string;
+  contentType: string;
+};
+
+const unwrapJikeGoData = <T>(response: any): T => {
+  const payload = response?.data ?? response;
+  if (typeof payload?.code === "number") {
+    if (payload.code !== 0 && payload.code !== 200) {
+      throw new Error(payload.msg || payload.message || "请求失败");
+    }
+    return payload.data as T;
+  }
+  return payload as T;
+};
+
+/** 获取本地文件元信息，不读取文件内容到 WebView。 */
+export async function getLocalFileInfo(path: string): Promise<LocalOssFileInfo> {
+  const invoke = getTauriInvoke();
+  if (!invoke) {
+    throw new Error("Tauri 文件上传不可用");
+  }
+  return invoke<LocalOssFileInfo>("get_local_file_info", { path });
+}
+
+/**
+ * 使用服务端签发的 OSS PUT URL 上传本地文件。
+ * 文件由 Rust 侧流式读取，渲染进程只持有路径和元信息。
+ */
+export async function uploadLocalFilePathToOSS(options: {
+  path: string;
+  name: string;
+  size: number;
+  contentType: string;
+  blobType: "image" | "video" | "audio";
+  maxSize: number;
+}): Promise<LocalOssUploadResult> {
+  const invoke = getTauriInvoke();
+  if (!invoke) {
+    throw new Error("Tauri 文件上传不可用");
+  }
+
+  const ext = options.name.split(".").pop()?.toLowerCase() || undefined;
+  const signed = unwrapJikeGoData<UploadOssPutUrlResp>(
+    await getUploadOssPutUrl({
+      blob_type: options.blobType,
+      ext,
+      content_type: options.contentType,
+    }),
+  );
+  if (!signed?.put_url || !signed.access_url) {
+    throw new Error("获取 OSS 直传地址失败");
+  }
+
+  const uploaded = await invoke<LocalOssFileInfo>(
+    "upload_local_file_to_signed_url",
+    {
+      path: options.path,
+      putUrl: signed.put_url,
+      headers: signed.headers || {},
+      maxSize: options.maxSize,
+    },
+  );
+
+  return {
+    name: uploaded.name || options.name,
+    size: uploaded.size || options.size,
+    url: signed.access_url,
+    key: signed.key || "",
+    contentType: options.contentType,
   };
 }
 

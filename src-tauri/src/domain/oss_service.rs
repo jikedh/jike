@@ -1,7 +1,8 @@
-use reqwest::{multipart, Body, Client, Url};
-use serde::Deserialize;
+use reqwest::{header, multipart, Body, Client, Url};
+use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::time::Duration;
+use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
@@ -18,6 +19,17 @@ pub enum OssCopyError {
     Upload(String),
     #[error("upload response missing url")]
     MissingUrl,
+    #[error("invalid local file")]
+    InvalidLocalFile,
+    #[error("local file is too large")]
+    FileTooLarge,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalFileInfo {
+    pub name: String,
+    pub size: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -129,6 +141,81 @@ pub async fn copy_media_url_to_oss(
         .ok_or(OssCopyError::MissingUrl)
 }
 
+/// 读取本地文件元信息，不将文件内容经 IPC 传给 WebView。
+pub async fn get_local_file_info(path: &str) -> Result<LocalFileInfo, OssCopyError> {
+    let metadata = tokio::fs::metadata(path)
+        .await
+        .map_err(|_| OssCopyError::InvalidLocalFile)?;
+    if !metadata.is_file() {
+        return Err(OssCopyError::InvalidLocalFile);
+    }
+
+    let name = std::path::Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .ok_or(OssCopyError::InvalidLocalFile)?
+        .to_string();
+
+    Ok(LocalFileInfo {
+        name,
+        size: metadata.len(),
+    })
+}
+
+/// 将本地文件作为 HTTP 流上传至由服务端签发的 OSS PUT URL。
+/// 文件数据始终保留在 Rust 流中，避免大文件占用 WebView 内存。
+pub async fn upload_local_file_to_signed_url(
+    path: &str,
+    put_url: &str,
+    headers: std::collections::HashMap<String, String>,
+    max_size: u64,
+) -> Result<LocalFileInfo, OssCopyError> {
+    let file_info = get_local_file_info(path).await?;
+    if file_info.size > max_size {
+        return Err(OssCopyError::FileTooLarge);
+    }
+
+    let upload_url = validate_signed_oss_url(put_url)?;
+    let file = tokio::fs::File::open(path)
+        .await
+        .map_err(|_| OssCopyError::InvalidLocalFile)?;
+    let stream = ReaderStream::new(file);
+    let body = Body::wrap_stream(stream);
+    let client = Client::builder()
+        .connect_timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(600))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|error| OssCopyError::Upload(error.to_string()))?;
+
+    let mut request = client.put(upload_url).header(header::CONTENT_LENGTH, file_info.size);
+    for (name, value) in headers {
+        let normalized = name.to_ascii_lowercase();
+        if normalized == "content-type" || normalized.starts_with("x-oss-") {
+            let header_name = header::HeaderName::from_bytes(normalized.as_bytes())
+                .map_err(|_| OssCopyError::Upload("invalid upload header".to_string()))?;
+            let header_value = header::HeaderValue::from_str(&value)
+                .map_err(|_| OssCopyError::Upload("invalid upload header".to_string()))?;
+            request = request.header(header_name, header_value);
+        }
+    }
+
+    let response = request
+        .body(body)
+        .send()
+        .await
+        .map_err(|error| OssCopyError::Upload(error.to_string()))?;
+    if !response.status().is_success() {
+        return Err(OssCopyError::Upload(format!(
+            "http status {}",
+            response.status()
+        )));
+    }
+
+    Ok(file_info)
+}
+
 fn validate_remote_media_url(media_url: &str) -> Result<Url, OssCopyError> {
     let url = Url::parse(media_url).map_err(|_| OssCopyError::InvalidUrl)?;
     if url.scheme() != "https" {
@@ -144,6 +231,19 @@ fn validate_upload_api_url(upload_api_url: &str) -> Result<Url, OssCopyError> {
         "http" | "https" => Ok(url),
         _ => Err(OssCopyError::UnsupportedProtocol),
     }
+}
+
+fn validate_signed_oss_url(put_url: &str) -> Result<Url, OssCopyError> {
+    let url = Url::parse(put_url).map_err(|_| OssCopyError::InvalidUrl)?;
+    if url.scheme() != "https" {
+        return Err(OssCopyError::UnsupportedProtocol);
+    }
+    let host = url.host_str().ok_or(OssCopyError::UnsafeHost)?;
+    let normalized = host.trim_end_matches('.').to_ascii_lowercase();
+    if normalized != "aliyuncs.com" && !normalized.ends_with(".aliyuncs.com") {
+        return Err(OssCopyError::UnsafeHost);
+    }
+    Ok(url)
 }
 
 fn validate_safe_host(url: &Url) -> Result<(), OssCopyError> {

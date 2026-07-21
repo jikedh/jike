@@ -75,6 +75,8 @@ export interface VideoPromptEditorHandle {
 
 export interface VideoPromptEditorProps {
   promptDraftHtml: string;
+  /** 优化提示词等异步操作期间，锁定正文以避免回写覆盖用户输入。 */
+  isEditable?: boolean;
   nodeId?: string;
   projectId?: string | null;
   mentionItems: {
@@ -218,7 +220,18 @@ AssetMentionSuggestion.displayName = "AssetMentionSuggestion";
 export const VideoPromptEditor = forwardRef<
   VideoPromptEditorHandle,
   VideoPromptEditorProps
->(({ promptDraftHtml, nodeId, projectId, mentionItems, onDraftChange }, ref) => {
+>(
+  (
+    {
+      promptDraftHtml,
+      isEditable = true,
+      nodeId,
+      projectId,
+      mentionItems,
+      onDraftChange,
+    },
+    ref,
+  ) => {
   const mentionItemsRef = useRef(mentionItems);
   const nodeIdRef = useRef(nodeId);
   const projectIdRef = useRef(projectId);
@@ -682,6 +695,11 @@ export const VideoPromptEditor = forwardRef<
     },
   });
 
+  useEffect(() => {
+    // TipTap 的只读状态会阻止键盘、粘贴和拖放等所有正文编辑入口。
+    editor?.setEditable(isEditable);
+  }, [editor, isEditable]);
+
   useImperativeHandle(
     ref,
     () => ({
@@ -903,17 +921,30 @@ export const VideoPromptEditor = forwardRef<
         };
         const nodes: ProseNode[] = [];
 
+        const appendText = (text: string) => {
+          text.split(/\r?\n/).forEach((paragraph, index) => {
+            if (paragraph.length === 0) return;
+
+            const last = nodes[nodes.length - 1];
+            if (index === 0 && last?.type === "paragraph") {
+              last.content = [
+                ...(last.content ?? []),
+                { type: "text", text: paragraph },
+              ];
+              return;
+            }
+
+            nodes.push({
+              type: "paragraph",
+              content: [{ type: "text", text: paragraph }],
+            });
+          });
+        };
+
         segments.forEach((segment) => {
           if (segment.kind === "text") {
-            // 注意上面 pushText 已经支持多段；在这里直接合并连续 text。
-            const paragraphs = segment.text.split(/\n+/);
-            paragraphs.forEach((paragraph) => {
-              if (paragraph.length === 0) return;
-              nodes.push({
-                type: "paragraph",
-                content: [{ type: "text", text: paragraph }],
-              });
-            });
+            // 无换行的文本与相邻 mention 保持在同一段落；显式换行才创建新段落。
+            appendText(segment.text);
             return;
           }
           const sameKind = orderedByType[segment.kindType];
