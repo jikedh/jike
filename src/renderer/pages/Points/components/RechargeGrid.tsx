@@ -3,7 +3,6 @@ import { Wallet } from "lucide-react";
 import { cn } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MIN_CUSTOM_RECHARGE_YUAN } from "../lib/constants";
 import type { RechargePackage } from "../lib/types";
 
 const PageTitle = () => (
@@ -91,27 +90,19 @@ const CustomRechargeCard = ({
 }) => {
     const [amount, setAmount] = useState("");
     const amountYuan = Number(amount);
-    // 1 元 = 60 积分，自定义充值仅支持整数元。
+    // 1 元 = 60 积分，按比例预估；前端允许两位小数
     const points = useMemo(
-        () =>
-            Number.isInteger(amountYuan) && amountYuan > 0
-                ? amountYuan * 60
-                : 0,
+        () => (Number.isFinite(amountYuan) && amountYuan > 0 ? Math.round(amountYuan * 60) : 0),
         [amountYuan],
     );
-    const isValidAmount =
-        Number.isInteger(amountYuan) &&
-        amountYuan >= MIN_CUSTOM_RECHARGE_YUAN &&
-        amountYuan <= 1_000_000;
+    const isValidAmount = Number.isFinite(amountYuan) && amountYuan >= 0.01 && amountYuan <= 1_000_000;
 
     return (
         <article className="rounded-[24px] border border-white/5 bg-[#121214] p-7 transition-all duration-500 hover:border-[#B43FEB]/40 hover:bg-[#161618]">
             <header className="mb-6 space-y-3">
                 <div>
                     <h3 className="text-2xl font-black tracking-tighter">自定义金额</h3>
-                    <p className="mt-1 text-xs text-white/35">
-                        1元 = 60积分，仅支持整数，最低 1 元，最高 100 万元
-                    </p>
+                    <p className="mt-1 text-xs text-white/35">1元 = 60积分，最低 0.01 元，最高 100 万元</p>
                 </div>
             </header>
 
@@ -119,9 +110,9 @@ const CustomRechargeCard = ({
                 <Input
                     id="custom-recharge-amount"
                     type="number"
-                    min={MIN_CUSTOM_RECHARGE_YUAN}
-                    step={1}
-                    inputMode="numeric"
+                    min={0.01}
+                    step={0.01}
+                    inputMode="decimal"
                     value={amount}
                     placeholder="请输入充值金额(单位元)"
                     className="h-12 rounded-2xl border-white/10 bg-white/5 text-white placeholder:text-white/25 focus-visible:ring-[#B43FEB]"
