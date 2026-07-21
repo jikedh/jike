@@ -119,6 +119,33 @@ function extractDurationSeconds(data: unknown): number | undefined {
   return undefined;
 }
 
+function extractVideoTrackDimensions(data: unknown): {
+  ratio: string | null;
+  resolution: string | null;
+} {
+  if (!data || typeof data !== "object") {
+    return { ratio: null, resolution: null };
+  }
+
+  const record = data as Record<string, any>;
+  const parameters = record.parameters ?? record.input?.parameters ?? {};
+  const ratio =
+    record.ratio ??
+    record.aspect_ratio ??
+    parameters.ratio ??
+    parameters.aspect_ratio ??
+    null;
+  const resolution = record.resolution ?? parameters.resolution ?? null;
+
+  return {
+    ratio: typeof ratio === "string" && ratio.trim() ? ratio.trim() : null,
+    resolution:
+      typeof resolution === "string" && resolution.trim()
+        ? resolution.trim()
+        : null,
+  };
+}
+
 function extractPrompt(data: unknown): string {
   if (!data || typeof data !== "object") {
     return "";
@@ -558,6 +585,7 @@ export async function createLzVideoTask(
     taskId,
     prompt: data.prompt,
     duration: extractDurationSeconds(data),
+    ...extractVideoTrackDimensions(data),
     referenceImageUrls: extractReferenceImageUrls(data),
     provider: "kuaizi",
     requestParams: data as unknown as Record<string, unknown>,
@@ -746,6 +774,7 @@ export async function createDashscopeVideoSynthesis(
     taskId,
     prompt: extractPrompt(data),
     duration: extractDurationSeconds(data),
+    ...extractVideoTrackDimensions(data),
     referenceImageUrls: extractReferenceImageUrls(data),
     provider: "dashscope",
     requestParams: trackData,
@@ -809,6 +838,7 @@ export async function createAgnesVideoTask(
       "",
     prompt: extractPrompt(data),
     duration: extractDurationSeconds(data),
+    ...extractVideoTrackDimensions(data),
     referenceImageUrls: extractReferenceImageUrls(data),
     provider: "agnes",
     requestParams: data,
@@ -871,6 +901,7 @@ export async function createOverseasSeedanceVideoTask(
     taskId,
     prompt: extractPrompt(data),
     duration: extractDurationSeconds(data),
+    ...extractVideoTrackDimensions(data),
     referenceImageUrls: extractReferenceImageUrls(data),
     provider: "kuaizi_global",
     requestParams: data as unknown as Record<string, unknown>,
@@ -936,6 +967,7 @@ async function createKuaiziOpenPlatformVideoTask({
     taskId,
     prompt: extractPrompt(data),
     duration: extractDurationSeconds(data),
+    ...extractVideoTrackDimensions(data),
     referenceImageUrls: extractReferenceImageUrls(data),
     provider: "kuaizi",
     requestParams: data as unknown as Record<string, unknown>,

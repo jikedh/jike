@@ -9,6 +9,8 @@ export interface AIVideoTrackData {
   taskId: string;
   prompt?: string;
   duration?: number;
+  ratio?: string | null;
+  resolution?: string | null;
   referenceImageUrls?: string[];
   provider?: string;
   requestParams?: Record<string, unknown>;
@@ -63,6 +65,8 @@ class AIVideoTrackingService {
             ? JSON.stringify(trackData.requestParams)
             : undefined,
           duration: trackData.duration,
+          ratio: trackData.ratio ?? null,
+          resolution: trackData.resolution ?? null,
           reference_image_url: trackData.referenceImageUrls,
           createTime: trackData.timestamp,
           scoreCost: trackData.scoreCost,
