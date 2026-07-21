@@ -1,3 +1,5 @@
+export const MIN_CUSTOM_RECHARGE_YUAN = 1;
+
 export const AVATAR_STYLES = [
   "adventurer",
   "adventurer-neutral",

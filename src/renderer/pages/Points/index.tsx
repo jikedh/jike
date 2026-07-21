@@ -13,7 +13,10 @@ import { HistorySection } from "./components/HistorySection";
 import { ProfileHeader } from "./components/ProfileHeader";
 import { RechargeDialog } from "./components/RechargeDialog";
 import { RechargeGrid } from "./components/RechargeGrid";
-import { RECHARGE_PACKAGES } from "./lib/constants";
+import {
+    MIN_CUSTOM_RECHARGE_YUAN,
+    RECHARGE_PACKAGES,
+} from "./lib/constants";
 import type { ActiveTab, NativePayOrder, RechargePackage } from "./lib/types";
 import { generateAvatarUrl, getRandomStyle } from "./lib/utils";
 
@@ -168,8 +171,19 @@ export function PointsView() {
             toast.error("请先登录后再充值");
             return;
         }
+        if (
+            !Number.isFinite(amountYuan) ||
+            amountYuan < MIN_CUSTOM_RECHARGE_YUAN
+        ) {
+            toast.error(`最低充值金额为 ${MIN_CUSTOM_RECHARGE_YUAN} 元`);
+            return;
+        }
+        if (!Number.isInteger(amountYuan)) {
+            toast.error("充值金额仅支持整数元");
+            return;
+        }
 
-        const points = Math.round(amountYuan * 60);
+        const points = amountYuan * 60;
         const customPackage: RechargePackage = {
             id: 0,
             packageId: "pkg_custom",
