@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import {
     createRechargeOrder,
     getRechargeOrderStatus,
-    updateVipScore,
 } from "@/api/jikeing";
 import { getJikeGoScoreRecords, getJikeGoScoreTransactions } from "@/api/jikeGo";
 import { useUserStore } from "@/stores/useUserStore";
@@ -13,10 +12,7 @@ import { HistorySection } from "./components/HistorySection";
 import { ProfileHeader } from "./components/ProfileHeader";
 import { RechargeDialog } from "./components/RechargeDialog";
 import { RechargeGrid } from "./components/RechargeGrid";
-import {
-    MIN_CUSTOM_RECHARGE_YUAN,
-    RECHARGE_PACKAGES,
-} from "./lib/constants";
+import { RECHARGE_PACKAGES } from "./lib/constants";
 import type { ActiveTab, NativePayOrder, RechargePackage } from "./lib/types";
 import { generateAvatarUrl, getRandomStyle } from "./lib/utils";
 
@@ -171,19 +167,8 @@ export function PointsView() {
             toast.error("请先登录后再充值");
             return;
         }
-        if (
-            !Number.isFinite(amountYuan) ||
-            amountYuan < MIN_CUSTOM_RECHARGE_YUAN
-        ) {
-            toast.error(`最低充值金额为 ${MIN_CUSTOM_RECHARGE_YUAN} 元`);
-            return;
-        }
-        if (!Number.isInteger(amountYuan)) {
-            toast.error("充值金额仅支持整数元");
-            return;
-        }
 
-        const points = amountYuan * 60;
+        const points = Math.round(amountYuan * 60);
         const customPackage: RechargePackage = {
             id: 0,
             packageId: "pkg_custom",
@@ -232,35 +217,21 @@ export function PointsView() {
             try {
                 const result = await getRechargeOrderStatus(nativePayOrder.orderId);
 
-                if (
-                    result?.data?.tradeState === "SUCCESS" ||
-                    result?.data?.status === "PAID"
-                ) {
+                const orderStatus = result?.data;
+
+                if (orderStatus?.credited) {
                     window.clearInterval(timer);
-
-                    try {
-                        await updateVipScore({
-                            userId,
-                            vipScoreDelta: selectedPackage.points,
-                        });
-                        if (balanceInfo) {
-                            setBalanceInfo({
-                                ...balanceInfo,
-                                forScore: balanceInfo.forScore + selectedPackage.points,
-                            });
-                        }
-                        void fetchBalanceInfo();
-                        void fetchRecords(1);
-                        void fetchTransactions(1);
-                        toast.success("充值成功，积分已到账");
-                    } catch (error: any) {
-                        console.error(error);
-                        toast.error("充值成功但积分更新失败，请刷新页面");
-                    }
-
+                    void fetchBalanceInfo();
+                    void fetchRecords(1);
+                    void fetchTransactions(1);
+                    toast.success("充值成功，积分已到账");
                     setSelectedPackage(null);
                     setNativePayOrder(null);
-                } else if (result?.data?.status === "CLOSED") {
+                } else if (orderStatus?.status === "PAID") {
+                    if (orderStatus.creditError) {
+                        toast.error("支付已完成，积分入账异常，请稍后刷新查看");
+                    }
+                } else if (orderStatus?.status === "CLOSED") {
                     toast.error("支付失败或已取消");
                     setSelectedPackage(null);
                     setNativePayOrder(null);
@@ -292,14 +263,11 @@ export function PointsView() {
             }
         };
     }, [
-        balanceInfo,
         fetchBalanceInfo,
         fetchRecords,
         fetchTransactions,
         nativePayOrder?.orderId,
         selectedPackage,
-        setBalanceInfo,
-        userId,
     ]);
 
     const handleRecharge = (pkg: RechargePackage) => {
