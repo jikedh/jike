@@ -3,6 +3,7 @@
  * 处理生成流程、输入验证、输出节点创建等核心业务逻辑
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getTextAgentModelConfig } from "shared/constants/text-agent-presets";
 import type { TextAgentNodeType, TextAgentPresetId } from "shared/types/flow";
 import { createDesktopChatCompletions } from "@/api/jikeGo";
 import { useMessage } from "@/hooks/useMessage";
@@ -194,11 +195,13 @@ export const useTextAgentGenerate = ({
 
     try {
       // 3. 调用 API
+      const modelConfig = getTextAgentModelConfig(currentModel);
       const response = await createDesktopChatCompletions(
         {
           model: currentModel,
-          platform: "toapi",
-          upstreamPath: "/v1/chat/completions",
+          platform: modelConfig.platform,
+          agentPresetId: presetId,
+          scoreTaskId: id,
           messages: [
             {
               role: "system",

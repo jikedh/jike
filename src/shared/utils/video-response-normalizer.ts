@@ -80,11 +80,17 @@ const extractKuaiziVideoItems = (response: any) => {
   }));
 };
 
-// Agnes-Video-V2.0 完成态在顶层 remixed_from_video_id 字段返回视频 URL。
+// Agnes-Video-V2.0 通常在顶层 url 字段返回视频地址，同时兼容代理嵌套结构。
 const extractAgnesVideoItems = (response: any) => {
   const candidates = [
-    response?.remixed_from_video_id,
-    response?.data?.remixed_from_video_id,
+    response?.url,
+    response?.video_url,
+    response?.data?.url,
+    response?.data?.video_url,
+    response?.result?.url,
+    response?.data?.result?.url,
+    response?.result?.data?.[0]?.url,
+    response?.data?.result?.data?.[0]?.url,
   ].filter((url): url is string => typeof url === "string" && url.length > 0);
 
   if (candidates.length === 0) {
@@ -146,8 +152,7 @@ const isKuaiziResponse = (response: any): boolean =>
   response?.output?.task_status !== undefined ||
   response?.data?.task_status !== undefined;
 
-// Agnes-Video-V2.0 响应在顶层以 status: queued/in_progress/completed/failed 标识，
-// 视频 URL 在 remixed_from_video_id 字段。
+// Agnes-Video-V2.0 响应在顶层以 status: queued/in_progress/completed/failed 标识。
 const isAgnesVideoResponse = (response: any): boolean => {
   const status = response?.status;
   return (

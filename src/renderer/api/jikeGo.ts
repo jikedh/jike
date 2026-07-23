@@ -107,6 +107,8 @@ export type DesktopChatCompletionsRequest = {
   platform: Extract<DesktopProxyPlatform, "dashscope" | "toapi">;
   upstreamPath?: string;
   model: string;
+  agentPresetId?: string;
+  scoreTaskId?: string;
   messages: Array<{
     role: "system" | "user" | "assistant" | "tool";
     content: string;

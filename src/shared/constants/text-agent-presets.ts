@@ -50,6 +50,17 @@ export const TEXT_AGENT_PRESETS: Record<
 
 export const TEXT_AGENT_PRESET_LIST = Object.values(TEXT_AGENT_PRESETS);
 
+export const KIMI_K3_MODEL = "kimi/kimi-k3";
+
+export const KIMI_K3_TEXT_AGENT_SCORE_COSTS: Record<TextAgentPresetId, number> =
+  {
+    "novel-to-script-agent": 80,
+    "short-video-storyboard": 40,
+    "jimeng-prompt": 20,
+    "novel-character-design": 50,
+    "script-to-storyboard": 70,
+  };
+
 export const getTextAgentPresetById = (presetId?: TextAgentPresetId) => {
   const defaultPreset = TEXT_AGENT_PRESETS["novel-to-script-agent"];
   if (!presetId) {
@@ -75,6 +86,29 @@ export const getTextAgentPresetLabelById = (presetId?: string) => {
 };
 
 export const TEXT_AGENT_MODELS = [
-  { value: "claude-sonnet-4.6", label: "Claude Sonnet 4.6" },
-  { value: "deepseek-v4-flash", label: "deepseek-v4-flash" },
-];
+  {
+    value: "claude-sonnet-4.6",
+    label: "Claude Sonnet 4.6",
+    platform: "toapi",
+  },
+  {
+    value: "deepseek-v4-flash",
+    label: "deepseek-v4-flash",
+    platform: "toapi",
+  },
+  { value: KIMI_K3_MODEL, label: "Kimi K3", platform: "dashscope" },
+] as const;
+
+export const getTextAgentModelConfig = (model: string) =>
+  TEXT_AGENT_MODELS.find((item) => item.value === model) ??
+  TEXT_AGENT_MODELS.find((item) => item.value === "deepseek-v4-flash")!;
+
+export const getTextAgentScoreCost = (
+  model: string,
+  presetId?: TextAgentPresetId,
+) => {
+  if (model !== KIMI_K3_MODEL || !presetId) {
+    return undefined;
+  }
+  return KIMI_K3_TEXT_AGENT_SCORE_COSTS[presetId];
+};
