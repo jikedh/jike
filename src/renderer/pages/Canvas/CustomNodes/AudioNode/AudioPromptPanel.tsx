@@ -7,7 +7,6 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   confirmDesktopProxyScore,
-  getDesktopAudioVoices,
   refundDesktopProxyScore,
   synthesizeDesktopAudio,
 } from "@/api/jikeGo";
@@ -21,8 +20,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
+import { useAudioVoiceStore } from "@/stores/audioVoiceStore";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import {
   AUDIO_TEXT_MARKERS,
@@ -31,9 +37,9 @@ import {
 import { GenerationStatus } from "shared/constants/enum";
 import type {
   AudioSynthesisResponse,
-  AudioTtsModelId,
   AudioTtsModelInfo,
   AudioTtsSegment,
+  AudioVoiceProfile,
 } from "shared/types/audio";
 import type { AudioGenerationNode } from "shared/types/flow";
 import {
@@ -65,6 +71,53 @@ const escapeHtml = (value: string) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+
+const getVoiceLanguageLabel = (language?: string) => {
+  switch (language) {
+    case "yue-HK":
+      return "粤语";
+    case "en-US":
+      return "英语";
+    case "zh-CN":
+      return "普通话";
+    default:
+      return "";
+  }
+};
+
+const VoiceSelectItem = ({ voice }: { voice: AudioVoiceProfile }) => {
+  const content = (
+    <span className="flex min-w-0 w-full items-center justify-between gap-3">
+      <span className="truncate">{voice.name}</span>
+      <span className="shrink-0 text-right text-xs text-muted-foreground">
+        {getVoiceLanguageLabel(voice.language)}
+      </span>
+    </span>
+  );
+
+  return (
+    <SelectItem
+      value={voice.profileId}
+      textValue={voice.name}
+      className="[&>span:last-child]:min-w-0 [&>span:last-child]:flex-1"
+    >
+      {voice.description?.trim() ? (
+        <Tooltip>
+          <TooltipTrigger asChild>{content}</TooltipTrigger>
+          <TooltipContent
+            side="right"
+            sideOffset={8}
+            className="z-[300] max-w-64 whitespace-normal border border-white/10 bg-neutral-800 text-xs leading-relaxed text-white/80"
+          >
+            {voice.description}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        content
+      )}
+    </SelectItem>
+  );
+};
 
 const audioBufferToWav = (buffer: AudioBuffer): Blob => {
   const channelCount = buffer.numberOfChannels;
@@ -266,48 +319,52 @@ export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
     return node?.data as AudioGenerationNode | undefined;
   });
 
-  const [models, setModels] = useState<AudioTtsModelInfo[]>([]);
-  const [selectedModel, setSelectedModel] = useState<AudioTtsModelId>(() =>
-    normalizeAudioTtsModel(currentData?.model),
-  );
-  const [selectedVoiceId, setSelectedVoiceId] = useState(
-    currentData?.voiceProfileId ?? "",
-  );
+  const models = useAudioVoiceStore((state) => state.models);
+  const loadingVoices = useAudioVoiceStore((state) => state.loading);
+  const fetchVoices = useAudioVoiceStore((state) => state.fetchVoices);
+  const upsertVoice = useAudioVoiceStore((state) => state.upsertVoice);
+  const selectedModel = normalizeAudioTtsModel(currentData?.model);
+  const selectedVoiceId = currentData?.voiceProfileId ?? "";
   const [text, setText] = useState(
     currentData?.promptDraft ?? currentData?.prompt ?? "",
   );
-  const [loadingVoices, setLoadingVoices] = useState(true);
+  const [voiceCatalogResolved, setVoiceCatalogResolved] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false);
 
   const loadVoices = useCallback(
-    async (syncMiniMax: boolean) => {
-      const response = await getDesktopAudioVoices(syncMiniMax);
-      const payload = unwrapResponse(response);
-      setModels(payload.models ?? []);
-      return payload.models ?? [];
+    async (options?: { force?: boolean; syncMiniMax?: boolean }) => {
+      const result = await fetchVoices(options);
+      setVoiceCatalogResolved(true);
+      if (!result.fromCache && result.syncWarning) {
+        warning("部分音色试听修复失败", result.syncWarning);
+      }
+      return result.models;
     },
-    [],
+    [fetchVoices],
   );
 
   useEffect(() => {
     let disposed = false;
-    void getDesktopAudioVoices(true)
-      .then((response) => {
-        if (disposed) return;
-        const payload = unwrapResponse(response);
-        setModels(payload.models ?? []);
+    void fetchVoices({ syncMiniMax: true })
+      .then((result) => {
+        if (disposed) {
+          return;
+        }
+        setVoiceCatalogResolved(true);
+        if (!result.fromCache && result.syncWarning) {
+          warning("部分音色试听修复失败", result.syncWarning);
+        }
       })
       .catch(() => {
-        if (!disposed) setModels([]);
-      })
-      .finally(() => {
-        if (!disposed) setLoadingVoices(false);
+        if (!disposed) {
+          setVoiceCatalogResolved(false);
+        }
       });
     return () => {
       disposed = true;
     };
-  }, []);
+  }, [fetchVoices]);
 
   useEffect(() => {
     setText(currentData?.promptDraft ?? currentData?.prompt ?? "");
@@ -331,6 +388,9 @@ export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
     currentModel?.available ?? selectedModel === AUDIO_TTS_MODEL_OPTIONS[0].id;
 
   useEffect(() => {
+    if (!voiceCatalogResolved || !currentModel) {
+      return;
+    }
     if (voiceOptions.some((voice) => voice.profileId === selectedVoiceId)) {
       return;
     }
@@ -340,9 +400,15 @@ export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
     if (nextVoiceId === selectedVoiceId) {
       return;
     }
-    setSelectedVoiceId(nextVoiceId);
     updateAudioNodeData(nodeId, { voiceProfileId: nextVoiceId });
-  }, [nodeId, selectedVoiceId, updateAudioNodeData, voiceOptions]);
+  }, [
+    currentModel,
+    nodeId,
+    selectedVoiceId,
+    updateAudioNodeData,
+    voiceCatalogResolved,
+    voiceOptions,
+  ]);
 
   const billableChars = useMemo(() => getAudioBillableChars(text), [text]);
   const requiredPoints = useMemo(
@@ -385,8 +451,6 @@ export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
   const handleModelChange = useCallback(
     (value: string) => {
       const model = normalizeAudioTtsModel(value);
-      setSelectedModel(model);
-      setSelectedVoiceId("");
       updateAudioNodeData(nodeId, {
         model,
         voiceProfileId: "",
@@ -525,31 +589,14 @@ export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
 
   const handleVoiceCreated = useCallback(
     (voice: AudioTtsModelInfo["voices"][number]) => {
-      setModels((currentModels) =>
-        currentModels.map((model) =>
-          model.id === voice.model
-            ? {
-                ...model,
-                available: true,
-                voices: [
-                  ...model.voices.filter(
-                    (item) => item.profileId !== voice.profileId,
-                  ),
-                  voice,
-                ],
-              }
-            : model,
-        ),
-      );
-      setSelectedModel(voice.model);
-      setSelectedVoiceId(voice.profileId);
+      upsertVoice(voice);
       updateAudioNodeData(nodeId, {
         model: voice.model,
         voiceProfileId: voice.profileId,
       });
-      void loadVoices(false);
+      void loadVoices({ force: true }).catch(() => undefined);
     },
-    [loadVoices, nodeId, updateAudioNodeData],
+    [loadVoices, nodeId, updateAudioNodeData, upsertVoice],
   );
 
   return (
@@ -589,48 +636,39 @@ export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
           </Select>
 
           <div className="flex min-w-0 gap-1.5">
-            <Select
-              value={selectedVoiceId}
-              onValueChange={(value) => {
-                setSelectedVoiceId(value);
-                updateAudioNodeData(nodeId, { voiceProfileId: value });
-              }}
-              disabled={loadingVoices || voiceOptions.length === 0}
-            >
-              <SelectTrigger className="min-w-0 flex-1 border-white/10 bg-white/5 text-white">
-                <SelectValue
-                  placeholder={loadingVoices ? "加载音色..." : "暂无可用音色"}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {systemVoiceOptions.length > 0 ? (
-                  <SelectGroup>
-                    <SelectLabel>系统音色</SelectLabel>
-                    {systemVoiceOptions.map((voice) => (
-                      <SelectItem
-                        key={voice.profileId}
-                        value={voice.profileId}
-                      >
-                        {voice.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ) : null}
-                {clonedVoiceOptions.length > 0 ? (
-                  <SelectGroup>
-                    <SelectLabel>共享复刻音色</SelectLabel>
-                    {clonedVoiceOptions.map((voice) => (
-                      <SelectItem
-                        key={voice.profileId}
-                        value={voice.profileId}
-                      >
-                        {voice.name}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ) : null}
-              </SelectContent>
-            </Select>
+            <TooltipProvider delayDuration={300}>
+              <Select
+                value={selectedVoiceId}
+                onValueChange={(value) => {
+                  updateAudioNodeData(nodeId, { voiceProfileId: value });
+                }}
+                disabled={loadingVoices || voiceOptions.length === 0}
+              >
+                <SelectTrigger className="min-w-0 flex-1 border-white/10 bg-white/5 text-white">
+                  <SelectValue
+                    placeholder={loadingVoices ? "加载音色..." : "暂无可用音色"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {systemVoiceOptions.length > 0 ? (
+                    <SelectGroup>
+                      <SelectLabel>系统音色</SelectLabel>
+                      {systemVoiceOptions.map((voice) => (
+                        <VoiceSelectItem key={voice.profileId} voice={voice} />
+                      ))}
+                    </SelectGroup>
+                  ) : null}
+                  {clonedVoiceOptions.length > 0 ? (
+                    <SelectGroup>
+                      <SelectLabel>共享复刻音色</SelectLabel>
+                      {clonedVoiceOptions.map((voice) => (
+                        <VoiceSelectItem key={voice.profileId} voice={voice} />
+                      ))}
+                    </SelectGroup>
+                  ) : null}
+                </SelectContent>
+              </Select>
+            </TooltipProvider>
             <button
               type="button"
               title="试听音色"
