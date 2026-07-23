@@ -14,6 +14,7 @@ interface ConfigPanelProps {
   onSystemPromptChange: (value: string) => void;
   currentModel: string;
   onModelChange: (model: string) => void;
+  scoreCost?: number;
   isGenerating: boolean;
   onGenerate: () => void;
 }
@@ -23,6 +24,7 @@ export const ConfigPanel = ({
   onSystemPromptChange,
   currentModel,
   onModelChange,
+  scoreCost,
   isGenerating,
   onGenerate,
 }: ConfigPanelProps) => {
@@ -98,7 +100,11 @@ export const ConfigPanel = ({
           )}
         >
           <IconSend size={14} />
-          {isGenerating ? "生成中..." : "生成"}
+          {isGenerating
+            ? "生成中..."
+            : scoreCost
+              ? `生成 · ${scoreCost}积分`
+              : "生成"}
         </Button>
       </div>
     </div>

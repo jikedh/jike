@@ -8,6 +8,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
   getTextAgentPresetById,
   getTextAgentPresetLabelById,
+  getTextAgentScoreCost,
 } from "shared/constants/text-agent-presets";
 import type { TextAgentNodeType, TextAgentPresetId } from "shared/types/flow";
 import { NodeContextMenu } from "@/pages/Canvas/components/NodeContextMenu";
@@ -44,7 +45,7 @@ export const TextAgentNode = memo(
       !data.presetId,
     );
     const [currentModel, setCurrentModel] = useState(
-      data.model || "gemini-3.1-pro",
+      data.model || getTextAgentPresetById(data.presetId).model,
     );
     const [editableSystemPrompt, setEditableSystemPrompt] = useState("");
     const [isRenaming, setIsRenaming] = useState(false);
@@ -234,6 +235,7 @@ export const TextAgentNode = memo(
                   onSystemPromptChange={setEditableSystemPrompt}
                   currentModel={currentModel}
                   onModelChange={handleModelChange}
+                  scoreCost={getTextAgentScoreCost(currentModel, presetId)}
                   isGenerating={isGenerating}
                   onGenerate={handleGenerate}
                 />

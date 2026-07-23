@@ -190,7 +190,7 @@ const AgnesAdvancedParams = ({ value, onChange }: AgnesAdvancedParamsProps) => {
         ) : null}
       </section>
 
-      <section className="space-y-2">
+      {/* <section className="space-y-2">
         <div className="flex items-center justify-between">
           <span className={FIELD_LABEL_CLASS}>随机种子 (seed)</span>
           <button
@@ -231,7 +231,7 @@ const AgnesAdvancedParams = ({ value, onChange }: AgnesAdvancedParamsProps) => {
           rows={2}
           className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs text-neutral-100 outline-none placeholder:text-neutral-500 focus:border-[#B43FEB]/60 disabled:opacity-50"
         />
-      </section>
+      </section> */}
 
       {hasError ? (
         <div className="flex items-start gap-1.5 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-[11px] text-red-300">
