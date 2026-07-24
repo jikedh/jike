@@ -207,37 +207,43 @@ function TeamsPage() {
         const member = currentTeam.members.find(
             (item) => String(item.userId) === memberUserId,
         );
-        patchCurrentTeam((bundle) => ({
-            ...bundle,
-            summary: {
-                ...bundle.summary,
-                allocatablePersonalCredits:
-                    bundle.summary.allocatablePersonalCredits - amount,
-                teamTotalAllocatedCredits:
-                    bundle.summary.teamTotalAllocatedCredits + amount,
-            },
-            ledgers: [
-                {
-                    id: nextId("lg"),
-                    memberId: member?.id ?? "",
-                    memberUserId,
-                    memberNickname: member?.nickname ?? `用户${memberUserId}`,
-                    memberAvatar:
-                        member?.avatar ?? buildTeamAvatar(String(memberUserId)),
-                    operatorUserId: CURRENT_USER_ID,
-                    operatorNickname: CURRENT_USER_NICKNAME,
-                    type: "ALLOCATE",
-                    amount,
-                    bizType: "manual_allocate",
-                    bizId: nextId("op"),
-                    createdAt: mockHoursAgo(0),
+        patchCurrentTeam((bundle) => {
+            const { currentVipScore, currentForScore } = bundle.summary;
+            // 分配优先消耗永久积分，不足部分再扣会员积分，保持 可分配 = 会员 + 永久
+            const deductFor = Math.min(currentForScore, amount);
+            const deductVip = amount - deductFor;
+            return {
+                ...bundle,
+                summary: {
+                    ...bundle.summary,
+                    allocatablePersonalCredits:
+                        bundle.summary.allocatablePersonalCredits - amount,
+                    teamTotalAllocatedCredits:
+                        bundle.summary.teamTotalAllocatedCredits + amount,
+                    currentForScore: currentForScore - deductFor,
+                    currentVipScore: currentVipScore - deductVip,
                 },
-                ...bundle.ledgers,
-            ],
-        }));
-        toast.success(
-            `已向「${member?.nickname ?? memberUserId}」分配 ${amount.toLocaleString("zh-CN")} 积分`,
-        );
+                ledgers: [
+                    {
+                        id: nextId("lg"),
+                        memberId: member?.id ?? "",
+                        memberUserId,
+                        memberNickname: member?.nickname ?? `用户${memberUserId}`,
+                        memberAvatar:
+                            member?.avatar ?? buildTeamAvatar(String(memberUserId)),
+                        operatorUserId: CURRENT_USER_ID,
+                        operatorNickname: CURRENT_USER_NICKNAME,
+                        type: "ALLOCATE",
+                        amount,
+                        bizType: "manual_allocate",
+                        bizId: nextId("op"),
+                        createdAt: mockHoursAgo(0),
+                    },
+                    ...bundle.ledgers,
+                ],
+            };
+        });
+
     };
 
     /* ---------------- 收到的邀请 ---------------- */

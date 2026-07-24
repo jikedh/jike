@@ -204,6 +204,7 @@ const lanhaiMembers: TeamMember[] = [
 ];
 
 const lanhaiSummary: TeamCreditSummary = {
+    // 1200 + 1800 = 3000
     allocatablePersonalCredits: 3000,
     teamTotalAllocatedCredits: 15000,
     currentVipScore: 1200,
