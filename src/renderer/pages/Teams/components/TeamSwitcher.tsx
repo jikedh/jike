@@ -1,10 +1,11 @@
 import { Crown, Plus, Users } from "lucide-react";
+import type { TeamInfo } from "shared/types/api/teams";
 import { cn } from "shared/utils/utils";
-import type { TeamBundle } from "../mockData";
 import { formatTeamTime } from "../utils";
 
 interface TeamSwitcherProps {
-    teams: TeamBundle[];
+    teams: TeamInfo[];
+    memberCounts: Record<string, number>;
     currentTeamId: string | number;
     onSelect: (teamId: string | number) => void;
     onCreate: () => void;
@@ -13,20 +14,22 @@ interface TeamSwitcherProps {
 /** 顶部团队切换卡片列表 + 创建入口。 */
 export function TeamSwitcher({
     teams,
+    memberCounts,
     currentTeamId,
     onSelect,
     onCreate,
 }: TeamSwitcherProps) {
     return (
         <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-            {teams.map((bundle) => {
-                const active = String(bundle.info.id) === String(currentTeamId);
-                const isOwner = bundle.info.currentRole === "OWNER";
+            {teams.map((info) => {
+                const active = String(info.id) === String(currentTeamId);
+                const isOwner = info.currentRole === "OWNER";
+                const count = memberCounts[String(info.id)] ?? 0;
                 return (
                     <button
-                        key={String(bundle.info.id)}
+                        key={String(info.id)}
                         type="button"
-                        onClick={() => onSelect(bundle.info.id)}
+                        onClick={() => onSelect(info.id)}
                         className={cn(
                             "group flex w-72 shrink-0 flex-col gap-3 rounded-[24px] border p-5 text-left transition-all cursor-pointer",
                             active
@@ -36,7 +39,7 @@ export function TeamSwitcher({
                     >
                         <div className="flex items-start justify-between gap-2">
                             <span className="text-base font-bold text-white truncate">
-                                {bundle.info.name}
+                                {info.name}
                             </span>
                             <span
                                 className={cn(
@@ -51,14 +54,14 @@ export function TeamSwitcher({
                             </span>
                         </div>
                         <p className="line-clamp-2 min-h-8 text-xs leading-relaxed text-white/35">
-                            {bundle.info.description || "暂无团队简介"}
+                            {info.description || "暂无团队简介"}
                         </p>
                         <div className="flex items-center justify-between text-[11px] text-white/30">
                             <span className="flex items-center gap-1.5">
                                 <Users className="h-3.5 w-3.5" />
-                                {bundle.members.length} 名成员
+                                {count} 名成员
                             </span>
-                            <span>创建于 {formatTeamTime(bundle.info.createdAt).slice(0, 10)}</span>
+                            <span>创建于 {formatTeamTime(info.createdAt).slice(0, 10)}</span>
                         </div>
                     </button>
                 );
