@@ -1,5 +1,6 @@
 import { capture, sendToCanvas } from '../util/capture.js';
 import { toast } from '../util/dom.js';
+import { uploadFileToOSS } from '../../../../service/oss.ts';
 
 /**
  * 截图小王国（§C）：管理会话内的截图数据与相关操作。
@@ -63,18 +64,34 @@ export class ShotManager {
 
   shotsForCamera(cameraId) { return this.list.filter((s) => s.cameraId === cameraId); }
 
-  sendShotsToCanvas(ids) {
+  async sendShotsToCanvas(ids) {
     const ids2 = (ids && ids.length) ? ids : [...this.selectedShotIds];
     if (!ids2.length) { toast('请先选择截图'); return; }
     const sel = this.list.filter((s) => ids2.includes(s.id));
-    const sent = sendToCanvas(sel.map((shot) => ({
-      name: shot.name,
-      dataUrl: shot.dataURL,
-      width: shot.width,
-      height: shot.height,
-    })));
-    if (sent) toast(`已发送 ${sel.length} 张到画布`);
-    else toast('请在画布中打开导演台后再发送截图');
+    try {
+      toast(`正在上传 ${sel.length} 张截图…`);
+      const images = await Promise.all(sel.map(async (shot) => {
+        const response = await fetch(shot.dataURL);
+        const blob = await response.blob();
+        const file = new File([blob], `${shot.name}.png`, {
+          type: blob.type || 'image/png',
+        });
+        const uploaded = await uploadFileToOSS(file);
+        if (!uploaded.url) throw new Error(`${shot.name} 上传失败`);
+        return {
+          name: shot.name,
+          url: uploaded.url,
+          width: shot.width,
+          height: shot.height,
+        };
+      }));
+      const sent = sendToCanvas(images);
+      if (sent) toast(`已发送 ${images.length} 张到画布`);
+      else toast('请在画布中打开导演台后再发送截图');
+    } catch (error) {
+      console.error('导演台截图上传失败', error);
+      toast('截图上传失败，请稍后重试');
+    }
   }
 
   removeShot(id) {
