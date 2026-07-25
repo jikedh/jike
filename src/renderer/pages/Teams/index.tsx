@@ -1,5 +1,6 @@
-import { Coins, Loader2, PencilLine, Plus } from "lucide-react";
+import { Bell, Coins, Loader2, PencilLine, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { TeamConsumptionRecord, TeamCreditLedger, TeamCreditSummary, TeamId, TeamInfo, TeamInvitation, TeamMember } from "shared/types/api/teams";
 import { toast } from "sonner";
 import {
@@ -62,6 +63,7 @@ const EMPTY_SUMMARY: TeamCreditSummary = {
 function TeamsPage() {
     const userInfo = useUserStore((s) => s.userInfo);
     const currentUserId = String(userInfo?.id ?? "");
+    const navigate = useNavigate();
 
     // 团队列表
     const [teams, setTeams] = useState<TeamInfo[]>([]);
@@ -295,6 +297,12 @@ function TeamsPage() {
     // 我可分配积分 = 后端按角色返回的 allocatablePersonalCredits（Owner=个人可分配总额，Member=0）
     const allocatableCredits = summary.allocatablePersonalCredits;
 
+    // 待处理的收到邀请数量，用于红点提示
+    const pendingInvitationCount = useMemo(
+        () => myInvitations.filter((inv) => inv.status === "PENDING").length,
+        [myInvitations],
+    );
+
     const currentTeam = useMemo(
         () => teams.find((t) => String(t.id) === String(currentTeamId)) ?? null,
         [teams, currentTeamId],
@@ -320,6 +328,19 @@ function TeamsPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <div className="relative">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate(`/invitation-center?teamId=${currentTeamId ?? ""}`)}
+                        >
+                            <Bell className="h-4 w-4" />
+                            邀请中心
+                        </Button>
+                        {pendingInvitationCount > 0 && (
+                            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
+                        )}
+                    </div>
                     {isOwner && currentTeam && (
                         <>
                             <Button
@@ -380,14 +401,6 @@ function TeamsPage() {
                                     onLeave={handleLeaveTeam}
                                 />
 
-                                <InvitationsPanel
-                                    myInvitations={myInvitations}
-                                    sentInvitations={sentInvitations}
-                                    isOwner={isOwner}
-                                    onAccept={handleAcceptInvitation}
-                                    onReject={handleRejectInvitation}
-                                />
-
                                 <RecordsSection
                                     ledgers={ledgers}
                                     consumption={consumption}
@@ -410,15 +423,6 @@ function TeamsPage() {
                                 创建第一个团队
                             </Button>
                         </div>
-
-                        {/* 无团队时也保持邀请中心可见：用户可能收到邀请但尚未加入任何团队 */}
-                        <InvitationsPanel
-                            myInvitations={myInvitations}
-                            sentInvitations={[]}
-                            isOwner={false}
-                            onAccept={handleAcceptInvitation}
-                            onReject={handleRejectInvitation}
-                        />
                     </>
                 )}
             </section>

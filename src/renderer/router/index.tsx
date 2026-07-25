@@ -26,6 +26,7 @@ const PointsPage = lazy(() => import("@/pages/Points"));
 const LoginPage = lazy(() => import("@/pages/Login"));
 const ProfilePage = lazy(() => import("@/pages/Profile"));
 const TeamsPage = lazy(() => import("@/pages/Teams"));
+const InvitationCenterPage = lazy(() => import("@/pages/InvitationCenter"));
 // Canvas 是重型页面，独立懒加载
 const CanvasPage = lazy(() => import("@/pages/Canvas"));
 // Story 故事创作是独立全屏页面
@@ -119,6 +120,10 @@ const router = createHashRouter([
       {
         path: "/teams",
         element: <TeamsPage />,
+      },
+      {
+        path: "/invitation-center",
+        element: <InvitationCenterPage />,
       },
       {
         path: "/profile",
