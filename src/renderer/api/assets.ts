@@ -36,6 +36,26 @@ import { uploadOssFile as jikeGoUploadOssFile } from "./jikeGo";
 const JIKE_GO_BASE_URL = import.meta.env.VITE_JIKE_GO_BASE_URL;
 
 /**
+ * 自定义 params 序列化器：数组展平为重复 key（tags=a&tags=b），兼容 Gin form 绑定。
+ * 默认 axios 序列化数组为 tags[]=a&tags[]=b，Go/Gin 无法正确绑定到 []string。
+ */
+const paramsSerializer = (params: Record<string, unknown>) => {
+  const searchParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((v) => {
+        if (v !== undefined && v !== null) {
+          searchParams.append(key, String(v));
+        }
+      });
+    } else if (value !== undefined && value !== null) {
+      searchParams.append(key, String(value));
+    }
+  });
+  return searchParams.toString();
+};
+
+/**
  * 通用请求封装：注入 baseURL 并把 axios `response.data`（即后端 envelope）原样返回。
  *
  * 不做 `code` 判断、不做 `data` 解包：
@@ -48,6 +68,7 @@ const request = async <T>(
 ): Promise<ApiEnvelope<T>> => {
   return (await jikeingService.request({
     baseURL: JIKE_GO_BASE_URL,
+    paramsSerializer,
     ...config,
   })) as unknown as ApiEnvelope<T>;
 };

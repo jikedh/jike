@@ -1,6 +1,7 @@
 import { Crown, Plus, Users } from "lucide-react";
 import type { TeamInfo } from "shared/types/api/teams";
 import { cn } from "shared/utils/utils";
+import { Button } from "@/components/ui/button";
 import { formatTeamTime } from "../utils";
 
 interface TeamSwitcherProps {
@@ -26,12 +27,12 @@ export function TeamSwitcher({
                 const isOwner = info.currentRole === "OWNER";
                 const count = memberCounts[String(info.id)] ?? 0;
                 return (
-                    <button
+                    <Button
                         key={String(info.id)}
-                        type="button"
+                        unstyled
                         onClick={() => onSelect(info.id)}
                         className={cn(
-                            "group flex w-72 shrink-0 flex-col gap-3 rounded-[24px] border p-5 text-left transition-all cursor-pointer",
+                            "group flex w-72 shrink-0 flex-col gap-3 rounded-[24px] border p-5 text-left transition-all",
                             active
                                 ? "border-[#B43FEB]/60 bg-linear-to-br from-[#B43FEB]/15 via-[#121214] to-[#121214] shadow-[0_0_25px_rgba(180,63,235,0.15)]"
                                 : "border-white/5 bg-[#121214] hover:border-white/15",
@@ -63,20 +64,20 @@ export function TeamSwitcher({
                             </span>
                             <span>创建于 {formatTeamTime(info.createdAt).slice(0, 10)}</span>
                         </div>
-                    </button>
+                    </Button>
                 );
             })}
 
-            <button
-                type="button"
+            <Button
+                unstyled
                 onClick={onCreate}
-                className="flex w-48 shrink-0 flex-col items-center justify-center gap-2 rounded-[24px] border border-dashed border-white/10 bg-transparent text-white/35 transition-all hover:border-[#B43FEB]/50 hover:text-[#d896ff] cursor-pointer"
+                className="flex w-48 shrink-0 flex-col items-center justify-center gap-2 rounded-[24px] border border-dashed border-white/10 bg-transparent text-white/35 transition-all hover:border-[#B43FEB]/50 hover:text-[#d896ff]"
             >
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5">
                     <Plus className="h-5 w-5" />
                 </span>
                 <span className="text-sm font-medium">创建新团队</span>
-            </button>
+            </Button>
         </div>
     );
 }

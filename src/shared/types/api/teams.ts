@@ -65,6 +65,7 @@ export type TeamListResponse = TeamApiResponse<TeamListData>;
 export interface TeamMember {
     id: TeamId;
     userId: TeamId;
+    username: string;
     nickname: string;
     avatar: string;
     role: TeamRole;
@@ -88,7 +89,7 @@ export type TeamDepartureResponse = TeamApiResponse<TeamDepartureResult>;
 
 /** 创建团队邀请请求。 */
 export interface CreateTeamInvitationRequest {
-    inviteeUserId: TeamId;
+    inviteeUuid: string;
 }
 
 /** 团队邀请信息。 */

@@ -48,6 +48,8 @@ export interface UseRemoteAssetLibraryOptions {
   primaryCategory?: PrimaryCategory;
   /** 关键词搜索 */
   keyword?: string;
+  /** 标签过滤（AND 语义：资产须同时拥有所有指定标签） */
+  tags?: string[];
   /** 分页 */
   page: number;
   pageSize: number;
@@ -110,6 +112,7 @@ const buildListParams = (
   if (options.mediaType) params.mediaType = options.mediaType;
   if (options.primaryCategory) params.primaryCategory = options.primaryCategory;
   if (options.keyword?.trim()) params.keyword = options.keyword.trim();
+  if (options.tags && options.tags.length > 0) params.tags = options.tags;
 
   return params;
 };
@@ -200,6 +203,7 @@ export const useRemoteAssetLibrary = (
     options.scope,
     options.sortBy,
     options.sortOrder,
+    options.tags,
     skipQuery,
   ]);
 

@@ -1,5 +1,6 @@
-import { Coins, Loader2, PencilLine, Plus } from "lucide-react";
+import { Bell, Coins, Loader2, PencilLine, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { TeamConsumptionRecord, TeamCreditLedger, TeamCreditSummary, TeamId, TeamInfo, TeamInvitation, TeamMember } from "shared/types/api/teams";
 import { toast } from "sonner";
 import {
@@ -62,6 +63,7 @@ const EMPTY_SUMMARY: TeamCreditSummary = {
 function TeamsPage() {
     const userInfo = useUserStore((s) => s.userInfo);
     const currentUserId = String(userInfo?.id ?? "");
+    const navigate = useNavigate();
 
     // 团队列表
     const [teams, setTeams] = useState<TeamInfo[]>([]);
@@ -130,19 +132,30 @@ function TeamsPage() {
     const loadTeamData = useCallback(async (teamId: TeamId) => {
         setIsDataLoading(true);
         try {
-            const [membersRes, summaryRes, ledgersRes, consumptionRes, invitationsRes] =
-                await Promise.all([
-                    getTeamMembers(teamId),
-                    getTeamCreditSummary(teamId),
-                    getTeamCreditLedgers(teamId, { pageSize: DATA_PAGE_SIZE }),
-                    getTeamConsumptionRecords(teamId, { pageSize: DATA_PAGE_SIZE }),
-                    getTeamInvitations(teamId, { pageSize: DATA_PAGE_SIZE }),
-                ]);
+            // members / summary / ledgers / consumption 对所有成员开放；
+            // invitations 仅 Owner 可查，必须等 summary 拿到 currentRole 后再决定是否调用。
+            const [membersRes, summaryRes, ledgersRes, consumptionRes] = await Promise.all([
+                getTeamMembers(teamId),
+                getTeamCreditSummary(teamId),
+                getTeamCreditLedgers(teamId, { pageSize: DATA_PAGE_SIZE }),
+                getTeamConsumptionRecords(teamId, { pageSize: DATA_PAGE_SIZE }),
+            ]);
             setMembers(membersRes.data?.list ?? []);
             setSummary(summaryRes.data ?? EMPTY_SUMMARY);
             setLedgers(ledgersRes.data?.list ?? []);
             setConsumption(consumptionRes.data?.list ?? []);
-            setSentInvitations(invitationsRes.data?.list ?? []);
+
+            const role = summaryRes.data?.currentRole ?? "MEMBER";
+            if (role === "OWNER") {
+                try {
+                    const invitationsRes = await getTeamInvitations(teamId, { pageSize: DATA_PAGE_SIZE });
+                    setSentInvitations(invitationsRes.data?.list ?? []);
+                } catch {
+                    // 静默失败：邀请列表非关键
+                }
+            } else {
+                setSentInvitations([]);
+            }
         } catch {
             toast.error("加载团队数据失败");
         } finally {
@@ -191,7 +204,7 @@ function TeamsPage() {
         setConfirm({
             open: true,
             title: "退出团队",
-            description: "退出后将无法使用团队分配给你的积分，确定退出吗？",
+            description: "想好了吗？确定退出吗？",
             confirmText: "退出团队",
             action: async () => {
                 try {
@@ -208,11 +221,11 @@ function TeamsPage() {
 
     /* ---------------- 成员操作 ---------------- */
 
-    const handleInvite = async (inviteeUserId: string) => {
+    const handleInvite = async (inviteeUuid: string) => {
         if (!currentTeamId) return;
         try {
-            await createTeamInvitation(currentTeamId, { inviteeUserId });
-            toast.success(`已向用户 ${inviteeUserId} 发出邀请`);
+            await createTeamInvitation(currentTeamId, { inviteeUuid });
+            toast.success(`已向 UUID 为 ${inviteeUuid} 的用户发出邀请`);
             const res = await getTeamInvitations(currentTeamId, { pageSize: DATA_PAGE_SIZE });
             setSentInvitations(res.data?.list ?? []);
         } catch {
@@ -281,7 +294,14 @@ function TeamsPage() {
 
     /* ---------------- 派生数据 ---------------- */
 
-    const allocatableCredits = summary.currentVipScore + summary.currentForScore;
+    // 我可分配积分 = 后端按角色返回的 allocatablePersonalCredits（Owner=个人可分配总额，Member=0）
+    const allocatableCredits = summary.allocatablePersonalCredits;
+
+    // 待处理的收到邀请数量，用于红点提示
+    const pendingInvitationCount = useMemo(
+        () => myInvitations.filter((inv) => inv.status === "PENDING").length,
+        [myInvitations],
+    );
 
     const currentTeam = useMemo(
         () => teams.find((t) => String(t.id) === String(currentTeamId)) ?? null,
@@ -308,6 +328,19 @@ function TeamsPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <div className="relative">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate(`/invitation-center?teamId=${currentTeamId ?? ""}`)}
+                        >
+                            <Bell className="h-4 w-4" />
+                            邀请中心
+                        </Button>
+                        {pendingInvitationCount > 0 && (
+                            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
+                        )}
+                    </div>
                     {isOwner && currentTeam && (
                         <>
                             <Button
@@ -355,7 +388,8 @@ function TeamsPage() {
                             </div>
                         ) : (
                             <>
-                                <CreditSummaryCards summary={summary} />
+                                {/* 积分概览卡片仅团队负责人（Owner）可见 */}
+                                {isOwner && <CreditSummaryCards summary={summary} />}
 
                                 <MembersSection
                                     members={members}
@@ -365,14 +399,6 @@ function TeamsPage() {
                                     onAllocate={(member) => setAllocate({ open: true, presetMember: member })}
                                     onRemove={handleRemoveMember}
                                     onLeave={handleLeaveTeam}
-                                />
-
-                                <InvitationsPanel
-                                    myInvitations={myInvitations}
-                                    sentInvitations={sentInvitations}
-                                    isOwner={isOwner}
-                                    onAccept={handleAcceptInvitation}
-                                    onReject={handleRejectInvitation}
                                 />
 
                                 <RecordsSection
@@ -385,17 +411,19 @@ function TeamsPage() {
                         )}
                     </>
                 ) : (
-                    <div className="flex flex-col items-center justify-center gap-4 py-32 text-center">
-                        <p className="text-sm text-white/40">你还没有加入任何团队</p>
-                        <Button
-                            variant="blue"
-                            size="sm"
-                            onClick={() => setTeamForm({ open: true, mode: "create" })}
-                        >
-                            <Plus className="h-4 w-4" />
-                            创建第一个团队
-                        </Button>
-                    </div>
+                    <>
+                        <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+                            <p className="text-sm text-white/40">你还没有加入任何团队</p>
+                            <Button
+                                variant="blue"
+                                size="sm"
+                                onClick={() => setTeamForm({ open: true, mode: "create" })}
+                            >
+                                <Plus className="h-4 w-4" />
+                                创建第一个团队
+                            </Button>
+                        </div>
+                    </>
                 )}
             </section>
 
