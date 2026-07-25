@@ -21,14 +21,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { formatCredits } from "../utils";
 
-const darkContentClass = "border-white/10 bg-[#1a1a1e] text-white";
-const fieldClass =
-    "border-white/10 bg-white/5 text-white placeholder:text-white/25 focus-visible:border-[#B43FEB]/60";
-
-const FieldLabel = ({ children }: { children: string }) => (
-    <label className="mb-1.5 block text-xs font-bold text-white/50">{children}</label>
-);
-
 /* ---------------- 创建 / 编辑团队 ---------------- */
 
 interface TeamFormDialogProps {
@@ -70,7 +62,7 @@ export function TeamFormDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className={darkContentClass}>
+            <DialogContent className="border-white/10 bg-[#1a1a1e] text-white">
                 <DialogHeader>
                     <DialogTitle className="text-white">
                         {mode === "create" ? "创建新团队" : "编辑团队信息"}
@@ -83,24 +75,24 @@ export function TeamFormDialog({
                 </DialogHeader>
                 <div className="mt-4 space-y-4">
                     <div>
-                        <FieldLabel>团队名称</FieldLabel>
+                        <div className="mb-1.5 block text-xs font-bold text-white/50">团队名称</div>
                         <Input
                             value={name}
                             onChange={(event) => setName(event.target.value)}
                             placeholder="例如：星火内容工作室"
                             maxLength={30}
-                            className={fieldClass}
+                            className="border-white/10 bg-white/5 text-white placeholder:text-white/25 focus-visible:border-[#B43FEB]/60"
                         />
                     </div>
                     <div>
-                        <FieldLabel>团队简介</FieldLabel>
+                        <div className="mb-1.5 block text-xs font-bold text-white/50">团队简介</div>
                         <Textarea
                             value={description}
                             onChange={(event) => setDescription(event.target.value)}
                             placeholder="一句话说明团队方向，便于成员识别"
                             rows={3}
                             maxLength={120}
-                            className={fieldClass}
+                            className="border-white/10 bg-white/5 text-white placeholder:text-white/25 focus-visible:border-[#B43FEB]/60"
                         />
                     </div>
                 </div>
@@ -148,7 +140,7 @@ export function InviteMemberDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className={darkContentClass}>
+            <DialogContent className="border-white/10 bg-[#1a1a1e] text-white">
                 <DialogHeader>
                     <DialogTitle className="text-white">邀请成员</DialogTitle>
                     <DialogDescription className="text-white/40">
@@ -156,12 +148,12 @@ export function InviteMemberDialog({
                     </DialogDescription>
                 </DialogHeader>
                 <div className="mt-4">
-                    <FieldLabel>用户 ID</FieldLabel>
+                    <div className="mb-1.5 block text-xs font-bold text-white/50">用户 ID</div>
                     <Input
                         value={inviteeUserId}
                         onChange={(event) => setInviteeUserId(event.target.value)}
                         placeholder="例如：10086"
-                        className={fieldClass}
+                        className="border-white/10 bg-white/5 text-white placeholder:text-white/25 focus-visible:border-[#B43FEB]/60"
                     />
                 </div>
                 <DialogFooter className="border-white/10">
@@ -224,7 +216,7 @@ export function AllocateCreditsDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className={darkContentClass}>
+            <DialogContent className="border-white/10 bg-[#1a1a1e] text-white">
                 <DialogHeader>
                     <DialogTitle className="text-white">分配个人积分</DialogTitle>
                     <DialogDescription className="text-white/40">
@@ -237,7 +229,7 @@ export function AllocateCreditsDialog({
                 </DialogHeader>
                 <div className="mt-4 space-y-4">
                     <div>
-                        <FieldLabel>选择成员</FieldLabel>
+                        <div className="mb-1.5 block text-xs font-bold text-white/50">选择成员</div>
                         <Select value={memberUserId} onValueChange={setMemberUserId}>
                             <SelectTrigger className="w-full border-white/10 bg-white/5 text-white">
                                 <SelectValue placeholder="选择团队成员" />
@@ -256,7 +248,7 @@ export function AllocateCreditsDialog({
                         </Select>
                     </div>
                     <div>
-                        <FieldLabel>积分数量</FieldLabel>
+                        <div className="mb-1.5 block text-xs font-bold text-white/50">积分数量</div>
                         <Input
                             value={amount}
                             onChange={(event) =>
@@ -264,7 +256,7 @@ export function AllocateCreditsDialog({
                             }
                             placeholder="输入正整数积分"
                             inputMode="numeric"
-                            className={fieldClass}
+                            className="border-white/10 bg-white/5 text-white placeholder:text-white/25 focus-visible:border-[#B43FEB]/60"
                         />
                     </div>
                 </div>
@@ -300,7 +292,7 @@ export function ConfirmActionDialog({
 }: ConfirmActionDialogProps) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className={darkContentClass}>
+            <DialogContent className="border-white/10 bg-[#1a1a1e] text-white">
                 <DialogHeader>
                     <DialogTitle className="text-white">{title}</DialogTitle>
                     <DialogDescription className="text-white/40">

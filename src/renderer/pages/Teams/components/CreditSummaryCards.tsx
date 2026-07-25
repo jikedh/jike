@@ -9,8 +9,8 @@ interface CreditSummaryCardsProps {
 
 /** 团队积分概览统计卡。 */
 export function CreditSummaryCards({ summary }: CreditSummaryCardsProps) {
-    // 我可分配积分 = 我的会员积分 + 我的永久积分
-    const allocatable = summary.currentVipScore + summary.currentForScore;
+    // 我可分配积分：Owner 视角 = 个人可分配总额，Member 视角 = 0
+    const allocatable = summary.allocatablePersonalCredits;
 
     const cards = [
         {
@@ -19,7 +19,7 @@ export function CreditSummaryCards({ summary }: CreditSummaryCardsProps) {
             value: allocatable,
             icon: <Wallet className="h-5 w-5" />,
             highlight: true,
-            desc: "会员积分 + 永久积分",
+            desc: "Owner 可向成员分配的积分",
         },
         {
             key: "total",

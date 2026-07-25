@@ -130,19 +130,30 @@ function TeamsPage() {
     const loadTeamData = useCallback(async (teamId: TeamId) => {
         setIsDataLoading(true);
         try {
-            const [membersRes, summaryRes, ledgersRes, consumptionRes, invitationsRes] =
-                await Promise.all([
-                    getTeamMembers(teamId),
-                    getTeamCreditSummary(teamId),
-                    getTeamCreditLedgers(teamId, { pageSize: DATA_PAGE_SIZE }),
-                    getTeamConsumptionRecords(teamId, { pageSize: DATA_PAGE_SIZE }),
-                    getTeamInvitations(teamId, { pageSize: DATA_PAGE_SIZE }),
-                ]);
+            // members / summary / ledgers / consumption 对所有成员开放；
+            // invitations 仅 Owner 可查，必须等 summary 拿到 currentRole 后再决定是否调用。
+            const [membersRes, summaryRes, ledgersRes, consumptionRes] = await Promise.all([
+                getTeamMembers(teamId),
+                getTeamCreditSummary(teamId),
+                getTeamCreditLedgers(teamId, { pageSize: DATA_PAGE_SIZE }),
+                getTeamConsumptionRecords(teamId, { pageSize: DATA_PAGE_SIZE }),
+            ]);
             setMembers(membersRes.data?.list ?? []);
             setSummary(summaryRes.data ?? EMPTY_SUMMARY);
             setLedgers(ledgersRes.data?.list ?? []);
             setConsumption(consumptionRes.data?.list ?? []);
-            setSentInvitations(invitationsRes.data?.list ?? []);
+
+            const role = summaryRes.data?.currentRole ?? "MEMBER";
+            if (role === "OWNER") {
+                try {
+                    const invitationsRes = await getTeamInvitations(teamId, { pageSize: DATA_PAGE_SIZE });
+                    setSentInvitations(invitationsRes.data?.list ?? []);
+                } catch {
+                    // 静默失败：邀请列表非关键
+                }
+            } else {
+                setSentInvitations([]);
+            }
         } catch {
             toast.error("加载团队数据失败");
         } finally {
@@ -281,7 +292,8 @@ function TeamsPage() {
 
     /* ---------------- 派生数据 ---------------- */
 
-    const allocatableCredits = summary.currentVipScore + summary.currentForScore;
+    // 我可分配积分 = 后端按角色返回的 allocatablePersonalCredits（Owner=个人可分配总额，Member=0）
+    const allocatableCredits = summary.allocatablePersonalCredits;
 
     const currentTeam = useMemo(
         () => teams.find((t) => String(t.id) === String(currentTeamId)) ?? null,
@@ -355,7 +367,8 @@ function TeamsPage() {
                             </div>
                         ) : (
                             <>
-                                <CreditSummaryCards summary={summary} />
+                                {/* 积分概览卡片仅团队负责人（Owner）可见 */}
+                                {isOwner && <CreditSummaryCards summary={summary} />}
 
                                 <MembersSection
                                     members={members}
@@ -385,17 +398,28 @@ function TeamsPage() {
                         )}
                     </>
                 ) : (
-                    <div className="flex flex-col items-center justify-center gap-4 py-32 text-center">
-                        <p className="text-sm text-white/40">你还没有加入任何团队</p>
-                        <Button
-                            variant="blue"
-                            size="sm"
-                            onClick={() => setTeamForm({ open: true, mode: "create" })}
-                        >
-                            <Plus className="h-4 w-4" />
-                            创建第一个团队
-                        </Button>
-                    </div>
+                    <>
+                        <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+                            <p className="text-sm text-white/40">你还没有加入任何团队</p>
+                            <Button
+                                variant="blue"
+                                size="sm"
+                                onClick={() => setTeamForm({ open: true, mode: "create" })}
+                            >
+                                <Plus className="h-4 w-4" />
+                                创建第一个团队
+                            </Button>
+                        </div>
+
+                        {/* 无团队时也保持邀请中心可见：用户可能收到邀请但尚未加入任何团队 */}
+                        <InvitationsPanel
+                            myInvitations={myInvitations}
+                            sentInvitations={[]}
+                            isOwner={false}
+                            onAccept={handleAcceptInvitation}
+                            onReject={handleRejectInvitation}
+                        />
+                    </>
                 )}
             </section>
 
