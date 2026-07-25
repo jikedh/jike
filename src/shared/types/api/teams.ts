@@ -34,8 +34,8 @@ export interface TeamInfo {
     description: string;
     createdBy: TeamId;
     currentRole: TeamRole;
-    createdAt: number;
-    updatedAt: number;
+    createdAt: number | string;
+    updatedAt: number | string;
 }
 
 /** 创建团队请求。 */
