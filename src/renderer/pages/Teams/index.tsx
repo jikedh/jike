@@ -202,7 +202,7 @@ function TeamsPage() {
         setConfirm({
             open: true,
             title: "退出团队",
-            description: "退出后将无法使用团队分配给你的积分，确定退出吗？",
+            description: "想好了吗？确定退出吗？",
             confirmText: "退出团队",
             action: async () => {
                 try {
@@ -219,11 +219,11 @@ function TeamsPage() {
 
     /* ---------------- 成员操作 ---------------- */
 
-    const handleInvite = async (inviteeUserId: string) => {
+    const handleInvite = async (inviteeUuid: string) => {
         if (!currentTeamId) return;
         try {
-            await createTeamInvitation(currentTeamId, { inviteeUserId });
-            toast.success(`已向用户 ${inviteeUserId} 发出邀请`);
+            await createTeamInvitation(currentTeamId, { inviteeUuid });
+            toast.success(`已向 UUID 为 ${inviteeUuid} 的用户发出邀请`);
             const res = await getTeamInvitations(currentTeamId, { pageSize: DATA_PAGE_SIZE });
             setSentInvitations(res.data?.list ?? []);
         } catch {

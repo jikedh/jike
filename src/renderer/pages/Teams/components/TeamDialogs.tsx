@@ -11,13 +11,6 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCredits } from "../utils";
 
@@ -113,7 +106,7 @@ interface InviteMemberDialogProps {
     open: boolean;
     teamName: string;
     onOpenChange: (open: boolean) => void;
-    onSubmit: (inviteeUserId: string) => void;
+    onSubmit: (inviteeUuid: string) => void;
 }
 
 export function InviteMemberDialog({
@@ -122,16 +115,16 @@ export function InviteMemberDialog({
     onOpenChange,
     onSubmit,
 }: InviteMemberDialogProps) {
-    const [inviteeUserId, setInviteeUserId] = useState("");
+    const [inviteeUuid, setInviteeUuid] = useState("");
 
     useEffect(() => {
-        if (open) setInviteeUserId("");
+        if (open) setInviteeUuid("");
     }, [open]);
 
     const handleSubmit = () => {
-        const trimmed = inviteeUserId.trim();
+        const trimmed = inviteeUuid.trim();
         if (!trimmed) {
-            toast.error("请输入被邀请人的用户 ID");
+            toast.error("请输入被邀请人的 UUID");
             return;
         }
         onSubmit(trimmed);
@@ -144,15 +137,15 @@ export function InviteMemberDialog({
                 <DialogHeader>
                     <DialogTitle className="text-white">邀请成员</DialogTitle>
                     <DialogDescription className="text-white/40">
-                        输入对方用户 ID，将其邀请加入「{teamName}」。
+                        输入对方用户 UUID，将其邀请加入「{teamName}」。
                     </DialogDescription>
                 </DialogHeader>
                 <div className="mt-4">
-                    <div className="mb-1.5 block text-xs font-bold text-white/50">用户 ID</div>
+                    <div className="mb-1.5 block text-xs font-bold text-white/50">用户 UUID</div>
                     <Input
-                        value={inviteeUserId}
-                        onChange={(event) => setInviteeUserId(event.target.value)}
-                        placeholder="例如：10086"
+                        value={inviteeUuid}
+                        onChange={(event) => setInviteeUuid(event.target.value)}
+                        placeholder="输入被邀请人的 UUID"
                         className="border-white/10 bg-white/5 text-white placeholder:text-white/25 focus-visible:border-[#B43FEB]/60"
                     />
                 </div>
@@ -230,22 +223,25 @@ export function AllocateCreditsDialog({
                 <div className="mt-4 space-y-4">
                     <div>
                         <div className="mb-1.5 block text-xs font-bold text-white/50">选择成员</div>
-                        <Select value={memberUserId} onValueChange={setMemberUserId}>
-                            <SelectTrigger className="w-full border-white/10 bg-white/5 text-white">
-                                <SelectValue placeholder="选择团队成员" />
-                            </SelectTrigger>
-                            <SelectContent className="border-white/10 bg-[#1a1a1e] text-white">
-                                {members.map((member) => (
-                                    <SelectItem
-                                        key={String(member.userId)}
-                                        value={String(member.userId)}
-                                    >
-                                        {member.nickname}
-                                        {member.role === "OWNER" ? "（负责人）" : ""}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <select
+                            value={memberUserId}
+                            onChange={(event) => setMemberUserId(event.target.value)}
+                            className="h-9 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white"
+                        >
+                            <option value="" className="bg-[#1a1a1e]">
+                                选择团队成员
+                            </option>
+                            {members.map((member) => (
+                                <option
+                                    key={String(member.userId)}
+                                    value={String(member.userId)}
+                                    className="bg-[#1a1a1e]"
+                                >
+                                    {member.username}
+                                    {member.role === "OWNER" ? "（负责人）" : ""}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                     <div>
                         <div className="mb-1.5 block text-xs font-bold text-white/50">积分数量</div>
