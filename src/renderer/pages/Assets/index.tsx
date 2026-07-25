@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { getAssetCategories } from "@/api/assets";
 import { Button } from "@/components/ui/button";
+import { TagFilterPanel } from "@/pages/Assets/components/TagFilterPanel";
 import { AssetCategoryCascadeSelect } from "@/pages/Canvas/components/AssetCategoryCascadeSelect";
 import {
   RemoteCreateAssetDialog,
@@ -274,6 +275,7 @@ export default function AssetsPage() {
   );
   const [keyword, setKeyword] = useState("");
   const [keywordInput, setKeywordInput] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
   const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
@@ -292,6 +294,7 @@ export default function AssetsPage() {
           ? activeCategory
           : undefined,
       keyword,
+      tags: selectedTags,
       page,
       pageSize: PAGE_SIZE,
       sortBy: "createTime" as const,
@@ -303,6 +306,7 @@ export default function AssetsPage() {
       activeMediaType,
       activeScope,
       keyword,
+      selectedTags,
       page,
       refreshKey,
       supportsCategory,
@@ -341,7 +345,7 @@ export default function AssetsPage() {
   useEffect(() => {
     setPage(1);
     setPreviewAssetId(null);
-  }, [activeScope, activeMediaType, activeCategory, keyword]);
+  }, [activeScope, activeMediaType, activeCategory, keyword, selectedTags]);
 
   const handleFileSelected = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -543,6 +547,31 @@ export default function AssetsPage() {
               onChange={setActiveCategory}
               includeAll
             />
+          </div>
+        ) : null}
+        <TagFilterPanel
+          selectedTags={selectedTags}
+          onTagsChange={setSelectedTags}
+        />
+        {selectedTags.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {selectedTags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 rounded-md border border-[#B43FEB]/40 bg-[#B43FEB]/15 px-2 py-0.5 text-[11px] text-[#d486ff]"
+              >
+                {tag}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedTags(selectedTags.filter((t) => t !== tag))
+                  }
+                  className="ml-0.5 rounded-full text-[#d486ff]/60 hover:text-[#d486ff]"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
           </div>
         ) : null}
         <form
