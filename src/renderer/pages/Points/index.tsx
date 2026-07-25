@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
     createRechargeOrder,
     getRechargeOrderStatus,
+    updateVipScore,
 } from "@/api/jikeing";
 import { getJikeGoScoreRecords, getJikeGoScoreTransactions } from "@/api/jikeGo";
 import { useUserStore } from "@/stores/useUserStore";
@@ -217,21 +218,35 @@ export function PointsView() {
             try {
                 const result = await getRechargeOrderStatus(nativePayOrder.orderId);
 
-                const orderStatus = result?.data;
-
-                if (orderStatus?.credited) {
+                if (
+                    result?.data?.tradeState === "SUCCESS" ||
+                    result?.data?.status === "PAID"
+                ) {
                     window.clearInterval(timer);
-                    void fetchBalanceInfo();
-                    void fetchRecords(1);
-                    void fetchTransactions(1);
-                    toast.success("充值成功，积分已到账");
+
+                    try {
+                        await updateVipScore({
+                            userId,
+                            vipScoreDelta: selectedPackage.points,
+                        });
+                        if (balanceInfo) {
+                            setBalanceInfo({
+                                ...balanceInfo,
+                                forScore: balanceInfo.forScore + selectedPackage.points,
+                            });
+                        }
+                        void fetchBalanceInfo();
+                        void fetchRecords(1);
+                        void fetchTransactions(1);
+                        toast.success("充值成功，积分已到账");
+                    } catch (error: any) {
+                        console.error(error);
+                        toast.error("充值成功但积分更新失败，请刷新页面");
+                    }
+
                     setSelectedPackage(null);
                     setNativePayOrder(null);
-                } else if (orderStatus?.status === "PAID") {
-                    if (orderStatus.creditError) {
-                        toast.error("支付已完成，积分入账异常，请稍后刷新查看");
-                    }
-                } else if (orderStatus?.status === "CLOSED") {
+                } else if (result?.data?.status === "CLOSED") {
                     toast.error("支付失败或已取消");
                     setSelectedPackage(null);
                     setNativePayOrder(null);
@@ -263,11 +278,14 @@ export function PointsView() {
             }
         };
     }, [
+        balanceInfo,
         fetchBalanceInfo,
         fetchRecords,
         fetchTransactions,
         nativePayOrder?.orderId,
         selectedPackage,
+        setBalanceInfo,
+        userId,
     ]);
 
     const handleRecharge = (pkg: RechargePackage) => {

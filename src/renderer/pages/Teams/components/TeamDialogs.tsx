@@ -11,23 +11,8 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCredits } from "../utils";
-
-const darkContentClass = "border-white/10 bg-[#1a1a1e] text-white";
-const fieldClass =
-    "border-white/10 bg-white/5 text-white placeholder:text-white/25 focus-visible:border-[#B43FEB]/60";
-
-const FieldLabel = ({ children }: { children: string }) => (
-    <label className="mb-1.5 block text-xs font-bold text-white/50">{children}</label>
-);
 
 /* ---------------- 创建 / 编辑团队 ---------------- */
 
@@ -70,7 +55,7 @@ export function TeamFormDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className={darkContentClass}>
+            <DialogContent className="border-white/10 bg-[#1a1a1e] text-white">
                 <DialogHeader>
                     <DialogTitle className="text-white">
                         {mode === "create" ? "创建新团队" : "编辑团队信息"}
@@ -83,24 +68,24 @@ export function TeamFormDialog({
                 </DialogHeader>
                 <div className="mt-4 space-y-4">
                     <div>
-                        <FieldLabel>团队名称</FieldLabel>
+                        <div className="mb-1.5 block text-xs font-bold text-white/50">团队名称</div>
                         <Input
                             value={name}
                             onChange={(event) => setName(event.target.value)}
                             placeholder="例如：星火内容工作室"
                             maxLength={30}
-                            className={fieldClass}
+                            className="border-white/10 bg-white/5 text-white placeholder:text-white/25 focus-visible:border-[#B43FEB]/60"
                         />
                     </div>
                     <div>
-                        <FieldLabel>团队简介</FieldLabel>
+                        <div className="mb-1.5 block text-xs font-bold text-white/50">团队简介</div>
                         <Textarea
                             value={description}
                             onChange={(event) => setDescription(event.target.value)}
                             placeholder="一句话说明团队方向，便于成员识别"
                             rows={3}
                             maxLength={120}
-                            className={fieldClass}
+                            className="border-white/10 bg-white/5 text-white placeholder:text-white/25 focus-visible:border-[#B43FEB]/60"
                         />
                     </div>
                 </div>
@@ -121,7 +106,7 @@ interface InviteMemberDialogProps {
     open: boolean;
     teamName: string;
     onOpenChange: (open: boolean) => void;
-    onSubmit: (inviteeUserId: string) => void;
+    onSubmit: (inviteeUuid: string) => void;
 }
 
 export function InviteMemberDialog({
@@ -130,16 +115,16 @@ export function InviteMemberDialog({
     onOpenChange,
     onSubmit,
 }: InviteMemberDialogProps) {
-    const [inviteeUserId, setInviteeUserId] = useState("");
+    const [inviteeUuid, setInviteeUuid] = useState("");
 
     useEffect(() => {
-        if (open) setInviteeUserId("");
+        if (open) setInviteeUuid("");
     }, [open]);
 
     const handleSubmit = () => {
-        const trimmed = inviteeUserId.trim();
+        const trimmed = inviteeUuid.trim();
         if (!trimmed) {
-            toast.error("请输入被邀请人的用户 ID");
+            toast.error("请输入被邀请人的 UUID");
             return;
         }
         onSubmit(trimmed);
@@ -148,20 +133,20 @@ export function InviteMemberDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className={darkContentClass}>
+            <DialogContent className="border-white/10 bg-[#1a1a1e] text-white">
                 <DialogHeader>
                     <DialogTitle className="text-white">邀请成员</DialogTitle>
                     <DialogDescription className="text-white/40">
-                        输入对方用户 ID，将其邀请加入「{teamName}」。
+                        输入对方用户 UUID，将其邀请加入「{teamName}」。
                     </DialogDescription>
                 </DialogHeader>
                 <div className="mt-4">
-                    <FieldLabel>用户 ID</FieldLabel>
+                    <div className="mb-1.5 block text-xs font-bold text-white/50">用户 UUID</div>
                     <Input
-                        value={inviteeUserId}
-                        onChange={(event) => setInviteeUserId(event.target.value)}
-                        placeholder="例如：10086"
-                        className={fieldClass}
+                        value={inviteeUuid}
+                        onChange={(event) => setInviteeUuid(event.target.value)}
+                        placeholder="输入被邀请人的 UUID"
+                        className="border-white/10 bg-white/5 text-white placeholder:text-white/25 focus-visible:border-[#B43FEB]/60"
                     />
                 </div>
                 <DialogFooter className="border-white/10">
@@ -224,7 +209,7 @@ export function AllocateCreditsDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className={darkContentClass}>
+            <DialogContent className="border-white/10 bg-[#1a1a1e] text-white">
                 <DialogHeader>
                     <DialogTitle className="text-white">分配个人积分</DialogTitle>
                     <DialogDescription className="text-white/40">
@@ -237,26 +222,29 @@ export function AllocateCreditsDialog({
                 </DialogHeader>
                 <div className="mt-4 space-y-4">
                     <div>
-                        <FieldLabel>选择成员</FieldLabel>
-                        <Select value={memberUserId} onValueChange={setMemberUserId}>
-                            <SelectTrigger className="w-full border-white/10 bg-white/5 text-white">
-                                <SelectValue placeholder="选择团队成员" />
-                            </SelectTrigger>
-                            <SelectContent className="border-white/10 bg-[#1a1a1e] text-white">
-                                {members.map((member) => (
-                                    <SelectItem
-                                        key={String(member.userId)}
-                                        value={String(member.userId)}
-                                    >
-                                        {member.nickname}
-                                        {member.role === "OWNER" ? "（负责人）" : ""}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <div className="mb-1.5 block text-xs font-bold text-white/50">选择成员</div>
+                        <select
+                            value={memberUserId}
+                            onChange={(event) => setMemberUserId(event.target.value)}
+                            className="h-9 w-full rounded-md border border-white/10 bg-white/5 px-3 text-sm text-white"
+                        >
+                            <option value="" className="bg-[#1a1a1e]">
+                                选择团队成员
+                            </option>
+                            {members.map((member) => (
+                                <option
+                                    key={String(member.userId)}
+                                    value={String(member.userId)}
+                                    className="bg-[#1a1a1e]"
+                                >
+                                    {member.username}
+                                    {member.role === "OWNER" ? "（负责人）" : ""}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                     <div>
-                        <FieldLabel>积分数量</FieldLabel>
+                        <div className="mb-1.5 block text-xs font-bold text-white/50">积分数量</div>
                         <Input
                             value={amount}
                             onChange={(event) =>
@@ -264,7 +252,7 @@ export function AllocateCreditsDialog({
                             }
                             placeholder="输入正整数积分"
                             inputMode="numeric"
-                            className={fieldClass}
+                            className="border-white/10 bg-white/5 text-white placeholder:text-white/25 focus-visible:border-[#B43FEB]/60"
                         />
                     </div>
                 </div>
@@ -300,7 +288,7 @@ export function ConfirmActionDialog({
 }: ConfirmActionDialogProps) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className={darkContentClass}>
+            <DialogContent className="border-white/10 bg-[#1a1a1e] text-white">
                 <DialogHeader>
                     <DialogTitle className="text-white">{title}</DialogTitle>
                     <DialogDescription className="text-white/40">

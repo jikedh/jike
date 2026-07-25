@@ -248,10 +248,10 @@ export function RecordsSection({
                             const meta = LEDGER_TYPE_META[ledger.type];
                             return (
                                 <li key={String(ledger.id)}>
-                                    <button
-                                        type="button"
+                                    <Button
+                                        unstyled
                                         onClick={() => setDetailLedger(ledger)}
-                                        className="flex w-full items-center gap-4 px-6 py-4 text-left transition-colors hover:bg-white/2 cursor-pointer"
+                                        className="flex w-full items-center gap-4 px-6 py-4 text-left transition-colors hover:bg-white/2"
                                     >
                                         <span
                                             className={cn(
@@ -282,7 +282,7 @@ export function RecordsSection({
                                             {meta.income ? "+" : "-"}
                                             {formatCredits(Math.abs(ledger.amount))}
                                         </span>
-                                    </button>
+                                    </Button>
                                 </li>
                             );
                         })}
@@ -378,9 +378,8 @@ export function RecordsSection({
                                 />
                                 <DetailRow
                                     label="积分变动"
-                                    value={`${
-                                        LEDGER_TYPE_META[detailLedger.type].income ? "+" : "-"
-                                    }${formatCredits(Math.abs(detailLedger.amount))}`}
+                                    value={`${LEDGER_TYPE_META[detailLedger.type].income ? "+" : "-"
+                                        }${formatCredits(Math.abs(detailLedger.amount))}`}
                                 />
                                 <DetailRow label="成员" value={detailLedger.memberNickname} />
                                 <DetailRow

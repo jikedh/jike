@@ -77,9 +77,5 @@ export interface GetRechargeOrderStatusResponse {
     orderId: string;
     status: "CREATED" | "PAID" | "CLOSED";
     tradeState?: string;
-    credited?: boolean;
-    creditError?: string | null;
-    forBalanceScore?: number;
-    vipBalanceScore?: number;
   };
 }

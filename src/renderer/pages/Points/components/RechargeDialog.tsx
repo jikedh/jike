@@ -55,7 +55,7 @@ const PaymentQrcode = ({
                     className="h-60 w-60 rounded-2xl bg-white p-2"
                 />
                 <p className="mt-3 text-[10px] text-white/35">
-                    支付完成后将由服务端自动入账
+                    支付完成后积分将自动到账
                 </p>
             </>
         ) : (
