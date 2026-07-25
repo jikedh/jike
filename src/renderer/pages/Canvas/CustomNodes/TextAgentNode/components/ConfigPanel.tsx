@@ -7,7 +7,9 @@ import { IconCheck, IconChevronDown, IconSend } from "@tabler/icons-react";
 import { useState } from "react";
 import { TEXT_AGENT_MODELS } from "shared/constants/text-agent-presets";
 import { cn } from "shared/utils/utils";
+import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { Button } from "@/components/ui/button";
+import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 
 interface ConfigPanelProps {
   editableSystemPrompt: string;
@@ -29,6 +31,7 @@ export const ConfigPanel = ({
   onGenerate,
 }: ConfigPanelProps) => {
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const { totalPoints } = useGenerationPoints();
 
   return (
     <div className="nodrag nopan nowheel absolute left-1/2 -translate-x-1/2 top-[216px] w-[500px] rounded-2xl border border-white/[0.05] bg-[#1e1e20] p-3 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-top-2 duration-200 z-30">
@@ -88,24 +91,30 @@ export const ConfigPanel = ({
           )}
         </div>
 
-        {/* 生成按钮 */}
-        <Button
-          disabled={isGenerating}
-          onClick={onGenerate}
-          className={cn(
-            "gap-1.5 h-8 px-4 text-xs font-medium rounded-lg transition-colors active:scale-[0.97]",
-            isGenerating
-              ? "bg-white/10 text-white/40 cursor-not-allowed"
-              : "bg-[#B43FEB] text-white hover:bg-[#B43FEB]/80",
-          )}
-        >
-          <IconSend size={14} />
-          {isGenerating
-            ? "生成中..."
-            : scoreCost
-              ? `生成 · ${scoreCost}积分`
-              : "生成"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {scoreCost ? (
+            <ModelPointsBadge
+              totalPoints={totalPoints}
+              requiredPoints={scoreCost}
+              title={`生成需要 ${scoreCost} 积分，当前余额 ${totalPoints}`}
+              className="h-8 rounded-lg px-2.5 py-0"
+            />
+          ) : null}
+
+          <Button
+            disabled={isGenerating}
+            onClick={onGenerate}
+            className={cn(
+              "gap-1.5 h-8 px-4 text-xs font-medium rounded-lg transition-colors active:scale-[0.97]",
+              isGenerating
+                ? "bg-white/10 text-white/40 cursor-not-allowed"
+                : "bg-[#B43FEB] text-white hover:bg-[#B43FEB]/80",
+            )}
+          >
+            <IconSend size={14} />
+            {isGenerating ? "生成中..." : "生成"}
+          </Button>
+        </div>
       </div>
     </div>
   );

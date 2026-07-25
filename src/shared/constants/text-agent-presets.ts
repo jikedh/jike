@@ -96,6 +96,16 @@ export const TEXT_AGENT_MODELS = [
     label: "deepseek-v4-flash",
     platform: "toapi",
   },
+  {
+    value: "gemini-3.1-flash-lite",
+    label: "gemini-3.1-flash-lite",
+    platform: "toapi",
+  },
+  {
+    value: "gemini-3.0-flash",
+    label: "gemini-3.0-flash",
+    platform: "toapi",
+  },
   { value: KIMI_K3_MODEL, label: "Kimi K3", platform: "dashscope" },
 ] as const;
 
