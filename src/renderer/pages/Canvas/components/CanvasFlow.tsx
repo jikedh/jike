@@ -839,8 +839,8 @@ export const CanvasFlow = ({
             type: "image",
             data: [
               {
-                url: image.dataUrl,
-                displayUrl: image.dataUrl,
+                url: image.url,
+                displayUrl: image.url,
                 assetName: image.name,
               },
             ],

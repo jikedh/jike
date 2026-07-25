@@ -4,7 +4,8 @@ export const DIRECTOR_DESK_STATE_VERSION = 1;
 
 export type DirectorDeskImage = {
     name: string;
-    dataUrl: string;
+    /** 已上传至对象存储的远程图片地址，画布节点仅持久化该 URL。 */
+    url: string;
     width?: number;
     height?: number;
 };
@@ -211,9 +212,7 @@ const isValidImage = (value: unknown): value is DirectorDeskImage => {
     }
 
     return (
-        isShortString(value.name) && typeof value.dataUrl === "string" &&
-        /^data:image\/(png|jpeg|webp);base64,/i.test(value.dataUrl) &&
-        value.dataUrl.length <= 20_000_000 &&
+        isShortString(value.name) && isRemoteImageUrl(value.url) &&
         (value.width === undefined || isFiniteNumber(value.width, 1, 32_768)) &&
         (value.height === undefined || isFiniteNumber(value.height, 1, 32_768))
     );

@@ -5,6 +5,7 @@ import {
   House,
   Settings,
   SquareDashedMousePointer,
+  UsersRound,
   Video,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -109,6 +110,12 @@ export const SidebarCeBianLan = () => {
       icon: <Folder size={24} />,
       label: "资产库",
       path: "/assets",
+    },
+    {
+      id: "teams",
+      icon: <UsersRound size={24} />,
+      label: "团队",
+      path: "/teams",
     },
     // {
     //   id: "short-drama-commentary",
