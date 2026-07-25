@@ -1,7 +1,6 @@
 import {
   IconMicrophone,
   IconPlayerPlay,
-  IconSparkles,
   IconVolume,
 } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -30,6 +29,7 @@ import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
 import { useAudioVoiceStore } from "@/stores/audioVoiceStore";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
+import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
 import {
   AUDIO_TEXT_MARKERS,
   AUDIO_TTS_MODEL_OPTIONS,
@@ -99,7 +99,10 @@ const VoiceSelectItem = ({ voice }: { voice: AudioVoiceProfile }) => {
     <SelectItem
       value={voice.profileId}
       textValue={voice.name}
-      className="[&>span:last-child]:min-w-0 [&>span:last-child]:flex-1"
+      className={cn(
+        PROMPT_PANEL_STYLES.modelSelectItem,
+        "[&>span:last-child]:min-w-0 [&>span:last-child]:flex-1",
+      )}
     >
       {voice.description?.trim() ? (
         <Tooltip>
@@ -415,6 +418,8 @@ export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
     () => getAudioGenerationPoints(selectedModel, text),
     [selectedModel, text],
   );
+  const generationDisabled =
+    isGenerating || !modelAvailable || !selectedVoiceId || billableChars <= 0;
 
   const handleTextChange = useCallback(
     (value: string) => {
@@ -600,81 +605,127 @@ export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
   );
 
   return (
-    <div className="nodrag nopan nowheel absolute left-1/2 top-[calc(100%+12px)] z-50 w-[420px] -translate-x-1/2 overflow-hidden rounded-lg border border-white/10 bg-[#17171b] shadow-2xl">
-      <div className="flex items-center gap-2 border-b border-white/8 px-3 py-2.5">
-        <IconSparkles size={16} className="text-[#B43FEB]" />
-        <span className="text-sm font-medium text-white">语音合成</span>
-        <ModelPointsBadge
-          totalPoints={totalPoints}
-          requiredPoints={requiredPoints}
-          className="ml-auto"
-          title={`${billableChars} 个计费字符，预计 ${requiredPoints} 积分`}
-        />
-      </div>
-
-      <div className="flex flex-col gap-3 p-3">
-        <div className="grid grid-cols-2 gap-2">
-          <Select value={selectedModel} onValueChange={handleModelChange}>
-            <SelectTrigger className="w-full border-white/10 bg-white/5 text-white">
-              <SelectValue placeholder="选择模型" />
-            </SelectTrigger>
-            <SelectContent>
-              {AUDIO_TTS_MODEL_OPTIONS.map((option) => {
-                const serverModel = models.find(
-                  (model) => model.id === option.id,
-                );
-                return (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.label}
-                    {serverModel && !serverModel.available
-                      ? "（待配置音色）"
-                      : ""}
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-
-          <div className="flex min-w-0 gap-1.5">
-            <TooltipProvider delayDuration={300}>
-              <Select
-                value={selectedVoiceId}
-                onValueChange={(value) => {
-                  updateAudioNodeData(nodeId, { voiceProfileId: value });
-                }}
-                disabled={loadingVoices || voiceOptions.length === 0}
+    <TooltipProvider delayDuration={300}>
+      <div
+        className={cn(
+          PROMPT_PANEL_STYLES.container,
+          "absolute left-1/2 top-[calc(100%+12px)] z-50 -translate-x-1/2",
+        )}
+      >
+        <div className={PROMPT_PANEL_STYLES.inputArea}>
+          <div className="flex min-h-8 items-center gap-1.5 overflow-x-auto pb-0.5">
+            <span className="mr-1 shrink-0 text-xs font-medium text-white/45">
+              表达标记
+            </span>
+            {AUDIO_TEXT_MARKERS.map((marker) => (
+              <button
+                key={marker}
+                type="button"
+                onClick={() => insertMarker(marker)}
+                className="shrink-0 rounded-lg border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5 text-xs text-white/60 transition-colors hover:border-[#B43FEB]/35 hover:bg-[#B43FEB]/10 hover:text-white"
               >
-                <SelectTrigger className="min-w-0 flex-1 border-white/10 bg-white/5 text-white">
-                  <SelectValue
-                    placeholder={loadingVoices ? "加载音色..." : "暂无可用音色"}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {systemVoiceOptions.length > 0 ? (
-                    <SelectGroup>
-                      <SelectLabel>系统音色</SelectLabel>
-                      {systemVoiceOptions.map((voice) => (
-                        <VoiceSelectItem key={voice.profileId} voice={voice} />
-                      ))}
-                    </SelectGroup>
-                  ) : null}
-                  {clonedVoiceOptions.length > 0 ? (
-                    <SelectGroup>
-                      <SelectLabel>共享复刻音色</SelectLabel>
-                      {clonedVoiceOptions.map((voice) => (
-                        <VoiceSelectItem key={voice.profileId} voice={voice} />
-                      ))}
-                    </SelectGroup>
-                  ) : null}
-                </SelectContent>
-              </Select>
-            </TooltipProvider>
+                {marker}
+              </button>
+            ))}
+          </div>
+
+          <div className={cn(PROMPT_PANEL_STYLES.textAreaWrap, "relative")}>
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={(event) => handleTextChange(event.target.value)}
+              placeholder="输入台词，可插入停顿、笑、叹气等表达标记"
+              className="nodrag nopan nowheel h-[132px] w-full resize-none bg-transparent p-4 pb-9 text-sm leading-6 text-white/90 outline-none placeholder:text-white/30"
+            />
+            <span className="pointer-events-none absolute bottom-3 left-4 text-[11px] text-white/35">
+              {billableChars} 个计费字符
+            </span>
+          </div>
+        </div>
+
+        <div className={PROMPT_PANEL_STYLES.divider} />
+
+        <div className={PROMPT_PANEL_STYLES.controlArea}>
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <Select value={selectedModel} onValueChange={handleModelChange}>
+              <SelectTrigger
+                size="sm"
+                className={cn(
+                  PROMPT_PANEL_STYLES.modelSelect,
+                  "w-[170px] justify-between",
+                )}
+              >
+                <SelectValue placeholder="选择模型" />
+              </SelectTrigger>
+              <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
+                {AUDIO_TTS_MODEL_OPTIONS.map((option) => {
+                  const serverModel = models.find(
+                    (model) => model.id === option.id,
+                  );
+                  return (
+                    <SelectItem
+                      key={option.id}
+                      value={option.id}
+                      className={PROMPT_PANEL_STYLES.modelSelectItem}
+                    >
+                      {option.label}
+                      {serverModel && !serverModel.available
+                        ? "（待配置音色）"
+                        : ""}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={selectedVoiceId}
+              onValueChange={(value) => {
+                updateAudioNodeData(nodeId, { voiceProfileId: value });
+              }}
+              disabled={loadingVoices || voiceOptions.length === 0}
+            >
+              <SelectTrigger
+                size="sm"
+                className={cn(
+                  PROMPT_PANEL_STYLES.modelSelect,
+                  "w-[200px] min-w-0 justify-between",
+                )}
+              >
+                <SelectValue
+                  placeholder={loadingVoices ? "加载音色..." : "暂无可用音色"}
+                />
+              </SelectTrigger>
+              <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
+                {systemVoiceOptions.length > 0 ? (
+                  <SelectGroup>
+                    <SelectLabel className="text-[11px] text-white/35">
+                      系统音色
+                    </SelectLabel>
+                    {systemVoiceOptions.map((voice) => (
+                      <VoiceSelectItem key={voice.profileId} voice={voice} />
+                    ))}
+                  </SelectGroup>
+                ) : null}
+                {clonedVoiceOptions.length > 0 ? (
+                  <SelectGroup>
+                    <SelectLabel className="text-[11px] text-white/35">
+                      共享复刻音色
+                    </SelectLabel>
+                    {clonedVoiceOptions.map((voice) => (
+                      <VoiceSelectItem key={voice.profileId} voice={voice} />
+                    ))}
+                  </SelectGroup>
+                ) : null}
+              </SelectContent>
+            </Select>
+
             <button
               type="button"
               title="试听音色"
               disabled={!selectedVoice?.previewUrl}
               onClick={handlePreviewVoice}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/55 hover:border-[#B43FEB]/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-transparent bg-white/5 text-white/55 transition-colors hover:border-[#B43FEB]/30 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
             >
               <IconVolume size={15} />
             </button>
@@ -686,73 +737,47 @@ export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
                 !currentModel?.cloneSupported
               }
               onClick={() => setIsCloneDialogOpen(true)}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/55 hover:border-[#B43FEB]/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-transparent bg-white/5 text-white/55 transition-colors hover:border-[#B43FEB]/30 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
             >
               <IconMicrophone size={15} />
             </button>
           </div>
-        </div>
 
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={(event) => handleTextChange(event.target.value)}
-          placeholder="输入台词，可插入停顿、笑、叹气等标记"
-          className="h-28 w-full resize-none rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-white/30 focus:border-[#B43FEB]/70"
-        />
-
-        <div className="flex flex-wrap gap-1.5">
-          {AUDIO_TEXT_MARKERS.map((marker) => (
+          <div className="ml-auto flex shrink-0 items-center gap-3">
+            <ModelPointsBadge
+              totalPoints={totalPoints}
+              requiredPoints={requiredPoints}
+              title={`${billableChars} 个计费字符，每 100 字 ${
+                currentModel?.pointsPer100 ??
+                AUDIO_TTS_MODEL_OPTIONS.find(
+                  (option) => option.id === selectedModel,
+                )?.pointsPer100
+              } 积分，预计消耗 ${requiredPoints} 积分`}
+            />
             <button
-              key={marker}
               type="button"
-              onClick={() => insertMarker(marker)}
-              className="rounded-md border border-white/8 bg-white/5 px-2 py-1 text-[11px] text-white/65 transition-colors hover:border-[#B43FEB]/40 hover:text-white"
+              onClick={() => void handleGenerate()}
+              disabled={generationDisabled}
+              className={cn(
+                PROMPT_PANEL_STYLES.generateButton,
+                "inline-flex items-center gap-1.5",
+                generationDisabled &&
+                  "cursor-not-allowed opacity-40 hover:scale-100 hover:bg-[#c246ff]",
+              )}
             >
-              {marker}
+              <IconPlayerPlay size={14} />
+              {isGenerating ? "生成中" : "生成"}
             </button>
-          ))}
+          </div>
         </div>
 
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-white/40">
-            {billableChars} 个计费字符 · 每 100 字{" "}
-            {currentModel?.pointsPer100 ??
-              AUDIO_TTS_MODEL_OPTIONS.find(
-                (option) => option.id === selectedModel,
-              )?.pointsPer100}{" "}
-            积分
-          </span>
-          <button
-            type="button"
-            onClick={() => void handleGenerate()}
-            disabled={
-              isGenerating ||
-              !modelAvailable ||
-              !selectedVoiceId ||
-              billableChars <= 0
-            }
-            className={cn(
-              "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors",
-              isGenerating ||
-                !modelAvailable ||
-                !selectedVoiceId ||
-                billableChars <= 0
-                ? "cursor-not-allowed bg-white/8 text-white/30"
-                : "bg-[#B43FEB] text-white hover:bg-[#9d32ce]",
-            )}
-          >
-            <IconPlayerPlay size={14} />
-            {isGenerating ? "生成中" : "生成"}
-          </button>
-        </div>
+        <AudioVoiceCloneDialog
+          open={isCloneDialogOpen}
+          scoreCost={currentModel?.cloneScoreCost}
+          onOpenChange={setIsCloneDialogOpen}
+          onCreated={handleVoiceCreated}
+        />
       </div>
-      <AudioVoiceCloneDialog
-        open={isCloneDialogOpen}
-        scoreCost={currentModel?.cloneScoreCost}
-        onOpenChange={setIsCloneDialogOpen}
-        onCreated={handleVoiceCreated}
-      />
-    </div>
+    </TooltipProvider>
   );
 };

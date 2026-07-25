@@ -11,8 +11,10 @@ import { createPortal } from "react-dom";
 import { generateVideoSnapshotUrl, uploadFileToOSS } from "service/oss";
 import {
   AGNES_IMAGE_2_FLASH_MODEL,
+  AGNES_IMAGE_21_FLASH_MODEL,
   AGNES_PLATFORM,
   IMAGE_MODELS,
+  isAgnesImageModel,
 } from "shared/constants/ai-models";
 import { getImageGenerationPoints } from "shared/constants/model-points";
 import { VIDEO_PULL_FILM_COLUMNS } from "shared/constants/video-agent-presets";
@@ -87,6 +89,18 @@ const IMAGE_RESOLUTION_OPTIONS = [
   { label: "4K", value: "4K" },
 ];
 const AGNES_IMAGE_RESOLUTION_OPTIONS = [{ label: "1K", value: "1K" }];
+const AGNES_IMAGE_21_SIZE_OPTIONS = [
+  ...COMMON_IMAGE_SIZE_OPTIONS,
+  { label: "2:3", value: "2:3" },
+  { label: "3:2", value: "3:2" },
+  { label: "21:9", value: "21:9" },
+];
+const AGNES_IMAGE_21_RESOLUTION_OPTIONS = [
+  { label: "1K", value: "1K" },
+  { label: "2K", value: "2K" },
+  { label: "3K", value: "3K" },
+  { label: "4K", value: "4K" },
+];
 const STORYBOARD_SELECT_CONTENT_CLASS =
   "!z-[10001] border border-white/10 bg-[#141418] text-white shadow-2xl ring-white/10";
 const STORYBOARD_SELECT_ITEM_CLASS =
@@ -802,13 +816,17 @@ export const TableNode = memo(
       storyboardSketchPlatform,
     );
     const storyboardSketchSizeOptions =
-      storyboardSketchModel === AGNES_IMAGE_2_FLASH_MODEL
-        ? COMMON_IMAGE_SIZE_OPTIONS
-        : WIDE_IMAGE_SIZE_OPTIONS;
+      storyboardSketchModel === AGNES_IMAGE_21_FLASH_MODEL
+        ? AGNES_IMAGE_21_SIZE_OPTIONS
+        : storyboardSketchModel === AGNES_IMAGE_2_FLASH_MODEL
+          ? COMMON_IMAGE_SIZE_OPTIONS
+          : WIDE_IMAGE_SIZE_OPTIONS;
     const storyboardSketchResolutionOptions =
-      storyboardSketchModel === AGNES_IMAGE_2_FLASH_MODEL
-        ? AGNES_IMAGE_RESOLUTION_OPTIONS
-        : IMAGE_RESOLUTION_OPTIONS;
+      storyboardSketchModel === AGNES_IMAGE_21_FLASH_MODEL
+        ? AGNES_IMAGE_21_RESOLUTION_OPTIONS
+        : storyboardSketchModel === AGNES_IMAGE_2_FLASH_MODEL
+          ? AGNES_IMAGE_RESOLUTION_OPTIONS
+          : IMAGE_RESOLUTION_OPTIONS;
     const showStoryboardSketchResolution =
       storyboardSketchModel !== "midjourney" &&
       storyboardSketchModel !== "midjourney-niji7";
@@ -1064,13 +1082,15 @@ export const TableNode = memo(
 
         setStoryboardSketchModel(selectedModel.model);
         setStoryboardSketchPlatform(selectedModel.platform);
-        if (
-          selectedModel.model === AGNES_IMAGE_2_FLASH_MODEL ||
-          selectedModel.platform === AGNES_PLATFORM
-        ) {
-          setStoryboardSketchResolution("1K");
+        if (isAgnesImageModel(selectedModel.model)) {
+          const isAgnesImage21 =
+            selectedModel.model === AGNES_IMAGE_21_FLASH_MODEL;
+          setStoryboardSketchResolution(isAgnesImage21 ? "2K" : "1K");
+          const supportedSizeOptions = isAgnesImage21
+            ? AGNES_IMAGE_21_SIZE_OPTIONS
+            : COMMON_IMAGE_SIZE_OPTIONS;
           if (
-            !COMMON_IMAGE_SIZE_OPTIONS.some(
+            !supportedSizeOptions.some(
               (item) => item.value === storyboardSketchSize,
             )
           ) {

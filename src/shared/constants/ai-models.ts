@@ -139,6 +139,13 @@ export const RUNNINGHUB_GPT_IMAGE2_MODEL = "runninghub-gpt-image-2";
 export const RUNNINGHUB_NANO_BANANA_PRO_MODEL = "runninghub-nano-banana-pro";
 export const AGNES_PLATFORM = "agnes";
 export const AGNES_IMAGE_2_FLASH_MODEL = "agnes-image-2.0-flash";
+export const AGNES_IMAGE_21_FLASH_MODEL = "agnes-image-2.1-flash";
+export const AGNES_IMAGE_MODELS = new Set([
+  AGNES_IMAGE_2_FLASH_MODEL,
+  AGNES_IMAGE_21_FLASH_MODEL,
+]);
+export const isAgnesImageModel = (model?: string) =>
+  Boolean(model && AGNES_IMAGE_MODELS.has(model));
 
 export const IMAGE_MODELS = [
   // { id: 1, name: 'doubao-seedream-4-0', model: 'doubao-seedream-4-0', platform: 'Seedream' },
@@ -184,6 +191,12 @@ export const IMAGE_MODELS = [
     id: 21,
     name: "Agnes Image 2.0 Flash",
     model: AGNES_IMAGE_2_FLASH_MODEL,
+    platform: AGNES_PLATFORM,
+  },
+  {
+    id: 22,
+    name: "Agnes Image 2.1 Flash",
+    model: AGNES_IMAGE_21_FLASH_MODEL,
     platform: AGNES_PLATFORM,
   },
   // {
@@ -232,6 +245,7 @@ export const GENERATION_SCORE_COST_MAP: Record<string, number> = {
   [RUNNINGHUB_GPT_IMAGE2_MODEL]: 10,
   [RUNNINGHUB_NANO_BANANA_PRO_MODEL]: 10,
   [AGNES_IMAGE_2_FLASH_MODEL]: 0,
+  [AGNES_IMAGE_21_FLASH_MODEL]: 0,
   // 视频模型
   "doubao-seedance-2.0": 30,
   "wan2.7-i2v": 30,

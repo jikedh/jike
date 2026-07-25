@@ -9,13 +9,14 @@ import { toChineseNumber } from "shared/utils/utils";
 import { uploadFileToOSS } from "service/oss";
 import { ImageReferenceThumbnails } from "./components/ImageReferenceThumbnails";
 import {
-  AGNES_IMAGE_2_FLASH_MODEL,
+  AGNES_IMAGE_21_FLASH_MODEL,
   IMAGE_MODELS,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
   RUNNINGHUB_GPT_IMAGE2_MODEL,
   RUNNINGHUB_NANO_BANANA_PRO_MODEL,
-  RUNNINGHUB_PLATFORM
+  RUNNINGHUB_PLATFORM,
+  isAgnesImageModel as isAgnesImageModelId
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
 import { getImageGenerationPoints } from "shared/constants/model-points";
@@ -135,6 +136,22 @@ const AGNES_IMAGE_SIZE_VALUES = toOptionValueSet(AGNES_IMAGE_SIZE_OPTIONS);
 const AGNES_IMAGE_RESOLUTION_VALUES = new Set(["1K"]);
 const AGNES_IMAGE_RESOLUTION_OPTIONS = [
   { label: "1K", value: "1K", description: "1024px" },
+];
+const AGNES_IMAGE_21_SIZE_OPTIONS = [
+  ...AGNES_IMAGE_SIZE_OPTIONS,
+  { label: "2:3", value: "2:3", description: "竖向2:3" },
+  { label: "3:2", value: "3:2", description: "横向3:2" },
+  { label: "21:9", value: "21:9", description: "超宽屏" },
+];
+const AGNES_IMAGE_21_SIZE_VALUES = toOptionValueSet(
+  AGNES_IMAGE_21_SIZE_OPTIONS,
+);
+const AGNES_IMAGE_21_RESOLUTION_VALUES = new Set(["1K", "2K", "3K", "4K"]);
+const AGNES_IMAGE_21_RESOLUTION_OPTIONS = [
+  { label: "1K", value: "1K", description: "标准" },
+  { label: "2K", value: "2K", description: "高清" },
+  { label: "3K", value: "3K", description: "高精细" },
+  { label: "4K", value: "4K", description: "超清" },
 ];
 const SEEDREAM_SIZE_VALUES = toOptionValueSet(SEEDREAM_ASPECT_RATIOS);
 const SEEDREAM_RESOLUTION_VALUES = toOptionValueSet(SEEDREAM_RESOLUTIONS);
@@ -282,7 +299,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     isNanoBananaLocalModel || isRunningHubNanoBananaProModel;
   // 判断是否为 GPT-Image-2 模型
   const isGptImage2Model = model === "gpt-image-2" || isRunningHubGptImage2Model;
-  const isAgnesImageModel = model === AGNES_IMAGE_2_FLASH_MODEL;
+  const isAgnesImageModel = isAgnesImageModelId(model);
+  const isAgnesImage21Model = model === AGNES_IMAGE_21_FLASH_MODEL;
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
   const isLocalGeminiDirectModel =
@@ -334,10 +352,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
     if (isAgnesImageModel) {
       return {
-        sizes: AGNES_IMAGE_SIZE_VALUES,
-        resolutions: AGNES_IMAGE_RESOLUTION_VALUES,
+        sizes: isAgnesImage21Model
+          ? AGNES_IMAGE_21_SIZE_VALUES
+          : AGNES_IMAGE_SIZE_VALUES,
+        resolutions: isAgnesImage21Model
+          ? AGNES_IMAGE_21_RESOLUTION_VALUES
+          : AGNES_IMAGE_RESOLUTION_VALUES,
         defaultSize: "1:1",
-        defaultResolution: "1K",
+        defaultResolution: isAgnesImage21Model ? "2K" : "1K",
       };
     }
 
@@ -353,6 +375,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     isGeminiModel,
     isGeminiPro2Model,
     isGptImage2Model,
+    isAgnesImage21Model,
     isAgnesImageModel,
     isMidjourneyModel,
     isLocalGeminiDirectModel,
@@ -1795,8 +1818,16 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             <GptImage2ParamsPanel
               size={size}
               resolution={resolution}
-              sizeOptions={AGNES_IMAGE_SIZE_OPTIONS}
-              resolutionOptions={AGNES_IMAGE_RESOLUTION_OPTIONS}
+              sizeOptions={
+                isAgnesImage21Model
+                  ? AGNES_IMAGE_21_SIZE_OPTIONS
+                  : AGNES_IMAGE_SIZE_OPTIONS
+              }
+              resolutionOptions={
+                isAgnesImage21Model
+                  ? AGNES_IMAGE_21_RESOLUTION_OPTIONS
+                  : AGNES_IMAGE_RESOLUTION_OPTIONS
+              }
               onSizeChange={(value) => {
                 persistImageDefaultPreset({ size: value });
                 updateImageNodeData(nodeId, { size: value });

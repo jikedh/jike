@@ -1,8 +1,8 @@
 ﻿import { addEdge, applyEdgeChanges, applyNodeChanges } from "@xyflow/react";
 import { copyMediaUrlToOss, copyVideoUrlToOss } from "service/oss";
 import {
-  AGNES_IMAGE_2_FLASH_MODEL,
   getVisibleImageModels,
+  isAgnesImageModel,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
   RUNNINGHUB_GPT_IMAGE2_MODEL,
@@ -3343,7 +3343,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         } else {
           // 非 Midjourney 模型：RunningHub 专属模型走低价->官方回退，其它模型直接走 ToAPI。
           const payloadOriginalModel = payload.originalModel ?? payload.model;
-          if (payloadOriginalModel === AGNES_IMAGE_2_FLASH_MODEL) {
+          if (isAgnesImageModel(payloadOriginalModel)) {
             set((state) => ({
               nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
                 ...data,

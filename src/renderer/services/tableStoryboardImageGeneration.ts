@@ -20,9 +20,9 @@ import {
   refundDesktopProxyScore,
 } from "@/api/jikeGo";
 import {
-  AGNES_IMAGE_2_FLASH_MODEL,
   RUNNINGHUB_GPT_IMAGE2_MODEL,
   RUNNINGHUB_NANO_BANANA_PRO_MODEL,
+  isAgnesImageModel,
 } from "shared/constants/ai-models";
 import { getRequestErrorMessage } from "shared/utils/requestErrorHandler";
 
@@ -331,7 +331,7 @@ export const generateTableStoryboardImage = async (
   const referenceImageUrls = options.referenceImageUrls?.filter(Boolean) ?? [];
   throwIfAborted(options.signal);
 
-  if (options.model === AGNES_IMAGE_2_FLASH_MODEL) {
+  if (isAgnesImageModel(options.model)) {
     const response = await createAgnesImageGeneration(
       {
         model: options.model,
