@@ -16,8 +16,8 @@ import { getImageDimensions } from "@/pages/Canvas/CustomNodes/ImageNode/utils/a
 import { useUserStore } from "@/stores/useUserStore";
 import { generateImageUrl } from "service/oss";
 import {
-  AGNES_IMAGE_2_FLASH_MODEL,
   getCanvasChatImageModelConfig,
+  isAgnesImageModel,
 } from "shared/constants/ai-models";
 import { getImageGenerationPoints } from "shared/constants/modelPoints";
 import type { NoteGenerationImage } from "shared/types/NoteGeneration";
@@ -627,10 +627,10 @@ export const generateCanvasChatImages = async ({
   let images: NoteGenerationImage[] = [];
   let ledgerBizId: string | undefined;
   const scoreBizType =
-    config.imageModel === AGNES_IMAGE_2_FLASH_MODEL ? "agnes" : "image";
+    isAgnesImageModel(config.imageModel) ? "agnes" : "image";
 
   try {
-    if (config.imageModel === AGNES_IMAGE_2_FLASH_MODEL) {
+    if (isAgnesImageModel(config.imageModel)) {
       onProgress?.("正在生成 Agnes 图片...");
       const response: any = await createAgnesImageGeneration(
         payload,

@@ -3,7 +3,11 @@ import { jikeingService } from "service/aiRequest";
 import { BailianVideoGenerationRequest } from "shared/types/detail/Bailian/video";
 import { Seedance20Request } from "shared/types/detail/kuaizhi/Seedance-2.0";
 import type { ToApiImageGenerationRequest } from "shared/types/detail/ToApi/images";
-import { AGNES_IMAGE_2_FLASH_MODEL } from "shared/constants/ai-models";
+import {
+  AGNES_IMAGE_2_FLASH_MODEL,
+  AGNES_IMAGE_21_FLASH_MODEL,
+  isAgnesImageModel,
+} from "shared/constants/ai-models";
 import { getJikeingToken } from "shared/utils/utils";
 import { aiVideoTrackingService } from "@/services/aiVideoTracking";
 import {
@@ -294,6 +298,28 @@ const normalizeAgnesImageSize = (size: unknown) => {
   return AGNES_IMAGE_SIZE_BY_RATIO[rawSize] ?? AGNES_IMAGE_SIZE_BY_RATIO["1:1"];
 };
 
+const AGNES_IMAGE_21_RESOLUTIONS = new Set(["1K", "2K", "3K", "4K"]);
+const AGNES_IMAGE_21_RATIOS = new Set([
+  "1:1",
+  "3:4",
+  "4:3",
+  "16:9",
+  "9:16",
+  "2:3",
+  "3:2",
+  "21:9",
+]);
+
+const normalizeAgnesImage21Resolution = (value: unknown) => {
+  const resolution = typeof value === "string" ? value.trim().toUpperCase() : "";
+  return AGNES_IMAGE_21_RESOLUTIONS.has(resolution) ? resolution : "2K";
+};
+
+const normalizeAgnesImage21Ratio = (value: unknown) => {
+  const ratio = typeof value === "string" ? value.trim() : "";
+  return AGNES_IMAGE_21_RATIOS.has(ratio) ? ratio : "1:1";
+};
+
 const normalizeAgnesImageInput = (value: unknown): string[] => {
   const rawItems = Array.isArray(value) ? value : value ? [value] : [];
   return rawItems
@@ -362,6 +388,11 @@ export async function createAgnesImageGeneration(
 ) {
   void scoreCost;
 
+  const requestedModel = String(data.originalModel ?? data.model ?? "").trim();
+  const model = isAgnesImageModel(requestedModel)
+    ? requestedModel
+    : AGNES_IMAGE_2_FLASH_MODEL;
+  const isAgnesImage21 = model === AGNES_IMAGE_21_FLASH_MODEL;
   const imageUrls = normalizeAgnesImageInput(
     data.image ?? data.image_urls ?? data.images,
   );
@@ -369,15 +400,25 @@ export async function createAgnesImageGeneration(
     response_format: "url",
   };
   const body: Record<string, any> = {
-    model: AGNES_IMAGE_2_FLASH_MODEL,
+    model,
     prompt: String(data.prompt ?? ""),
-    size: normalizeAgnesImageSize(data.size),
+    size: isAgnesImage21
+      ? normalizeAgnesImage21Resolution(
+          data.resolution ?? data.metadata?.resolution,
+        )
+      : normalizeAgnesImageSize(data.size),
     extra_body: extraBody,
   };
 
+  if (isAgnesImage21) {
+    body.ratio = normalizeAgnesImage21Ratio(data.ratio ?? data.size);
+  }
+
   if (imageUrls.length > 0) {
-    body.image = imageUrls;
     extraBody.image = imageUrls;
+    if (!isAgnesImage21) {
+      body.image = imageUrls;
+    }
   }
 
   const apiKey = getAgnesImageApiKey();

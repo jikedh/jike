@@ -60,9 +60,10 @@ import {
   storyboardStorage,
 } from "service/storyboardStorage";
 import {
-  AGNES_IMAGE_2_FLASH_MODEL,
+  AGNES_IMAGE_21_FLASH_MODEL,
   getVisibleImageModels,
   IMAGE_MODELS,
+  isAgnesImageModel,
   RUNNINGHUB_GPT_IMAGE2_MODEL,
   RUNNINGHUB_NANO_BANANA_PRO_MODEL,
   RUNNINGHUB_PLATFORM,
@@ -717,6 +718,27 @@ const STORY_AGNES_IMAGE_RESOLUTION_VALUES = new Set(["1K"]);
 const STORY_AGNES_IMAGE_RESOLUTION_OPTIONS = [
   { label: "1K", value: "1K", description: "1024px" },
 ];
+const STORY_AGNES_IMAGE_21_SIZE_OPTIONS = [
+  ...STORY_AGNES_IMAGE_SIZE_OPTIONS,
+  { label: "2:3", value: "2:3", description: "竖向2:3" },
+  { label: "3:2", value: "3:2", description: "横向3:2" },
+  { label: "21:9", value: "21:9", description: "超宽屏" },
+];
+const STORY_AGNES_IMAGE_21_SIZE_VALUES = toOptionValueSet(
+  STORY_AGNES_IMAGE_21_SIZE_OPTIONS,
+);
+const STORY_AGNES_IMAGE_21_RESOLUTION_VALUES = new Set([
+  "1K",
+  "2K",
+  "3K",
+  "4K",
+]);
+const STORY_AGNES_IMAGE_21_RESOLUTION_OPTIONS = [
+  { label: "1K", value: "1K", description: "标准" },
+  { label: "2K", value: "2K", description: "高清" },
+  { label: "3K", value: "3K", description: "高精细" },
+  { label: "4K", value: "4K", description: "超清" },
+];
 const STORY_MIDJOURNEY_SIZE_VALUES = toOptionValueSet(MIDJOURNEY_ASPECT_RATIOS);
 
 type StoryImageParamConfig = {
@@ -763,12 +785,17 @@ const getStoryImageParamConfig = (model: string): StoryImageParamConfig => {
     };
   }
 
-  if (model === AGNES_IMAGE_2_FLASH_MODEL) {
+  if (isAgnesImageModel(model)) {
+    const isAgnesImage21 = model === AGNES_IMAGE_21_FLASH_MODEL;
     return {
       defaultAspectRatio: "1:1",
-      defaultResolution: "1K",
-      aspectRatioValues: STORY_AGNES_IMAGE_SIZE_VALUES,
-      resolutionValues: STORY_AGNES_IMAGE_RESOLUTION_VALUES,
+      defaultResolution: isAgnesImage21 ? "2K" : "1K",
+      aspectRatioValues: isAgnesImage21
+        ? STORY_AGNES_IMAGE_21_SIZE_VALUES
+        : STORY_AGNES_IMAGE_SIZE_VALUES,
+      resolutionValues: isAgnesImage21
+        ? STORY_AGNES_IMAGE_21_RESOLUTION_VALUES
+        : STORY_AGNES_IMAGE_RESOLUTION_VALUES,
     };
   }
 
@@ -2942,13 +2969,22 @@ const StoryAssetImageParamsControl = ({
     );
   }
 
-  if (model === AGNES_IMAGE_2_FLASH_MODEL) {
+  if (isAgnesImageModel(model)) {
+    const isAgnesImage21 = model === AGNES_IMAGE_21_FLASH_MODEL;
     return (
       <GptImage2ParamsPanel
         size={params.aspectRatio}
-        resolution={params.resolution || "1K"}
-        sizeOptions={STORY_AGNES_IMAGE_SIZE_OPTIONS}
-        resolutionOptions={STORY_AGNES_IMAGE_RESOLUTION_OPTIONS}
+        resolution={params.resolution || (isAgnesImage21 ? "2K" : "1K")}
+        sizeOptions={
+          isAgnesImage21
+            ? STORY_AGNES_IMAGE_21_SIZE_OPTIONS
+            : STORY_AGNES_IMAGE_SIZE_OPTIONS
+        }
+        resolutionOptions={
+          isAgnesImage21
+            ? STORY_AGNES_IMAGE_21_RESOLUTION_OPTIONS
+            : STORY_AGNES_IMAGE_RESOLUTION_OPTIONS
+        }
         onSizeChange={updateAspectRatio}
         onResolutionChange={updateResolution}
       />
@@ -5282,7 +5318,7 @@ const StoryAgentPage = ({
     aspectRatio: string;
     resolution?: string;
   }) => {
-    if (input.model === AGNES_IMAGE_2_FLASH_MODEL) {
+    if (isAgnesImageModel(input.model)) {
       const response: any = await createAgnesImageGeneration({
         model: input.model,
         prompt: input.prompt,
