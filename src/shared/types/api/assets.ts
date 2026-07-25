@@ -253,6 +253,7 @@ export interface AssetListParams {
   primaryCategory?: PrimaryCategory;
   status?: AssetStatus;
   keyword?: string;
+  tags?: string[];
   sortBy?: "createTime" | "updateTime" | "name" | "fileSize";
   sortOrder?: "asc" | "desc";
   page?: number;
@@ -264,6 +265,7 @@ export interface AssetListParams {
 export interface AssetSearchParams {
   q: string;
   scope?: AssetScope;
+  tags?: string[];
   page?: number;
   pageSize?: number;
 }
