@@ -2,6 +2,7 @@ import {
   IconDownload,
   IconPhotoPlus,
   IconPencil,
+  IconRefresh,
   IconTable,
   IconUser,
 } from "@tabler/icons-react";
@@ -38,6 +39,15 @@ import {
   getStoryboardImageCacheKey,
   type StoryboardImageCacheMap,
 } from "@/services/storyboardImageCache";
+import {
+  createAndUploadStoryboardCard,
+  isStoryboardCardField,
+  persistStoryboardSketchSource,
+  STORYBOARD_CARD_STALE_FIELD,
+  STORYBOARD_CARD_VERSION,
+  STORYBOARD_CARD_VERSION_FIELD,
+  STORYBOARD_RAW_SKETCH_FIELD,
+} from "@/services/storyboardCardComposer";
 import { exportVideoPullFilmExcel } from "@/services/tableExcelExport";
 import { generateTableStoryboardImage } from "@/services/tableStoryboardImageGeneration";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
@@ -569,8 +579,10 @@ interface TableBodyProps {
   onUpdateCell: (rowIndex: number, column: string, value: string) => void;
   onPreviewImage?: (url: string) => void;
   onGenerateStoryboardSketch?: (rowIndex: number) => void;
+  onRefreshStoryboardCard?: (rowIndex: number) => void;
   storyboardActionDisabled?: boolean;
   storyboardSketchingRowIndex?: number | null;
+  storyboardCardRefreshingRowIndex?: number | null;
   maxWidth?: string;
   cellClassName?: string;
 }
@@ -582,8 +594,10 @@ const TableBody = memo(
     onUpdateCell,
     onPreviewImage,
     onGenerateStoryboardSketch,
+    onRefreshStoryboardCard,
     storyboardActionDisabled,
     storyboardSketchingRowIndex,
+    storyboardCardRefreshingRowIndex,
     maxWidth,
     cellClassName,
   }: TableBodyProps) => {
@@ -612,11 +626,22 @@ const TableBody = memo(
           >
             {columns.map((col) => {
               const isActionColumn = isStoryboardActionColumn(col);
+              const rowRecord = row as unknown as Record<string, unknown>;
               const hasSketch = isImageSource(
-                String(row[STORYBOARD_SKETCH_COLUMN] ?? "").trim(),
+                String(rowRecord[STORYBOARD_SKETCH_COLUMN] ?? "").trim(),
               );
+              const rawSketchUrl = String(
+                rowRecord[STORYBOARD_RAW_SKETCH_FIELD] ??
+                  rowRecord[STORYBOARD_SKETCH_COLUMN] ??
+                  "",
+              ).trim();
+              const canRefreshCard = isImageSource(rawSketchUrl);
+              const isCardStale =
+                rowRecord[STORYBOARD_CARD_STALE_FIELD] === true;
               const isSketchingThisRow =
                 storyboardSketchingRowIndex === rowIndex;
+              const isRefreshingThisRow =
+                storyboardCardRefreshingRowIndex === rowIndex;
 
               return (
                 <td
@@ -628,21 +653,53 @@ const TableBody = memo(
                   )}
                 >
                   {isActionColumn ? (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onGenerateStoryboardSketch?.(rowIndex);
-                      }}
-                      disabled={storyboardActionDisabled}
-                      className="rounded-md border border-[#B43FEB]/70 bg-[#B43FEB] px-2.5 py-1.5 text-[11px] font-medium text-white transition-colors hover:border-[#c45bff] hover:bg-[#c45bff] disabled:cursor-not-allowed disabled:opacity-45"
-                    >
-                      {isSketchingThisRow
-                        ? "生成中..."
-                        : hasSketch
-                          ? "重新生成分镜草图"
-                          : "生成分镜草图"}
-                    </button>
+                    <div className="flex flex-col items-stretch gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onGenerateStoryboardSketch?.(rowIndex);
+                        }}
+                        disabled={
+                          storyboardActionDisabled || isRefreshingThisRow
+                        }
+                        className="rounded-md border border-[#B43FEB]/70 bg-[#B43FEB] px-2.5 py-1.5 text-[11px] font-medium text-white transition-colors hover:border-[#c45bff] hover:bg-[#c45bff] disabled:cursor-not-allowed disabled:opacity-45"
+                      >
+                        {isSketchingThisRow
+                          ? "生成中..."
+                          : hasSketch
+                            ? "重新生成分镜草图"
+                            : "生成分镜草图"}
+                      </button>
+                      {canRefreshCard && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onRefreshStoryboardCard?.(rowIndex);
+                          }}
+                          disabled={
+                            storyboardActionDisabled || isRefreshingThisRow
+                          }
+                          className={cn(
+                            "inline-flex items-center justify-center gap-1 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45",
+                            isCardStale
+                              ? "border-amber-400/70 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"
+                              : "border-white/15 bg-white/[0.04] text-white/70 hover:bg-white/[0.08] hover:text-white",
+                          )}
+                        >
+                          <IconRefresh
+                            size={13}
+                            className={cn(isRefreshingThisRow && "animate-spin")}
+                          />
+                          {isRefreshingThisRow
+                            ? "刷新中..."
+                            : isCardStale
+                              ? "刷新分镜卡（待更新）"
+                              : "刷新分镜卡"}
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     <EditableCell
                       value={row[col as keyof typeof row] || ""}
@@ -732,6 +789,10 @@ export const TableNode = memo(
     });
     const [storyboardSketchingRowIndex, setStoryboardSketchingRowIndex] =
       useState<number | null>(null);
+    const [
+      storyboardCardRefreshingRowIndex,
+      setStoryboardCardRefreshingRowIndex,
+    ] = useState<number | null>(null);
     const storyboardAbortControllerRef = useRef<AbortController | null>(null);
 
     const handleVisibilityClass = selected
@@ -895,14 +956,102 @@ export const TableNode = memo(
         updateTableNodeData(id, ((prevData: any) => {
           const currentRows = prevData.rows || [];
           const newRows = [...currentRows];
+          const currentRow = newRows[rowIndex] || {};
+          const rawSketchUrl = String(
+            currentRow[STORYBOARD_RAW_SKETCH_FIELD] ??
+              currentRow[STORYBOARD_SKETCH_COLUMN] ??
+              "",
+          ).trim();
+          const shouldMarkCardStale =
+            isStoryboardCardField(column) && isImageSource(rawSketchUrl);
           newRows[rowIndex] = {
-            ...newRows[rowIndex],
+            ...currentRow,
             [column]: value,
+            ...(shouldMarkCardStale
+              ? { [STORYBOARD_CARD_STALE_FIELD]: true }
+              : {}),
           };
           return { ...prevData, rows: newRows };
         }) as (prev: Record<string, unknown>) => Record<string, unknown>);
       },
       [id, updateTableNodeData],
+    );
+
+    const updateStoryboardSketchResult = useCallback(
+      (
+        rowIndex: number,
+        {
+          cardUrl,
+          rawSketchUrl,
+          stale,
+        }: {
+          cardUrl: string;
+          rawSketchUrl: string;
+          stale: boolean;
+        },
+      ) => {
+        updateTableNodeData(id, ((prevData: any) => {
+          const currentColumns = prevData.columns || [];
+          const nextColumns = ensureStoryboardColumns(currentColumns);
+          const currentRows = prevData.rows || [];
+          const nextRows = [...currentRows];
+          nextRows[rowIndex] = {
+            ...nextRows[rowIndex],
+            [STORYBOARD_SKETCH_COLUMN]: cardUrl,
+            [STORYBOARD_RAW_SKETCH_FIELD]: rawSketchUrl,
+            [STORYBOARD_CARD_STALE_FIELD]: stale,
+            [STORYBOARD_CARD_VERSION_FIELD]: STORYBOARD_CARD_VERSION,
+          };
+
+          return {
+            ...prevData,
+            columns: nextColumns,
+            rows: nextRows,
+          };
+        }) as (prev: Record<string, unknown>) => Record<string, unknown>);
+      },
+      [id, updateTableNodeData],
+    );
+
+    const getCurrentStoryboardRow = useCallback(
+      (rowIndex: number) => {
+        const currentNode = useCanvasFlowStore
+          .getState()
+          .nodes.find((node) => node.id === id);
+        const currentRows =
+          currentNode?.type === "tableNode" ? currentNode.data.rows : rows;
+        return (currentRows?.[rowIndex] ?? rows?.[rowIndex] ?? {}) as Record<
+          string,
+          unknown
+        >;
+      },
+      [id, rows],
+    );
+
+    const createStoryboardCardForRow = useCallback(
+      async ({
+        rowIndex,
+        rawSketchUrl,
+        persistSource,
+        signal,
+      }: {
+        rowIndex: number;
+        rawSketchUrl: string;
+        persistSource: boolean;
+        signal?: AbortSignal;
+      }) => {
+        const persistedRawSketchUrl = persistSource
+          ? await persistStoryboardSketchSource(rawSketchUrl)
+          : rawSketchUrl;
+        const cardUrl = await createAndUploadStoryboardCard({
+          sketchUrl: persistedRawSketchUrl,
+          row: getCurrentStoryboardRow(rowIndex),
+          rowIndex,
+          signal,
+        });
+        return { cardUrl, rawSketchUrl: persistedRawSketchUrl };
+      },
+      [getCurrentStoryboardRow],
     );
 
     const updateStoryboardImageCell = useCallback(
@@ -1406,8 +1555,9 @@ export const TableNode = memo(
         setStoryboardSketchingRowIndex(rowIndex);
         setStoryboardProgress({ done: 0, total: 1 });
 
+        let rawSketchUrl = "";
         try {
-          const sketchUrl = await generateStoryboardSketchWithRetry({
+          rawSketchUrl = await generateStoryboardSketchWithRetry({
             rowIndex,
             referenceImageUrl,
             signal: abortController.signal,
@@ -1419,8 +1569,22 @@ export const TableNode = memo(
             return;
           }
 
-          updateStoryboardSketchCell(rowIndex, sketchUrl);
-          cacheStoryboardImageUrl(sketchUrl, rowIndex, abortController.signal);
+          const storyboardCard = await createStoryboardCardForRow({
+            rowIndex,
+            rawSketchUrl,
+            persistSource: true,
+            signal: abortController.signal,
+          });
+          updateStoryboardSketchResult(rowIndex, {
+            cardUrl: storyboardCard.cardUrl,
+            rawSketchUrl: storyboardCard.rawSketchUrl,
+            stale: false,
+          });
+          cacheStoryboardImageUrl(
+            storyboardCard.cardUrl,
+            rowIndex,
+            abortController.signal,
+          );
           success(
             isImageSource(String(row[STORYBOARD_SKETCH_COLUMN] ?? "").trim())
               ? "已重新生成分镜草图"
@@ -1433,6 +1597,18 @@ export const TableNode = memo(
           ) {
             updateStoryboardSketchCell(rowIndex, "已停止");
             warning("已停止生成草图");
+          } else if (rawSketchUrl) {
+            updateStoryboardSketchResult(rowIndex, {
+              cardUrl: rawSketchUrl,
+              rawSketchUrl,
+              stale: true,
+            });
+            cacheStoryboardImageUrl(rawSketchUrl, rowIndex);
+            const message = getGenerationErrorMessage(generateError);
+            error(
+              "分镜卡合成失败",
+              `${message}；已保留原始分镜草图，可稍后刷新分镜卡`,
+            );
           } else {
             const message = getGenerationErrorMessage(generateError);
             updateStoryboardSketchCell(rowIndex, `失败：${message}`);
@@ -1449,6 +1625,7 @@ export const TableNode = memo(
       },
       [
         cacheStoryboardImageUrl,
+        createStoryboardCardForRow,
         error,
         generateStoryboardSketchWithRetry,
         isStoryboardCapturing,
@@ -1458,7 +1635,61 @@ export const TableNode = memo(
         storyboardGenerating,
         success,
         updateStoryboardSketchCell,
+        updateStoryboardSketchResult,
         validateBalanceBeforeGenerate,
+        warning,
+      ],
+    );
+
+    const handleRefreshStoryboardCard = useCallback(
+      async (rowIndex: number) => {
+        if (
+          storyboardGenerating ||
+          storyboardCardRefreshingRowIndex !== null
+        ) {
+          return;
+        }
+
+        const row = getCurrentStoryboardRow(rowIndex);
+        const rawSketchUrl = String(
+          row[STORYBOARD_RAW_SKETCH_FIELD] ??
+            row[STORYBOARD_SKETCH_COLUMN] ??
+            "",
+        ).trim();
+        if (!isImageSource(rawSketchUrl)) {
+          warning("没有可用于刷新的原始分镜草图");
+          return;
+        }
+
+        setStoryboardCardRefreshingRowIndex(rowIndex);
+        try {
+          const storyboardCard = await createStoryboardCardForRow({
+            rowIndex,
+            rawSketchUrl,
+            persistSource: false,
+          });
+          updateStoryboardSketchResult(rowIndex, {
+            cardUrl: storyboardCard.cardUrl,
+            rawSketchUrl: storyboardCard.rawSketchUrl,
+            stale: false,
+          });
+          cacheStoryboardImageUrl(storyboardCard.cardUrl, rowIndex);
+          success("分镜卡已刷新");
+        } catch (refreshError) {
+          error("刷新分镜卡失败", getGenerationErrorMessage(refreshError));
+        } finally {
+          setStoryboardCardRefreshingRowIndex(null);
+        }
+      },
+      [
+        cacheStoryboardImageUrl,
+        createStoryboardCardForRow,
+        error,
+        getCurrentStoryboardRow,
+        storyboardCardRefreshingRowIndex,
+        storyboardGenerating,
+        success,
+        updateStoryboardSketchResult,
         warning,
       ],
     );
@@ -1510,8 +1741,9 @@ export const TableNode = memo(
             const item = storyboardSketchRows[currentIndex];
             if (!item) return;
 
+            let rawSketchUrl = "";
             try {
-              const sketchUrl = await generateStoryboardSketchWithRetry({
+              rawSketchUrl = await generateStoryboardSketchWithRetry({
                 rowIndex: item.rowIndex,
                 referenceImageUrl: item.referenceImageUrl,
                 signal: abortController.signal,
@@ -1521,9 +1753,19 @@ export const TableNode = memo(
                 stoppedCount += 1;
                 updateStoryboardSketchCell(item.rowIndex, "已停止");
               } else {
-                updateStoryboardSketchCell(item.rowIndex, sketchUrl);
+                const storyboardCard = await createStoryboardCardForRow({
+                  rowIndex: item.rowIndex,
+                  rawSketchUrl,
+                  persistSource: true,
+                  signal: abortController.signal,
+                });
+                updateStoryboardSketchResult(item.rowIndex, {
+                  cardUrl: storyboardCard.cardUrl,
+                  rawSketchUrl: storyboardCard.rawSketchUrl,
+                  stale: false,
+                });
                 cacheStoryboardImageUrl(
-                  sketchUrl,
+                  storyboardCard.cardUrl,
                   item.rowIndex,
                   abortController.signal,
                 );
@@ -1536,6 +1778,14 @@ export const TableNode = memo(
               ) {
                 stoppedCount += 1;
                 updateStoryboardSketchCell(item.rowIndex, "已停止");
+              } else if (rawSketchUrl) {
+                failedCount += 1;
+                updateStoryboardSketchResult(item.rowIndex, {
+                  cardUrl: rawSketchUrl,
+                  rawSketchUrl,
+                  stale: true,
+                });
+                cacheStoryboardImageUrl(rawSketchUrl, item.rowIndex);
               } else {
                 failedCount += 1;
                 const message = getGenerationErrorMessage(generateError);
@@ -1581,6 +1831,7 @@ export const TableNode = memo(
       },
       [
         cacheStoryboardImageUrl,
+        createStoryboardCardForRow,
         error,
         generateStoryboardSketchWithRetry,
         isStoryboardCapturing,
@@ -1591,6 +1842,7 @@ export const TableNode = memo(
         storyboardSketchRows,
         success,
         updateStoryboardSketchCell,
+        updateStoryboardSketchResult,
         validateBalanceBeforeGenerate,
         warning,
       ],
@@ -1998,8 +2250,19 @@ export const TableNode = memo(
                       ? handleGenerateSingleStoryboardSketch
                       : undefined
                   }
-                  storyboardActionDisabled={storyboardGenerating}
+                  onRefreshStoryboardCard={
+                    isVideoPullFilmTable
+                      ? handleRefreshStoryboardCard
+                      : undefined
+                  }
+                  storyboardActionDisabled={
+                    storyboardGenerating ||
+                    storyboardCardRefreshingRowIndex !== null
+                  }
                   storyboardSketchingRowIndex={storyboardSketchingRowIndex}
+                  storyboardCardRefreshingRowIndex={
+                    storyboardCardRefreshingRowIndex
+                  }
                   maxWidth="200px"
                 />
               </tbody>
@@ -2194,9 +2457,20 @@ export const TableNode = memo(
                               ? handleGenerateSingleStoryboardSketch
                               : undefined
                           }
-                          storyboardActionDisabled={storyboardGenerating}
+                          onRefreshStoryboardCard={
+                            isVideoPullFilmTable
+                              ? handleRefreshStoryboardCard
+                              : undefined
+                          }
+                          storyboardActionDisabled={
+                            storyboardGenerating ||
+                            storyboardCardRefreshingRowIndex !== null
+                          }
                           storyboardSketchingRowIndex={
                             storyboardSketchingRowIndex
+                          }
+                          storyboardCardRefreshingRowIndex={
+                            storyboardCardRefreshingRowIndex
                           }
                           maxWidth="120px"
                         />
