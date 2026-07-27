@@ -276,8 +276,8 @@ export function getJikeingUserInfo(): Record<string, any> | null {
  */
 export function setJikeingUserInfo(userInfo: Record<string, any>): void {
   localStorage.setItem(JIKEING_USER_INFO_KEY, JSON.stringify(userInfo));
-  // 同步展示用用户标识，优先使用 uuid，兼容只有 id 的登录响应
-  const userId = userInfo.uuid ?? userInfo.id;
+  // 统一使用 snowflake id 作为用户标识，确保与后端 user_id 字段类型一致
+  const userId = userInfo.id ?? userInfo.uuid;
   if (userId) {
     localStorage.setItem(JIKEING_USER_ID_KEY, String(userId));
   }
