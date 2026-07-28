@@ -20,7 +20,7 @@ import {
   IconVideo,
   IconX,
 } from "@tabler/icons-react";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { cn, getVideoThumbnail } from "shared/utils/utils";
 import { NotePreviewPopover } from "@/components/NotePreviewPopover";
 import { ThumbnailPreviewPopover } from "@/components/ThumbnailPreviewPopover";
@@ -39,6 +39,8 @@ interface ReferenceThumbnailsProps {
   onReorder?: (fromIndex: number, toIndex: number) => void;
   onRemove?: (item: ReferenceItem) => void;
   onHoverChange?: (item: ReferenceItem, isHovering: boolean) => void;
+  expanded?: boolean;
+  renderItemAccessory?: (item: ReferenceItem) => ReactNode;
 }
 
 const TYPE_LABELS: Record<ReferenceItemType, string> = {
@@ -237,12 +239,14 @@ const SortableReferenceItem = ({
   displayIndex,
   onRemove,
   onHoverChange,
+  accessory,
 }: {
   item: ReferenceItem;
   index: number;
   displayIndex: number;
   onRemove?: (item: ReferenceItem) => void;
   onHoverChange?: (item: ReferenceItem, isHovering: boolean) => void;
+  accessory?: ReactNode;
 }) => {
   const {
     attributes,
@@ -278,7 +282,10 @@ const SortableReferenceItem = ({
       onMouseEnter={() => onHoverChange?.(item, true)}
       onMouseLeave={() => onHoverChange?.(item, false)}
     >
-      <ReferenceCard item={item} index={displayIndex} />
+      <div className={cn(accessory && "flex w-15 flex-col gap-1")}>
+        <ReferenceCard item={item} index={displayIndex} />
+        {accessory}
+      </div>
       {onRemove ? (
         <button
           type="button"
@@ -296,7 +303,10 @@ const SortableReferenceItem = ({
         type="button"
         {...attributes}
         {...listeners}
-        className="absolute right-1 bottom-1 flex h-6 w-6 cursor-grab items-center justify-center rounded-full bg-black/55 text-white opacity-0 shadow-sm transition-opacity active:cursor-grabbing group-hover:opacity-100"
+        className={cn(
+          "absolute right-1 flex h-6 w-6 cursor-grab items-center justify-center rounded-full bg-black/55 text-white opacity-0 shadow-sm transition-opacity active:cursor-grabbing group-hover:opacity-100",
+          accessory ? "top-8" : "bottom-1",
+        )}
         title={`拖动排序${TYPE_LABELS[item.type]}`}
       >
         <IconGripVertical size={18} stroke={1.8} />
@@ -311,12 +321,14 @@ const StaticReferenceItem = ({
   displayIndex,
   onRemove,
   onHoverChange,
+  accessory,
 }: {
   item: ReferenceItem;
   index: number;
   displayIndex: number;
   onRemove?: (item: ReferenceItem) => void;
   onHoverChange?: (item: ReferenceItem, isHovering: boolean) => void;
+  accessory?: ReactNode;
 }) => {
   return (
     <div
@@ -324,7 +336,10 @@ const StaticReferenceItem = ({
       onMouseEnter={() => onHoverChange?.(item, true)}
       onMouseLeave={() => onHoverChange?.(item, false)}
     >
-      <ReferenceCard item={item} index={displayIndex} />
+      <div className={cn(accessory && "flex w-15 flex-col gap-1")}>
+        <ReferenceCard item={item} index={displayIndex} />
+        {accessory}
+      </div>
       {onRemove ? (
         <button
           type="button"
@@ -347,6 +362,8 @@ export const ReferenceThumbnails = ({
   onReorder,
   onRemove,
   onHoverChange,
+  expanded = false,
+  renderItemAccessory,
 }: ReferenceThumbnailsProps) => {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -379,7 +396,12 @@ export const ReferenceThumbnails = ({
   if (!onReorder) {
     // 新版视频节点暂时禁用拖拽排序，避免缩略图长按/拖动时把素材区域向下拉伸。
     return (
-      <div className="flex h-15 items-center gap-2 overflow-visible">
+      <div
+        className={cn(
+          "flex gap-2 overflow-visible",
+          expanded ? "h-24 items-start" : "h-15 items-center",
+        )}
+      >
         {sortableItems.map(({ item, index, displayIndex }) => (
           <StaticReferenceItem
             key={item.id}
@@ -388,6 +410,7 @@ export const ReferenceThumbnails = ({
             displayIndex={displayIndex}
             onRemove={onRemove}
             onHoverChange={onHoverChange}
+            accessory={renderItemAccessory?.(item)}
           />
         ))}
       </div>
@@ -430,7 +453,12 @@ export const ReferenceThumbnails = ({
         items={sortableItems.map(({ item }) => item.id)}
         strategy={horizontalListSortingStrategy}
       >
-        <div className="flex h-15 items-center gap-2 overflow-visible">
+        <div
+          className={cn(
+            "flex gap-2 overflow-visible",
+            expanded ? "h-24 items-start" : "h-15 items-center",
+          )}
+        >
           {sortableItems.map(({ item, index, displayIndex }) => (
             <SortableReferenceItem
               key={item.id}
@@ -439,6 +467,7 @@ export const ReferenceThumbnails = ({
               displayIndex={displayIndex}
               onRemove={onRemove}
               onHoverChange={onHoverChange}
+              accessory={renderItemAccessory?.(item)}
             />
           ))}
         </div>

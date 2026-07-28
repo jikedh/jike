@@ -391,6 +391,10 @@ const buildWanxiangRequest = (request: VideoGenerateRequest) => {
   const images = getImages(request);
   const videos = getVideos(request);
   const firstAudio = getAudios(request)[0];
+  const getReferenceVoice = (url: string) =>
+    request.wanReferenceVoiceByUrl
+      ? request.wanReferenceVoiceByUrl[url]
+      : firstAudio;
   const resolution = isOneOf(
     request.params.resolution,
     ["720P", "1080P"] as const,
@@ -447,17 +451,23 @@ const buildWanxiangRequest = (request: VideoGenerateRequest) => {
   }
 
   const media: NonNullable<Wan27R2vRequest["input"]["media"]> = [
-    ...images.map((url) => ({
-      type: "reference_image" as const,
-      url,
-      ...(firstAudio ? { reference_voice: firstAudio } : {}),
-    })),
-    ...videos.map((url) => ({
-      type: "reference_video" as const,
-      url,
-      ...(firstAudio ? { reference_voice: firstAudio } : {}),
-    })),
-  ].slice(0, 9);
+    ...images.map((url) => {
+      const referenceVoice = getReferenceVoice(url);
+      return {
+        type: "reference_image" as const,
+        url,
+        ...(referenceVoice ? { reference_voice: referenceVoice } : {}),
+      };
+    }),
+    ...videos.map((url) => {
+      const referenceVoice = getReferenceVoice(url);
+      return {
+        type: "reference_video" as const,
+        url,
+        ...(referenceVoice ? { reference_voice: referenceVoice } : {}),
+      };
+    }),
+  ].slice(0, 5);
 
   const body: Wan27R2vRequest = {
     model: "wan2.7-r2v",

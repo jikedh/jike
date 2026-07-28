@@ -14,6 +14,7 @@ export interface VideoReferenceCapability {
   image?: ReferenceCountCapability;
   video?: ReferenceCountCapability;
   audio?: ReferenceCountCapability;
+  maxVisualReferences?: number;
   requireAnyReference?: boolean;
   requireOnlyImages?: boolean;
   audioRequiresVisualReference?: boolean;
@@ -22,6 +23,11 @@ export interface VideoModeGenerationCapability {
   references?: VideoReferenceCapability;
   params?: {
     duration?: number[];
+    durationRange?: {
+      min: number;
+      max: number;
+      maxWithVideo?: number;
+    };
     resolution?: string[];
     ratio?: string[];
     generateAudio?: boolean;
@@ -127,10 +133,14 @@ export const VIDEO_MODEL_GENERATION_CAPABILITIES: Record<
       "text-to-video": { references: emptyReferences },
       "all-reference": {
         references: {
-          image: { max: 9 },
-          video: { max: 9 },
+          image: { max: 5 },
+          video: { max: 5 },
           audio: { max: 1 },
+          maxVisualReferences: 5,
           requireAnyReference: true,
+        },
+        params: {
+          durationRange: { min: 2, max: 15, maxWithVideo: 10 },
         },
       },
       "image-to-video": { references: onlyImages(1, 1) },
@@ -314,6 +324,14 @@ export const validateVideoGenerationCapability = ({
         `${modelLabel}「${modeLabel}」参考音频不能单独使用，请同时添加参考图片或参考视频`,
       );
     }
+    if (
+      references.maxVisualReferences !== undefined &&
+      imageCount + videoCount > references.maxVisualReferences
+    ) {
+      reasons.push(
+        `${modelLabel}「${modeLabel}」参考图片和参考视频合计最多支持 ${references.maxVisualReferences} 个，当前已选择 ${imageCount + videoCount} 个`,
+      );
+    }
     validateCount({
       reasons,
       modelLabel,
@@ -340,6 +358,26 @@ export const validateVideoGenerationCapability = ({
     });
   }
   if (modeCapability.params && params) {
+    const durationRange = modeCapability.params.durationRange;
+    if (durationRange) {
+      const hasVideoReference = referenceItems.some(
+        (item) => item.type === "video",
+      );
+      const maxDuration =
+        hasVideoReference && durationRange.maxWithVideo !== undefined
+          ? durationRange.maxWithVideo
+          : durationRange.max;
+      if (
+        params.duration < durationRange.min ||
+        params.duration > maxDuration
+      ) {
+        reasons.push(
+          hasVideoReference && durationRange.maxWithVideo !== undefined
+            ? `${modelLabel}「${modeLabel}」包含参考视频时，视频时长需在 ${durationRange.min}～${maxDuration} 秒之间`
+            : `${modelLabel}「${modeLabel}」视频时长需在 ${durationRange.min}～${maxDuration} 秒之间`,
+        );
+      }
+    }
     validateParamChoice({
       reasons,
       modelLabel,

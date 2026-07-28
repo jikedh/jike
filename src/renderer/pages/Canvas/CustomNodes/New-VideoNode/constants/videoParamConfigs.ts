@@ -128,6 +128,11 @@ const resolution7201080 = resolution480720.concat([
   { label: "1080p", value: "1080P" },
 ]);
 
+const wanxiangResolutions = [
+  { label: "720p", value: "720P" },
+  { label: "1080p", value: "1080P" },
+];
+
 const happyHorseResolutions = [
   { label: "720p", value: "720P" },
   { label: "1080p", value: "1080P" },
@@ -172,7 +177,7 @@ const wanxiangReferenceConfig = (mode: VideoModeKey): VideoParamConfig => ({
   qualityGroup: {
     key: "resolution",
     label: "分辨率",
-    options: resolution7201080,
+    options: wanxiangResolutions,
   },
   duration: { type: "slider", min: 2, max: 15, step: 1 },
   promptExtend,
@@ -318,7 +323,7 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
     qualityGroup: {
       key: "resolution",
       label: "分辨率",
-      options: resolution7201080,
+      options: wanxiangResolutions,
     },
     duration: duration4_5_10,
     promptExtend,
@@ -335,7 +340,7 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
     qualityGroup: {
       key: "resolution",
       label: "分辨率",
-      options: resolution7201080,
+      options: wanxiangResolutions,
     },
     duration: duration4_5_10,
     promptExtend,
