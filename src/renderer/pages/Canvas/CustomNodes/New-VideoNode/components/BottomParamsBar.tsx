@@ -26,6 +26,8 @@ export interface VideoGenerateRequest {
   prompt: string;
   referenceItems: MentionItem[];
   mode: VideoModeKey;
+  /** Wan2.7 全能参考专用：视觉素材 URL 到参考音色 URL 的映射。 */
+  wanReferenceVoiceByUrl?: Record<string, string>;
 }
 
 interface BottomParamsBarProps {
@@ -63,6 +65,13 @@ export const BottomParamsBar = ({
   accessory,
   modelOptions = VIDEO_MODEL_OPTIONS,
 }: BottomParamsBarProps) => {
+  const wanReferenceDurationMax =
+    selectedModel === "wanxiang" &&
+    mode === "all-reference" &&
+    referenceItems.some((item) => item.type === "video")
+      ? 10
+      : undefined;
+
   const handleClick = () => {
     const request: VideoGenerateRequest = {
       model: selectedModel,
@@ -99,6 +108,7 @@ export const BottomParamsBar = ({
           mode={mode}
           value={selectedParams}
           onChange={onParamsChange}
+          durationMaxOverride={wanReferenceDurationMax}
         />
       </div>
 

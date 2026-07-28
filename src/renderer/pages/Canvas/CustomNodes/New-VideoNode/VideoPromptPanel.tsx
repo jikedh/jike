@@ -7,7 +7,8 @@ import { getVideoGenerationPoints } from "shared/constants/model-points";
 import type { NewVideoGenerationNode } from "shared/types/flow";
 import { getVideoDuration } from "shared/utils/getVideoDuration";
 import { toChineseNumber } from "shared/utils/utils";
-import { cn } from "shared/utils/utils";
+import { cn, downloadImageFromUrl } from "shared/utils/utils";
+import { uploadFileToOSS } from "service/oss";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { PresetDropdown } from "@/components/PresetDropdown";
 import {
@@ -42,6 +43,10 @@ import {
 } from "./components/BottomParamsBar";
 import { ModeToggleBar } from "./components/ModeToggleBar";
 import { ReferenceThumbnails } from "./components/ReferenceThumbnails";
+import {
+  WanReferenceVoiceSlot,
+  type ReferenceVoiceBinding,
+} from "./components/WanReferenceVoiceSlot";
 import {
   type MentionItem,
   VIDEO_MODEL_OPTIONS,
@@ -107,6 +112,59 @@ const isVideoModeKey = (value: unknown): value is VideoModeKey => {
 };
 
 const OVERSEAS_SEEDANCE_MODEL = "dreamina-seedance-2-0-260128";
+const WAN_REFERENCE_VOICES_KEY = "wanReferenceVoices";
+const WAN_REFERENCE_VOICES_MIGRATED_KEY = "wanReferenceVoicesMigrated";
+const WAN_REFERENCE_VOICE_MAX_SIZE = 15 * 1024 * 1024;
+
+const readWanReferenceVoiceBindings = (
+  metadata?: Record<string, unknown>,
+): Record<string, ReferenceVoiceBinding> => {
+  const value = metadata?.[WAN_REFERENCE_VOICES_KEY];
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+  return Object.entries(value as Record<string, unknown>).reduce<
+    Record<string, ReferenceVoiceBinding>
+  >((bindings, [id, binding]) => {
+    if (!binding || typeof binding !== "object" || Array.isArray(binding)) {
+      return bindings;
+    }
+    const record = binding as Record<string, unknown>;
+    if (typeof record.url !== "string" || !record.url.trim()) return bindings;
+    bindings[id] = {
+      url: record.url,
+      ...(typeof record.name === "string" ? { name: record.name } : {}),
+      ...(typeof record.duration === "number"
+        ? { duration: record.duration }
+        : {}),
+      ...(typeof record.size === "number" ? { size: record.size } : {}),
+    };
+    return bindings;
+  }, {});
+};
+
+const getAudioFileDuration = (file: File): Promise<number> =>
+  new Promise((resolve, reject) => {
+    const audio = document.createElement("audio");
+    const objectUrl = URL.createObjectURL(file);
+    const cleanup = () => {
+      audio.removeAttribute("src");
+      audio.load();
+      URL.revokeObjectURL(objectUrl);
+    };
+    audio.preload = "metadata";
+    audio.onloadedmetadata = () => {
+      const duration = audio.duration;
+      cleanup();
+      Number.isFinite(duration)
+        ? resolve(duration)
+        : reject(new Error("无法读取音频时长"));
+    };
+    audio.onerror = () => {
+      cleanup();
+      reject(new Error("无法读取音频文件"));
+    };
+    audio.src = objectUrl;
+  });
 
 const escapeHtml = (value: string) => {
   return value
@@ -453,6 +511,13 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     useState(storedOptimizeSystemPrompt);
   const [isOptimizingPrompt, setIsOptimizingPrompt] = useState(false);
   const promptOptimizeAbortRef = useRef<AbortController | null>(null);
+  const referenceVoicePreviewRef = useRef<HTMLAudioElement | null>(null);
+  const [uploadingReferenceVoiceId, setUploadingReferenceVoiceId] = useState<
+    string | null
+  >(null);
+  const [playingReferenceVoiceId, setPlayingReferenceVoiceId] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     if (!isPromptOptimizePopoverOpen) {
@@ -464,6 +529,8 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     return () => {
       promptOptimizeAbortRef.current?.abort();
       promptOptimizeAbortRef.current = null;
+      referenceVoicePreviewRef.current?.pause();
+      referenceVoicePreviewRef.current = null;
     };
   }, []);
 
@@ -665,9 +732,79 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   ]);
 
   // 视频参考缩略图展示类型：包含文本便签项，type 字段扩展为 "note"。
+  const isWanReferenceVoiceMode =
+    selectedModel === "wanxiang" && activeMode === "all-reference";
+  useEffect(() => {
+    if (isWanReferenceVoiceMode) return;
+    referenceVoicePreviewRef.current?.pause();
+    referenceVoicePreviewRef.current = null;
+    setPlayingReferenceVoiceId(null);
+  }, [isWanReferenceVoiceMode]);
+
+  const storedWanReferenceVoiceBindings = useMemo(
+    () => readWanReferenceVoiceBindings(currentData?.metadata),
+    [currentData?.metadata],
+  );
+  const isWanReferenceVoiceMigrated =
+    currentData?.metadata?.[WAN_REFERENCE_VOICES_MIGRATED_KEY] === true;
+  const wanVisualReferenceItems = useMemo(
+    () =>
+      generationReferenceItems.filter(
+        (item) => item.type === "image" || item.type === "video",
+      ),
+    [generationReferenceItems],
+  );
+  const legacyWanReferenceVoice = useMemo<ReferenceVoiceBinding | undefined>(
+    () => {
+      if (isWanReferenceVoiceMigrated) return undefined;
+      const legacyAudio = generationReferenceItems.find(
+        (item) => item.type === "audio",
+      );
+      const url =
+        legacyAudio?.url ?? legacyAudio?.fileUrl ?? legacyAudio?.value ?? "";
+      return url
+        ? { url, name: legacyAudio?.label || "参考音色" }
+        : undefined;
+    },
+    [generationReferenceItems, isWanReferenceVoiceMigrated],
+  );
+  const effectiveWanReferenceVoiceBindings = useMemo(() => {
+    const bindings = { ...storedWanReferenceVoiceBindings };
+    if (legacyWanReferenceVoice) {
+      wanVisualReferenceItems.forEach((item) => {
+        bindings[item.id] ??= legacyWanReferenceVoice;
+      });
+    }
+    return bindings;
+  }, [
+    legacyWanReferenceVoice,
+    storedWanReferenceVoiceBindings,
+    wanVisualReferenceItems,
+  ]);
+  const wanReferenceVoiceByUrl = useMemo(() => {
+    if (!isWanReferenceVoiceMode) return undefined;
+    return wanVisualReferenceItems.reduce<Record<string, string>>(
+      (bindings, item) => {
+        const visualUrl = item.url ?? item.fileUrl ?? item.value;
+        const voiceUrl = effectiveWanReferenceVoiceBindings[item.id]?.url;
+        if (visualUrl && voiceUrl) bindings[visualUrl] = voiceUrl;
+        return bindings;
+      },
+      {},
+    );
+  }, [
+    effectiveWanReferenceVoiceBindings,
+    isWanReferenceVoiceMode,
+    wanVisualReferenceItems,
+  ]);
+
   const displayReferenceItems = useMemo<VideoReferenceDisplayItem[]>(() => {
     const mediaItems: VideoReferenceDisplayItem[] = generationReferenceItems
-      .filter((item) => item.type !== "image" || item.url)
+      .filter(
+        (item) =>
+          (item.type !== "image" || item.url) &&
+          (!isWanReferenceVoiceMode || item.type !== "audio"),
+      )
       .map((item) => ({
         id: item.id,
         label: item.label,
@@ -724,7 +861,12 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       return sorted;
     }
     return merged;
-  }, [generationReferenceItems, parentNoteNodes, currentData?.metadata?.referenceOrder]);
+  }, [
+    generationReferenceItems,
+    parentNoteNodes,
+    currentData?.metadata?.referenceOrder,
+    isWanReferenceVoiceMode,
+  ]);
   const generationVideoReferenceUrls = useMemo(
     () =>
       generationReferenceItems
@@ -965,6 +1107,22 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     ],
   );
 
+  const hasWanReferenceVideo =
+    selectedModel === "wanxiang" &&
+    activeMode === "all-reference" &&
+    generationReferenceItems.some((item) => item.type === "video");
+
+  useEffect(() => {
+    if (!hasWanReferenceVideo || selectedParams.duration <= 10) return;
+    handleParamsChange({ ...selectedParams, duration: 10 });
+    warning("添加参考视频后，Wan2.7 全能参考最大生成时长为 10 秒");
+  }, [
+    handleParamsChange,
+    hasWanReferenceVideo,
+    selectedParams,
+    warning,
+  ]);
+
   const handleDraftChange = useCallback(
     (payload: { text: string; html: string }) => {
       setPromptText(payload.text);
@@ -1143,8 +1301,65 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     ],
   );
 
+  const materializeWanReferenceVoiceBindings = useCallback(
+    (metadata?: Record<string, unknown>) => {
+      const bindings = readWanReferenceVoiceBindings(metadata);
+      if (
+        metadata?.[WAN_REFERENCE_VOICES_MIGRATED_KEY] !== true &&
+        legacyWanReferenceVoice
+      ) {
+        wanVisualReferenceItems.forEach((item) => {
+          bindings[item.id] ??= legacyWanReferenceVoice;
+        });
+      }
+      return bindings;
+    },
+    [legacyWanReferenceVoice, wanVisualReferenceItems],
+  );
+
+  const persistWanReferenceVoiceBindings = useCallback(
+    (bindings: Record<string, ReferenceVoiceBinding>) => {
+      const latestData = getCurrentNewVideoData(nodeId);
+      updateNewVideoNodeData(nodeId, {
+        metadata: {
+          ...(latestData?.metadata ?? {}),
+          [WAN_REFERENCE_VOICES_KEY]: bindings,
+          [WAN_REFERENCE_VOICES_MIGRATED_KEY]: true,
+        },
+      });
+    },
+    [nodeId, updateNewVideoNodeData],
+  );
+
+  const removeWanReferenceVoiceBinding = useCallback(
+    (referenceId: string) => {
+      if (!isWanReferenceVoiceMode) return;
+      const latestData = getCurrentNewVideoData(nodeId);
+      const bindings = materializeWanReferenceVoiceBindings(
+        latestData?.metadata,
+      );
+      delete bindings[referenceId];
+      persistWanReferenceVoiceBindings(bindings);
+      if (playingReferenceVoiceId === referenceId) {
+        referenceVoicePreviewRef.current?.pause();
+        referenceVoicePreviewRef.current = null;
+        setPlayingReferenceVoiceId(null);
+      }
+    },
+    [
+      isWanReferenceVoiceMode,
+      materializeWanReferenceVoiceBindings,
+      nodeId,
+      persistWanReferenceVoiceBindings,
+      playingReferenceVoiceId,
+    ],
+  );
+
   const handleSortableReferenceRemove = useCallback(
     (item: MentionItem) => {
+      if (item.type === "image" || item.type === "video") {
+        removeWanReferenceVoiceBinding(item.id);
+      }
       // 便签参考：直接断开对应便签边。
       if (item.id.startsWith("parent-note-")) {
         const noteId = item.id.slice("parent-note-".length);
@@ -1188,7 +1403,121 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       handleRemoveReferenceImage,
       localReferenceImageIndexes,
       localReferenceImageUrls,
+      removeWanReferenceVoiceBinding,
     ],
+  );
+
+  const handleWanReferenceVoiceUpload = useCallback(
+    async (referenceId: string, file: File) => {
+      if (!isWanReferenceVoiceMode || uploadingReferenceVoiceId) return;
+      const extension = file.name.split(".").pop()?.toLowerCase();
+      if (extension !== "mp3" && extension !== "wav") {
+        warning("参考音色仅支持 MP3 或 WAV 格式");
+        return;
+      }
+      if (file.size > WAN_REFERENCE_VOICE_MAX_SIZE) {
+        warning("参考音色文件不能超过 15MB");
+        return;
+      }
+
+      setUploadingReferenceVoiceId(referenceId);
+      try {
+        const duration = await getAudioFileDuration(file);
+        if (duration < 1 || duration > 10) {
+          warning("参考音色时长需在 1～10 秒之间");
+          return;
+        }
+        const uploaded = await uploadFileToOSS(file);
+        if (!uploaded.url) throw new Error("上传成功但未返回音频地址");
+
+        const latestData = getCurrentNewVideoData(nodeId);
+        const bindings = materializeWanReferenceVoiceBindings(
+          latestData?.metadata,
+        );
+        bindings[referenceId] = {
+          url: uploaded.url,
+          name: uploaded.name || file.name,
+          duration,
+          size: uploaded.size || file.size,
+        };
+        persistWanReferenceVoiceBindings(bindings);
+        success("参考音色上传成功");
+      } catch (uploadError) {
+        error(
+          uploadError instanceof Error
+            ? uploadError.message
+            : "参考音色上传失败",
+        );
+      } finally {
+        setUploadingReferenceVoiceId(null);
+      }
+    },
+    [
+      error,
+      isWanReferenceVoiceMode,
+      materializeWanReferenceVoiceBindings,
+      nodeId,
+      persistWanReferenceVoiceBindings,
+      success,
+      uploadingReferenceVoiceId,
+      warning,
+    ],
+  );
+
+  const handleWanReferenceVoicePreview = useCallback(
+    (referenceId: string, binding: ReferenceVoiceBinding) => {
+      if (playingReferenceVoiceId === referenceId) {
+        referenceVoicePreviewRef.current?.pause();
+        referenceVoicePreviewRef.current = null;
+        setPlayingReferenceVoiceId(null);
+        return;
+      }
+
+      referenceVoicePreviewRef.current?.pause();
+      const audio = new Audio(binding.url);
+      referenceVoicePreviewRef.current = audio;
+      setPlayingReferenceVoiceId(referenceId);
+      const finish = () => {
+        if (referenceVoicePreviewRef.current === audio) {
+          referenceVoicePreviewRef.current = null;
+          setPlayingReferenceVoiceId(null);
+        }
+      };
+      audio.onended = finish;
+      audio.onerror = () => {
+        finish();
+        error("参考音色播放失败");
+      };
+      void audio.play().catch(() => {
+        finish();
+        error("参考音色播放失败");
+      });
+    },
+    [error, playingReferenceVoiceId],
+  );
+
+  const handleWanReferenceVoiceDownload = useCallback(
+    async (binding: ReferenceVoiceBinding) => {
+      try {
+        await downloadImageFromUrl(
+          binding.url,
+          binding.name || `reference-voice-${Date.now()}.mp3`,
+        );
+      } catch (downloadError) {
+        if (
+          downloadError instanceof Error &&
+          downloadError.message === "取消下载"
+        ) {
+          return;
+        }
+        error(
+          downloadError instanceof Error
+            ? downloadError.message
+            : "参考音色下载失败",
+        );
+      }
+    },
+    [error],
   );
 
   const [
@@ -1654,6 +1983,9 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
           normalized.referenceItems.length > 0
             ? normalized.referenceItems
             : generationReferenceItems,
+        ...(isWanReferenceVoiceMode
+          ? { wanReferenceVoiceByUrl }
+          : {}),
       };
       const apiRequest = buildVideoApiRequest(fullRequest);
       const referenceCounts = fullRequest.referenceItems.reduce(
@@ -1687,12 +2019,14 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       generationVideoReferenceUrls.length,
       isGenerating,
       isLoadingOverseasReferenceDuration,
+      isWanReferenceVoiceMode,
       overseasReferenceDurationError,
       overseasReferenceDurationSeconds,
       parentNoteContents,
       requiredPoints,
       validateBalanceBeforeGenerate,
       videoModelOptions,
+      wanReferenceVoiceByUrl,
       warning,
     ],
   );
@@ -1715,6 +2049,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
             parentImageNodes={parentImageNodes}
             parentAudioNodes={parentAudioNodes}
             parentVideoNodes={parentVideoNodes}
+            expanded={isWanReferenceVoiceMode}
             referenceContent={
               displayReferenceItems.length > 0 ? (
                 <ReferenceThumbnails
@@ -1722,6 +2057,38 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
                   onReorder={handleReferenceReorder}
                   onRemove={handleSortableReferenceRemove}
                   onHoverChange={handleSortableReferenceHoverChange}
+                  expanded={isWanReferenceVoiceMode}
+                  renderItemAccessory={(item) => {
+                    if (
+                      !isWanReferenceVoiceMode ||
+                      (item.type !== "image" && item.type !== "video")
+                    ) {
+                      return undefined;
+                    }
+                    const binding =
+                      effectiveWanReferenceVoiceBindings[item.id];
+                    return (
+                      <WanReferenceVoiceSlot
+                        binding={binding}
+                        isUploading={uploadingReferenceVoiceId === item.id}
+                        isPlaying={playingReferenceVoiceId === item.id}
+                        onUpload={(file) =>
+                          handleWanReferenceVoiceUpload(item.id, file)
+                        }
+                        onRemove={() =>
+                          removeWanReferenceVoiceBinding(item.id)
+                        }
+                        onPreview={() =>
+                          binding &&
+                          handleWanReferenceVoicePreview(item.id, binding)
+                        }
+                        onDownload={() =>
+                          binding &&
+                          handleWanReferenceVoiceDownload(binding)
+                        }
+                      />
+                    );
+                  }}
                 />
               ) : undefined
             }

@@ -95,6 +95,7 @@ export const VideoReferenceAssetsBar = ({
   parentAudioNodes,
   parentVideoNodes,
   referenceContent,
+  expanded = false,
   onDisconnectNode,
   onRemoveReferenceImage,
   onReferenceHoverChange,
@@ -110,12 +111,20 @@ export const VideoReferenceAssetsBar = ({
   parentAudioNodes: { id: string; url: string; label?: string }[];
   parentVideoNodes: { id: string; url: string; label?: string }[];
   referenceContent?: ReactNode;
+  expanded?: boolean;
   onDisconnectNode: (sourceNodeId: string) => void;
   onRemoveReferenceImage: (url: string, index: number) => void;
   onReferenceHoverChange: (sourceNodeId: string, isHovering: boolean) => void;
 }) => {
   return (
-    <div className="nodrag nopan nowheel no-scrollbar flex h-15 items-center gap-2 overflow-x-auto overflow-y-hidden">
+    <div
+      className={cn(
+        "nodrag nopan nowheel no-scrollbar flex gap-2 overflow-x-auto",
+        expanded
+          ? "h-24 items-start overflow-y-visible"
+          : "h-15 items-center overflow-y-hidden",
+      )}
+    >
       {referenceContent ? (
         referenceContent
       ) : (

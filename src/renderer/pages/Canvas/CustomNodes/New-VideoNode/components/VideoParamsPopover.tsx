@@ -24,6 +24,7 @@ type VideoParamsPopoverProps = {
   mode: VideoModeKey;
   value: VideoParamState;
   onChange: (value: VideoParamState) => void;
+  durationMaxOverride?: number;
 };
 
 // Agnes-Video-V2.0 在通用参数面板里集中暴露的可选参数。
@@ -248,8 +249,16 @@ export const VideoParamsPopover = ({
   mode,
   value,
   onChange,
+  durationMaxOverride,
 }: VideoParamsPopoverProps) => {
   const config = getVideoParamConfig(modelId, mode);
+  const durationConfig =
+    config.duration.type === "slider" && durationMaxOverride !== undefined
+      ? {
+          ...config.duration,
+          max: Math.min(config.duration.max, durationMaxOverride),
+        }
+      : config.duration;
 
   const summary = useMemo(() => {
     const parts: string[] = [];
@@ -453,24 +462,24 @@ export const VideoParamsPopover = ({
               </label>
             ) : null}
 
-            {config.duration.type === "slider" ? (
+            {durationConfig.type === "slider" ? (
               <div className={cn("space-y-2", value.autoDuration && "pointer-events-none opacity-40")}>
                 <Slider
                   value={[value.duration]}
-                  min={config.duration.min}
-                  max={config.duration.max}
-                  step={config.duration.step ?? 1}
+                  min={durationConfig.min}
+                  max={durationConfig.max}
+                  step={durationConfig.step ?? 1}
                   onValueChange={(values) => patch({ duration: values[0] })}
                   className="[&_[data-slot=slider-range]]:bg-[#B43FEB] [&_[data-slot=slider-thumb]]:border-[#B43FEB]"
                 />
                 <div className="flex justify-between text-[11px] text-neutral-500">
-                  <span>{config.duration.min}s</span>
-                  <span>{config.duration.max}s</span>
+                  <span>{durationConfig.min}s</span>
+                  <span>{durationConfig.max}s</span>
                 </div>
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-2">
-                {config.duration.options.map((option) => {
+                {durationConfig.options.map((option) => {
                   const active = value.duration === Number(option.value);
                   return (
                     <button
