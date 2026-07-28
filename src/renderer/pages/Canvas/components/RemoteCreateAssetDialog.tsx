@@ -80,8 +80,6 @@ export interface RemoteCreateAssetDialogProps {
 const SCOPE_OPTIONS: Array<{ id: AssetScope; label: string; hint: string }> = [
   { id: "project", label: "项目资产", hint: "归属当前项目，项目成员可见" },
   { id: "personal", label: "个人资产", hint: "仅自己可见，可后续升级" },
-  { id: "company", label: "公司资产", hint: "按所选人员分类授权访问" },
-  { id: "public", label: "公共资产", hint: "所有登录用户可见" },
 ];
 
 const FALLBACK_CATEGORY_OPTIONS: AssetCategory[] = [
