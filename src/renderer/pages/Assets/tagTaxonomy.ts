@@ -194,11 +194,125 @@ const PROP_GROUPS: AssetTagGroup[] = [
     },
 ];
 
-/** 公共资产库标签体系：人物 / 场景 / 道具 / 其他 */
+// ===================== 海外 =====================
+
+const OVERSEAS_GROUPS: AssetTagGroup[] = [
+    {
+        key: "region",
+        label: "地区文化",
+        tags: ["北美", "欧洲", "日本", "韩国", "东南亚", "中东", "拉丁美洲", "非洲"],
+    },
+    {
+        key: "setting",
+        label: "题材场景",
+        tags: ["好莱坞", "纽约都市", "巴黎街头", "伦敦雨夜", "东京校园", "首尔都市", "西部小镇", "热带海岛"],
+    },
+    {
+        key: "style",
+        label: "视觉风格",
+        tags: ["欧美电影", "日系动漫", "韩剧质感", "美式漫画", "迪士尼风", "赛博都市", "复古胶片", "旅行纪录片"],
+    },
+    {
+        key: "character",
+        label: "人物元素",
+        tags: ["外国人", "金发", "棕发", "混血", "西装绅士", "学院制服", "街头潮流", "异域服饰"],
+    },
+];
+
+// ===================== 国内 =====================
+
+const DOMESTIC_GROUPS: AssetTagGroup[] = [
+    {
+        key: "region",
+        label: "地域风貌",
+        tags: ["北京", "上海", "广州", "深圳", "成都", "重庆", "江南", "西北", "岭南", "东北"],
+    },
+    {
+        key: "setting",
+        label: "生活场景",
+        tags: ["国风街区", "城市CBD", "校园生活", "乡村田园", "夜市", "高铁站", "写字楼", "新中式住宅"],
+    },
+    {
+        key: "culture",
+        label: "文化元素",
+        tags: ["国潮", "新中式", "水墨", "剪纸", "戏曲", "茶文化", "武术", "春节", "非遗"],
+    },
+    {
+        key: "style",
+        label: "内容风格",
+        tags: ["国产剧", "国漫", "短剧", "生活纪实", "电商视觉", "国风广告", "都市情感", "现实主义"],
+    },
+];
+
+// ===================== 古装 =====================
+
+const COSTUME_DRAMA_GROUPS: AssetTagGroup[] = [
+    {
+        key: "dynasty",
+        label: "时代朝代",
+        tags: ["先秦", "汉代", "唐代", "宋代", "明代", "清代", "民国", "架空王朝"],
+    },
+    {
+        key: "identity",
+        label: "角色身份",
+        tags: ["皇帝", "皇后", "公主", "太子", "将军", "侠客", "书生", "丫鬟", "道士", "医者"],
+    },
+    {
+        key: "setting",
+        label: "场景地点",
+        tags: ["宫殿", "王府", "江湖客栈", "竹林", "古镇", "书院", "战场", "山门", "牢狱"],
+    },
+    {
+        key: "costume",
+        label: "服饰道具",
+        tags: ["汉服", "唐装", "官服", "盔甲", "斗篷", "发簪", "团扇", "佩剑", "油纸伞"],
+    },
+    {
+        key: "theme",
+        label: "剧情氛围",
+        tags: ["宫斗", "权谋", "武侠", "仙侠", "探案", "家国", "爱情", "复仇", "朝堂风云"],
+    },
+];
+
+// ===================== 3D 古装 =====================
+
+const THREE_D_COSTUME_DRAMA_GROUPS: AssetTagGroup[] = [
+    {
+        key: "rendering",
+        label: "渲染风格",
+        tags: ["3D国漫", "3D写实", "电影级渲染", "游戏CG", "卡通渲染", "虚幻引擎风", "高精建模", "全局光照"],
+    },
+    {
+        key: "character",
+        label: "角色造型",
+        tags: ["3D侠客", "3D仙女", "3D将军", "3D帝王", "3D妖兽", "3D神将", "精致妆造", "飘逸发丝"],
+    },
+    {
+        key: "scene",
+        label: "三维场景",
+        tags: ["仙侠山门", "3D宫殿", "云海", "古战场", "秘境洞府", "悬浮岛", "龙宫", "古城夜景"],
+    },
+    {
+        key: "effects",
+        label: "特效元素",
+        tags: ["法术光效", "粒子特效", "御剑飞行", "灵气", "火焰", "冰霜", "雷电", "能量护盾"],
+    },
+    {
+        key: "camera",
+        label: "镜头表现",
+        tags: ["角色转身", "环绕镜头", "慢动作", "史诗远景", "战斗运镜", "低机位", "景深", "动态模糊"],
+    },
+];
+
+/** 公共资产库标签体系：人物 / 场景 / 道具 / 海外 / 国内 / 古装 / 3D古装 / 其他 */
 export const ASSET_TAG_TAXONOMY: AssetTagCategory[] = [
     { key: "character", label: "人物", groups: CHARACTER_GROUPS },
     { key: "scene", label: "场景", groups: SCENE_GROUPS },
     { key: "prop", label: "道具", groups: PROP_GROUPS },
+    { key: "overseas", label: "海外的", groups: OVERSEAS_GROUPS },
+    { key: "domestic", label: "国内的", groups: DOMESTIC_GROUPS },
+    { key: "costumeDrama", label: "古装的", groups: COSTUME_DRAMA_GROUPS },
+    { key: "threeDCostumeDrama", label: "3D古装的", groups: THREE_D_COSTUME_DRAMA_GROUPS },
     // 「其他」分类无静态分组，标签由后端聚合接口动态提供
     { key: "other", label: "其他", groups: [] },
 ];
