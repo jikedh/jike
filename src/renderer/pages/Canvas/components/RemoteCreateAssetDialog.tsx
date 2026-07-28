@@ -12,6 +12,8 @@
  */
 
 import {
+  IconChevronDown,
+  IconChevronUp,
   IconMusic,
   IconPhoto,
   IconTag,
@@ -20,15 +22,25 @@ import {
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { getAssetCategories } from "@/api/assets";
+import { getAssetCategories, getAssetPersonCategories } from "@/api/assets";
 import type {
   AssetCategory,
   AssetScope,
   MediaType,
+  PersonCategory,
   PrimaryCategory,
 } from "shared/types/api/assets";
 import { cn } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
+import { ASSET_TAG_TAXONOMY } from "@/pages/Assets/tagTaxonomy";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   fetchBlobFromUrl,
   uploadAndCreateAsset,
@@ -68,6 +80,8 @@ export interface RemoteCreateAssetDialogProps {
 const SCOPE_OPTIONS: Array<{ id: AssetScope; label: string; hint: string }> = [
   { id: "project", label: "项目资产", hint: "归属当前项目，项目成员可见" },
   { id: "personal", label: "个人资产", hint: "仅自己可见，可后续升级" },
+  { id: "company", label: "公司资产", hint: "按所选人员分类授权访问" },
+  { id: "public", label: "公共资产", hint: "所有登录用户可见" },
 ];
 
 const FALLBACK_CATEGORY_OPTIONS: AssetCategory[] = [
@@ -75,13 +89,6 @@ const FALLBACK_CATEGORY_OPTIONS: AssetCategory[] = [
   { id: "scene", code: "scene", name: "场景", sort: 20, status: 1 },
   { id: "prop", code: "prop", name: "道具", sort: 30, status: 1 },
 ];
-
-const flattenLeafCategories = (categories: AssetCategory[]): AssetCategory[] =>
-  categories.flatMap((category) =>
-    category.children && category.children.length > 0
-      ? flattenLeafCategories(category.children)
-      : [category],
-  );
 
 /** 后端允许分类 code 为空，此处优先以 code 作为分类值，缺省回退到分类 ID。 */
 const getCategoryValue = (category: AssetCategory): PrimaryCategory =>
@@ -135,14 +142,7 @@ const getMediaIcon = (mediaType: MediaType, size = 18) => {
   return <IconPhoto size={size} />;
 };
 
-const splitTags = (raw: string): string[] => {
-  const set = new Set<string>();
-  for (const part of raw.split(/[,，\s]+/)) {
-    const trimmed = part.trim();
-    if (trimmed.length > 0) set.add(trimmed);
-  }
-  return Array.from(set);
-};
+const TAG_MAX_COUNT = 20;
 
 export const RemoteCreateAssetDialog = ({
   open,
@@ -159,13 +159,48 @@ export const RemoteCreateAssetDialog = ({
   const [categoryOptions, setCategoryOptions] = useState<AssetCategory[]>(
     FALLBACK_CATEGORY_OPTIONS,
   );
-  const [tagsInput, setTagsInput] = useState("");
+  const [personCategories, setPersonCategories] = useState<PersonCategory[]>([]);
+  const [personCategoryCode, setPersonCategoryCode] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [customTag, setCustomTag] = useState("");
+  const [activeTagCategoryKey, setActiveTagCategoryKey] = useState(
+    ASSET_TAG_TAXONOMY[0].key,
+  );
+  const [tagSelectorExpanded, setTagSelectorExpanded] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [previewUrl, setPreviewUrl] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
-  const tags = useMemo(() => splitTags(tagsInput), [tagsInput]);
+  const selectedTagSet = useMemo(() => new Set(selectedTags), [selectedTags]);
+  const activeTagCategory =
+    ASSET_TAG_TAXONOMY.find(
+      (category) => category.key === activeTagCategoryKey,
+    ) ?? ASSET_TAG_TAXONOMY[0];
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags((current) =>
+      current.includes(tag)
+        ? current.filter((item) => item !== tag)
+        : current.length >= TAG_MAX_COUNT
+          ? current
+          : [...current, tag],
+    );
+  };
+
+  const addCustomTag = () => {
+    const tag = customTag.trim();
+    if (!tag || selectedTagSet.has(tag)) {
+      setCustomTag("");
+      return;
+    }
+    if (selectedTags.length >= TAG_MAX_COUNT) {
+      toast.warning(`最多可选择 ${TAG_MAX_COUNT} 个标签`);
+      return;
+    }
+    setSelectedTags((current) => [...current, tag]);
+    setCustomTag("");
+  };
 
   // 维护 blob preview URL 的生命周期，避免内存泄漏
   useEffect(() => {
@@ -211,12 +246,36 @@ export const RemoteCreateAssetDialog = ({
           getDefaultPrimaryCategory(request.mediaType),
         ),
     );
-    setTagsInput("");
+    setSelectedTags([]);
+    setCustomTag("");
+    setActiveTagCategoryKey(ASSET_TAG_TAXONOMY[0].key);
+    setTagSelectorExpanded(true);
+    setPersonCategoryCode("");
     setProgress(0);
     return () => {
       cancelled = true;
     };
   }, [open, request]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void getAssetPersonCategories()
+      .then((envelope) => {
+        if (
+          cancelled ||
+          (envelope.code !== 0 && envelope.code !== 200) ||
+          !Array.isArray(envelope.data)
+        ) {
+          return;
+        }
+        setPersonCategories(envelope.data);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   // 关闭时中断上传
   useEffect(() => {
@@ -257,6 +316,10 @@ export const RemoteCreateAssetDialog = ({
         toast.warning("当前画布未关联项目，无法创建项目资产");
         return;
       }
+      if (scope === "company" && !personCategoryCode) {
+        toast.warning("请选择公司资产的人员分类");
+        return;
+      }
 
       setSubmitting(true);
       setProgress(0);
@@ -270,9 +333,11 @@ export const RemoteCreateAssetDialog = ({
         primaryCategory,
         scope,
         projectId: targetProjectId,
+        personCategoryCode:
+          scope === "company" ? personCategoryCode : undefined,
         name,
         description,
-        tags,
+        tags: selectedTags,
         sourceProjectId: request.projectId || undefined,
         sourceNodeId: request.nodeId || undefined,
         onProgress: (percent) => setProgress(percent),
@@ -294,7 +359,7 @@ export const RemoteCreateAssetDialog = ({
 
   return (
     <div className="fixed inset-0 z-80 flex items-center justify-center bg-black/55 px-6 backdrop-blur-sm">
-      <div className="noflow nodrag nopan nowheel w-[min(720px,94vw)] overflow-hidden rounded-xl border border-white/10 bg-[#171719] text-white shadow-2xl">
+      <div className="noflow nodrag nopan nowheel flex max-h-[92vh] w-[min(1120px,96vw)] flex-col overflow-hidden rounded-xl border border-white/10 bg-[#171719] text-white shadow-2xl">
         {/* Header */}
         <div className="flex h-13 items-center justify-between border-b border-white/8 px-5">
           <div className="flex items-center gap-2 text-sm font-medium">
@@ -313,7 +378,7 @@ export const RemoteCreateAssetDialog = ({
         </div>
 
         {/* Body */}
-        <div className="grid gap-5 p-5 md:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto p-6 lg:grid-cols-[380px_minmax(0,1fr)]">
           {/* Preview */}
           <div>
             <div className="mb-2 text-xs text-white/40">预览</div>
@@ -352,7 +417,7 @@ export const RemoteCreateAssetDialog = ({
           </div>
 
           {/* Form */}
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4">
             <label className="block">
               <div className="mb-1.5 text-xs text-white/45">
                 名称 <span className="text-red-400">*</span>
@@ -398,6 +463,32 @@ export const RemoteCreateAssetDialog = ({
               </div>
             </div>
 
+            {scope === "company" ? (
+              <label className="block">
+                <div className="mb-1.5 text-xs text-white/45">
+                  人员分类 <span className="text-red-400">*</span>
+                </div>
+                <Select
+                  value={personCategoryCode}
+                  disabled={submitting}
+                  onValueChange={setPersonCategoryCode}
+                >
+                  <SelectTrigger className="w-full border-white/10 bg-black/30 text-white/80">
+                    <SelectValue placeholder="请选择人员分类" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {personCategories.map((category) => (
+                        <SelectItem key={category.code} value={category.code}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </label>
+            ) : null}
+
             <div>
               <div className="mb-1.5 text-xs text-white/45">
                 主分类 <span className="text-red-400">*</span>
@@ -426,34 +517,135 @@ export const RemoteCreateAssetDialog = ({
               />
             </label>
 
-            <label className="block">
+            <div>
               <div className="mb-1.5 flex items-center justify-between text-xs text-white/45">
                 <span>
-                  标签 <span className="text-white/30">(最多 20 个)</span>
+                  标签 <span className="text-white/30">(最多 {TAG_MAX_COUNT} 个)</span>
                 </span>
-                <span className="text-white/30">用空格或逗号分隔</span>
+                <button
+                  type="button"
+                  onClick={() => setTagSelectorExpanded((current) => !current)}
+                  className="flex items-center gap-1 text-white/45 hover:text-white"
+                >
+                  {tagSelectorExpanded ? "收起标签" : "展开标签"}
+                  {tagSelectorExpanded ? (
+                    <IconChevronUp size={13} />
+                  ) : (
+                    <IconChevronDown size={13} />
+                  )}
+                </button>
               </div>
-              <input
-                value={tagsInput}
-                onChange={(event) => setTagsInput(event.target.value)}
-                disabled={submitting}
-                placeholder="例：古风, 汉服, 少女"
-                className="h-10 w-full rounded-md border border-white/10 bg-black/30 px-3 text-sm outline-none focus:border-[#B43FEB]/70"
-              />
-              {tags.length > 0 ? (
+
+              {tagSelectorExpanded ? (
+                <div className="rounded-md border border-white/10 bg-black/20 p-3">
+                  <div className="flex flex-wrap gap-1 rounded-md bg-white/4 p-0.5">
+                    {ASSET_TAG_TAXONOMY.map((category) => (
+                      <button
+                        key={category.key}
+                        type="button"
+                        disabled={submitting}
+                        onClick={() => setActiveTagCategoryKey(category.key)}
+                        className={cn(
+                          "rounded px-2.5 py-1 text-xs transition-colors disabled:opacity-40",
+                          activeTagCategoryKey === category.key
+                            ? "bg-[#B43FEB]/25 text-white"
+                            : "text-white/55 hover:text-white",
+                        )}
+                      >
+                        {category.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="asset-library-scrollbar mt-3 flex max-h-48 flex-col gap-2.5 overflow-y-auto pr-1">
+                    {activeTagCategory.groups.length === 0 ? (
+                      <span className="text-[11px] text-white/35">
+                        暂无预置标签，可在下方添加自定义标签
+                      </span>
+                    ) : (
+                      activeTagCategory.groups.map((group) => (
+                        <div key={group.key} className="flex items-start gap-3">
+                          <span className="mt-1 w-16 shrink-0 text-right text-[11px] leading-5 text-white/35">
+                            {group.label}
+                          </span>
+                          <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+                            {group.tags.map((tag) => {
+                              const selected = selectedTagSet.has(tag);
+                              const disabled =
+                                submitting ||
+                                (!selected && selectedTags.length >= TAG_MAX_COUNT);
+                              return (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  disabled={disabled}
+                                  onClick={() => toggleTag(tag)}
+                                  className={cn(
+                                    "rounded-md border px-2 py-1 text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                                    selected
+                                      ? "border-[#B43FEB]/70 bg-[#B43FEB]/25 text-[#e0aaff]"
+                                      : "border-white/10 bg-white/4 text-white/55 hover:border-white/20 hover:text-white/80",
+                                  )}
+                                >
+                                  {tag}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={customTag}
+                  onChange={(event) => setCustomTag(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addCustomTag();
+                    }
+                  }}
+                  disabled={submitting || selectedTags.length >= TAG_MAX_COUNT}
+                  maxLength={64}
+                  placeholder="没有合适的标签？添加一个自定义标签"
+                  className="h-10 min-w-0 flex-1 rounded-md border border-white/10 bg-black/30 px-3 text-sm outline-none focus:border-[#B43FEB]/70"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={submitting || !customTag.trim() || selectedTags.length >= TAG_MAX_COUNT}
+                  onClick={addCustomTag}
+                >
+                  添加
+                </Button>
+              </div>
+
+              {selectedTags.length > 0 ? (
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {tags.map((tag) => (
+                  {selectedTags.map((tag) => (
                     <span
                       key={tag}
                       className="inline-flex items-center gap-1 rounded-full bg-[#B43FEB]/15 px-2 py-0.5 text-[11px] text-[#d486ff]"
                     >
                       <IconTag size={10} />
                       {tag}
+                      <button
+                        type="button"
+                        disabled={submitting}
+                        onClick={() => toggleTag(tag)}
+                        className="text-[#d486ff]/60 hover:text-[#d486ff] disabled:opacity-40"
+                      >
+                        <IconX size={10} />
+                      </button>
                     </span>
                   ))}
                 </div>
               ) : null}
-            </label>
+            </div>
           </div>
         </div>
 

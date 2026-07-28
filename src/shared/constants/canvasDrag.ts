@@ -49,7 +49,7 @@ export type CanvasAssetDragPayload = {
 export type CanvasRemoteAssetDragItem = {
   id: string;
   name: string;
-  scope: "personal" | "project" | "public";
+  scope: "personal" | "project" | "company" | "public";
   mediaType: "image" | "video" | "audio";
   primaryCategory: PrimaryCategory;
   fileUrl: string;

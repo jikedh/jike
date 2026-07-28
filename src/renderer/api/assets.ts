@@ -22,6 +22,7 @@ import type {
   AssetSearchParams,
   AssetTag,
   AssetTagsRequest,
+  PersonCategory,
   ChangeAssetScopeRequest,
   ChangeAssetScopeResult,
   CreateAssetRequest,
@@ -105,6 +106,26 @@ export const getAssetPrimaryCategories = () =>
 export const getAssetCategories = () =>
   request<AssetCategory[]>({
     url: "/v1/assets/categories",
+    method: "get",
+  });
+
+/**
+ * 获取启用的人员分类。
+ * GET /v1/assets/person-categories
+ */
+export const getAssetPersonCategories = () =>
+  request<PersonCategory[]>({
+    url: "/v1/assets/person-categories",
+    method: "get",
+  });
+
+/**
+ * 聚合公共资产下的全部去重标签。
+ * GET /v1/assets/tags
+ */
+export const getPublicAssetTags = () =>
+  request<string[]>({
+    url: "/v1/assets/tags",
     method: "get",
   });
 

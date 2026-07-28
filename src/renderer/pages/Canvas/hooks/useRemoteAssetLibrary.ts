@@ -2,14 +2,15 @@
  * Canvas 远程资产库 Hook
  *
  * 职责：
- * - 在不同 scope（项目 / 个人 / 公开）之间切换列表查询
+ * - 在不同 scope（项目 / 个人 / 公司 / 公开）之间切换列表查询
  * - 支持 mediaType / primaryCategory / 关键词 / 分页 / 排序 / 标签过滤
  * - 提供创建、删除、更新、改变 scope、标签管理等操作
  * - 统一处理 loading / error / 成功反馈
  *
- * 三类资产差异：
+ * 四类资产差异：
  * - personal：`scope=personal`，仅当前用户可见
  * - project：`scope=project & projectId`；后端要求 projectId 必填
+ * - company：`scope=company`，仅匹配资产人员分类的当前有效用户可见
  * - public：`scope=public`，所有登录用户可见，但写操作只能创建者执行（最终由后端校验）
  */
 
@@ -50,6 +51,8 @@ export interface UseRemoteAssetLibraryOptions {
   keyword?: string;
   /** 标签过滤（AND 语义：资产须同时拥有所有指定标签） */
   tags?: string[];
+  /** 按资产创建者当前人员分类筛选 */
+  personCategoryCode?: string;
   /** 分页 */
   page: number;
   pageSize: number;
@@ -105,6 +108,8 @@ const buildListParams = (
     if (options.projectId) params.projectId = options.projectId;
   } else if (options.scope === "personal") {
     params.scope = "personal";
+  } else if (options.scope === "company") {
+    params.scope = "company";
   } else {
     params.scope = "public";
   }
@@ -113,6 +118,9 @@ const buildListParams = (
   if (options.primaryCategory) params.primaryCategory = options.primaryCategory;
   if (options.keyword?.trim()) params.keyword = options.keyword.trim();
   if (options.tags && options.tags.length > 0) params.tags = options.tags;
+  if (options.personCategoryCode?.trim()) {
+    params.personCategoryCode = options.personCategoryCode.trim();
+  }
 
   return params;
 };
@@ -198,6 +206,7 @@ export const useRemoteAssetLibrary = (
     options.mediaType,
     options.page,
     options.pageSize,
+    options.personCategoryCode,
     options.primaryCategory,
     options.projectId,
     options.scope,

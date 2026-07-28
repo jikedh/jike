@@ -35,7 +35,7 @@ import {
     type MouseEvent,
 } from "react";
 import { toast } from "sonner";
-import { getAssetCategories } from "@/api/assets";
+import { getAssetCategories, getAssetPersonCategories } from "@/api/assets";
 import {
     CANVAS_REMOTE_ASSET_DRAG_MIME,
     CANVAS_REMOTE_ASSET_DRAG_TYPE,
@@ -45,10 +45,19 @@ import type {
     AssetScope,
     AssetCategory,
     MediaType,
+    PersonCategory,
     PrimaryCategory,
 } from "shared/types/api/assets";
 import { cn } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
+import {
+    Select,
+    SelectContent,
+    SelectGroup,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { useRemoteAssetLibrary } from "../hooks/useRemoteAssetLibrary";
 import {
     CATEGORY_LABEL_MAP,
@@ -100,6 +109,11 @@ const SCOPE_OPTIONS: ScopeOption[] = [
         id: "personal",
         label: SCOPE_LABEL_MAP.personal,
         description: "我创建的个人资产",
+    },
+    {
+        id: "company",
+        label: SCOPE_LABEL_MAP.company,
+        description: "按人员分类授权的公司资产",
     },
     {
         id: "public",
@@ -406,6 +420,8 @@ export const RemoteAssetLibraryDialog = ({
     const [categoryOptions, setCategoryOptions] = useState<AssetCategory[]>(FALLBACK_CATEGORY_OPTIONS);
     const [keyword, setKeyword] = useState("");
     const [keywordInput, setKeywordInput] = useState("");
+    const [personCategories, setPersonCategories] = useState<PersonCategory[]>([]);
+    const [personCategoryCode, setPersonCategoryCode] = useState("");
     const [page, setPage] = useState(1);
     // 选择
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -440,6 +456,7 @@ export const RemoteAssetLibraryDialog = ({
                     ? activeCategory
                     : undefined,
             keyword,
+            personCategoryCode: personCategoryCode || undefined,
             page,
             pageSize: PAGE_SIZE,
             sortBy: "createTime" as const,
@@ -452,6 +469,7 @@ export const RemoteAssetLibraryDialog = ({
             activeScope,
             keyword,
             page,
+            personCategoryCode,
             projectId,
             refreshKey,
             supportsCategory,
@@ -482,6 +500,31 @@ export const RemoteAssetLibraryDialog = ({
     useEffect(() => {
         if (!open) return;
         let cancelled = false;
+        void getAssetPersonCategories()
+            .then((envelope) => {
+                if (
+                    cancelled ||
+                    (envelope.code !== 0 && envelope.code !== 200) ||
+                    !Array.isArray(envelope.data)
+                ) {
+                    return;
+                }
+                setPersonCategories(envelope.data);
+                setPersonCategoryCode((current) =>
+                    current && !envelope.data.some((category) => category.code === current)
+                        ? ""
+                        : current,
+                );
+            })
+            .catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, [open]);
+
+    useEffect(() => {
+        if (!open) return;
+        let cancelled = false;
         void getAssetCategories()
             .then((envelope) => {
                 if (cancelled) return;
@@ -506,7 +549,7 @@ export const RemoteAssetLibraryDialog = ({
         setPreviewAssetId(null);
         selectionAnchorRef.current = null;
         setPage(1);
-    }, [activeScope, activeMediaType, activeCategory, keyword]);
+    }, [activeScope, activeMediaType, activeCategory, keyword, personCategoryCode]);
 
     useEffect(() => {
         if (!contextMenu) return;
@@ -707,7 +750,7 @@ export const RemoteAssetLibraryDialog = ({
                 <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 rounded-md border border-dashed border-white/10 text-sm text-white/45">
                     <IconLayoutGrid size={28} className="text-white/30" />
                     <div>暂无资产</div>
-                    {onRequestUpload && activeScope !== "public" ? (
+                    {onRequestUpload && activeScope === "personal" ? (
                         <Button size="sm" variant="blue" onClick={onRequestUpload}>
                             <IconUpload size={14} />
                             上传资产
@@ -827,7 +870,7 @@ export const RemoteAssetLibraryDialog = ({
                     </nav>
 
                     <div className="flex items-center gap-2">
-                        {onRequestUpload && activeScope !== "public" ? (
+                        {onRequestUpload && activeScope === "personal" ? (
                             <Button size="sm" variant="blue" onClick={onRequestUpload}>
                                 <IconUpload size={14} />
                                 上传资产
@@ -877,6 +920,30 @@ export const RemoteAssetLibraryDialog = ({
                             />
                         </div>
                     ) : null}
+
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-white/35">人员分类</span>
+                        <Select
+                            value={personCategoryCode || "all"}
+                            onValueChange={(value) =>
+                                setPersonCategoryCode(value === "all" ? "" : value)
+                            }
+                        >
+                            <SelectTrigger size="sm" className="w-32 border-white/10 bg-white/4 text-xs text-white/75">
+                                <SelectValue placeholder="全部人员" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectGroup>
+                                    <SelectItem value="all">全部人员</SelectItem>
+                                    {personCategories.map((category) => (
+                                        <SelectItem key={category.code} value={category.code}>
+                                            {category.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectGroup>
+                            </SelectContent>
+                        </Select>
+                    </div>
 
                     <form
                         className="ml-auto flex items-center gap-2"

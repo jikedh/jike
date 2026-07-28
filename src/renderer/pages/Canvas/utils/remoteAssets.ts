@@ -26,6 +26,7 @@ export interface RemoteAsset {
   userId: string;
   scope: AssetScope;
   projectId: string | null;
+  personCategoryId: string | null;
   name: string;
   description: string;
   mediaType: MediaType;
@@ -81,6 +82,8 @@ export const mapListItemToRemoteAsset = (item: AssetListItem): RemoteAsset => ({
   userId: toStringId(item.userId),
   scope: item.scope,
   projectId: item.projectId == null ? null : toStringId(item.projectId),
+  personCategoryId:
+    item.personCategoryId == null ? null : toStringId(item.personCategoryId),
   name: toStringOrEmpty(item.name),
   description: toStringOrEmpty(item.description),
   mediaType: item.mediaType,
@@ -110,6 +113,10 @@ export const mapDetailToRemoteAsset = (detail: AssetDetail): RemoteAsset => ({
   userId: toStringId(detail.userId),
   scope: detail.scope,
   projectId: detail.projectId == null ? null : toStringId(detail.projectId),
+  personCategoryId:
+    detail.personCategoryId == null
+      ? null
+      : toStringId(detail.personCategoryId),
   name: toStringOrEmpty(detail.name),
   description: toStringOrEmpty(detail.description),
   mediaType: detail.mediaType,
@@ -139,6 +146,7 @@ export const mapDetailToRemoteAsset = (detail: AssetDetail): RemoteAsset => ({
 export const SCOPE_LABEL_MAP: Record<AssetScope, string> = {
   personal: "个人资产",
   project: "项目资产",
+  company: "公司资产",
   public: "公共资产",
 };
 

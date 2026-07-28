@@ -35,7 +35,7 @@ export interface PaginatedData<T> {
 
 // ===================== 枚举 =====================
 
-export type AssetScope = "personal" | "project" | "public";
+export type AssetScope = "personal" | "project" | "company" | "public";
 
 export type MediaType = "image" | "video" | "audio";
 
@@ -53,6 +53,12 @@ export interface AssetCategory {
   sort: number;
   status: AssetStatus;
   children?: AssetCategory[];
+}
+
+export interface PersonCategory {
+  code: string;
+  name: string;
+  sortOrder: number;
 }
 
 // ===================== Conditions 结构化筛选 =====================
@@ -140,6 +146,7 @@ export interface AssetListItem {
   userId: string;
   scope: AssetScope;
   projectId: string | null;
+  personCategoryId?: string | null;
   name: string;
   mediaType: MediaType;
   categoryId?: string | null;
@@ -168,6 +175,7 @@ export interface AssetDetail {
   userAvatar?: string;
   scope: AssetScope;
   projectId: string | null;
+  personCategoryId?: string | null;
   projectName?: string | null;
   name: string;
   mediaType: MediaType;
@@ -224,9 +232,10 @@ export interface CreateAssetRequest {
   name: string;
   mediaType: MediaType;
   primaryCategory: PrimaryCategory;
-  /** 默认 personal；项目/公开可在创建时直接指定，需后端支持 */
+  /** 默认 personal；公司资产必须同时提供 personCategoryCode。 */
   scope?: AssetScope;
   projectId?: string | null;
+  personCategoryCode?: string;
   conditions?: AssetConditions | null;
   description?: string | null;
   fileKey: string;
@@ -249,6 +258,7 @@ export interface AssetListParams {
   scope?: AssetScope;
   projectId?: string;
   userId?: string;
+  personCategoryCode?: string;
   mediaType?: MediaType;
   primaryCategory?: PrimaryCategory;
   status?: AssetStatus;
@@ -265,6 +275,7 @@ export interface AssetListParams {
 export interface AssetSearchParams {
   q: string;
   scope?: AssetScope;
+  personCategoryCode?: string;
   tags?: string[];
   page?: number;
   pageSize?: number;
@@ -292,6 +303,7 @@ export interface DeleteAssetResult {
 export interface ChangeAssetScopeRequest {
   targetScope: AssetScope;
   projectId?: string;
+  personCategoryCode?: string;
 }
 
 export interface ChangeAssetScopeResult {
@@ -299,6 +311,7 @@ export interface ChangeAssetScopeResult {
   previousScope: AssetScope;
   currentScope: AssetScope;
   projectId: string | null;
+  personCategoryId?: string | null;
   updateTime: number;
 }
 

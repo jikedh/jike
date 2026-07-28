@@ -1,55 +1,23 @@
-import { IconTag, IconTrash } from "@tabler/icons-react";
-import { useCallback, useMemo, useRef, useState } from "react";
 import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/components/ui/popover";
+    IconChevronDown,
+    IconChevronUp,
+    IconTags,
+    IconX,
+} from "@tabler/icons-react";
+import { useEffect, useMemo, useState } from "react";
+import { getPublicAssetTags } from "@/api/assets";
 import { cn } from "shared/utils/utils";
+import { ASSET_TAG_TAXONOMY } from "../tagTaxonomy";
 
-// ===================== 筛选维度定义 =====================
+/** 「其他」分类的 key，对应 tagTaxonomy 中无静态分组的动态分类 */
+const OTHER_CATEGORY_KEY = "other";
 
-export interface TagGroup {
-    /** 分组唯一标识 */
-    key: string;
-    /** 分组展示名 */
-    label: string;
-    /** 可选标签列表 */
-    tags: string[];
-}
-
-const TAG_GROUPS: TagGroup[] = [
-    {
-        key: "imageType",
-        label: "图片",
-        tags: [
-            "背景图",
-            "图标",
-            "插画",
-            "商品图",
-            "头像",
-            "截图",
-            "贴纸",
-            "蒙版图",
-            "透明 PNG",
-        ],
-    },
-    {
-        key: "ageGroup",
-        label: "年龄段",
-        tags: ["儿童", "少年", "青年", "中年", "老年"],
-    },
-    {
-        key: "race",
-        label: "种族",
-        tags: ["人类", "精灵", "兽人", "机械", "其他"],
-    },
-    {
-        key: "era",
-        label: "时代",
-        tags: ["先秦", "古代", "近代", "现代", "未来"],
-    },
-];
+/** 汇总内置静态标签，用于从聚合标签中排除，避免「其他」分类重复展示 */
+const BUILTIN_TAGS = new Set(
+    ASSET_TAG_TAXONOMY.flatMap((category) =>
+        category.groups.flatMap((group) => group.tags),
+    ),
+);
 
 // ===================== 组件 Props =====================
 
@@ -62,101 +30,142 @@ interface TagFilterPanelProps {
 
 // ===================== 主组件 =====================
 
+/**
+ * 公共资产库标签筛选面板
+ *
+ * 展示方式：
+ * - 顶部为 人物 / 场景 / 道具 三大类切换，只影响下方展示的标签分组，不直接过滤资产
+ * - 分组标签以行内标签云形式平铺，选中即加入筛选条件
+ * - 选中标签以后端 AND 语义过滤：资产须同时拥有全部选中标签
+ * - 已选标签以 chips 形式回显，可单独移除或一键清空
+ */
 export const TagFilterPanel = ({
     selectedTags,
     onTagsChange,
 }: TagFilterPanelProps) => {
-    const [open, setOpen] = useState(false);
-    const triggerRef = useRef<HTMLButtonElement | null>(null);
-
-    const selectedCount = selectedTags.length;
-
-    const toggleTag = useCallback(
-        (tag: string) => {
-            const next = selectedTags.includes(tag)
-                ? selectedTags.filter((t) => t !== tag)
-                : [...selectedTags, tag];
-            onTagsChange(next);
-        },
-        [selectedTags, onTagsChange],
+    const [activeCategoryKey, setActiveCategoryKey] = useState(
+        ASSET_TAG_TAXONOMY[0].key,
     );
+    const [expanded, setExpanded] = useState(true);
+    const [otherTags, setOtherTags] = useState<string[]>([]);
+    const [otherTagsLoading, setOtherTagsLoading] = useState(false);
 
-    const clearAll = useCallback(() => {
-        onTagsChange([]);
-    }, [onTagsChange]);
+    const selectedSet = useMemo(() => new Set(selectedTags), [selectedTags]);
+    const activeCategory =
+        ASSET_TAG_TAXONOMY.find(
+            (category) => category.key === activeCategoryKey,
+        ) ?? ASSET_TAG_TAXONOMY[0];
+    const isOtherCategory = activeCategoryKey === OTHER_CATEGORY_KEY;
+    const hasSelection = selectedTags.length > 0;
 
-    const hasSelection = selectedCount > 0;
+    // 「其他」分类：聚合后端公共资产标签，排除内置静态标签后展示
+    useEffect(() => {
+        if (!isOtherCategory) return;
+        let cancelled = false;
+        setOtherTagsLoading(true);
+        void getPublicAssetTags()
+            .then((envelope) => {
+                if (
+                    cancelled ||
+                    (envelope.code !== 0 && envelope.code !== 200) ||
+                    !Array.isArray(envelope.data)
+                ) {
+                    return;
+                }
+                setOtherTags(
+                    envelope.data.filter(
+                        (tag) => typeof tag === "string" && !BUILTIN_TAGS.has(tag),
+                    ),
+                );
+            })
+            .catch(() => undefined)
+            .finally(() => {
+                if (!cancelled) setOtherTagsLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [isOtherCategory]);
 
-    // 按分组划分选中状态，用于渲染
-    const groupSelectionMap = useMemo(() => {
-        const map: Record<string, Set<string>> = {};
-        for (const group of TAG_GROUPS) {
-            map[group.key] = new Set(
-                group.tags.filter((tag) => selectedTags.includes(tag)),
-            );
-        }
-        return map;
-    }, [selectedTags]);
+    const toggleTag = (tag: string) => {
+        onTagsChange(
+            selectedSet.has(tag)
+                ? selectedTags.filter((item) => item !== tag)
+                : [...selectedTags, tag],
+        );
+    };
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <button
-                    ref={triggerRef}
-                    type="button"
-                    className={cn(
-                        "flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs transition-colors",
-                        hasSelection
-                            ? "border-[#B43FEB]/60 bg-[#B43FEB]/15 text-[#d486ff]"
-                            : "border-white/10 bg-white/4 text-white/65 hover:text-white/85",
-                    )}
-                >
-                    <IconTag size={13} />
-                    <span>标签分类</span>
+        <section className="shrink-0 border-b border-white/8 px-6 py-3">
+            {/* 头部：大类切换 + 操作区 */}
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="flex items-center gap-1.5 text-xs text-white/35">
+                    <IconTags size={13} />
+                    标签
+                </span>
+                <div className="flex items-center gap-1 rounded-md bg-white/4 p-0.5">
+                    {ASSET_TAG_TAXONOMY.map((category) => (
+                        <button
+                            key={category.key}
+                            type="button"
+                            onClick={() => setActiveCategoryKey(category.key)}
+                            className={cn(
+                                "rounded px-2.5 py-1 text-xs transition-colors",
+                                activeCategoryKey === category.key
+                                    ? "bg-[#B43FEB]/25 text-white"
+                                    : "text-white/55 hover:text-white",
+                            )}
+                        >
+                            {category.label}
+                        </button>
+                    ))}
+                </div>
+                <div className="ml-auto flex items-center gap-1.5">
                     {hasSelection ? (
-                        <span className="flex size-4 items-center justify-center rounded-full bg-[#B43FEB]/40 text-[10px] font-medium text-white">
-                            {selectedCount}
-                        </span>
+                        <>
+                            <span className="text-[11px] text-white/40">
+                                已选 {selectedTags.length} 个
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => onTagsChange([])}
+                                className="rounded px-2 py-1 text-[11px] text-white/55 transition-colors hover:bg-white/8 hover:text-white"
+                            >
+                                清空
+                            </button>
+                        </>
                     ) : null}
-                </button>
-            </PopoverTrigger>
-
-            <PopoverContent
-                align="start"
-                side="bottom"
-                sideOffset={6}
-                className="w-[320px] rounded-xl border border-white/12 bg-[#1a1a1f] p-4 text-white shadow-2xl"
-                onPointerDownOutside={() => setOpen(false)}
-            >
-                {/* 面板头部：标题 + 清空 */}
-                <div className="mb-3 flex items-center justify-between">
-                    <span className="text-xs font-medium text-white/80">标签分类</span>
                     <button
                         type="button"
-                        onClick={clearAll}
-                        disabled={!hasSelection}
-                        className={cn(
-                            "flex items-center gap-1 rounded-md px-2 py-1 text-[11px] transition-colors",
-                            hasSelection
-                                ? "text-white/55 hover:bg-white/8 hover:text-white/85"
-                                : "cursor-not-allowed text-white/20",
-                        )}
+                        onClick={() => setExpanded((current) => !current)}
+                        className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-white/55 transition-colors hover:bg-white/8 hover:text-white"
                     >
-                        <IconTrash size={11} />
-                        清空
+                        {expanded ? "收起" : "展开"}
+                        {expanded ? (
+                            <IconChevronUp size={12} />
+                        ) : (
+                            <IconChevronDown size={12} />
+                        )}
                     </button>
                 </div>
+            </div>
 
-                {/* 4 个独立筛选分组 */}
-                <div className="flex flex-col gap-4">
-                    {TAG_GROUPS.map((group) => (
-                        <div key={group.key}>
-                            <div className="mb-2 text-[11px] font-medium text-white/40">
-                                {group.label}
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                                {group.tags.map((tag) => {
-                                    const isSelected = groupSelectionMap[group.key]?.has(tag);
+            {/* 标签分组：行内标签云；「其他」分类展示动态聚合标签 */}
+            {expanded ? (
+                <div className="asset-library-scrollbar mt-3 flex max-h-52 flex-col gap-2.5 overflow-y-auto pr-1">
+                    {isOtherCategory ? (
+                        <div className="flex flex-wrap gap-1.5">
+                            {otherTagsLoading ? (
+                                <span className="text-[11px] text-white/35">
+                                    正在加载...
+                                </span>
+                            ) : otherTags.length === 0 ? (
+                                <span className="text-[11px] text-white/35">
+                                    暂无其他标签
+                                </span>
+                            ) : (
+                                otherTags.map((tag) => {
+                                    const selected = selectedSet.has(tag);
                                     return (
                                         <button
                                             key={tag}
@@ -164,7 +173,7 @@ export const TagFilterPanel = ({
                                             onClick={() => toggleTag(tag)}
                                             className={cn(
                                                 "rounded-md border px-2 py-1 text-[11px] transition-colors",
-                                                isSelected
+                                                selected
                                                     ? "border-[#B43FEB]/70 bg-[#B43FEB]/25 text-[#e0aaff]"
                                                     : "border-white/10 bg-white/4 text-white/55 hover:border-white/20 hover:text-white/80",
                                             )}
@@ -172,12 +181,61 @@ export const TagFilterPanel = ({
                                             {tag}
                                         </button>
                                     );
-                                })}
-                            </div>
+                                })
+                            )}
                         </div>
+                    ) : (
+                        activeCategory.groups.map((group) => (
+                            <div key={group.key} className="flex items-start gap-3">
+                                <span className="mt-1 w-16 shrink-0 text-right text-[11px] leading-5 text-white/35">
+                                    {group.label}
+                                </span>
+                                <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+                                    {group.tags.map((tag) => {
+                                        const selected = selectedSet.has(tag);
+                                        return (
+                                            <button
+                                                key={tag}
+                                                type="button"
+                                                onClick={() => toggleTag(tag)}
+                                                className={cn(
+                                                    "rounded-md border px-2 py-1 text-[11px] transition-colors",
+                                                    selected
+                                                        ? "border-[#B43FEB]/70 bg-[#B43FEB]/25 text-[#e0aaff]"
+                                                        : "border-white/10 bg-white/4 text-white/55 hover:border-white/20 hover:text-white/80",
+                                                )}
+                                            >
+                                                {tag}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            ) : null}
+
+            {/* 已选标签回显 */}
+            {hasSelection ? (
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                    {selectedTags.map((tag) => (
+                        <span
+                            key={tag}
+                            className="inline-flex items-center gap-1 rounded-md border border-[#B43FEB]/40 bg-[#B43FEB]/15 px-2 py-0.5 text-[11px] text-[#d486ff]"
+                        >
+                            {tag}
+                            <button
+                                type="button"
+                                onClick={() => toggleTag(tag)}
+                                className="text-[#d486ff]/60 hover:text-[#d486ff]"
+                            >
+                                <IconX size={10} />
+                            </button>
+                        </span>
                     ))}
                 </div>
-            </PopoverContent>
-        </Popover>
+            ) : null}
+        </section>
     );
 };

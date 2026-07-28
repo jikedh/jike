@@ -357,6 +357,7 @@ export interface UploadAndCreateInput {
   primaryCategory: PrimaryCategory;
   scope: AssetScope;
   projectId?: string | null;
+  personCategoryCode?: string;
   name: string;
   description?: string;
   tags?: string[];
@@ -383,6 +384,7 @@ export const uploadAndCreateAsset = async (
     primaryCategory,
     scope,
     projectId,
+    personCategoryCode,
     name,
     description,
     tags,
@@ -407,6 +409,9 @@ export const uploadAndCreateAsset = async (
   if (scope === "project" && !projectId) {
     throw new Error("项目资产必须指定项目");
   }
+  if (scope === "company" && !personCategoryCode?.trim()) {
+    throw new Error("公司资产必须选择人员分类");
+  }
 
   // 2. 元数据
   const metadata = await extractBlobMetadata(blob, mediaType, fileName);
@@ -428,6 +433,8 @@ export const uploadAndCreateAsset = async (
       primaryCategory,
       scope,
       projectId: scope === "project" ? projectId || undefined : undefined,
+      personCategoryCode:
+        scope === "company" ? personCategoryCode.trim() : undefined,
       conditions: conditions || undefined,
       description: description?.trim() || undefined,
       fileKey,

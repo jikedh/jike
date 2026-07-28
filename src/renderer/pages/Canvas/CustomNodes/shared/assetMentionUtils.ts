@@ -27,6 +27,7 @@ export const ASSET_MENTION_SCOPE_ORDER = [
 const ASSET_MENTION_VALID_SCOPES = [
   "project",
   "personal",
+  "company",
   "public",
 ] as const satisfies readonly AssetScope[];
 
@@ -45,6 +46,7 @@ export const ASSET_MENTION_IMAGE_CATEGORY_ORDER = [
 export const ASSET_MENTION_SCOPE_LABEL: Record<AssetScope, string> = {
   project: "项目资产",
   personal: "个人资产",
+  company: "公司资产",
   public: "公开资产",
 };
 
