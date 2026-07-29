@@ -1,4 +1,9 @@
-import { type NodeProps, NodeResizer, NodeToolbar, Position } from "@xyflow/react";
+import {
+  type NodeProps,
+  NodeResizer,
+  NodeToolbar,
+  Position,
+} from "@xyflow/react";
 import { memo, useCallback, useRef, useState } from "react";
 import type { NoteNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
@@ -154,6 +159,7 @@ export const NoteNode = memo(
                   onStartEdit={handleStartEdit}
                   onContentBlur={handleContentBlur}
                   editorRef={editorRef}
+                  scrollbarVariant={data.scrollbarVariant}
                 />
               </div>
             </div>

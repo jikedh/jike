@@ -61,6 +61,41 @@ export const KIMI_K3_TEXT_AGENT_SCORE_COSTS: Record<TextAgentPresetId, number> =
     "script-to-storyboard": 70,
   };
 
+export const TEXT_AGENT_SCORE_COSTS: Record<
+  string,
+  Record<TextAgentPresetId, number>
+> = {
+  "claude-sonnet-4.6": {
+    "novel-to-script-agent": 60,
+    "short-video-storyboard": 30,
+    "jimeng-prompt": 20,
+    "novel-character-design": 35,
+    "script-to-storyboard": 45,
+  },
+  "deepseek-v4-flash": {
+    "novel-to-script-agent": 5,
+    "short-video-storyboard": 3,
+    "jimeng-prompt": 2,
+    "novel-character-design": 3,
+    "script-to-storyboard": 4,
+  },
+  "gemini-3.1-flash-lite": {
+    "novel-to-script-agent": 5,
+    "short-video-storyboard": 3,
+    "jimeng-prompt": 2,
+    "novel-character-design": 3,
+    "script-to-storyboard": 4,
+  },
+  "gemini-3.0-flash": {
+    "novel-to-script-agent": 8,
+    "short-video-storyboard": 4,
+    "jimeng-prompt": 3,
+    "novel-character-design": 5,
+    "script-to-storyboard": 6,
+  },
+  [KIMI_K3_MODEL]: KIMI_K3_TEXT_AGENT_SCORE_COSTS,
+};
+
 export const getTextAgentPresetById = (presetId?: TextAgentPresetId) => {
   const defaultPreset = TEXT_AGENT_PRESETS["novel-to-script-agent"];
   if (!presetId) {
@@ -117,8 +152,8 @@ export const getTextAgentScoreCost = (
   model: string,
   presetId?: TextAgentPresetId,
 ) => {
-  if (model !== KIMI_K3_MODEL || !presetId) {
+  if (!presetId) {
     return undefined;
   }
-  return KIMI_K3_TEXT_AGENT_SCORE_COSTS[presetId];
+  return TEXT_AGENT_SCORE_COSTS[model]?.[presetId];
 };

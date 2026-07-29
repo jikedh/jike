@@ -10,6 +10,7 @@ import { cn } from "shared/utils/utils";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { Button } from "@/components/ui/button";
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
+import { useMessage } from "@/hooks/useMessage";
 
 interface ConfigPanelProps {
   editableSystemPrompt: string;
@@ -18,7 +19,7 @@ interface ConfigPanelProps {
   onModelChange: (model: string) => void;
   scoreCost?: number;
   isGenerating: boolean;
-  onGenerate: () => void;
+  onGenerate: () => Promise<void>;
 }
 
 export const ConfigPanel = ({
@@ -31,7 +32,45 @@ export const ConfigPanel = ({
   onGenerate,
 }: ConfigPanelProps) => {
   const [showModelDropdown, setShowModelDropdown] = useState(false);
-  const { totalPoints } = useGenerationPoints();
+  const { warning } = useMessage();
+  const {
+    totalPoints,
+    ensureEnoughPoints,
+    refreshBalanceInfo,
+    validateBalanceBeforeGenerate,
+  } = useGenerationPoints();
+
+  const handleGenerate = async () => {
+    if (
+      scoreCost &&
+      !ensureEnoughPoints({
+        requiredPoints: scoreCost,
+        actionLabel: "生成",
+        warning,
+        skipBalanceCheck: true,
+      })
+    ) {
+      return;
+    }
+
+    if (
+      scoreCost &&
+      !(await validateBalanceBeforeGenerate({
+        requiredPoints: scoreCost,
+        warning,
+      }))
+    ) {
+      return;
+    }
+
+    try {
+      await onGenerate();
+    } finally {
+      if (scoreCost) {
+        void refreshBalanceInfo();
+      }
+    }
+  };
 
   return (
     <div className="nodrag nopan nowheel absolute left-1/2 -translate-x-1/2 top-[216px] w-[500px] rounded-2xl border border-white/[0.05] bg-[#1e1e20] p-3 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-top-2 duration-200 z-30">
@@ -103,7 +142,7 @@ export const ConfigPanel = ({
 
           <Button
             disabled={isGenerating}
-            onClick={onGenerate}
+            onClick={() => void handleGenerate()}
             className={cn(
               "gap-1.5 h-8 px-4 text-xs font-medium rounded-lg transition-colors active:scale-[0.97]",
               isGenerating

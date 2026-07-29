@@ -82,9 +82,7 @@ export const useVideoAgentGenerate = ({
       };
     }
 
-    const videoUrl = getPrimaryRemoteVideoUrlFromNodeData(
-      parentVideoNode.data,
-    );
+    const videoUrl = getPrimaryRemoteVideoUrlFromNodeData(parentVideoNode.data);
     if (!videoUrl) {
       return {
         videoUrl: null,
@@ -129,6 +127,7 @@ export const useVideoAgentGenerate = ({
           tableCharacterProfiles: characterProfiles,
           tableSourceVideoUrl: sourceVideo?.videoUrl,
           tableSourceVideoNodeId: sourceVideo?.videoNodeId ?? undefined,
+          scrollbarVariant: "agent-result",
         });
       } else {
         // 其他预设 → 输出便签节点

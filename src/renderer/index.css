@@ -626,6 +626,11 @@
 }
 
 /* NoteNode 专用滚动条 */
+.note-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #b43feb transparent;
+}
+
 .note-scrollbar::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -636,12 +641,52 @@
 }
 
 .note-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 3px;
+  background: #b43feb;
+  border-radius: 999px;
 }
 
 .note-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: #c65cff;
+}
+
+/* 智能体生成结果：透明轨道 + 紫色滚动条 */
+.agent-result-scrollbar,
+.agent-result-scrollbar-scope,
+.agent-result-scrollbar-scope * {
+  scrollbar-width: thin;
+  scrollbar-color: #b43feb transparent;
+}
+
+.agent-result-scrollbar::-webkit-scrollbar,
+.agent-result-scrollbar-scope::-webkit-scrollbar,
+.agent-result-scrollbar-scope *::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.agent-result-scrollbar::-webkit-scrollbar-track,
+.agent-result-scrollbar-scope::-webkit-scrollbar-track,
+.agent-result-scrollbar-scope *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agent-result-scrollbar::-webkit-scrollbar-thumb,
+.agent-result-scrollbar-scope::-webkit-scrollbar-thumb,
+.agent-result-scrollbar-scope *::-webkit-scrollbar-thumb {
+  background: #b43feb;
+  border-radius: 999px;
+}
+
+.agent-result-scrollbar::-webkit-scrollbar-thumb:hover,
+.agent-result-scrollbar-scope::-webkit-scrollbar-thumb:hover,
+.agent-result-scrollbar-scope *::-webkit-scrollbar-thumb:hover {
+  background: #c65cff;
+}
+
+.agent-result-scrollbar::-webkit-scrollbar-corner,
+.agent-result-scrollbar-scope::-webkit-scrollbar-corner,
+.agent-result-scrollbar-scope *::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* 全景浏览器背景光晕动画 */
@@ -707,9 +752,12 @@
 .react-flow[data-space-pressed="true"].react-flow__pane--dragging {
   cursor: grabbing;
 }
-.react-flow[data-space-pressed="true"].react-flow__pane--dragging .react-flow__pane,
-.react-flow[data-space-pressed="true"].react-flow__pane--dragging .react-flow__node,
-.react-flow[data-space-pressed="true"].react-flow__pane--dragging .react-flow__handle,
+.react-flow[data-space-pressed="true"].react-flow__pane--dragging
+  .react-flow__pane,
+.react-flow[data-space-pressed="true"].react-flow__pane--dragging
+  .react-flow__node,
+.react-flow[data-space-pressed="true"].react-flow__pane--dragging
+  .react-flow__handle,
 .react-flow[data-space-pressed="true"].react-flow__pane--dragging .nodrag {
   cursor: grabbing !important;
 }

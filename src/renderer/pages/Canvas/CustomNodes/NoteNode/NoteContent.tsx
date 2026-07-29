@@ -10,6 +10,7 @@ type NoteContentProps = {
   onStartEdit: () => void;
   onContentBlur: (html: string, text: string) => void;
   editorRef?: React.RefObject<NoteEditorHandle | null>;
+  scrollbarVariant?: "agent-result";
 };
 
 export const NoteContent = ({
@@ -20,6 +21,7 @@ export const NoteContent = ({
   onStartEdit,
   onContentBlur,
   editorRef: externalEditorRef,
+  scrollbarVariant,
 }: NoteContentProps) => {
   const internalEditorRef = useRef<NoteEditorHandle>(null);
   const editorRef = externalEditorRef ?? internalEditorRef;
@@ -77,7 +79,9 @@ export const NoteContent = ({
   const hasContent = contentHtml || content;
 
   return (
-    <div className={`noflow nopan ${dragClass} ${wheelClass} h-full w-full overflow-hidden rounded-xl relative ${isEditing ? "cursor-text" : "cursor-pointer"}`}>
+    <div
+      className={`noflow nopan ${dragClass} ${wheelClass} h-full w-full overflow-hidden rounded-xl relative ${isEditing ? "cursor-text" : "cursor-pointer"}`}
+    >
       {/* 编辑器始终挂载，让工具栏能访问 editor 实例；非编辑态隐藏 */}
       <div
         ref={editingRootRef}
@@ -94,13 +98,15 @@ export const NoteContent = ({
       {/* 阅读态 */}
       {!isEditing && (
         <div
-          className="note-scrollbar absolute inset-0 rounded-xl bg-[#1f1f1f] p-3 text-sm text-white/90 cursor-pointer overflow-y-auto overflow-x-hidden overscroll-contain"
+          className={`${scrollbarVariant === "agent-result" ? "agent-result-scrollbar" : "note-scrollbar"} absolute inset-0 rounded-xl bg-[#1f1f1f] p-3 text-sm text-white/90 cursor-pointer overflow-y-auto overflow-x-hidden overscroll-contain`}
           onDoubleClick={handlePreviewDoubleClick}
         >
           {hasContent ? (
             <div
               className="prose prose-invert prose-sm max-w-none [&_h1]:text-base [&_h1]:font-bold [&_h1]:text-white [&_h1]:mt-2 [&_h1]:mb-1 [&_h2]:text-sm [&_h2]:font-bold [&_h2]:text-white [&_h2]:mt-2 [&_h2]:mb-1 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-white [&_p]:my-1 [&_p]:leading-relaxed [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_strong]:text-white [&_strong]:font-bold [&_pre]:bg-black/30 [&_pre]:p-2 [&_pre]:rounded [&_blockquote]:border-l-2 [&_blockquote]:border-[#B43FEB] [&_blockquote]:pl-3 [&_blockquote]:text-white/70 [&_hr]:!border-white/10"
-              dangerouslySetInnerHTML={{ __html: contentHtml || escapeHtml(content) }}
+              dangerouslySetInnerHTML={{
+                __html: contentHtml || escapeHtml(content),
+              }}
             />
           ) : (
             <div className="opacity-70 text-white select-none">
@@ -113,7 +119,6 @@ export const NoteContent = ({
   );
 };
 
-
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -122,6 +127,3 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;")
     .replace(/\n/g, "<br>");
 }
-
-
-

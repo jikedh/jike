@@ -25,6 +25,7 @@ export const createNoteNode = (
   data: {
     content: options?.initialContent ?? "",
     isEditing: options?.initialContent ? false : true,
+    scrollbarVariant: options?.scrollbarVariant,
     createdAt: Date.now(),
   },
 });
@@ -271,6 +272,7 @@ export const createTableNode = (
     characterProfiles: options?.tableCharacterProfiles ?? [],
     sourceVideoUrl: options?.tableSourceVideoUrl,
     sourceVideoNodeId: options?.tableSourceVideoNodeId,
+    scrollbarVariant: options?.scrollbarVariant,
     createdAt: Date.now(),
   },
 });

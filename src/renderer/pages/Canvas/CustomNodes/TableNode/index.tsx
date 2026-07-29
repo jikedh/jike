@@ -164,8 +164,7 @@ const getStoryboardDownloadFilename = (imageUrl: string) => {
     if (filename && filename.includes(".")) {
       return filename;
     }
-  } catch {
-  }
+  } catch {}
 
   return `storyboard-${Date.now()}.jpg`;
 };
@@ -283,7 +282,8 @@ const orderVideoPullFilmColumns = (columns: string[]) => {
     uniqueColumns.includes(column),
   );
   const extraColumns = uniqueColumns.filter(
-    (column) => !(VIDEO_PULL_FILM_COLUMNS as readonly string[]).includes(column),
+    (column) =>
+      !(VIDEO_PULL_FILM_COLUMNS as readonly string[]).includes(column),
   );
   return [...orderedColumns, ...extraColumns];
 };
@@ -648,7 +648,8 @@ const TableBody = memo(
                   key={col}
                   className={cn(
                     "relative px-3 py-2 border-b border-r border-white/[0.06] text-[#8D8D8E] text-xs align-top",
-                    isActionColumn && "text-center align-middle whitespace-nowrap",
+                    isActionColumn &&
+                      "text-center align-middle whitespace-nowrap",
                     cellClassName,
                   )}
                 >
@@ -690,7 +691,9 @@ const TableBody = memo(
                         >
                           <IconRefresh
                             size={13}
-                            className={cn(isRefreshingThisRow && "animate-spin")}
+                            className={cn(
+                              isRefreshingThisRow && "animate-spin",
+                            )}
                           />
                           {isRefreshingThisRow
                             ? "刷新中..."
@@ -817,7 +820,7 @@ export const TableNode = memo(
     const storyboardImageCache = useMemo<StoryboardImageCacheMap>(
       () =>
         data.storyboardImageCache &&
-          typeof data.storyboardImageCache === "object"
+        typeof data.storyboardImageCache === "object"
           ? data.storyboardImageCache
           : {},
       [data.storyboardImageCache],
@@ -827,6 +830,8 @@ export const TableNode = memo(
       ["场景", "时长", "镜号", STORYBOARD_IMAGE_COLUMN].every((column) =>
         dataColumns.includes(column),
       );
+    const useAgentResultScrollbar =
+      isVideoPullFilmTable || data.scrollbarVariant === "agent-result";
     const columns = isVideoPullFilmTable
       ? orderVideoPullFilmColumns(ensureStoryboardColumns(dataColumns))
       : dataColumns;
@@ -839,10 +844,10 @@ export const TableNode = memo(
             return captureTimeMs == null
               ? null
               : {
-                row,
-                rowIndex,
-                captureTimeMs,
-              };
+                  row,
+                  rowIndex,
+                  captureTimeMs,
+                };
           })
           .filter((item): item is StoryboardCaptureRow => item != null),
       [rows],
@@ -856,9 +861,9 @@ export const TableNode = memo(
             ).trim();
             return isImageSource(referenceImageUrl)
               ? {
-                rowIndex,
-                referenceImageUrl,
-              }
+                  rowIndex,
+                  referenceImageUrl,
+                }
               : null;
           })
           .filter((item): item is StoryboardSketchRow => item != null),
@@ -1171,12 +1176,9 @@ export const TableNode = memo(
       setCharacterProfilesDialogOpen(false);
     }, []);
 
-    const openImagePreview = useCallback(
-      (imageUrl: string) => {
-        setPreviewImageUrl(imageUrl);
-      },
-      [],
-    );
+    const openImagePreview = useCallback((imageUrl: string) => {
+      setPreviewImageUrl(imageUrl);
+    }, []);
 
     const handlePreviewImageDownload: NonNullable<
       NonNullable<LightboxProps["download"]>["download"]
@@ -1195,9 +1197,7 @@ export const TableNode = memo(
           getStoryboardDownloadFilename(imageUrl),
         ).catch((downloadError) => {
           const message =
-            downloadError instanceof Error
-              ? downloadError.message
-              : "下载失败";
+            downloadError instanceof Error ? downloadError.message : "下载失败";
           if (message === "取消下载") return;
           error("图片下载失败", message);
         });
@@ -1352,7 +1352,7 @@ export const TableNode = memo(
             updateTableNodeData(id, ((prevData: any) => {
               const prevCache =
                 prevData.storyboardImageCache &&
-                  typeof prevData.storyboardImageCache === "object"
+                typeof prevData.storyboardImageCache === "object"
                   ? prevData.storyboardImageCache
                   : {};
               return {
@@ -1643,10 +1643,7 @@ export const TableNode = memo(
 
     const handleRefreshStoryboardCard = useCallback(
       async (rowIndex: number) => {
-        if (
-          storyboardGenerating ||
-          storyboardCardRefreshingRowIndex !== null
-        ) {
+        if (storyboardGenerating || storyboardCardRefreshingRowIndex !== null) {
           return;
         }
 
@@ -1990,11 +1987,12 @@ export const TableNode = memo(
                 <div
                   className="h-full bg-[#B43FEB] transition-all"
                   style={{
-                    width: `${storyboardProgress.total
+                    width: `${
+                      storyboardProgress.total
                         ? (storyboardProgress.done / storyboardProgress.total) *
-                        100
+                          100
                         : 0
-                      }%`,
+                    }%`,
                   }}
                 />
               </div>
@@ -2224,7 +2222,12 @@ export const TableNode = memo(
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-4">
+        <div
+          className={cn(
+            "flex-1 overflow-auto p-4",
+            useAgentResultScrollbar && "agent-result-scrollbar-scope",
+          )}
+        >
           <div className="bg-[#1A1A1C] rounded-lg border border-white/[0.06] overflow-auto min-w-full">
             <table className="border-collapse text-left">
               <thead className="sticky top-0 z-10 bg-[#1A1A1C]">
@@ -2431,7 +2434,12 @@ export const TableNode = memo(
                   </h3>
                 </div>
 
-                <div className="flex-1 overflow-auto p-2 nodrag nopan nowheel">
+                <div
+                  className={cn(
+                    "flex-1 overflow-auto p-2 nodrag nopan nowheel",
+                    useAgentResultScrollbar && "agent-result-scrollbar-scope",
+                  )}
+                >
                   <div className="bg-[#1A1A1C] rounded-lg border border-white/[0.06] overflow-auto min-w-full">
                     <table className="border-collapse text-left">
                       <thead className="sticky top-0 z-10 bg-[#1A1A1C]">

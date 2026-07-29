@@ -88,6 +88,7 @@ export type AddNodeOptions = {
   tableCharacterProfiles?: unknown[];
   tableSourceVideoUrl?: string;
   tableSourceVideoNodeId?: string;
+  scrollbarVariant?: "agent-result";
 };
 
 /**

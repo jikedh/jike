@@ -109,6 +109,7 @@ export const useTextAgentGenerate = ({
         const outputTableId = addNode("table", nextPosition, {
           tableTitle: "角色设计表",
           tableRows: tableRows,
+          scrollbarVariant: "agent-result",
         });
 
         setTimeout(() => {
@@ -126,6 +127,7 @@ export const useTextAgentGenerate = ({
           initialWidth: noteSize.width,
           initialHeight: noteSize.height,
           initialContent: cleanContent,
+          scrollbarVariant: "agent-result",
         });
         setNoteNodeEditing(outputNoteId, false);
 
