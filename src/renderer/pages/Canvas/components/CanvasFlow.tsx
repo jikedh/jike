@@ -1951,10 +1951,13 @@ export const CanvasFlow = ({
         return;
       }
 
-      if (!event.shiftKey && !event.ctrlKey && !event.metaKey) {
+      const isAdditiveSelection =
+        event.shiftKey || event.ctrlKey || event.metaKey;
+
+      if (!isAdditiveSelection) {
         selectOnlyNode(node.id);
       }
-      setActiveNodeId(node.id);
+      setActiveNodeId(isAdditiveSelection ? null : node.id);
       setSelectedGroupId(null);
     },
     [
@@ -3152,6 +3155,7 @@ export const CanvasFlow = ({
             session.selectionStarted = true;
             suppressDefaultSelectionRef.current = true;
             deferSelectionCalculationRef.current = true;
+            setActiveNodeId(null);
             setSelectionBoxActive(true);
             setSelectedGroupId(null);
           }

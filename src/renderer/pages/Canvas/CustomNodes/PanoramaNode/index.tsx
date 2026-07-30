@@ -46,10 +46,11 @@ export const PanoramaNode = memo(
     const [isRenaming, setIsRenaming] = useState(false);
     const nodeLabel = data.nickname ?? "全景图节点";
 
-    // 仅订阅与当前节点相关的派生布尔值，避免选中数量变化时所有节点重渲染
-    const hasMultipleSelected = useCanvasFlowStore(
-      (state) => state.selectedNodesCount > 1,
+    // 只订阅当前节点是否为活动节点，避免多选时批量挂载工具栏。
+    const isActiveFromStore = useCanvasFlowStore(
+      (state) => state.activeNodeId === id,
     );
+    const isActiveNode = isActiveFromStore && selected;
 
     const handleVisibilityClass = useMemo(
       () =>
@@ -60,8 +61,8 @@ export const PanoramaNode = memo(
     );
 
     const shouldShowToolbar = useMemo(
-      () => selected && !isDragging && !hasMultipleSelected,
-      [selected, isDragging, hasMultipleSelected],
+      () => isActiveNode && !isDragging,
+      [isActiveNode, isDragging],
     );
 
     const handleDuplicate = useCallback(() => {

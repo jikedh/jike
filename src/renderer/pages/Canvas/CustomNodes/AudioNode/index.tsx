@@ -14,7 +14,6 @@ import {
   NodeToolbar,
   Position,
   useReactFlow,
-  useStore,
 } from "@xyflow/react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
@@ -784,6 +783,9 @@ export const AudioNode = memo(
     const isSourceHighlighted = useCanvasFlowStore((state) =>
       state.highlightedSourceNodeIds.includes(id),
     );
+    const isActiveFromStore = useCanvasFlowStore(
+      (state) => state.activeNodeId === id,
+    );
     const { setNodes: setReactFlowNodes } = useReactFlow();
     const { success, error: showError } = useMessage();
 
@@ -794,15 +796,8 @@ export const AudioNode = memo(
 
     const audioUrl = data.result?.data?.[0]?.url;
 
-    // 仅订阅与当前节点相关的派生布尔值，避免选中数量变化时所有节点重渲染
-    const hasMultipleSelected = useStore((state) => {
-      let count = 0;
-      for (const node of state.nodes) {
-        if (node.selected) count++;
-        if (count > 1) break;
-      }
-      return count > 1;
-    });
+    // 只让活动单节点挂载工具栏和生成面板。
+    const isActiveNode = isActiveFromStore && selected;
 
     useEffect(() => {
       if (!selected && isTrimming) {
@@ -830,8 +825,8 @@ export const AudioNode = memo(
     );
 
     const shouldShowToolbar = useMemo(
-      () => selected && !isDragging && !hasMultipleSelected,
-      [selected, isDragging, hasMultipleSelected],
+      () => isActiveNode && !isDragging,
+      [isActiveNode, isDragging],
     );
 
     const handleDuplicate = useCallback(() => {
@@ -1084,7 +1079,7 @@ export const AudioNode = memo(
               />
             </div>
           </div>
-          {selected && !isDragging && !isTrimming ? (
+          {isActiveNode && !isTrimming ? (
             <AudioPromptPanel nodeId={id} />
           ) : null}
         </div>

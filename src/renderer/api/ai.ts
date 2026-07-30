@@ -473,9 +473,12 @@ export async function getImageTaskStatus(id: string, signal?: AbortSignal) {
 // - stream: true → 返回 async generator，逐块 yield 文本内容
 
 export async function createChatCompletion(data: any, signal?: AbortSignal) {
+  const isKimiK3 = data.model === "kimi/kimi-k3";
   const desktopData = {
-    platform: "toapi" as const,
-    upstreamPath: "/v1/chat/completions",
+    platform: isKimiK3 ? ("dashscope" as const) : ("toapi" as const),
+    upstreamPath: isKimiK3
+      ? "/compatible-mode/v1/chat/completions"
+      : "/v1/chat/completions",
     ...data,
   };
 

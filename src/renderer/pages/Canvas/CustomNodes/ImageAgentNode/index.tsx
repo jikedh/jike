@@ -56,6 +56,9 @@ export const ImageAgentNode = memo(
     const updateNodeNickname = useCanvasFlowStore(
       (state) => state.updateNodeNickname,
     );
+    const isActiveNode = useCanvasFlowStore(
+      (state) => state.activeNodeId === id,
+    );
 
     const presetId = data.presetId;
     const preset = presetId ? getImageAgentPresetById(presetId) : null;
@@ -168,7 +171,7 @@ export const ImageAgentNode = memo(
               />
 
               {/* 选中时展开配置面板 */}
-              {selected && (
+              {selected && isActiveNode && (
                 <ConfigPanel
                   editableSystemPrompt={editableSystemPrompt}
                   onSystemPromptChange={setEditableSystemPrompt}

@@ -744,11 +744,12 @@ export const TableNode = memo(
       (state) => state.updateNodeNickname,
     );
     const isDragging = Boolean(dragging);
-    // 仅订阅与当前节点相关的派生布尔值，避免选中数量变化时所有节点重渲染
-    const hasMultipleSelected = useCanvasFlowStore(
-      (state) => state.selectedNodesCount > 1,
+    // 表格操作和缩放控件只属于活动单节点。
+    const isActiveFromStore = useCanvasFlowStore(
+      (state) => state.activeNodeId === id,
     );
-    const shouldShowToolbar = selected && !isDragging && !hasMultipleSelected;
+    const isActiveNode = isActiveFromStore && selected;
+    const shouldShowToolbar = isActiveNode && !isDragging;
     const {
       totalPoints,
       fallbackAIGenPrice,
@@ -2300,7 +2301,7 @@ export const TableNode = memo(
         >
           <div className="group/node relative">
             <NodeResizer
-              isVisible={selected && !isDragging}
+              isVisible={isActiveNode && !isDragging}
               lineClassName="!border !border-[#B43FEB]/50"
               handleClassName="!w-5 !h-5 !bg-transparent !border-0"
             />

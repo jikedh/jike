@@ -573,6 +573,13 @@ export const CANVAS_CHAT_MODELS = [
     platform: "moonshot",
     platformId: 10,
   },
+  {
+    id: 1039,
+    name: "Kimi K3",
+    model: "kimi/kimi-k3",
+    platform: "moonshot",
+    platformId: 10,
+  },
   // MiniMax 系列
   {
     id: 1038,

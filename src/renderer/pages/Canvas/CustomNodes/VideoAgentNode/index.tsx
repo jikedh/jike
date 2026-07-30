@@ -54,6 +54,9 @@ export const VideoAgentNode = memo(
     const updateNodeNickname = useCanvasFlowStore(
       (state) => state.updateNodeNickname,
     );
+    const isActiveNode = useCanvasFlowStore(
+      (state) => state.activeNodeId === id,
+    );
 
     const presetId = data.presetId;
     const preset = presetId ? getVideoAgentPresetById(presetId) : null;
@@ -175,7 +178,7 @@ export const VideoAgentNode = memo(
                 isGenerating={isGenerating}
               />
 
-              {selected && (
+              {selected && isActiveNode && (
                 <ConfigPanel
                   editableSystemPrompt={editableSystemPrompt}
                   onSystemPromptChange={setEditableSystemPrompt}

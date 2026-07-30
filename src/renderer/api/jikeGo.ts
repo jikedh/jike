@@ -389,6 +389,15 @@ export function getJikeGoUserInfo(): any {
   });
 }
 
+export function getInternalFeatureAccess(): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/user/internal-access",
+    method: "get",
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
 // 个人信息更新请求体：所有字段可选，仅传入字段会被更新
 export type UpdateJikeGoUserInfoRequest = {
   nickname?: string;

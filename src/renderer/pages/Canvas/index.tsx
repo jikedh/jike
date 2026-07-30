@@ -1,19 +1,20 @@
-// import { IconMessageCircle } from "@tabler/icons-react";
+import { IconMessageCircle } from "@tabler/icons-react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { AllNodeType } from "shared/types/flow";
-// import { cn } from "shared/utils/utils";
+import { cn } from "shared/utils/utils";
 import { CinematicProjectLoader } from "@/components/CinematicProjectLoader";
-// import { useCanvasChat } from "@/hooks/useCanvasChat";
+import { useCanvasChat } from "@/hooks/useCanvasChat";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
+import { useUserStore } from "@/stores/useUserStore";
 import { notifyCompletedGenerationDiff } from "@/utils/generationNotification";
 import { CanvasChatToolbar } from "./components/CanvasChatToolbar";
 import { CanvasFlow } from "./components/CanvasFlow";
 import { CanvasSidebar } from "./components/CanvasSidebar";
-// import { ChatDrawer } from "./components/ChatDrawer";
+import { ChatDrawer } from "./components/ChatDrawer";
 import ReactFlowDevTools from "./DevTools";
 
 const CANVAS_READY_MIN_VISIBLE_MS = 900;
@@ -64,18 +65,19 @@ const waitForCanvasPreviewImage = (url: string) => waitForImage(url);
 const CanvasPage = () => {
   // 从路由参数获取项目 ID
   const { projectId } = useParams<{ projectId: string }>();
-  // const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const isInternalUser = useUserStore((state) => state.isInternalUser);
   const [isProjectEntering, setIsProjectEntering] = useState(Boolean(projectId));
   const [hasProjectEntered, setHasProjectEntered] = useState(!projectId);
   const enteredProjectRef = useRef<string | null>(null);
-  // const {
-  //   messages,
-  //   isLoading,
-  //   sendMessage,
-  //   stopMessage,
-  //   clearLocalMessages,
-  //   setMessages,
-  // } = useCanvasChat();
+  const {
+    messages,
+    isLoading,
+    sendMessage,
+    stopMessage,
+    clearLocalMessages,
+    setMessages,
+  } = useCanvasChat();
   // 从设置 store 读取调试工具面板的显示状态
   const devToolsVisible = useChatSettingsStore(
     (state) => state.devToolsVisible,
@@ -173,7 +175,8 @@ const CanvasPage = () => {
             onToggleMiniMap={() => setIsMiniMapVisible((prev) => !prev)}
           />
 
-          {/* 右下角 AI 对话入口暂时隐藏，保留代码方便后续恢复。
+          {isInternalUser && (
+            <>
           <button
             type="button"
             title="打开 AI 对话"
@@ -185,9 +188,7 @@ const CanvasPage = () => {
           >
             <IconMessageCircle size={18} />
           </button>
-          */}
 
-          {/* 右侧抽屉聊天窗口暂时隐藏，统一走桌面代理聊天接口，并使用 idb-keyval 持久化会话。
           <ChatDrawer
             open={isChatOpen}
             onClose={() => setIsChatOpen(false)}
@@ -198,7 +199,8 @@ const CanvasPage = () => {
             clearLocalMessages={clearLocalMessages}
             setMessages={setMessages}
           />
-          */}
+            </>
+          )}
 
           {/* 调试工具面板：由设置中心控制显示/隐藏 */}
           {devToolsVisible && <ReactFlowDevTools position="top-center" />}

@@ -14,9 +14,11 @@ import FirstLoginGuideDialog, {
 } from "@/components/FirstLoginGuideDialog";
 import { checkProfileCompleteness } from "@/utils/profileCompleteness";
 import { getJikeingToken } from "shared/utils/utils";
+import { useUserStore } from "@/stores/useUserStore";
 
 const HomePage = () => {
   const navigate = useNavigate();
+  const isInternalUser = useUserStore((state) => state.isInternalUser);
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [pendingItems, setPendingItems] = useState<GuideItem["key"][]>([]);
@@ -168,32 +170,39 @@ const HomePage = () => {
       <div className="relative z-20 mx-auto max-w-7xl -mt-10 px-8 pb-24">
         {/* 功能入口：四个卡片横排展示，保留参考页的密度与层次 */}
         <div className="mb-16 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {features.map((feature) => {
-            const Icon = feature.icon;
+          {features
+            .filter(
+              (feature) =>
+                isInternalUser ||
+                (feature.id !== "story" &&
+                  feature.id !== "video-to-script"),
+            )
+            .map((feature) => {
+              const Icon = feature.icon;
 
-            return (
-              <div
-                key={feature.id}
-                className="group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#121214] p-6 transition-all duration-300 hover:border-[#B43FEB] hover:bg-[#B43FEB]/5"
-                onClick={() => {
-                  if (feature.id === "canvas") {
-                    setIsProjectDialogOpen(true);
-                  } else {
-                    navigate(`/${feature.id}`);
-                  }
-                }}
-              >
-                <div className="absolute inset-0 bg-linear-to-b from-[#B43FEB]/0 to-[#B43FEB]/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                <Icon className="relative z-10 mb-6 h-6 w-6 text-white/70 transition-colors group-hover:text-[#B43FEB]" />
-                <h3 className="relative z-10 mb-3 text-lg font-semibold text-white/90 transition-colors group-hover:text-white">
-                  {feature.title}
-                </h3>
-                <p className="relative z-10 text-sm leading-relaxed text-white/50 transition-colors group-hover:text-white/70">
-                  {feature.description}
-                </p>
-              </div>
-            );
-          })}
+              return (
+                <div
+                  key={feature.id}
+                  className="group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#121214] p-6 transition-all duration-300 hover:border-[#B43FEB] hover:bg-[#B43FEB]/5"
+                  onClick={() => {
+                    if (feature.id === "canvas") {
+                      setIsProjectDialogOpen(true);
+                    } else {
+                      navigate(`/${feature.id}`);
+                    }
+                  }}
+                >
+                  <div className="absolute inset-0 bg-linear-to-b from-[#B43FEB]/0 to-[#B43FEB]/5 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                  <Icon className="relative z-10 mb-6 h-6 w-6 text-white/70 transition-colors group-hover:text-[#B43FEB]" />
+                  <h3 className="relative z-10 mb-3 text-lg font-semibold text-white/90 transition-colors group-hover:text-white">
+                    {feature.title}
+                  </h3>
+                  <p className="relative z-10 text-sm leading-relaxed text-white/50 transition-colors group-hover:text-white/70">
+                    {feature.description}
+                  </p>
+                </div>
+              );
+            })}
         </div>
 
         {/* 创意广场：项目卡片的图片、标签和标题，保持参考页一致的视觉节奏 */}

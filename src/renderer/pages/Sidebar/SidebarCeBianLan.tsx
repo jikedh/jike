@@ -27,8 +27,14 @@ export const SidebarCeBianLan = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [appVersion, setAppVersion] = useState("");
 
-  const { loginStatus, fetchUserInfo, balanceInfo, fetchBalanceInfo } =
-    useUserStore();
+  const {
+    loginStatus,
+    fetchUserInfo,
+    balanceInfo,
+    fetchBalanceInfo,
+    isInternalUser,
+    fetchInternalAccess,
+  } = useUserStore();
 
   useEffect(() => {
     let isMounted = true;
@@ -61,10 +67,11 @@ export const SidebarCeBianLan = () => {
     if (token) {
       fetchUserInfo();
       fetchBalanceInfo();
+      fetchInternalAccess();
       // 画布设置中心的"首次登录欢迎"弹窗已下线：
       // 首次进入应用（无论登录与否）都直接进入主界面，不再自动弹出。
     }
-  }, [token, fetchUserInfo, fetchBalanceInfo]);
+  }, [token, fetchUserInfo, fetchBalanceInfo, fetchInternalAccess]);
 
   const handleNavClick = (path: string) => {
     navigate(path);
@@ -164,15 +171,21 @@ export const SidebarCeBianLan = () => {
         </button>
 
         <SidebarNav classNames={{ root: "flex-1" }}>
-          {navItems.map((item) => (
-            <SidebarNavItem
-              key={item.id}
-              id={item.id}
-              icon={item.icon}
-              label={item.label}
-              onClick={() => handleNavClick(item.path)}
-            />
-          ))}
+          {navItems
+            .filter(
+              (item) =>
+                isInternalUser ||
+                (item.id !== "story" && item.id !== "video-to-script"),
+            )
+            .map((item) => (
+              <SidebarNavItem
+                key={item.id}
+                id={item.id}
+                icon={item.icon}
+                label={item.label}
+                onClick={() => handleNavClick(item.path)}
+              />
+            ))}
         </SidebarNav>
 
         <SidebarFooter classNames={{ root: "pt-4" }}>

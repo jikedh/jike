@@ -178,6 +178,7 @@ const NewVideoNode = ({
       isActiveNode && !isDragging && isDragUiSettled && !hasMultipleSelected,
     [isActiveNode, isDragging, isDragUiSettled, hasMultipleSelected],
   );
+  const shouldShowPromptPanel = isActiveNode && !hasMultipleSelected;
 
   // 生成中的占位卡在新版节点里也算一个视频，用于支持“1 个真实视频 + 1 个生成中占位”时独立为视频。
   const hasMultipleResults =
@@ -297,7 +298,7 @@ const NewVideoNode = ({
           className={`transition-opacity duration-150 ${handleVisibilityClass}`}
         />
 
-        {shouldShowToolbar && !isUploadVideo && (
+        {shouldShowPromptPanel && !isUploadVideo && (
           <div className="selection-box-deferred-ui nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2">
             <VideoPromptPanel nodeId={id} />
           </div>

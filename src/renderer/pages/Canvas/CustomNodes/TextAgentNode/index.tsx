@@ -64,6 +64,9 @@ export const TextAgentNode = memo(
     const updateNodeNickname = useCanvasFlowStore(
       (state) => state.updateNodeNickname,
     );
+    const isActiveNode = useCanvasFlowStore(
+      (state) => state.activeNodeId === id,
+    );
     // 当前预设信息
     const presetId = data.presetId;
     const preset = presetId ? getTextAgentPresetById(presetId) : null;
@@ -229,7 +232,7 @@ export const TextAgentNode = memo(
               />
 
               {/* 配置面板（选中时显示） */}
-              {selected && (
+              {selected && isActiveNode && (
                 <ConfigPanel
                   editableSystemPrompt={editableSystemPrompt}
                   onSystemPromptChange={setEditableSystemPrompt}

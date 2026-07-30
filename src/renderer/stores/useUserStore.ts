@@ -10,7 +10,12 @@ import {
 } from "shared/utils/utils";
 import { create } from "zustand";
 import { getUserInfo } from "@/api/ai";
-import { getJikeGoScoreBalance } from "@/api/jikeGo";
+import {
+  getInternalFeatureAccess,
+  getJikeGoScoreBalance,
+} from "@/api/jikeGo";
+
+let internalAccessLoading = false;
 
 const initialState: Pick<
   UserStoreType,
@@ -20,6 +25,8 @@ const initialState: Pick<
   | "isLoading"
   | "dialogLoginStatus"
   | "balanceInfo"
+  | "isInternalUser"
+  | "internalAccessLoaded"
 > = {
   loginStatus: 0,
   userInfo: null,
@@ -27,6 +34,8 @@ const initialState: Pick<
   isLoading: false,
   dialogLoginStatus: false,
   balanceInfo: null,
+  isInternalUser: false,
+  internalAccessLoaded: false,
 };
 
 export const useUserStore = create<UserStoreType>((set, get) => ({
@@ -122,6 +131,32 @@ export const useUserStore = create<UserStoreType>((set, get) => ({
     }
   },
 
+  fetchInternalAccess: async () => {
+    const token = getJikeingToken();
+    if (!token) {
+      set({ isInternalUser: false, internalAccessLoaded: false });
+      return;
+    }
+    if (get().internalAccessLoaded || internalAccessLoading) {
+      return;
+    }
+    internalAccessLoading = true;
+
+    try {
+      const res = await getInternalFeatureAccess();
+      const data = res?.data ?? res;
+      set({
+        isInternalUser: Boolean(data?.is_internal ?? data?.isInternal),
+        internalAccessLoaded: true,
+      });
+    } catch (error) {
+      console.error("[fetchInternalAccess] 获取内部权限异常:", error);
+      set({ isInternalUser: false, internalAccessLoaded: true });
+    } finally {
+      internalAccessLoading = false;
+    }
+  },
+
   setBalanceInfo: (info) => set({ balanceInfo: info }),
 
   logout: async () => {
@@ -134,6 +169,8 @@ export const useUserStore = create<UserStoreType>((set, get) => ({
       vipLevel: 0,
       dialogLoginStatus: false,
       balanceInfo: null,
+      isInternalUser: false,
+      internalAccessLoaded: false,
     });
   },
 

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import {
   createHashRouter,
   RouterProvider,
@@ -7,6 +7,8 @@ import {
 } from "react-router-dom";
 import { CinematicProjectLoader } from "@/components/CinematicProjectLoader";
 import { SidebarCeBianLan } from "@/pages/Sidebar/SidebarCeBianLan";
+import { useUserStore } from "@/stores/useUserStore";
+import { getJikeingToken } from "shared/utils/utils";
 
 // 懒加载页面组件 - 按需加载，减少首屏加载量
 const HomePage = lazy(() => import("@/pages/Home"));
@@ -42,6 +44,35 @@ const PageLoader = () => (
 const CanvasRouteLoader = () => (
   <CinematicProjectLoader fixed title="" subtitle="" />
 );
+
+const InternalOnlyRoute = ({ children }: { children: ReactNode }) => {
+  const isInternalUser = useUserStore((state) => state.isInternalUser);
+  const internalAccessLoaded = useUserStore(
+    (state) => state.internalAccessLoaded,
+  );
+  const fetchInternalAccess = useUserStore(
+    (state) => state.fetchInternalAccess,
+  );
+  const token = getJikeingToken();
+
+  useEffect(() => {
+    if (token && !internalAccessLoaded) {
+      fetchInternalAccess();
+    }
+  }, [fetchInternalAccess, internalAccessLoaded, token]);
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!internalAccessLoaded) {
+    return <PageLoader />;
+  }
+  if (!isInternalUser) {
+    return <Navigate to="/home" replace />;
+  }
+
+  return children;
+};
 
 // 带侧边栏的布局组件
 const SidebarLayout = () => {
@@ -107,7 +138,11 @@ const router = createHashRouter([
       },
       {
         path: "/video-to-script",
-        element: <VideoToScriptPage />,
+        element: (
+          <InternalOnlyRoute>
+            <VideoToScriptPage />
+          </InternalOnlyRoute>
+        ),
       },
       {
         path: "/short-drama-commentary",
@@ -131,19 +166,35 @@ const router = createHashRouter([
       },
       {
         path: "/story",
-        element: <StoryPage />,
+        element: (
+          <InternalOnlyRoute>
+            <StoryPage />
+          </InternalOnlyRoute>
+        ),
       },
       {
         path: "/story/:projectId",
-        element: <StoryPage />,
+        element: (
+          <InternalOnlyRoute>
+            <StoryPage />
+          </InternalOnlyRoute>
+        ),
       },
       {
         path: "/story/:projectId/snippets/:snippetId",
-        element: <StoryPage />,
+        element: (
+          <InternalOnlyRoute>
+            <StoryPage />
+          </InternalOnlyRoute>
+        ),
       },
       {
         path: "/story/:projectId/snippets/:snippetId/agent",
-        element: <StoryPage />,
+        element: (
+          <InternalOnlyRoute>
+            <StoryPage />
+          </InternalOnlyRoute>
+        ),
       },
     ],
   },

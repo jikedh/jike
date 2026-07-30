@@ -7,13 +7,17 @@ import { getJikeingToken } from "shared/utils/utils";
 
 function App() {
   const fetchUserInfo = useUserStore((state) => state.fetchUserInfo);
+  const fetchInternalAccess = useUserStore(
+    (state) => state.fetchInternalAccess,
+  );
 
   useEffect(() => {
     const token = getJikeingToken();
     if (token) {
       fetchUserInfo();
+      fetchInternalAccess();
     }
-  }, [fetchUserInfo]);
+  }, [fetchInternalAccess, fetchUserInfo]);
 
   return (
     <>

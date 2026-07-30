@@ -7,6 +7,7 @@ import {
   CreateRechargeOrderResponse,
   GetRechargeOrderStatusResponse,
   GetScoreBalanceResponse,
+  GetScoreConfigResponse,
   UpdateVipScoreRequest,
   UpdateVipScoreResponse,
 } from "shared/types/api/score";
@@ -14,15 +15,37 @@ import { getJikeingUserInfo } from "shared/utils/utils";
 
 // ===================== 用户侧 API（jike-web-api）/userscore/v1 =====================
 
+let scoreConfigCache: GetScoreConfigResponse | null = null;
+let scoreConfigRequest: Promise<GetScoreConfigResponse> | null = null;
+
 /**
  * 获取积分配置
  * 不需要登录认证
  */
-export function getScoreConfig(): any {
-  return jikeingService({
+export function getScoreConfig(): Promise<GetScoreConfigResponse> {
+  if (scoreConfigCache) {
+    return Promise.resolve(scoreConfigCache);
+  }
+
+  if (scoreConfigRequest) {
+    return scoreConfigRequest;
+  }
+
+  const request = jikeingService({
     url: "/userscore/v1/get-score-config",
     method: "get",
-  });
+  }) as unknown as Promise<GetScoreConfigResponse>;
+
+  scoreConfigRequest = request
+    .then((response) => {
+      scoreConfigCache = response;
+      return response;
+    })
+    .finally(() => {
+      scoreConfigRequest = null;
+    });
+
+  return scoreConfigRequest;
 }
 
 /**

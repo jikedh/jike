@@ -177,6 +177,8 @@ export const ImageNode = memo(
         hasMultipleSelected,
       ],
     );
+    const shouldShowPromptPanel =
+      isActiveNode && !hasMultipleSelected && !isAnnotationMode;
 
     // 根据 data.size（如 "1:1", "16:9"）动态计算节点尺寸，按图片原始比例展示
     const nodeSize = useMemo(() => {
@@ -874,9 +876,8 @@ export const ImageNode = memo(
               </div>
             </div>
 
-            {/* 节点内底部增强输入区：与节点同一几何空间，缩放时保持一致 */}
-            {/* 拖动结束后再挂载，降低首次拖拽时的渲染负担 */}
-            {shouldShowToolbar && !isUploadImage && (
+            {/* 节点内底部增强输入区：单节点拖拽时保持挂载并跟随节点移动。 */}
+            {shouldShowPromptPanel && !isUploadImage && (
               <div className="selection-box-deferred-ui nodrag nopan nowheel absolute top-full left-1/2 z-50 mt-4 w-175 -translate-x-1/2">
                 <ImagePromptPanel nodeId={id} />
               </div>

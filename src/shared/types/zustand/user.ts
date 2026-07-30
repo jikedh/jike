@@ -11,6 +11,8 @@ export type UserStoreType = {
   isLoading: boolean;
   dialogLoginStatus: boolean;
   balanceInfo: UserScoreVO | null;
+  isInternalUser: boolean;
+  internalAccessLoaded: boolean;
 
   // ── 配对 setter ──────────────────────────────
   setLoginStatus: (status: number) => void;
@@ -23,6 +25,7 @@ export type UserStoreType = {
   // ── 业务 action ───────────────────────────────
   fetchUserInfo: () => Promise<void>;
   fetchBalanceInfo: () => Promise<void>;
+  fetchInternalAccess: () => Promise<void>;
   logout: () => Promise<void>;
 
   // ── 计算属性 ─────────────────────────────────

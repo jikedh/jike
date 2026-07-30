@@ -38,12 +38,16 @@ export const NoteNode = memo(
     const resizeNoteNode = useCanvasFlowStore((state) => state.resizeNoteNode);
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
+    const isActiveFromStore = useCanvasFlowStore(
+      (state) => state.activeNodeId === id,
+    );
 
     const [isFullscreen, setIsFullscreen] = useState(false);
     const editorRef = useRef<NoteEditorHandle>(null);
     const { zoom } = useNodeScale();
 
     const isDragging = Boolean(dragging);
+    const isActiveNode = isActiveFromStore && selected;
 
     const handleStartEdit = useCallback(() => {
       setNoteNodeEditing(id, true);
@@ -93,7 +97,7 @@ export const NoteNode = memo(
         >
           <div className="group/node relative">
             <NodeResizer
-              isVisible={selected && !isDragging}
+              isVisible={isActiveNode && !isDragging}
               minWidth={200}
               minHeight={120}
               lineClassName="!border !border-[#B43FEB]/50 !rounded-xl"
@@ -105,7 +109,7 @@ export const NoteNode = memo(
 
             {/* 格式工具栏 — 仅选中时显示 */}
             <NodeToolbar
-              isVisible={selected && !isDragging}
+              isVisible={isActiveNode && !isDragging}
               position={Position.Top}
               offset={8 * zoom}
             >
