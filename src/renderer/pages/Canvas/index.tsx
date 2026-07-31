@@ -74,6 +74,7 @@ const CanvasPage = () => {
     messages,
     isLoading,
     sendMessage,
+    retryMessage,
     stopMessage,
     clearLocalMessages,
     setMessages,
@@ -195,6 +196,7 @@ const CanvasPage = () => {
             messages={messages}
             isLoading={isLoading}
             sendMessage={sendMessage}
+            retryMessage={retryMessage}
             stopMessage={stopMessage}
             clearLocalMessages={clearLocalMessages}
             setMessages={setMessages}

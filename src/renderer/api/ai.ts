@@ -243,9 +243,11 @@ async function createDesktopChatStream(data: any, signal?: AbortSignal) {
   });
 
   if (!response.ok) {
-    throw new Error(
+    const requestError = new Error(
       await response.text().catch(() => `请求失败：${response.status}`),
-    );
+    ) as Error & { status?: number };
+    requestError.status = response.status;
+    throw requestError;
   }
 
   const reader = response

@@ -1,3 +1,4 @@
+import { IconRefresh } from "@tabler/icons-react";
 import { useEffect, useState, type RefObject } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -17,6 +18,7 @@ type ChatMessageListProps = {
   isLoading?: boolean;
   className?: string;
   containerRef?: RefObject<HTMLDivElement | null>;
+  onRetry?: (messageIndex: number) => void;
 };
 
 type ChatImagePreviewProps = {
@@ -165,6 +167,7 @@ export const ChatMessageList = ({
   isLoading = false,
   className,
   containerRef,
+  onRetry,
 }: ChatMessageListProps) => {
   const lastMessage = messages[messages.length - 1];
   const shouldShowThinking =
@@ -173,7 +176,10 @@ export const ChatMessageList = ({
   return (
     <div
       ref={containerRef}
-      className={cn("flex-1 overflow-y-auto px-3 py-3 no-scrollbar", className)}
+      className={cn(
+        "canvas-chat-scrollbar flex-1 overflow-y-auto px-3 py-3",
+        className,
+      )}
     >
       <div className="space-y-3.5">
         {messages.map((message, index) => {
@@ -211,6 +217,19 @@ export const ChatMessageList = ({
                     ))}
                   </div>
                 )}
+                {message.status === "failed" &&
+                  index === messages.length - 1 &&
+                  !isLoading &&
+                  onRetry && (
+                    <button
+                      type="button"
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-[#b43feb]/35 bg-[#b43feb]/10 px-2.5 py-1.5 text-xs text-[#d793ff] transition-colors hover:bg-[#b43feb]/20"
+                      onClick={() => onRetry(index)}
+                    >
+                      <IconRefresh size={14} />
+                      <span>重试</span>
+                    </button>
+                  )}
               </div>
             </div>
           );

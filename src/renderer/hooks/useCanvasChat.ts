@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { createChatCompletion } from "@/api/ai";
 import {
+  CANVAS_CHAT_MAX_INPUT_LENGTH,
   DEFAULT_CANVAS_CHAT_MODEL,
   isCanvasChatImageModel,
 } from "shared/constants/ai-models";
@@ -39,6 +40,72 @@ const getPersonaById = (personaId: ChatPersonaId) => {
 
   return CANVAS_CHAT_PERSONAS.find((item) => item.id === personaId) ?? null;
 };
+
+const MAX_AUTO_RETRY_ATTEMPTS = 2;
+const AUTO_RETRY_DELAYS_MS = [800, 1600] as const;
+
+type ChatRequestError = Error & {
+  partialContent?: string;
+  status?: number;
+};
+
+const isRetryableChatError = (chatError: unknown) => {
+  const status =
+    chatError && typeof chatError === "object"
+      ? (chatError as { status?: unknown }).status
+      : undefined;
+
+  if (typeof status === "number") {
+    return status === 408 || status === 425 || status === 429 || status >= 500;
+  }
+
+  if (chatError instanceof TypeError) {
+    return true;
+  }
+
+  const message =
+    chatError instanceof Error ? chatError.message : String(chatError ?? "");
+  return /network|fetch|timeout|timed out|empty response|未获取到有效内容|超时|网络|连接|服务暂时不可用/i.test(
+    message,
+  );
+};
+
+const attachPartialContent = (
+  chatError: unknown,
+  partialContent: string,
+): ChatRequestError => {
+  const requestError =
+    chatError instanceof Error
+      ? (chatError as ChatRequestError)
+      : (new Error(
+          String(chatError ?? "生成出现了点问题，请稍后再试"),
+        ) as ChatRequestError);
+  requestError.partialContent = partialContent;
+  return requestError;
+};
+
+const waitForRetry = (delayMs: number, signal: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    let timer: number | undefined;
+
+    const handleAbort = () => {
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+      reject(new DOMException("The operation was aborted", "AbortError"));
+    };
+
+    if (signal.aborted) {
+      handleAbort();
+      return;
+    }
+
+    timer = window.setTimeout(() => {
+      signal.removeEventListener("abort", handleAbort);
+      resolve();
+    }, delayMs);
+    signal.addEventListener("abort", handleAbort, { once: true });
+  });
 
 /**
  * 组装发送给模型的消息数组。
@@ -104,6 +171,210 @@ export const useCanvasChat = () => {
     };
   }, []);
 
+  const updateAssistantMessage = useCallback(
+    (
+      assistantMessageIndex: number,
+      update: (message: NoteGenerationMessage) => NoteGenerationMessage,
+    ) => {
+      setMessages((prev) => {
+        const assistantMessage = prev[assistantMessageIndex];
+        if (!assistantMessage || assistantMessage.role !== "assistant") {
+          return prev;
+        }
+
+        const updatedMessages = [...prev];
+        updatedMessages[assistantMessageIndex] = update(assistantMessage);
+        return updatedMessages;
+      });
+    },
+    [],
+  );
+
+  const executeRequest = async ({
+    content,
+    personaId,
+    model,
+    nextMessages,
+    assistantMessageIndex,
+    controller,
+  }: {
+    content: string;
+    personaId: ChatPersonaId;
+    model: string;
+    nextMessages: NoteGenerationMessage[];
+    assistantMessageIndex: number;
+    controller: AbortController;
+  }) => {
+    if (isCanvasChatImageModel(model)) {
+      updateAssistantMessage(assistantMessageIndex, (assistantMessage) => ({
+        ...assistantMessage,
+        content: "正在生成图片...",
+        status: "generating",
+      }));
+
+      const result = await generateCanvasChatImages({
+        model,
+        prompt: content,
+        signal: controller.signal,
+        onProgress: (progressMessage) => {
+          updateAssistantMessage(assistantMessageIndex, (assistantMessage) => ({
+            ...assistantMessage,
+            content: progressMessage,
+            status: "generating",
+          }));
+        },
+      });
+
+      updateAssistantMessage(assistantMessageIndex, (assistantMessage) => ({
+        ...assistantMessage,
+        content: `${result.label} 已生成 ${result.images.length} 张图片`,
+        images: result.images,
+        status: "completed",
+      }));
+      return;
+    }
+
+    const requestPayload: NoteGenerationRequest = {
+      model,
+      messages: buildRequestMessages(personaId, nextMessages),
+    };
+
+    for (let attempt = 0; attempt <= MAX_AUTO_RETRY_ATTEMPTS; attempt += 1) {
+      let streamedContent = "";
+
+      if (attempt > 0) {
+        updateAssistantMessage(assistantMessageIndex, (assistantMessage) => ({
+          ...assistantMessage,
+          content: `请求失败，正在重试（第 ${attempt}/${MAX_AUTO_RETRY_ATTEMPTS} 次）...`,
+          status: "generating",
+        }));
+        await waitForRetry(
+          AUTO_RETRY_DELAYS_MS[attempt - 1],
+          controller.signal,
+        );
+      } else {
+        updateAssistantMessage(assistantMessageIndex, (assistantMessage) => ({
+          ...assistantMessage,
+          content: "",
+          status: "generating",
+        }));
+      }
+
+      try {
+        const stream = await createChatCompletion(
+          {
+            ...requestPayload,
+            stream: true,
+          },
+          controller.signal,
+        );
+
+        for await (const chunk of stream) {
+          streamedContent += chunk;
+          updateAssistantMessage(assistantMessageIndex, (assistantMessage) => ({
+            ...assistantMessage,
+            content: streamedContent,
+            status: "generating",
+          }));
+        }
+
+        if (!streamedContent.trim()) {
+          throw new Error("未获取到有效内容");
+        }
+
+        updateAssistantMessage(assistantMessageIndex, (assistantMessage) => ({
+          ...assistantMessage,
+          content: streamedContent,
+          status: "completed",
+        }));
+        return;
+      } catch (chatError) {
+        if (chatError instanceof Error && chatError.name === "AbortError") {
+          throw chatError;
+        }
+
+        const errorWithPartialContent = attachPartialContent(
+          chatError,
+          streamedContent,
+        );
+        if (
+          attempt < MAX_AUTO_RETRY_ATTEMPTS &&
+          !streamedContent.trim() &&
+          isRetryableChatError(chatError)
+        ) {
+          continue;
+        }
+
+        throw errorWithPartialContent;
+      }
+    }
+  };
+
+  const runRequest = async (request: {
+    content: string;
+    personaId: ChatPersonaId;
+    model: string;
+    nextMessages: NoteGenerationMessage[];
+    assistantMessageIndex: number;
+  }) => {
+    setIsLoading(true);
+
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      await executeRequest({
+        ...request,
+        controller,
+      });
+    } catch (chatError: any) {
+      if (chatError?.name === "AbortError") {
+        updateAssistantMessage(
+          request.assistantMessageIndex,
+          (assistantMessage) => ({
+            ...assistantMessage,
+            content: assistantMessage.content.trim()
+              ? `${assistantMessage.content}\n\n（已停止生成）`
+              : "已停止生成。",
+            status: "stopped",
+          }),
+        );
+      } else {
+        console.error("聊天请求失败:", chatError);
+        error(
+          isCanvasChatImageModel(request.model)
+            ? "图片生成失败，请稍后重试"
+            : "对话失败，请稍后重试",
+        );
+
+        const partialContent = (
+          chatError as ChatRequestError
+        )?.partialContent?.trim();
+        const errorMessage =
+          chatError instanceof Error
+            ? chatError.message
+            : "生成出现了点问题，未能获取到有效内容，请稍后再试~";
+
+        updateAssistantMessage(
+          request.assistantMessageIndex,
+          (assistantMessage) => ({
+            ...assistantMessage,
+            content: partialContent
+              ? `${partialContent}\n\n（生成中断，请点击“重试”继续）`
+              : errorMessage,
+            status: "failed",
+          }),
+        );
+      }
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+      setIsLoading(false);
+    }
+  };
+
   /**
    * 发送一条用户消息并处理模型回复。
    *
@@ -129,7 +400,9 @@ export const useCanvasChat = () => {
     personaId: ChatPersonaId;
     model?: string;
   }) => {
-    const content = payload.content.trim();
+    const content = payload.content
+      .trim()
+      .slice(0, CANVAS_CHAT_MAX_INPUT_LENGTH);
     if (!content || isLoading) {
       return;
     }
@@ -147,172 +420,60 @@ export const useCanvasChat = () => {
       {
         role: "assistant",
         content: "",
+        status: "pending",
       },
     ]);
-    setIsLoading(true);
+    await runRequest({
+      content,
+      personaId: payload.personaId,
+      model,
+      nextMessages,
+      assistantMessageIndex,
+    });
+  };
 
-    abortControllerRef.current?.abort();
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    try {
-      const isImageGeneration = isCanvasChatImageModel(model);
-
-      if (isImageGeneration) {
-        setMessages((prev) => {
-          const assistantMessage = prev[assistantMessageIndex];
-          if (!assistantMessage || assistantMessage.role !== "assistant") {
-            return prev;
-          }
-
-          const updatedMessages = [...prev];
-          updatedMessages[assistantMessageIndex] = {
-            ...assistantMessage,
-            content: "正在生成图片...",
-            status: "generating",
-          };
-          return updatedMessages;
-        });
-
-        const result = await generateCanvasChatImages({
-          model,
-          prompt: content,
-          signal: controller.signal,
-          onProgress: (progressMessage) => {
-            setMessages((prev) => {
-              const assistantMessage = prev[assistantMessageIndex];
-              if (!assistantMessage || assistantMessage.role !== "assistant") {
-                return prev;
-              }
-
-              const updatedMessages = [...prev];
-              updatedMessages[assistantMessageIndex] = {
-                ...assistantMessage,
-                content: progressMessage,
-                status: "generating",
-              };
-              return updatedMessages;
-            });
-          },
-        });
-
-        setMessages((prev) => {
-          const assistantMessage = prev[assistantMessageIndex];
-          if (!assistantMessage || assistantMessage.role !== "assistant") {
-            return prev;
-          }
-
-          const imageCount = result.images.length;
-          const updatedMessages = [...prev];
-          updatedMessages[assistantMessageIndex] = {
-            ...assistantMessage,
-            content: `${result.label} 已生成 ${imageCount} 张图片`,
-            images: result.images,
-            status: "completed",
-          };
-          return updatedMessages;
-        });
-        return;
-      }
-
-      const requestPayload: NoteGenerationRequest = {
-        model,
-        messages: buildRequestMessages(payload.personaId, nextMessages),
-      };
-
-      const stream = await createChatCompletion(
-        {
-          ...requestPayload,
-          stream: true,
-        },
-        controller.signal,
-      );
-
-      for await (const content of stream) {
-        setMessages((prev) => {
-          const assistantMessage = prev[assistantMessageIndex];
-          if (!assistantMessage || assistantMessage.role !== "assistant") {
-            return prev;
-          }
-
-          const updatedMessages = [...prev];
-          updatedMessages[assistantMessageIndex] = {
-            ...assistantMessage,
-            content: `${assistantMessage.content}${content}`,
-          };
-          return updatedMessages;
-        });
-      }
-
-      setMessages((prev) => {
-        const assistantMessage = prev[assistantMessageIndex];
-        if (!assistantMessage || assistantMessage.role !== "assistant") {
-          return prev;
-        }
-
-        if (assistantMessage.content.trim()) {
-          return prev;
-        }
-
-        const updatedMessages = [...prev];
-        updatedMessages[assistantMessageIndex] = {
-          ...assistantMessage,
-          content: "生成出现了点问题，未能获取到有效内容，请稍后再试~",
-          status: "failed",
-        };
-        return updatedMessages;
-      });
-    } catch (chatError: any) {
-      if (chatError?.name === "AbortError") {
-        setMessages((prev) => {
-          const assistantMessage = prev[assistantMessageIndex];
-          if (!assistantMessage || assistantMessage.role !== "assistant") {
-            return prev;
-          }
-
-          const updatedMessages = [...prev];
-          updatedMessages[assistantMessageIndex] = {
-            ...assistantMessage,
-            content: assistantMessage.content.trim()
-              ? `${assistantMessage.content}\n\n（已停止生成）`
-              : "已停止生成。",
-            status: "stopped",
-          };
-          return updatedMessages;
-        });
-        return;
-      }
-
-      console.error("聊天请求失败:", chatError);
-      error(
-        isCanvasChatImageModel(model)
-          ? "图片生成失败，请稍后重试"
-          : "对话失败，请稍后重试",
-      );
-
-      setMessages((prev) => {
-        const assistantMessage = prev[assistantMessageIndex];
-        if (!assistantMessage || assistantMessage.role !== "assistant") {
-          return prev;
-        }
-
-        const updatedMessages = [...prev];
-        updatedMessages[assistantMessageIndex] = {
-          ...assistantMessage,
-          content:
-            chatError instanceof Error
-              ? chatError.message
-              : "生成出现了点问题，未能获取到有效内容，请稍后再试~",
-          status: "failed",
-        };
-        return updatedMessages;
-      });
-    } finally {
-      if (abortControllerRef.current === controller) {
-        abortControllerRef.current = null;
-      }
-      setIsLoading(false);
+  const retryMessage = async (
+    assistantMessageIndex: number,
+    payload: {
+      personaId: ChatPersonaId;
+      model?: string;
+    },
+  ) => {
+    if (isLoading || assistantMessageIndex !== messages.length - 1) {
+      return;
     }
+
+    const assistantMessage = messages[assistantMessageIndex];
+    const userMessage = messages[assistantMessageIndex - 1];
+    if (
+      !assistantMessage ||
+      assistantMessage.role !== "assistant" ||
+      assistantMessage.status !== "failed" ||
+      !userMessage ||
+      userMessage.role !== "user"
+    ) {
+      return;
+    }
+
+    const model = payload.model || DEFAULT_CANVAS_CHAT_MODEL;
+    const nextMessages = messages.slice(0, assistantMessageIndex);
+    setMessages([
+      ...nextMessages,
+      {
+        ...assistantMessage,
+        content: "",
+        images: undefined,
+        status: "pending",
+      },
+    ]);
+
+    await runRequest({
+      content: userMessage.content.slice(0, CANVAS_CHAT_MAX_INPUT_LENGTH),
+      personaId: payload.personaId,
+      model,
+      nextMessages,
+      assistantMessageIndex,
+    });
   };
 
   /**
@@ -339,6 +500,7 @@ export const useCanvasChat = () => {
     messages,
     isLoading,
     sendMessage,
+    retryMessage,
     stopMessage,
     clearLocalMessages,
     setMessages: setMessagesDirectly,

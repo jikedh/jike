@@ -595,6 +595,9 @@ export const CANVAS_CHAT_SELECT_MODELS = [
   ...CANVAS_CHAT_IMAGE_MODELS,
 ];
 
+/** 画布 AI 助手单次输入的最大字符数 */
+export const CANVAS_CHAT_MAX_INPUT_LENGTH = 6000;
+
 export const getCanvasChatImageModelConfig = (model?: string) => {
   if (!model?.startsWith(CANVAS_CHAT_IMAGE_MODEL_PREFIX)) {
     return undefined;

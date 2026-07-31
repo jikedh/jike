@@ -12,6 +12,7 @@ import {
 } from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  CANVAS_CHAT_MAX_INPUT_LENGTH,
   CANVAS_CHAT_SELECT_MODELS,
   DEFAULT_CANVAS_CHAT_MODEL,
 } from "shared/constants/ai-models";
@@ -50,6 +51,13 @@ type ChatDrawerProps = {
     personaId: ChatPersonaId;
     model?: string;
   }) => void;
+  retryMessage: (
+    assistantMessageIndex: number,
+    payload: {
+      personaId: ChatPersonaId;
+      model?: string;
+    },
+  ) => void;
   stopMessage: () => void;
   clearLocalMessages: () => void;
   setMessages: (messages: NoteGenerationMessage[]) => void;
@@ -136,6 +144,7 @@ export const ChatDrawer = ({
   messages,
   isLoading,
   sendMessage,
+  retryMessage,
   stopMessage,
   clearLocalMessages,
   setMessages,
@@ -203,7 +212,7 @@ export const ChatDrawer = ({
     if (listElement) {
       listElement.scrollTop = listElement.scrollHeight;
     }
-  }, [messages, isLoading]);
+  }, [messages.length]);
 
   useEffect(() => {
     if (open) {
@@ -218,7 +227,9 @@ export const ChatDrawer = ({
   }, [open]);
 
   const handleSend = useCallback(() => {
-    const content = inputValue.trim();
+    const content = inputValue
+      .trim()
+      .slice(0, CANVAS_CHAT_MAX_INPUT_LENGTH);
     if (!content || isLoading) return;
     sendMessage({
       content,
@@ -284,7 +295,7 @@ export const ChatDrawer = ({
   }, [createNewSession, selectedPersonaId, selectedModel, clearLocalMessages]);
 
   const handleSelectSkill = useCallback((prompt: string) => {
-    setInputValue(prompt);
+    setInputValue(prompt.slice(0, CANVAS_CHAT_MAX_INPUT_LENGTH));
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, []);
 
@@ -499,6 +510,12 @@ export const ChatDrawer = ({
                 containerRef={messageListRef}
                 isLoading={isLoading}
                 messages={messages}
+                onRetry={(messageIndex) =>
+                  retryMessage(messageIndex, {
+                    personaId: selectedPersonaId,
+                    model: selectedModel,
+                  })
+                }
               />
             )}
 
@@ -520,7 +537,12 @@ export const ChatDrawer = ({
                   <Textarea
                     ref={textareaRef}
                     value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
+                    maxLength={CANVAS_CHAT_MAX_INPUT_LENGTH}
+                    onChange={(e) =>
+                      setInputValue(
+                        e.target.value.slice(0, CANVAS_CHAT_MAX_INPUT_LENGTH),
+                      )
+                    }
                     onKeyDown={handleKeyDown}
                     placeholder="输入你的想法，或直接从上面的 Skills 开始"
                     rows={1}
@@ -536,6 +558,16 @@ export const ChatDrawer = ({
                     </span>
                     <span className="max-w-[180px] truncate rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-white/70">
                       {selectedModelLabel}
+                    </span>
+                    <span
+                      className={cn(
+                        "tabular-nums text-[11px]",
+                        inputValue.length >= CANVAS_CHAT_MAX_INPUT_LENGTH
+                          ? "text-[#d793ff]"
+                          : "text-white/35",
+                      )}
+                    >
+                      {inputValue.length}/{CANVAS_CHAT_MAX_INPUT_LENGTH}
                     </span>
                   </div>
 

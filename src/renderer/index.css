@@ -689,6 +689,34 @@
   background: transparent;
 }
 
+/* 画布 AI 助手消息列表：透明轨道 + 紫色滚动条 */
+.canvas-chat-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #b43feb transparent;
+}
+
+.canvas-chat-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.canvas-chat-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.canvas-chat-scrollbar::-webkit-scrollbar-thumb {
+  background: #b43feb;
+  border-radius: 999px;
+}
+
+.canvas-chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #c65cff;
+}
+
+.canvas-chat-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* 全景浏览器背景光晕动画 */
 @keyframes blob {
   0% {
