@@ -9,9 +9,14 @@ import {
   Scissors,
   UploadCloud,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "shared/utils/utils";
+import {
+  clearVideoToScriptState,
+  loadVideoToScriptState,
+  saveVideoToScriptState,
+} from "service/videoToScriptStorage";
 import { createDashscopeChatCompletion } from "@/api/ai";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +35,7 @@ import {
 } from "@/components/ui/select";
 import { getUploadOssPutUrl, type UploadOssPutUrlResp } from "@/api/jikeGo";
 
-type VideoToScriptModel = "qwen3.5-flash" | "qwen3.7-plus";
+type VideoToScriptModel = "qwen3.7-flash" | "qwen3.7-plus";
 type UploadStatus = "idle" | "pending" | "success" | "error";
 type ScriptStatus = "idle" | "pending" | "success" | "error";
 type ClipStatus = "idle" | "pending" | "success" | "error" | "skipped";
@@ -71,12 +76,12 @@ type SplitMp4Result = {
 const SCRIPT_BULK_CONCURRENCY = 10;
 const OSS_UPLOAD_CONCURRENCY = 5;
 const CLIP_SEGMENT_SECONDS = 14;
-const DEFAULT_VIDEO_TO_SCRIPT_MODEL: VideoToScriptModel = "qwen3.5-flash";
+const DEFAULT_VIDEO_TO_SCRIPT_MODEL: VideoToScriptModel = "qwen3.7-plus";
 const VIDEO_TO_SCRIPT_MODELS: Array<{
   value: VideoToScriptModel;
   label: string;
 }> = [
-  { value: "qwen3.5-flash", label: "qwen3.5-flash" },
+  { value: "qwen3.7-flash", label: "qwen3.7-flash" },
   { value: "qwen3.7-plus", label: "qwen3.7-plus" },
 ];
 const OSS_DIRECT_UPLOAD_TTL = 12 * 60 * 60;
@@ -289,6 +294,34 @@ const inferEpisodeFromFilePath = (path: string, fallbackEpisode: number) => {
 const getItemKey = (item: Pick<VideoToScriptItem, "episode" | "pageUrl">) =>
   `${item.episode}-${item.pageUrl}`;
 
+const isVideoToScriptModel = (
+  value: string | undefined,
+): value is VideoToScriptModel =>
+  value === "qwen3.7-flash" || value === "qwen3.7-plus";
+
+const normalizePersistedItem = (value: unknown): VideoToScriptItem | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const item = value as Partial<VideoToScriptItem>;
+  if (
+    typeof item.episode !== "number" ||
+    typeof item.pageUrl !== "string" ||
+    typeof item.localMp4Path !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    ...item,
+    title: typeof item.title === "string" ? item.title : "",
+    uploadStatus: item.uploadStatus === "pending" ? "idle" : item.uploadStatus,
+    scriptStatus: item.scriptStatus === "pending" ? "idle" : item.scriptStatus,
+    clipStatus: item.clipStatus === "pending" ? "idle" : item.clipStatus,
+  } as VideoToScriptItem;
+};
+
 const splitMp4BySeconds = async (
   inputPath: string,
   segmentSeconds = CLIP_SEGMENT_SECONDS,
@@ -496,7 +529,11 @@ const createScriptsDocx = (items: VideoToScriptItem[]) => {
 };
 
 export default function VideoToScriptPage() {
-  const [results, setResults] = useState<VideoToScriptItem[]>([]);
+  const [results, setResults] = useState<VideoToScriptItem[]>(() =>
+    loadVideoToScriptState()
+      .results.map(normalizePersistedItem)
+      .filter((item): item is VideoToScriptItem => Boolean(item)),
+  );
   const [uploadingMap, setUploadingMap] = useState<Record<string, boolean>>({});
   const [scriptingMap, setScriptingMap] = useState<Record<string, boolean>>({});
   const [splittingMap, setSplittingMap] = useState<Record<string, boolean>>({});
@@ -505,8 +542,36 @@ export default function VideoToScriptPage() {
   const [viewingScriptItem, setViewingScriptItem] =
     useState<VideoToScriptItem | null>(null);
   const [videoToScriptModel, setVideoToScriptModel] =
-    useState<VideoToScriptModel>(DEFAULT_VIDEO_TO_SCRIPT_MODEL);
+    useState<VideoToScriptModel>(() => {
+      const persistedModel = loadVideoToScriptState().model;
+      return isVideoToScriptModel(persistedModel)
+        ? persistedModel
+        : DEFAULT_VIDEO_TO_SCRIPT_MODEL;
+    });
+  const latestPersistedStateRef = useRef({
+    results,
+    model: videoToScriptModel,
+  });
+  latestPersistedStateRef.current = {
+    results,
+    model: videoToScriptModel,
+  };
   const scriptBulkStopRequestedRef = useRef(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      saveVideoToScriptState(latestPersistedStateRef.current);
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [results, videoToScriptModel]);
+
+  useEffect(
+    () => () => {
+      saveVideoToScriptState(latestPersistedStateRef.current);
+    },
+    [],
+  );
 
   const updateItem = (
     item: VideoToScriptItem,
@@ -828,7 +893,10 @@ export default function VideoToScriptPage() {
             <Button
               variant="default"
               disabled={results.length === 0}
-              onClick={() => setResults([])}
+              onClick={() => {
+                setResults([]);
+                clearVideoToScriptState();
+              }}
               title="清空结果"
             >
               <RotateCcw size={16} />
