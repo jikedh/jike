@@ -85,6 +85,23 @@ export const useScriptAgent = () => {
         [activeSessionId],
     );
 
+    // 重命名会话
+    const renameSession = useCallback(
+        async (sessionId: string, newTitle: string) => {
+            try {
+                await api.renameSession(sessionId, newTitle);
+                setSessions((prev) =>
+                    prev.map((s) =>
+                        s.id === sessionId ? { ...s, title: newTitle } : s,
+                    ),
+                );
+            } catch (e: any) {
+                console.error("[ScriptAgent] renameSession failed", e);
+            }
+        },
+        [],
+    );
+
     // 发送消息（触发流式）
     const send = useCallback(
         async (content: string) => {
@@ -193,5 +210,6 @@ export const useScriptAgent = () => {
         createNewSession,
         removeSession,
         send,
+        renameSession,
     };
 };

@@ -19,6 +19,7 @@ const ScriptAgentPage = () => {
         loadMessages,
         createNewSession,
         removeSession,
+        renameSession,
         send,
     } = useScriptAgent();
 
@@ -31,6 +32,7 @@ const ScriptAgentPage = () => {
                 onSelect={loadMessages}
                 onCreate={createNewSession}
                 onDelete={removeSession}
+                onRename={renameSession}
             />
 
             {/* 右侧聊天区域 */}
