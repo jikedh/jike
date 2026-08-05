@@ -266,7 +266,7 @@ pub fn build_system_prompt_with_memories(base_prompt: &str) -> Result<String, St
     Ok(sections.join("\n"))
 }
 
-/// 从 AI 回复中提取 [MEMORY:key=value] 标签并自动保存
+/// 从 AI 回复中提取 [MEMORY:key=value] 标签并自动保存（正则兜底）
 pub fn extract_and_save_memories(content: &str) -> Vec<MemoryEntry> {
     let re_pattern = r"\[MEMORY:(\w+):([^=\]]+)=(.+?)\]";
     let re = regex_lite::Regex::new(re_pattern).unwrap();
@@ -282,6 +282,93 @@ pub fn extract_and_save_memories(content: &str) -> Vec<MemoryEntry> {
         }
     }
     saved
+}
+
+const MEMORY_EXTRACTION_PROMPT: &str = r#"你是一个记忆提取助手。请分析以下对话内容，从中提取值得长期记住的用户信息。
+
+分类规则：
+- preference: 用户的创作偏好（题材、风格、篇幅、语气等）
+- knowledge: 用户提供的剧本相关知识或背景设定
+- character: 用户描述的角色设定（姓名、性格、关系等）
+- style: 用户偏好的写作风格（对白风格、叙事节奏、格式要求等）
+
+输出格式要求（严格遵守，不要输出任何其他内容）：
+每行一条记忆，格式为 [MEMORY:category:key=value]
+如果没有值得记忆的信息，输出 NONE
+
+示例输出：
+[MEMORY:preference:genre=都市情感]
+[MEMORY:character:protagonist=林小雨，25岁女记者，性格倔强]
+[MEMORY:style:dialogue=简洁口语化，避免书面语]"#;
+
+/// 通过独立 LLM 调用从对话中提取记忆并保存
+pub async fn extract_memories_via_llm(
+    api_key: &str,
+    api_base: &str,
+    model: &str,
+    user_message: &str,
+    assistant_reply: &str,
+) -> Vec<MemoryEntry> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/v1/chat/completions", api_base.trim_end_matches('/'));
+
+    let conversation = format!(
+        "用户说：{}\n\n助手回复：{}",
+        user_message, assistant_reply
+    );
+
+    let body = serde_json::json!({
+        "model": model,
+        "messages": [
+            { "role": "system", "content": MEMORY_EXTRACTION_PROMPT },
+            { "role": "user", "content": conversation }
+        ],
+        "stream": false,
+        "temperature": 0.1
+    });
+
+    let resp = match client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("[ScriptAgent] memory extraction request failed: {}", e);
+            return Vec::new();
+        }
+    };
+
+    if !resp.status().is_success() {
+        log::warn!(
+            "[ScriptAgent] memory extraction error: {}",
+            resp.status()
+        );
+        return Vec::new();
+    }
+
+    let json: serde_json::Value = match resp.json().await {
+        Ok(j) => j,
+        Err(e) => {
+            log::warn!("[ScriptAgent] memory extraction parse failed: {}", e);
+            return Vec::new();
+        }
+    };
+
+    let content = json["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("")
+        .trim();
+
+    if content == "NONE" || content.is_empty() {
+        return Vec::new();
+    }
+
+    // 复用正则解析 LLM 返回的标签
+    extract_and_save_memories(content)
 }
 
 /// 流式事件载荷
@@ -411,8 +498,22 @@ pub async fn chat_completion_streaming(
         },
     );
 
-    // 自动提取并保存记忆标签
-    let _ = extract_and_save_memories(&full_content);
+    // 用独立 LLM 调用提取记忆（异步后台执行，不阻塞返回）
+    let user_content = messages.last().map(|m| m.content.as_str()).unwrap_or("");
+    let ak = api_key.to_string();
+    let ab = api_base.to_string();
+    let md = model.to_string();
+    let reply_clone = full_content.clone();
+    let user_clone = user_content.to_string();
+    tokio::spawn(async move {
+        let saved = extract_memories_via_llm(&ak, &ab, &md, &user_clone, &reply_clone).await;
+        if !saved.is_empty() {
+            log::info!(
+                "[ScriptAgent] extracted {} memories via LLM",
+                saved.len()
+            );
+        }
+    });
 
     Ok(full_content)
 }
