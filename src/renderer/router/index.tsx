@@ -33,6 +33,7 @@ const InvitationCenterPage = lazy(() => import("@/pages/InvitationCenter"));
 const CanvasPage = lazy(() => import("@/pages/Canvas"));
 // Story 故事创作是独立全屏页面
 const StoryPage = lazy(() => import("@/pages/Story"));
+const ScriptAgentPage = lazy(() => import("@/pages/ScriptAgent"));
 
 // 页面加载中 fallback
 const PageLoader = () => (
@@ -123,6 +124,10 @@ const router = createHashRouter([
       {
         path: "/script",
         element: <ScriptPage />,
+      },
+      {
+        path: "/script-agent",
+        element: <ScriptAgentPage />,
       },
       {
         path: "/assets",

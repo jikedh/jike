@@ -1,6 +1,6 @@
 [package]
 name = "jike"
-version = "2.2.4"
+version = "2.2.6"
 description = "即刻 - 视频工作流"
 authors = ["小明"]
 edition = "2021"
@@ -45,6 +45,8 @@ futures-util = "0.3"
 async-trait = "0.1"
 once_cell = "1"
 mime_guess = "2"
+rusqlite = { version = "0.32", features = ["bundled"] }
+regex-lite = "0.1"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"

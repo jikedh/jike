@@ -5,6 +5,7 @@ import {
   House,
   Settings,
   SquareDashedMousePointer,
+  TextQuote,
   UsersRound,
   Video,
 } from "lucide-react";
@@ -105,6 +106,12 @@ export const SidebarCeBianLan = () => {
       icon: <BookOpenText size={24} />,
       label: "故事创作",
       path: "/story",
+    },
+    {
+      id: "script-agent",
+      icon: <TextQuote size={24} />,
+      label: "剧本Agent",
+      path: "/script-agent",
     },
     {
       id: "video-to-script",

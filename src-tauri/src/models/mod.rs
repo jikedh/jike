@@ -3,8 +3,10 @@ pub mod media;
 pub mod storage;
 pub mod tracking;
 pub mod video;
+pub mod script_agent;
 
 pub use media::*;
 pub use storage::*;
 pub use tracking::*;
 pub use video::*;
+pub use script_agent::*;
