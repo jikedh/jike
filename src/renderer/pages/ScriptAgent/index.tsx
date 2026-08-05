@@ -1,7 +1,60 @@
-const ScriptAgentPage = () => (
-    <div className="flex h-full min-h-screen items-center justify-center bg-[#09090b] text-2xl text-white">
-        功能正在开发中
-    </div>
-);
+/**
+ * 剧本Agent 页面
+ * 左侧会话列表 + 右侧聊天区域
+ */
+import { ChatInput } from "./ChatInput";
+import { MessageList } from "./MessageList";
+import { SessionList } from "./SessionList";
+import { useScriptAgent } from "./useScriptAgent";
+
+const ScriptAgentPage = () => {
+    const {
+        sessions,
+        activeSessionId,
+        messages,
+        loading,
+        sending,
+        streamingContent,
+        messagesEndRef,
+        loadMessages,
+        createNewSession,
+        removeSession,
+        send,
+    } = useScriptAgent();
+
+    return (
+        <div className="flex h-screen bg-[#09090b] text-white">
+            {/* 左侧会话列表 */}
+            <SessionList
+                sessions={sessions}
+                activeId={activeSessionId}
+                onSelect={loadMessages}
+                onCreate={createNewSession}
+                onDelete={removeSession}
+            />
+
+            {/* 右侧聊天区域 */}
+            <div className="flex flex-1 flex-col overflow-hidden">
+                {!activeSessionId ? (
+                    <div className="flex flex-1 flex-col items-center justify-center gap-4 text-white/30">
+                        <span className="text-4xl">🎬</span>
+                        <span className="text-lg">选择一个对话或创建新对话开始创作</span>
+                    </div>
+                ) : (
+                    <>
+                        <MessageList
+                            messages={messages}
+                            streamingContent={streamingContent}
+                            loading={loading}
+                            sending={sending}
+                            endRef={messagesEndRef}
+                        />
+                        <ChatInput disabled={sending || loading} onSend={send} />
+                    </>
+                )}
+            </div>
+        </div>
+    );
+};
 
 export default ScriptAgentPage;
