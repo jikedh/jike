@@ -14,6 +14,7 @@ import type {
   Wan27T2vRequest
 } from "shared/types/detail/Bailian/video";
 import type { Seedance20Request } from "shared/types/detail/kuaizhi/Seedance-2.0";
+import type { MiniMaxH3Request } from "shared/types/detail/MiniMax/MiniMax-H3";
 import type { VideoGenerateRequest } from "../components/BottomParamsBar";
 import type { VideoModeKey } from "../constants/videoModelCapabilities";
 
@@ -22,6 +23,7 @@ export type NewVideoApiRequest =
   | OverseasSeedance20Request
   | BailianVideoGenerationRequest
   | ViduQ3Image2VideoRequest
+  | MiniMaxH3Request
   | AgnesVideoRequest;
 
 type OverseasSeedance20ContentItem =
@@ -384,6 +386,76 @@ const buildOverseasSeedanceRequest = (
     generate_audio: request.params.generateAudio,
     watermark: false,
     seed: -1,
+  };
+};
+
+const buildMiniMaxH3Request = (
+  request: VideoGenerateRequest,
+): MiniMaxH3Request => {
+  const images = getImages(request);
+  const videos = getVideos(request);
+  const audios = getAudios(request);
+  const content: MiniMaxH3Request["content"] = [
+    { type: "text", text: getPrompt(request.prompt) },
+  ];
+  const frameMode =
+    request.mode === "image-to-video" ||
+    request.mode === "first-last-frame";
+
+  if (request.mode === "image-to-video" && images[0]) {
+    content.push({
+      type: "image_url",
+      image_url: { url: images[0] },
+      role: "first_frame",
+    });
+  } else if (request.mode === "first-last-frame") {
+    if (images[0]) {
+      content.push({
+        type: "image_url",
+        image_url: { url: images[0] },
+        role: "first_frame",
+      });
+    }
+    if (images[1]) {
+      content.push({
+        type: "image_url",
+        image_url: { url: images[1] },
+        role: "last_frame",
+      });
+    }
+  } else if (request.mode === "all-reference") {
+    images.forEach((url) =>
+      content.push({
+        type: "image_url",
+        image_url: { url },
+        role: "reference_image",
+      }),
+    );
+    videos.forEach((url) =>
+      content.push({
+        type: "video_url",
+        video_url: { url },
+        role: "reference_video",
+      }),
+    );
+    audios.forEach((url) =>
+      content.push({
+        type: "audio_url",
+        audio_url: { url },
+        role: "reference_audio",
+      }),
+    );
+  }
+
+  return {
+    model: "MiniMax-H3",
+    content,
+    resolution: request.params.resolution === "2K" ? "2K" : "768P",
+    duration: request.params.duration as MiniMaxH3Request["duration"],
+    ratio: frameMode
+      ? "adaptive"
+      : (request.params.aspectRatio as MiniMaxH3Request["ratio"]),
+    aigc_watermark: false,
   };
 };
 
@@ -913,6 +985,8 @@ export const buildVideoApiRequest = (
       return buildKelingRequest(request);
     case "agnes-video-v2.0":
       return buildAgnesRequest(request);
+    case "MiniMax-H3":
+      return buildMiniMaxH3Request(request);
     default:
       return buildSeedanceRequest(request);
   }

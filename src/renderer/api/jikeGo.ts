@@ -27,7 +27,8 @@ export type DesktopProxyPlatform =
   | "toapi"
   | "zeakai"
   | "yunwu"
-  | "agnes";
+  | "agnes"
+  | "minimax";
 
 // ===================== 画质增强相关 =====================
 
@@ -100,6 +101,7 @@ export type DesktopProxyRequest = {
   scoreModel?: string;
   scoreSource?: string;
   scoreSourceLabel?: string;
+  coreSourceLabel?: string;
   scoreTaskId?: string;
 };
 

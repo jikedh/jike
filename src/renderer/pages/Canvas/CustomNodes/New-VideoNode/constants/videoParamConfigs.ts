@@ -560,6 +560,101 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
       agnesFrameRate: 24,
     },
   },
+  [byModeKey("MiniMax-H3", "text-to-video")]: {
+    modelId: "MiniMax-H3",
+    mode: "text-to-video",
+    aspectRatios: [
+      RATIO.cinema,
+      RATIO.wide,
+      RATIO.classic,
+      RATIO.square,
+      RATIO.portrait,
+      RATIO.vertical,
+    ],
+    qualityGroup: {
+      key: "resolution",
+      label: "分辨率",
+      options: [
+        { label: "768P", value: "768P" },
+        { label: "2K", value: "2K" },
+      ],
+    },
+    duration: { type: "slider", min: 4, max: 15, step: 1 },
+    audio,
+    defaults: {
+      aspectRatio: "16:9",
+      resolution: "768P",
+      duration: 5,
+      generateAudio: true,
+    },
+  },
+  [byModeKey("MiniMax-H3", "all-reference")]: {
+    modelId: "MiniMax-H3",
+    mode: "all-reference",
+    aspectRatios: [
+      RATIO.auto,
+      RATIO.cinema,
+      RATIO.wide,
+      RATIO.classic,
+      RATIO.square,
+      RATIO.portrait,
+      RATIO.vertical,
+    ],
+    qualityGroup: {
+      key: "resolution",
+      label: "分辨率",
+      options: [
+        { label: "768P", value: "768P" },
+        { label: "2K", value: "2K" },
+      ],
+    },
+    duration: { type: "slider", min: 4, max: 15, step: 1 },
+    audio,
+    defaults: {
+      aspectRatio: "adaptive",
+      resolution: "768P",
+      duration: 5,
+      generateAudio: true,
+    },
+  },
+  [byModeKey("MiniMax-H3", "image-to-video")]: {
+    modelId: "MiniMax-H3",
+    mode: "image-to-video",
+    qualityGroup: {
+      key: "resolution",
+      label: "分辨率",
+      options: [
+        { label: "768P", value: "768P" },
+        { label: "2K", value: "2K" },
+      ],
+    },
+    duration: { type: "slider", min: 4, max: 15, step: 1 },
+    audio,
+    defaults: {
+      resolution: "768P",
+      duration: 5,
+      generateAudio: true,
+    },
+  },
+  [byModeKey("MiniMax-H3", "first-last-frame")]: {
+    modelId: "MiniMax-H3",
+    mode: "first-last-frame",
+    qualityGroup: {
+      key: "resolution",
+      label: "分辨率",
+      options: [
+        { label: "768P", value: "768P" },
+        { label: "2K", value: "2K" },
+      ],
+    },
+    duration: { type: "slider", min: 4, max: 15, step: 1 },
+    audio,
+    defaults: {
+      resolution: "768P",
+      duration: 5,
+      generateAudio: true,
+    },
+  },
 };
 
 export const getVideoParamConfig = (modelId: string, mode?: VideoModeKey) =>

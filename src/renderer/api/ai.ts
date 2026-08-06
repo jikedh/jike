@@ -2,6 +2,11 @@ import { EventSourceParserStream } from "eventsource-parser/stream";
 import { jikeingService } from "service/aiRequest";
 import { BailianVideoGenerationRequest } from "shared/types/detail/Bailian/video";
 import { Seedance20Request } from "shared/types/detail/kuaizhi/Seedance-2.0";
+import type {
+  MiniMaxH3Request,
+  MiniMaxH3Response,
+  MiniMaxH3StatusResponse,
+} from "shared/types/detail/MiniMax/MiniMax-H3";
 import type { ToApiImageGenerationRequest } from "shared/types/detail/ToApi/images";
 import {
   AGNES_IMAGE_2_FLASH_MODEL,
@@ -406,8 +411,8 @@ export async function createAgnesImageGeneration(
     prompt: String(data.prompt ?? ""),
     size: isAgnesImage21
       ? normalizeAgnesImage21Resolution(
-          data.resolution ?? data.metadata?.resolution,
-        )
+        data.resolution ?? data.metadata?.resolution,
+      )
       : normalizeAgnesImageSize(data.size),
     extra_body: extraBody,
   };
@@ -907,6 +912,54 @@ export async function getAgnesVideoTaskStatus(videoId: string) {
     query: { video_id: videoId, model_name: "agnes-video-v2.0" },
   });
 
+  return unwrapDesktopProxyData(response);
+}
+
+export async function createMiniMaxH3VideoTask(
+  data: MiniMaxH3Request,
+  scoreCost?: number,
+): Promise<MiniMaxH3Response & { ledgerBizId?: string }> {
+  const response = await createDesktopProxyTask({
+    platform: "minimax",
+    upstreamPath: "/v2/video_generation",
+    method: "POST",
+    body: data,
+    scoreCost,
+    scoreBizType: "video",
+    scoreModel: data.model,
+    scoreSource: "minimax",
+    scoreSourceLabel: "MiniMax官方平台",
+    coreSourceLabel: "MiniMax官方平台",
+  });
+  const rawData = unwrapDesktopProxyData(response);
+  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
+
+  await aiVideoTrackingService.track({
+    apiName: "/v2/video_generation",
+    model: data.model,
+    taskId: responseData?.task_id ?? "",
+    prompt: extractPrompt(data),
+    duration: data.duration,
+    ratio: data.ratio ?? null,
+    resolution: data.resolution,
+    referenceImageUrls: extractReferenceImageUrls(data),
+    provider: "minimax",
+    requestParams: data as unknown as Record<string, unknown>,
+    status: responseData?.task_id ? "PENDING" : "FAIL",
+    scoreCost,
+  });
+
+  return ledgerBizId ? { ...responseData, ledgerBizId } : responseData;
+}
+
+export async function getMiniMaxH3VideoTaskStatus(
+  taskId: string,
+): Promise<MiniMaxH3StatusResponse> {
+  const response = await queryDesktopProxyTask({
+    platform: "minimax",
+    upstreamPath: `/v2/query/video_generation/${taskId}`,
+    method: "GET",
+  });
   return unwrapDesktopProxyData(response);
 }
 

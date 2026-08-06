@@ -272,6 +272,37 @@ export const normalizeVideoTaskResponse = (response: any) => {
     };
   }
 
+  if (response?.task && typeof response.task === "object") {
+    const task = response.task;
+    const rawStatus = String(task.status ?? "").toLowerCase();
+    const status =
+      rawStatus === "success" ||
+        rawStatus === "succeeded" ||
+        rawStatus === "completed"
+        ? GenerationStatus.COMPLETED
+        : rawStatus === "failed" ||
+          rawStatus === "error" ||
+          rawStatus === "cancelled"
+          ? GenerationStatus.FAILED
+          : rawStatus === "queued" || rawStatus === "pending"
+            ? GenerationStatus.QUEUED
+            : GenerationStatus.IN_PROGRESS;
+    const videoUrl = task.content?.url ?? task.video_url ?? task.url;
+    const videoItems = videoUrl ? [{ url: videoUrl, format: "mp4" }] : [];
+    return {
+      status,
+      progress:
+        status === GenerationStatus.COMPLETED ? 100 : task.progress ?? 50,
+      taskId: task.id ?? task.task_id,
+      videoItems,
+      missingResultUrl:
+        status === GenerationStatus.COMPLETED && videoItems.length === 0,
+      errorMessage:
+        task.error?.message ??
+        (typeof task.error === "string" ? task.error : undefined),
+    };
+  }
+
   if (isKuaiziResponse(response)) {
     const rawStatus = String(
       response?.output?.task_status ?? response?.data?.task_status ?? "",

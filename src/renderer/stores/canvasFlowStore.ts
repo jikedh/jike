@@ -88,6 +88,7 @@ import {
   createImageGeneration,
   extractAgnesImageUrls,
   createLzVideoTask,
+  createMiniMaxH3VideoTask,
   createOverseasSeedanceVideoTask,
   fetchMjTask,
   generateGeminiContent,
@@ -95,6 +96,7 @@ import {
   getDashscopeVideoTaskStatus,
   getImageTaskStatus,
   getLzVideoTaskStatus,
+  getMiniMaxH3VideoTaskStatus,
   getOverseasSeedanceVideoTaskStatus,
   submitMjImagine
 } from "@/api/ai";
@@ -1746,7 +1748,12 @@ const pollNewVideoGeneration = async ({
   taskIndex: number;
   totalTasks: number;
   ledgerBizId?: string;
-  videoProvider?: "seedance" | "seedance_global" | "dashscope" | "agnes";
+  videoProvider?:
+  | "seedance"
+  | "seedance_global"
+  | "dashscope"
+  | "agnes"
+  | "minimax";
 }) => {
   const startTime = Date.now();
   let missingResultUrlStartTime: number | null = null;
@@ -1796,9 +1803,11 @@ const pollNewVideoGeneration = async ({
             ? await getOverseasSeedanceVideoTaskStatus(taskId)
             : videoProvider === "agnes"
               ? await getAgnesVideoTaskStatus(taskId)
-              : isSeedance20
-                ? await getLzVideoTaskStatus(taskId)
-                : await getDashscopeVideoTaskStatus(taskId);
+              : videoProvider === "minimax"
+                ? await getMiniMaxH3VideoTaskStatus(taskId)
+                : isSeedance20
+                  ? await getLzVideoTaskStatus(taskId)
+                  : await getDashscopeVideoTaskStatus(taskId);
 
       const normalized = normalizeVideoTaskResponse(response);
       const normalizedTaskId = normalized.taskId ?? taskId;
@@ -2524,6 +2533,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                       "seedance-2.0-fast",
                       "seedance-2.0-mini",
                       "seedance-2.0-pro",
+                      "MiniMax-H3",
                       "wanxiang",
                       "vidu-q3-pro",
                       "vidu",
@@ -4317,6 +4327,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         model === "seedance-2.0-pro";
       const isOverseasSeedance20 =
         model === "dreamina-seedance-2-0-260128";
+      const isMiniMaxH3 = model === "MiniMax-H3";
 
       set((state) => ({
         nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
@@ -4361,6 +4372,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           } else if (model === "agnes-video-v2.0") {
             // Agnes 走独立桌面代理通道，避免被误归类为 dashscope / kuaizi。
             response = await createAgnesVideoTask(
+              requestPayload,
+              requiredPoints,
+            );
+          } else if (isMiniMaxH3) {
+            response = await createMiniMaxH3VideoTask(
               requestPayload,
               requiredPoints,
             );
@@ -4437,11 +4453,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             videoProvider:
               model === "agnes-video-v2.0"
                 ? "agnes"
-                : isOverseasSeedance20
-                  ? "seedance_global"
-                  : isSeedance20
-                    ? "seedance"
-                    : "dashscope",
+                : isMiniMaxH3
+                  ? "minimax"
+                  : isOverseasSeedance20
+                    ? "seedance_global"
+                    : isSeedance20
+                      ? "seedance"
+                      : "dashscope",
           });
         });
       } catch (startError) {
