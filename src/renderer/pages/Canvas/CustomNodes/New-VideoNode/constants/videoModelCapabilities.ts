@@ -289,6 +289,21 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
       },
     ],
   },
+  {
+    id: "MiniMax-H3",
+    label: "MiniMax H3",
+    variants: [
+      {
+        id: "MiniMax-H3",
+        supportedModes: [
+          "text-to-video",
+          "all-reference",
+          "image-to-video",
+          "first-last-frame",
+        ],
+      },
+    ],
+  },
 ];
 
 export const getVisibleVideoModels = () => MOCK_MAIN_MODELS;

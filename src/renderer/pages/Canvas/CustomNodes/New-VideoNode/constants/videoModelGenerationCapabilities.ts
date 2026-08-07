@@ -219,6 +219,54 @@ export const VIDEO_MODEL_GENERATION_CAPABILITIES: Record<
       "image-to-video": { references: onlyImages(1, 10) },
     },
   },
+  "MiniMax-H3": {
+    modes: {
+      "text-to-video": {
+        references: emptyReferences,
+        params: {
+          duration: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+          resolution: ["768P", "2K"],
+          ratio: ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"],
+        },
+      },
+      "all-reference": {
+        references: {
+          image: { max: 9 },
+          video: { max: 3 },
+          audio: { max: 3 },
+          maxVisualReferences: 12,
+          requireAnyReference: true,
+        },
+        params: {
+          duration: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+          resolution: ["768P", "2K"],
+          ratio: [
+            "adaptive",
+            "21:9",
+            "16:9",
+            "4:3",
+            "1:1",
+            "3:4",
+            "9:16",
+          ],
+        },
+      },
+      "image-to-video": {
+        references: onlyImages(1, 1),
+        params: {
+          duration: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+          resolution: ["768P", "2K"],
+        },
+      },
+      "first-last-frame": {
+        references: onlyImages(2, 2),
+        params: {
+          duration: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+          resolution: ["768P", "2K"],
+        },
+      },
+    },
+  },
 };
 const getModelLabel = (modelId: string) =>
   MOCK_MAIN_MODELS.find((model) => model.id === modelId)?.label ?? modelId;
