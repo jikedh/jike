@@ -42,7 +42,7 @@ import {
 } from "@/components/ui/pagination";
 import type { ProjectListItem } from "shared/types/api/projects";
 
-const SHARE_UUID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const SHARE_USER_IDENTIFIER_PATTERN = /^(?:[A-Za-z0-9_-]{1,64}|[1-9]\d{0,18})$/;
 
 const escapeRegExp = (value: string) => {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -131,7 +131,7 @@ export default function CanvasPlaceholderPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
-  const [targetUuid, setTargetUuid] = useState("");
+  const [targetUserIdentifier, setTargetUserIdentifier] = useState("");
   const [shareError, setShareError] = useState("");
   const [exportingProjectId, setExportingProjectId] = useState<string | null>(
     null,
@@ -234,27 +234,27 @@ export default function CanvasPlaceholderPage() {
   const openShareDialog = (e: React.MouseEvent, project: ProjectListItem) => {
     e.stopPropagation();
     setProjectToShare(project);
-    setTargetUuid("");
+    setTargetUserIdentifier("");
     setShareError("");
   };
 
   const closeShareDialog = () => {
     if (isSharing) return;
     setProjectToShare(null);
-    setTargetUuid("");
+    setTargetUserIdentifier("");
     setShareError("");
   };
 
   const handleConfirmShare = async () => {
     if (!projectToShare) return;
 
-    const uuid = targetUuid.trim();
-    if (!uuid) {
-      setShareError("请输入要分享的用户 UUID");
+    const userIdentifier = targetUserIdentifier.trim();
+    if (!userIdentifier) {
+      setShareError("请输入要分享的用户 UUID 或 ID");
       return;
     }
-    if (!SHARE_UUID_PATTERN.test(uuid)) {
-      setShareError("UUID 仅支持 1-64 位字母、数字、下划线或短横线");
+    if (!SHARE_USER_IDENTIFIER_PATTERN.test(userIdentifier)) {
+      setShareError("请输入有效的用户 UUID 或 ID");
       return;
     }
 
@@ -262,13 +262,13 @@ export default function CanvasPlaceholderPage() {
     setShareError("");
     try {
       const result = await shareProject(projectToShare.id, {
-        target_uuid: uuid,
+        target_uuid: userIdentifier,
       });
       toast.success("分享成功", {
         description: `已为目标用户创建项目「${result.data.name}」`,
       });
       setProjectToShare(null);
-      setTargetUuid("");
+      setTargetUserIdentifier("");
     } catch (error: any) {
       console.error("Failed to share project:", error);
       setShareError(error?.response?.data?.msg || "分享项目失败，请稍后重试");
@@ -700,16 +700,16 @@ export default function CanvasPlaceholderPage() {
 
               <div>
                 <label className="text-sm font-medium text-white/70 block mb-2">
-                  目标用户 UUID
+                  目标用户 UUID 或 ID
                 </label>
                 <input
                   type="text"
-                  value={targetUuid}
+                  value={targetUserIdentifier}
                   onChange={(e) => {
-                    setTargetUuid(e.target.value);
+                    setTargetUserIdentifier(e.target.value);
                     if (shareError) setShareError("");
                   }}
-                  placeholder="输入要分享给的用户 UUID"
+                  placeholder="输入要分享给的用户 UUID 或 ID"
                   disabled={isSharing}
                   className={`w-full bg-black/50 border rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-white/30 focus:ring-1 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed ${shareError
                     ? "border-red-500/60 focus:border-red-500 focus:ring-red-500"
@@ -720,7 +720,7 @@ export default function CanvasPlaceholderPage() {
                   <p className="mt-2 text-xs text-red-400">{shareError}</p>
                 ) : (
                   <p className="mt-2 text-xs text-white/40">
-                    UUID 为目标用户个人中心头像点击之后出现的12 位字符串。
+                    可输入个人中心显示的 UUID，或用户 ID。
                   </p>
                 )}
               </div>
