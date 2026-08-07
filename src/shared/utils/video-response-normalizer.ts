@@ -140,46 +140,6 @@ const getErrorMessage = (response: any, fallbackMessage: string) => {
   return JSON.stringify(message);
 };
 
-/**
- * 判断是否为 wan2.7-i2v 响应格式
- * wan2.7-i2v 响应结构: { output: { task_status, video_url, ... } }
- */
-const isWan27I2vResponse = (response: any): boolean => {
-  return response?.output?.task_status !== undefined;
-};
-
-const isKuaiziResponse = (response: any): boolean =>
-  response?.output?.task_status !== undefined ||
-  response?.data?.task_status !== undefined;
-
-// Agnes-Video-V2.0 响应在顶层以 status: queued/in_progress/completed/failed 标识。
-const isAgnesVideoResponse = (response: any): boolean => {
-  const status = response?.status;
-  return (
-    status === "queued" ||
-    status === "in_progress" ||
-    status === "completed" ||
-    status === "failed"
-  );
-};
-
-const isOverseasSeedanceResponse = (response: any): boolean => {
-  const status = response?.status ?? response?.data?.status;
-  const hasAgnesVideoId = Boolean(response?.video_id ?? response?.data?.video_id);
-  const hasOverseasSeedanceShape = Boolean(
-    response?.id ?? response?.data?.id ?? response?.content ?? response?.data?.content,
-  );
-  return (
-    !hasAgnesVideoId &&
-    hasOverseasSeedanceShape &&
-    (status === "queued" ||
-      status === "running" ||
-      status === "succeeded" ||
-      status === "failed" ||
-      status === "expired")
-  );
-};
-
 const agnesVideoStatusMap: Record<string, GenerationStatus> = {
   queued: GenerationStatus.QUEUED,
   in_progress: GenerationStatus.IN_PROGRESS,
@@ -187,126 +147,125 @@ const agnesVideoStatusMap: Record<string, GenerationStatus> = {
   failed: GenerationStatus.FAILED,
 };
 
-export const normalizeVideoTaskResponse = (response: any) => {
-  if (isOverseasSeedanceResponse(response)) {
-    const rawStatus = String(response?.status ?? response?.data?.status ?? "");
-    const taskId = response?.id ?? response?.data?.id ?? response?.task_id;
-    const progress =
-      rawStatus === "succeeded"
-        ? 100
-        : response?.progress ?? response?.data?.progress ?? 0;
-    const videoItems = extractOverseasSeedanceVideoItems(response);
+const normalizeOverseasSeedanceResponse = (response: any) => {
+  const rawStatus = String(response?.status ?? response?.data?.status ?? "");
+  const taskId = response?.id ?? response?.data?.id ?? response?.task_id;
+  const progress =
+    rawStatus === "succeeded"
+      ? 100
+      : response?.progress ?? response?.data?.progress ?? 0;
+  const videoItems = extractOverseasSeedanceVideoItems(response);
 
-    if (rawStatus === "succeeded") {
-      return {
-        status: GenerationStatus.COMPLETED,
-        progress: 100,
-        taskId,
-        videoItems,
-        missingResultUrl: videoItems.length === 0,
-        errorMessage: undefined,
-      };
-    }
-
-    if (rawStatus === "failed" || rawStatus === "expired") {
-      return {
-        status: GenerationStatus.FAILED,
-        progress,
-        taskId,
-        videoItems: [],
-        missingResultUrl: false,
-        errorMessage: getErrorMessage(response, "生成失败，请稍后再试"),
-      };
-    }
-
+  if (rawStatus === "succeeded") {
     return {
-      status:
-        rawStatus === "queued"
+      status: GenerationStatus.COMPLETED,
+      progress: 100,
+      taskId,
+      videoItems,
+      missingResultUrl: videoItems.length === 0,
+      errorMessage: undefined,
+    };
+  }
+
+  if (rawStatus === "failed" || rawStatus === "expired") {
+    return {
+      status: GenerationStatus.FAILED,
+      progress,
+      taskId,
+      videoItems: [],
+      missingResultUrl: false,
+      errorMessage: getErrorMessage(response, "生成失败，请稍后再试"),
+    };
+  }
+
+  return {
+    status:
+      rawStatus === "queued"
+        ? GenerationStatus.QUEUED
+        : GenerationStatus.IN_PROGRESS,
+    progress,
+    taskId,
+    videoItems,
+    missingResultUrl: false,
+    errorMessage: undefined,
+  };
+};
+
+const normalizeAgnesVideoResponse = (response: any) => {
+  const rawStatus = String(response?.status ?? "");
+  const taskId = response?.video_id ?? response?.id ?? response?.task_id;
+  const progress = response?.progress ?? 0;
+  const videoItems = extractAgnesVideoItems(response);
+
+  if (rawStatus === "completed") {
+    return {
+      status: GenerationStatus.COMPLETED,
+      progress: 100,
+      taskId,
+      videoItems,
+      missingResultUrl: videoItems.length === 0,
+      errorMessage: undefined,
+    };
+  }
+
+  if (rawStatus === "failed") {
+    return {
+      status: GenerationStatus.FAILED,
+      progress,
+      taskId,
+      videoItems: [],
+      missingResultUrl: false,
+      errorMessage: getErrorMessage(response, "生成失败，请稍后再试"),
+    };
+  }
+
+  return {
+    status: agnesVideoStatusMap[rawStatus] ?? GenerationStatus.IN_PROGRESS,
+    progress,
+    taskId,
+    videoItems,
+    missingResultUrl: false,
+    errorMessage: undefined,
+  };
+};
+
+const normalizeMiniMaxVideoResponse = (response: any) => {
+  const task = response?.task ?? {};
+  const rawStatus = String(task.status ?? "").toLowerCase();
+  const status =
+    rawStatus === "success" ||
+      rawStatus === "succeeded" ||
+      rawStatus === "completed"
+      ? GenerationStatus.COMPLETED
+      : rawStatus === "failed" ||
+        rawStatus === "error" ||
+        rawStatus === "cancelled"
+        ? GenerationStatus.FAILED
+        : rawStatus === "queued" || rawStatus === "pending"
           ? GenerationStatus.QUEUED
-          : GenerationStatus.IN_PROGRESS,
-      progress,
-      taskId,
-      videoItems,
-      missingResultUrl: false,
-      errorMessage: undefined,
-    };
-  }
+          : GenerationStatus.IN_PROGRESS;
+  const videoUrl = task.content?.url ?? task.video_url ?? task.url;
+  const videoItems = videoUrl ? [{ url: videoUrl, format: "mp4" }] : [];
 
-  // Agnes-Video-V2.0 优先识别，避免与 kuaizi/dashscope 格式混淆
-  if (isAgnesVideoResponse(response)) {
-    const rawStatus = String(response?.status ?? "");
-    const taskId = response?.video_id ?? response?.id ?? response?.task_id;
-    const progress = response?.progress ?? 0;
-    const videoItems = extractAgnesVideoItems(response);
+  return {
+    status,
+    progress: status === GenerationStatus.COMPLETED ? 100 : task.progress ?? 50,
+    taskId: task.id ?? task.task_id,
+    videoItems,
+    missingResultUrl:
+      status === GenerationStatus.COMPLETED && videoItems.length === 0,
+    errorMessage:
+      task.error?.message ??
+      (typeof task.error === "string" ? task.error : undefined),
+  };
+};
 
-    if (rawStatus === "completed") {
-      return {
-        status: GenerationStatus.COMPLETED,
-        progress: 100,
-        taskId,
-        videoItems,
-        missingResultUrl: videoItems.length === 0,
-        errorMessage: undefined,
-      };
-    }
+const normalizeKuaiziVideoResponse = (response: any) => {
+  const taskStatus =
+    response?.output?.task_status ?? response?.data?.task_status;
 
-    if (rawStatus === "failed") {
-      return {
-        status: GenerationStatus.FAILED,
-        progress,
-        taskId,
-        videoItems: [],
-        missingResultUrl: false,
-        errorMessage: getErrorMessage(response, "生成失败，请稍后再试"),
-      };
-    }
-
-    return {
-      status:
-        agnesVideoStatusMap[rawStatus] ?? GenerationStatus.IN_PROGRESS,
-      progress,
-      taskId,
-      videoItems,
-      missingResultUrl: false,
-      errorMessage: undefined,
-    };
-  }
-
-  if (response?.task && typeof response.task === "object") {
-    const task = response.task;
-    const rawStatus = String(task.status ?? "").toLowerCase();
-    const status =
-      rawStatus === "success" ||
-        rawStatus === "succeeded" ||
-        rawStatus === "completed"
-        ? GenerationStatus.COMPLETED
-        : rawStatus === "failed" ||
-          rawStatus === "error" ||
-          rawStatus === "cancelled"
-          ? GenerationStatus.FAILED
-          : rawStatus === "queued" || rawStatus === "pending"
-            ? GenerationStatus.QUEUED
-            : GenerationStatus.IN_PROGRESS;
-    const videoUrl = task.content?.url ?? task.video_url ?? task.url;
-    const videoItems = videoUrl ? [{ url: videoUrl, format: "mp4" }] : [];
-    return {
-      status,
-      progress:
-        status === GenerationStatus.COMPLETED ? 100 : task.progress ?? 50,
-      taskId: task.id ?? task.task_id,
-      videoItems,
-      missingResultUrl:
-        status === GenerationStatus.COMPLETED && videoItems.length === 0,
-      errorMessage:
-        task.error?.message ??
-        (typeof task.error === "string" ? task.error : undefined),
-    };
-  }
-
-  if (isKuaiziResponse(response)) {
-    const rawStatus = String(
-      response?.output?.task_status ?? response?.data?.task_status ?? "",
-    ).toUpperCase();
+  if (taskStatus !== undefined) {
+    const rawStatus = String(taskStatus).toUpperCase();
     const taskId =
       response?.output?.task_id ?? response?.data?.task_id ?? response?.task_id;
     const progress = rawStatus === "SUCCEEDED" ? 100 : 0;
@@ -343,46 +302,7 @@ export const normalizeVideoTaskResponse = (response: any) => {
       errorMessage: undefined,
     };
   }
-  // wan2.7-i2v 响应格式
-  if (isWan27I2vResponse(response)) {
-    const rawStatus = response?.output?.task_status;
-    const taskId = response?.output?.task_id;
-    const progress = rawStatus === "SUCCEEDED" ? 100 : 0;
-    const videoItems = extractWan27I2vVideoItems(response);
 
-    if (rawStatus === "SUCCEEDED") {
-      return {
-        status: GenerationStatus.COMPLETED,
-        progress: 100,
-        taskId,
-        videoItems,
-        missingResultUrl: videoItems.length === 0,
-        errorMessage: undefined,
-      };
-    }
-
-    if (rawStatus === "FAILED") {
-      return {
-        status: GenerationStatus.FAILED,
-        progress,
-        taskId,
-        videoItems: [],
-        missingResultUrl: false,
-        errorMessage: getErrorMessage(response, "生成失败，请稍后再试"),
-      };
-    }
-
-    return {
-      status: wan27I2vStatusMap[rawStatus] ?? GenerationStatus.IN_PROGRESS,
-      progress,
-      taskId,
-      videoItems,
-      missingResultUrl: false,
-      errorMessage: undefined,
-    };
-  }
-
-  // 快手/Seedance 2.0 响应格式
   const rawStatus = response?.data?.status;
   const taskId = response?.data?.task_id;
   const progress = response?.data?.progress ?? 0;
@@ -423,5 +343,84 @@ export const normalizeVideoTaskResponse = (response: any) => {
     videoItems,
     missingResultUrl: false,
     errorMessage: undefined,
+  };
+};
+
+const normalizeWan27VideoResponse = (response: any) => {
+  const rawStatus = response?.output?.task_status;
+  const taskId = response?.output?.task_id;
+  const progress = rawStatus === "SUCCEEDED" ? 100 : 0;
+  const videoItems = extractWan27I2vVideoItems(response);
+
+  if (rawStatus === "SUCCEEDED") {
+    return {
+      status: GenerationStatus.COMPLETED,
+      progress: 100,
+      taskId,
+      videoItems,
+      missingResultUrl: videoItems.length === 0,
+      errorMessage: undefined,
+    };
+  }
+
+  if (rawStatus === "FAILED") {
+    return {
+      status: GenerationStatus.FAILED,
+      progress,
+      taskId,
+      videoItems: [],
+      missingResultUrl: false,
+      errorMessage: getErrorMessage(response, "生成失败，请稍后再试"),
+    };
+  }
+
+  return {
+    status: wan27I2vStatusMap[rawStatus] ?? GenerationStatus.IN_PROGRESS,
+    progress,
+    taskId,
+    videoItems,
+    missingResultUrl: false,
+    errorMessage: undefined,
+  };
+};
+
+const videoResponseNormalizerMap: Record<string, (response: any) => any> = {
+  kuaizi: normalizeKuaiziVideoResponse,
+  "seedance-2.0-fast": normalizeKuaiziVideoResponse,
+  "seedance-2.0-mini": normalizeKuaiziVideoResponse,
+  "seedance-2.0-pro": normalizeKuaiziVideoResponse,
+  "doubao-seedance-2.0-fast": normalizeKuaiziVideoResponse,
+  "doubao-seedance-2.0-mini": normalizeKuaiziVideoResponse,
+  "doubao-seedance-2.0-pro": normalizeKuaiziVideoResponse,
+  kuaizi_global: normalizeOverseasSeedanceResponse,
+  "dreamina-seedance-2-0-260128": normalizeOverseasSeedanceResponse,
+  agnes: normalizeAgnesVideoResponse,
+  "agnes-video-v2.0": normalizeAgnesVideoResponse,
+  minimax: normalizeMiniMaxVideoResponse,
+  "minimax-h3": normalizeMiniMaxVideoResponse,
+  dashscope: normalizeWan27VideoResponse,
+  "wan2.7-t2v": normalizeWan27VideoResponse,
+  "wan2.7-i2v": normalizeWan27VideoResponse,
+  "wan2.7-r2v": normalizeWan27VideoResponse,
+};
+
+export const normalizeVideoTaskResponse = (response: any) => {
+  const modal =
+    typeof response?.modal === "string" ? response.modal.trim().toLowerCase() : "";
+  const normalizer = videoResponseNormalizerMap[modal];
+
+  if (normalizer) {
+    return normalizer(response);
+  }
+
+  return {
+    status: GenerationStatus.FAILED,
+    progress: 0,
+    taskId: undefined,
+    videoItems: [],
+    missingResultUrl: false,
+    errorMessage: modal
+      ? `不支持的视频响应来源：${response.modal}`
+      : "视频任务响应缺少 modal 字段",
   };
 };
