@@ -17,6 +17,7 @@ import {
 } from "../constants/mockData";
 import type { VideoModeKey } from "../constants/videoModelCapabilities";
 import type { VideoParamState } from "../constants/videoParamConfigs";
+import { VideoModelHelpTooltip } from "./VideoModelHelpTooltip";
 import { VideoParamsPopover } from "./VideoParamsPopover";
 
 // UI 层请求体（捕获面板状态）
@@ -67,8 +68,8 @@ export const BottomParamsBar = ({
 }: BottomParamsBarProps) => {
   const wanReferenceDurationMax =
     selectedModel === "wanxiang" &&
-    mode === "all-reference" &&
-    referenceItems.some((item) => item.type === "video")
+      mode === "all-reference" &&
+      referenceItems.some((item) => item.type === "video")
       ? 10
       : undefined;
 
@@ -86,6 +87,7 @@ export const BottomParamsBar = ({
   return (
     <div className={PROMPT_PANEL_STYLES.controlArea}>
       <div className="flex items-center gap-2">
+        <VideoModelHelpTooltip modelId={selectedModel} />
         <Select value={selectedModel} onValueChange={onModelChange}>
           <SelectTrigger size="sm" className={PROMPT_PANEL_STYLES.modelSelect}>
             <SelectValue />
