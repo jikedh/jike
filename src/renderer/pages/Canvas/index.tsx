@@ -1,4 +1,4 @@
-import { IconMessageCircle } from "@tabler/icons-react";
+import { IconMessageCircle, IconSparkles } from "@tabler/icons-react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
@@ -15,6 +15,7 @@ import { CanvasChatToolbar } from "./components/CanvasChatToolbar";
 import { CanvasFlow } from "./components/CanvasFlow";
 import { CanvasSidebar } from "./components/CanvasSidebar";
 import { ChatDrawer } from "./components/ChatDrawer";
+import { HermesDrawer } from "./components/HermesDrawer";
 import ReactFlowDevTools from "./DevTools";
 
 const CANVAS_READY_MIN_VISIBLE_MS = 900;
@@ -46,7 +47,8 @@ const getCanvasPreviewImages = (nodes: AllNodeType[]) => {
     }
 
     const firstImage = node.data?.result?.data?.find((item) => item?.url);
-    const url = firstImage?.displayUrl || firstImage?.url || firstImage?.remoteUrl;
+    const url =
+      firstImage?.displayUrl || firstImage?.url || firstImage?.remoteUrl;
     if (url) {
       images.push(url);
     }
@@ -66,8 +68,11 @@ const CanvasPage = () => {
   // 从路由参数获取项目 ID
   const { projectId } = useParams<{ projectId: string }>();
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isHermesOpen, setIsHermesOpen] = useState(false);
   const isInternalUser = useUserStore((state) => state.isInternalUser);
-  const [isProjectEntering, setIsProjectEntering] = useState(Boolean(projectId));
+  const [isProjectEntering, setIsProjectEntering] = useState(
+    Boolean(projectId),
+  );
   const [hasProjectEntered, setHasProjectEntered] = useState(!projectId);
   const enteredProjectRef = useRef<string | null>(null);
   const {
@@ -165,7 +170,10 @@ const CanvasPage = () => {
           }
           transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
         >
-          <CanvasFlow projectId={projectId} isMiniMapVisible={isMiniMapVisible} />
+          <CanvasFlow
+            projectId={projectId}
+            isMiniMapVisible={isMiniMapVisible}
+          />
 
           {/* 悬浮侧边栏：与 CanvasFlow 同级，避免节点移动时不必要重渲染。 */}
           <CanvasSidebar />
@@ -178,29 +186,46 @@ const CanvasPage = () => {
 
           {isInternalUser && (
             <>
-          <button
-            type="button"
-            title="打开 AI 对话"
-            className={cn(
-              "fixed right-6 bottom-6 z-50 flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-[0_10px_24px_rgba(37,99,235,0.35)] transition-colors",
-              isChatOpen ? "bg-blue-500" : "bg-blue-600 hover:bg-blue-500",
-            )}
-            onClick={() => setIsChatOpen(true)}
-          >
-            <IconMessageCircle size={18} />
-          </button>
+              <button
+                type="button"
+                title="打开 Hermes Agent"
+                className={cn(
+                  "fixed right-6 bottom-[84px] z-50 flex h-11 w-11 items-center justify-center rounded-xl bg-violet-600 text-white shadow-[0_10px_24px_rgba(124,58,237,0.4)] transition-colors hover:bg-violet-500",
+                  isHermesOpen && "bg-violet-500",
+                )}
+                onClick={() => setIsHermesOpen(true)}
+              >
+                <IconSparkles size={18} />
+              </button>
 
-          <ChatDrawer
-            open={isChatOpen}
-            onClose={() => setIsChatOpen(false)}
-            messages={messages}
-            isLoading={isLoading}
-            sendMessage={sendMessage}
-            retryMessage={retryMessage}
-            stopMessage={stopMessage}
-            clearLocalMessages={clearLocalMessages}
-            setMessages={setMessages}
-          />
+              <HermesDrawer
+                open={isHermesOpen}
+                onClose={() => setIsHermesOpen(false)}
+              />
+
+              <button
+                type="button"
+                title="打开 AI 对话"
+                className={cn(
+                  "fixed right-6 bottom-6 z-50 flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-[0_10px_24px_rgba(37,99,235,0.35)] transition-colors",
+                  isChatOpen ? "bg-blue-500" : "bg-blue-600 hover:bg-blue-500",
+                )}
+                onClick={() => setIsChatOpen(true)}
+              >
+                <IconMessageCircle size={18} />
+              </button>
+
+              <ChatDrawer
+                open={isChatOpen}
+                onClose={() => setIsChatOpen(false)}
+                messages={messages}
+                isLoading={isLoading}
+                sendMessage={sendMessage}
+                retryMessage={retryMessage}
+                stopMessage={stopMessage}
+                clearLocalMessages={clearLocalMessages}
+                setMessages={setMessages}
+              />
             </>
           )}
 
@@ -210,12 +235,7 @@ const CanvasPage = () => {
 
         <AnimatePresence>
           {isProjectEntering ? (
-            <CinematicProjectLoader
-              fixed
-              instant
-              title=""
-              subtitle=""
-            />
+            <CinematicProjectLoader fixed instant title="" subtitle="" />
           ) : null}
         </AnimatePresence>
       </div>
