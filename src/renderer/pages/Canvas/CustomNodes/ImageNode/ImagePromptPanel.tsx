@@ -1,9 +1,10 @@
 ﻿import { arrayMove } from "@dnd-kit/sortable";
-import { IconX } from "@tabler/icons-react";
+import { IconPhoto, IconX } from "@tabler/icons-react";
 import Mention from "@tiptap/extension-mention";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ImageReferenceThumbnails } from "./components/ImageReferenceThumbnails";
 import {
   AGNES_IMAGE_21_FLASH_MODEL,
@@ -19,7 +20,7 @@ import { GenerationStatus } from "shared/constants/enum";
 import { getImageGenerationPoints } from "shared/constants/model-points";
 import type { ImageGenerationNode, NoteNodeData } from "shared/types/flow";
 import { getRemoteMediaUrl } from "shared/utils/mediaPersistence";
-import { cn } from "shared/utils/utils";
+import { cn, toChineseNumber } from "shared/utils/utils";
 import { useShallow } from "zustand/react/shallow";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { PresetDropdown } from "@/components/PresetDropdown";
@@ -57,7 +58,7 @@ import {
   SEEDREAM_RESOLUTIONS,
   SeedreamParamsPanel
 } from "./components/SeedreamParamsPanel";
-import { COMMAND_MOCK, MENTION_MOCK } from "./mock";
+import { COMMAND_MOCK } from "./mock";
 
 const ReferenceItemWrapper = ({
   children,
@@ -172,6 +173,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     null,
   );
   const [activeIndex, setActiveIndex] = useState(0);
+  const [mentionPreview, setMentionPreview] = useState<{
+    src: string;
+    label: string;
+    left: number;
+    top: number;
+  } | null>(null);
 
   // 消息提示（成功/失败/警告）
   const { success, error, warning } = useMessage();
@@ -446,9 +453,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const getMentionLabel = (attrs: {
     id?: string;
     label?: string;
+    displayLabel?: string;
     value?: string;
   }) => {
-    return attrs.label || attrs.value || attrs.id || "";
+    return attrs.displayLabel || attrs.label || attrs.value || attrs.id || "";
   };
 
   const disableBuiltInSuggestion = {
@@ -462,17 +470,90 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   };
 
   const mentionExtension = useMemo(() => {
-    return Mention.configure({
+    return Mention.extend({
+      parseHTML() {
+        return [{ tag: "span[data-mention-id]" }];
+      },
+      addAttributes() {
+        return {
+          ...this.parent?.(),
+          thumbnail: {
+            default: null,
+            parseHTML: (element) => element.getAttribute("data-thumbnail"),
+            renderHTML: (attributes) =>
+              attributes.thumbnail
+                ? { "data-thumbnail": attributes.thumbnail }
+                : {},
+          },
+          originalLabel: {
+            default: null,
+            parseHTML: (element) =>
+              element.getAttribute("data-mention-original-label"),
+            renderHTML: (attributes) =>
+              attributes.originalLabel
+                ? { "data-mention-original-label": attributes.originalLabel }
+                : {},
+          },
+          displayLabel: {
+            default: null,
+            parseHTML: (element) =>
+              element.getAttribute("data-mention-display-label"),
+            renderHTML: (attributes) =>
+              attributes.displayLabel
+                ? { "data-mention-display-label": attributes.displayLabel }
+                : {},
+          },
+          type: {
+            default: "image",
+            parseHTML: (element) =>
+              element.getAttribute("data-mention-kind") || "image",
+            renderHTML: (attributes) => ({
+              "data-mention-kind": attributes.type || "image",
+            }),
+          },
+          url: {
+            default: null,
+            parseHTML: (element) => element.getAttribute("data-url"),
+            renderHTML: (attributes) =>
+              attributes.url ? { "data-url": attributes.url } : {},
+          },
+        };
+      },
+      draggable: true,
+    }).configure({
       deleteTriggerWithBackspace: true,
       HTMLAttributes: {
-        class: "image-node-mention-pill",
+        class: "video-node-mention-pill",
+        draggable: "true",
       },
-      renderText({ options, node }) {
+      renderText({ node }) {
         const mentionLabel = getMentionLabel(node.attrs);
-        return `${options.suggestion.char}${mentionLabel}`;
+        return mentionLabel;
       },
       renderHTML({ options, node }) {
         const mentionLabel = getMentionLabel(node.attrs);
+        const originalLabel =
+          (node.attrs.originalLabel as string | undefined) ?? mentionLabel;
+        const thumbnail = node.attrs.thumbnail as string | undefined;
+
+        const children: any[] = [];
+        if (thumbnail) {
+          children.push([
+            "img",
+            {
+              class: "video-node-mention-pill__thumbnail",
+              src: thumbnail,
+              alt: originalLabel,
+              draggable: "false",
+            },
+          ]);
+        }
+        children.push([
+          "span",
+          { class: "video-node-mention-pill__label" },
+          mentionLabel,
+        ]);
+
         return [
           "span",
           {
@@ -480,9 +561,15 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             "data-mention-id": node.attrs.id,
             "data-mention-value": node.attrs.value,
             "data-mention-label": mentionLabel,
+            "data-mention-display-label": mentionLabel,
+            "data-mention-original-label": originalLabel,
+            "data-thumbnail": thumbnail,
+            "data-url": node.attrs.url,
             contenteditable: "false",
+            draggable: "true",
+            title: originalLabel,
           },
-          `${options.suggestion.char}${mentionLabel}`,
+          ...children,
         ];
       },
       // 这里禁用内建 suggestion UI，改为当前组件自己的下拉面板实现
@@ -533,14 +620,28 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
   const insertSuggestionNode = (
     mode: "mention" | "command",
-    item: (typeof MENTION_MOCK)[number] | (typeof COMMAND_MOCK)[number],
+    item:
+      | {
+        id: string;
+        label: string;
+        displayLabel: string;
+        value: string;
+        thumbnail: string;
+      }
+      | (typeof COMMAND_MOCK)[number],
   ) => {
     if (!triggerRangeRef.current) {
       return;
     }
 
     if (mode === "mention") {
-      const selected = item as (typeof MENTION_MOCK)[number];
+      const selected = item as {
+        id: string;
+        label: string;
+        displayLabel: string;
+        value: string;
+        thumbnail: string;
+      };
 
       editor
         ?.chain()
@@ -550,8 +651,13 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             type: "mention",
             attrs: {
               id: selected.id,
-              label: selected.label,
-              value: selected.value || selected.label,
+              label: selected.displayLabel,
+              displayLabel: selected.displayLabel,
+              originalLabel: selected.label,
+              value: selected.value,
+              thumbnail: selected.thumbnail,
+              type: "image",
+              url: selected.value,
             },
           },
           {
@@ -637,21 +743,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     });
   }, [commandQuery]);
 
-  const filteredMentionItems = useMemo(() => {
-    const q = mentionQuery.trim().toLowerCase();
-    const all = [...MENTION_MOCK];
-    if (!q) {
-      return all;
-    }
-    return all.filter((item) => {
-      return (
-        item.label.toLowerCase().includes(q) ||
-        item.value.toLowerCase().includes(q) ||
-        item.description.toLowerCase().includes(q)
-      );
-    });
-  }, [mentionQuery]);
-
   // 沿着边找所有父节点，并合并其第一张图片作为参考图来源
   const parentImageEntryValues = useCanvasFlowStore(
     useShallow((state) => {
@@ -706,6 +797,31 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     () => parentImageNodes.map((item) => item.url),
     [parentImageNodes],
   );
+
+  const imageMentionItems = useMemo(
+    () =>
+      parentImageNodes.map((item, index) => ({
+        id: `parent-image-${item.id}`,
+        label: "参考图",
+        displayLabel: `图片${toChineseNumber(index + 1)}`,
+        value: item.url,
+        thumbnail: item.url,
+      })),
+    [parentImageNodes],
+  );
+
+  const filteredMentionItems = useMemo(() => {
+    const query = mentionQuery.trim().toLowerCase();
+    if (!query) {
+      return imageMentionItems;
+    }
+
+    return imageMentionItems.filter((item) =>
+      [item.label, item.displayLabel].some((value) =>
+        value.toLowerCase().includes(query),
+      ),
+    );
+  }, [imageMentionItems, mentionQuery]);
 
   // 断开连接时，同步清理 midjourneyAdvanced 中的 URL
   const handleDisconnectNode = useCallback(
@@ -1074,7 +1190,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         "\n",
         "\0",
       );
-      const mentionMatch = plainText.match(/(^|\s)@([^\s@]*)$/);
+      const mentionMatch = plainText.match(/@([^\s@]*)$/);
       const commandMatch = plainText.match(/(^|\s)\/([^\s/]*)$/);
 
       if (mentionMatch) {
@@ -1121,6 +1237,162 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
     editor.commands.setContent(promptDraftHtml, { emitUpdate: false });
   }, [editor, promptDraftHtml]);
+
+  useEffect(() => {
+    if (!editor || imageMentionItems.length === 0) {
+      return;
+    }
+
+    const mentionMap = new Map(imageMentionItems.map((item) => [item.id, item]));
+    let transaction = editor.state.tr;
+    let changed = false;
+
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name !== "mention") {
+        return true;
+      }
+
+      const item = mentionMap.get(String(node.attrs.id ?? ""));
+      if (!item) {
+        return true;
+      }
+
+      if (
+        node.attrs.displayLabel === item.displayLabel &&
+        node.attrs.label === item.displayLabel &&
+        node.attrs.thumbnail === item.thumbnail &&
+        node.attrs.url === item.value
+      ) {
+        return true;
+      }
+
+      transaction = transaction.setNodeMarkup(pos, undefined, {
+        ...node.attrs,
+        label: item.displayLabel,
+        displayLabel: item.displayLabel,
+        originalLabel: item.label,
+        value: item.value,
+        thumbnail: item.thumbnail,
+        type: "image",
+        url: item.value,
+      });
+      changed = true;
+      return true;
+    });
+
+    if (changed) {
+      editor.view.dispatch(transaction);
+    }
+  }, [editor, imageMentionItems]);
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    const editorDom = editor.view.dom;
+
+    const getMentionPill = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) {
+        return null;
+      }
+
+      const mentionPill = target.closest(".video-node-mention-pill");
+      if (!(mentionPill instanceof HTMLElement)) {
+        return null;
+      }
+
+      const thumbnail =
+        mentionPill.dataset.thumbnail ||
+        mentionPill.querySelector<HTMLImageElement>(
+          ".video-node-mention-pill__thumbnail",
+        )?.src;
+      if (!thumbnail) {
+        return null;
+      }
+
+      return { element: mentionPill, thumbnail };
+    };
+
+    const handleMouseOver = (event: MouseEvent) => {
+      const result = getMentionPill(event.target);
+      if (!result) {
+        return;
+      }
+
+      if (
+        event.relatedTarget instanceof Node &&
+        result.element.contains(event.relatedTarget)
+      ) {
+        return;
+      }
+
+      const rect = result.element.getBoundingClientRect();
+      setMentionPreview({
+        src: result.thumbnail,
+        label: result.element.dataset.mentionOriginalLabel || "提及图片",
+        left: rect.left + rect.width / 2,
+        top: Math.max(12, rect.top - 8),
+      });
+    };
+
+    const handleMouseOut = (event: MouseEvent) => {
+      const result = getMentionPill(event.target);
+      if (!result) {
+        return;
+      }
+
+      if (
+        event.relatedTarget instanceof Node &&
+        result.element.contains(event.relatedTarget)
+      ) {
+        return;
+      }
+
+      setMentionPreview(null);
+    };
+
+    const handleDragStart = (event: DragEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      const mentionPill = target.closest(".video-node-mention-pill");
+      if (mentionPill) {
+        mentionPill.classList.add("dragging");
+        event.dataTransfer?.setData(
+          "text/plain",
+          mentionPill.getAttribute("data-mention-id") || "",
+        );
+      }
+    };
+
+    const handleDragEnd = (event: DragEvent) => {
+      const target = event.target;
+      if (target instanceof Element) {
+        target.closest(".video-node-mention-pill")?.classList.remove("dragging");
+      }
+
+      editorDom
+        .querySelectorAll(".video-node-mention-pill.dragging")
+        .forEach((element) => {
+          element.classList.remove("dragging");
+        });
+    };
+
+    editorDom.addEventListener("dragstart", handleDragStart);
+    editorDom.addEventListener("dragend", handleDragEnd);
+    editorDom.addEventListener("mouseover", handleMouseOver);
+    editorDom.addEventListener("mouseout", handleMouseOut);
+
+    return () => {
+      editorDom.removeEventListener("dragstart", handleDragStart);
+      editorDom.removeEventListener("dragend", handleDragEnd);
+      editorDom.removeEventListener("mouseover", handleMouseOver);
+      editorDom.removeEventListener("mouseout", handleMouseOut);
+    };
+  }, [editor]);
 
   const mentionSuggestionItems = activeMode === "mention" ? filteredMentionItems : [];
   const commandSuggestionItems = activeMode === "command" ? filteredCommandItems : [];
@@ -1434,6 +1706,26 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         <div className={PROMPT_PANEL_STYLES.textAreaWrap}>
           <EditorContent editor={editor} />
         </div>
+        {mentionPreview &&
+          createPortal(
+            <div
+              className="pointer-events-none fixed z-9999"
+              style={{
+                left: mentionPreview.left,
+                top: mentionPreview.top,
+                transform: "translate(-50%, -100%)",
+              }}
+            >
+              <div className="flex w-60 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-neutral-900 shadow-2xl transition-opacity duration-150">
+                <img
+                  src={mentionPreview.src}
+                  alt={mentionPreview.label}
+                  className="h-auto w-full rounded-xl object-contain"
+                />
+              </div>
+            </div>,
+            document.body,
+          )}
 
         <div className="nodrag nopan nowheel flex gap-2 overflow-x-auto pb-1">
           {/* 参考图列表（支持拖拽排序、hover 预览、删除） */}
@@ -1447,16 +1739,19 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           )}
         </div>
         {/* @ mention 建议面板 */}
-        {activeMode === "mention" && mentionSuggestionItems.length > 0 && (
+        {activeMode === "mention" && (
           <div
             ref={suggestionPanelRef}
             className="nodrag nopan nowheel absolute right-2 bottom-full left-2 z-30 mb-5 max-h-60 overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900 shadow-[0_14px_34px_rgba(0,0,0,0.45)]"
           >
-            {mentionSuggestionItems.map((item, index) => {
+            {mentionSuggestionItems.length === 0 ? (
+              <div className="p-3 text-center text-sm text-neutral-400">
+                暂无可提及图片
+              </div>
+            ) : mentionSuggestionItems.map((item, index) => {
               const isActive = index === activeIndex;
               const title = item.label;
-              const desc = item.description;
-              const token = `@${item.value}`;
+              const token = item.displayLabel;
 
               return (
                 <Button
@@ -1481,12 +1776,19 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                     resetSuggestionState();
                   }}
                 >
-                  <div>
-                    <div className="text-xs font-medium">{title}</div>
-                    <div className="mt-0.5 text-[11px] text-neutral-400">
-                      {desc}
+                  <img
+                    src={item.thumbnail}
+                    alt={title}
+                    className="h-8 w-8 shrink-0 rounded-md object-cover"
+                    loading="lazy"
+                  />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <div className="truncate text-xs font-medium">{title}</div>
+                    <div className="mt-0.5 truncate text-[11px] text-neutral-400">
+                      {item.displayLabel}
                     </div>
                   </div>
+                  <IconPhoto size={14} className="shrink-0 text-neutral-500" />
                   <span className="rounded-md border border-neutral-700 bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300">
                     {token}
                   </span>
