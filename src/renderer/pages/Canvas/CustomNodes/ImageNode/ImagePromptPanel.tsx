@@ -1,12 +1,9 @@
 ﻿import { arrayMove } from "@dnd-kit/sortable";
-import { IconUpload, IconX } from "@tabler/icons-react";
+import { IconX } from "@tabler/icons-react";
 import Mention from "@tiptap/extension-mention";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import type { ChangeEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toChineseNumber } from "shared/utils/utils";
-import { uploadFileToOSS } from "service/oss";
 import { ImageReferenceThumbnails } from "./components/ImageReferenceThumbnails";
 import {
   AGNES_IMAGE_21_FLASH_MODEL,
@@ -21,7 +18,6 @@ import {
 import { GenerationStatus } from "shared/constants/enum";
 import { getImageGenerationPoints } from "shared/constants/model-points";
 import type { ImageGenerationNode, NoteNodeData } from "shared/types/flow";
-import { compressImage, MAX_IMAGE_SIZE_MB } from "shared/utils/imageCompress";
 import { getRemoteMediaUrl } from "shared/utils/mediaPersistence";
 import { cn } from "shared/utils/utils";
 import { useShallow } from "zustand/react/shallow";
@@ -165,8 +161,6 @@ type SupportedImageParams = {
 };
 
 export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
-  // 上传中态，避免重复上传触发
-  const [isUploading, setIsUploading] = useState(false);
   // 图片生成数量选择
   const [imageCount, setImageCount] = useState<ImageCount>(1);
   // 正在生成的数量（用于显示进度提示）
@@ -534,8 +528,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
   // 用于粗粒度识别当前触发词位置，便于替换 @xxx 或 /xxx
   const triggerRangeRef = useRef<{ from: number; to: number } | null>(null);
-  // 上传按钮对应的隐藏 input
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   // 建议面板容器 ref
   const suggestionPanelRef = useRef<HTMLDivElement | null>(null);
 
@@ -813,33 +805,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     [parentNoteNodes],
   );
 
-  // 构建参考图列表：区分本地上传图片和父节点图片
-  const localReferenceImageItems = useMemo(() => {
-    const parentUrlCounts = new Map<string, number>();
-    parentImageNodes.forEach((item) => {
-      parentUrlCounts.set(item.url, (parentUrlCounts.get(item.url) ?? 0) + 1);
-    });
-
-    return (referenceImageUrls ?? []).flatMap((url, index) => {
-      const count = parentUrlCounts.get(url) ?? 0;
-      if (count > 0) {
-        parentUrlCounts.set(url, count - 1);
-        return [];
-      }
-      return [{ url, index }];
-    });
-  }, [parentImageNodes, referenceImageUrls]);
-
-  const localReferenceImageUrls = useMemo(
-    () => localReferenceImageItems.map((item) => item.url),
-    [localReferenceImageItems],
-  );
-
-  const localReferenceImageIndexes = useMemo(
-    () => localReferenceImageItems.map((item) => item.index),
-    [localReferenceImageItems],
-  );
-
   // 生成参考图 items（用于 ImageReferenceThumbnails）
   const generationReferenceItems = useMemo(() => {
     const items: Array<{
@@ -851,19 +816,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       type?: "image" | "note";
       content?: string;
     }> = [];
-
-    // 本地上传的图片
-    localReferenceImageUrls.forEach((url, index) => {
-      const label = `图片${toChineseNumber(index + 1)}`;
-      items.push({
-        id: `local-image-${localReferenceImageIndexes[index]}-${url}`,
-        url,
-        label,
-        thumbnail: url,
-        isLocalImage: true,
-        type: "image",
-      });
-    });
 
     // 父节点图片
     parentImageNodes.forEach((node) => {
@@ -899,8 +851,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
     return items;
   }, [
-    localReferenceImageUrls,
-    localReferenceImageIndexes,
     parentImageNodes,
     parentNoteNodes,
   ]);
@@ -954,32 +904,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         return;
       }
 
-      if (item.isLocalImage) {
-        // 本地上传的图片：从 image_urls 中移除
-        const localIndex = localReferenceImageUrls.findIndex(
-          (url, idx) =>
-            item.id === `local-image-${localReferenceImageIndexes[idx]}-${url}`,
-        );
-        if (localIndex >= 0) {
-          const urlToRemove = localReferenceImageUrls[localIndex];
-          updateImageNodeData(nodeId, {
-            image_urls: referenceImageUrls.filter((url) => url !== urlToRemove),
-          });
-        }
-      } else {
-        // 父节点图片：断开连接
-        const nodeIdToDisconnect = item.id.replace("parent-image-", "");
-        handleDisconnectNode(nodeIdToDisconnect);
-      }
+      // 父节点图片：断开连接
+      const nodeIdToDisconnect = item.id.replace("parent-image-", "");
+      handleDisconnectNode(nodeIdToDisconnect);
     },
     [
       generationReferenceItems,
       handleDisconnectNode,
-      localReferenceImageIndexes,
-      localReferenceImageUrls,
       nodeId,
-      referenceImageUrls,
-      updateImageNodeData,
     ],
   );
 
@@ -1044,51 +976,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       status === GenerationStatus.QUEUED
     );
   }, [currentImageData, generatingCount]);
-
-  // 触发上传选择
-  const handleUploadClick = () => {
-    if (isUploading) {
-      return;
-    }
-    fileInputRef.current?.click();
-  };
-
-  // 上传图片并回填到参image_urls: [...referenceImage
-  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    setIsUploading(true);
-
-    try {
-      // 检查文件大小，大于10MB时压缩
-      let fileToUpload = file;
-      if (file.size > MAX_IMAGE_SIZE_MB) {
-        fileToUpload = await compressImage(file);
-      }
-
-      const result = await uploadFileToOSS(fileToUpload);
-      const nextUrl = result.url;
-
-      if (!nextUrl) {
-        warning("上传成功但未返回图片地址");
-        return;
-      }
-
-      updateImageNodeData(nodeId, {
-        image_urls: [...referenceImageUrls, nextUrl],
-      });
-      success("上传成功");
-    } catch (uploadError) {
-      console.error("上传图片失败:", uploadError);
-      error("上传失败，请重试");
-    } finally {
-      setIsUploading(false);
-      event.target.value = "";
-    }
-  };
 
   const editor = useEditor({
     extensions: [StarterKit, mentionExtension, slashCommandExtension],
@@ -1549,32 +1436,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         </div>
 
         <div className="nodrag nopan nowheel flex gap-2 overflow-x-auto pb-1">
-          {/* 上传按钮（固定为第一个） */}
-          <Button
-            unstyled
-            className={PROMPT_PANEL_STYLES.uploadButton}
-            onClick={handleUploadClick}
-            title={isUploading ? "上传中..." : "上传参考图"}
-            disabled={isUploading}
-          >
-            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[10px]">
-              <IconUpload
-                size={16}
-                className="w-4 h-4 mb-1.5 group-hover:-translate-y-0.5 transition-transform"
-              />
-              {isUploading ? "上传中" : "上传"}
-            </div>
-          </Button>
-
-          {/* 隐藏 input，用于触发文件选择 */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-
           {/* 参考图列表（支持拖拽排序、hover 预览、删除） */}
           {generationReferenceItems.length > 0 && (
             <ImageReferenceThumbnails
@@ -1923,7 +1784,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                 unstyled
                 className={PROMPT_PANEL_STYLES.generateButton}
                 onClick={handleGenerate}
-                disabled={isUploading}
               >
                 {generatingCount > 0 ? `生成中 (${generatingCount})` : "生成"}
               </Button>
