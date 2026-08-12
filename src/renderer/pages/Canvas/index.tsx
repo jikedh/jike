@@ -159,9 +159,9 @@ const CanvasPage = () => {
 
   return (
     <ReactFlowProvider>
-      <div className="h-screen w-screen">
+      <div className="h-screen w-screen overflow-hidden">
         <motion.div
-          className="h-full w-full origin-center"
+          className="h-full w-full origin-center overflow-hidden"
           initial={false}
           animate={
             hasProjectEntered

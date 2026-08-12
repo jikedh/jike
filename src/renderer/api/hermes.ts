@@ -18,6 +18,13 @@ export type HermesConversation = {
   updated_at: number;
 };
 
+export type HermesAttachment = {
+  key: string;
+  filename: string;
+  size: number;
+  content_type: string;
+};
+
 type HermesConversationList = {
   list: HermesConversation[];
   total: number;
@@ -78,6 +85,19 @@ export const deleteHermesConversation = async (
   await request<{ deleted: boolean }>({
     method: "DELETE",
     url: `/v1/ai/hermes/conversations/${encodeURIComponent(String(conversationId))}`,
+  });
+};
+
+export const uploadHermesAttachment = async (
+  conversationId: string | number,
+  file: File,
+): Promise<HermesAttachment> => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return request<HermesAttachment>({
+    method: "POST",
+    url: `/v1/ai/hermes/conversations/${encodeURIComponent(String(conversationId))}/attachments`,
+    data: formData,
   });
 };
 
@@ -143,9 +163,18 @@ const parseSseBlock = (block: string): string => {
   }
 };
 
+const getSseEventName = (block: string): string =>
+  block
+    .split(/\r?\n/)
+    .find((line) => line.startsWith("event:"))
+    ?.slice(6)
+    .trim()
+    .toLowerCase() || "";
+
 export const streamHermesChat = async (
   conversationId: string | number,
   input: string,
+  attachments: HermesAttachment[],
   signal: AbortSignal,
   onDelta: (delta: string) => void,
 ): Promise<void> => {
@@ -159,7 +188,7 @@ export const streamHermesChat = async (
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ input }),
+      body: JSON.stringify({ input, attachments }),
       signal,
     },
   );
@@ -172,6 +201,30 @@ export const streamHermesChat = async (
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let receivedAssistantDelta = false;
+
+  const handleBlock = (block: string) => {
+    const event = getSseEventName(block);
+    if (event === "assistant.delta") {
+      const delta = parseSseBlock(block);
+      if (delta) {
+        receivedAssistantDelta = true;
+        onDelta(delta);
+      }
+      return;
+    }
+    if (event === "assistant.completed") {
+      if (!receivedAssistantDelta) {
+        const content = parseSseBlock(block);
+        if (content) onDelta(content);
+      }
+      return;
+    }
+    if (!event) {
+      const delta = parseSseBlock(block);
+      if (delta) onDelta(delta);
+    }
+  };
 
   try {
     while (true) {
@@ -180,14 +233,12 @@ export const streamHermesChat = async (
       const blocks = buffer.split(/\r?\n\r?\n/);
       buffer = blocks.pop() || "";
       for (const block of blocks) {
-        const delta = parseSseBlock(block);
-        if (delta) onDelta(delta);
+        handleBlock(block);
       }
       if (done) break;
     }
 
-    const finalDelta = parseSseBlock(buffer);
-    if (finalDelta) onDelta(finalDelta);
+    if (buffer.trim()) handleBlock(buffer);
   } finally {
     reader.releaseLock();
   }
