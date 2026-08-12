@@ -2,12 +2,16 @@
  * 剧本Agent 页面
  * 左侧会话列表 + 右侧聊天区域
  */
+import { useState } from "react";
+import type { ScriptAgentSource } from "shared/types/scriptAgent";
 import { ChatInput } from "./ChatInput";
 import { MessageList } from "./MessageList";
 import { SessionList } from "./SessionList";
+import { SourcePanel } from "./SourcePanel";
 import { useScriptAgent } from "./useScriptAgent";
 
 const ScriptAgentPage = () => {
+    const [sources, setSources] = useState<ScriptAgentSource[]>([]);
     const {
         sessions,
         activeSessionId,
@@ -50,11 +54,13 @@ const ScriptAgentPage = () => {
                             loading={loading}
                             sending={sending}
                             endRef={messagesEndRef}
+                            onShowSources={setSources}
                         />
                         <ChatInput disabled={sending || loading} onSend={send} />
                     </>
                 )}
             </div>
+            {sources.length > 0 && <SourcePanel sources={sources} onClose={() => setSources([])} />}
         </div>
     );
 };

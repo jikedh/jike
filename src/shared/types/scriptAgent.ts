@@ -12,6 +12,16 @@ export type ScriptAgentMessage = {
     createdAt: number;
 };
 
+/** 联网搜索来源 */
+export type ScriptAgentSource = {
+    index: number;
+    siteName: string;
+    title: string;
+    summary: string;
+    publishedAt?: string;
+    url: string;
+};
+
 /** 会话元数据（列表展示用，不含完整消息） */
 export type ScriptAgentSessionMeta = {
     id: string;
@@ -57,4 +67,5 @@ export type ScriptAgentStreamEvent = {
     delta: string;
     done: boolean;
     error: string | null;
+    sources?: ScriptAgentSource[];
 };

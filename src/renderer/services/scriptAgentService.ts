@@ -18,6 +18,24 @@ const SCRIPT_AGENT_MODELS = {
     fast: "deepseek-v4-flash",
 } as const;
 
+const WEB_SEARCH_OUTPUT_INSTRUCTION = `
+
+## 联网搜索回复规则
+
+当前用户已启用联网搜索。请先通过当前模型或服务端提供的联网检索能力核验需要时效性或事实性的内容，再按以下顺序输出：
+
+## AI答案正文
+
+使用清晰的 Markdown 正文回答用户问题。对无法核实的信息明确说明不确定性，不得编造来源。
+
+## 引用来源
+
+仅列出实际使用的来源，每条使用以下格式：
+
+- [来源标题](https://example.com)｜来源摘要
+
+每个链接必须是完整的 http 或 https URL；标题、摘要和链接必须与实际来源一致。没有可靠来源时，输出“未检索到可引用的可靠来源”。`;
+
 /** 创建新会话 */
 export const createSession = async (
     title: string = "新对话",
@@ -55,6 +73,7 @@ export const sendMessage = async (
     sessionId: string,
     content: string,
     deepThinking: boolean,
+    webSearchEnabled: boolean,
 ): Promise<{ userMessage: ScriptAgentMessage; assistantMessageId: string }> => {
     if (!DEEPSEEK_API_KEY) {
         throw new Error("DeepSeek API Key 未配置，请在 .env 中设置 VITE_DEEPSEEK_API_KEY");
@@ -67,7 +86,8 @@ export const sendMessage = async (
         model: deepThinking
             ? SCRIPT_AGENT_MODELS.deepThinking
             : SCRIPT_AGENT_MODELS.fast,
-        systemPrompt: SCRIPT_AGENT_SYSTEM_PROMPT,
+        systemPrompt: `${SCRIPT_AGENT_SYSTEM_PROMPT}${webSearchEnabled ? WEB_SEARCH_OUTPUT_INSTRUCTION : ""}`,
+        webSearchEnabled,
     });
 };
 

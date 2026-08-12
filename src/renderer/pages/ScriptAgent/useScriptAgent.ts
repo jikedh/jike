@@ -10,6 +10,7 @@ import type {
     ScriptAgentStreamEvent,
 } from "shared/types/scriptAgent";
 import * as api from "@/services/scriptAgentService";
+import { appendSourceData } from "./sourceUtils";
 
 export const useScriptAgent = () => {
     const [sessions, setSessions] = useState<ScriptAgentSessionMeta[]>([]);
@@ -104,7 +105,12 @@ export const useScriptAgent = () => {
 
     // 发送消息（触发流式）
     const send = useCallback(
-        async (content: string, displayContent: string, deepThinking: boolean) => {
+        async (
+            content: string,
+            displayContent: string,
+            deepThinking: boolean,
+            webSearchEnabled: boolean,
+        ) => {
             if (!content.trim() || !activeSessionId || sending) return;
             setSending(true);
             setStreamingContent("");
@@ -113,6 +119,7 @@ export const useScriptAgent = () => {
                     activeSessionId,
                     content.trim(),
                     deepThinking,
+                    webSearchEnabled,
                 );
                 // 立即追加用户消息到列表
                 setMessages((prev) => [
@@ -144,7 +151,7 @@ export const useScriptAgent = () => {
             unlisten = await listen<ScriptAgentStreamEvent>(
                 "script-agent-stream",
                 (event) => {
-                    const { session_id, delta, done, error } = event.payload;
+                    const { session_id, delta, done, error, sources } = event.payload;
 
                     if (error) {
                         // 流式出错
@@ -169,7 +176,7 @@ export const useScriptAgent = () => {
                                     id: `stream-${Date.now()}`,
                                     sessionId: session_id,
                                     role: "assistant",
-                                    content: prev,
+                                    content: appendSourceData(prev, sources || []),
                                     createdAt: Date.now(),
                                 };
                                 setMessages((msgs) => [...msgs, assistantMsg]);
