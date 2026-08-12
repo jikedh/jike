@@ -2,6 +2,7 @@ import {
   IconClock,
   IconEraser,
   IconMessageCircle,
+  IconPaperclip,
   IconPencil,
   IconPlayerStop,
   IconPlus,
@@ -10,6 +11,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
+import type { HermesAttachment } from "@/api/hermes";
 import { cn } from "shared/utils/utils";
 import { Textarea } from "@/components/ui/textarea";
 import { useHermesChat } from "@/hooks/useHermesChat";
@@ -30,22 +32,26 @@ const formatTime = (value: number) =>
 
 export const HermesDrawer = ({ open, onClose }: HermesDrawerProps) => {
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState<HermesAttachment[]>([]);
   const [showHistory, setShowHistory] = useState(true);
   const [editingConversationId, setEditingConversationId] = useState<
     string | number | null
   >(null);
   const [editingTitle, setEditingTitle] = useState("");
   const messageListRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     conversations,
     currentConversation,
     messages,
     isLoading,
+    isUploading,
     newConversation,
     selectConversation,
     renameConversation,
     deleteConversation,
     sendMessage,
+    uploadAttachments,
     stopMessage,
     clearConversation,
   } = useHermesChat(open);
@@ -57,10 +63,27 @@ export const HermesDrawer = ({ open, onClose }: HermesDrawerProps) => {
     });
   }, [messages.length, messages.at(-1)?.content]);
 
+  useEffect(() => {
+    setAttachments([]);
+  }, [currentConversation?.id]);
+
   const handleSend = () => {
-    if (!input.trim() || isLoading) return;
-    void sendMessage(input);
+    if (!input.trim() || isLoading || isUploading) return;
+    void sendMessage(input, attachments);
     setInput("");
+    setAttachments([]);
+  };
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const remaining = Math.max(0, 6 - attachments.length);
+    const uploaded = await uploadAttachments(
+      Array.from(files).slice(0, remaining),
+    );
+    if (uploaded.length > 0) {
+      setAttachments((previous) => [...previous, ...uploaded].slice(0, 6));
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const startRename = (conversation: (typeof conversations)[number]) => {
@@ -234,7 +257,56 @@ export const HermesDrawer = ({ open, onClose }: HermesDrawerProps) => {
         )}
 
         <div className="border-t border-white/10 p-3">
+          {attachments.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {attachments.map((attachment) => (
+                <div
+                  key={attachment.key}
+                  className="flex max-w-full items-center gap-2 rounded-md border border-violet-400/25 bg-violet-500/10 px-2 py-1 text-xs text-violet-100"
+                >
+                  <IconPaperclip size={13} className="shrink-0" />
+                  <span className="max-w-[260px] truncate">
+                    {attachment.filename}
+                  </span>
+                  <button
+                    type="button"
+                    title="移除附件"
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-white/50 hover:bg-white/10 hover:text-white"
+                    onClick={() =>
+                      setAttachments((previous) =>
+                        previous.filter(
+                          (item) => item.key !== attachment.key,
+                        ),
+                      )
+                    }
+                  >
+                    <IconX size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex items-end gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".md,.txt,.docx,.pdf,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              multiple
+              className="hidden"
+              onChange={(event) => void handleFiles(event.target.files)}
+            />
+            <button
+              type="button"
+              title="添加附件"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/5 text-white/60 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={isLoading || isUploading || attachments.length >= 6}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <IconPaperclip
+                size={16}
+                className={isUploading ? "animate-pulse" : undefined}
+              />
+            </button>
             <Textarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
@@ -246,7 +318,7 @@ export const HermesDrawer = ({ open, onClose }: HermesDrawerProps) => {
               }}
               placeholder="向 Hermes Agent 提问..."
               className="min-h-[42px] resize-none border-0 bg-transparent text-sm shadow-none"
-              disabled={isLoading}
+              disabled={isLoading || isUploading}
             />
             {isLoading ? (
               <button
@@ -263,7 +335,7 @@ export const HermesDrawer = ({ open, onClose }: HermesDrawerProps) => {
                 title="发送"
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
                 onClick={handleSend}
-                disabled={!input.trim()}
+                disabled={!input.trim() || isUploading}
               >
                 <IconSend size={16} />
               </button>

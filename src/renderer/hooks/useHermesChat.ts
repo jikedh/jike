@@ -8,8 +8,9 @@ import {
   listHermesConversations,
   renameHermesConversation,
   streamHermesChat,
+  uploadHermesAttachment,
 } from "@/api/hermes";
-import type { HermesConversation } from "@/api/hermes";
+import type { HermesAttachment, HermesConversation } from "@/api/hermes";
 
 export const useHermesChat = (open: boolean) => {
   const [conversations, setConversations] = useState<HermesConversation[]>([]);
@@ -17,6 +18,7 @@ export const useHermesChat = (open: boolean) => {
     useState<HermesConversation | null>(null);
   const [messages, setMessages] = useState<NoteGenerationMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const { error } = useMessage();
 
@@ -64,10 +66,37 @@ export const useHermesChat = (open: boolean) => {
     [error],
   );
 
+  const uploadAttachments = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return [];
+      const conversation =
+        currentConversation || (await newConversation().catch(() => null));
+      if (!conversation) return [];
+
+      setIsUploading(true);
+      try {
+        const uploaded: HermesAttachment[] = [];
+        for (const file of files) {
+          uploaded.push(await uploadHermesAttachment(conversation.id, file));
+        }
+        return uploaded;
+      } catch (requestError) {
+        error(
+          "Hermes 附件上传失败",
+          requestError instanceof Error ? requestError.message : undefined,
+        );
+        return [];
+      } finally {
+        setIsUploading(false);
+      }
+    },
+    [currentConversation, error, newConversation],
+  );
+
   const sendMessage = useCallback(
-    async (input: string) => {
+    async (input: string, attachments: HermesAttachment[] = []) => {
       const content = input.trim();
-      if (!content || isLoading) return;
+      if (!content || isLoading || isUploading) return;
 
       const conversation =
         currentConversation || (await newConversation().catch(() => null));
@@ -77,9 +106,13 @@ export const useHermesChat = (open: boolean) => {
       abortRef.current?.abort();
       abortRef.current = controller;
       const assistantIndex = messages.length + 1;
+      const userContent =
+        attachments.length > 0
+          ? `${content}\n\n附件：${attachments.map((item) => item.filename).join("、")}`
+          : content;
       setMessages((previous) => [
         ...previous,
-        { role: "user", content },
+        { role: "user", content: userContent },
         { role: "assistant", content: "", status: "generating" },
       ]);
       setIsLoading(true);
@@ -88,6 +121,7 @@ export const useHermesChat = (open: boolean) => {
         await streamHermesChat(
           conversation.id,
           content,
+          attachments,
           controller.signal,
           (delta) => {
             setMessages((previous) => {
@@ -136,6 +170,7 @@ export const useHermesChat = (open: boolean) => {
       currentConversation,
       error,
       isLoading,
+      isUploading,
       loadConversations,
       messages.length,
       newConversation,
@@ -213,12 +248,14 @@ export const useHermesChat = (open: boolean) => {
     currentConversation,
     messages,
     isLoading,
+    isUploading,
     loadConversations,
     newConversation,
     selectConversation,
     renameConversation,
     deleteConversation,
     sendMessage,
+    uploadAttachments,
     stopMessage,
     clearConversation,
   };
