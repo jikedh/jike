@@ -13,7 +13,10 @@ import { SCRIPT_AGENT_SYSTEM_PROMPT } from "shared/constants/scriptAgent";
 const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || "";
 const DEEPSEEK_API_BASE =
     import.meta.env.VITE_DEEPSEEK_API_BASE_URL || "https://api.deepseek.com";
-const DEFAULT_MODEL = "deepseek-chat";
+const SCRIPT_AGENT_MODELS = {
+    deepThinking: "deepseek-v4-pro",
+    fast: "deepseek-v4-flash",
+} as const;
 
 /** 创建新会话 */
 export const createSession = async (
@@ -51,6 +54,7 @@ export const getMessages = async (
 export const sendMessage = async (
     sessionId: string,
     content: string,
+    deepThinking: boolean,
 ): Promise<{ userMessage: ScriptAgentMessage; assistantMessageId: string }> => {
     if (!DEEPSEEK_API_KEY) {
         throw new Error("DeepSeek API Key 未配置，请在 .env 中设置 VITE_DEEPSEEK_API_KEY");
@@ -60,7 +64,9 @@ export const sendMessage = async (
         content,
         apiKey: DEEPSEEK_API_KEY,
         apiBase: DEEPSEEK_API_BASE,
-        model: DEFAULT_MODEL,
+        model: deepThinking
+            ? SCRIPT_AGENT_MODELS.deepThinking
+            : SCRIPT_AGENT_MODELS.fast,
         systemPrompt: SCRIPT_AGENT_SYSTEM_PROMPT,
     });
 };

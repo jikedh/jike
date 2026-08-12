@@ -104,14 +104,21 @@ export const useScriptAgent = () => {
 
     // 发送消息（触发流式）
     const send = useCallback(
-        async (content: string) => {
+        async (content: string, displayContent: string, deepThinking: boolean) => {
             if (!content.trim() || !activeSessionId || sending) return;
             setSending(true);
             setStreamingContent("");
             try {
-                const result = await api.sendMessage(activeSessionId, content.trim());
+                const result = await api.sendMessage(
+                    activeSessionId,
+                    content.trim(),
+                    deepThinking,
+                );
                 // 立即追加用户消息到列表
-                setMessages((prev) => [...prev, result.userMessage]);
+                setMessages((prev) => [
+                    ...prev,
+                    { ...result.userMessage, content: displayContent },
+                ]);
                 setTimeout(scrollToBottom, 50);
             } catch (e: any) {
                 console.error("[ScriptAgent] sendMessage failed", e);
