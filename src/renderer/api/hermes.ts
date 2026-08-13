@@ -104,11 +104,63 @@ export const uploadHermesAttachment = async (
 const toMessage = (value: unknown): NoteGenerationMessage | null => {
   if (!value || typeof value !== "object") return null;
   const item = value as Record<string, unknown>;
+  const nestedMessage =
+    item.message && typeof item.message === "object"
+      ? (item.message as Record<string, unknown>)
+      : null;
   const role =
-    item.role === "user" || item.role === "assistant" ? item.role : null;
-  const content = typeof item.content === "string" ? item.content : "";
+    item.role === "user" || item.role === "assistant"
+      ? item.role
+      : nestedMessage?.role === "user" || nestedMessage?.role === "assistant"
+        ? nestedMessage.role
+        : null;
+  const rawContent = nestedMessage?.content ?? item.content;
+  const content =
+    typeof rawContent === "string"
+      ? rawContent
+      : Array.isArray(rawContent)
+        ? rawContent
+            .map((part) => {
+              if (typeof part === "string") return part;
+              if (!part || typeof part !== "object") return "";
+              const contentPart = part as Record<string, unknown>;
+              return typeof contentPart.text === "string"
+                ? contentPart.text
+                : typeof contentPart.content === "string"
+                  ? contentPart.content
+                  : "";
+            })
+            .join("")
+        : "";
   if (!role || !content) return null;
   return { role, content, status: "completed" };
+};
+
+const findMessageList = (
+  value: unknown,
+  visited = new Set<object>(),
+): unknown[] => {
+  if (Array.isArray(value)) {
+    if (value.some((item) => toMessage(item))) return value;
+    for (const item of value) {
+      const nested = findMessageList(item, visited);
+      if (nested.length > 0) return nested;
+    }
+    return [];
+  }
+  if (!value || typeof value !== "object" || visited.has(value)) return [];
+
+  visited.add(value);
+  const item = value as Record<string, unknown>;
+  for (const key of ["messages", "items", "history", "data", "session"]) {
+    const nested = findMessageList(item[key], visited);
+    if (nested.length > 0) return nested;
+  }
+  for (const nestedValue of Object.values(item)) {
+    const nested = findMessageList(nestedValue, visited);
+    if (nested.length > 0) return nested;
+  }
+  return [];
 };
 
 export const getHermesMessages = async (
@@ -118,9 +170,7 @@ export const getHermesMessages = async (
     method: "GET",
     url: `/v1/ai/hermes/conversations/${encodeURIComponent(String(conversationId))}/messages`,
   });
-  const raw = Array.isArray(response)
-    ? response
-    : (response as { messages?: unknown[] })?.messages || [];
+  const raw = findMessageList(response);
   return raw.map(toMessage).filter(Boolean) as NoteGenerationMessage[];
 };
 

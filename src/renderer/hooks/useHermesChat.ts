@@ -12,6 +12,8 @@ import {
 } from "@/api/hermes";
 import type { HermesAttachment, HermesConversation } from "@/api/hermes";
 
+const HERMES_LAST_CONVERSATION_KEY = "hermes:last-conversation-id";
+
 export const useHermesChat = (open: boolean) => {
   const [conversations, setConversations] = useState<HermesConversation[]>([]);
   const [currentConversation, setCurrentConversation] =
@@ -20,18 +22,95 @@ export const useHermesChat = (open: boolean) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const currentConversationRef = useRef<HermesConversation | null>(null);
+  const messagesRef = useRef<NoteGenerationMessage[]>([]);
+  const messageCacheRef = useRef(
+    new Map<string, NoteGenerationMessage[]>(),
+  );
+  const loadRequestRef = useRef(0);
   const { error } = useMessage();
+
+  const updateMessages = useCallback(
+    (
+      next:
+        | NoteGenerationMessage[]
+        | ((previous: NoteGenerationMessage[]) => NoteGenerationMessage[]),
+    ) => {
+      setMessages((previous) => {
+        const resolved =
+          typeof next === "function" ? next(previous) : next;
+        messagesRef.current = resolved;
+        const conversation = currentConversationRef.current;
+        if (conversation) {
+          messageCacheRef.current.set(String(conversation.id), resolved);
+        }
+        return resolved;
+      });
+    },
+    [],
+  );
+
+  const setActiveConversation = useCallback(
+    (conversation: HermesConversation | null) => {
+      currentConversationRef.current = conversation;
+      setCurrentConversation(conversation);
+      if (conversation) {
+        localStorage.setItem(
+          HERMES_LAST_CONVERSATION_KEY,
+          String(conversation.id),
+        );
+      } else {
+        localStorage.removeItem(HERMES_LAST_CONVERSATION_KEY);
+      }
+    },
+    [],
+  );
+
+  const loadConversationMessages = useCallback(
+    async (conversation: HermesConversation) => {
+      const conversationId = String(conversation.id);
+      const requestId = ++loadRequestRef.current;
+      const cachedMessages = messageCacheRef.current.get(conversationId);
+      setActiveConversation(conversation);
+      messagesRef.current = cachedMessages || [];
+      setMessages(cachedMessages || []);
+
+      const nextMessages = await getHermesMessages(conversation.id);
+      if (
+        requestId !== loadRequestRef.current ||
+        String(currentConversationRef.current?.id) !== conversationId
+      ) {
+        return;
+      }
+      messageCacheRef.current.set(conversationId, nextMessages);
+      messagesRef.current = nextMessages;
+      setMessages(nextMessages);
+    },
+    [setActiveConversation],
+  );
 
   const loadConversations = useCallback(async () => {
     try {
-      setConversations(await listHermesConversations());
+      const nextConversations = await listHermesConversations();
+      setConversations(nextConversations);
+
+      if (!currentConversationRef.current && nextConversations.length > 0) {
+        const savedConversationId = localStorage.getItem(
+          HERMES_LAST_CONVERSATION_KEY,
+        );
+        const conversation =
+          nextConversations.find(
+            (item) => String(item.id) === savedConversationId,
+          ) || nextConversations[0];
+        await loadConversationMessages(conversation);
+      }
     } catch (requestError) {
       error(
         "Hermes 对话加载失败",
         requestError instanceof Error ? requestError.message : undefined,
       );
     }
-  }, [error]);
+  }, [error, loadConversationMessages]);
 
   useEffect(() => {
     if (open) void loadConversations();
@@ -41,19 +120,20 @@ export const useHermesChat = (open: boolean) => {
 
   const newConversation = useCallback(async () => {
     const conversation = await createHermesConversation();
-    setCurrentConversation(conversation);
+    loadRequestRef.current += 1;
+    setActiveConversation(conversation);
+    messageCacheRef.current.set(String(conversation.id), []);
+    messagesRef.current = [];
     setMessages([]);
     setConversations((previous) => [conversation, ...previous]);
     return conversation;
-  }, []);
+  }, [setActiveConversation]);
 
   const selectConversation = useCallback(
     async (conversation: HermesConversation) => {
       setIsLoading(true);
       try {
-        const nextMessages = await getHermesMessages(conversation.id);
-        setCurrentConversation(conversation);
-        setMessages(nextMessages);
+        await loadConversationMessages(conversation);
       } catch (requestError) {
         error(
           "Hermes 消息加载失败",
@@ -63,7 +143,7 @@ export const useHermesChat = (open: boolean) => {
         setIsLoading(false);
       }
     },
-    [error],
+    [error, loadConversationMessages],
   );
 
   const uploadAttachments = useCallback(
@@ -110,7 +190,7 @@ export const useHermesChat = (open: boolean) => {
         attachments.length > 0
           ? `${content}\n\n附件：${attachments.map((item) => item.filename).join("、")}`
           : content;
-      setMessages((previous) => [
+      updateMessages((previous) => [
         ...previous,
         { role: "user", content: userContent },
         { role: "assistant", content: "", status: "generating" },
@@ -124,7 +204,7 @@ export const useHermesChat = (open: boolean) => {
           attachments,
           controller.signal,
           (delta) => {
-            setMessages((previous) => {
+            updateMessages((previous) => {
               const next = [...previous];
               const assistant = next[assistantIndex];
               if (assistant?.role === "assistant") {
@@ -137,7 +217,7 @@ export const useHermesChat = (open: boolean) => {
             });
           },
         );
-        setMessages((previous) => {
+        updateMessages((previous) => {
           const next = [...previous];
           const assistant = next[assistantIndex];
           if (assistant?.role === "assistant") {
@@ -152,7 +232,7 @@ export const useHermesChat = (open: boolean) => {
             "Hermes 对话失败",
             requestError instanceof Error ? requestError.message : undefined,
           );
-          setMessages((previous) => {
+          updateMessages((previous) => {
             const next = [...previous];
             const assistant = next[assistantIndex];
             if (assistant?.role === "assistant") {
@@ -174,6 +254,7 @@ export const useHermesChat = (open: boolean) => {
       loadConversations,
       messages.length,
       newConversation,
+      updateMessages,
     ],
   );
 
@@ -192,11 +273,12 @@ export const useHermesChat = (open: boolean) => {
             String(item.id) === String(updated.id) ? updated : item,
           ),
         );
-        setCurrentConversation((current) =>
-          current && String(current.id) === String(updated.id)
-            ? updated
-            : current,
-        );
+        if (
+          currentConversationRef.current &&
+          String(currentConversationRef.current.id) === String(updated.id)
+        ) {
+          setActiveConversation(updated);
+        }
         return updated;
       } catch (requestError) {
         error(
@@ -206,7 +288,7 @@ export const useHermesChat = (open: boolean) => {
         return null;
       }
     },
-    [error],
+    [error, setActiveConversation],
   );
 
   const deleteConversation = useCallback(
@@ -222,8 +304,10 @@ export const useHermesChat = (open: boolean) => {
             (item) => String(item.id) !== String(conversation.id),
           ),
         );
+        messageCacheRef.current.delete(String(conversation.id));
         if (deletingCurrent) {
-          setCurrentConversation(null);
+          setActiveConversation(null);
+          messagesRef.current = [];
           setMessages([]);
         }
         return true;
@@ -235,13 +319,13 @@ export const useHermesChat = (open: boolean) => {
         return false;
       }
     },
-    [currentConversation?.id, error, stopMessage],
+    [currentConversation?.id, error, setActiveConversation, stopMessage],
   );
 
   const clearConversation = useCallback(() => {
     stopMessage();
-    setMessages([]);
-  }, [stopMessage]);
+    updateMessages([]);
+  }, [stopMessage, updateMessages]);
 
   return {
     conversations,
