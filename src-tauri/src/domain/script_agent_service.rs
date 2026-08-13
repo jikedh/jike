@@ -378,6 +378,78 @@ pub struct StreamEvent {
     pub delta: String,
     pub done: bool,
     pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sources: Option<Vec<SearchSource>>,
+}
+
+#[derive(Clone, serde::Serialize)]
+pub struct SearchSource {
+    pub index: usize,
+    pub site_name: String,
+    pub title: String,
+    pub summary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub published_at: Option<String>,
+    pub url: String,
+}
+
+fn get_string(value: &serde_json::Value, keys: &[&str]) -> Option<String> {
+    keys
+        .iter()
+        .find_map(|key| value.get(*key).and_then(serde_json::Value::as_str))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+}
+
+fn parse_search_sources(value: &serde_json::Value) -> Vec<SearchSource> {
+    let candidates = [
+        value.pointer("/search_results"),
+        value.pointer("/web_search_results"),
+        value.pointer("/choices/0/message/search_results"),
+        value.pointer("/choices/0/message/web_search_results"),
+    ];
+
+    let Some(items) = candidates.into_iter().flatten().find_map(serde_json::Value::as_array) else {
+        return Vec::new();
+    };
+
+    items
+        .iter()
+        .filter_map(|item| {
+            let url = get_string(item, &["url", "link", "href"])?;
+            if !url.starts_with("https://") && !url.starts_with("http://") {
+                return None;
+            }
+            Some((
+                get_string(item, &["site_name", "siteName", "source", "domain"])
+                    .unwrap_or_else(|| {
+                        url.split("//")
+                            .nth(1)
+                            .unwrap_or("未知来源")
+                            .split('/')
+                            .next()
+                            .unwrap_or("未知来源")
+                            .trim_start_matches("www.")
+                            .to_string()
+                    }),
+                get_string(item, &["title", "name"]).unwrap_or_else(|| url.clone()),
+                get_string(item, &["summary", "snippet", "description", "content"])
+                    .unwrap_or_else(|| "暂无摘要".to_string()),
+                get_string(item, &["published_at", "publishedAt", "publish_time", "date"]),
+                url,
+            ))
+        })
+        .enumerate()
+        .map(|(index, (site_name, title, summary, published_at, url))| SearchSource {
+            index: index + 1,
+            site_name,
+            title,
+            summary,
+            published_at,
+            url,
+        })
+        .collect()
 }
 
 /// 调用 DeepSeek Chat API（SSE 流式），通过 Tauri Emitter 逐 chunk 推送
@@ -389,6 +461,7 @@ pub async fn chat_completion_streaming(
     model: &str,
     system_prompt: &str,
     messages: &[ScriptMessage],
+    web_search_enabled: bool,
 ) -> Result<String, String> {
     use futures_util::StreamExt;
     use tauri::Emitter;
@@ -407,11 +480,15 @@ pub async fn chat_completion_streaming(
         }));
     }
 
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model,
         "messages": api_messages,
         "stream": true
     });
+
+    if web_search_enabled {
+        body["web_search"] = serde_json::Value::Bool(true);
+    }
 
     let resp = client
         .post(&url)
@@ -428,6 +505,7 @@ pub async fn chat_completion_streaming(
                     delta: String::new(),
                     done: true,
                     error: Some(format!("DeepSeek request failed: {}", e)),
+                    sources: None,
                 },
             );
             format!("DeepSeek request failed: {}", e)
@@ -444,6 +522,7 @@ pub async fn chat_completion_streaming(
                 delta: String::new(),
                 done: true,
                 error: Some(err_msg.clone()),
+                sources: None,
             },
         );
         return Err(err_msg);
@@ -452,6 +531,7 @@ pub async fn chat_completion_streaming(
     let mut stream = resp.bytes_stream();
     let mut full_content = String::new();
     let mut buffer = String::new();
+    let mut sources = Vec::new();
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| e.to_string())?;
@@ -468,6 +548,10 @@ pub async fn chat_completion_streaming(
                     break;
                 }
                 if let Ok(json) = serde_json::from_str::<serde_json::Value>(json_str) {
+                    let parsed_sources = parse_search_sources(&json);
+                    if !parsed_sources.is_empty() {
+                        sources = parsed_sources;
+                    }
                     if let Some(delta) = json["choices"][0]["delta"]["content"].as_str() {
                         if !delta.is_empty() {
                             full_content.push_str(delta);
@@ -478,6 +562,7 @@ pub async fn chat_completion_streaming(
                                     delta: delta.to_string(),
                                     done: false,
                                     error: None,
+                                    sources: None,
                                 },
                             );
                         }
@@ -495,6 +580,7 @@ pub async fn chat_completion_streaming(
             delta: String::new(),
             done: true,
             error: None,
+            sources: (!sources.is_empty()).then_some(sources),
         },
     );
 

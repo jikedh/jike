@@ -1,12 +1,17 @@
 /** 剧本Agent 消息输入框 */
-import { FileText, Paperclip, Send, Sparkles, X } from "lucide-react";
+import { FileText, Globe2, Paperclip, Send, Sparkles, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { extractScriptAgentFileText } from "./fileTextExtractor";
 
 type Props = {
     disabled: boolean;
-    onSend: (content: string, displayContent: string, deepThinking: boolean) => void;
+    onSend: (
+        content: string,
+        displayContent: string,
+        deepThinking: boolean,
+        webSearchEnabled: boolean,
+    ) => void;
 };
 
 export const ChatInput = ({ disabled, onSend }: Props) => {
@@ -18,6 +23,7 @@ export const ChatInput = ({ disabled, onSend }: Props) => {
     const [isParsing, setIsParsing] = useState(false);
     const [parseError, setParseError] = useState("");
     const [deepThinking, setDeepThinking] = useState(false);
+    const [webSearchEnabled, setWebSearchEnabled] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -30,7 +36,7 @@ export const ChatInput = ({ disabled, onSend }: Props) => {
         const displayContent = attachment
             ? `${trimmed ? `${trimmed}\n\n` : ""}【已附加文件：${attachment.name}】`
             : trimmed;
-        onSend(content, displayContent, deepThinking);
+        onSend(content, displayContent, deepThinking, webSearchEnabled);
         setValue("");
         setAttachment(null);
         setParseError("");
@@ -38,7 +44,7 @@ export const ChatInput = ({ disabled, onSend }: Props) => {
         if (textareaRef.current) {
             textareaRef.current.style.height = "auto";
         }
-    }, [attachment, deepThinking, disabled, isParsing, onSend, value]);
+    }, [attachment, deepThinking, disabled, isParsing, onSend, value, webSearchEnabled]);
 
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent) => {
@@ -79,17 +85,32 @@ export const ChatInput = ({ disabled, onSend }: Props) => {
     return (
         <div className="shrink-0 border-t border-white/10 bg-[#0c0c10] px-4 py-3">
             <div className="mb-2 flex items-center justify-between gap-3 px-1">
-                <div className="flex items-center gap-2 text-xs text-white/60">
-                    <Sparkles size={14} className={deepThinking ? "text-[#d793ff]" : "text-white/35"} />
-                    <span className={deepThinking ? "text-white/90" : ""}>深度思考模式</span>
-                    <span className="text-white/35">{deepThinking ? "已开启" : "已关闭"}</span>
+                <div className="flex items-center gap-4 text-xs text-white/60">
+                    <div className="flex items-center gap-2">
+                        <Sparkles size={14} className={deepThinking ? "text-[#d793ff]" : "text-white/35"} />
+                        <span className={deepThinking ? "text-white/90" : ""}>深度思考</span>
+                        <span className="text-white/35">{deepThinking ? "已开启" : "已关闭"}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Globe2 size={14} className={webSearchEnabled ? "text-[#62c9ff]" : "text-white/35"} />
+                        <span className={webSearchEnabled ? "text-white/90" : ""}>联网搜索</span>
+                        <span className="text-white/35">{webSearchEnabled ? "已开启" : "已关闭"}</span>
+                    </div>
                 </div>
-                <Switch
-                    checked={deepThinking}
-                    disabled={disabled || isParsing}
-                    onCheckedChange={setDeepThinking}
-                    className="data-[state=checked]:bg-[#B43FEB] data-[state=unchecked]:bg-white/15"
-                />
+                <div className="flex items-center gap-3">
+                    <Switch
+                        checked={deepThinking}
+                        disabled={disabled || isParsing}
+                        onCheckedChange={setDeepThinking}
+                        className="data-[state=checked]:bg-[#B43FEB] data-[state=unchecked]:bg-white/15"
+                    />
+                    <Switch
+                        checked={webSearchEnabled}
+                        disabled={disabled || isParsing}
+                        onCheckedChange={setWebSearchEnabled}
+                        className="data-[state=checked]:bg-[#2499d6] data-[state=unchecked]:bg-white/15"
+                    />
+                </div>
             </div>
 
             {(attachment || isParsing || parseError) && (

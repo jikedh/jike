@@ -42,6 +42,7 @@ pub async fn script_agent_send_message(
     api_base: String,
     model: String,
     system_prompt: String,
+    web_search_enabled: bool,
 ) -> Result<serde_json::Value, String> {
     // 保存用户消息
     let user_msg = svc::add_message(&session_id, "user", &content)?;
@@ -58,6 +59,7 @@ pub async fn script_agent_send_message(
         &model,
         &enriched_prompt,
         &history,
+        web_search_enabled,
     )
     .await?;
     // 流结束后保存完整 AI 回复到 SQLite
