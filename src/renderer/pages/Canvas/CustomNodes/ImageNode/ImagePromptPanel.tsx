@@ -6,6 +6,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ImageReferenceThumbnails } from "./components/ImageReferenceThumbnails";
+import { ImageModelHelpTooltip } from "./components/ImageModelHelpTooltip";
 import {
   AGNES_IMAGE_21_FLASH_MODEL,
   IMAGE_MODELS,
@@ -1853,6 +1854,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
       <div className={PROMPT_PANEL_STYLES.controlArea}>
         <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden">
+          <ImageModelHelpTooltip modelId={model} />
           {/* 生成模型 - 始终在最左侧 */}
           <Select
             value={String(currentModelId)}
