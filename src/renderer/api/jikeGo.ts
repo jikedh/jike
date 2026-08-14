@@ -20,6 +20,16 @@ const getJikeGoAiProxyHeaders = () => ({
   [SKIP_AUTH_HEADER]: "true",
 });
 
+export type VersionCheckResponse = {
+  code: number;
+  data?: {
+    hasNewVersion: boolean;
+    version: string;
+    downloadUrl: string;
+    releaseNotes?: string;
+  };
+};
+
 export type DesktopProxyPlatform =
   | "kuaizi"
   | "kuaizi_global"
@@ -163,6 +173,17 @@ export function healthCheck(): any {
     url: "/health",
     method: "get",
   });
+}
+
+// 版本检查失败时由调用方静默忽略，避免影响主界面使用。
+export function checkVersion(currentVersion: string): Promise<VersionCheckResponse> {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/api/version-check",
+    method: "get",
+    params: { currentVersion },
+    timeout: 5_000,
+  }) as Promise<VersionCheckResponse>;
 }
 
 // 健康检查

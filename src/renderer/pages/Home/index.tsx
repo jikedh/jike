@@ -3,12 +3,25 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   BookOpenText,
+  Copy,
+  Download,
   Folder,
   Mic,
   SquareDashedMousePointer,
   Video,
 } from "lucide-react";
+import { open } from "@tauri-apps/plugin-shell";
 import ProjectDialog from "@/components/ProjectDialog";
+import { checkVersion } from "@/api/jikeGo";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import FirstLoginGuideDialog, {
   type GuideItem,
 } from "@/components/FirstLoginGuideDialog";
@@ -16,14 +29,57 @@ import { checkProfileCompleteness } from "@/utils/profileCompleteness";
 import { getJikeingToken } from "shared/utils/utils";
 import { useUserStore } from "@/stores/useUserStore";
 
+const CURRENT_APP_VERSION = "2.2.8";
+
 const HomePage = () => {
   const navigate = useNavigate();
   const isInternalUser = useUserStore((state) => state.isInternalUser);
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [pendingItems, setPendingItems] = useState<GuideItem["key"][]>([]);
+  const [versionUpdate, setVersionUpdate] = useState<{
+    version: string;
+    downloadUrl: string;
+    releaseNotes?: string;
+  } | null>(null);
   // 防止 React 18 严格模式 / 路由重复挂载时重复触发校验
   const guideCheckedRef = useRef(false);
+  const versionCheckedRef = useRef(false);
+
+  // 首页完成首次绘制后检查更新，网络异常或超时均静默忽略。
+  useEffect(() => {
+    if (versionCheckedRef.current) return;
+    versionCheckedRef.current = true;
+
+    const frameId = window.requestAnimationFrame(() => {
+      void checkVersion(CURRENT_APP_VERSION)
+        .then((response) => {
+          const data = response.data;
+          if (
+            response.code === 200 &&
+            data?.hasNewVersion &&
+            data.downloadUrl
+          ) {
+            setVersionUpdate(data);
+          }
+        })
+        .catch((err: any) => {
+          console.warn("[VersionCheck] 检查失败:", err?.message || err);
+        });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, []);
+
+  const handleDownloadVersion = () => {
+    if (!versionUpdate?.downloadUrl) return;
+    void open(versionUpdate.downloadUrl);
+  };
+
+  const handleCopyDownloadUrl = async () => {
+    if (!versionUpdate?.downloadUrl) return;
+    await navigator.clipboard.writeText(versionUpdate.downloadUrl);
+  };
 
   // 首次登录引导：登录成功后进入 /home，校验用户信息完整性
   // 未登录时直接跳过，避免在初次进入应用时弹出"完善账号信息"
@@ -251,6 +307,47 @@ const HomePage = () => {
         pending={pendingItems}
         onClose={handleGuideClose}
       />
+
+      <Dialog open={Boolean(versionUpdate)} onOpenChange={() => { }}>
+        <DialogContent
+          className="max-w-md border-white/10 bg-[#121214] text-white"
+          onPointerDownOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => event.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>发现新版本 v{versionUpdate?.version}</DialogTitle>
+            <DialogDescription className="text-white/60">
+              新版本已发布，请下载并安装后继续使用。
+            </DialogDescription>
+          </DialogHeader>
+
+          {versionUpdate?.releaseNotes ? (
+            <div className="max-h-48 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-4 text-sm leading-relaxed whitespace-pre-wrap text-white/75">
+              {versionUpdate.releaseNotes}
+            </div>
+          ) : null}
+
+          <button
+            className="flex w-full items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-left text-xs text-white/70 hover:border-[#B43FEB]/60"
+            onClick={() => void handleCopyDownloadUrl()}
+          >
+            <span className="min-w-0 flex-1 truncate">
+              {versionUpdate?.downloadUrl}
+            </span>
+            <Copy className="h-4 w-4 shrink-0 text-[#B43FEB]" />
+          </button>
+
+          <DialogFooter className="border-white/10">
+            <Button
+              className="w-full bg-[#B43FEB] text-white hover:bg-[#B43FEB]/90"
+              onClick={handleDownloadVersion}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              下载新版本
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
