@@ -10,6 +10,7 @@ import {
   SquareDashedMousePointer,
   Video,
 } from "lucide-react";
+import { getVersion } from "@tauri-apps/api/app";
 import { open } from "@tauri-apps/plugin-shell";
 import ProjectDialog from "@/components/ProjectDialog";
 import { checkVersion } from "@/api/jikeGo";
@@ -28,8 +29,6 @@ import FirstLoginGuideDialog, {
 import { checkProfileCompleteness } from "@/utils/profileCompleteness";
 import { getJikeingToken } from "shared/utils/utils";
 import { useUserStore } from "@/stores/useUserStore";
-
-const CURRENT_APP_VERSION = "2.2.8";
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -52,20 +51,20 @@ const HomePage = () => {
     versionCheckedRef.current = true;
 
     const frameId = window.requestAnimationFrame(() => {
-      void checkVersion(CURRENT_APP_VERSION)
-        .then((response) => {
-          const data = response.data;
-          if (
-            response.code === 200 &&
-            data?.hasNewVersion &&
-            data.downloadUrl
-          ) {
-            setVersionUpdate(data);
-          }
-        })
-        .catch((err: any) => {
-          console.warn("[VersionCheck] 检查失败:", err?.message || err);
-        });
+      void (async () => {
+        const currentVersion = await getVersion();
+        const response = await checkVersion(currentVersion);
+        const data = response.data;
+        if (
+          response.code === 200 &&
+          data?.hasNewVersion &&
+          data.downloadUrl
+        ) {
+          setVersionUpdate(data);
+        }
+      })().catch((err: any) => {
+        console.warn("[VersionCheck] 检查失败:", err?.message || err);
+      });
     });
 
     return () => window.cancelAnimationFrame(frameId);
