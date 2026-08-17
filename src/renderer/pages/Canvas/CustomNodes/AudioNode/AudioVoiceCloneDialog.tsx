@@ -24,11 +24,13 @@ import type {
 } from "shared/types/audio";
 import { cn } from "shared/utils/utils";
 import { uploadFileToOSS } from "service/oss";
+import {
+  getAudioDuration,
+  getCloneAudioValidationMessage,
+  isCloneAudioDurationValid,
+} from "./utils/audioCloneFile";
 
 const MINIMAX_VOICE_CLONE_POINTS = 594;
-const MAX_AUDIO_SIZE = 20 * 1024 * 1024;
-const MIN_AUDIO_DURATION = 10;
-const MAX_AUDIO_DURATION = 5 * 60;
 const DEFAULT_PREVIEW_TEXT = "你好，很高兴认识你，今天也要保持好心情。";
 
 type AudioVoiceCloneDialogProps = {
@@ -40,38 +42,6 @@ type AudioVoiceCloneDialogProps = {
 
 const unwrapResponse = <T,>(response: T | { data?: T }): T =>
   ((response as { data?: T })?.data ?? response) as T;
-
-const getAudioDuration = (file: File): Promise<number> =>
-  new Promise((resolve, reject) => {
-    const audio = document.createElement("audio");
-    const objectURL = URL.createObjectURL(file);
-    const cleanup = () => {
-      audio.removeAttribute("src");
-      audio.load();
-      URL.revokeObjectURL(objectURL);
-    };
-    audio.preload = "metadata";
-    audio.onloadedmetadata = () => {
-      const duration = audio.duration;
-      cleanup();
-      if (!Number.isFinite(duration)) {
-        reject(new Error("无法读取音频时长"));
-        return;
-      }
-      resolve(duration);
-    };
-    audio.onerror = () => {
-      cleanup();
-      reject(new Error("无法读取音频文件"));
-    };
-    audio.src = objectURL;
-  });
-
-const isSupportedAudioFile = (file: File) =>
-  /\.(mp3|m4a|wav)$/i.test(file.name) ||
-  ["audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/wav", "audio/x-wav"].includes(
-    file.type,
-  );
 
 export const AudioVoiceCloneDialog = ({
   open,
@@ -121,22 +91,16 @@ export const AudioVoiceCloneDialog = ({
   const handleFileChange = useCallback(
     async (selectedFile: File | undefined) => {
       if (!selectedFile) return;
-      if (!isSupportedAudioFile(selectedFile)) {
-        warning("请选择 MP3、M4A 或 WAV 音频");
-        return;
-      }
-      if (selectedFile.size > MAX_AUDIO_SIZE) {
-        warning("音频文件不能超过20MB");
+      const validationMessage = getCloneAudioValidationMessage(selectedFile);
+      if (validationMessage) {
+        warning(validationMessage);
         return;
       }
 
       setIsInspecting(true);
       try {
         const nextDuration = await getAudioDuration(selectedFile);
-        if (
-          nextDuration < MIN_AUDIO_DURATION ||
-          nextDuration > MAX_AUDIO_DURATION
-        ) {
+        if (!isCloneAudioDurationValid(nextDuration)) {
           warning("音频时长需在10秒到5分钟之间");
           return;
         }

@@ -38,7 +38,6 @@ import { GenerationStatus } from "shared/constants/enum";
 import type {
   AudioSynthesisResponse,
   AudioTtsModelInfo,
-  AudioTtsSegment,
   AudioVoiceProfile,
 } from "shared/types/audio";
 import type { AudioGenerationNode } from "shared/types/flow";
@@ -48,17 +47,11 @@ import {
   normalizeAudioTtsModel,
 } from "shared/utils/audioTts";
 import { cn } from "shared/utils/utils";
-import { copyMediaUrlToOss, uploadFileToOSS } from "service/oss";
 import { AudioVoiceCloneDialog } from "./AudioVoiceCloneDialog";
+import { materializeAudioSegments } from "./utils/audioSynthesis";
 
 type AudioPromptPanelProps = {
   nodeId: string;
-};
-
-type MaterializedAudio = {
-  url: string;
-  format: string;
-  duration?: number;
 };
 
 const unwrapResponse = <T,>(response: T | { data?: T }): T =>
@@ -120,191 +113,6 @@ const VoiceSelectItem = ({ voice }: { voice: AudioVoiceProfile }) => {
       )}
     </SelectItem>
   );
-};
-
-const audioBufferToWav = (buffer: AudioBuffer): Blob => {
-  const channelCount = buffer.numberOfChannels;
-  const sampleRate = buffer.sampleRate;
-  const blockAlign = channelCount * 2;
-  const dataLength = buffer.length * blockAlign;
-  const output = new ArrayBuffer(44 + dataLength);
-  const view = new DataView(output);
-
-  const writeString = (offset: number, value: string) => {
-    for (let index = 0; index < value.length; index++) {
-      view.setUint8(offset + index, value.charCodeAt(index));
-    }
-  };
-
-  writeString(0, "RIFF");
-  view.setUint32(4, output.byteLength - 8, true);
-  writeString(8, "WAVE");
-  writeString(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, channelCount, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * blockAlign, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, 16, true);
-  writeString(36, "data");
-  view.setUint32(40, dataLength, true);
-
-  let offset = 44;
-  for (let frame = 0; frame < buffer.length; frame++) {
-    for (let channel = 0; channel < channelCount; channel++) {
-      const sample = Math.max(
-        -1,
-        Math.min(1, buffer.getChannelData(channel)[frame]),
-      );
-      view.setInt16(
-        offset,
-        sample < 0 ? sample * 0x8000 : sample * 0x7fff,
-        true,
-      );
-      offset += 2;
-    }
-  }
-
-  return new Blob([output], { type: "audio/wav" });
-};
-
-const copyResampledChannel = (
-  source: Float32Array,
-  target: Float32Array,
-  targetOffset: number,
-  targetLength: number,
-) => {
-  if (source.length === targetLength) {
-    target.set(source, targetOffset);
-    return;
-  }
-
-  const ratio = source.length / targetLength;
-  for (let index = 0; index < targetLength; index++) {
-    const sourcePosition = index * ratio;
-    const leftIndex = Math.floor(sourcePosition);
-    const rightIndex = Math.min(source.length - 1, leftIndex + 1);
-    const mix = sourcePosition - leftIndex;
-    target[targetOffset + index] =
-      source[leftIndex] * (1 - mix) + source[rightIndex] * mix;
-  }
-};
-
-const persistAudioSource = async (url: string): Promise<string> => {
-  const persistedUrl = await copyMediaUrlToOss(url);
-  if (!persistedUrl) {
-    throw new Error("生成音频转存失败");
-  }
-  return persistedUrl;
-};
-
-const materializeAudioSegments = async (
-  segments: AudioTtsSegment[],
-): Promise<MaterializedAudio> => {
-  const audioSegments = segments.filter(
-    (segment): segment is AudioTtsSegment & { url: string } =>
-      segment.type === "audio" && Boolean(segment.url),
-  );
-  if (audioSegments.length === 0) {
-    throw new Error("语音服务未返回有效音频");
-  }
-
-  const persistedUrls = new Map<AudioTtsSegment, string>();
-  for (const segment of audioSegments) {
-    persistedUrls.set(segment, await persistAudioSource(segment.url));
-  }
-
-  const needsMerge =
-    audioSegments.length > 1 ||
-    segments.some(
-      (segment) => segment.type === "silence" && (segment.durationMs ?? 0) > 0,
-    );
-  if (!needsMerge) {
-    return {
-      url: persistedUrls.get(audioSegments[0])!,
-      format: "mp3",
-    };
-  }
-
-  const audioContext = new AudioContext();
-  try {
-    const decodedBuffers = new Map<AudioTtsSegment, AudioBuffer>();
-    for (const segment of audioSegments) {
-      const response = await fetch(persistedUrls.get(segment)!);
-      if (!response.ok) {
-        throw new Error("读取生成音频失败");
-      }
-      decodedBuffers.set(
-        segment,
-        await audioContext.decodeAudioData(await response.arrayBuffer()),
-      );
-    }
-
-    const sampleRate = audioContext.sampleRate;
-    const channelCount = Math.max(
-      1,
-      ...Array.from(decodedBuffers.values()).map(
-        (buffer) => buffer.numberOfChannels,
-      ),
-    );
-    const totalFrames = segments.reduce((total, segment) => {
-      if (segment.type === "silence") {
-        return (
-          total + Math.round(((segment.durationMs ?? 0) / 1000) * sampleRate)
-        );
-      }
-      const buffer = decodedBuffers.get(segment);
-      return total + Math.round((buffer?.duration ?? 0) * sampleRate);
-    }, 0);
-    const outputBuffer = audioContext.createBuffer(
-      channelCount,
-      Math.max(1, totalFrames),
-      sampleRate,
-    );
-
-    let targetOffset = 0;
-    for (const segment of segments) {
-      if (segment.type === "silence") {
-        targetOffset += Math.round(
-          ((segment.durationMs ?? 0) / 1000) * sampleRate,
-        );
-        continue;
-      }
-      const sourceBuffer = decodedBuffers.get(segment);
-      if (!sourceBuffer) continue;
-      const targetLength = Math.round(sourceBuffer.duration * sampleRate);
-      for (let channel = 0; channel < channelCount; channel++) {
-        const sourceChannel = sourceBuffer.getChannelData(
-          Math.min(channel, sourceBuffer.numberOfChannels - 1),
-        );
-        copyResampledChannel(
-          sourceChannel,
-          outputBuffer.getChannelData(channel),
-          targetOffset,
-          targetLength,
-        );
-      }
-      targetOffset += targetLength;
-    }
-
-    const file = new File(
-      [audioBufferToWav(outputBuffer)],
-      `generated_audio_${Date.now()}.wav`,
-      { type: "audio/wav" },
-    );
-    const upload = await uploadFileToOSS(file);
-    if (!upload.url) {
-      throw new Error("合并音频上传失败");
-    }
-    return {
-      url: upload.url,
-      format: "wav",
-      duration: outputBuffer.duration,
-    };
-  } finally {
-    await audioContext.close();
-  }
 };
 
 export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
@@ -747,12 +555,11 @@ export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
             <ModelPointsBadge
               totalPoints={totalPoints}
               requiredPoints={requiredPoints}
-              title={`${billableChars} 个计费字符，每 100 字 ${
-                currentModel?.pointsPer100 ??
+              title={`${billableChars} 个计费字符，每 100 字 ${currentModel?.pointsPer100 ??
                 AUDIO_TTS_MODEL_OPTIONS.find(
                   (option) => option.id === selectedModel,
                 )?.pointsPer100
-              } 积分，预计消耗 ${requiredPoints} 积分`}
+                } 积分，预计消耗 ${requiredPoints} 积分`}
             />
             <button
               type="button"
@@ -762,7 +569,7 @@ export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
                 PROMPT_PANEL_STYLES.generateButton,
                 "inline-flex items-center gap-1.5",
                 generationDisabled &&
-                  "cursor-not-allowed opacity-40 hover:scale-100 hover:bg-[#c246ff]",
+                "cursor-not-allowed opacity-40 hover:scale-100 hover:bg-[#c246ff]",
               )}
             >
               <IconPlayerPlay size={14} />
