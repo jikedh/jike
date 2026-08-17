@@ -398,8 +398,8 @@ export const ReferenceThumbnails = ({
     return (
       <div
         className={cn(
-          "flex gap-2 overflow-visible",
-          expanded ? "h-24 items-start" : "h-15 items-center",
+          "flex flex-wrap gap-2 overflow-visible",
+          expanded ? "items-start" : "items-center",
         )}
       >
         {sortableItems.map(({ item, index, displayIndex }) => (
@@ -455,8 +455,8 @@ export const ReferenceThumbnails = ({
       >
         <div
           className={cn(
-            "flex gap-2 overflow-visible",
-            expanded ? "h-24 items-start" : "h-15 items-center",
+            "flex flex-wrap gap-2 overflow-visible",
+            expanded ? "items-start" : "items-center",
           )}
         >
           {sortableItems.map(({ item, index, displayIndex }) => (

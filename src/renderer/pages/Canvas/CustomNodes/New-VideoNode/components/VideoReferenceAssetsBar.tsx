@@ -119,10 +119,10 @@ export const VideoReferenceAssetsBar = ({
   return (
     <div
       className={cn(
-        "nodrag nopan nowheel no-scrollbar flex gap-2 overflow-x-auto",
+        "nodrag nopan nowheel no-scrollbar flex flex-wrap gap-2 overflow-visible",
         expanded
-          ? "h-24 items-start overflow-y-visible"
-          : "h-15 items-center overflow-y-hidden",
+          ? "items-start"
+          : "items-center",
       )}
     >
       {referenceContent ? (
