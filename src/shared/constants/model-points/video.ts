@@ -5,6 +5,7 @@ export const VIDEO_MODEL_POINTS: Record<string, number> = {
   "seedance-2.0-fast": 48, // 新版视频节点 Seedance 2.0 Fast
   "seedance-2.0-mini": 30, // 新版视频节点 Seedance 2.0 Mini，按 Pro 半价计费
   "seedance-2.0-pro": 60, // 新版视频节点 Seedance 2.0 Pro
+  "seedance-2.5": 60,
   "dreamina-seedance-2-0-260128": 72, // 海外 Seedance 2.0 Pro 默认 720p 基础分
   "wan2.7-r2v": 36, // 默认 720p 基础分
   "pixverse-i2v": 60,
@@ -63,7 +64,8 @@ export const getVideoGenerationPoints = ({
   // 特殊逻辑：Seedance 2.0 系列
   if (
     model?.startsWith("doubao-seedance-2.0") ||
-    model?.startsWith("seedance-2.0")
+    model?.startsWith("seedance-2.0") ||
+    model === "seedance-2.5"
   ) {
     const isFast = model.includes("-fast");
     const isMini = model.includes("-mini");

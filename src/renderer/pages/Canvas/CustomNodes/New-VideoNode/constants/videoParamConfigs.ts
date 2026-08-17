@@ -21,7 +21,7 @@ export type VideoParamState = {
   aspectRatio?: string;
   resolution?: string;
   quality?: string;
-  generationMode?: "fast" | "mini" | "pro";
+  generationMode?: "fast" | "mini" | "pro" | "seedance2.5";
   duration: number;
   generateAudio: boolean;
   promptExtend?: boolean;
@@ -241,6 +241,32 @@ const seedance20Config = (
   },
 });
 
+const seedance25Config = (mode?: VideoModeKey): VideoParamConfig => {
+  const requiresAdaptiveRatio =
+    mode === "first-last-frame" || mode === "video-edit";
+
+  return {
+    modelId: "seedance-2.5",
+    mode,
+    aspectRatios: requiresAdaptiveRatio ? [RATIO.auto] : seedanceRatios,
+    qualityGroup: {
+      key: "resolution",
+      label: "分辨率",
+      options: resolution480720,
+    },
+    duration: { type: "slider", min: 4, max: 30, step: 1 },
+    audio,
+    defaults: {
+      aspectRatio: requiresAdaptiveRatio ? "adaptive" : "16:9",
+      resolution: "720P",
+      generationMode: "seedance2.5",
+      duration: 8,
+      generateAudio: true,
+      autoDuration: mode === "video-edit",
+    },
+  };
+};
+
 const overseasSeedance20Config = (): VideoParamConfig => ({
   modelId: "dreamina-seedance-2-0-260128",
   aspectRatios: seedanceRatios,
@@ -309,6 +335,17 @@ const happyHorseConfig = (mode: VideoModeKey): VideoParamConfig => ({
 });
 
 export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
+  "seedance-2.5": seedance25Config(),
+  [byModeKey("seedance-2.5", "text-to-video")]:
+    seedance25Config("text-to-video"),
+  [byModeKey("seedance-2.5", "all-reference")]:
+    seedance25Config("all-reference"),
+  [byModeKey("seedance-2.5", "image-to-video")]:
+    seedance25Config("image-to-video"),
+  [byModeKey("seedance-2.5", "video-edit")]:
+    seedance25Config("video-edit"),
+  [byModeKey("seedance-2.5", "first-last-frame")]:
+    seedance25Config("first-last-frame"),
   "seedance-2.0-fast": seedance20Config("seedance-2.0-fast", "fast"),
   "seedance-2.0-mini": seedance20Config("seedance-2.0-mini", "mini"),
   "seedance-2.0-pro": seedance20Config("seedance-2.0-pro", "pro"),
@@ -699,6 +736,10 @@ export const normalizeVideoParams = (
     ...config.defaults,
     ...current,
   };
+
+  if (modelId === "seedance-2.5" && mode === "video-edit") {
+    next.autoDuration = true;
+  }
 
   if (!optionContains(config.aspectRatios, next.aspectRatio)) {
     next.aspectRatio = config.defaults.aspectRatio;

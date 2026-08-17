@@ -252,12 +252,14 @@ export const VideoParamsPopover = ({
   durationMaxOverride,
 }: VideoParamsPopoverProps) => {
   const config = getVideoParamConfig(modelId, mode);
+  const followsSourceDuration =
+    modelId === "seedance-2.5" && mode === "video-edit";
   const durationConfig =
     config.duration.type === "slider" && durationMaxOverride !== undefined
       ? {
-          ...config.duration,
-          max: Math.min(config.duration.max, durationMaxOverride),
-        }
+        ...config.duration,
+        max: Math.min(config.duration.max, durationMaxOverride),
+      }
       : config.duration;
 
   const summary = useMemo(() => {
@@ -276,7 +278,9 @@ export const VideoParamsPopover = ({
     if (ratio) parts.push(ratio);
     if (quality) parts.push(quality);
     if (generationMode) parts.push(generationMode);
-    if (value.autoDuration) {
+    if (followsSourceDuration) {
+      parts.push("跟随原视频");
+    } else if (value.autoDuration) {
       parts.push("自动");
     } else if (value.duration) {
       parts.push(`${value.duration}s`);
@@ -298,7 +302,7 @@ export const VideoParamsPopover = ({
     }
 
     return parts;
-  }, [config, value, modelId]);
+  }, [config, value, modelId, followsSourceDuration]);
 
   const patch = (patchValue: Partial<VideoParamState>) => {
     onChange({ ...value, ...patchValue });
@@ -444,7 +448,11 @@ export const VideoParamsPopover = ({
             <div className="flex items-center justify-between text-xs">
               <span className="font-medium text-neutral-300">视频时长</span>
               <span className="font-semibold text-[#B43FEB]">
-                {value.autoDuration ? "自动" : `${value.duration}s`}
+                {followsSourceDuration
+                  ? "跟随原视频"
+                  : value.autoDuration
+                    ? "自动"
+                    : `${value.duration}s`}
               </span>
             </div>
 
@@ -462,7 +470,7 @@ export const VideoParamsPopover = ({
               </label>
             ) : null}
 
-            {durationConfig.type === "slider" ? (
+            {followsSourceDuration ? null : durationConfig.type === "slider" ? (
               <div className={cn("space-y-2", value.autoDuration && "pointer-events-none opacity-40")}>
                 <Slider
                   value={[value.duration]}

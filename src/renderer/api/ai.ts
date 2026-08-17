@@ -179,6 +179,10 @@ function getSeedance20Model(data: Seedance20Request): string {
   const record = data as unknown as Record<string, unknown>;
   const model = String(record.model || "");
 
+  if (model === "seedance-2.5" || data.mode === "seedance2.5") {
+    return "seedance-2.5";
+  }
+
   if (
     model === "seedance-2.0-fast" ||
     model === "seedance-2.0-mini" ||
@@ -610,6 +614,7 @@ export async function createLzVideoTask(
   data: Seedance20Request,
   scoreCost?: number,
 ) {
+  const scoreModel = getSeedance20Model(data);
   const response = await createDesktopProxyTask({
     platform: "kuaizi",
     upstreamPath: "/v1/lz/video/task/create",
@@ -617,9 +622,10 @@ export async function createLzVideoTask(
     body: data,
     scoreCost,
     scoreBizType: "video",
-    scoreModel: getSeedance20Model(data),
+    scoreModel,
     scoreSource: "kuaizi",
-    scoreSourceLabel: "快手可灵",
+    scoreSourceLabel:
+      scoreModel === "seedance-2.5" ? "Seedance 2.5" : "快手可灵",
   });
   const rawData = unwrapDesktopProxyData(response);
   const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
@@ -632,7 +638,7 @@ export async function createLzVideoTask(
 
   await aiVideoTrackingService.track({
     apiName: "/v1/lz/video/task/create",
-    model: getSeedance20Model(data),
+    model: scoreModel,
     taskId,
     prompt: data.prompt,
     duration: extractDurationSeconds(data),

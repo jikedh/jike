@@ -64,6 +64,59 @@ export const VIDEO_MODEL_GENERATION_CAPABILITIES: Record<
   string,
   VideoModelGenerationCapability
 > = {
+  "seedance-2.5": {
+    modes: {
+      "text-to-video": {
+        references: emptyReferences,
+        params: {
+          durationRange: { min: 4, max: 30 },
+          resolution: ["480P", "720P"],
+          ratio: ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive"],
+        },
+      },
+      "all-reference": {
+        references: {
+          image: { max: 30 },
+          video: { max: 10 },
+          audio: { max: 10 },
+          requireAnyReference: true,
+        },
+        params: {
+          durationRange: { min: 4, max: 30 },
+          resolution: ["480P", "720P"],
+          ratio: ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive"],
+        },
+      },
+      "image-to-video": {
+        references: onlyImages(1, 30),
+        params: {
+          durationRange: { min: 4, max: 30 },
+          resolution: ["480P", "720P"],
+          ratio: ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive"],
+        },
+      },
+      "video-edit": {
+        references: {
+          image: { max: 30 },
+          video: { min: 1, max: 10 },
+          audio: { max: 10 },
+        },
+        params: {
+          durationRange: { min: 4, max: 30 },
+          resolution: ["480P", "720P"],
+          ratio: ["adaptive"],
+        },
+      },
+      "first-last-frame": {
+        references: firstLastFrame,
+        params: {
+          durationRange: { min: 4, max: 30 },
+          resolution: ["480P", "720P"],
+          ratio: ["adaptive"],
+        },
+      },
+    },
+  },
   "seedance-2.0-fast": {
     modes: {
       "text-to-video": { references: emptyReferences },

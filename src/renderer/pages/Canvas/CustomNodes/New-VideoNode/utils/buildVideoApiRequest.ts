@@ -171,7 +171,7 @@ const getHappyHorseResolution = (request: VideoGenerateRequest) =>
 
 const getSeedanceGenerationMode = (
   request: VideoGenerateRequest,
-): "fast" | "mini" | "pro" => {
+): "fast" | "mini" | "pro" | "seedance2.5" => {
   // Seedance 各档位作为独立模型展示，接口里的 mode 由模型 ID 固定。
   if (request.model === "seedance-2.0-fast") {
     return "fast";
@@ -181,6 +181,9 @@ const getSeedanceGenerationMode = (
   }
   if (request.model === "seedance-2.0-pro") {
     return "pro";
+  }
+  if (request.model === "seedance-2.5") {
+    return "seedance2.5";
   }
   return request.params.generationMode ?? "pro";
 };
@@ -229,7 +232,11 @@ const buildSize = (
   }
 };
 
-const buildSeedanceImages = (mode: VideoModeKey, images: string[]) => {
+const buildSeedanceImages = (
+  mode: VideoModeKey,
+  images: string[],
+  maxImages: number,
+) => {
   if (mode === "text-to-video") {
     return [];
   }
@@ -242,13 +249,13 @@ const buildSeedanceImages = (mode: VideoModeKey, images: string[]) => {
   }
 
   if (mode === "image-to-video") {
-    return images.slice(0, 9).map((url) => ({
+    return images.slice(0, maxImages).map((url) => ({
       url,
       role: "reference_image" as const,
     }));
   }
 
-  return images.slice(0, 9).map((url) => ({
+  return images.slice(0, maxImages).map((url) => ({
     url,
     role: "reference_image" as const,
   }));
@@ -257,12 +264,17 @@ const buildSeedanceImages = (mode: VideoModeKey, images: string[]) => {
 const buildSeedanceRequest = (
   request: VideoGenerateRequest,
 ): Seedance20Request => {
-  const images = buildSeedanceImages(request.mode, getImages(request));
+  const isSeedance25 = request.model === "seedance-2.5";
+  const images = buildSeedanceImages(
+    request.mode,
+    getImages(request),
+    isSeedance25 ? 30 : 9,
+  );
   const supportsReferenceMedia =
     request.mode !== "text-to-video" && request.mode !== "first-last-frame";
   const videos = supportsReferenceMedia
     ? getVideos(request)
-      .slice(0, 3)
+      .slice(0, isSeedance25 ? 10 : 3)
       .map((url) => ({
         url,
         role: "reference_video" as const,
@@ -270,7 +282,7 @@ const buildSeedanceRequest = (
     : [];
   const audios = supportsReferenceMedia
     ? getAudios(request)
-      .slice(0, 3)
+      .slice(0, isSeedance25 ? 10 : 3)
       .map((url) => ({
         url,
         role: "reference_audio" as const,
@@ -284,17 +296,24 @@ const buildSeedanceRequest = (
     // Seedance 2.0 接口类型使用小写 p，前端历史配置可能仍是大写，传参前统一归一化。
     resolution: isOneOf(
       request.params.resolution?.toLowerCase(),
-      ["480p", "720p", "1080p", "4k"] as const,
+      isSeedance25
+        ? (["480p", "720p"] as const)
+        : (["480p", "720p", "1080p", "4k"] as const),
       "720p",
     ),
-    ratio: isOneOf(
-      getRatio(request),
-      ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive"] as const,
-      "16:9",
-    ),
-    duration: request.params.autoDuration
+    ratio:
+      isSeedance25 &&
+        (request.mode === "first-last-frame" || request.mode === "video-edit")
+        ? "adaptive"
+        : isOneOf(
+          getRatio(request),
+          ["16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive"] as const,
+          "16:9",
+        ),
+    duration: request.params.autoDuration ||
+      (isSeedance25 && request.mode === "video-edit")
       ? -1
-      : clampNumber(request.params.duration, 4, 15, 8),
+      : clampNumber(request.params.duration, 4, isSeedance25 ? 30 : 15, 8),
     generate_audio: request.params.generateAudio,
     seed: -1,
     web_search: request.params.webSearch ?? false,
@@ -963,6 +982,7 @@ export const buildVideoApiRequest = (
     case "seedance-2.0-fast":
     case "seedance-2.0-mini":
     case "seedance-2.0-pro":
+    case "seedance-2.5":
       return buildSeedanceRequest(request);
     case "wanxiang":
       return buildWanxiangRequest(request);

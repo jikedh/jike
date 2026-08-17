@@ -101,6 +101,23 @@ export const ALL_MODE_KEYS: VideoModeKey[] = [
  */
 export const MOCK_MAIN_MODELS: MainModelConfig[] = [
   {
+    id: "seedance-2.5",
+    label: "Seedance 2.5",
+    variants: [
+      {
+        id: "seedance-2.5",
+        supportedModes: [
+          "text-to-video",
+          "all-reference",
+          "image-to-video",
+          "video-edit",
+          "first-last-frame",
+        ],
+        defaultParams: { generationMode: "seedance2.5" },
+      },
+    ],
+  },
+  {
     id: "seedance-2.0-fast",
     label: "Seedance 2.0 Fast",
     variants: [

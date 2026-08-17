@@ -4,22 +4,22 @@ export interface Seedance20Request {
   prompt: string; // 文本提示词：文生素材时条件必填；可在提示词中引用 images 素材
   generation_type: "video"; // 生成类型：视频任务可填写 "video"（条件必填）
   input_type?: "reference" | "first_last_frame"; // 输入类型："reference"（全能参考）| "first_last_frame"（首尾帧）
-  mode?: "fast" | "mini" | "pro"; // 生成模式："fast"（默认）| "mini" | "pro"
+  mode?: "fast" | "mini" | "pro" | "seedance2.5";
 
   images?: {
     url: string; // 图片参考图 URL（必填）
     role?: "first_frame" | "last_frame" | "reference_image"; // 图片角色：首帧/尾帧/参考图
-  }[]; // 图片输入列表，最多 9 张
+  }[]; // Seedance 2.5 最多 30 张，其余档位最多 9 张
 
   videos?: {
     url: string; // 视频 URL（必填）
     role?: "reference_video"; // 固定为参考视频角色
-  }[]; // 视频输入列表（mini/pro），最多 3 段，总时长 <= 15s
+  }[]; // Seedance 2.5 最多 10 段，其余档位最多 3 段
 
   audios?: {
     url: string; // 音频 URL（必填）
     role?: "reference_audio"; // 固定为参考音频角色
-  }[]; // 音频输入列表（mini/pro），最多 3 段，总时长 <= 15s，不能单独输入，需要搭配图片或视频
+  }[]; // Seedance 2.5 最多 10 段且支持纯音频参考
 
   resolution?: "480p" | "720p" | "1080p" | "4k"; // 分辨率，默认 "720p"
   ratio?: "16:9" | "4:3" | "1:1" | "3:4" | "9:16" | "21:9" | "adaptive"; // 宽高比（默认 "adaptive"）
@@ -45,12 +45,12 @@ export interface Seedance20StatusResponse {
   data?: {
     task_id: string; // 任务唯一标识符，用于查询任务状态
     status:
-      | "queued"
-      | "processing"
-      | "running"
-      | "succeeded"
-      | "failed"
-      | "canceled"; // 任务状态
+    | "queued"
+    | "processing"
+    | "running"
+    | "succeeded"
+    | "failed"
+    | "canceled"; // 任务状态
     duration?: number; // 视频时长（秒）
     error?: string; // 错误信息，成功时通常为空字符串
     tos_key?: string; // 对象存储中的资源 Key

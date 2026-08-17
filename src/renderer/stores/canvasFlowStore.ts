@@ -4324,7 +4324,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const isSeedance20 =
         model === "seedance-2.0-fast" ||
         model === "seedance-2.0-mini" ||
-        model === "seedance-2.0-pro";
+        model === "seedance-2.0-pro" ||
+        model === "seedance-2.5";
       const isOverseasSeedance20 =
         model === "dreamina-seedance-2-0-260128";
       const isMiniMaxH3 = model === "MiniMax-H3";
