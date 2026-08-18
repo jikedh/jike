@@ -3,7 +3,7 @@ import {
   IconPlayerPlay,
   IconVolume,
 } from "@tabler/icons-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   confirmDesktopProxyScore,
   refundDesktopProxyScore,
@@ -78,7 +78,7 @@ const getVoiceLanguageLabel = (language?: string) => {
   }
 };
 
-const VoiceSelectItem = ({ voice }: { voice: AudioVoiceProfile }) => {
+const VoiceSelectItem = memo(({ voice }: { voice: AudioVoiceProfile }) => {
   const content = (
     <span className="flex min-w-0 w-full items-center justify-between gap-3">
       <span className="truncate">{voice.name}</span>
@@ -113,7 +113,64 @@ const VoiceSelectItem = ({ voice }: { voice: AudioVoiceProfile }) => {
       )}
     </SelectItem>
   );
-};
+});
+
+const AudioVoiceSelect = memo(
+  ({
+    loading,
+    voices,
+    selectedVoiceId,
+    onValueChange,
+  }: {
+    loading: boolean;
+    voices: AudioVoiceProfile[];
+    selectedVoiceId: string;
+    onValueChange: (value: string) => void;
+  }) => {
+    const systemVoices = voices.filter((voice) => voice.voiceType !== "cloned");
+    const clonedVoices = voices.filter((voice) => voice.voiceType === "cloned");
+
+    return (
+      <Select
+        value={selectedVoiceId}
+        onValueChange={onValueChange}
+        disabled={loading || voices.length === 0}
+      >
+        <SelectTrigger
+          size="sm"
+          className={cn(
+            PROMPT_PANEL_STYLES.modelSelect,
+            "w-[200px] min-w-0 justify-between",
+          )}
+        >
+          <SelectValue placeholder={loading ? "加载音色..." : "暂无可用音色"} />
+        </SelectTrigger>
+        <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
+          {systemVoices.length > 0 ? (
+            <SelectGroup>
+              <SelectLabel className="text-[11px] text-white/35">
+                系统音色
+              </SelectLabel>
+              {systemVoices.map((voice) => (
+                <VoiceSelectItem key={voice.profileId} voice={voice} />
+              ))}
+            </SelectGroup>
+          ) : null}
+          {clonedVoices.length > 0 ? (
+            <SelectGroup>
+              <SelectLabel className="text-[11px] text-white/35">
+                共享复刻音色
+              </SelectLabel>
+              {clonedVoices.map((voice) => (
+                <VoiceSelectItem key={voice.profileId} voice={voice} />
+              ))}
+            </SelectGroup>
+          ) : null}
+        </SelectContent>
+      </Select>
+    );
+  },
+);
 
 export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -186,12 +243,6 @@ export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
     [models, selectedModel],
   );
   const voiceOptions = currentModel?.voices ?? [];
-  const systemVoiceOptions = voiceOptions.filter(
-    (voice) => voice.voiceType !== "cloned",
-  );
-  const clonedVoiceOptions = voiceOptions.filter(
-    (voice) => voice.voiceType === "cloned",
-  );
   const selectedVoice = voiceOptions.find(
     (voice) => voice.profileId === selectedVoiceId,
   );
@@ -271,6 +322,13 @@ export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
       });
     },
     [nodeId, text, updateAudioNodeData],
+  );
+
+  const handleVoiceChange = useCallback(
+    (voiceProfileId: string) => {
+      updateAudioNodeData(nodeId, { voiceProfileId });
+    },
+    [nodeId, updateAudioNodeData],
   );
 
   const handleGenerate = useCallback(async () => {
@@ -486,47 +544,12 @@ export const AudioPromptPanel = ({ nodeId }: AudioPromptPanelProps) => {
               </SelectContent>
             </Select>
 
-            <Select
-              value={selectedVoiceId}
-              onValueChange={(value) => {
-                updateAudioNodeData(nodeId, { voiceProfileId: value });
-              }}
-              disabled={loadingVoices || voiceOptions.length === 0}
-            >
-              <SelectTrigger
-                size="sm"
-                className={cn(
-                  PROMPT_PANEL_STYLES.modelSelect,
-                  "w-[200px] min-w-0 justify-between",
-                )}
-              >
-                <SelectValue
-                  placeholder={loadingVoices ? "加载音色..." : "暂无可用音色"}
-                />
-              </SelectTrigger>
-              <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
-                {systemVoiceOptions.length > 0 ? (
-                  <SelectGroup>
-                    <SelectLabel className="text-[11px] text-white/35">
-                      系统音色
-                    </SelectLabel>
-                    {systemVoiceOptions.map((voice) => (
-                      <VoiceSelectItem key={voice.profileId} voice={voice} />
-                    ))}
-                  </SelectGroup>
-                ) : null}
-                {clonedVoiceOptions.length > 0 ? (
-                  <SelectGroup>
-                    <SelectLabel className="text-[11px] text-white/35">
-                      共享复刻音色
-                    </SelectLabel>
-                    {clonedVoiceOptions.map((voice) => (
-                      <VoiceSelectItem key={voice.profileId} voice={voice} />
-                    ))}
-                  </SelectGroup>
-                ) : null}
-              </SelectContent>
-            </Select>
+            <AudioVoiceSelect
+              loading={loadingVoices}
+              voices={voiceOptions}
+              selectedVoiceId={selectedVoiceId}
+              onValueChange={handleVoiceChange}
+            />
 
             <button
               type="button"
