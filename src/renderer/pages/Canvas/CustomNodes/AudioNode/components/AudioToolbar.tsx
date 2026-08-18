@@ -1,4 +1,4 @@
-import { IconDownload, IconTrash, IconUpload } from "@tabler/icons-react";
+import { IconCut, IconDownload, IconTrash, IconUpload } from "@tabler/icons-react";
 import { memo, useCallback, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
@@ -11,10 +11,12 @@ import { getAudioDownloadExtension, isSupportedUploadAudioFile } from "../utils/
 type AudioToolbarProps = {
     nodeId: string;
     data: AudioNodeType["data"];
+    isTrimming: boolean;
+    onTrim: () => void;
     onDelete: () => void;
 };
 
-export const AudioToolbar = memo(({ nodeId, data, onDelete }: AudioToolbarProps) => {
+export const AudioToolbar = memo(({ nodeId, data, isTrimming, onTrim, onDelete }: AudioToolbarProps) => {
     const [isUploading, setIsUploading] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -78,6 +80,21 @@ export const AudioToolbar = memo(({ nodeId, data, onDelete }: AudioToolbarProps)
                 <button onClick={() => void handleDownload()} disabled={!audioUrl || isDownloading} className={cn("flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all", !audioUrl || isDownloading ? "cursor-not-allowed text-white/30" : "text-white/70 hover:bg-white/10 hover:text-white")}>
                     <IconDownload size={14} />
                     <span>{isDownloading ? "下载中" : "下载"}</span>
+                </button>
+                <button
+                    onClick={onTrim}
+                    disabled={!audioUrl}
+                    className={cn(
+                        "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium",
+                        !audioUrl
+                            ? "cursor-not-allowed text-white/30"
+                            : isTrimming
+                                ? "bg-[#B43FEB]/20 text-[#d896f7]"
+                                : "text-white/70 hover:bg-white/10 hover:text-white",
+                    )}
+                >
+                    <IconCut size={14} />
+                    <span>截取</span>
                 </button>
                 <button onClick={onDelete} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-white/70 transition-all hover:bg-white/10 hover:text-white">
                     <IconTrash size={14} />

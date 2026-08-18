@@ -17,6 +17,7 @@ export const AudioNode = memo(
   ({ id, data, selected, dragging }: NodeProps<AudioNodeType>) => {
     const { zoom } = useNodeScale();
     const [isRenaming, setIsRenaming] = useState(false);
+    const [isTrimming, setIsTrimming] = useState(false);
     const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
     const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
     const updateNodeNickname = useCanvasFlowStore(
@@ -85,13 +86,20 @@ export const AudioNode = memo(
                 transformOrigin: "bottom center",
               }}
             >
-              <AudioToolbar nodeId={id} data={data} onDelete={handleDelete} />
+              <AudioToolbar
+                nodeId={id}
+                data={data}
+                isTrimming={isTrimming}
+                onTrim={() => setIsTrimming(true)}
+                onDelete={handleDelete}
+              />
             </div>
           </NodeToolbar>
 
           <div
             className={cn(
-              "group/card relative flex h-45 w-87.5 flex-col rounded-[20px] border bg-linear-to-br from-[#18181e] to-[#0d0d11] transition-all duration-300 ease-out",
+              "group/card relative flex w-87.5 flex-col rounded-[20px] border bg-linear-to-br from-[#18181e] to-[#0d0d11] transition-all duration-300 ease-out",
+              isTrimming ? "h-56" : "h-45",
               selected
                 ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
                 : isSourceHighlighted
@@ -138,7 +146,12 @@ export const AudioNode = memo(
             <div className="pointer-events-none absolute inset-0 rounded-[20px] bg-linear-to-tr from-transparent via-white/2 to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
 
             <div className="relative flex h-full w-full overflow-hidden rounded-[19px] p-2">
-              <AudioContent data={data} />
+              <AudioContent
+                nodeId={id}
+                data={data}
+                isTrimming={isTrimming}
+                onCancelTrim={() => setIsTrimming(false)}
+              />
             </div>
           </div>
           {isActiveNode ? (
