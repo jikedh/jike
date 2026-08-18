@@ -1,51 +1,86 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import WaveSurfer from "wavesurfer.js";
 
-export const useAudioPlayback = (
-    audioRef: React.RefObject<HTMLAudioElement | null>,
-) => {
+export const useAudioPlayback = (audioUrl?: string) => {
+    const waveformRef = useRef<HTMLDivElement | null>(null);
+    const wavesurferRef = useRef<WaveSurfer | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
+    const [isLoading, setIsLoading] = useState(false);
+    const [playbackError, setPlaybackError] = useState("");
 
-    const togglePlayback = useCallback(() => {
-        if (!audioRef.current) return;
+    useEffect(() => {
+        const container = waveformRef.current;
+        if (!container || !audioUrl) return;
 
-        if (isPlaying) {
-            audioRef.current.pause();
-        } else {
-            void audioRef.current.play();
+        setIsPlaying(false);
+        setCurrentTime(0);
+        setDuration(0);
+        setIsLoading(true);
+        setPlaybackError("");
+
+        const wavesurfer = WaveSurfer.create({
+            container,
+            url: audioUrl,
+            height: "auto",
+            waveColor: "#45414d",
+            progressColor: "#75617e",
+            cursorColor: "#ff3b3b",
+            cursorWidth: 2,
+            barWidth: 3,
+            barGap: 3,
+            barRadius: 3,
+            barHeight: 0.9,
+            barMinHeight: 2,
+            normalize: true,
+            interact: true,
+            dragToSeek: true,
+            hideScrollbar: true,
+        });
+        wavesurferRef.current = wavesurfer;
+
+        const unsubscribers = [
+            wavesurfer.on("ready", (nextDuration) => {
+                setDuration(nextDuration);
+                setIsLoading(false);
+            }),
+            wavesurfer.on("timeupdate", setCurrentTime),
+            wavesurfer.on("play", () => setIsPlaying(true)),
+            wavesurfer.on("pause", () => setIsPlaying(false)),
+            wavesurfer.on("finish", () => setIsPlaying(false)),
+            wavesurfer.on("error", () => {
+                setIsLoading(false);
+                setPlaybackError("音频波形加载失败");
+            }),
+        ];
+
+        return () => {
+            unsubscribers.forEach((unsubscribe) => unsubscribe());
+            wavesurfer.destroy();
+            wavesurferRef.current = null;
+        };
+    }, [audioUrl]);
+
+    const togglePlayback = useCallback(async () => {
+        if (!wavesurferRef.current || isLoading) return;
+
+        try {
+            setPlaybackError("");
+            await wavesurferRef.current.playPause();
+        } catch (error: any) {
+            console.error("音频播放失败:", error);
+            setPlaybackError("音频播放失败");
         }
-        setIsPlaying((value) => !value);
-    }, [audioRef, isPlaying]);
-
-    const updateCurrentTime = useCallback(() => {
-        if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
-    }, [audioRef]);
-
-    const loadMetadata = useCallback(() => {
-        if (audioRef.current) setDuration(audioRef.current.duration);
-    }, [audioRef]);
-
-    const seek = useCallback(
-        (event: React.MouseEvent<HTMLDivElement>) => {
-            if (!audioRef.current || !duration) return;
-
-            const rect = event.currentTarget.getBoundingClientRect();
-            const nextTime = ((event.clientX - rect.left) / rect.width) * duration;
-            audioRef.current.currentTime = nextTime;
-            setCurrentTime(nextTime);
-        },
-        [audioRef, duration],
-    );
+    }, [isLoading]);
 
     return {
+        waveformRef,
         isPlaying,
         currentTime,
         duration,
+        isLoading,
+        playbackError,
         togglePlayback,
-        updateCurrentTime,
-        loadMetadata,
-        seek,
-        stopPlayback: () => setIsPlaying(false),
     };
 };

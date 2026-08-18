@@ -1,6 +1,6 @@
 import { IconMusic } from "@tabler/icons-react";
 import { type NodeProps, NodeToolbar, Position } from "@xyflow/react";
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import type { AudioNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
 import { ButtonHandle } from "@/components/button-handle";
@@ -29,8 +29,6 @@ export const AudioNode = memo(
     const isActiveFromStore = useCanvasFlowStore(
       (state) => state.activeNodeId === id,
     );
-    const audioRef = useRef<HTMLAudioElement>(null);
-
     // 只让活动单节点挂载工具栏和生成面板。
     const isActiveNode = isActiveFromStore && selected;
 
@@ -93,7 +91,7 @@ export const AudioNode = memo(
 
           <div
             className={cn(
-              "group/card relative flex h-62.5 w-87.5 flex-col rounded-xl border bg-linear-to-br from-[#141418] to-[#0d0d10] transition-all duration-300 ease-out",
+              "group/card relative flex h-45 w-87.5 flex-col rounded-[20px] border bg-linear-to-br from-[#18181e] to-[#0d0d11] transition-all duration-300 ease-out",
               selected
                 ? "border-[#B43FEB]/80 shadow-[0_0_25px_rgba(180,63,235,0.4),0_0_50px_rgba(180,63,235,0.15)] ring-1 ring-[#B43FEB]/30"
                 : isSourceHighlighted
@@ -130,17 +128,17 @@ export const AudioNode = memo(
             />
             {selected ? (
               <>
-                <div className="absolute -top-px -left-px h-4 w-4 rounded-tl-xl border-l-2 border-t-2 border-[#B43FEB]" />
-                <div className="absolute -top-px -right-px h-4 w-4 rounded-tr-xl border-r-2 border-t-2 border-[#B43FEB]" />
-                <div className="absolute -bottom-px -left-px h-4 w-4 rounded-bl-xl border-b-2 border-l-2 border-[#B43FEB]" />
-                <div className="absolute -bottom-px -right-px h-4 w-4 rounded-br-xl border-b-2 border-r-2 border-[#B43FEB]" />
+                <div className="absolute -top-px -left-px h-4 w-4 rounded-tl-[20px] border-l-2 border-t-2 border-[#B43FEB]" />
+                <div className="absolute -top-px -right-px h-4 w-4 rounded-tr-[20px] border-r-2 border-t-2 border-[#B43FEB]" />
+                <div className="absolute -bottom-px -left-px h-4 w-4 rounded-bl-[20px] border-b-2 border-l-2 border-[#B43FEB]" />
+                <div className="absolute -bottom-px -right-px h-4 w-4 rounded-br-[20px] border-b-2 border-r-2 border-[#B43FEB]" />
               </>
             ) : null}
 
-            <div className="pointer-events-none absolute inset-0 rounded-xl bg-linear-to-tr from-transparent via-white/2 to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
+            <div className="pointer-events-none absolute inset-0 rounded-[20px] bg-linear-to-tr from-transparent via-white/2 to-transparent opacity-0 transition-opacity duration-500 group-hover/card:opacity-100" />
 
-            <div className="relative flex h-full w-full overflow-hidden rounded-lg bg-black/30">
-              <AudioContent data={data} audioRef={audioRef} />
+            <div className="relative flex h-full w-full overflow-hidden rounded-[19px] p-2">
+              <AudioContent data={data} />
             </div>
           </div>
           {isActiveNode ? (
