@@ -354,6 +354,7 @@ export const VideoPromptEditor = forwardRef<
               class: cn(
                 options.HTMLAttributes.class,
                 mentionType === "image" && thumbnail && "cursor-pointer",
+                mentionType === "audio" && "cursor-pointer",
               ),
               "data-type": "mention",
               "data-mention-id": node.attrs.id,
