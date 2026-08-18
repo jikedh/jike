@@ -41,6 +41,11 @@ export const AudioContent = memo(({ nodeId, data, isTrimming, onCancelTrim }: Au
         data.status === GenerationStatus.QUEUED ||
         data.status === GenerationStatus.FAILED;
     const playableAudioUrl = playbackUnavailable ? undefined : audioUrl;
+    const trimDuration = Math.max(0, trimRange.end - trimRange.start);
+    const playbackRange =
+        isTrimming && trimDuration >= MIN_TRIM_DURATION
+            ? trimRange
+            : undefined;
     const {
         waveformRef,
         isPlaying,
@@ -49,9 +54,8 @@ export const AudioContent = memo(({ nodeId, data, isTrimming, onCancelTrim }: Au
         isLoading,
         playbackError,
         togglePlayback,
-    } = useAudioPlayback(playableAudioUrl);
+    } = useAudioPlayback(playableAudioUrl, playbackRange);
     const playbackDisabled = isLoading || duration <= 0 || Boolean(playbackError);
-    const trimDuration = Math.max(0, trimRange.end - trimRange.start);
     const startPercent = duration > 0 ? (trimRange.start / duration) * 100 : 0;
     const endPercent = duration > 0 ? (trimRange.end / duration) * 100 : 100;
 
