@@ -52,8 +52,6 @@ import {
   type LightingGenerationConfig
 } from "./utils/lighting";
 
-const DRAG_UI_RESTORE_DELAY = 140;
-
 /**
  * 图片节点组件
  * 职责：
@@ -67,7 +65,6 @@ const DRAG_UI_RESTORE_DELAY = 140;
 export const ImageNode = memo(
   ({ id, data, selected, dragging }: NodeProps<ImageNodeType>) => {
     const isDragging = Boolean(dragging);
-    const [isDragUiSettled, setIsDragUiSettled] = useState(!isDragging);
     const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
     const [isGridCropOpen, setIsGridCropOpen] = useState(false);
     const [isLightingDialogOpen, setIsLightingDialogOpen] = useState(false);
@@ -135,22 +132,6 @@ export const ImageNode = memo(
     const isAnnotationTarget = annotationWorkspace.sourceNodeId === id;
     const isActiveNode = isActiveFromStore && selected;
 
-    // 使用 useMemo 缓存样式类名，避免每次渲染都重新拼接字符串
-    useEffect(() => {
-      if (isDragging) {
-        setIsDragUiSettled(false);
-        return;
-      }
-
-      const timer = window.setTimeout(() => {
-        setIsDragUiSettled(true);
-      }, DRAG_UI_RESTORE_DELAY);
-
-      return () => {
-        window.clearTimeout(timer);
-      };
-    }, [isDragging]);
-
     const handleVisibilityClass = useMemo(
       () =>
         isGalleryExpanded || isAnnotationMode
@@ -162,17 +143,13 @@ export const ImageNode = memo(
     );
 
     // 使用 useMemo 缓存工具栏显示条件，避免每次渲染都重新计算
-    const shouldShowToolbar = useMemo(
+    const shouldMountToolbar = useMemo(
       () =>
         isActiveNode &&
-        !isDragging &&
-        isDragUiSettled &&
         !hasMultipleSelected &&
         !isAnnotationMode,
       [
         isActiveNode,
-        isDragging,
-        isDragUiSettled,
         isAnnotationMode,
         hasMultipleSelected,
       ],
@@ -770,8 +747,13 @@ export const ImageNode = memo(
             }}
           >
             {/* 节点内顶部工具栏：直接参与节点缩放，保证几何一致性 */}
-            {shouldShowToolbar && (
-              <div className="selection-box-deferred-ui nodrag nopan nowheel absolute -top-22 left-1/2 z-50 -translate-x-1/2">
+            {shouldMountToolbar && (
+              <div
+                className={cn(
+                  "selection-box-deferred-ui nodrag nopan nowheel absolute -top-22 left-1/2 z-50 -translate-x-1/2",
+                  isDragging ? "invisible opacity-0" : "visible opacity-100",
+                )}
+              >
                 <ImageToolbar
                   nodeId={id}
                   data={data}

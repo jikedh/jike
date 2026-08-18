@@ -19,8 +19,6 @@ import { VideoContent } from "./VideoContent";
 import { VideoPromptPanel } from "./VideoPromptPanel";
 import { VideoToolbar } from "./VideoToolbar";
 
-const DRAG_UI_RESTORE_DELAY = 140;
-
 /**
  * 新版视频节点入口。
  * 这里保留新版参数面板，同时把旧版成熟的尺寸同步、右键拆分和多结果承载能力补回来。
@@ -32,7 +30,6 @@ const NewVideoNode = ({
   dragging,
 }: NodeProps<NewVideoNodeType>) => {
   const isDragging = Boolean(dragging);
-  const [isDragUiSettled, setIsDragUiSettled] = useState(!isDragging);
   const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -103,19 +100,6 @@ const NewVideoNode = ({
     updateNodeDimensions(id, nodeSize.width, nodeSize.height);
   }, [id, nodeSize.height, nodeSize.width, updateNodeDimensions]);
 
-  useEffect(() => {
-    if (isDragging) {
-      setIsDragUiSettled(false);
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setIsDragUiSettled(true);
-    }, DRAG_UI_RESTORE_DELAY);
-
-    return () => window.clearTimeout(timer);
-  }, [isDragging]);
-
   const isGenerating = useMemo(() => {
     const status = data.status ?? GenerationStatus.COMPLETED;
     return (
@@ -173,10 +157,9 @@ const NewVideoNode = ({
 
   const nodeIcon = useMemo(() => <IconVideo size={14} />, []);
 
-  const shouldShowToolbar = useMemo(
-    () =>
-      isActiveNode && !isDragging && isDragUiSettled && !hasMultipleSelected,
-    [isActiveNode, isDragging, isDragUiSettled, hasMultipleSelected],
+  const shouldMountToolbar = useMemo(
+    () => isActiveNode && !hasMultipleSelected,
+    [isActiveNode, hasMultipleSelected],
   );
   const shouldShowPromptPanel = isActiveNode && !hasMultipleSelected;
 
@@ -212,8 +195,13 @@ const NewVideoNode = ({
           height: `${nodeSize.height}px`,
         }}
       >
-        {shouldShowToolbar && (
-          <div className="selection-box-deferred-ui nodrag nopan nowheel absolute -top-23 left-1/2 z-50 -translate-x-1/2">
+        {shouldMountToolbar && (
+          <div
+            className={cn(
+              "selection-box-deferred-ui nodrag nopan nowheel absolute -top-23 left-1/2 z-50 -translate-x-1/2",
+              isDragging ? "invisible opacity-0" : "visible opacity-100",
+            )}
+          >
             <VideoToolbar
               nodeId={id}
               data={data}

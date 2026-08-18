@@ -12,7 +12,7 @@ import {
   IconZoomIn,
 } from "@tabler/icons-react";
 import type { ChangeEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
 import { normalizeRequiredPoints } from "shared/constants/points";
@@ -927,7 +927,7 @@ type ActionKey =
  * 新版视频节点工具栏
  * 职责：提供上传、下载、放大查看、截帧、裁剪、去字幕等操作按钮
  */
-export const VideoToolbar = ({
+export const VideoToolbar = memo(({
   nodeId,
   data,
   onDelete,
@@ -1805,4 +1805,4 @@ export const VideoToolbar = ({
       ) : null}
     </>
   );
-};
+});

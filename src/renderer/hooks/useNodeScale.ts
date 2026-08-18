@@ -1,5 +1,4 @@
 import { useStore } from "@xyflow/react";
-import { useMemo } from "react";
 
 /**
  * 获取当前视口缩放值（离散化处理，避免高频重渲染）
@@ -16,11 +15,7 @@ import { useMemo } from "react";
  * - 对 zoom 做离散化处理（步长 0.05），在视觉平滑和性能之间取得平衡。
  */
 export const useNodeScale = () => {
-  // 选择性订阅 zoom 值，仅在 zoom 变化时触发重渲染
-  const rawZoom = useStore((s) => s.transform[2]);
-
-  // 离散化：步长 0.05，减少微小变化带来的重渲染
-  const zoom = useMemo(() => Math.round(rawZoom * 20) / 20, [rawZoom]);
+  const zoom = useStore((state) => Math.round(state.transform[2] * 20) / 20);
 
   return { zoom };
 };

@@ -1282,6 +1282,31 @@ export const CanvasFlow = ({
   const [displayEdges, setDisplayEdges] = useState<EdgeType[]>(
     () => useCanvasFlowStore.getState().edges,
   );
+  const connectedEdgesByNodeId = useMemo(() => {
+    const edgeMap = new Map<string, EdgeType[]>();
+
+    displayEdges.forEach((edge) => {
+      const sourceEdges = edgeMap.get(edge.source);
+      if (sourceEdges) {
+        sourceEdges.push(edge);
+      } else {
+        edgeMap.set(edge.source, [edge]);
+      }
+
+      if (edge.target === edge.source) {
+        return;
+      }
+
+      const targetEdges = edgeMap.get(edge.target);
+      if (targetEdges) {
+        targetEdges.push(edge);
+      } else {
+        edgeMap.set(edge.target, [edge]);
+      }
+    });
+
+    return edgeMap;
+  }, [displayEdges]);
   const groups = useCanvasFlowStore((state) => state.groups);
   const selectedGroupId = useCanvasFlowStore((state) => state.selectedGroupId);
   const setSelectedGroupId = useCanvasFlowStore(
@@ -1803,14 +1828,19 @@ export const CanvasFlow = ({
               };
             }) as NodeDragDomSnapshot[])
           : [];
+      const connectedEdges = Array.from(
+        new Map(
+          nodeIds.flatMap((nodeId) =>
+            (connectedEdgesByNodeId.get(nodeId) ?? []).map((edge) => [
+              edge.id,
+              edge,
+            ]),
+          ),
+        ).values(),
+      );
       const connectedEdgePreviews =
         typeof document !== "undefined"
-          ? (displayEdges
-            .filter((edge) => {
-              const sourceDragged = nodeIdSet.has(edge.source);
-              const targetDragged = nodeIdSet.has(edge.target);
-              return sourceDragged || targetDragged;
-            })
+          ? (connectedEdges
             .map((edge) => {
               const pathElements = getEdgePathElements(edge.id);
               const pointsFromPath =
@@ -1867,7 +1897,7 @@ export const CanvasFlow = ({
         connectedEdgePreviews,
       };
     },
-    [displayEdges, getHandleCenterFlowPosition, reactFlowInstance],
+    [connectedEdgesByNodeId, getHandleCenterFlowPosition, reactFlowInstance],
   );
 
   const scheduleNodeDragPreview = useCallback(() => {
@@ -2041,10 +2071,6 @@ export const CanvasFlow = ({
         dragState.latestPositions.set(change.id, change.position);
       });
 
-      const currentNodes = reactFlowInstance.getNodes() as AllNodeType[];
-      const currentNodeById = new Map(
-        currentNodes.map((item) => [item.id, item]),
-      );
       const positionByNodeId = new Map<string, { x: number; y: number }>();
       const positionChanges: NodeChange<AllNodeType>[] = [];
 
@@ -2052,7 +2078,7 @@ export const CanvasFlow = ({
         const startPosition = dragState.startPositions.get(nodeId);
         const latestPosition =
           dragState.latestPositions.get(nodeId) ??
-          currentNodeById.get(nodeId)?.position;
+          reactFlowInstance.getNode(nodeId)?.position;
 
         if (!startPosition || !latestPosition) {
           return;
@@ -3836,21 +3862,13 @@ export const CanvasFlow = ({
         y: number;
         zoom: number;
       };
-      markViewportInteracting();
-      finishViewportInteracting();
-
       if (!shouldTrackViewport) {
         return;
       }
 
       scheduleViewportState(viewport as { x: number; y: number; zoom: number });
     },
-    [
-      finishViewportInteracting,
-      markViewportInteracting,
-      scheduleViewportState,
-      shouldTrackViewport,
-    ],
+    [scheduleViewportState, shouldTrackViewport],
   );
 
   const handleViewportMoveStart = useCallback(
@@ -4864,6 +4882,7 @@ export const CanvasFlow = ({
             zoomActivationKeyCode={isAnnotationLocked ? null : "Control"}
             zoomOnPinch={!isAnnotationLocked}
             preventScrolling={false}
+            onlyRenderVisibleElements
             connectionLineStyle={connectionLineStyle}
             // 吸附开关与网格尺寸由设置中心驱动
             snapToGrid={snapToGrid}

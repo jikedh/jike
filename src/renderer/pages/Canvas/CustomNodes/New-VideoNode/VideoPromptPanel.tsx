@@ -1,6 +1,6 @@
 import { arrayMove } from "@dnd-kit/sortable";
 import { IconSparkles, IconWand } from "@tabler/icons-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createChatCompletion } from "@/api/ai";
 import { GenerationStatus } from "shared/constants/enum";
 import { getVideoGenerationPoints } from "shared/constants/model-points";
@@ -416,7 +416,7 @@ const getCurrentNewVideoData = (nodeId: string) => {
   return node?.data as NewVideoGenerationNode | undefined;
 };
 
-export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
+export const VideoPromptPanel = memo(({ nodeId }: VideoPromptPanelProps) => {
   const editorRef = useRef<VideoPromptEditorHandle | null>(null);
   const { success, warning, error } = useMessage();
   const {
@@ -2348,4 +2348,4 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       </div>
     </TooltipProvider>
   );
-};
+});
