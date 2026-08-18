@@ -107,10 +107,6 @@ export const ImageNode = memo(
     const isActiveFromStore = useCanvasFlowStore(
       (state) => state.activeNodeId === id,
     );
-    // 从 store 直接读取选中节点数量，避免 O(n²) 遍历；这里只关心是否 > 1
-    const hasMultipleSelected = useCanvasFlowStore(
-      (state) => state.selectedNodesCount > 1,
-    );
     const projectId = useCanvasFlowStore((state) => state.projectId);
     const setDefaultImagePreset = useChatSettingsStore(
       (state) => state.setDefaultImagePreset,
@@ -142,20 +138,8 @@ export const ImageNode = memo(
       [isActiveNode, isAnnotationMode, isGalleryExpanded],
     );
 
-    // 使用 useMemo 缓存工具栏显示条件，避免每次渲染都重新计算
-    const shouldMountToolbar = useMemo(
-      () =>
-        isActiveNode &&
-        !hasMultipleSelected &&
-        !isAnnotationMode,
-      [
-        isActiveNode,
-        isAnnotationMode,
-        hasMultipleSelected,
-      ],
-    );
-    const shouldShowPromptPanel =
-      isActiveNode && !hasMultipleSelected && !isAnnotationMode;
+    const shouldMountToolbar = isActiveNode && !isAnnotationMode;
+    const shouldShowPromptPanel = isActiveNode && !isAnnotationMode;
 
     // 根据 data.size（如 "1:1", "16:9"）动态计算节点尺寸，按图片原始比例展示
     const nodeSize = useMemo(() => {

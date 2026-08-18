@@ -157,7 +157,6 @@ export function useUndoRedo() {
         hydratedNodes,
       ),
       selectedGroupId: null,
-      selectedNodesCount: hydratedNodes.filter((node) => node.selected).length,
     });
 
     historyIndexRef.current = newIndex;
@@ -183,7 +182,6 @@ export function useUndoRedo() {
         hydratedNodes,
       ),
       selectedGroupId: null,
-      selectedNodesCount: hydratedNodes.filter((node) => node.selected).length,
     });
 
     historyIndexRef.current = newIndex;

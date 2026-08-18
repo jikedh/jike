@@ -2206,8 +2206,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     historyVersion: 0,
     // 历史重置触发器（每次递增通知 useUndoRedo hook 重置历史）
     historyResetTrigger: 0,
-    // 选中节点数量初始化（用于避免 O(n²) 遍历）
-    selectedNodesCount: 0,
     activeNodeId: null,
     activeVideoTool: null,
     isSelectionBoxActive: false,
@@ -2911,7 +2909,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         }),
         groups: [...current.groups, group],
         selectedGroupId: group.id,
-        selectedNodesCount: 0,
       }));
 
       get().requestHistorySave();
@@ -4197,10 +4194,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           })
           .concat(newNodes);
 
-        set(() => ({
-          nodes: nextNodes,
-          selectedNodesCount: nextNodes.filter((node) => node.selected).length,
-        }));
+        set(() => ({ nodes: nextNodes }));
 
         get().requestHistorySave();
 
@@ -4649,11 +4643,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               };
             })
             : state.groups;
-        // 计算选中节点数量，避免在 ImageNode 等组件中 O(n²) 遍历
-        const selectedCount = nextNodes.filter((n) => n.selected).length;
         return {
           nodes: nextNodes,
-          selectedNodesCount: selectedCount,
           selectedGroupId: hasSelectChange ? null : state.selectedGroupId,
           groups: nextGroups,
         };
@@ -4830,8 +4821,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           sourceNodeId: null,
         },
         historyResetTrigger: get().historyResetTrigger + 1,
-        // 选中节点数量初始化（用于避免 O(n²) 遍历）
-        selectedNodesCount: 0,
       });
     },
 

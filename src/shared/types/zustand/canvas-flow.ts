@@ -117,8 +117,6 @@ export type CanvasFlowStoreType = {
   };
   historyVersion: number;
   historyResetTrigger: number;
-  // 选中的节点数量（用于避免 O(n²) 遍历计算）
-  selectedNodesCount: number;
   activeNodeId: string | null;
   activeVideoTool: ActiveVideoTool;
   isSelectionBoxActive: boolean;

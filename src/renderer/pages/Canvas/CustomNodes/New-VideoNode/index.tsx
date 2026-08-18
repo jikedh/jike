@@ -57,10 +57,6 @@ const NewVideoNode = ({
     (state) => state.activeVideoTool !== null,
   );
 
-  // 只关心是否 > 1，避免选中数量变化时所有节点重渲染
-  const hasMultipleSelected = useCanvasFlowStore(
-    (state) => state.selectedNodesCount > 1,
-  );
   const isActiveNode = isActiveFromStore && selected;
 
   const handleVisibilityClass = useMemo(
@@ -157,11 +153,8 @@ const NewVideoNode = ({
 
   const nodeIcon = useMemo(() => <IconVideo size={14} />, []);
 
-  const shouldMountToolbar = useMemo(
-    () => isActiveNode && !hasMultipleSelected,
-    [isActiveNode, hasMultipleSelected],
-  );
-  const shouldShowPromptPanel = isActiveNode && !hasMultipleSelected;
+  const shouldMountToolbar = isActiveNode;
+  const shouldShowPromptPanel = isActiveNode;
 
   // 生成中的占位卡在新版节点里也算一个视频，用于支持“1 个真实视频 + 1 个生成中占位”时独立为视频。
   const hasMultipleResults =
