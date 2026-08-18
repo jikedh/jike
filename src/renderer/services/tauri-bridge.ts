@@ -140,7 +140,7 @@ const downloadApi = {
 // === videoProcessing ===================================================
 
 const videoProcessingApi = {
-    trim: (request: { videoUrl: string; start: number; end: number; authToken?: string; backendBaseUrl?: string; ffmpegPath?: string }) =>
+    trim: (request: { videoUrl: string; start: number; end: number; authToken?: string; backendBaseUrl?: string }) =>
         invokeOrThrow<{
             success: boolean;
             data?: { url: string; format: "mp4"; duration: number; method: "cloud" | "ffmpeg"; jobId?: string };

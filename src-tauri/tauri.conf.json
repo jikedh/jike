@@ -68,9 +68,7 @@
         "displayLanguageSelector": false
       }
     },
-    "resources": {
-      "resources/ffmpeg/": "ffmpeg/"
-    },
+    "resources": [],
     "publisher": "小明",
     "copyright": "© 2026 小明"
   },

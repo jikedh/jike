@@ -37,7 +37,6 @@ declare global {
         end: number;
         authToken?: string;
         backendBaseUrl?: string;
-        ffmpegPath?: string;
       }) => Promise<{
         success: boolean;
         data?: {

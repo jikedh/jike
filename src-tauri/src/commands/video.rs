@@ -1,14 +1,9 @@
 use crate::domain;
 use crate::models::{SplitMp4Request, VideoTrimRequest};
-use std::path::PathBuf;
-use tauri::Manager;
 
 #[tauri::command]
-pub async fn video_processing_trim(
-    app: tauri::AppHandle,
-    request: VideoTrimRequest,
-) -> Result<serde_json::Value, String> {
-    match domain::trim_video(request, ffmpeg_resource_dirs(&app)).await {
+pub async fn video_processing_trim(request: VideoTrimRequest) -> Result<serde_json::Value, String> {
+    match domain::trim_video(request).await {
         Ok(r) => Ok(serde_json::json!({ "success": true, "data": r })),
         Err(e) => Ok(serde_json::json!({ "success": false, "error": e.to_string() })),
     }
@@ -16,27 +11,10 @@ pub async fn video_processing_trim(
 
 #[tauri::command]
 pub async fn video_split_mp4_by_seconds(
-    app: tauri::AppHandle,
     request: SplitMp4Request,
 ) -> Result<serde_json::Value, String> {
-    match domain::split_mp4_by_seconds(request, ffmpeg_resource_dirs(&app)).await {
+    match domain::split_mp4_by_seconds(request).await {
         Ok(r) => Ok(serde_json::json!({ "success": true, "data": r })),
         Err(e) => Ok(serde_json::json!({ "success": false, "error": e.to_string() })),
     }
-}
-
-fn ffmpeg_resource_dirs(app: &tauri::AppHandle) -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
-
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        dirs.push(resource_dir.join("ffmpeg").join("windows-x86_64"));
-        dirs.push(
-            resource_dir
-                .join("resources")
-                .join("ffmpeg")
-                .join("windows-x86_64"),
-        );
-    }
-
-    dirs
 }

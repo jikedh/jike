@@ -6,7 +6,6 @@ import {
   IconEraser,
   IconPlayerPauseFilled,
   IconPlayerPlayFilled,
-  IconPlayerStop,
   IconScissors,
   IconTrash,
   IconUpload,
@@ -54,11 +53,9 @@ import { useUserStore } from "@/stores/useUserStore";
 import { withRemoteMediaRef } from "../utils/localMedia";
 import type { VideoEnhanceParams } from "./components/VideoEnhancePanel";
 import { VideoEnhancePanel } from "./components/VideoEnhancePanel";
-import { VideoSnapshotPanel } from "./components/VideoSnapshotPanel";
 import { VideoTimeline } from "./components/VideoTimeline";
 import type { VideoTrimResult } from "./components/VideoTrimPanel";
 import { VideoTrimPanel } from "./components/VideoTrimPanel";
-import { useVideoFrameCapture } from "./hooks/useVideoFrameCapture";
 import {
   getVideoItemsFromNodeData,
   getVideoUrlsFromNodeData,
@@ -924,12 +921,11 @@ type ActionKey =
   | "snapshot"
   | "trim"
   | "removeCaptions"
-  | "videoEnhance"
-  | "lastFrame";
+  | "videoEnhance";
 
 /**
  * 新版视频节点工具栏
- * 职责：提供首帧、尾帧、上传、下载、放大查看、截帧、去字幕等操作按钮
+ * 职责：提供上传、下载、放大查看、截帧、裁剪、去字幕等操作按钮
  */
 export const VideoToolbar = ({
   nodeId,
@@ -940,7 +936,6 @@ export const VideoToolbar = ({
 }: VideoToolbarProps) => {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [isSnapshotPanelOpen, setIsSnapshotPanelOpen] = useState(false);
   const [isTrimPanelOpen, setIsTrimPanelOpen] = useState(false);
   const [isTrimmingVideo, setIsTrimmingVideo] = useState(false);
   const [isSubtitlePanelOpen, setIsSubtitlePanelOpen] = useState(false);
@@ -959,13 +954,6 @@ export const VideoToolbar = ({
   const setActiveVideoTool = useCanvasFlowStore(
     (state) => state.setActiveVideoTool,
   );
-
-  const {
-    captureLastFrame,
-    captureSnapshot,
-    isCapturingLastFrame,
-    isCapturingSnapshot,
-  } = useVideoFrameCapture();
 
   const videoUrls = useMemo(() => {
     return getVideoUrlsFromNodeData(data);
@@ -996,7 +984,6 @@ export const VideoToolbar = ({
     () => [
       { key: "upload" as const, label: "上传", icon: IconUpload },
       { key: "snapshot" as const, label: "截帧", icon: IconScissors },
-      { key: "lastFrame" as const, label: "尾帧", icon: IconPlayerStop },
       { key: "trim" as const, label: "视频裁剪", icon: IconScissors },
       {
         key: "removeCaptions" as const,
@@ -1139,12 +1126,7 @@ export const VideoToolbar = ({
     }
 
     if (actionKey === "snapshot") {
-      if (!currentVideoUrl) {
-        toast.info("暂无可用视频");
-        return;
-      }
-      setActiveVideoTool({ nodeId, tool: "snapshot" });
-      setIsSnapshotPanelOpen(true);
+      toast.info("截帧功能正在开发中");
       return;
     }
 
@@ -1155,15 +1137,6 @@ export const VideoToolbar = ({
       }
       setActiveVideoTool({ nodeId, tool: "trim" });
       setIsTrimPanelOpen(true);
-      return;
-    }
-
-    if (actionKey === "lastFrame") {
-      if (!currentVideoUrl) {
-        toast.info("暂无可用视频");
-        return;
-      }
-      await captureLastFrame(currentVideoUrl, nodeId);
       return;
     }
 
@@ -1191,11 +1164,6 @@ export const VideoToolbar = ({
   const closeVideoTool = useCallback(() => {
     setActiveVideoTool(null);
   }, [setActiveVideoTool]);
-
-  const closeSnapshotPanel = useCallback(() => {
-    setIsSnapshotPanelOpen(false);
-    closeVideoTool();
-  }, [closeVideoTool]);
 
   const closeSubtitlePanel = useCallback(() => {
     setIsSubtitlePanelOpen(false);
@@ -1237,10 +1205,6 @@ export const VideoToolbar = ({
         const authToken = getJikeingToken();
         const backendBaseUrl =
           import.meta.env.VITE_JIKE_GO_BASE_URL || "http://localhost:9181";
-        const ffmpegPath =
-          import.meta.env.VITE_FFMPEG_PATH ||
-          import.meta.env.VITE_JIKE_FFMPEG_PATH ||
-          undefined;
 
         const response = await window.videoProcessing.trim({
           videoUrl: currentVideoUrl,
@@ -1248,7 +1212,6 @@ export const VideoToolbar = ({
           end: range.end,
           authToken: authToken || undefined,
           backendBaseUrl,
-          ffmpegPath,
         });
 
         if (!response.success || !response.data?.url) {
@@ -1758,8 +1721,6 @@ export const VideoToolbar = ({
           const isDisabled =
             (item.key === "download" && isDownloading) ||
             (item.key === "upload" && isUploading) ||
-            (item.key === "lastFrame" && isCapturingLastFrame) ||
-            (item.key === "snapshot" && isCapturingSnapshot) ||
             (item.key === "trim" && isTrimmingVideo) ||
             (item.key === "removeCaptions" && isSubmittingSubtitle);
 
@@ -1800,17 +1761,6 @@ export const VideoToolbar = ({
           <span className="text-[10px]">删除</span>
         </button>
       </div>
-
-      {/* 截帧面板 */}
-      <VideoSnapshotPanel
-        open={isSnapshotPanelOpen}
-        onClose={closeSnapshotPanel}
-        videoUrl={currentVideoUrl || ""}
-        onSnapshot={(timeMs) =>
-          captureSnapshot(currentVideoUrl || "", timeMs, nodeId)
-        }
-        isCapturing={isCapturingSnapshot}
-      />
 
       {/* 去字幕面板 */}
       <VideoSubtitleRemovalPanel
