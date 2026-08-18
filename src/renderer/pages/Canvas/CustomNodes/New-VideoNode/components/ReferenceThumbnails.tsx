@@ -25,6 +25,7 @@ import { cn, getVideoThumbnail } from "shared/utils/utils";
 import { NotePreviewPopover } from "@/components/NotePreviewPopover";
 import { ThumbnailPreviewPopover } from "@/components/ThumbnailPreviewPopover";
 import { VideoPreviewPopover } from "@/components/VideoPreviewPopover";
+import { AudioWaveformPreview } from "./AudioWaveformPreview";
 import type { MentionItem } from "../constants/mockData";
 
 type ReferenceItemType = "image" | "video" | "audio" | "note";
@@ -219,6 +220,14 @@ const ReferenceCard = ({
       <VideoPreviewPopover src={item.thumbnail} index={index}>
         {card}
       </VideoPreviewPopover>
+    );
+  }
+
+  if (item.type === "audio") {
+    return (
+      <AudioWaveformPreview audioUrl={item.url ?? item.value} label={item.label}>
+        {card}
+      </AudioWaveformPreview>
     );
   }
 
