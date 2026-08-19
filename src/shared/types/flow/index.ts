@@ -36,7 +36,8 @@ export interface ImageGenerationNode {
   size?: string; // 图片尺寸比例，如 "16:9", "1024x1024"
   resolution?: string; // 分辨率，如 "1K", "2K", "4K"
   requiredPoints?: number; // 本次生成预计消耗积分（用于扣费与 UI 对齐）
-  quality?: string; // 图片质量，如 "standard", "hd"
+  quality?: string; // 图片质量，如 "standard", "hd", "1", "4"
+  raw?: boolean; // Midjourney 原始模式
   style?: string; // 图片风格
   chaos?: number; // Midjourney 结果随机性，范围 0-100
   stylize?: number; // Midjourney 风格化强度，范围 0-1000

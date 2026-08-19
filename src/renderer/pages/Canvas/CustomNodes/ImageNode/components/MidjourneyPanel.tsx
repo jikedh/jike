@@ -1,10 +1,23 @@
 import { Slider } from "@/components/ui/slider";
+import {
+    Select,
+    SelectContent,
+    SelectGroup,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { ImageParamsPopover } from "./ImageParamsPopover";
 import type { ImageParamOption } from "./ImageParamsPopover";
+
+export type MidjourneyQuality = "1" | "4";
 
 type MidjourneyPanelProps = {
     size: string;
     resolution: string;
+    quality: MidjourneyQuality;
+    raw: boolean;
     chaos: number;
     stylize: number;
     imageWeight: number;
@@ -12,6 +25,8 @@ type MidjourneyPanelProps = {
     resolutionOptions: ImageParamOption[];
     onSizeChange: (value: string) => void;
     onResolutionChange: (value: string) => void;
+    onQualityChange: (value: MidjourneyQuality) => void;
+    onRawChange: (value: boolean) => void;
     onChaosChange: (value: number) => void;
     onStylizeChange: (value: number) => void;
     onImageWeightChange: (value: number) => void;
@@ -66,6 +81,8 @@ const NumericParameter = ({
 export const MidjourneyPanel = ({
     size,
     resolution,
+    quality,
+    raw,
     chaos,
     stylize,
     imageWeight,
@@ -73,6 +90,8 @@ export const MidjourneyPanel = ({
     resolutionOptions,
     onSizeChange,
     onResolutionChange,
+    onQualityChange,
+    onRawChange,
     onChaosChange,
     onStylizeChange,
     onImageWeightChange,
@@ -88,6 +107,42 @@ export const MidjourneyPanel = ({
         onResolutionChange={onResolutionChange}
     >
         <div className="flex flex-col gap-4 border-t border-white/6 pt-4">
+            <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                    <div className="text-xs font-medium text-white/68">图像模式</div>
+                    <div className="mt-0.5 text-[10px] leading-4 text-white/36">
+                        高质量模式会使用更多生成资源。
+                    </div>
+                </div>
+                <Select
+                    value={quality}
+                    onValueChange={(value) =>
+                        onQualityChange(value as MidjourneyQuality)
+                    }
+                >
+                    <SelectTrigger className="w-32 shrink-0 border-white/10 bg-white/4 text-xs text-white/72">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectGroup>
+                            <SelectItem value="1">标准质量</SelectItem>
+                            <SelectItem value="4">高质量模式</SelectItem>
+                        </SelectGroup>
+                    </SelectContent>
+                </Select>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                    <div className="text-xs font-medium text-white/68">创意处理（Raw）</div>
+                    <div className="mt-0.5 text-[10px] leading-4 text-white/36">
+                        开启后减少自动风格修饰，增强提示词控制。
+                    </div>
+                </div>
+                <Switch
+                    checked={raw}
+                    onCheckedChange={onRawChange}
+                />
+            </div>
             <NumericParameter
                 label="混沌程度（Chaos）"
                 description="提高结果之间的随机性和差异。"
