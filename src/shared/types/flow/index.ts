@@ -38,6 +38,9 @@ export interface ImageGenerationNode {
   requiredPoints?: number; // 本次生成预计消耗积分（用于扣费与 UI 对齐）
   quality?: string; // 图片质量，如 "standard", "hd"
   style?: string; // 图片风格
+  chaos?: number; // Midjourney 结果随机性，范围 0-100
+  stylize?: number; // Midjourney 风格化强度，范围 0-1000
+  iw?: number; // Midjourney 垫图权重，范围 0-3
   image_urls?: string[]; // 参考图片 URL 列表（统一关键字段，包含上传和来自依赖节点的图片）
   ossUrlMap?: Record<string, string>; // 本地文件路径到 OSS URL 的映射缓存（避免重复上传）
   // ---- 输出结果 ----

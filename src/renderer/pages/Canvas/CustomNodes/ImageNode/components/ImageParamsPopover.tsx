@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { cn } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +21,7 @@ type ImageParamsPopoverProps = {
   resolutionOptions?: ImageParamOption[];
   sizeLabel?: string;
   resolutionLabel?: string;
+  children?: ReactNode;
   onSizeChange: (value: string) => void;
   onResolutionChange?: (value: string) => void;
 };
@@ -31,6 +33,7 @@ export const ImageParamsPopover = ({
   resolutionOptions,
   sizeLabel = "图片比例",
   resolutionLabel = "分辨率",
+  children,
   onSizeChange,
   onResolutionChange,
 }: ImageParamsPopoverProps) => {
@@ -145,6 +148,8 @@ export const ImageParamsPopover = ({
               </div>
             </div>
           ) : null}
+
+          {children}
         </div>
       </PopoverContent>
     </Popover>

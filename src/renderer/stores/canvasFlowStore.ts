@@ -525,6 +525,9 @@ const buildRunningHubImageRequest = ({
   imageUrls,
   size,
   resolution,
+  chaos,
+  stylize,
+  imageWeight,
   route,
   scoreCost,
 }: {
@@ -532,6 +535,9 @@ const buildRunningHubImageRequest = ({
   imageUrls: string[];
   size?: string;
   resolution?: string;
+  chaos?: number;
+  stylize?: number;
+  imageWeight?: number;
   route: RunningHubImageRoute;
   scoreCost?: number;
 }) => {
@@ -541,6 +547,9 @@ const buildRunningHubImageRequest = ({
       aspectRatio: size || "1:1",
       quality: "1",
       hd: resolution?.toUpperCase() === "2K",
+      chaos: chaos ?? 0,
+      stylize: stylize ?? 0,
+      iw: imageWeight ?? 1,
       ...(imageUrls[0] ? { imageUrl: imageUrls[0] } : {}),
       ...(scoreCost != null ? { scoreCost } : {}),
     };
@@ -557,16 +566,33 @@ const buildRunningHubImageRequest = ({
     ? { ...baseRequest, imageUrls: imageUrls.slice(0, 10) }
     : baseRequest;
 };
-const extractRunningHubImageUrl = (response: any) => {
+const unwrapRunningHubTaskData = (response: any) => {
   const data = response?.data ?? response;
-  const directUrl = data?.url || data?.imageUrl || data?.fileUrl;
-  if (directUrl) {
-    return directUrl;
+  const nestedData = data?.data;
+  if (
+    nestedData &&
+    typeof nestedData === "object" &&
+    (nestedData.taskId || nestedData.status || Array.isArray(nestedData.results))
+  ) {
+    return nestedData;
   }
-  const firstResult = Array.isArray(data?.results)
-    ? data.results[0]
-    : undefined;
-  return firstResult?.url || firstResult?.fileUrl || firstResult?.imageUrl;
+  return data;
+};
+const extractRunningHubImageUrls = (response: any) => {
+  const data = unwrapRunningHubTaskData(response);
+  const urls = [data?.url, data?.imageUrl, data?.fileUrl];
+  if (Array.isArray(data?.results)) {
+    data.results.forEach((item: any) => {
+      urls.push(item?.url, item?.fileUrl, item?.imageUrl);
+    });
+  }
+  return Array.from(
+    new Set(
+      urls
+        .map((url) => String(url || "").trim())
+        .filter(Boolean),
+    ),
+  );
 };
 const waitForRunningHubV2ImageResult = async (taskId: string) => {
   const startedAt = Date.now();
@@ -574,13 +600,13 @@ const waitForRunningHubV2ImageResult = async (taskId: string) => {
   let lastMessage = "";
   while (Date.now() - startedAt < IMAGE_TIMEOUT) {
     const response = await queryRunningHubV2Task({ taskId });
-    const data = response?.data ?? response;
+    const data = unwrapRunningHubTaskData(response);
     const status = String(data?.status || "").toUpperCase();
     lastStatus = status || lastStatus;
     lastMessage = data?.errorMessage || data?.message || lastMessage;
-    const resultUrl = extractRunningHubImageUrl(data);
-    if (resultUrl && (status === "SUCCESS" || !status)) {
-      return resultUrl;
+    const resultUrls = extractRunningHubImageUrls(data);
+    if (resultUrls.length > 0 && (status === "SUCCESS" || !status)) {
+      return resultUrls;
     }
     if (status === "FAILED") {
       throw new Error(lastMessage || "RunningHub 生图失败");
@@ -599,6 +625,9 @@ const submitRunningHubImageTask = async ({
   imageUrls,
   size,
   resolution,
+  chaos,
+  stylize,
+  imageWeight,
   scoreCost,
 }: {
   route: RunningHubImageRoute;
@@ -606,6 +635,9 @@ const submitRunningHubImageTask = async ({
   imageUrls: string[];
   size?: string;
   resolution?: string;
+  chaos?: number;
+  stylize?: number;
+  imageWeight?: number;
   scoreCost?: number;
 }) => {
   const request = buildRunningHubImageRequest({
@@ -614,21 +646,24 @@ const submitRunningHubImageTask = async ({
     imageUrls,
     size,
     resolution,
+    chaos,
+    stylize,
+    imageWeight,
     scoreCost,
   });
   const response =
     imageUrls.length > 0
       ? await route.imageToImage(request as any)
       : await route.textToImage(request);
-  const data = response?.data ?? response;
-  const immediateUrl = extractRunningHubImageUrl(data);
+  const data = unwrapRunningHubTaskData(response);
+  const immediateUrls = extractRunningHubImageUrls(data);
   const ledgerBizId: string | undefined =
     data?.ledger_biz_id ?? data?.ledgerBizId;
-  if (immediateUrl) {
+  if (immediateUrls.length > 0) {
     if (ledgerBizId) {
       confirmDesktopProxyScore(ledgerBizId, "runninghub_v2").catch(() => { });
     }
-    return immediateUrl;
+    return immediateUrls;
   }
   if (!data?.taskId) {
     if (ledgerBizId) {
@@ -641,11 +676,11 @@ const submitRunningHubImageTask = async ({
     throw new Error("RunningHub 未返回任务 ID");
   }
   try {
-    const url = await waitForRunningHubV2ImageResult(data.taskId);
+    const urls = await waitForRunningHubV2ImageResult(data.taskId);
     if (ledgerBizId) {
       confirmDesktopProxyScore(ledgerBizId, "runninghub_v2").catch(() => { });
     }
-    return url;
+    return urls;
   } catch (pollError) {
     if (ledgerBizId) {
       const message =
@@ -663,6 +698,9 @@ const generateRunningHubImageWithFallback = async ({
   imageUrls,
   size,
   resolution,
+  chaos,
+  stylize,
+  imageWeight,
   scoreCost,
 }: {
   model?: string;
@@ -670,6 +708,9 @@ const generateRunningHubImageWithFallback = async ({
   imageUrls: string[];
   size?: string;
   resolution?: string;
+  chaos?: number;
+  stylize?: number;
+  imageWeight?: number;
   scoreCost?: number;
 }) => {
   const routes = resolveRunningHubImageRoutes(model);
@@ -683,6 +724,9 @@ const generateRunningHubImageWithFallback = async ({
       imageUrls,
       size,
       resolution,
+      chaos,
+      stylize,
+      imageWeight,
       scoreCost,
     });
   } catch (lowCostError) {
@@ -696,6 +740,9 @@ const generateRunningHubImageWithFallback = async ({
       imageUrls,
       size,
       resolution,
+      chaos,
+      stylize,
+      imageWeight,
       scoreCost,
     });
   }
@@ -3041,177 +3088,190 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         // RunningHub 专属模型走低价->官方回退，其它模型直接走 ToAPI。
         const payloadOriginalModel = payload.originalModel ?? payload.model;
         if (isAgnesImageModel(payloadOriginalModel)) {
-            set((state) => ({
-              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-                ...data,
-                status: GenerationStatus.IN_PROGRESS,
-                progress: 0,
-              })),
+          set((state) => ({
+            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+              ...data,
+              status: GenerationStatus.IN_PROGRESS,
+              progress: 0,
+            })),
+          }));
+
+          try {
+            const response = await createAgnesImageGeneration(
+              payload,
+              scoreCost,
+            );
+            ledgerBizId = response?.ledgerBizId;
+
+            const resultUrls = extractAgnesImageUrls(response);
+            if (resultUrls.length === 0) {
+              throw new Error("Agnes 图片生成完成，但未返回图片地址");
+            }
+
+            const projectId = get().projectId;
+            const rawResultData = resultUrls.map((resultUrl) => ({
+              url: resultUrl,
             }));
 
-            try {
-              const response = await createAgnesImageGeneration(
-                payload,
-                scoreCost,
+            // 先写入原始 URL，再统一刷新转存 OSS（等价于模拟点击刷新按钮）
+            set((state) => ({
+              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+                const existingData = data.result?.data ?? [];
+                const mergedData = appendMediaSequences(
+                  existingData,
+                  rawResultData,
+                );
+                return {
+                  ...data,
+                  status: GenerationStatus.COMPLETED,
+                  progress: 100,
+                  result: { type: "image", data: mergedData },
+                  error: undefined,
+                };
+              }),
+            }));
+            saveCurrentCanvasToHistory();
+            if (useChatSettingsStore.getState().autoSaveEnabled) {
+              get().saveGraph();
+            }
+
+            // 刷新 OSS 转存
+            const currentImages =
+              (
+                get().nodes.find((n) => n.id === nodeId)
+                  ?.data as ImageGenerationNode
+              )?.result?.data ?? [];
+            const startIndex = currentImages.length - rawResultData.length;
+            for (let i = 0; i < rawResultData.length; i++) {
+              void refreshImageToOss(
+                nodeId,
+                currentImages,
+                startIndex + i,
+                get().updateImageNodeData,
               );
-              ledgerBizId = response?.ledgerBizId;
+            }
+            if (ledgerBizId) {
+              confirmDesktopProxyScore(ledgerBizId, "agnes").catch(() => { });
+            }
+            await refreshBalanceAfterGeneration({
+              scene: "image",
+              nodeId,
+              model: payloadOriginalModel,
+              requiredPoints: payload.requiredPoints,
+            });
 
-              const resultUrls = extractAgnesImageUrls(response);
-              if (resultUrls.length === 0) {
-                throw new Error("Agnes 图片生成完成，但未返回图片地址");
-              }
+            const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
+            if (remaining <= 0) pendingTaskCounts.delete(nodeId);
+            else pendingTaskCounts.set(nodeId, remaining);
 
-              const projectId = get().projectId;
-              const rawResultData = resultUrls.map((resultUrl) => ({
-                url: resultUrl,
-              }));
+            return;
+          } catch (agnesError) {
+            if (ledgerBizId) {
+              refundDesktopProxyScore(
+                ledgerBizId,
+                getRequestErrorMessage(agnesError) || "Agnes image failed",
+                "agnes",
+              ).catch(() => { });
+            }
+            throw agnesError;
+          }
+        }
 
-              // 先写入原始 URL，再统一刷新转存 OSS（等价于模拟点击刷新按钮）
-              set((state) => ({
-                nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-                  const existingData = data.result?.data ?? [];
-                  const mergedData = appendMediaSequences(
-                    existingData,
-                    rawResultData,
-                  );
-                  return {
-                    ...data,
-                    status: GenerationStatus.COMPLETED,
-                    progress: 100,
-                    result: { type: "image", data: mergedData },
-                    error: undefined,
-                  };
-                }),
-              }));
-              saveCurrentCanvasToHistory();
-              if (useChatSettingsStore.getState().autoSaveEnabled) {
-                get().saveGraph();
-              }
+        if (RUNNINGHUB_IMAGE_MODEL_IDS.has(payloadOriginalModel)) {
+          // RunningHub 直接生成（可能返回立即地址或 taskId）
+          set((state) => ({
+            nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
+              ...data,
+              status: GenerationStatus.IN_PROGRESS,
+              progress: 0,
+            })),
+          }));
 
-              // 刷新 OSS 转存
-              const currentImages =
-                (
-                  get().nodes.find((n) => n.id === nodeId)
-                    ?.data as ImageGenerationNode
-                )?.result?.data ?? [];
-              const startIndex = currentImages.length - rawResultData.length;
+          try {
+            const resultUrls = await generateRunningHubImageWithFallback({
+              model: payloadOriginalModel,
+              prompt: payload.prompt,
+              imageUrls: Array.isArray(payload.image_urls)
+                ? payload.image_urls
+                : [],
+              size: payload.size,
+              resolution: payload.resolution,
+              chaos: payload.chaos,
+              stylize: payload.stylize,
+              imageWeight: payload.iw,
+              scoreCost,
+            });
+
+            const rawResultData = resultUrls.map((url) => ({ url }));
+
+            // 先写入原始 URL，再统一刷新转存 OSS
+            set((state) => ({
+              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+                const existingData = data.result?.data ?? [];
+                const mergedData = appendMediaSequences(
+                  existingData,
+                  rawResultData,
+                );
+                return {
+                  ...data,
+                  status: GenerationStatus.COMPLETED,
+                  progress: 100,
+                  result: { type: "image", data: mergedData },
+                  error: undefined,
+                };
+              }),
+            }));
+            saveCurrentCanvasToHistory();
+            if (useChatSettingsStore.getState().autoSaveEnabled) {
+              get().saveGraph();
+            }
+
+            // 刷新 OSS 转存
+            const currentImages =
+              (
+                get().nodes.find((n) => n.id === nodeId)
+                  ?.data as ImageGenerationNode
+              )?.result?.data ?? [];
+            const startIndex = currentImages.length - rawResultData.length;
+            void (async () => {
               for (let i = 0; i < rawResultData.length; i++) {
-                void refreshImageToOss(
+                const latestImages =
+                  (
+                    get().nodes.find((n) => n.id === nodeId)
+                      ?.data as ImageGenerationNode
+                  )?.result?.data ?? [];
+                await refreshImageToOss(
                   nodeId,
-                  currentImages,
+                  latestImages,
                   startIndex + i,
                   get().updateImageNodeData,
                 );
               }
-              if (ledgerBizId) {
-                confirmDesktopProxyScore(ledgerBizId, "agnes").catch(() => { });
-              }
-              await refreshBalanceAfterGeneration({
-                scene: "image",
-                nodeId,
-                model: payloadOriginalModel,
-                requiredPoints: payload.requiredPoints,
-              });
+            })();
 
-              const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
-              if (remaining <= 0) pendingTaskCounts.delete(nodeId);
-              else pendingTaskCounts.set(nodeId, remaining);
+            await refreshBalanceAfterGeneration({
+              scene: "image",
+              nodeId,
+              model: payloadOriginalModel,
+              requiredPoints: payload.requiredPoints,
+            });
 
-              return;
-            } catch (agnesError) {
-              if (ledgerBizId) {
-                refundDesktopProxyScore(
-                  ledgerBizId,
-                  getRequestErrorMessage(agnesError) || "Agnes image failed",
-                  "agnes",
-                ).catch(() => { });
-              }
-              throw agnesError;
-            }
-        }
+            // 调整 pending count
+            const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
+            if (remaining <= 0) pendingTaskCounts.delete(nodeId);
+            else pendingTaskCounts.set(nodeId, remaining);
 
-        if (RUNNINGHUB_IMAGE_MODEL_IDS.has(payloadOriginalModel)) {
-            // RunningHub 直接生成（可能返回立即地址或 taskId）
-            set((state) => ({
-              nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-                ...data,
-                status: GenerationStatus.IN_PROGRESS,
-                progress: 0,
-              })),
-            }));
-
-            try {
-              const resultUrl = await generateRunningHubImageWithFallback({
-                model: payloadOriginalModel,
-                prompt: payload.prompt,
-                imageUrls: Array.isArray(payload.image_urls)
-                  ? payload.image_urls
-                  : [],
-                size: payload.size,
-                resolution: payload.resolution,
-                scoreCost,
-              });
-
-              const rawResultItem = { url: resultUrl };
-
-              // 先写入原始 URL，再统一刷新转存 OSS
-              set((state) => ({
-                nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-                  const existingData = data.result?.data ?? [];
-                  const mergedData = appendMediaSequences(existingData, [
-                    rawResultItem,
-                  ]);
-                  return {
-                    ...data,
-                    status: GenerationStatus.COMPLETED,
-                    progress: 100,
-                    result: { type: "image", data: mergedData },
-                    error: undefined,
-                  };
-                }),
-              }));
-              saveCurrentCanvasToHistory();
-              if (useChatSettingsStore.getState().autoSaveEnabled) {
-                get().saveGraph();
-              }
-
-              // 刷新 OSS 转存
-              const currentImages =
-                (
-                  get().nodes.find((n) => n.id === nodeId)
-                    ?.data as ImageGenerationNode
-                )?.result?.data ?? [];
-              const lastIndex = currentImages.length - 1;
-              void refreshImageToOss(
-                nodeId,
-                currentImages,
-                lastIndex,
-                get().updateImageNodeData,
-              );
-
-              await refreshBalanceAfterGeneration({
-                scene: "image",
-                nodeId,
-                model: payloadOriginalModel,
-                requiredPoints: payload.requiredPoints,
-              });
-
-              // 调整 pending count
-              const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
-              if (remaining <= 0) pendingTaskCounts.delete(nodeId);
-              else pendingTaskCounts.set(nodeId, remaining);
-
-              return;
-            } catch (rhError) {
-              console.error(
-                "[startImageGeneration] RunningHub 生图失败:",
-                rhError,
-              );
-              const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
-              if (remaining <= 0) pendingTaskCounts.delete(nodeId);
-              else pendingTaskCounts.set(nodeId, remaining);
-              throw rhError;
-            }
+            return;
+          } catch (rhError) {
+            console.error(
+              "[startImageGeneration] RunningHub 生图失败:",
+              rhError,
+            );
+            const remaining = (pendingTaskCounts.get(nodeId) ?? 1) - 1;
+            if (remaining <= 0) pendingTaskCounts.delete(nodeId);
+            else pendingTaskCounts.set(nodeId, remaining);
+            throw rhError;
+          }
         }
 
         // 非 RunningHub：创建图片生成任务，获取 task_id 后启动轮询

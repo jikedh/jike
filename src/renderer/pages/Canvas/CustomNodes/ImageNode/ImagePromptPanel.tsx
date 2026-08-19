@@ -50,6 +50,7 @@ import {
   GPTIMAGE2_SIZES,
   GptImage2ParamsPanel
 } from "./components/GptImage2ParamsPanel";
+import { MidjourneyPanel } from "./components/MidjourneyPanel";
 import {
   SEEDREAM_ASPECT_RATIOS,
   SEEDREAM_RESOLUTIONS,
@@ -256,6 +257,9 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   // 统一使用 size 字段存储宽高比/画面比例
   const size = currentImageData?.size ?? "1:1";
   const resolution = currentImageData?.resolution ?? "2K";
+  const chaos = currentImageData?.chaos ?? 0;
+  const stylize = currentImageData?.stylize ?? 0;
+  const imageWeight = currentImageData?.iw ?? 1;
   const referenceImageUrls = currentImageData?.image_urls ?? [];
   const promptDraftHtml = currentImageData?.promptDraftHtml ?? "<p></p>";
 
@@ -1529,6 +1533,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         };
       }
 
+      if (isRunningHubMidjourneyV81Model) {
+        basePayload.chaos = currentImageData?.chaos ?? 0;
+        basePayload.stylize = currentImageData?.stylize ?? 0;
+        basePayload.iw = currentImageData?.iw ?? 1;
+      }
+
       return basePayload;
     };
 
@@ -1934,9 +1944,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           )}
 
           {isRunningHubMidjourneyV81Model && (
-            <GptImage2ParamsPanel
+            <MidjourneyPanel
               size={size}
               resolution={resolution}
+              chaos={chaos}
+              stylize={stylize}
+              imageWeight={imageWeight}
               sizeOptions={MIDJOURNEY_V81_SIZE_OPTIONS}
               resolutionOptions={MIDJOURNEY_V81_RESOLUTION_OPTIONS}
               onSizeChange={(value) => {
@@ -1946,6 +1959,15 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               onResolutionChange={(value) => {
                 persistImageDefaultPreset({ resolution: value });
                 updateImageNodeData(nodeId, { resolution: value });
+              }}
+              onChaosChange={(value) => {
+                updateImageNodeData(nodeId, { chaos: value });
+              }}
+              onStylizeChange={(value) => {
+                updateImageNodeData(nodeId, { stylize: value });
+              }}
+              onImageWeightChange={(value) => {
+                updateImageNodeData(nodeId, { iw: value });
               }}
             />
           )}
