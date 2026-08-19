@@ -2,16 +2,13 @@ import {
   createAgnesImageGeneration,
   createImageGeneration,
   extractAgnesImageUrls,
-  fetchMjTask,
   generateGeminiContent,
   getImageTaskStatus,
-  submitMjImagine,
 } from "@/api/ai";
 import {
   confirmDesktopProxyScore,
   refundDesktopProxyScore,
 } from "@/api/jikeGo";
-import { buildMidjourneyPrompt } from "@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt";
 import { getImageDimensions } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
 import { useUserStore } from "@/stores/useUserStore";
 import { generateImageUrl } from "service/oss";
@@ -436,23 +433,14 @@ const refreshBalanceAfterGeneration = async () => {
 };
 
 const buildBasePayload = (config: ChatImageModelConfig, prompt: string) => {
-  const isNiji7 = config.imageModel === "midjourney-niji7";
-  const backendModel = isNiji7 ? "midjourney" : config.imageModel;
   let finalPrompt = prompt;
-
-  if (backendModel === "midjourney") {
-    finalPrompt = `${finalPrompt} --ar ${DEFAULT_CHAT_IMAGE_SIZE}`;
-    if (isNiji7) {
-      finalPrompt = `${finalPrompt} --niji 7`;
-    }
-  }
 
   if (config.imagePlatform === "google_pro2") {
     finalPrompt = `${finalPrompt} [尺寸:${DEFAULT_CHAT_IMAGE_SIZE}] [分辨率:${DEFAULT_CHAT_IMAGE_RESOLUTION}]`;
   }
 
   return {
-    model: backendModel,
+    model: config.imageModel,
     originalModel: config.imageModel,
     prompt: finalPrompt,
     resolution: DEFAULT_CHAT_IMAGE_RESOLUTION,
@@ -497,38 +485,6 @@ const pollStandardImageGeneration = async (
         response?.result?.message ||
         "图片生成失败，请稍后再试",
       );
-    }
-
-    await wait(CHAT_IMAGE_POLL_INTERVAL, signal);
-    throwIfAborted(signal);
-  }
-};
-
-const pollMidjourneyImageGeneration = async (
-  taskId: string,
-  signal?: AbortSignal,
-): Promise<NoteGenerationImage[]> => {
-  const startTime = Date.now();
-
-  while (true) {
-    throwIfAborted(signal);
-
-    if (Date.now() - startTime > CHAT_IMAGE_TIMEOUT) {
-      throw new Error("Midjourney 图片生成超时，请稍后再试");
-    }
-
-    const response: any = await fetchMjTask(taskId);
-
-    if (isSuccessStatus(response?.status)) {
-      const images = extractImages(response);
-      if (images.length === 0) {
-        throw new Error("Midjourney 生成完成，但未返回图片地址");
-      }
-      return images;
-    }
-
-    if (isFailureStatus(response?.status)) {
-      throw new Error(response?.failReason || "Midjourney 图片生成失败");
     }
 
     await wait(CHAT_IMAGE_POLL_INTERVAL, signal);
@@ -656,29 +612,6 @@ export const generateCanvasChatImages = async ({
       );
       images = result.images;
       ledgerBizId = result.ledgerBizId;
-    } else if (payload.model === "midjourney") {
-      onProgress?.("已提交 Midjourney 任务，正在生成图片...");
-      const finalPrompt = buildMidjourneyPrompt({
-        prompt: payload.prompt,
-        referenceUrls: [],
-        styleUrls: [],
-      });
-      const response: any = await submitMjImagine(
-        { prompt: finalPrompt },
-        requiredPoints,
-      );
-      ledgerBizId = response?.ledgerBizId;
-      if (response?.code !== 1) {
-        throw new Error(response?.description || "Midjourney 任务提交失败");
-      }
-
-      throwIfAborted(signal);
-
-      const taskId = extractTaskId(response);
-      if (!taskId) {
-        throw new Error("未返回图片生成任务 ID，请稍后再试");
-      }
-      images = await pollMidjourneyImageGeneration(taskId, signal);
     } else {
       onProgress?.("已提交图片任务，正在生成图片...");
       const response: any = await createImageGeneration(payload, requiredPoints);

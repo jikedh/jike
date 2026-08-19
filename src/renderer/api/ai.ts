@@ -571,42 +571,6 @@ export async function analyzeLightingReferenceImage(
   return description;
 }
 
-// ===================== Midjourney 相关 =====================
-
-// 提交 Midjourney imagine 任务
-export async function submitMjImagine(
-  data: { prompt: string },
-  scoreCost?: number,
-  signal?: AbortSignal,
-) {
-  const response = await createDesktopProxyTask({
-    platform: "zeakai",
-    upstreamPath: "/mj/submit/imagine",
-    method: "POST",
-    body: data,
-    scoreCost,
-    scoreBizType: "image",
-    scoreModel: "midjourney",
-    scoreSource: "zeakai",
-    scoreSourceLabel: "Midjourney",
-  }, signal);
-
-  const rawData = unwrapDesktopProxyData(response);
-  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
-  return ledgerBizId ? { ...responseData, ledgerBizId } : responseData;
-}
-
-// 获取 Midjourney 任务状态
-export async function fetchMjTask(id: string, signal?: AbortSignal) {
-  const response = await queryDesktopProxyTask({
-    platform: "zeakai",
-    upstreamPath: `/mj/task/${id}/fetch`,
-    method: "GET",
-  }, signal);
-
-  return unwrapDesktopProxyData(response);
-}
-
 // ===================== 快手 AI 视频相关 =====================
 
 // 创建快手视频生成任务

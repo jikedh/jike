@@ -49,11 +49,6 @@ import {
   GPTIMAGE2_SIZES,
   GptImage2ParamsPanel
 } from "./components/GptImage2ParamsPanel";
-import { MidjourneyAdvancedPanel } from "./components/MidjourneyAdvancedPanel";
-import {
-  MIDJOURNEY_ASPECT_RATIOS,
-  MidjourneyParamsPanel
-} from "./components/MidjourneyParamsPanel";
 import {
   SEEDREAM_ASPECT_RATIOS,
   SEEDREAM_RESOLUTIONS,
@@ -153,7 +148,6 @@ const AGNES_IMAGE_21_RESOLUTION_OPTIONS = [
 ];
 const SEEDREAM_SIZE_VALUES = toOptionValueSet(SEEDREAM_ASPECT_RATIOS);
 const SEEDREAM_RESOLUTION_VALUES = toOptionValueSet(SEEDREAM_RESOLUTIONS);
-const MIDJOURNEY_SIZE_VALUES = toOptionValueSet(MIDJOURNEY_ASPECT_RATIOS);
 
 type SupportedImageParams = {
   sizes?: Set<string>;
@@ -277,9 +271,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   );
 
   // ========== 模型专属参数 ==========
-  // 判断是否为 Midjourney 系列模型
-  const isMidjourneyModel =
-    model === "midjourney" || model === "midjourney-niji7";
   // 判断是否为 Seedream 5.0 模型
   const isSeedreamModel = model === "doubao-seedream-5-0";
   // 判断是否为 Gemini 3 Pro 模型（渠道一，原有模型）
@@ -365,13 +356,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       };
     }
 
-    if (isMidjourneyModel) {
-      return {
-        sizes: MIDJOURNEY_SIZE_VALUES,
-        defaultSize: "1:1",
-      };
-    }
-
     return null;
   }, [
     isGeminiModel,
@@ -379,7 +363,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     isGptImage2Model,
     isAgnesImage21Model,
     isAgnesImageModel,
-    isMidjourneyModel,
     isLocalGeminiDirectModel,
     isNanoBananaParamsModel,
     isSeedreamModel,
@@ -422,26 +405,17 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       getImageGenerationPoints({
         model,
         platform,
-        count: isMidjourneyModel ? 1 : imageCount,
+        count: imageCount,
         fallback: fallbackAIGenPrice,
       }),
     );
   }, [
     fallbackAIGenPrice,
     imageCount,
-    isMidjourneyModel,
     model,
     normalizeRequiredPoints,
     platform,
   ]);
-
-  // Midjourney 高级参数
-  const midjourneyAdvanced = currentImageData?.midjourneyAdvanced ?? {
-    referenceUrls: referenceImageUrls,
-    styleUrls: [],
-    iw: 1,
-    sw: 100,
-  };
 
   const resetSuggestionState = () => {
     setActiveMode(null);
@@ -824,48 +798,17 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     );
   }, [imageMentionItems, mentionQuery]);
 
-  // 断开连接时，同步清理 midjourneyAdvanced 中的 URL
   const handleDisconnectNode = useCallback(
     (sourceNodeId: string) => {
-      const { edges, nodes } = useCanvasFlowStore.getState();
+      const { edges } = useCanvasFlowStore.getState();
       const edgeToDelete = edges.find(
         (edge) => edge.source === sourceNodeId && edge.target === nodeId,
       );
       if (edgeToDelete) {
         deleteEdge(edgeToDelete.id);
       }
-
-      // 从 midjourneyAdvanced 中移除断开连接的父节点图片
-      // 通过 nodes 直接查找父节点，获取其第一张结果图的 URL
-      const parentNode = nodes.find((node) => node.id === sourceNodeId);
-      if (parentNode && parentNode.type === "imageNode") {
-        const parentData = parentNode.data as ImageGenerationNode;
-        const firstItem = parentData.result?.data?.[0];
-        if (firstItem?.url) {
-          const urlToRemove = firstItem.url;
-          // 直接从最新的 nodes 状态中获取当前的 midjourneyAdvanced，避免依赖旧状态
-          const currentNodeData = nodes.find((n) => n.id === nodeId);
-          const currentAdvanced = (currentNodeData?.data as ImageGenerationNode)
-            ?.midjourneyAdvanced;
-          if (currentAdvanced) {
-            const newReferenceUrls = (
-              currentAdvanced.referenceUrls ?? []
-            ).filter((url) => url !== urlToRemove);
-            const newStyleUrls = (currentAdvanced.styleUrls ?? []).filter(
-              (url) => url !== urlToRemove,
-            );
-            updateImageNodeData(nodeId, {
-              midjourneyAdvanced: {
-                ...currentAdvanced,
-                referenceUrls: newReferenceUrls,
-                styleUrls: newStyleUrls,
-              },
-            });
-          }
-        }
-      }
     },
-    [nodeId, deleteEdge, updateImageNodeData],
+    [nodeId, deleteEdge],
   );
 
   // 收集父级便签节点：selector 只返回扁平 primitive 数组，避免 React 19 对新对象快照触发无限更新。
@@ -1450,24 +1393,11 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       return;
     }
 
-    // 判断是否为 Midjourney Niji7 模型，如果是则在 prompt 最后拼接 --niji7 参数
-    const isNiji7Model = model === "midjourney-niji7";
-    // 构建 Midjourney 模型的最终 prompt：添加 --ar 参数
     let finalPrompt = mergedPrompt;
-    if (isMidjourneyModel) {
-      // Midjourney 模型：在 prompt 末尾拼接 --ar 尺寸参数
-      finalPrompt = `${finalPrompt} --ar ${size}`;
-      // 如果是 Niji7 模型，还需要拼接 --niji 7
-      if (isNiji7Model) {
-        finalPrompt = `${finalPrompt} --niji 7`;
-      }
-    }
     // Gemini 3 Pro 渠道二：在 prompt 末尾拼接 [尺寸:x:x] [分辨率:xK] 参数
     if (isGeminiPro2Model) {
       finalPrompt = `${finalPrompt} [尺寸:${size}] [分辨率:${resolution}]`;
     }
-    // 发送给后端的 model 字段：如果是 midjourney-niji7 则改为 midjourney
-    const backendModel = isNiji7Model ? "midjourney" : model;
 
     // image_urls 直接使用界面当前显示的参考图列表（上传 + 父节点结果）
     // 所有图片在上传时已经上传到 OSS，或是在线 URL，直接使用即可
@@ -1514,7 +1444,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         image_urls: imageUrls,
       });
     }
-    const generationTaskCount = isMidjourneyModel ? 1 : imageCount;
+    const generationTaskCount = imageCount;
     const perTaskRequiredPoints = requiredPoints / generationTaskCount;
 
     const totalScoreCost = requiredPoints;
@@ -1533,9 +1463,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     const buildPayload = (): any => {
       // 基础 payload
       const basePayload: any = {
-        // 请求使用 backendModel（后端统一使用 midjourney，Niji7 效果通过 prompt 参数控制）
-        model: backendModel,
-        // 保留原始 model 用于 UI 状态同步
+        model,
         originalModel: model,
         prompt: finalPrompt,
         resolution,
@@ -1564,15 +1492,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
           resolution,
         };
       } else {
-        // 其他模型（Midjourney 等）
+        // 其他模型
         basePayload.size = size;
         basePayload.aspectRatio = currentImageData?.aspectRatio ?? "1:1";
         basePayload.metadata = {
           resolution,
         };
-        if (isMidjourneyModel) {
-          basePayload.midjourneyAdvanced = midjourneyAdvanced;
-        }
       }
 
       return basePayload;
@@ -2003,34 +1928,6 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               }}
             />
           )}
-          {isMidjourneyModel && (
-            <MidjourneyParamsPanel
-              size={size}
-              onSizeChange={(value) => {
-                persistImageDefaultPreset({ size: value });
-                updateImageNodeData(nodeId, { size: value });
-              }}
-            />
-          )}
-
-          {/* Midjourney 高级选项 - 仅在选择 Midjourney 模型时显示 */}
-          {isMidjourneyModel && (
-            <MidjourneyAdvancedPanel
-              referenceImageUrls={referenceImageUrls}
-              value={midjourneyAdvanced}
-              onChange={(next) => {
-                updateImageNodeData(nodeId, {
-                  midjourneyAdvanced: {
-                    referenceUrls: next.referenceUrls ?? [],
-                    styleUrls: next.styleUrls ?? [],
-                    iw: next.iw ?? 1,
-                    sw: next.sw ?? 100,
-                  },
-                });
-              }}
-            />
-          )}
-
           {/* 数量选择和生成按钮 */}
           <div className="ml-auto flex shrink-0 items-center gap-3">
             {/* 预设提示词下拉 */}
@@ -2042,27 +1939,24 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               }}
             />
 
-            {/* 数量选择按钮 - Midjourney 模型隐藏 */}
-            {!isMidjourneyModel && (
-              <button
-                type="button"
-                onClick={() => {
-                  const currentIndex = IMAGE_COUNT_OPTIONS.indexOf(imageCount);
-                  const nextIndex =
-                    (currentIndex + 1) % IMAGE_COUNT_OPTIONS.length;
-                  setImageCount(IMAGE_COUNT_OPTIONS[nextIndex]);
-                }}
-                disabled={isGenerating}
-                className={cn(
-                  PROMPT_PANEL_STYLES.countButton,
-                  isGenerating && "opacity-50 cursor-not-allowed",
-                )}
-                title={`当前生成 ${imageCount} 张图片，点击切换`}
-              >
-                <span>×</span>
-                <span>{imageCount}</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                const currentIndex = IMAGE_COUNT_OPTIONS.indexOf(imageCount);
+                const nextIndex =
+                  (currentIndex + 1) % IMAGE_COUNT_OPTIONS.length;
+                setImageCount(IMAGE_COUNT_OPTIONS[nextIndex]);
+              }}
+              disabled={isGenerating}
+              className={cn(
+                PROMPT_PANEL_STYLES.countButton,
+                isGenerating && "opacity-50 cursor-not-allowed",
+              )}
+              title={`当前生成 ${imageCount} 张图片，点击切换`}
+            >
+              <span>×</span>
+              <span>{imageCount}</span>
+            </button>
 
             {pointsEnabled ? (
               <ModelPointsBadge

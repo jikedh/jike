@@ -41,7 +41,6 @@ import {
   GPTIMAGE2_SIZES,
   GptImage2ParamsPanel
 } from "./components/GptImage2ParamsPanel";
-import { MidjourneyParamsPanel } from "./components/MidjourneyParamsPanel";
 import { SeedreamParamsPanel } from "./components/SeedreamParamsPanel";
 
 type AnnotationTool =
@@ -585,8 +584,6 @@ export const ImageAnnotationWorkspace = ({
       3
     );
   }, [eraseModel, erasePlatform]);
-  const isEraseMidjourneyModel =
-    eraseModel === "midjourney" || eraseModel === "midjourney-niji7";
   const isEraseSeedreamModel = eraseModel === "doubao-seedream-5-0";
   const isEraseGeminiModel =
     eraseModel === "gemini-3-pro-image-preview" &&
@@ -1731,20 +1728,15 @@ export const ImageAnnotationWorkspace = ({
         targetHandle: "input",
       });
 
-      const isNiji7Model = eraseModel === "midjourney-niji7";
-      const backendModel = isNiji7Model ? "midjourney" : eraseModel;
-      const count = isEraseMidjourneyModel ? 1 : eraseImageCount;
-      const basePrompt =
-        isEraseMidjourneyModel && !prompt.includes("--ar")
-          ? `${prompt} --ar ${eraseSize}${isNiji7Model ? " --niji 7" : ""}`
-          : prompt;
+      const count = eraseImageCount;
+      const basePrompt = prompt;
       const finalPrompt = isEraseGeminiPro2Model
         ? `${basePrompt} [尺寸:${eraseSize}] [分辨率:${eraseResolution}]`
         : basePrompt;
 
       const buildPayload = () => {
         const payload: any = {
-          model: backendModel,
+          model: eraseModel,
           originalModel: eraseModel,
           platform: erasePlatform,
           prompt: finalPrompt,
@@ -1756,11 +1748,6 @@ export const ImageAnnotationWorkspace = ({
           size: eraseSize,
           metadata: { resolution: eraseResolution },
         };
-
-        if (isEraseMidjourneyModel) {
-          payload.aspectRatio = sourceImageData?.aspectRatio ?? "1:1";
-          payload.midjourneyAdvanced = sourceImageData?.midjourneyAdvanced;
-        }
 
         return payload;
       };
@@ -1843,11 +1830,8 @@ export const ImageAnnotationWorkspace = ({
     eraseResolution,
     eraseSize,
     isEraseGeminiPro2Model,
-    isEraseMidjourneyModel,
     onClose,
     onConnect,
-    sourceImageData?.aspectRatio,
-    sourceImageData?.midjourneyAdvanced,
     sourceImageNode,
     sourceNodeId,
     startGeminiPro2Generation,
@@ -2761,39 +2745,27 @@ export const ImageAnnotationWorkspace = ({
                   />
                 ) : null}
 
-                {isEraseMidjourneyModel ? (
-                  <MidjourneyParamsPanel
-                    size={eraseSize}
-                    onSizeChange={(value) => {
-                      persistEraseImageDefaultPreset({ size: value });
-                      updateEraseImageParams({ size: value });
-                    }}
-                  />
-                ) : null}
-
                 <div className="ml-auto flex items-center gap-3">
-                  {!isEraseMidjourneyModel ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const currentIndex =
-                          ERASE_IMAGE_COUNT_OPTIONS.indexOf(eraseImageCount);
-                        const nextIndex =
-                          (currentIndex + 1) %
-                          ERASE_IMAGE_COUNT_OPTIONS.length;
-                        setEraseImageCount(ERASE_IMAGE_COUNT_OPTIONS[nextIndex]);
-                      }}
-                      disabled={isEraseGenerating}
-                      className={cn(
-                        PROMPT_PANEL_STYLES.countButton,
-                        isEraseGenerating && "cursor-not-allowed opacity-50",
-                      )}
-                      title={`当前生成 ${eraseImageCount} 张图片，点击切换`}
-                    >
-                      <span>x</span>
-                      <span>{eraseImageCount}</span>
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const currentIndex =
+                        ERASE_IMAGE_COUNT_OPTIONS.indexOf(eraseImageCount);
+                      const nextIndex =
+                        (currentIndex + 1) %
+                        ERASE_IMAGE_COUNT_OPTIONS.length;
+                      setEraseImageCount(ERASE_IMAGE_COUNT_OPTIONS[nextIndex]);
+                    }}
+                    disabled={isEraseGenerating}
+                    className={cn(
+                      PROMPT_PANEL_STYLES.countButton,
+                      isEraseGenerating && "cursor-not-allowed opacity-50",
+                    )}
+                    title={`当前生成 ${eraseImageCount} 张图片，点击切换`}
+                  >
+                    <span>x</span>
+                    <span>{eraseImageCount}</span>
+                  </button>
 
                   <Button
                     type="button"

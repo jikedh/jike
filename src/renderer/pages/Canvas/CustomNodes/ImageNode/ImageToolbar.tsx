@@ -373,29 +373,18 @@ export const ImageToolbar = memo(
           targetHandle: "input",
         });
 
-        const isNiji7Model = config.model === "midjourney-niji7";
-        const isMidjourneyModel =
-          config.model === "midjourney" || isNiji7Model;
         const isNanoBananaLocalModel =
           config.model === NANO_BANANA_LOCAL_MODEL &&
           config.platform === NANO_BANANA_LOCAL_PLATFORM;
         const isLocalDirectModel =
           isNanoBananaLocalModel;
-        const backendModel = isNiji7Model ? "midjourney" : config.model;
         const size = config.size ?? data.size ?? "1:1";
         const resolution = config.resolution ?? data.resolution ?? "2K";
         const prompt = buildLightingPrompt(config);
         let finalPrompt = prompt;
 
-        if (isMidjourneyModel && !finalPrompt.includes("--ar")) {
-          finalPrompt = `${finalPrompt} --ar ${size}`;
-          if (isNiji7Model) {
-            finalPrompt = `${finalPrompt} --niji 7`;
-          }
-        }
-
         const payload = {
-          model: backendModel,
+          model: config.model,
           originalModel: config.model,
           platform: config.platform,
           prompt: finalPrompt,
@@ -407,12 +396,6 @@ export const ImageToolbar = memo(
           size,
           metadata: { resolution },
           lighting: config,
-          ...(isMidjourneyModel
-            ? {
-              aspectRatio: data.aspectRatio ?? "1:1",
-              midjourneyAdvanced: data.midjourneyAdvanced,
-            }
-            : {}),
         };
 
         updateImageNodeData(childId, {

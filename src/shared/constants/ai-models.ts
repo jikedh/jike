@@ -146,6 +146,8 @@ export const AGNES_IMAGE_MODELS = new Set([
 ]);
 export const isAgnesImageModel = (model?: string) =>
   Boolean(model && AGNES_IMAGE_MODELS.has(model));
+export const DEFAULT_IMAGE_MODEL = "gemini-3-pro-image-preview";
+export const DEFAULT_IMAGE_PLATFORM = "google";
 
 export const IMAGE_MODELS = [
   // { id: 1, name: 'doubao-seedream-4-0', model: 'doubao-seedream-4-0', platform: 'Seedream' },
@@ -167,13 +169,6 @@ export const IMAGE_MODELS = [
     name: "豆包 Seedream 5.0",
     model: "doubao-seedream-5-0",
     platform: "Seedream",
-  },
-  { id: 5, name: "Midjourney", model: "midjourney", platform: "midjourney" },
-  {
-    id: 6,
-    name: "Midjourney Niji7",
-    model: "midjourney-niji7",
-    platform: "midjourney",
   },
   {
     id: 19,
@@ -240,8 +235,6 @@ export const GENERATION_SCORE_COST_MAP: Record<string, number> = {
   // 图片模型
   "gemini-3-pro-image-preview": 30,
   "doubao-seedream-5-0": 30,
-  midjourney: 30,
-  "midjourney-niji7": 30,
   [RUNNINGHUB_GPT_IMAGE2_MODEL]: 10,
   [RUNNINGHUB_NANO_BANANA_PRO_MODEL]: 10,
   [AGNES_IMAGE_2_FLASH_MODEL]: 0,

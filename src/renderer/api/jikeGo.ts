@@ -35,7 +35,6 @@ export type DesktopProxyPlatform =
   | "kuaizi_global"
   | "dashscope"
   | "toapi"
-  | "zeakai"
   | "yunwu"
   | "agnes"
   | "minimax";

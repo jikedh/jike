@@ -2,9 +2,7 @@ import {
   createAgnesImageGeneration,
   createImageGeneration,
   extractAgnesImageUrls,
-  fetchMjTask,
   getImageTaskStatus,
-  submitMjImagine,
 } from "@/api/ai";
 import {
   confirmDesktopProxyScore,
@@ -165,33 +163,6 @@ const pollStandardImageTask = async (taskId: string, signal?: AbortSignal) => {
   }
 
   throw new Error("图片生成超时，请稍后再试");
-};
-
-const pollMidjourneyImageTask = async (
-  taskId: string,
-  signal?: AbortSignal,
-) => {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < IMAGE_TASK_TIMEOUT) {
-    await delay(IMAGE_TASK_POLL_INTERVAL, signal);
-    throwIfAborted(signal);
-    const response = await fetchMjTask(taskId, signal);
-
-    if (isSuccessStatus(response?.status)) {
-      const urls = extractImageUrls(response);
-      if (urls.length === 0) {
-        throw new Error("Midjourney 生成完成，但未返回图片地址");
-      }
-      return urls[0];
-    }
-
-    if (isFailureStatus(response?.status)) {
-      throw new Error(response?.failReason || "Midjourney 图片生成失败");
-    }
-  }
-
-  throw new Error("Midjourney 图片生成超时，请稍后再试");
 };
 
 const extractRunningHubImageUrl = (response: any) => {
@@ -357,51 +328,6 @@ export const generateTableStoryboardImage = async (
     options.model === RUNNINGHUB_NANO_BANANA_PRO_MODEL
   ) {
     return generateRunningHubImage(options);
-  }
-
-  if (options.model === "midjourney" || options.model === "midjourney-niji7") {
-    const referencePromptPrefix =
-      referenceImageUrls.length > 0 ? `${referenceImageUrls.join(" ")} ` : "";
-    const finalPrompt =
-      options.model === "midjourney-niji7"
-        ? `${referencePromptPrefix}${options.prompt} --ar ${options.size || "1:1"} --niji 7`
-        : `${referencePromptPrefix}${options.prompt} --ar ${options.size || "1:1"}`;
-    const response = await submitMjImagine(
-      { prompt: finalPrompt },
-      scoreCost,
-      options.signal,
-    );
-    const ledgerBizId = response?.ledgerBizId;
-    if (response?.code !== 1) {
-      if (ledgerBizId) {
-        refundDesktopProxyScore(
-          ledgerBizId,
-          response?.description || "Midjourney 任务提交失败",
-          "image",
-        ).catch(() => { });
-      }
-      throw new Error(response?.description || "Midjourney 任务提交失败");
-    }
-
-    try {
-      const resultUrl = await pollMidjourneyImageTask(
-        String(response.result),
-        options.signal,
-      );
-      if (ledgerBizId) {
-        confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
-      }
-      return resultUrl;
-    } catch (error) {
-      if (ledgerBizId) {
-        refundDesktopProxyScore(
-          ledgerBizId,
-          getRequestErrorMessage(error) || "Midjourney 图片生成失败",
-          "image",
-        ).catch(() => { });
-      }
-      throw error;
-    }
   }
 
   const response = await createImageGeneration(

@@ -61,6 +61,8 @@ import {
 } from "service/storyboardStorage";
 import {
   AGNES_IMAGE_21_FLASH_MODEL,
+  DEFAULT_IMAGE_MODEL,
+  DEFAULT_IMAGE_PLATFORM,
   getVisibleImageModels,
   IMAGE_MODELS,
   isAgnesImageModel,
@@ -115,10 +117,6 @@ import {
   GPTIMAGE2_SIZES,
   GptImage2ParamsPanel,
 } from "@/pages/Canvas/CustomNodes/ImageNode/components/GptImage2ParamsPanel";
-import {
-  MIDJOURNEY_ASPECT_RATIOS,
-  MidjourneyParamsPanel,
-} from "@/pages/Canvas/CustomNodes/ImageNode/components/MidjourneyParamsPanel";
 import {
   SEEDREAM_ASPECT_RATIOS,
   SEEDREAM_RESOLUTIONS,
@@ -425,6 +423,55 @@ const migrateStoryDefaultPrompts = (data: StoryboardAgentData) => {
   };
 };
 
+const hasStoryImageModelMigration = (data: StoryboardAgentData) => {
+  const options = getVisibleImageModels();
+  return Object.values(data.assets || {}).some((items) =>
+    items.some(
+      (item) =>
+        item.kind !== "audio" &&
+        !options.some(
+          (option) =>
+            option.model === item.imageModel &&
+            option.platform === item.imagePlatform,
+        ),
+    ),
+  );
+};
+
+const migrateStoryImageModels = (data: StoryboardAgentData) => {
+  const options = getVisibleImageModels();
+  const fallback =
+    options.find((option) => option.model === DEFAULT_IMAGE_MODEL) ??
+    options[0];
+  if (!fallback) return data;
+
+  const normalizeItems = (items: StoryboardAssetItem[]) =>
+    items.map((item) => {
+      const matches = options.some(
+        (option) =>
+          option.model === item.imageModel &&
+          option.platform === item.imagePlatform,
+      );
+      if (item.kind === "audio" || matches) return item;
+
+      return {
+        ...item,
+        imageModel: fallback.model,
+        imagePlatform: fallback.platform ?? DEFAULT_IMAGE_PLATFORM,
+      };
+    });
+
+  return {
+    ...data,
+    assets: {
+      role: normalizeItems(data.assets?.role ?? []),
+      scene: normalizeItems(data.assets?.scene ?? []),
+      prop: normalizeItems(data.assets?.prop ?? []),
+      audio: normalizeItems(data.assets?.audio ?? []),
+    },
+  };
+};
+
 const normalizeAgentData = (data: StoryboardAgentData): StoryboardAgentData => {
   const empty = createEmptyAgentData();
   const inferredStep: StoryboardAgentStep = data.unlockedStep
@@ -436,7 +483,7 @@ const normalizeAgentData = (data: StoryboardAgentData): StoryboardAgentData => {
         : "script";
 
   return migrateStoryDefaultPrompts(
-    migrateStoryShotVideoModels({
+    migrateStoryImageModels(migrateStoryShotVideoModels({
       ...empty,
       ...data,
       unlockedStep: inferredStep,
@@ -462,7 +509,7 @@ const normalizeAgentData = (data: StoryboardAgentData): StoryboardAgentData => {
         ...(data.assets || {}),
       },
       shots: data.shots || [],
-    }),
+    })),
   );
 };
 
@@ -739,7 +786,6 @@ const STORY_AGNES_IMAGE_21_RESOLUTION_OPTIONS = [
   { label: "3K", value: "3K", description: "高精细" },
   { label: "4K", value: "4K", description: "超清" },
 ];
-const STORY_MIDJOURNEY_SIZE_VALUES = toOptionValueSet(MIDJOURNEY_ASPECT_RATIOS);
 
 type StoryImageParamConfig = {
   defaultAspectRatio: string;
@@ -796,13 +842,6 @@ const getStoryImageParamConfig = (model: string): StoryImageParamConfig => {
       resolutionValues: isAgnesImage21
         ? STORY_AGNES_IMAGE_21_RESOLUTION_VALUES
         : STORY_AGNES_IMAGE_RESOLUTION_VALUES,
-    };
-  }
-
-  if (model === "midjourney" || model === "midjourney-niji7") {
-    return {
-      defaultAspectRatio: "1:1",
-      aspectRatioValues: STORY_MIDJOURNEY_SIZE_VALUES,
     };
   }
 
@@ -2991,15 +3030,6 @@ const StoryAssetImageParamsControl = ({
     );
   }
 
-  if (model === "midjourney" || model === "midjourney-niji7") {
-    return (
-      <MidjourneyParamsPanel
-        size={params.aspectRatio}
-        onSizeChange={updateAspectRatio}
-      />
-    );
-  }
-
   return (
     <GptImage2ParamsPanel
       size={params.aspectRatio}
@@ -4770,14 +4800,13 @@ const StoryAgentPage = ({
           projectId,
           snippetId,
         );
+        const rawAgent = { ...data, assets: sharedAssets };
         const needsMigration = hasStoryShotVideoModelMigration(data);
+        const needsImageModelMigration = hasStoryImageModelMigration(rawAgent);
         const needsPromptMigration = isLegacyDefaultSplitSystemPrompt(
           data.splitSystemPrompt,
         );
-        const next = normalizeAgentData({
-          ...data,
-          assets: sharedAssets,
-        });
+        const next = normalizeAgentData(rawAgent);
         const migratedShots = next.shots.map((shot) =>
           applyAutoDescToShot(shot, next.assets),
         );
@@ -4795,6 +4824,7 @@ const StoryAgentPage = ({
         setActiveStep(nextWithPromptAssets.unlockedStep);
         if (
           needsMigration ||
+          needsImageModelMigration ||
           needsPromptMigration ||
           needsShotPromptMigration
         ) {

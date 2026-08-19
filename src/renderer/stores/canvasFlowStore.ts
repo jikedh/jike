@@ -1,6 +1,8 @@
 ﻿import { addEdge, applyEdgeChanges, applyNodeChanges } from "@xyflow/react";
 import { copyMediaUrlToOss, copyVideoUrlToOss } from "service/oss";
 import {
+  DEFAULT_IMAGE_MODEL,
+  DEFAULT_IMAGE_PLATFORM,
   getVisibleImageModels,
   isAgnesImageModel,
   NANO_BANANA_LOCAL_MODEL,
@@ -90,15 +92,13 @@ import {
   createLzVideoTask,
   createMiniMaxH3VideoTask,
   createOverseasSeedanceVideoTask,
-  fetchMjTask,
   generateGeminiContent,
   getAgnesVideoTaskStatus,
   getDashscopeVideoTaskStatus,
   getImageTaskStatus,
   getLzVideoTaskStatus,
   getMiniMaxH3VideoTaskStatus,
-  getOverseasSeedanceVideoTaskStatus,
-  submitMjImagine
+  getOverseasSeedanceVideoTaskStatus
 } from "@/api/ai";
 import {
   confirmDesktopProxyScore,
@@ -119,7 +119,6 @@ import {
   getNodeSizeByAspectRatio,
   getVideoDimensions
 } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
-import { buildMidjourneyPrompt } from "@/pages/Canvas/CustomNodes/ImageNode/utils/buildMidjourneyPrompt";
 import { getVisibleVideoModels } from "@/pages/Canvas/CustomNodes/New-VideoNode/constants/videoModelCapabilities";
 import { aiVideoTrackingService } from "@/services/aiVideoTracking";
 import { useUserStore } from "@/stores/useUserStore";
@@ -787,18 +786,36 @@ export const hydrateCanvasNodesForRuntime = async (
 ): Promise<AllNodeType[]> => {
   return Promise.all(
     nodes.map(async (node): Promise<AllNodeType> => {
-      if (node.type === "imageNode" && node.data?.result?.data) {
-        const processedData = node.data.result.data.map((item: any) =>
+      if (node.type === "imageNode") {
+        const legacyImageData = node.data as ImageGenerationNode & {
+          midjourneyAdvanced?: unknown;
+        };
+        const isLegacyModel =
+          legacyImageData.model === "midjourney" ||
+          legacyImageData.model === "midjourney-niji7";
+        const { midjourneyAdvanced: _, ...imageData } = legacyImageData;
+        void _;
+        const processedData = legacyImageData.result?.data?.map((item: any) =>
           hydrateMediaForRuntime(item),
         );
         return {
           ...node,
           data: {
-            ...node.data,
-            result: {
-              ...node.data.result,
-              data: assignMissingMediaSequences(processedData),
-            },
+            ...imageData,
+            ...(isLegacyModel
+              ? {
+                model: DEFAULT_IMAGE_MODEL,
+                platform: DEFAULT_IMAGE_PLATFORM,
+              }
+              : {}),
+            ...(processedData
+              ? {
+                result: {
+                  ...legacyImageData.result,
+                  data: assignMissingMediaSequences(processedData),
+                },
+              }
+              : {}),
           },
         };
       }
@@ -841,7 +858,7 @@ export const hydrateCanvasNodesForRuntime = async (
 };
 
 /**
- * 标准图片生成轮询逻辑（非 Midjourney 模型）
+ * 标准图片生成轮询逻辑
  */
 const pollImageGeneration = async (
   taskId: string,
@@ -1168,301 +1185,6 @@ const pollImageGeneration = async (
       refundDesktopProxyScore(ledgerBizId, "image poll error", "image").catch(
         () => { },
       );
-    }
-  }
-};
-
-/**
- * Midjourney 图片生成轮询逻辑
- */
-const pollMjImageGeneration = async (
-  taskId: string,
-  nodeId: string,
-  signal: AbortSignal,
-  setState: (
-    updater: (state: CanvasFlowStoreType) => Partial<CanvasFlowStoreType>,
-  ) => void,
-  getState: () => CanvasFlowStoreType,
-  totalTaskCount: number,
-  ledgerBizId?: string,
-) => {
-  const startTime = Date.now();
-  try {
-    while (true) {
-      await wait(IMAGE_POLL_INTERVAL, signal);
-      if (signal.aborted) {
-        return;
-      }
-
-      // 检查是否超时
-      if (Date.now() - startTime > IMAGE_TIMEOUT) {
-        console.error("[pollMjImageGeneration] 图片生成超时");
-        stopImagePollingInternal(taskId);
-        const currentData = getState().nodes.find((n) => n.id === nodeId)
-          ?.data as ImageGenerationNode;
-        if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
-          pendingTaskCounts.delete(nodeId);
-        }
-        let shouldWarnPartialFailure = false;
-        let partialSuccessCount = 0;
-        let partialFailedCount = 0;
-        setState((state) => ({
-          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-            const completedCount = (data.completedCount ?? 0) + 1;
-            const allCompleted = completedCount >= totalTaskCount;
-            const successCount =
-              data.result?.data?.filter((item) => item?.url).length ?? 0;
-            const hasSuccessfulImages = successCount > 0;
-
-            if (allCompleted && hasSuccessfulImages) {
-              shouldWarnPartialFailure = true;
-              partialSuccessCount = successCount;
-              partialFailedCount = Math.max(totalTaskCount - successCount, 1);
-            }
-
-            return {
-              ...data,
-              status:
-                allCompleted && hasSuccessfulImages
-                  ? GenerationStatus.COMPLETED
-                  : allCompleted
-                    ? GenerationStatus.FAILED
-                    : GenerationStatus.IN_PROGRESS,
-              progress:
-                allCompleted && hasSuccessfulImages ? 100 : data.progress,
-              error: {
-                code: "TIMEOUT",
-                message: "图片生成超时，请稍后再试",
-              },
-              completedCount,
-            };
-          }),
-        }));
-        if (shouldWarnPartialFailure) {
-          toast.warning(
-            `已生成 ${partialSuccessCount} 张图片，${partialFailedCount} 张失败`,
-          );
-        }
-        if (ledgerBizId) {
-          refundDesktopProxyScore(
-            ledgerBizId,
-            "midjourney image generation timeout",
-            "image",
-          ).catch(() => { });
-        }
-        return;
-      }
-
-      const response: any = await fetchMjTask(taskId);
-
-      const currentNode = getState().nodes.find((node) => node.id === nodeId);
-      if (!currentNode || currentNode.type !== "imageNode") {
-        stopImagePollingInternal(taskId);
-        return;
-      }
-
-      // 从 progress 字符串（如 "50%"）提取数值
-      const progressValue = parseInt(
-        response.progress?.replace("%", "") || "0",
-        10,
-      );
-
-      // SUCCESS 状态表示完成
-      if (response.status === "SUCCESS") {
-        // imageUrls 可能是字符串数组或对象数组 { url: string }[]
-        const rawImageUrls = response.imageUrls ?? [];
-        const newImageUrls: string[] = rawImageUrls
-          .map((item: any) => (typeof item === "string" ? item : item?.url))
-          .filter(Boolean)
-          .map((url: string) => url.trim().replace(/^`|`$/g, ""));
-
-        // 先写入原始 URL，再统一刷新转存 OSS
-        const processedResultData = newImageUrls.map((url: string) => ({
-          url,
-        }));
-
-        setState((state) => ({
-          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-            // 追加新结果到 result.data，而不是覆盖
-            const existingData = data.result?.data ?? [];
-            const mergedData = appendMediaSequences(
-              existingData,
-              processedResultData,
-            );
-
-            // 更新已完成数量
-            const completedCount = (data.completedCount ?? 0) + 1;
-            // 判断是否所有任务都已完成
-            const allCompleted = completedCount >= totalTaskCount;
-
-            return {
-              ...data,
-              status: allCompleted
-                ? GenerationStatus.COMPLETED
-                : GenerationStatus.IN_PROGRESS,
-              progress: allCompleted ? 100 : progressValue,
-              result: {
-                type: "image",
-                data: mergedData,
-              },
-              completedCount,
-              error: allCompleted ? undefined : data.error,
-            };
-          }),
-        }));
-        saveCurrentCanvasToHistory();
-        if (useChatSettingsStore.getState().autoSaveEnabled) {
-          getState().saveGraph();
-        }
-
-        // 刷新 OSS 转存
-        const mjCurrentImages =
-          (
-            getState().nodes.find((n) => n.id === nodeId)
-              ?.data as ImageGenerationNode
-          )?.result?.data ?? [];
-        const mjStartIndex =
-          mjCurrentImages.length - processedResultData.length;
-        for (let i = 0; i < processedResultData.length; i++) {
-          void refreshImageToOss(
-            nodeId,
-            mjCurrentImages,
-            mjStartIndex + i,
-            getState().updateImageNodeData,
-          );
-        }
-
-        stopImagePollingInternal(taskId);
-        // 如果所有任务都完成了，清理计数
-        const currentData = getState().nodes.find((n) => n.id === nodeId)
-          ?.data as ImageGenerationNode;
-        if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
-          pendingTaskCounts.delete(nodeId);
-        }
-
-        if (ledgerBizId) {
-          confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
-        }
-
-        await refreshBalanceAfterGeneration({
-          scene: "image",
-          nodeId,
-          taskId,
-          model: currentData?.model,
-          requiredPoints: currentData?.requiredPoints,
-        });
-        return;
-      }
-
-      // FAILURE 或 CANCEL 状态表示失败
-      if (response.status === "FAILURE" || response.status === "CANCEL") {
-        let shouldWarnPartialFailure = false;
-        let partialSuccessCount = 0;
-        let partialFailedCount = 0;
-
-        setState((state) => ({
-          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-            const completedCount = (data.completedCount ?? 0) + 1;
-            const allCompleted = completedCount >= totalTaskCount;
-            const successCount =
-              data.result?.data?.filter((item) => item?.url).length ?? 0;
-            const hasSuccessfulImages = successCount > 0;
-            const message =
-              response.failReason ||
-              response.description ||
-              "生成失败，请稍后再试";
-
-            if (allCompleted && hasSuccessfulImages) {
-              shouldWarnPartialFailure = true;
-              partialSuccessCount = successCount;
-              partialFailedCount = Math.max(totalTaskCount - successCount, 1);
-            }
-
-            return {
-              ...data,
-              status:
-                allCompleted && hasSuccessfulImages
-                  ? GenerationStatus.COMPLETED
-                  : allCompleted
-                    ? GenerationStatus.FAILED
-                    : GenerationStatus.IN_PROGRESS,
-              progress:
-                allCompleted && hasSuccessfulImages ? 100 : progressValue,
-              error: {
-                code: "MJ_ERROR",
-                message,
-              },
-              completedCount,
-            };
-          }),
-        }));
-
-        if (shouldWarnPartialFailure) {
-          toast.warning(
-            `已生成 ${partialSuccessCount} 张图片，${partialFailedCount} 张失败`,
-          );
-        }
-
-        saveCurrentCanvasToHistory();
-        if (useChatSettingsStore.getState().autoSaveEnabled) {
-          getState().saveGraph();
-        }
-
-        stopImagePollingInternal(taskId);
-        const currentData = getState().nodes.find((n) => n.id === nodeId)
-          ?.data as ImageGenerationNode;
-        if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
-          pendingTaskCounts.delete(nodeId);
-        }
-        if (ledgerBizId) {
-          refundDesktopProxyScore(
-            ledgerBizId,
-            "midjourney image generation failed",
-            "image",
-          ).catch(() => { });
-        }
-        return;
-      }
-
-      // 更新进度
-      // NOT_START、SUBMITTED、MODAL 状态为排队中
-      const isQueued = ["NOT_START", "SUBMITTED", "MODAL"].includes(
-        response.status,
-      );
-
-      setState((state) => ({
-        nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-          ...data,
-          status: isQueued
-            ? GenerationStatus.QUEUED
-            : GenerationStatus.IN_PROGRESS,
-          progress: progressValue,
-        })),
-      }));
-    }
-  } catch (pollError) {
-    console.error("Midjourney 图片生成轮询失败:", pollError);
-    stopImagePollingInternal(taskId);
-    setState((state) => ({
-      nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-        ...data,
-        status: GenerationStatus.FAILED,
-        error: {
-          code: "POLL_ERROR",
-          message: "轮询失败，请稍后再试",
-        },
-      })),
-    }));
-    saveCurrentCanvasToHistory();
-    if (useChatSettingsStore.getState().autoSaveEnabled) {
-      getState().saveGraph();
-    }
-    if (ledgerBizId) {
-      refundDesktopProxyScore(
-        ledgerBizId,
-        "midjourney image poll error",
-        "image",
-      ).catch(() => { });
     }
   }
 };
@@ -2146,35 +1868,11 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const currentUrls = nodeData?.[targetField] ?? [];
       const nextUrls = updateUrlListByMode(currentUrls, sourceUrls, mode);
 
-      // 对于 imageNode，mode === "remove" 时也需要清理 midjourneyAdvanced 中的 URL
-      let nextMidjourneyAdvanced = nodeData?.midjourneyAdvanced;
-      if (
-        mode === "remove" &&
-        node.type === "imageNode" &&
-        nextMidjourneyAdvanced
-      ) {
-        const sourceUrlSet = new Set(sourceUrls);
-        const newReferenceUrls = (
-          nextMidjourneyAdvanced.referenceUrls ?? []
-        ).filter((url: string) => !sourceUrlSet.has(url));
-        const newStyleUrls = (nextMidjourneyAdvanced.styleUrls ?? []).filter(
-          (url: string) => !sourceUrlSet.has(url),
-        );
-        nextMidjourneyAdvanced = {
-          ...nextMidjourneyAdvanced,
-          referenceUrls: newReferenceUrls,
-          styleUrls: newStyleUrls,
-        };
-      }
-
       return {
         ...node,
         data: {
           ...nodeData,
           [targetField]: nextUrls,
-          ...(nextMidjourneyAdvanced && {
-            midjourneyAdvanced: nextMidjourneyAdvanced,
-          }),
         },
       };
     });
@@ -2514,8 +2212,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               ...newNode,
               data: {
                 ...newNode.data,
-                model: defaultImageModel || newNode.data.model,
-                platform: defaultImagePlatform || newNode.data.platform,
+                model: visibleImageModel
+                  ? defaultImageModel
+                  : newNode.data.model,
+                platform: visibleImageModel
+                  ? defaultImagePlatform
+                  : newNode.data.platform,
                 size: defaultImageSize || newNode.data.size,
                 resolution: defaultImageResolution || newNode.data.resolution,
               },
@@ -3287,8 +2989,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       pendingTaskCounts.set(nodeId, currentCount + 1);
       const totalTaskCount = currentCount + 1;
 
-      // 使用 originalModel 恢复原始模型状态（避免 payload 中的 backendModel 覆盖 UI 状态）
-      // 例如：midjourney-niji7 在发送给后端时会转为 midjourney，但需要保留原始值用于 UI 显示
       const restoredModel = payload.originalModel ?? payload.model;
 
       // 更新节点输入参数与状态
@@ -3297,7 +2997,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
           ...data,
           ...payload,
-          // 强制恢复原始模型，确保 UI 显示正确的模型名称
           model: restoredModel,
           status: GenerationStatus.QUEUED,
           progress: 0,
@@ -3310,47 +3009,15 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         })),
       }));
 
-      // 判断是否为 Midjourney 模型
-      const isMidjourney = payload.model === "midjourney";
       const scoreCost = Number(payload.requiredPoints ?? 0) || undefined;
 
       try {
         let taskId: string;
         let ledgerBizId: string | undefined;
 
-        if (isMidjourney) {
-          const finalPrompt = buildMidjourneyPrompt({
-            prompt: payload.prompt,
-            referenceUrls: payload?.midjourneyAdvanced?.referenceUrls,
-            styleUrls: payload?.midjourneyAdvanced?.styleUrls,
-            iw: payload?.midjourneyAdvanced?.iw,
-            sw: payload?.midjourneyAdvanced?.sw,
-          });
-
-          // Midjourney 模型使用 zeakai API
-          const response = await submitMjImagine(
-            { prompt: finalPrompt },
-            scoreCost,
-          );
-          ledgerBizId = response?.ledgerBizId;
-
-          // code === 1 表示提交成功
-          if (response.code !== 1) {
-            if (ledgerBizId) {
-              refundDesktopProxyScore(
-                ledgerBizId,
-                response.description || "midjourney task creation failed",
-                "image",
-              ).catch(() => { });
-            }
-            throw new Error(response.description || "Midjourney 任务提交失败");
-          }
-
-          taskId = response.result;
-        } else {
-          // 非 Midjourney 模型：RunningHub 专属模型走低价->官方回退，其它模型直接走 ToAPI。
-          const payloadOriginalModel = payload.originalModel ?? payload.model;
-          if (isAgnesImageModel(payloadOriginalModel)) {
+        // RunningHub 专属模型走低价->官方回退，其它模型直接走 ToAPI。
+        const payloadOriginalModel = payload.originalModel ?? payload.model;
+        if (isAgnesImageModel(payloadOriginalModel)) {
             set((state) => ({
               nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
                 ...data,
@@ -3438,9 +3105,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               }
               throw agnesError;
             }
-          }
+        }
 
-          if (RUNNINGHUB_IMAGE_MODEL_IDS.has(payloadOriginalModel)) {
+        if (RUNNINGHUB_IMAGE_MODEL_IDS.has(payloadOriginalModel)) {
             // RunningHub 直接生成（可能返回立即地址或 taskId）
             set((state) => ({
               nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
@@ -3522,34 +3189,33 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               else pendingTaskCounts.set(nodeId, remaining);
               throw rhError;
             }
+        }
+
+        // 非 RunningHub：创建图片生成任务，获取 task_id 后启动轮询
+        const response: any = await createImageGeneration(payload, scoreCost);
+        ledgerBizId = response?.ledgerBizId;
+
+        // 从响应中提取 task_id（兼容多种返回结构）
+        taskId =
+          response?.data?.task_id ??
+          response?.result?.task_id ??
+          response?.task_id ??
+          response?.data?.taskId ??
+          response?.result?.taskId ??
+          response?.taskId ??
+          response?.data?.id ??
+          response?.result?.id ??
+          response?.id;
+
+        if (!taskId) {
+          if (ledgerBizId) {
+            refundDesktopProxyScore(
+              ledgerBizId,
+              "image task creation failed: no task_id",
+              "image",
+            ).catch(() => { });
           }
-
-          // 非 RunningHub：创建图片生成任务，获取 task_id 后启动轮询
-          const response: any = await createImageGeneration(payload, scoreCost);
-          ledgerBizId = response?.ledgerBizId;
-
-          // 从响应中提取 task_id（兼容多种返回结构）
-          taskId =
-            response?.data?.task_id ??
-            response?.result?.task_id ??
-            response?.task_id ??
-            response?.data?.taskId ??
-            response?.result?.taskId ??
-            response?.taskId ??
-            response?.data?.id ??
-            response?.result?.id ??
-            response?.id;
-
-          if (!taskId) {
-            if (ledgerBizId) {
-              refundDesktopProxyScore(
-                ledgerBizId,
-                "image task creation failed: no task_id",
-                "image",
-              ).catch(() => { });
-            }
-            throw new Error("未返回任务 ID，请稍后再试");
-          }
+          throw new Error("未返回任务 ID，请稍后再试");
         }
 
         if (!taskId) {
@@ -3576,29 +3242,15 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         const controller = new AbortController();
         imagePollingControllers.set(taskId, controller);
 
-        // 根据模型类型选择不同的轮询函数，传入 totalTaskCount 用于判断所有任务是否完成
-        if (isMidjourney) {
-          pollMjImageGeneration(
-            taskId,
-            nodeId,
-            controller.signal,
-            set,
-            get,
-            totalTaskCount,
-            ledgerBizId,
-          );
-        } else {
-          // 非 Midjourney 模型使用标准轮询
-          pollImageGeneration(
-            taskId,
-            nodeId,
-            controller.signal,
-            set,
-            get,
-            totalTaskCount,
-            ledgerBizId,
-          );
-        }
+        pollImageGeneration(
+          taskId,
+          nodeId,
+          controller.signal,
+          set,
+          get,
+          totalTaskCount,
+          ledgerBizId,
+        );
       } catch (startError) {
         console.error("创建图片生成任务失败:", startError);
         // 调用失败时减少待完成数量
@@ -3930,7 +3582,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           platform: sourceData.platform,
           size: sourceData.size,
           resolution: sourceData.resolution,
-          midjourneyAdvanced: sourceData.midjourneyAdvanced,
           promptDraft: splitPrompt,
           promptDraftHtml: `<p>${splitPrompt}</p>`,
         });

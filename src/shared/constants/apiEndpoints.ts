@@ -102,21 +102,6 @@
 //     allowedFields: [], // FormData，不需要过滤
 //   },
 
-//   // Midjourney 相关
-//   MJ_SUBMIT_IMAGINE: {
-//     path: '/mj/submit/imagine',
-//     method: 'POST',
-//     allowedFields: [
-//       'prompt',
-//       'bot_type',
-//       'account_id',
-//     ],
-//   },
-//   MJ_TASK_FETCH: {
-//     path: '/mj/task/{id}/fetch',
-//     method: 'GET',
-//     allowedFields: [],
-//   },
 // } as const
 
 // // 端点路径到配置的映射

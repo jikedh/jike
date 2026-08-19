@@ -894,9 +894,6 @@ export const TableNode = memo(
         : storyboardSketchModel === AGNES_IMAGE_2_FLASH_MODEL
           ? AGNES_IMAGE_RESOLUTION_OPTIONS
           : IMAGE_RESOLUTION_OPTIONS;
-    const showStoryboardSketchResolution =
-      storyboardSketchModel !== "midjourney" &&
-      storyboardSketchModel !== "midjourney-niji7";
     const perStoryboardSketchPoints = normalizeRequiredPoints(
       getImageGenerationPoints({
         model: selectedStoryboardSketchModel.model,
@@ -1134,9 +1131,7 @@ export const TableNode = memo(
                 storyboardSketchPromptTemplate,
               ),
               size: storyboardSketchSize,
-              resolution: showStoryboardSketchResolution
-                ? storyboardSketchResolution
-                : undefined,
+              resolution: storyboardSketchResolution,
               referenceImageUrls: [referenceImageUrl],
               requiredPoints: perStoryboardSketchPoints,
               signal,
@@ -1160,7 +1155,6 @@ export const TableNode = memo(
         perStoryboardSketchPoints,
         selectedStoryboardSketchModel.model,
         selectedStoryboardSketchModel.platform,
-        showStoryboardSketchResolution,
         storyboardSketchPromptTemplate,
         storyboardSketchResolution,
         storyboardSketchSize,
@@ -1924,38 +1918,29 @@ export const TableNode = memo(
                 </Select>
               </div>
 
-              {showStoryboardSketchResolution ? (
-                <div className="grid gap-2">
-                  <span className="text-xs text-white/45">分辨率</span>
-                  <Select
-                    value={storyboardSketchResolution}
-                    onValueChange={setStoryboardSketchResolution}
-                    disabled={isStoryboardSketching}
-                  >
-                    <SelectTrigger className="h-9 border-white/10 bg-white/[0.03] text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className={STORYBOARD_SELECT_CONTENT_CLASS}>
-                      {storyboardSketchResolutionOptions.map((item) => (
-                        <SelectItem
-                          key={item.value}
-                          value={item.value}
-                          className={STORYBOARD_SELECT_ITEM_CLASS}
-                        >
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : (
-                <div className="grid gap-2">
-                  <span className="text-xs text-white/45">分辨率</span>
-                  <div className="flex h-9 items-center rounded-md border border-white/10 bg-white/[0.03] px-3 text-xs text-white/35">
-                    模型自动
-                  </div>
-                </div>
-              )}
+              <div className="grid gap-2">
+                <span className="text-xs text-white/45">分辨率</span>
+                <Select
+                  value={storyboardSketchResolution}
+                  onValueChange={setStoryboardSketchResolution}
+                  disabled={isStoryboardSketching}
+                >
+                  <SelectTrigger className="h-9 border-white/10 bg-white/[0.03] text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className={STORYBOARD_SELECT_CONTENT_CLASS}>
+                    {storyboardSketchResolutionOptions.map((item) => (
+                      <SelectItem
+                        key={item.value}
+                        value={item.value}
+                        className={STORYBOARD_SELECT_ITEM_CLASS}
+                      >
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="grid gap-2">
