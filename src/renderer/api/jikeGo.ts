@@ -570,6 +570,17 @@ export type RunningHubTextToImageRequest = {
 export type RunningHubImageToImageRequest = RunningHubTextToImageRequest & {
   imageUrls: string[];
 };
+export type RunningHubMidjourneyV81Request = RunningHubTextToImageRequest & {
+  chaos?: number;
+  stylize?: number;
+  raw?: boolean;
+  imageUrl?: string;
+  iw?: number;
+  sref?: string;
+  sw?: number;
+  sv?: number;
+  hd: boolean;
+};
 export type QueryRunningHubV2TaskRequest = {
   taskId: string;
 };
@@ -637,6 +648,16 @@ export function createRhartImageNProEdit(data: RunningHubImageToImageRequest): a
 }
 export function createRhartImageNProOfficialEdit(data: RunningHubImageToImageRequest): any {
   return createRunningHubV2ImageToImage("/v1/runninghub/rhart-image-n-pro-official/edit", data);
+}
+export function createMidjourneyV81TextToImage(
+  data: RunningHubMidjourneyV81Request,
+  signal?: AbortSignal,
+): any {
+  return createRunningHubV2TextToImage(
+    "/v1/runninghub/midjourney-v81/text-to-image",
+    data,
+    signal,
+  );
 }
 export function queryRunningHubV2Task(
   data: QueryRunningHubV2TaskRequest,

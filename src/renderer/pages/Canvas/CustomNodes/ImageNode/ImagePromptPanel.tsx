@@ -9,10 +9,11 @@ import { ImageReferenceThumbnails } from "./components/ImageReferenceThumbnails"
 import { ImageModelHelpTooltip } from "./components/ImageModelHelpTooltip";
 import {
   AGNES_IMAGE_21_FLASH_MODEL,
-  IMAGE_MODELS,
+  IMAGE_NODE_MODELS,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
   RUNNINGHUB_GPT_IMAGE2_MODEL,
+  RUNNINGHUB_MIDJOURNEY_V81_MODEL,
   RUNNINGHUB_NANO_BANANA_PRO_MODEL,
   RUNNINGHUB_PLATFORM,
   isAgnesImageModel as isAgnesImageModelId
@@ -118,6 +119,19 @@ const GPTIMAGE2_RESOLUTION_OPTIONS = [
   { label: "2K", value: "2K", description: "高清" },
   { label: "4K", value: "4K", description: "超清" },
 ];
+const MIDJOURNEY_V81_SIZE_OPTIONS = GPTIMAGE2_SIZES.filter((item) =>
+  ["1:1", "4:3", "3:2", "16:9", "3:4", "2:3", "9:16"].includes(
+    item.value,
+  ),
+);
+const MIDJOURNEY_V81_SIZE_VALUES = toOptionValueSet(
+  MIDJOURNEY_V81_SIZE_OPTIONS,
+);
+const MIDJOURNEY_V81_RESOLUTION_VALUES = new Set(["1K", "2K"]);
+const MIDJOURNEY_V81_RESOLUTION_OPTIONS = [
+  { label: "1K", value: "1K", description: "标准" },
+  { label: "2K", value: "2K", description: "原生高清" },
+];
 const AGNES_IMAGE_SIZE_OPTIONS = [
   { label: "1:1", value: "1:1", description: "正方形" },
   { label: "4:3", value: "4:3", description: "横向4:3" },
@@ -214,7 +228,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     return node.data as ImageGenerationNode;
   });
   const visibleImageModels = useMemo(
-    () => IMAGE_MODELS,
+    () => IMAGE_NODE_MODELS,
     [],
   );
 
@@ -226,16 +240,16 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   // 新建节点时 platform 为 undefined，需要回退到只按 model 匹配
   const currentModelId = (() => {
     // 优先精确匹配 model + platform
-    const matched = IMAGE_MODELS.find(
+    const matched = IMAGE_NODE_MODELS.find(
       (item) => item.model === model && item.platform === platform,
     );
     if (matched) {
       return matched.id;
     }
     // 回退：只按 model 匹配（新建节点时 platform 为 undefined）
-    // 由于所有 IMAGE_MODELS 中的模型都有 platform 值，这里改为按 id 回退
+    // 由于所有图片节点模型都有 platform 值，这里改为按 id 回退
     // 找不到时返回 id=3（默认的"谷歌 Gemini 3 Pro"）
-    const fallback = IMAGE_MODELS.find((item) => item.model === model);
+    const fallback = IMAGE_NODE_MODELS.find((item) => item.model === model);
     return fallback?.id ?? 3;
   })();
 
@@ -287,6 +301,9 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     currentImageData?.platform === RUNNINGHUB_PLATFORM;
   const isRunningHubNanoBananaProModel =
     model === RUNNINGHUB_NANO_BANANA_PRO_MODEL &&
+    currentImageData?.platform === RUNNINGHUB_PLATFORM;
+  const isRunningHubMidjourneyV81Model =
+    model === RUNNINGHUB_MIDJOURNEY_V81_MODEL &&
     currentImageData?.platform === RUNNINGHUB_PLATFORM;
   const isNanoBananaParamsModel =
     isNanoBananaLocalModel || isRunningHubNanoBananaProModel;
@@ -343,6 +360,15 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       };
     }
 
+    if (isRunningHubMidjourneyV81Model) {
+      return {
+        sizes: MIDJOURNEY_V81_SIZE_VALUES,
+        resolutions: MIDJOURNEY_V81_RESOLUTION_VALUES,
+        defaultSize: "1:1",
+        defaultResolution: "1K",
+      };
+    }
+
     if (isAgnesImageModel) {
       return {
         sizes: isAgnesImage21Model
@@ -365,6 +391,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     isAgnesImageModel,
     isLocalGeminiDirectModel,
     isNanoBananaParamsModel,
+    isRunningHubMidjourneyV81Model,
     isSeedreamModel,
   ]);
 
@@ -650,12 +677,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     const commandSizeMap: Record<string, string> = {
       "c-1": "4:3", // 角色参考图
       "c-2":
-        isNanoBananaParamsModel
+        isNanoBananaParamsModel || isRunningHubMidjourneyV81Model
           ? "16:9"
           : "21:9", // 角色三视图
       "c-3": "16:9", // 多宫格电影分镜
       "c-4":
-        isNanoBananaParamsModel
+        isNanoBananaParamsModel || isRunningHubMidjourneyV81Model
           ? "16:9"
           : "21:9", // VR图
     };
@@ -674,7 +701,9 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     const commandResolutionMap: Record<string, string | undefined> = {
       "c-3": isSeedreamModel ? "2K" : "1K", // 多宫格电影分镜
       "c-4":
-        isNanoBananaParamsModel ||
+        isRunningHubMidjourneyV81Model
+          ? "2K"
+          : isNanoBananaParamsModel ||
           isGptImage2Model
           ? "4K"
           : "3K",
@@ -1893,6 +1922,23 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               resolution={resolution}
               sizeOptions={GPTIMAGE2_SIZES}
               resolutionOptions={GPTIMAGE2_RESOLUTION_OPTIONS}
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
+            />
+          )}
+
+          {isRunningHubMidjourneyV81Model && (
+            <GptImage2ParamsPanel
+              size={size}
+              resolution={resolution}
+              sizeOptions={MIDJOURNEY_V81_SIZE_OPTIONS}
+              resolutionOptions={MIDJOURNEY_V81_RESOLUTION_OPTIONS}
               onSizeChange={(value) => {
                 persistImageDefaultPreset({ size: value });
                 updateImageNodeData(nodeId, { size: value });
