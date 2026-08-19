@@ -50,7 +50,10 @@ import {
   GPTIMAGE2_SIZES,
   GptImage2ParamsPanel
 } from "./components/GptImage2ParamsPanel";
-import { MidjourneyPanel } from "./components/MidjourneyPanel";
+import {
+  MidjourneyPanel,
+  type MidjourneyQuality,
+} from "./components/MidjourneyPanel";
 import {
   SEEDREAM_ASPECT_RATIOS,
   SEEDREAM_RESOLUTIONS,
@@ -260,6 +263,9 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const chaos = currentImageData?.chaos ?? 0;
   const stylize = currentImageData?.stylize ?? 0;
   const imageWeight = currentImageData?.iw ?? 1;
+  const midjourneyQuality: MidjourneyQuality =
+    currentImageData?.quality === "4" ? "4" : "1";
+  const raw = currentImageData?.raw ?? false;
   const referenceImageUrls = currentImageData?.image_urls ?? [];
   const promptDraftHtml = currentImageData?.promptDraftHtml ?? "<p></p>";
 
@@ -1534,6 +1540,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       }
 
       if (isRunningHubMidjourneyV81Model) {
+        basePayload.quality = midjourneyQuality;
+        basePayload.raw = raw;
         basePayload.chaos = currentImageData?.chaos ?? 0;
         basePayload.stylize = currentImageData?.stylize ?? 0;
         basePayload.iw = currentImageData?.iw ?? 1;
@@ -1947,6 +1955,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             <MidjourneyPanel
               size={size}
               resolution={resolution}
+              quality={midjourneyQuality}
+              raw={raw}
               chaos={chaos}
               stylize={stylize}
               imageWeight={imageWeight}
@@ -1959,6 +1969,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
               onResolutionChange={(value) => {
                 persistImageDefaultPreset({ resolution: value });
                 updateImageNodeData(nodeId, { resolution: value });
+              }}
+              onQualityChange={(value) => {
+                updateImageNodeData(nodeId, { quality: value });
+              }}
+              onRawChange={(value) => {
+                updateImageNodeData(nodeId, { raw: value });
               }}
               onChaosChange={(value) => {
                 updateImageNodeData(nodeId, { chaos: value });

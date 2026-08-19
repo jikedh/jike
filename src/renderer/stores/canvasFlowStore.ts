@@ -525,6 +525,8 @@ const buildRunningHubImageRequest = ({
   imageUrls,
   size,
   resolution,
+  quality,
+  raw,
   chaos,
   stylize,
   imageWeight,
@@ -535,6 +537,8 @@ const buildRunningHubImageRequest = ({
   imageUrls: string[];
   size?: string;
   resolution?: string;
+  quality?: string;
+  raw?: boolean;
   chaos?: number;
   stylize?: number;
   imageWeight?: number;
@@ -545,7 +549,8 @@ const buildRunningHubImageRequest = ({
     return {
       prompt: prompt || "",
       aspectRatio: size || "1:1",
-      quality: "1",
+      quality: quality === "4" ? "4" : "1",
+      raw: raw ?? false,
       hd: resolution?.toUpperCase() === "2K",
       chaos: chaos ?? 0,
       stylize: stylize ?? 0,
@@ -625,6 +630,8 @@ const submitRunningHubImageTask = async ({
   imageUrls,
   size,
   resolution,
+  quality,
+  raw,
   chaos,
   stylize,
   imageWeight,
@@ -635,6 +642,8 @@ const submitRunningHubImageTask = async ({
   imageUrls: string[];
   size?: string;
   resolution?: string;
+  quality?: string;
+  raw?: boolean;
   chaos?: number;
   stylize?: number;
   imageWeight?: number;
@@ -646,6 +655,8 @@ const submitRunningHubImageTask = async ({
     imageUrls,
     size,
     resolution,
+    quality,
+    raw,
     chaos,
     stylize,
     imageWeight,
@@ -698,6 +709,8 @@ const generateRunningHubImageWithFallback = async ({
   imageUrls,
   size,
   resolution,
+  quality,
+  raw,
   chaos,
   stylize,
   imageWeight,
@@ -708,6 +721,8 @@ const generateRunningHubImageWithFallback = async ({
   imageUrls: string[];
   size?: string;
   resolution?: string;
+  quality?: string;
+  raw?: boolean;
   chaos?: number;
   stylize?: number;
   imageWeight?: number;
@@ -724,6 +739,8 @@ const generateRunningHubImageWithFallback = async ({
       imageUrls,
       size,
       resolution,
+      quality,
+      raw,
       chaos,
       stylize,
       imageWeight,
@@ -740,6 +757,8 @@ const generateRunningHubImageWithFallback = async ({
       imageUrls,
       size,
       resolution,
+      quality,
+      raw,
       chaos,
       stylize,
       imageWeight,
@@ -3196,6 +3215,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                 : [],
               size: payload.size,
               resolution: payload.resolution,
+                quality: payload.quality,
+                raw: payload.raw,
               chaos: payload.chaos,
               stylize: payload.stylize,
               imageWeight: payload.iw,
