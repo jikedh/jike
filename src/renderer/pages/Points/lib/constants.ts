@@ -40,7 +40,7 @@ export const RECHARGE_PACKAGES = [
 export const usageHistory = [
   {
     id: 1,
-    type: "生成图像 (Midjourney V6)",
+    type: "生成图像 (GPT-Image-2)",
     amount: "-10",
     date: "2024-04-13 12:30",
     status: "success",

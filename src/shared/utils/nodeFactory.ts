@@ -1,6 +1,10 @@
 import { getAgentPresetById } from "shared/constants/agent-presets";
 import { GenerationStatus } from "shared/constants/enum";
 import { MINIMAX_SPEECH_28_HD_MODEL } from "shared/constants/audio-models";
+import {
+  DEFAULT_IMAGE_MODEL,
+  DEFAULT_IMAGE_PLATFORM,
+} from "shared/constants/ai-models";
 import type { AllNodeType } from "shared/types/flow";
 import type {
   AddNodeOptions,
@@ -44,17 +48,12 @@ export const createImageNode = (
   width: 350,
   height: 250,
   data: {
-    model: "gemini-3-pro-image-preview",
+    model: DEFAULT_IMAGE_MODEL,
+    platform: DEFAULT_IMAGE_PLATFORM,
     prompt: "",
     promptDraft: "",
     promptDraftHtml: "<p></p>",
     image_urls: [],
-    midjourneyAdvanced: {
-      referenceUrls: [],
-      styleUrls: [],
-      iw: 1,
-      sw: 100,
-    },
     nickname: "图片",
     status: GenerationStatus.COMPLETED,
     progress: 0,

@@ -173,7 +173,7 @@ const HomePage = () => {
       id: 2,
       title: "第一集_剪辑版资产",
       image: "https://picsum.photos/seed/episode1/800/500",
-      tag: "Midjourney V6",
+      tag: "AI 图像",
     },
     {
       id: 3,
