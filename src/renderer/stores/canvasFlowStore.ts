@@ -3,12 +3,13 @@ import { copyMediaUrlToOss, copyVideoUrlToOss } from "service/oss";
 import {
   DEFAULT_IMAGE_MODEL,
   DEFAULT_IMAGE_PLATFORM,
-  getVisibleImageModels,
+  IMAGE_NODE_MODELS,
   isAgnesImageModel,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
   RUNNINGHUB_GPT_IMAGE2_MODEL,
   RUNNINGHUB_IMAGE_MODEL_IDS,
+  RUNNINGHUB_MIDJOURNEY_V81_MODEL,
   RUNNINGHUB_NANO_BANANA_PRO_MODEL
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
@@ -110,6 +111,7 @@ import {
   createRhartImageNProOfficialEdit,
   createRhartImageNProOfficialTextToImage,
   createRhartImageNProTextToImage,
+  createMidjourneyV81TextToImage,
   queryRunningHubV2Task,
   refundDesktopProxyScore
 } from "@/api/jikeGo";
@@ -466,22 +468,17 @@ const resolveLocalGeminiImageModel = ({
 };
 
 type RunningHubImageRoute = {
-  model: "gpt-image-2" | "nano-banana-pro";
-  textToImage: (data: {
-    prompt: string;
-    aspectRatio?: string;
-    resolution?: string;
-    quality?: string;
-  }) => any;
-  imageToImage: (data: {
-    prompt: string;
-    imageUrls: string[];
-    aspectRatio?: string;
-    resolution?: string;
-    quality?: string;
-  }) => any;
+  model: "gpt-image-2" | "nano-banana-pro" | "midjourney-v8.1";
+  textToImage: (data: any) => any;
+  imageToImage: (data: any) => any;
 };
-const resolveRunningHubImageRoutes = (model?: string) => {
+type RunningHubImageRoutes = {
+  lowCost: RunningHubImageRoute;
+  official?: RunningHubImageRoute;
+};
+const resolveRunningHubImageRoutes = (
+  model?: string,
+): RunningHubImageRoutes | undefined => {
   if (model === RUNNINGHUB_GPT_IMAGE2_MODEL) {
     return {
       lowCost: {
@@ -508,7 +505,16 @@ const resolveRunningHubImageRoutes = (model?: string) => {
         textToImage: createRhartImageNProOfficialTextToImage,
         imageToImage: createRhartImageNProOfficialEdit,
       },
-    } as const;
+    };
+  }
+  if (model === RUNNINGHUB_MIDJOURNEY_V81_MODEL) {
+    return {
+      lowCost: {
+        model: "midjourney-v8.1",
+        textToImage: createMidjourneyV81TextToImage,
+        imageToImage: createMidjourneyV81TextToImage,
+      },
+    };
   }
   return undefined;
 };
@@ -529,6 +535,17 @@ const buildRunningHubImageRequest = ({
   route: RunningHubImageRoute;
   scoreCost?: number;
 }) => {
+  if (route.model === "midjourney-v8.1") {
+    return {
+      prompt: prompt || "",
+      aspectRatio: size || "1:1",
+      quality: "1",
+      hd: resolution?.toUpperCase() === "2K",
+      ...(imageUrls[0] ? { imageUrl: imageUrls[0] } : {}),
+      ...(scoreCost != null ? { scoreCost } : {}),
+    };
+  }
+
   const baseRequest = {
     prompt: prompt || "",
     aspectRatio: size || "1:1",
@@ -669,6 +686,9 @@ const generateRunningHubImageWithFallback = async ({
       scoreCost,
     });
   } catch (lowCostError) {
+    if (!routes.official) {
+      throw lowCostError;
+    }
     console.warn("RunningHub 低价渠道生成失败，切换官方稳定版:", lowCostError);
     return submitRunningHubImageTask({
       route: routes.official,
@@ -2193,7 +2213,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const visibleNewVideoModelIds = new Set(
         getVisibleVideoModels().map((model) => model.id),
       );
-      const visibleImageModel = getVisibleImageModels().find(
+      const visibleImageModel = IMAGE_NODE_MODELS.find(
         (item) =>
           item.model === defaultImageModel &&
           item.platform === defaultImagePlatform,

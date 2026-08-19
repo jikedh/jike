@@ -137,6 +137,7 @@ export const NANO_BANANA_LOCAL_PLATFORM = "google_local_gemini";
 export const RUNNINGHUB_PLATFORM = "runninghub";
 export const RUNNINGHUB_GPT_IMAGE2_MODEL = "runninghub-gpt-image-2";
 export const RUNNINGHUB_NANO_BANANA_PRO_MODEL = "runninghub-nano-banana-pro";
+export const RUNNINGHUB_MIDJOURNEY_V81_MODEL = "runninghub-midjourney-v8.1";
 export const AGNES_PLATFORM = "agnes";
 export const AGNES_IMAGE_2_FLASH_MODEL = "agnes-image-2.0-flash";
 export const AGNES_IMAGE_21_FLASH_MODEL = "agnes-image-2.1-flash";
@@ -202,9 +203,20 @@ export const IMAGE_MODELS = [
   // },
 ];
 
+export const IMAGE_NODE_MODELS = [
+  ...IMAGE_MODELS,
+  {
+    id: 23,
+    name: "Midjourney-v8.1（RunningHub版本）",
+    model: RUNNINGHUB_MIDJOURNEY_V81_MODEL,
+    platform: RUNNINGHUB_PLATFORM,
+  },
+];
+
 export const RUNNINGHUB_IMAGE_MODEL_IDS = new Set([
   RUNNINGHUB_GPT_IMAGE2_MODEL,
   RUNNINGHUB_NANO_BANANA_PRO_MODEL,
+  RUNNINGHUB_MIDJOURNEY_V81_MODEL,
 ]);
 
 export const getVisibleImageModels = () => IMAGE_MODELS;
@@ -237,6 +249,7 @@ export const GENERATION_SCORE_COST_MAP: Record<string, number> = {
   "doubao-seedream-5-0": 30,
   [RUNNINGHUB_GPT_IMAGE2_MODEL]: 10,
   [RUNNINGHUB_NANO_BANANA_PRO_MODEL]: 10,
+  [RUNNINGHUB_MIDJOURNEY_V81_MODEL]: 10,
   [AGNES_IMAGE_2_FLASH_MODEL]: 0,
   [AGNES_IMAGE_21_FLASH_MODEL]: 0,
   // 视频模型
