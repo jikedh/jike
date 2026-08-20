@@ -61,6 +61,11 @@ export function useModeAvailability(params: {
         );
       }
 
+      // Seedance 2.5 的视频编辑能力暂未开放。
+      if (selectedModelId === "seedance-2.5" && key === "video-edit") {
+        reasons.push("Seedance 2.5 的视频编辑暂未开放");
+      }
+
       // 原因 B: 参考图数量不符合约束（仅在模型支持时才检查）
       if (modelSupportedModes.has(key)) {
         // 首尾帧特殊判断：恰好 2 项且全部为图片
