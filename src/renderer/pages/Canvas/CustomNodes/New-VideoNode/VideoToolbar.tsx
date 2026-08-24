@@ -1113,7 +1113,16 @@ export const VideoToolbar = ({
 
       setIsDownloading(true);
       try {
-        await downloadImageFromUrl(currentVideoUrl);
+        const format = videoItems[0]?.format?.toLowerCase();
+        const extension = ["mp4", "webm", "mov", "mkv", "avi"].includes(
+          format || "",
+        )
+          ? format
+          : "mp4";
+        await downloadImageFromUrl(
+          currentVideoUrl,
+          `video_${nodeId}.${extension}`,
+        );
         toast.success("下载成功");
       } catch (error) {
         const message = error instanceof Error ? error.message : "下载失败";
