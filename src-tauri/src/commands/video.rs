@@ -1,11 +1,21 @@
 use crate::domain;
-use crate::models::{SplitMp4Request, VideoTrimRequest};
+use crate::models::{SplitMp4Request, VideoFrameCaptureRequest, VideoTrimRequest};
 
 #[tauri::command]
 pub async fn video_processing_trim(request: VideoTrimRequest) -> Result<serde_json::Value, String> {
     match domain::trim_video(request).await {
         Ok(r) => Ok(serde_json::json!({ "success": true, "data": r })),
         Err(e) => Ok(serde_json::json!({ "success": false, "error": e.to_string() })),
+    }
+}
+
+#[tauri::command]
+pub async fn video_capture_frame(
+    request: VideoFrameCaptureRequest,
+) -> Result<serde_json::Value, String> {
+    match domain::capture_video_frame(request).await {
+        Ok(result) => Ok(serde_json::json!({ "success": true, "data": result })),
+        Err(error) => Ok(serde_json::json!({ "success": false, "error": error.to_string() })),
     }
 }
 

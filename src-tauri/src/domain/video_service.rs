@@ -3,15 +3,21 @@
 // Rust 端等价实现：调用阿里云 ICE REST API 提交裁剪作业，等待完成，下载到本地，
 // 通过后端 /v1/oss/upload 上传。ffmpeg 方案降级为调用本地 ffmpeg 二进制。
 
-use crate::models::{SplitMp4Request, SplitMp4Result, VideoTrimRequest, VideoTrimResult};
+use crate::models::{
+    SplitMp4Request, SplitMp4Result, VideoFrameCaptureRequest, VideoFrameCaptureResult,
+    VideoTrimRequest, VideoTrimResult,
+};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+use tokio::io::AsyncWriteExt;
 
 const FFMPEG_PATH_ENV: &str = "JIKE_FFMPEG_PATH";
+const MAX_FRAME_SOURCE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const END_FRAME_PADDING_SECONDS: f64 = 0.2;
 
 #[derive(Debug, thiserror::Error)]
 pub enum VideoError {
@@ -79,6 +85,171 @@ pub async fn trim_video(req: VideoTrimRequest) -> Result<VideoTrimResult, VideoE
 
     // 降级到 ffmpeg sidecar
     trim_via_ffmpeg(&req).await
+}
+
+pub async fn capture_video_frame(
+    req: VideoFrameCaptureRequest,
+) -> Result<VideoFrameCaptureResult, VideoError> {
+    if !req.time.is_finite() || req.time < 0.0 {
+        return Err(VideoError::Config("截帧时间无效".into()));
+    }
+
+    let source_url = crate::domain::oss_service::validate_remote_media_url(&req.video_url)
+        .map_err(|error| VideoError::Config(error.to_string()))?;
+    let temp_dir = std::env::temp_dir().join(format!("jike-frame-{}", uuid::Uuid::new_v4()));
+    let result = async {
+        tokio::fs::create_dir_all(&temp_dir).await?;
+        let input_path = temp_dir.join("source.mp4");
+        let output_path = temp_dir.join("frame.png");
+        download_frame_source(&source_url, &input_path).await?;
+        let ffmpeg = resolve_ffmpeg_path(None)?;
+        let capture_time = match req.mode.as_str() {
+            "start" => 0.0,
+            "end" => {
+                let duration = probe_media_duration(&ffmpeg, &input_path).await?;
+                (duration - END_FRAME_PADDING_SECONDS).max(0.0)
+            }
+            "current" => req.time,
+            _ => return Err(VideoError::Config("不支持的截帧模式".into())),
+        };
+        extract_frame_with_ffmpeg(&ffmpeg, &input_path, &output_path, capture_time).await?;
+        let frame = tokio::fs::read(&output_path).await?;
+        let url = upload_frame_to_backend(
+            frame,
+            req.auth_token.as_deref(),
+            req.backend_base_url.as_deref(),
+        )
+        .await?;
+
+        Ok(VideoFrameCaptureResult {
+            url,
+            format: "png".to_string(),
+            method: "ffmpeg".to_string(),
+        })
+    }
+    .await;
+
+    let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+    result
+}
+
+async fn download_frame_source(source_url: &reqwest::Url, target: &Path) -> Result<(), VideoError> {
+    let client = Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(600))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|error| VideoError::Http(error.to_string()))?;
+    let mut response = client
+        .get(source_url.clone())
+        .send()
+        .await
+        .map_err(|error| VideoError::Http(error.to_string()))?;
+
+    if !response.status().is_success() {
+        return Err(VideoError::Http(format!("视频下载失败：HTTP {}", response.status())));
+    }
+    if response.content_length().is_some_and(|size| size > MAX_FRAME_SOURCE_BYTES) {
+        return Err(VideoError::Config("视频文件超过截帧大小限制".into()));
+    }
+
+    let mut file = tokio::fs::File::create(target).await?;
+    let mut downloaded = 0u64;
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| VideoError::Http(error.to_string()))?
+    {
+        downloaded += chunk.len() as u64;
+        if downloaded > MAX_FRAME_SOURCE_BYTES {
+            return Err(VideoError::Config("视频文件超过截帧大小限制".into()));
+        }
+        file.write_all(&chunk).await?;
+    }
+
+    file.flush().await?;
+    Ok(())
+}
+
+async fn extract_frame_with_ffmpeg(
+    ffmpeg: &Path,
+    input_path: &Path,
+    output_path: &Path,
+    time: f64,
+) -> Result<(), VideoError> {
+    let ffmpeg = ffmpeg.to_path_buf();
+    let input_path = input_path.to_path_buf();
+    let output_path = output_path.to_path_buf();
+    let output_path_for_command = output_path.clone();
+    let time = format!("{time:.3}");
+    let output = tokio::task::spawn_blocking(move || {
+        Command::new(ffmpeg)
+            .args([
+                "-y",
+                "-hide_banner",
+                "-ss",
+                &time,
+                "-i",
+                input_path.to_string_lossy().as_ref(),
+                "-frames:v",
+                "1",
+                output_path_for_command.to_string_lossy().as_ref(),
+            ])
+            .output()
+    })
+    .await
+    .map_err(|error| VideoError::JobFailed(error.to_string()))?
+    .map_err(|error| VideoError::JobFailed(error.to_string()))?;
+
+    if output.status.success() && output_path.is_file() {
+        Ok(())
+    } else {
+        Err(VideoError::JobFailed(ffmpeg_stderr_message(&output.stderr)))
+    }
+}
+
+async fn upload_frame_to_backend(
+    frame: Vec<u8>,
+    auth_token: Option<&str>,
+    backend_base_url: Option<&str>,
+) -> Result<String, VideoError> {
+    let backend = resolve_backend(backend_base_url);
+    let upload_url = format!("{backend}/v1/oss/upload");
+    let part = reqwest::multipart::Part::bytes(frame)
+        .file_name("video-frame.png")
+        .mime_str("image/png")
+        .map_err(|error| VideoError::Http(error.to_string()))?;
+    let form = reqwest::multipart::Form::new().part("file", part);
+    let mut request = Client::new().post(upload_url).multipart(form);
+    if let Some(token) = auth_token.filter(|token| !token.trim().is_empty()) {
+        let authorization = if token.starts_with("Bearer ") {
+            token.to_string()
+        } else {
+            format!("Bearer {token}")
+        };
+        request = request.header("Authorization", authorization);
+    }
+
+    let response = request
+        .send()
+        .await
+        .map_err(|error| VideoError::Http(error.to_string()))?;
+    if !response.status().is_success() {
+        return Err(VideoError::Http(format!("截帧图片上传失败：HTTP {}", response.status())));
+    }
+
+    let payload = response
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|error| VideoError::Http(error.to_string()))?;
+    payload
+        .get("data")
+        .and_then(|data| data.get("url"))
+        .and_then(|url| url.as_str())
+        .or_else(|| payload.get("url").and_then(|url| url.as_str()))
+        .filter(|url| !url.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| VideoError::Http("截帧图片上传未返回地址".into()))
 }
 
 pub async fn split_mp4_by_seconds(req: SplitMp4Request) -> Result<SplitMp4Result, VideoError> {
@@ -361,10 +532,23 @@ fn list_clip_outputs(output_dir: &Path) -> Result<Vec<String>, VideoError> {
 
 fn ffmpeg_stderr_message(stderr: &[u8]) -> String {
     let stderr = String::from_utf8_lossy(stderr);
-    stderr
+    let lines = stderr
         .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>();
+
+    lines
+        .iter()
         .rev()
-        .find(|line| !line.trim().is_empty())
+        .find(|line| {
+            let normalized = line.to_ascii_lowercase();
+            ["error", "invalid", "failed", "unable", "could not", "conversion failed"]
+                .iter()
+                .any(|keyword| normalized.contains(keyword))
+        })
+        .copied()
+        .or_else(|| lines.iter().rev().find(|line| !line.starts_with("frame=")) .copied())
         .unwrap_or("ffmpeg exit non-zero")
         .to_string()
 }

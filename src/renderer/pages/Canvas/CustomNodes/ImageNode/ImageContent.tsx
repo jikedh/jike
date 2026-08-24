@@ -48,6 +48,7 @@ export const ImageContent = memo(
     const progress = data.progress ?? 0;
     const error = data.error;
     const isUpload = data.isUpload ?? false;
+    const processingLabel = data.processingLabel;
     const hasImages = images.length > 0;
 
     // 错误状态
@@ -93,7 +94,7 @@ export const ImageContent = memo(
             <div className="absolute inset-0 border-2 border-transparent border-t-primary rounded-full animate-spin"></div>
           </div>
           <div className="text-xs font-medium text-white/75">
-            {isUploading || isUpload ? "上传中..." : "生成中..."}
+            {processingLabel || (isUploading || isUpload ? "上传中..." : "生成中...")}
           </div>
         </div>
       );

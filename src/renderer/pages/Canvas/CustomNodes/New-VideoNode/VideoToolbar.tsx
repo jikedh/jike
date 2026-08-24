@@ -11,7 +11,7 @@ import {
   IconUpload,
   IconZoomIn,
 } from "@tabler/icons-react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, RefObject } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
@@ -44,6 +44,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { VideoPlayer } from "@/components/ui/video-player";
 import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import { getAspectRatioFromMediaFile } from "@/pages/Canvas/CustomNodes/ImageNode/utils/aspectRatioUtils";
@@ -60,6 +67,10 @@ import {
   getVideoItemsFromNodeData,
   getVideoUrlsFromNodeData,
 } from "./utils/video-url";
+import {
+  getVideoFrameCaptureTime,
+  type VideoFrameCaptureMode,
+} from "./utils/captureVideoFrame";
 
 type WuhenRect = {
   x1: number;
@@ -912,6 +923,7 @@ type VideoToolbarProps = {
   onDelete?: () => void;
   isUploading?: boolean;
   onUploadingChange?: (uploading: boolean) => void;
+  primaryVideoRef: RefObject<HTMLVideoElement | null>;
 };
 
 type ActionKey =
@@ -923,6 +935,13 @@ type ActionKey =
   | "removeCaptions"
   | "videoEnhance";
 
+const SNAPSHOT_LABELS: Record<VideoFrameCaptureMode, string> = {
+  current: "截取当前帧",
+  start: "截取首帧",
+  end: "截取尾帧",
+};
+const SNAPSHOT_MODES: VideoFrameCaptureMode[] = ["current", "start", "end"];
+
 /**
  * 新版视频节点工具栏
  * 职责：提供上传、下载、放大查看、截帧、裁剪、去字幕等操作按钮
@@ -933,6 +952,7 @@ export const VideoToolbar = ({
   onDelete,
   isUploading = false,
   onUploadingChange,
+  primaryVideoRef,
 }: VideoToolbarProps) => {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -941,6 +961,7 @@ export const VideoToolbar = ({
   const [isSubtitlePanelOpen, setIsSubtitlePanelOpen] = useState(false);
   const [isSubmittingSubtitle, setIsSubmittingSubtitle] = useState(false);
   const [isEnhancePanelOpen, setIsEnhancePanelOpen] = useState(false);
+  const [isCapturingFrame, setIsCapturingFrame] = useState(false);
   const [previewVideoUrls, setPreviewVideoUrls] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const previewObjectUrlsRef = useRef<string[]>([]);
@@ -950,6 +971,9 @@ export const VideoToolbar = ({
   const onConnect = useCanvasFlowStore((state) => state.onConnect);
   const updateNewVideoNodeData = useCanvasFlowStore(
     (state) => state.updateNewVideoNodeData,
+  );
+  const updateImageNodeData = useCanvasFlowStore(
+    (state) => state.updateImageNodeData,
   );
   const setActiveVideoTool = useCanvasFlowStore(
     (state) => state.setActiveVideoTool,
@@ -1087,6 +1111,134 @@ export const VideoToolbar = ({
     }
   };
 
+  const handleCaptureFrame = useCallback(
+    async (mode: VideoFrameCaptureMode) => {
+      if (isCapturingFrame) return;
+
+      const video = primaryVideoRef.current;
+      if (!video) {
+        toast.info("视频尚未加载完成，请稍后重试");
+        return;
+      }
+
+      setIsCapturingFrame(true);
+      let childId: string | null = null;
+      try {
+        if (!window.videoProcessing?.captureFrame) {
+          throw new Error("截帧服务未初始化，请重启应用后重试");
+        }
+
+        const sourceNode = useCanvasFlowStore
+          .getState()
+          .nodes.find((node) => node.id === nodeId);
+        if (!sourceNode) {
+          throw new Error("当前视频节点不存在");
+        }
+
+        childId = addNode(
+          "image",
+          getProcessedVideoNodePosition(sourceNode),
+        );
+        if (!childId) {
+          throw new Error("截帧图片节点创建失败");
+        }
+
+        onConnect({
+          source: nodeId,
+          target: childId,
+          sourceHandle: "output",
+          targetHandle: "input",
+        });
+
+        updateImageNodeData(childId, {
+          badgeLabel: "视频截帧",
+          nickname: "截帧进行中",
+          processingLabel: "截帧进行中",
+          ...(data.aspect_ratio ? { size: data.aspect_ratio } : {}),
+          result: {
+            type: "image",
+            data: [],
+          },
+          status: GenerationStatus.IN_PROGRESS,
+          progress: 0,
+          error: undefined,
+        });
+
+        const flowStore = useCanvasFlowStore.getState();
+        flowStore.requestHistorySave();
+        flowStore.saveGraph();
+
+        const response = await window.videoProcessing.captureFrame({
+          videoUrl: currentVideoUrl || video.currentSrc,
+          time: getVideoFrameCaptureTime(video, mode),
+          mode,
+          authToken: getJikeingToken() || undefined,
+          backendBaseUrl:
+            import.meta.env.VITE_JIKE_GO_BASE_URL || "http://localhost:9181",
+        });
+        if (!response.success || !response.data?.url) {
+          throw new Error(response.error || "截帧图片上传失败");
+        }
+
+        updateImageNodeData(childId, {
+          badgeLabel: "视频截帧",
+          nickname: SNAPSHOT_LABELS[mode],
+          processingLabel: undefined,
+          isUpload: true,
+          ...(data.aspect_ratio ? { size: data.aspect_ratio } : {}),
+          image_urls: [response.data.url],
+          result: {
+            type: "image",
+            data: [
+              withRemoteMediaRef({
+                url: response.data.url,
+                remoteUrl: response.data.url,
+              }),
+            ],
+          },
+          status: GenerationStatus.COMPLETED,
+          progress: 100,
+          error: undefined,
+        } as any);
+
+        flowStore.requestHistorySave();
+        flowStore.saveGraph();
+        toast.success(`${SNAPSHOT_LABELS[mode]}成功`);
+      } catch (error: any) {
+        if (childId) {
+          updateImageNodeData(childId, {
+            processingLabel: undefined,
+            isUpload: false,
+            status: GenerationStatus.FAILED,
+            progress: 0,
+            error: {
+              code: "VIDEO_FRAME_CAPTURE_FAILED",
+              message: error?.message || "视频截帧失败，请重试",
+            },
+          });
+
+          const flowStore = useCanvasFlowStore.getState();
+          flowStore.requestHistorySave();
+          flowStore.saveGraph();
+        }
+        console.error("视频截帧失败:", error);
+        toast.error(error?.message || "视频截帧失败，请重试");
+      } finally {
+        setIsCapturingFrame(false);
+      }
+    },
+    [
+      addNode,
+      isCapturingFrame,
+      nodeId,
+      onConnect,
+      primaryVideoRef,
+      currentVideoUrl,
+      data.aspect_ratio,
+      updateImageNodeData,
+    ],
+  );
+
   const handleAction = async (actionKey: ActionKey) => {
     if (actionKey === "upload") {
       handleUploadClick();
@@ -1131,11 +1283,6 @@ export const VideoToolbar = ({
       } finally {
         setIsDownloading(false);
       }
-      return;
-    }
-
-    if (actionKey === "snapshot") {
-      toast.info("截帧功能正在开发中");
       return;
     }
 
@@ -1731,7 +1878,51 @@ export const VideoToolbar = ({
             (item.key === "download" && isDownloading) ||
             (item.key === "upload" && isUploading) ||
             (item.key === "trim" && isTrimmingVideo) ||
-            (item.key === "removeCaptions" && isSubmittingSubtitle);
+            (item.key === "removeCaptions" && isSubmittingSubtitle) ||
+            (item.key === "snapshot" && isCapturingFrame);
+
+          if (item.key === "snapshot") {
+            return (
+              <DropdownMenu key={item.key}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={isDisabled}
+                    className={cn(
+                      "flex min-w-11 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-xs transition-colors cursor-pointer",
+                      isDisabled
+                        ? "text-white/30 cursor-not-allowed"
+                        : "text-white/60 hover:text-white hover:bg-white/5",
+                    )}
+                    title={item.label}
+                  >
+                    <Icon size={16} stroke={1.5} />
+                    <span className="text-[10px] whitespace-nowrap">
+                      {item.label}
+                    </span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="center"
+                  className="min-w-32 border-white/10 bg-[#121214] text-white"
+                >
+                  <DropdownMenuGroup>
+                    {SNAPSHOT_MODES.map((mode) => (
+                      <DropdownMenuItem
+                        key={mode}
+                        disabled={isCapturingFrame}
+                        onSelect={() => {
+                          void handleCaptureFrame(mode);
+                        }}
+                      >
+                        {SNAPSHOT_LABELS[mode]}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          }
 
           return (
             <button

@@ -216,7 +216,7 @@ pub async fn upload_local_file_to_signed_url(
     Ok(file_info)
 }
 
-fn validate_remote_media_url(media_url: &str) -> Result<Url, OssCopyError> {
+pub(crate) fn validate_remote_media_url(media_url: &str) -> Result<Url, OssCopyError> {
     let url = Url::parse(media_url).map_err(|_| OssCopyError::InvalidUrl)?;
     if url.scheme() != "https" {
         return Err(OssCopyError::UnsupportedProtocol);

@@ -64,6 +64,7 @@ export interface ImageGenerationNode {
   // ---- 状态管理 ----
   status?: GenerationStatus; // 当前生成状态
   progress?: number; // 进度百分比（0-100）
+  processingLabel?: string; // 处理中状态展示文本
   completedCount?: number; // 已完成图片数量（用于多图生成场景判断）
   isUpload?: boolean; // 是否为上传图片（用于区分加载中 / 生成中）
   error?: {

@@ -3,7 +3,15 @@ import {
   IconRefresh,
   IconVideo,
 } from "@tabler/icons-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { copyMediaUrlToOss } from "service/oss";
 import { getMediaSequence } from "shared/utils/mediaSequence";
 import { cn } from "shared/utils/utils";
@@ -39,6 +47,7 @@ type CollapsibleVideoGalleryProps = {
     width: number;
     height: number;
   };
+  primaryVideoRef?: RefObject<HTMLVideoElement | null>;
 };
 
 type ExpandedCardLayout = {
@@ -145,6 +154,7 @@ export const CollapsibleVideoGallery = memo(
     onExpandedChange,
     forcePosterOnly = false,
     frameSize,
+    primaryVideoRef,
   }: CollapsibleVideoGalleryProps) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -533,6 +543,7 @@ export const CollapsibleVideoGallery = memo(
                     </div>
                   ) : displayUrl && shouldRenderPlayer && !isBroken(index) ? (
                     <VideoPlayer
+                      ref={isPrimary ? primaryVideoRef : undefined}
                       src={displayUrl}
                       muted={!isPrimary}
                       loop={!isPrimary}
