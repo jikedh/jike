@@ -82,7 +82,10 @@ import { useModeAvailability } from "./hooks/useModeAvailability";
 import { useVideoGenerationAvailability } from "./hooks/useVideoGenerationAvailability";
 import { buildVideoApiRequest } from "./utils/buildVideoApiRequest";
 import { normalizeVideoMediaReferences } from "./utils/normalizeVideoMediaReferences";
-import { validateVideoGenerationCapability } from "./constants/videoModelGenerationCapabilities";
+import {
+  VIDEO_MODEL_GENERATION_CAPABILITIES,
+  validateVideoGenerationCapability
+} from "./constants/videoModelGenerationCapabilities";
 
 interface VideoPromptPanelProps {
   nodeId: string;
@@ -928,6 +931,43 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     referenceItems: generationReferenceItems,
     params: selectedParams,
   });
+  const wan30ReferenceSummary = useMemo(() => {
+    if (
+      selectedModel !== "wan3.0-video" &&
+      selectedModel !== "wan3.0-video-prime"
+    ) {
+      return null;
+    }
+    const references =
+      VIDEO_MODEL_GENERATION_CAPABILITIES[selectedModel]?.modes[activeMode]
+        ?.references;
+    if (!references) return null;
+
+    const imageCount = generationReferenceItems.filter(
+      (item) => item.type === "image",
+    ).length;
+    const videoCount = generationReferenceItems.filter(
+      (item) => item.type === "video",
+    ).length;
+    const audioCount = generationReferenceItems.filter(
+      (item) => item.type === "audio",
+    ).length;
+    const total = imageCount + videoCount + audioCount;
+
+    if (references.maxTotalReferences !== undefined) {
+      return `参考素材 ${total}/${references.maxTotalReferences} · 图 ${imageCount} · 视频 ${videoCount} · 音频 ${audioCount}`;
+    }
+    if (references.image?.max === 0 && references.video?.max === 0) {
+      return "当前模式不使用参考素材";
+    }
+    if (references.requireOnlyImages && references.image?.max !== undefined) {
+      return `参考图 ${imageCount}/${references.image.max}`;
+    }
+    if (references.video?.max !== undefined) {
+      return `参考视频 ${videoCount}/${references.video.max}`;
+    }
+    return null;
+  }, [activeMode, generationReferenceItems, selectedModel]);
   const currentModeEnabled = useMemo(() => {
     const state = modeStates.find((mode) => mode.key === activeMode);
     return state?.enabled ?? false;
@@ -2041,6 +2081,11 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
               activeMode={activeMode}
               onModeChange={(key) => handleModeChange(key as VideoModeKey)}
             />
+            {wan30ReferenceSummary ? (
+              <span className="ml-auto text-[11px] text-white/40">
+                {wan30ReferenceSummary}
+              </span>
+            ) : null}
           </div>
 
           <VideoReferenceAssetsBar

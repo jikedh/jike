@@ -402,6 +402,8 @@ const videoResponseNormalizerMap: Record<string, (response: any) => any> = {
   "wan2.7-t2v": normalizeWan27VideoResponse,
   "wan2.7-i2v": normalizeWan27VideoResponse,
   "wan2.7-r2v": normalizeWan27VideoResponse,
+  "wan3.0-video": normalizeWan27VideoResponse,
+  "wan3.0-video-prime": normalizeWan27VideoResponse,
 };
 
 export const normalizeVideoTaskResponse = (response: any) => {

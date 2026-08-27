@@ -15,6 +15,7 @@ export interface VideoReferenceCapability {
   video?: ReferenceCountCapability;
   audio?: ReferenceCountCapability;
   maxVisualReferences?: number;
+  maxTotalReferences?: number;
   requireAnyReference?: boolean;
   requireOnlyImages?: boolean;
   audioRequiresVisualReference?: boolean;
@@ -60,6 +61,60 @@ const onlyImages = (min: number, max: number): VideoReferenceCapability => ({
   requireOnlyImages: true,
 });
 const firstLastFrame = onlyImages(2, 2);
+const wan30GenerationCapability: VideoModelGenerationCapability = {
+  modes: {
+    "text-to-video": {
+      references: emptyReferences,
+      params: {
+        durationRange: { min: 2, max: 30 },
+        resolution: ["480P", "720P", "1080P"],
+        ratio: ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16"],
+      },
+    },
+    "all-reference": {
+      references: {
+        image: { max: 5 },
+        video: { max: 5 },
+        audio: { max: 5 },
+        maxTotalReferences: 5,
+        requireAnyReference: true,
+      },
+      params: {
+        durationRange: { min: 2, max: 30 },
+        resolution: ["480P", "720P", "1080P"],
+        ratio: ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16"],
+      },
+    },
+    "image-to-video": {
+      references: onlyImages(1, 1),
+      params: {
+        durationRange: { min: 2, max: 30 },
+        resolution: ["480P", "720P", "1080P"],
+        ratio: ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16"],
+      },
+    },
+    "video-edit": {
+      references: {
+        image: { max: 0 },
+        video: { min: 1, max: 1 },
+        audio: { max: 0 },
+      },
+      params: {
+        durationRange: { min: 2, max: 30 },
+        resolution: ["480P", "720P", "1080P"],
+        ratio: ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16"],
+      },
+    },
+    "first-last-frame": {
+      references: firstLastFrame,
+      params: {
+        durationRange: { min: 2, max: 30 },
+        resolution: ["480P", "720P", "1080P"],
+        ratio: ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16"],
+      },
+    },
+  },
+};
 export const VIDEO_MODEL_GENERATION_CAPABILITIES: Record<
   string,
   VideoModelGenerationCapability
@@ -200,6 +255,8 @@ export const VIDEO_MODEL_GENERATION_CAPABILITIES: Record<
       "first-last-frame": { references: firstLastFrame },
     },
   },
+  "wan3.0-video": wan30GenerationCapability,
+  "wan3.0-video-prime": wan30GenerationCapability,
   "vidu-q3-pro": {
     modes: {
       "text-to-video": { references: emptyReferences },
@@ -431,6 +488,14 @@ export const validateVideoGenerationCapability = ({
     ) {
       reasons.push(
         `${modelLabel}「${modeLabel}」参考图片和参考视频合计最多支持 ${references.maxVisualReferences} 个，当前已选择 ${imageCount + videoCount} 个`,
+      );
+    }
+    if (
+      references.maxTotalReferences !== undefined &&
+      totalReferenceCount > references.maxTotalReferences
+    ) {
+      reasons.push(
+        `${modelLabel}「${modeLabel}」参考素材合计最多支持 ${references.maxTotalReferences} 个，当前已选择 ${totalReferenceCount} 个`,
       );
     }
     validateCount({

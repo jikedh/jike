@@ -94,6 +94,13 @@ export type {
   Wan27T2vQueryResponse,
   Wan27T2vRequest,
 } from "./wanxiang/wan2.7-t2v";
+export type {
+  Wan30VideoCreateResponse,
+  Wan30VideoErrorResponse,
+  Wan30VideoModel,
+  Wan30VideoQueryResponse,
+  Wan30VideoRequest,
+} from "./wanxiang/wan3.0-video";
 
 import type {
   HappyHorse10I2vCreateResponse,
@@ -191,6 +198,12 @@ import type {
   Wan27T2vQueryResponse,
   Wan27T2vRequest,
 } from "./wanxiang/wan2.7-t2v";
+import type {
+  Wan30VideoCreateResponse,
+  Wan30VideoErrorResponse,
+  Wan30VideoQueryResponse,
+  Wan30VideoRequest,
+} from "./wanxiang/wan3.0-video";
 
 // 请求体联合类型
 export type BailianVideoGenerationRequest =
@@ -206,6 +219,7 @@ export type BailianVideoGenerationRequest =
   | Wan27T2vRequest
   | Wan27I2vRequest
   | Wan27R2vRequest
+  | Wan30VideoRequest
   | PixverseT2vRequest
   | PixverseI2vRequest
   | PixverseKf2vRequest
@@ -225,6 +239,7 @@ export type BailianVideoGenerationCreateResponse =
   | Wan27T2vCreateResponse
   | Wan27I2vCreateResponse
   | Wan27R2vCreateResponse
+  | Wan30VideoCreateResponse
   | PixverseT2vCreateResponse
   | PixverseI2vCreateResponse
   | PixverseKf2vCreateResponse
@@ -244,6 +259,7 @@ export type BailianVideoGenerationQueryResponse =
   | Wan27T2vQueryResponse
   | Wan27I2vQueryResponse
   | Wan27R2vQueryResponse
+  | Wan30VideoQueryResponse
   | PixverseT2vQueryResponse
   | PixverseI2vQueryResponse
   | PixverseKf2vQueryResponse
@@ -263,6 +279,7 @@ export type BailianVideoGenerationErrorResponse =
   | Wan27T2vErrorResponse
   | Wan27I2vErrorResponse
   | Wan27R2vErrorResponse
+  | Wan30VideoErrorResponse
   | PixverseT2vErrorResponse
   | PixverseI2vErrorResponse
   | PixverseKf2vErrorResponse

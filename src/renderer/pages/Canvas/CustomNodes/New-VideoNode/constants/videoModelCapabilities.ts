@@ -202,6 +202,38 @@ export const MOCK_MAIN_MODELS: MainModelConfig[] = [
     ],
   },
   {
+    id: "wan3.0-video",
+    label: "Wan3.0",
+    variants: [
+      {
+        id: "wan3.0-video",
+        supportedModes: [
+          "text-to-video",
+          "all-reference",
+          "image-to-video",
+          "video-edit",
+          "first-last-frame",
+        ],
+      },
+    ],
+  },
+  {
+    id: "wan3.0-video-prime",
+    label: "Wan3.0 Prime",
+    variants: [
+      {
+        id: "wan3.0-video-prime",
+        supportedModes: [
+          "text-to-video",
+          "all-reference",
+          "image-to-video",
+          "video-edit",
+          "first-last-frame",
+        ],
+      },
+    ],
+  },
+  {
     id: "vidu-q3-pro",
     label: "Vidu Q3 Pro",
     variants: [

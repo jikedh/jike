@@ -133,6 +133,21 @@ const wanxiangResolutions = [
   { label: "1080p", value: "1080P" },
 ];
 
+const wan30Resolutions = [
+  { label: "480p · 18 积分/秒", value: "480P" },
+  { label: "720p · 36 积分/秒", value: "720P" },
+  { label: "1080p · 72 积分/秒", value: "1080P" },
+];
+
+const wan30Ratios = [
+  RATIO.auto,
+  RATIO.wide,
+  RATIO.classic,
+  RATIO.square,
+  RATIO.portrait,
+  RATIO.vertical,
+];
+
 const happyHorseResolutions = [
   { label: "720p", value: "720P" },
   { label: "1080p", value: "1080P" },
@@ -187,6 +202,30 @@ const wanxiangReferenceConfig = (mode: VideoModeKey): VideoParamConfig => ({
     duration: 5,
     generateAudio: false,
     promptExtend: false,
+  },
+});
+
+const wan30Config = (
+  modelId: "wan3.0-video" | "wan3.0-video-prime",
+  mode: VideoModeKey,
+): VideoParamConfig => ({
+  modelId,
+  mode,
+  aspectRatios: wan30Ratios,
+  qualityGroup: {
+    key: "resolution",
+    label: "分辨率与计费",
+    options: wan30Resolutions,
+  },
+  duration: { type: "slider", min: 2, max: 30, step: 1 },
+  audio,
+  promptExtend,
+  defaults: {
+    aspectRatio: "adaptive",
+    resolution: "1080P",
+    duration: 5,
+    generateAudio: true,
+    promptExtend: true,
   },
 });
 
@@ -388,6 +427,51 @@ export const VIDEO_PARAM_CONFIGS: Record<string, VideoParamConfig> = {
       promptExtend: false,
     },
   },
+  "wan3.0-video": wan30Config("wan3.0-video", "text-to-video"),
+  [byModeKey("wan3.0-video", "text-to-video")]: wan30Config(
+    "wan3.0-video",
+    "text-to-video",
+  ),
+  [byModeKey("wan3.0-video", "all-reference")]: wan30Config(
+    "wan3.0-video",
+    "all-reference",
+  ),
+  [byModeKey("wan3.0-video", "image-to-video")]: wan30Config(
+    "wan3.0-video",
+    "image-to-video",
+  ),
+  [byModeKey("wan3.0-video", "video-edit")]: wan30Config(
+    "wan3.0-video",
+    "video-edit",
+  ),
+  [byModeKey("wan3.0-video", "first-last-frame")]: wan30Config(
+    "wan3.0-video",
+    "first-last-frame",
+  ),
+  "wan3.0-video-prime": wan30Config(
+    "wan3.0-video-prime",
+    "text-to-video",
+  ),
+  [byModeKey("wan3.0-video-prime", "text-to-video")]: wan30Config(
+    "wan3.0-video-prime",
+    "text-to-video",
+  ),
+  [byModeKey("wan3.0-video-prime", "all-reference")]: wan30Config(
+    "wan3.0-video-prime",
+    "all-reference",
+  ),
+  [byModeKey("wan3.0-video-prime", "image-to-video")]: wan30Config(
+    "wan3.0-video-prime",
+    "image-to-video",
+  ),
+  [byModeKey("wan3.0-video-prime", "video-edit")]: wan30Config(
+    "wan3.0-video-prime",
+    "video-edit",
+  ),
+  [byModeKey("wan3.0-video-prime", "first-last-frame")]: wan30Config(
+    "wan3.0-video-prime",
+    "first-last-frame",
+  ),
   vidu: viduQ3Config("vidu", "text-to-video"),
   [byModeKey("vidu", "image-to-video")]: viduQ3Config("vidu", "image-to-video"),
   // vidu 首尾帧模式

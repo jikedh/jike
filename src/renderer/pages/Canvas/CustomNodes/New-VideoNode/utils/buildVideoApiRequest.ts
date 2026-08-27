@@ -11,7 +11,8 @@ import type {
   ViduQ3TurboText2VideoRequest,
   Wan27I2vRequest,
   Wan27R2vRequest,
-  Wan27T2vRequest
+  Wan27T2vRequest,
+  Wan30VideoRequest
 } from "shared/types/detail/Bailian/video";
 import type { Seedance20Request } from "shared/types/detail/kuaizhi/Seedance-2.0";
 import type { MiniMaxH3Request } from "shared/types/detail/MiniMax/MiniMax-H3";
@@ -577,6 +578,73 @@ const buildWanxiangRequest = (request: VideoGenerateRequest) => {
   return body;
 };
 
+const buildWan30Request = (request: VideoGenerateRequest): Wan30VideoRequest => {
+  const images = getImages(request);
+  const videos = getVideos(request);
+  const audios = getAudios(request);
+  const resolution = isOneOf(
+    request.params.resolution,
+    ["480P", "720P", "1080P"] as const,
+    "1080P",
+  );
+  const ratio = isOneOf(
+    getRatio(request),
+    ["adaptive", "16:9", "4:3", "1:1", "3:4", "9:16"] as const,
+    "adaptive",
+  );
+
+  const media: NonNullable<Wan30VideoRequest["input"]["media"]> = (() => {
+    if (request.mode === "image-to-video") {
+      return images.slice(0, 1).map((url) => ({
+        type: "first_frame" as const,
+        url,
+      }));
+    }
+    if (request.mode === "first-last-frame") {
+      return images.slice(0, 2).map((url, index) => ({
+        type: index === 0 ? "first_frame" as const : "last_frame" as const,
+        url,
+      }));
+    }
+    if (request.mode === "video-edit") {
+      return videos.slice(0, 1).map((url) => ({
+        type: "reference_video" as const,
+        url,
+      }));
+    }
+    if (request.mode === "all-reference") {
+      const mediaTypeMap = {
+        image: "reference_image",
+        video: "reference_video",
+        audio: "reference_audio",
+      } as const;
+      return request.referenceItems
+        .flatMap((item) => {
+          const url = getReferenceUrl(item);
+          return url ? [{ type: mediaTypeMap[item.type], url }] : [];
+        })
+        .slice(0, 5);
+    }
+    return [];
+  })();
+
+  return {
+    model: request.model as Wan30VideoRequest["model"],
+    input: {
+      prompt: getPrompt(request.prompt) || undefined,
+      ...(media.length > 0 ? { media } : {}),
+    },
+    parameters: {
+      resolution,
+      ratio,
+      duration: clampNumber(request.params.duration, 2, 30, 5),
+      audio: request.params.generateAudio,
+      prompt_extend: request.params.promptExtend ?? true,
+      watermark: false,
+    },
+  };
+};
+
 const buildViduRequest = (
   request: VideoGenerateRequest,
 ): ViduQ3TurboText2VideoRequest => {
@@ -986,6 +1054,9 @@ export const buildVideoApiRequest = (
       return buildSeedanceRequest(request);
     case "wanxiang":
       return buildWanxiangRequest(request);
+    case "wan3.0-video":
+    case "wan3.0-video-prime":
+      return buildWan30Request(request);
     case "vidu":
     case "vidu-q3-pro":
       // vidu 首尾帧模式

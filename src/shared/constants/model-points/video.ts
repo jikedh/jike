@@ -8,6 +8,8 @@ export const VIDEO_MODEL_POINTS: Record<string, number> = {
   "seedance-2.5": 60,
   "dreamina-seedance-2-0-260128": 72, // 海外 Seedance 2.0 Pro 默认 720p 基础分
   "wan2.7-r2v": 36, // 默认 720p 基础分
+  "wan3.0-video": 36,
+  "wan3.0-video-prime": 36,
   "pixverse-i2v": 60,
   "agnes-video-v2.0": 0, // Agnes-Video-V2.0 当前为免费模型，固定 0 积分
   "MiniMax-H3": 30,
@@ -59,6 +61,16 @@ export const getVideoGenerationPoints = ({
     const billableDuration = Math.max(0, duration) + referenceDuration;
 
     return Math.ceil(rate * billableDuration);
+  }
+
+  if (model === "wan3.0-video" || model === "wan3.0-video-prime") {
+    const pointsMap: Record<string, number> = {
+      "480p": 18,
+      "720p": 36,
+      "1080p": 72,
+    };
+    const rate = pointsMap[resolution.toLowerCase()] ?? pointsMap["1080p"];
+    return Math.max(rate * duration, 1);
   }
 
   // 特殊逻辑：Seedance 2.0 系列
