@@ -1,5 +1,5 @@
-import { IconRefresh } from "@tabler/icons-react";
-import { useEffect, useState, type RefObject } from "react";
+import { IconCheck, IconCopy, IconRefresh } from "@tabler/icons-react";
+import { useCallback, useEffect, useState, type RefObject } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -169,9 +169,24 @@ export const ChatMessageList = ({
   containerRef,
   onRetry,
 }: ChatMessageListProps) => {
+  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(
+    null,
+  );
   const lastMessage = messages[messages.length - 1];
   const shouldShowThinking =
     isLoading && (!lastMessage || lastMessage.role === "user");
+
+  const handleCopyMessage = useCallback(async (index: number, content: string) => {
+    if (!content) return;
+
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedMessageIndex(index);
+      window.setTimeout(() => setCopiedMessageIndex(null), 2000);
+    } catch (error: any) {
+      console.error("[CanvasChat] copy message failed", error);
+    }
+  }, []);
 
   return (
     <div
@@ -198,10 +213,10 @@ export const ChatMessageList = ({
                   "max-w-[92%] rounded-[22px] px-3.5 py-2.5 shadow-[0_10px_24px_rgba(0,0,0,0.22)]",
                   isUser
                     ? "rounded-br-[8px] bg-[#b43feb] text-white"
-                    : "rounded-bl-[8px] border border-white/10 bg-[#151821] text-white/88",
+                    : "relative rounded-bl-[8px] border border-white/10 bg-[#151821] pb-9 text-white/88",
                 )}
               >
-                <div className="text-[14px] leading-[1.7] prose prose-invert max-w-none">
+                <div className="select-text text-[14px] leading-[1.7] prose prose-invert max-w-none">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {message.content}
                   </ReactMarkdown>
@@ -230,6 +245,32 @@ export const ChatMessageList = ({
                       <span>重试</span>
                     </button>
                   )}
+                {!isUser && (
+                  <button
+                    type="button"
+                    title={
+                      copiedMessageIndex === index ? "已复制回复" : "复制回复"
+                    }
+                    className={cn(
+                      "absolute bottom-2 right-2 flex items-center gap-1 rounded-md px-2 py-1 text-xs text-white/40 transition-colors hover:bg-white/10 hover:text-white/80",
+                      copiedMessageIndex === index && "text-emerald-400",
+                    )}
+                    onClick={() => handleCopyMessage(index, message.content)}
+                    disabled={!message.content}
+                  >
+                    {copiedMessageIndex === index ? (
+                      <>
+                        <IconCheck size={12} />
+                        <span>已复制</span>
+                      </>
+                    ) : (
+                      <>
+                        <IconCopy size={12} />
+                        <span>复制</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           );

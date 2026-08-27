@@ -103,13 +103,13 @@ pub async fn capture_video_frame(
         let output_path = temp_dir.join("frame.png");
         download_frame_source(&source_url, &input_path).await?;
         let ffmpeg = resolve_ffmpeg_path(None)?;
+        let duration = probe_media_duration(&ffmpeg, &input_path).await?;
+        // 所有模式都钳制到可解码范围，避免在末尾取到空帧
+        let safe_duration = (duration - END_FRAME_PADDING_SECONDS).max(0.0);
         let capture_time = match req.mode.as_str() {
             "start" => 0.0,
-            "end" => {
-                let duration = probe_media_duration(&ffmpeg, &input_path).await?;
-                (duration - END_FRAME_PADDING_SECONDS).max(0.0)
-            }
-            "current" => req.time,
+            "end" => safe_duration,
+            "current" => req.time.clamp(0.0, safe_duration),
             _ => return Err(VideoError::Config("不支持的截帧模式".into())),
         };
         extract_frame_with_ffmpeg(&ffmpeg, &input_path, &output_path, capture_time).await?;
@@ -177,25 +177,54 @@ async fn extract_frame_with_ffmpeg(
     output_path: &Path,
     time: f64,
 ) -> Result<(), VideoError> {
+    if run_frame_capture(ffmpeg, input_path, output_path, time, true)
+        .await
+        .is_ok()
+    {
+        return Ok(());
+    }
+
+    let precise_error = match run_frame_capture(ffmpeg, input_path, output_path, time, false).await {
+        Ok(()) => return Ok(()),
+        Err(error) => error,
+    };
+
+    if time > 0.0 {
+        return run_frame_capture(ffmpeg, input_path, output_path, 0.0, false).await;
+    }
+
+    Err(precise_error)
+}
+
+async fn run_frame_capture(
+    ffmpeg: &Path,
+    input_path: &Path,
+    output_path: &Path,
+    time: f64,
+    fast_seek: bool,
+) -> Result<(), VideoError> {
     let ffmpeg = ffmpeg.to_path_buf();
     let input_path = input_path.to_path_buf();
     let output_path = output_path.to_path_buf();
     let output_path_for_command = output_path.clone();
     let time = format!("{time:.3}");
     let output = tokio::task::spawn_blocking(move || {
-        Command::new(ffmpeg)
-            .args([
-                "-y",
-                "-hide_banner",
-                "-ss",
-                &time,
-                "-i",
-                input_path.to_string_lossy().as_ref(),
-                "-frames:v",
-                "1",
-                output_path_for_command.to_string_lossy().as_ref(),
-            ])
-            .output()
+        let mut cmd = Command::new(ffmpeg);
+        cmd.arg("-y").arg("-hide_banner");
+        if fast_seek {
+            cmd.arg("-ss").arg(&time);
+        } else {
+            cmd.arg("-i").arg(input_path.to_string_lossy().as_ref());
+            cmd.arg("-ss").arg(&time);
+        }
+        if fast_seek {
+            cmd.arg("-i").arg(input_path.to_string_lossy().as_ref());
+        }
+        cmd.args(["-map", "0:v:0"])
+            .args(["-frames:v", "1"])
+            .arg(output_path_for_command.to_string_lossy().as_ref());
+
+        cmd.output()
     })
     .await
     .map_err(|error| VideoError::JobFailed(error.to_string()))?
