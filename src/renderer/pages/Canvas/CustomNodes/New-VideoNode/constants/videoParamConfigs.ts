@@ -134,9 +134,9 @@ const wanxiangResolutions = [
 ];
 
 const wan30Resolutions = [
-  { label: "480p · 18 积分/秒", value: "480P" },
-  { label: "720p · 36 积分/秒", value: "720P" },
-  { label: "1080p · 72 积分/秒", value: "1080P" },
+  { label: "480p", value: "480P" },
+  { label: "720p", value: "720P" },
+  { label: "1080p", value: "1080P" },
 ];
 
 const wan30Ratios = [
@@ -214,7 +214,7 @@ const wan30Config = (
   aspectRatios: wan30Ratios,
   qualityGroup: {
     key: "resolution",
-    label: "分辨率与计费",
+    label: "分辨率",
     options: wan30Resolutions,
   },
   duration: { type: "slider", min: 2, max: 30, step: 1 },

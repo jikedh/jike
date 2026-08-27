@@ -874,11 +874,13 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     () =>
       generationReferenceItems
         .filter((item) => item.type === "video")
-        .map((item) => item.url ?? item.thumbnail ?? item.value)
+        .map(
+          (item) =>
+            item.fileUrl ?? item.url ?? item.value ?? item.thumbnail,
+        )
         .filter((url): url is string => Boolean(url)),
     [generationReferenceItems],
   );
-
   const editorMentionItems = useMemo(() => {
     return generationReferenceItems.map((item) => ({
       id: item.mentionId ?? item.id,
@@ -952,10 +954,12 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     const audioCount = generationReferenceItems.filter(
       (item) => item.type === "audio",
     ).length;
-    const total = imageCount + videoCount + audioCount;
+    if (activeMode === "all-reference") {
+      return `参考图 ${imageCount}/${references.image?.max ?? "-"} · 视频 ${videoCount} · 音频 ${audioCount}`;
+    }
 
     if (references.maxTotalReferences !== undefined) {
-      return `参考素材 ${total}/${references.maxTotalReferences} · 图 ${imageCount} · 视频 ${videoCount} · 音频 ${audioCount}`;
+      return `参考素材 ${generationReferenceItems.length}/${references.maxTotalReferences} · 图 ${imageCount} · 视频 ${videoCount} · 音频 ${audioCount}`;
     }
     if (references.image?.max === 0 && references.video?.max === 0) {
       return "当前模式不使用参考素材";
@@ -967,7 +971,11 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       return `参考视频 ${videoCount}/${references.video.max}`;
     }
     return null;
-  }, [activeMode, generationReferenceItems, selectedModel]);
+  }, [
+    activeMode,
+    generationReferenceItems,
+    selectedModel,
+  ]);
   const currentModeEnabled = useMemo(() => {
     const state = modeStates.find((mode) => mode.key === activeMode);
     return state?.enabled ?? false;

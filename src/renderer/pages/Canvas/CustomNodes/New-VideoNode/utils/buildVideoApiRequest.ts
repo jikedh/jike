@@ -622,8 +622,7 @@ const buildWan30Request = (request: VideoGenerateRequest): Wan30VideoRequest => 
         .flatMap((item) => {
           const url = getReferenceUrl(item);
           return url ? [{ type: mediaTypeMap[item.type], url }] : [];
-        })
-        .slice(0, 5);
+        });
     }
     return [];
   })();

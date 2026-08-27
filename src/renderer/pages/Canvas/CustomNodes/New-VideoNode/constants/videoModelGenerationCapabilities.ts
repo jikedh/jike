@@ -73,10 +73,7 @@ const wan30GenerationCapability: VideoModelGenerationCapability = {
     },
     "all-reference": {
       references: {
-        image: { max: 5 },
-        video: { max: 5 },
-        audio: { max: 5 },
-        maxTotalReferences: 5,
+        image: { max: 10 },
         requireAnyReference: true,
       },
       params: {
