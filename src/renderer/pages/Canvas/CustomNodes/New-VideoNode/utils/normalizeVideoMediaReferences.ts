@@ -6,8 +6,8 @@
  * 并保证最终 prompt 中的占位符编号严格对应 `images[N-1]` / `audios[N-1]` / `videos[N-1]`。
  *
  * 设计原则：
- * 1. 正文 mention 优先：按 TipTap 文档中 mention 节点出现的顺序进入最终数组。
- * 2. 参考列表补充：上方已选中但未被正文 @ 的媒体，按参考列表顺序追加。
+ * 1. 参考素材顺序决定占位符编号，正文 mention 只读取自身绑定的稳定资源 ID。
+ * 2. 正文顺序只影响 prompt 文本，不会重排图片、视频或音频的请求数组。
  * 3. 去重：同一媒体只在对应类型数组中出现一次；优先用真实 URL（url/fileUrl/value）作为去重 key。
  * 4. 不依赖 UI label：最终 prompt 一定使用英文占位符 `ImageN / AudioN / VideoN`。
  */
@@ -46,6 +46,8 @@ export interface NormalizedMediaEntry {
     key: string;
     /** mention 节点 ID，可为空（参考列表补充） */
     mentionId: string | null;
+    /** 素材的稳定引用 ID，用于将编辑器 mention 与参考素材一一对应。 */
+    resourceId: string | null;
     /** 原始来源：来自正文 @ 提及 or 上方参考列表 */
     source: "prompt" | "reference";
     /** mention 原 label，用于日志/调试 */
@@ -99,8 +101,11 @@ const toMentionItem = (
     originalLabel: string | null,
 ): MentionItem => {
     return {
-        id: entry.mentionId ?? `normalized-${entry.type}-${entry.index}`,
-        mentionId: entry.mentionId ?? undefined,
+        id:
+            entry.resourceId ??
+            entry.mentionId ??
+            `normalized-${entry.type}-${entry.index}`,
+        mentionId: entry.resourceId ?? entry.mentionId ?? undefined,
         label: originalLabel ?? placeholder,
         displayLabel: placeholder,
         originalLabel: originalLabel ?? placeholder,
@@ -162,8 +167,8 @@ export const extractMentionsFromProseMirrorDoc = (
  * 把 TipTap 文档树中每个 mention 节点的展示文本（displayLabel 或 label）
  * 替换为最终英文占位符。
  *
- * - 替换基于节点在 doc.content 数组中的顺序，与 `buildOrderedMentions` 的顺序一致。
- * - 对于不在已用 mention 集合里的 mention（例如纯显示残留），按真实出现顺序退回到默认占位符。
+ * - 替换基于 mention 节点的稳定资源 ID。
+ * - 找不到参考素材的 mention 才按正文顺序分配备用占位符。
  */
 const replaceMentionsInDoc = (
     doc: unknown,
@@ -225,8 +230,8 @@ const resolveMentionKind = (
     return isMediaKind(raw) ? raw : null;
 };
 
-const buildOrderedMentions = (
-    mentions: MentionLike[],
+const buildReferenceEntries = (
+    referenceItems: MentionItem[],
 ): NormalizedMediaEntry[] => {
     const counters: Record<MediaKind, number> = {
         image: 0,
@@ -236,95 +241,50 @@ const buildOrderedMentions = (
     const seenKeys = new Set<string>();
     const ordered: NormalizedMediaEntry[] = [];
 
-    mentions.forEach((mention, index) => {
-        const kind = resolveMentionKind(mention);
-        if (!kind) return;
-
-        const key = buildDedupeKey(mention, index);
-        if (seenKeys.has(key)) return;
-        seenKeys.add(key);
-
-        const url = pickRealUrl(mention);
-        if (!url) return;
-
-        counters[kind] += 1;
-        ordered.push({
-            type: kind,
-            index: counters[kind],
-            url,
-            key,
-            mentionId: typeof mention.id === "string" ? mention.id : null,
-            source: "prompt",
-            label:
-                mention.originalLabel ?? mention.label ?? mention.displayLabel ?? null,
-        });
-    });
-
-    return ordered;
-};
-
-const appendFromReferenceItems = (
-    existing: NormalizedMediaEntry[],
-    referenceItems: MentionItem[],
-): NormalizedMediaEntry[] => {
-    const counters: Record<MediaKind, number> = {
-        image: 0,
-        audio: 0,
-        video: 0,
-    };
-    existing.forEach((entry) => {
-        counters[entry.type] = Math.max(counters[entry.type], entry.index);
-    });
-
-    const seenKeys = new Set(existing.map((entry) => entry.key));
-    const ordered = [...existing];
-
     referenceItems.forEach((item, index) => {
         if (!isMediaKind(item.type)) return;
 
-        const key = buildDedupeKey(
-            {
-                id: item.id,
-                type: item.type,
-                label: item.label,
-                displayLabel: item.displayLabel,
-                originalLabel: item.originalLabel,
-                value: item.value,
-                thumbnail: item.thumbnail,
-                url: item.url,
-                fileUrl: item.fileUrl,
-                source: item.source,
-                scope: item.scope,
-                assetId: item.assetId,
-                nodeId: item.nodeId,
-                primaryCategory: item.primaryCategory,
-            },
-            index,
-        );
+        const key = buildDedupeKey(item, index);
         if (seenKeys.has(key)) return;
+        seenKeys.add(key);
 
-        const url = pickRealUrl({
-            url: item.url,
-            fileUrl: item.fileUrl,
-            value: item.value,
-            thumbnail: item.thumbnail,
-        });
+        const url = pickRealUrl(item);
         if (!url) return;
 
-        seenKeys.add(key);
         counters[item.type] += 1;
         ordered.push({
             type: item.type,
             index: counters[item.type],
             url,
             key,
-            mentionId: item.mentionId ?? null,
+            mentionId: item.mentionId ?? item.id,
+            resourceId: item.mentionId ?? item.id,
             source: "reference",
-            label: item.originalLabel ?? item.label ?? null,
+            label: item.originalLabel ?? item.label ?? item.displayLabel ?? null,
         });
     });
 
     return ordered;
+};
+
+const findReferenceEntry = (
+    mention: MentionLike,
+    entries: NormalizedMediaEntry[],
+    fallbackIndex: number,
+) => {
+    const kind = resolveMentionKind(mention);
+    if (!kind) return undefined;
+
+    const resourceId = mention.id?.trim();
+    if (resourceId) {
+        const byResourceId = entries.find(
+            (entry) => entry.type === kind && entry.resourceId === resourceId,
+        );
+        if (byResourceId) return byResourceId;
+    }
+
+    const key = buildDedupeKey(mention, fallbackIndex);
+    return entries.find((entry) => entry.type === kind && entry.key === key);
 };
 
 export interface NormalizeVideoMediaReferencesInput {
@@ -339,8 +299,8 @@ export interface NormalizeVideoMediaReferencesInput {
 /**
  * 统一归一化入口。
  *
- * - 解析 TipTap 文档中所有 mention 节点，按文档顺序编号。
- * - 剩余未在正文提及的媒体从 referenceItems 末尾追加。
+ * - 参考素材按稳定资源顺序编号，正文 mention 通过自身资源 ID 查找编号。
+ * - 仅正文存在的素材追加到参考列表末尾。
  * - 返回严格按 ImageN/AudioN/VideoN 顺序排列的最终请求数据。
  */
 export const normalizeVideoMediaReferences = ({
@@ -349,41 +309,63 @@ export const normalizeVideoMediaReferences = ({
     promptText,
 }: NormalizeVideoMediaReferencesInput): NormalizeResult => {
     const promptMentions = extractMentionsFromProseMirrorDoc(promptDoc);
-    const promptEntries = buildOrderedMentions(promptMentions);
-
-    const allEntries = appendFromReferenceItems(promptEntries, referenceItems);
-
-    const replacements = new Map<string, string>();
-    promptEntries.forEach((entry) => {
-        if (!entry.mentionId) return;
-        const placeholder = `${PLACEHOLDER_PREFIX[entry.type]}${entry.index}`;
-        replacements.set(entry.mentionId, placeholder);
-    });
-
-    // doc 中可能存在未在 promptMentions 中（id 缺失等）的 mention；为它们生成默认占位符。
-    const docMentions = promptDoc
-        ? extractMentionsFromProseMirrorDoc(promptDoc)
-        : [];
+    const referenceEntries = buildReferenceEntries(referenceItems);
+    const promptOnlyEntries: NormalizedMediaEntry[] = [];
+    const promptOnlyByKey = new Map<string, NormalizedMediaEntry>();
     const fallbackCounters: Record<MediaKind, number> = {
         image: 0,
         audio: 0,
         video: 0,
     };
-    promptEntries.forEach((entry) => {
+    referenceEntries.forEach((entry) => {
         fallbackCounters[entry.type] = Math.max(
             fallbackCounters[entry.type],
             entry.index,
         );
     });
-    docMentions.forEach((mention) => {
+
+    const replacements = new Map<string, string>();
+    promptMentions.forEach((mention, index) => {
         const mentionId = mention.id ?? "";
-        if (!mentionId || replacements.has(mentionId)) return;
         const kind = resolveMentionKind(mention);
         if (!kind) return;
-        fallbackCounters[kind] += 1;
-        const placeholder = `${PLACEHOLDER_PREFIX[kind]}${fallbackCounters[kind]}`;
-        replacements.set(mentionId, placeholder);
+
+        let entry = findReferenceEntry(mention, referenceEntries, index);
+        if (!entry) {
+            const key = buildDedupeKey(mention, index);
+            entry = promptOnlyByKey.get(key);
+            if (!entry) {
+                const url = pickRealUrl(mention);
+                if (!url) return;
+                fallbackCounters[kind] += 1;
+                entry = {
+                    type: kind,
+                    index: fallbackCounters[kind],
+                    url,
+                    key,
+                    mentionId: mentionId || null,
+                    resourceId: mentionId || null,
+                    source: "prompt",
+                    label:
+                        mention.originalLabel ??
+                        mention.label ??
+                        mention.displayLabel ??
+                        null,
+                };
+                promptOnlyByKey.set(key, entry);
+                promptOnlyEntries.push(entry);
+            }
+        }
+
+        if (mentionId) {
+            replacements.set(
+                mentionId,
+                `${PLACEHOLDER_PREFIX[entry.type]}${entry.index}`,
+            );
+        }
     });
+
+    const allEntries = [...referenceEntries, ...promptOnlyEntries];
 
     const normalizedPrompt = promptDoc
         ? replaceMentionsInDoc(promptDoc, replacements)
@@ -394,10 +376,10 @@ export const normalizeVideoMediaReferences = ({
 
     const buildItems = (kind: MediaKind) => {
         const entries = splitByKind(kind);
-        return entries.map((entry, ordinal) => {
+        return entries.map((entry) => {
             const placeholder = `${PLACEHOLDER_PREFIX[entry.type]}${entry.index}`;
             return toMentionItem(
-                { ...entry, index: ordinal + 1 },
+                entry,
                 placeholder,
                 entry.label,
             );
