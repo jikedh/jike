@@ -1127,6 +1127,7 @@ export const identifyAssetsWithAgent = async (input: {
   try {
     const response = await createChatCompletion({
       model: "deepseek-v4-flash",
+      agentPresetId: "novel-character-design",
       stream: false,
       temperature: 0.2,
       messages: [
@@ -1189,6 +1190,7 @@ export const splitScriptWithAgent = async (input: {
   try {
     const response = await createChatCompletion({
       model: "deepseek-v4-flash",
+      agentPresetId: "script-to-storyboard",
       stream: false,
       temperature: 0.3,
       messages: [
