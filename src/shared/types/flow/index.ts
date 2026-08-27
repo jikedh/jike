@@ -64,6 +64,9 @@ export interface ImageGenerationNode {
   progress?: number; // 进度百分比（0-100）
   processingLabel?: string; // 处理中状态展示文本
   completedCount?: number; // 已完成图片数量（用于多图生成场景判断）
+  task_id?: string; // 最近一次生成任务 ID（兼容单任务读取）
+  task_ids?: string[]; // 当前未完成生成任务 ID 列表
+  task_ledger_biz_ids?: Record<string, string>; // taskId 对应的积分流水 ID
   isUpload?: boolean; // 是否为上传图片（用于区分加载中 / 生成中）
   error?: {
     code?: string; // 错误代码

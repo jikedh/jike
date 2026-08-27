@@ -3511,7 +3511,7 @@ export const CanvasFlow = ({
 
   // 当 projectId 变化时切换项目
   useEffect(() => {
-    if (projectId && projectId !== currentProjectId) {
+    if (projectId) {
       switchProject(projectId);
     }
   }, [projectId, currentProjectId, switchProject]);

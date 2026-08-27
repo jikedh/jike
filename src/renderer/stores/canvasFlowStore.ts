@@ -283,6 +283,150 @@ const normalizeNodeIdCounters = (
 
 export const normalizeCanvasNodeIdCounters = normalizeNodeIdCounters;
 
+const isPendingGenerationStatus = (status?: GenerationStatus) =>
+  status === GenerationStatus.QUEUED || status === GenerationStatus.IN_PROGRESS;
+
+const getImagePendingTaskIds = (data: ImageGenerationNode) => {
+  const taskIds = data.task_ids?.filter(Boolean) ?? [];
+  return taskIds.length > 0 ? taskIds : data.task_id ? [data.task_id] : [];
+};
+
+const removeImagePendingTask = (
+  data: ImageGenerationNode,
+  taskId: string,
+) => {
+  const taskIds = getImagePendingTaskIds(data).filter((id) => id !== taskId);
+  const ledgerBizIds = { ...(data.task_ledger_biz_ids ?? {}) };
+  delete ledgerBizIds[taskId];
+
+  return {
+    task_id: taskIds[taskIds.length - 1],
+    task_ids: taskIds,
+    task_ledger_biz_ids: ledgerBizIds,
+  };
+};
+
+type VideoTaskProvider =
+  | "seedance"
+  | "seedance_global"
+  | "dashscope"
+  | "agnes"
+  | "minimax";
+
+const resolveVideoTaskProvider = (
+  model?: string,
+  storedProvider?: unknown,
+): VideoTaskProvider => {
+  if (
+    storedProvider === "seedance" ||
+    storedProvider === "seedance_global" ||
+    storedProvider === "dashscope" ||
+    storedProvider === "agnes" ||
+    storedProvider === "minimax"
+  ) {
+    return storedProvider;
+  }
+
+  if (model === "agnes-video-v2.0") return "agnes";
+  if (model === "MiniMax-H3") return "minimax";
+  if (model === "dreamina-seedance-2-0-260128") {
+    return "seedance_global";
+  }
+  if (
+    model === "seedance-2.0-fast" ||
+    model === "seedance-2.0-mini" ||
+    model === "seedance-2.0-pro" ||
+    model === "seedance-2.5"
+  ) {
+    return "seedance";
+  }
+
+  return "dashscope";
+};
+
+const getVideoPendingTasks = (data: NewVideoGenerationNode) => {
+  const pendingTasks = data.metadata?.pendingTasks;
+  if (Array.isArray(pendingTasks)) {
+    const tasks = pendingTasks.filter(
+      (task): task is { taskId: string; ledgerBizId?: string } =>
+        Boolean(task) &&
+        typeof task === "object" &&
+        typeof (task as { taskId?: unknown }).taskId === "string",
+    );
+    if (tasks.length > 0) return tasks;
+  }
+
+  const taskIds = Array.isArray(data.metadata?.tasks)
+    ? data.metadata.tasks.filter(
+      (task): task is string => typeof task === "string" && Boolean(task),
+    )
+    : data.task_id
+      ? [data.task_id]
+      : [];
+  const ledgerBizId =
+    typeof data.metadata?.ledgerBizId === "string"
+      ? data.metadata.ledgerBizId
+      : undefined;
+  return taskIds.map((taskId) => ({ taskId, ledgerBizId }));
+};
+
+const removeVideoPendingTask = (
+  data: NewVideoGenerationNode,
+  taskId: string,
+) => {
+  const pendingTasks = getVideoPendingTasks(data).filter(
+    (task) => task.taskId !== taskId,
+  );
+
+  return {
+    task_id: pendingTasks[0]?.taskId,
+    metadata: {
+      ...data.metadata,
+      tasks: pendingTasks.map((task) => task.taskId),
+      pendingTasks,
+      ledgerBizId: pendingTasks[0]?.ledgerBizId,
+    },
+  };
+};
+
+const restoreCanceledGenerationNode = (node: AllNodeType): AllNodeType => {
+  if (node.type === "imageNode") {
+    const data = node.data as ImageGenerationNode;
+    if (
+      data.error?.message === "任务已取消" &&
+      getImagePendingTaskIds(data).length > 0
+    ) {
+      return {
+        ...node,
+        data: {
+          ...data,
+          status: GenerationStatus.IN_PROGRESS,
+          error: undefined,
+        },
+      };
+    }
+  }
+
+  if (node.type === "newVideoNode") {
+    const data = node.data as NewVideoGenerationNode;
+    if (
+      data.error?.message === "任务已取消" &&
+      getVideoPendingTasks(data).length > 0
+    ) {
+      return {
+        ...node,
+        data: {
+          ...data,
+          status: GenerationStatus.IN_PROGRESS,
+          error: undefined,
+        },
+      };
+    }
+  }
+
+  return node;
+};
+
 export const buildCanvasPersistedState = ({
   nodes,
   edges,
@@ -956,12 +1100,18 @@ const pollImageGeneration = async (
   getState: () => CanvasFlowStoreType,
   totalTaskCount: number,
   ledgerBizId?: string,
+  projectId?: string,
+  pollImmediately = false,
 ) => {
   const startTime = Date.now();
+  let shouldWaitBeforePolling = !pollImmediately;
 
   try {
     while (true) {
-      await wait(IMAGE_POLL_INTERVAL, signal);
+      if (shouldWaitBeforePolling) {
+        await wait(IMAGE_POLL_INTERVAL, signal);
+      }
+      shouldWaitBeforePolling = true;
       if (signal.aborted) {
         return;
       }
@@ -970,58 +1120,6 @@ const pollImageGeneration = async (
       if (Date.now() - startTime > IMAGE_TIMEOUT) {
         console.error("[pollImageGeneration] 图片生成超时");
         stopImagePollingInternal(taskId);
-        const currentData = getState().nodes.find((n) => n.id === nodeId)
-          ?.data as ImageGenerationNode;
-        if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
-          pendingTaskCounts.delete(nodeId);
-        }
-        let shouldWarnPartialFailure = false;
-        let partialSuccessCount = 0;
-        let partialFailedCount = 0;
-        setState((state) => ({
-          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
-            const completedCount = (data.completedCount ?? 0) + 1;
-            const allCompleted = completedCount >= totalTaskCount;
-            const successCount =
-              data.result?.data?.filter((item) => item?.url).length ?? 0;
-            const hasSuccessfulImages = successCount > 0;
-
-            if (allCompleted && hasSuccessfulImages) {
-              shouldWarnPartialFailure = true;
-              partialSuccessCount = successCount;
-              partialFailedCount = Math.max(totalTaskCount - successCount, 1);
-            }
-
-            return {
-              ...data,
-              status:
-                allCompleted && hasSuccessfulImages
-                  ? GenerationStatus.COMPLETED
-                  : allCompleted
-                    ? GenerationStatus.FAILED
-                    : GenerationStatus.IN_PROGRESS,
-              progress:
-                allCompleted && hasSuccessfulImages ? 100 : data.progress,
-              error: {
-                code: "TIMEOUT",
-                message: "图片生成超时，请稍后再试",
-              },
-              completedCount,
-            };
-          }),
-        }));
-        if (shouldWarnPartialFailure) {
-          toast.warning(
-            `已生成 ${partialSuccessCount} 张图片，${partialFailedCount} 张失败`,
-          );
-        }
-        if (ledgerBizId) {
-          refundDesktopProxyScore(
-            ledgerBizId,
-            "image generation timeout",
-            "image",
-          ).catch(() => { });
-        }
         return;
       }
 
@@ -1030,7 +1128,11 @@ const pollImageGeneration = async (
       const responseData = response?.data ?? response;
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
-      if (!currentNode || currentNode.type !== "imageNode") {
+      if (
+        (projectId && projectId !== getState().projectId) ||
+        !currentNode ||
+        currentNode.type !== "imageNode"
+      ) {
         stopImagePollingInternal(taskId);
         return;
       }
@@ -1093,11 +1195,12 @@ const pollImageGeneration = async (
 
             // 更新已完成数量
             const completedCount = (data.completedCount ?? 0) + 1;
-            // 判断是否所有任务都已完成
-            const allCompleted = completedCount >= totalTaskCount;
+            const taskState = removeImagePendingTask(data, taskId);
+            const allCompleted = taskState.task_ids.length === 0;
 
             return {
               ...data,
+              ...taskState,
               status: allCompleted
                 ? GenerationStatus.COMPLETED
                 : GenerationStatus.IN_PROGRESS,
@@ -1112,9 +1215,7 @@ const pollImageGeneration = async (
           }),
         }));
         saveCurrentCanvasToHistory();
-        if (useChatSettingsStore.getState().autoSaveEnabled) {
-          getState().saveGraph();
-        }
+        getState().saveGraph();
 
         // 刷新 OSS 转存
         const pollingCurrentImages =
@@ -1134,10 +1235,9 @@ const pollImageGeneration = async (
         }
 
         stopImagePollingInternal(taskId);
-        // 如果所有任务都完成了，清理计数
         const currentData = getState().nodes.find((n) => n.id === nodeId)
           ?.data as ImageGenerationNode;
-        if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
+        if (getImagePendingTaskIds(currentData).length === 0) {
           pendingTaskCounts.delete(nodeId);
         }
 
@@ -1171,7 +1271,8 @@ const pollImageGeneration = async (
         setState((state) => ({
           nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
             const completedCount = (data.completedCount ?? 0) + 1;
-            const allCompleted = completedCount >= totalTaskCount;
+            const taskState = removeImagePendingTask(data, taskId);
+            const allCompleted = taskState.task_ids.length === 0;
             const successCount =
               data.result?.data?.filter((item) => item?.url).length ?? 0;
             const hasSuccessfulImages = successCount > 0;
@@ -1188,6 +1289,7 @@ const pollImageGeneration = async (
 
             return {
               ...data,
+              ...taskState,
               status:
                 allCompleted && hasSuccessfulImages
                   ? GenerationStatus.COMPLETED
@@ -1211,14 +1313,12 @@ const pollImageGeneration = async (
         }
 
         saveCurrentCanvasToHistory();
-        if (useChatSettingsStore.getState().autoSaveEnabled) {
-          getState().saveGraph();
-        }
+        getState().saveGraph();
 
         stopImagePollingInternal(taskId);
         const currentData = getState().nodes.find((n) => n.id === nodeId)
           ?.data as ImageGenerationNode;
-        if ((currentData?.completedCount ?? 0) >= totalTaskCount) {
+        if (getImagePendingTaskIds(currentData).length === 0) {
           pendingTaskCounts.delete(nodeId);
         }
         if (ledgerBizId) {
@@ -1253,25 +1353,6 @@ const pollImageGeneration = async (
   } catch (pollError) {
     console.error("图片生成轮询失败:", pollError);
     stopImagePollingInternal(taskId);
-    setState((state) => ({
-      nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-        ...data,
-        status: GenerationStatus.FAILED,
-        error: {
-          code: "POLL_ERROR",
-          message: "轮询失败，请稍后再试",
-        },
-      })),
-    }));
-    saveCurrentCanvasToHistory();
-    if (useChatSettingsStore.getState().autoSaveEnabled) {
-      getState().saveGraph();
-    }
-    if (ledgerBizId) {
-      refundDesktopProxyScore(ledgerBizId, "image poll error", "image").catch(
-        () => { },
-      );
-    }
   }
 };
 
@@ -1544,6 +1625,8 @@ const pollNewVideoGeneration = async ({
   totalTasks,
   ledgerBizId,
   videoProvider,
+  projectId,
+  pollImmediately,
 }: {
   taskId: string;
   nodeId: string;
@@ -1562,45 +1645,33 @@ const pollNewVideoGeneration = async ({
   | "dashscope"
   | "agnes"
   | "minimax";
+  projectId?: string;
+  pollImmediately?: boolean;
 }) => {
   const startTime = Date.now();
   let missingResultUrlStartTime: number | null = null;
+  let shouldWaitBeforePolling = !pollImmediately;
 
   try {
     while (true) {
-      await wait(VIDEO_POLL_INTERVAL, signal);
+      if (shouldWaitBeforePolling) {
+        await wait(VIDEO_POLL_INTERVAL, signal);
+      }
+      shouldWaitBeforePolling = true;
       if (signal.aborted) return;
 
       if (Date.now() - startTime > VIDEO_TIMEOUT) {
-        setState((state) => ({
-          nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            status: GenerationStatus.FAILED,
-            error: {
-              code: "TIMEOUT",
-              message: "视频生成超时，请稍后再试",
-            },
-          })),
-        }));
-        if (ledgerBizId) {
-          const bizType =
-            videoProvider === "agnes" ? "agnes" : "video";
-          refundDesktopProxyScore(
-            ledgerBizId,
-            "video generation timeout",
-            bizType,
-          ).catch(() => { });
-        }
-        await updateVideoTrackFinalStatus(
-          taskId,
-          "FAIL",
-          "视频生成超时，请稍后再试",
-        );
+        stopVideoPollingInternal(nodeId);
         return;
       }
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
-      if (!currentNode || currentNode.type !== "newVideoNode") {
+      if (
+        (projectId && projectId !== getState().projectId) ||
+        !currentNode ||
+        currentNode.type !== "newVideoNode"
+      ) {
+        stopVideoPollingInternal(nodeId);
         return;
       }
 
@@ -1618,6 +1689,10 @@ const pollNewVideoGeneration = async ({
                   : await getDashscopeVideoTaskStatus(taskId);
 
       const normalized = normalizeVideoTaskResponse(response);
+      if (projectId && projectId !== getState().projectId) {
+        stopVideoPollingInternal(nodeId);
+        return;
+      }
       const normalizedTaskId = normalized.taskId ?? taskId;
 
       if (normalized.status === GenerationStatus.COMPLETED) {
@@ -1636,6 +1711,7 @@ const pollNewVideoGeneration = async ({
           setState((state) => ({
             nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
               ...data,
+              ...removeVideoPendingTask(data, taskId),
               status: GenerationStatus.FAILED,
               progress: normalized.progress,
               task_id: normalizedTaskId,
@@ -1645,6 +1721,7 @@ const pollNewVideoGeneration = async ({
               },
             })),
           }));
+          getState().saveGraph();
 
           stopVideoPollingInternal(nodeId);
           if (ledgerBizId) {
@@ -1700,17 +1777,19 @@ const pollNewVideoGeneration = async ({
               (data.metadata?.failedTasks as unknown[]) ?? []
             ).length;
             const completedCount = mergedData.length + failedCount;
-            const completed = completedCount >= totalTasks;
+            const taskState = removeVideoPendingTask(data, taskId);
+            const completed = taskState.metadata.tasks.length === 0;
 
             return {
               ...data,
+              ...taskState,
               status: completed
                 ? GenerationStatus.COMPLETED
                 : GenerationStatus.IN_PROGRESS,
               progress: completed
                 ? 100
                 : Math.min(99, Math.round((completedCount / totalTasks) * 100)),
-              task_id: normalizedTaskId,
+              task_id: completed ? undefined : normalizedTaskId,
               result: {
                 type: "video",
                 data: mergedData,
@@ -1720,9 +1799,7 @@ const pollNewVideoGeneration = async ({
           }),
         }));
         saveCurrentCanvasToHistory();
-        if (useChatSettingsStore.getState().autoSaveEnabled) {
-          getState().saveGraph();
-        }
+        getState().saveGraph();
 
         stopVideoPollingInternal(nodeId);
         if (ledgerBizId) {
@@ -1753,6 +1830,7 @@ const pollNewVideoGeneration = async ({
         setState((state) => ({
           nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
             ...data,
+            ...removeVideoPendingTask(data, taskId),
             status: GenerationStatus.FAILED,
             progress: normalized.progress,
             task_id: normalizedTaskId,
@@ -1762,6 +1840,7 @@ const pollNewVideoGeneration = async ({
             },
           })),
         }));
+        getState().saveGraph();
         const failedNode = getState().nodes.find((node) => node.id === nodeId);
         const failedStatus = (failedNode?.data as any)?.status;
         if (
@@ -1801,29 +1880,8 @@ const pollNewVideoGeneration = async ({
       }));
     }
   } catch (pollError) {
-    const serverMessage = getRequestErrorMessage(pollError);
-    setState((state) => ({
-      nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
-        ...data,
-        status: GenerationStatus.FAILED,
-        error: {
-          code: "POLL_ERROR",
-          message: "轮询失败，请稍后再试",
-          detail: serverMessage,
-          serverMessage,
-        },
-      })),
-    }));
-    if (ledgerBizId) {
-      refundDesktopProxyScore(ledgerBizId, serverMessage || "poll error").catch(
-        () => { },
-      );
-    }
-    await updateVideoTrackFinalStatus(
-      taskId,
-      "FAIL",
-      serverMessage || "轮询失败，请稍后再试",
-    );
+    console.error("视频生成轮询失败:", pollError);
+    stopVideoPollingInternal(nodeId);
   }
 };
 
@@ -2032,6 +2090,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const currentProjectId = get().projectId;
       // 如果是同一个项目，不需要重新加载
       if (currentProjectId === projectId && get().hydrated) {
+        get().resumePendingGenerationTasks();
         return;
       }
 
@@ -2090,7 +2149,9 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         return node;
       });
       const persistedReadyNodes =
-        normalizeCanvasNodesForPersistence(processedNodes);
+        normalizeCanvasNodesForPersistence(processedNodes).map(
+          restoreCanceledGenerationNode,
+        );
 
       set({
         projectId,
@@ -2111,6 +2172,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         selectedGroupId: null,
       });
       get().requestHistorySave();
+      get().resumePendingGenerationTasks();
     },
 
     /**
@@ -2142,6 +2204,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const state = get();
       if (!state.projectId) return;
 
+      imagePollingControllers.forEach((_, taskId) => {
+        stopImagePollingInternal(taskId);
+      });
+      videoPollingControllers.forEach((_, nodeId) => {
+        stopVideoPollingInternal(nodeId);
+      });
+
       getCanvas(state.projectId)
         .then(async (response) => {
           const data = toCanvasPersistedState(unwrapApiData(response));
@@ -2163,7 +2232,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           const hydratedNodes = await hydrateCanvasNodesForRuntime(data.nodes);
           const persistedReadyNodes = normalizeCanvasNodesForPersistence(
             hydratedNodes,
-          );
+          ).map(restoreCanceledGenerationNode);
 
           set({
             nodes: persistedReadyNodes,
@@ -2177,6 +2246,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             activeVideoTool: null,
             selectedGroupId: null,
           });
+          get().resumePendingGenerationTasks();
         })
         .catch(() => {
           set({
@@ -2215,6 +2285,74 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         nodeIdCounters: normalizeNodeIdCounters(),
         hydrated: false,
         projectId: null,
+      });
+    },
+
+    resumePendingGenerationTasks: () => {
+      const { nodes, projectId } = get();
+      if (!projectId) return;
+
+      nodes.forEach((node) => {
+        if (!isPendingGenerationStatus(node.data?.status)) return;
+
+        if (node.type === "imageNode") {
+          const data = node.data as ImageGenerationNode;
+          const taskIds = getImagePendingTaskIds(data);
+          const totalTaskCount = Math.max(
+            (data.completedCount ?? 0) + taskIds.length,
+            1,
+          );
+
+          taskIds.forEach((taskId) => {
+            if (imagePollingControllers.has(taskId)) return;
+
+            const controller = new AbortController();
+            imagePollingControllers.set(taskId, controller);
+            void pollImageGeneration(
+              taskId,
+              node.id,
+              controller.signal,
+              set,
+              get,
+              totalTaskCount,
+              data.task_ledger_biz_ids?.[taskId],
+              projectId,
+              true,
+            );
+          });
+          return;
+        }
+
+        if (node.type !== "newVideoNode" || videoPollingControllers.has(node.id)) {
+          return;
+        }
+
+        const data = node.data as NewVideoGenerationNode;
+        const tasks = getVideoPendingTasks(data);
+        if (tasks.length === 0) return;
+
+        const videoProvider = resolveVideoTaskProvider(
+          data.model,
+          data.metadata?.videoProvider,
+        );
+        const controller = new AbortController();
+        videoPollingControllers.set(node.id, controller);
+        tasks.forEach((task, taskIndex) => {
+          void pollNewVideoGeneration({
+            taskId: task.taskId,
+            nodeId: node.id,
+            signal: controller.signal,
+            setState: set,
+            getState: get,
+            isSeedance20: videoProvider === "seedance",
+            taskIndex,
+            totalTasks: tasks.length,
+            ledgerBizId: task.ledgerBizId,
+            videoProvider,
+            projectId,
+            pollImmediately: true,
+          });
+        });
       });
     },
 
@@ -3215,8 +3353,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
                 : [],
               size: payload.size,
               resolution: payload.resolution,
-                quality: payload.quality,
-                raw: payload.raw,
+              quality: payload.quality,
+              raw: payload.raw,
               chaos: payload.chaos,
               stylize: payload.stylize,
               imageWeight: payload.iw,
@@ -3335,12 +3473,21 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         // 标记为生成中
         set((state) => ({
-          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => ({
-            ...data,
-            status: GenerationStatus.IN_PROGRESS,
-            progress: 0,
-          })),
+          nodes: updateImageNodeInList(state.nodes, nodeId, (data) => {
+            const taskIds = [...getImagePendingTaskIds(data), taskId];
+            return {
+              ...data,
+              task_id: taskId,
+              task_ids: taskIds,
+              task_ledger_biz_ids: ledgerBizId
+                ? { ...(data.task_ledger_biz_ids ?? {}), [taskId]: ledgerBizId }
+                : data.task_ledger_biz_ids,
+              status: GenerationStatus.IN_PROGRESS,
+              progress: 0,
+            };
+          }),
         }));
+        get().saveGraph();
 
         // 为每个 task 创建独立的 controller，以 taskId 为 key 存储
         const controller = new AbortController();
@@ -3354,6 +3501,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           get,
           totalTaskCount,
           ledgerBizId,
+          get().projectId ?? undefined,
         );
       } catch (startError) {
         console.error("创建图片生成任务失败:", startError);
@@ -4174,6 +4322,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         );
         const taskIds = taskResults.map((r) => r.taskId);
         const ledgerBizId = taskResults[0]?.ledgerBizId;
+        const videoProvider = resolveVideoTaskProvider(model);
 
         set((state) => ({
           nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
@@ -4184,11 +4333,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             metadata: {
               ...data.metadata,
               tasks: taskIds,
+              pendingTasks: taskResults.map((task) => ({
+                taskId: task.taskId,
+                ledgerBizId: task.ledgerBizId,
+              })),
               failedTasks: [],
               ledgerBizId,
+              videoProvider,
             },
           })),
         }));
+        get().saveGraph();
 
         const controller = new AbortController();
         videoPollingControllers.set(nodeId, controller);
@@ -4203,16 +4358,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             taskIndex: index,
             totalTasks,
             ledgerBizId,
-            videoProvider:
-              model === "agnes-video-v2.0"
-                ? "agnes"
-                : isMiniMaxH3
-                  ? "minimax"
-                  : isOverseasSeedance20
-                    ? "seedance_global"
-                    : isSeedance20
-                      ? "seedance"
-                      : "dashscope",
+            videoProvider,
+            projectId: get().projectId ?? undefined,
           });
         });
       } catch (startError) {
@@ -4273,8 +4420,6 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
     cancelAllGeneratingTasks: () => {
       const { nodes } = get();
 
-      // 收集需要停止轮询的节点
-      const imageNodesToStop: string[] = [];
       const videoNodesToStop: string[] = [];
 
       nodes.forEach((node) => {
@@ -4283,47 +4428,20 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           status === GenerationStatus.IN_PROGRESS ||
           status === GenerationStatus.QUEUED
         ) {
-          if (node.type === "imageNode") {
-            imageNodesToStop.push(node.id);
-          } else if (node.type === "newVideoNode") {
+          if (node.type === "newVideoNode") {
             videoNodesToStop.push(node.id);
           }
         }
       });
 
-      // 停止所有轮询
-      imageNodesToStop.forEach((nodeId) => stopImagePollingInternal(nodeId));
+      imagePollingControllers.forEach((_, taskId) => {
+        stopImagePollingInternal(taskId);
+      });
       videoNodesToStop.forEach((nodeId) => stopVideoPollingInternal(nodeId));
 
-      // 一次性更新所有节点状态
       set((state) => ({
         nodes: state.nodes.map((node) => {
           const status = node.data?.status;
-          if (
-            status === GenerationStatus.IN_PROGRESS ||
-            status === GenerationStatus.QUEUED
-          ) {
-            if (node.type === "imageNode") {
-              return {
-                ...node,
-                data: {
-                  ...node.data,
-                  status: GenerationStatus.FAILED,
-                  error: { message: "任务已取消" },
-                },
-              };
-            } else if (node.type === "newVideoNode") {
-              return {
-                ...node,
-                data: {
-                  ...node.data,
-                  status: GenerationStatus.FAILED,
-                  error: { message: "任务已取消" },
-                },
-              };
-            }
-          }
-          // 文本智能体节点
           if (node.type === "textAgentNode" && status === "generating") {
             return {
               ...node,

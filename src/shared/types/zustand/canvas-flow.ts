@@ -161,6 +161,7 @@ export type CanvasFlowStoreType = {
   hydrateGraph: (projectId: string) => void;
   resetToSavedGraph: () => void;
   clearCanvas: () => void;
+  resumePendingGenerationTasks: () => void;
 
   // ── 导入导出 ─────────────────────────────────
   exportCanvasData: () => CanvasPersistedState;
