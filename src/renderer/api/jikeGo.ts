@@ -112,6 +112,7 @@ export type DesktopProxyRequest = {
   scoreSourceLabel?: string;
   coreSourceLabel?: string;
   scoreTaskId?: string;
+  kuaiziBillingMode?: "actual";
 };
 
 export type DesktopChatCompletionsRequest = {

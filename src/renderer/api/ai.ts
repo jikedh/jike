@@ -623,6 +623,7 @@ export async function getLzVideoTaskStatus(taskId: string) {
     upstreamPath: "/v1/lz/video/task/status",
     method: "POST",
     body: { task_id: taskId },
+    kuaiziBillingMode: "actual",
   });
 
   return unwrapDesktopProxyData(response);
