@@ -36,6 +36,7 @@ import {
   getUploadOssPutUrl,
   queryVideoEnhanceTask,
   queryWuhenRemovalTask,
+  trimOssVideo,
 } from "@/api/jikeGo";
 import { ModelPointsBadge } from "@/components/ModelPointsBadge";
 import { Button } from "@/components/ui/button";
@@ -1347,24 +1348,44 @@ export const VideoToolbar = ({
           throw new Error("暂无可裁剪视频");
         }
 
-        if (!window.videoProcessing?.trim) {
-          throw new Error("视频裁剪组件未初始化，请重启应用后重试");
-        }
+        let trimResult: VideoTrimResult;
+        try {
+          const response = await trimOssVideo({
+            source_url: currentVideoUrl,
+            start_ms: Math.round(range.start * 1000),
+            end_ms: Math.round(range.end * 1000),
+          });
+          const payload = response?.data?.data ?? response?.data ?? response;
+          if (!payload?.url) {
+            throw new Error("IMM 未返回裁剪视频");
+          }
+          trimResult = {
+            url: payload.url,
+            format: "mp4",
+            duration: Number(payload.duration_ms) / 1000 || range.end - range.start,
+            method: "imm",
+            jobId: payload.task_id,
+          };
+        } catch (immError: any) {
+          console.warn("IMM 视频裁剪失败，切换到本地 FFmpeg：", immError);
+          if (!window.videoProcessing?.trim) {
+            throw new Error("IMM 裁剪失败，且本地 FFmpeg 裁剪组件未初始化");
+          }
 
-        const authToken = getJikeingToken();
-        const backendBaseUrl =
-          import.meta.env.VITE_JIKE_GO_BASE_URL || "http://localhost:9181";
-
-        const response = await window.videoProcessing.trim({
-          videoUrl: currentVideoUrl,
-          start: range.start,
-          end: range.end,
-          authToken: authToken || undefined,
-          backendBaseUrl,
-        });
-
-        if (!response.success || !response.data?.url) {
-          throw new Error(response.error || "视频裁剪失败");
+          const authToken = getJikeingToken();
+          const backendBaseUrl =
+            import.meta.env.VITE_JIKE_GO_BASE_URL || "http://localhost:9181";
+          const response = await window.videoProcessing.trim({
+            videoUrl: currentVideoUrl,
+            start: range.start,
+            end: range.end,
+            authToken: authToken || undefined,
+            backendBaseUrl,
+          });
+          if (!response.success || !response.data?.url) {
+            throw new Error(response.error || "视频裁剪失败");
+          }
+          trimResult = response.data;
         }
 
         const sourceNode = useCanvasFlowStore
@@ -1385,9 +1406,9 @@ export const VideoToolbar = ({
 
         const resultItem = withRemoteMediaRef(
           withVideoPosterFields({
-            url: response.data.url,
-            remoteUrl: response.data.url,
-            format: response.data.format,
+            url: trimResult.url,
+            remoteUrl: trimResult.url,
+            format: trimResult.format,
           }),
         );
 
@@ -1395,14 +1416,14 @@ export const VideoToolbar = ({
           badgeLabel: "视频裁剪",
           isUpload: true,
           aspect_ratio: data.aspect_ratio,
-          duration: response.data.duration,
+          duration: trimResult.duration,
           trimInfo: {
             sourceNodeId: nodeId,
             sourceVideoUrl: currentVideoUrl,
             startTime: range.start,
             endTime: range.end,
-            method: response.data.method,
-            jobId: response.data.jobId,
+            method: trimResult.method,
+            jobId: trimResult.jobId,
           },
           result: {
             type: "video",
@@ -1417,11 +1438,11 @@ export const VideoToolbar = ({
         flowStore.requestHistorySave();
         flowStore.saveGraph();
         toast.success(
-          response.data.method === "cloud"
-            ? "云端裁剪成功"
+          trimResult.method === "imm"
+            ? "IMM 云端裁剪成功"
             : "本地 ffmpeg 裁剪成功",
         );
-        return response.data;
+        return trimResult;
       } catch (error: any) {
         console.error("视频裁剪失败:", error);
         toast.error(error?.message || "视频裁剪失败，请重试");

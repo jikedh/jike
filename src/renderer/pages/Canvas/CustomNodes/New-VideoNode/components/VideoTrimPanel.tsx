@@ -18,7 +18,7 @@ export type VideoTrimResult = {
   url: string;
   format: "mp4";
   duration: number;
-  method: "cloud" | "ffmpeg";
+  method: "imm" | "ffmpeg";
   jobId?: string;
 };
 

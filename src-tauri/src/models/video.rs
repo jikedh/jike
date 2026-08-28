@@ -21,7 +21,7 @@ pub struct VideoTrimResult {
     pub url: String,
     pub format: String, // "mp4"
     pub duration: f64,
-    pub method: String, // "cloud" | "ffmpeg"
+    pub method: String, // "imm" | "ffmpeg"
     #[serde(rename = "jobId", skip_serializing_if = "Option::is_none", default)]
     pub job_id: Option<String>,
 }

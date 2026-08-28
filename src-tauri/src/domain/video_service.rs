@@ -7,7 +7,6 @@ use crate::models::{
     SplitMp4Request, SplitMp4Result, VideoTrimRequest, VideoTrimResult,
 };
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
     process::Command,
@@ -27,33 +26,8 @@ pub enum VideoError {
     JobFailed(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct AliyunRuntimeConfig {
-    access_key_id: String,
-    access_key_secret: String,
-    oss_region: String,
-    oss_bucket: String,
-    ims_region_id: Option<String>,
-    ims_endpoint: Option<String>,
-}
-
 fn env_or(k: &str) -> Option<String> {
     std::env::var(k).ok().filter(|v| !v.is_empty())
-}
-
-fn get_aliyun_config() -> Option<AliyunRuntimeConfig> {
-    let id = env_or("VITE_OSS_ACCESS_KEY_ID")?;
-    let secret = env_or("VITE_OSS_ACCESS_KEY_SECRET")?;
-    let region = env_or("VITE_OSS_REGION")?;
-    let bucket = env_or("VITE_OSS_BUCKET")?;
-    Some(AliyunRuntimeConfig {
-        access_key_id: id,
-        access_key_secret: secret,
-        oss_region: region,
-        oss_bucket: bucket,
-        ims_region_id: env_or("VITE_IMS_REGION_ID"),
-        ims_endpoint: env_or("VITE_IMS_ENDPOINT"),
-    })
 }
 
 fn resolve_backend(override_base: Option<&str>) -> String {
@@ -72,14 +46,6 @@ pub async fn trim_video(req: VideoTrimRequest) -> Result<VideoTrimResult, VideoE
         return Err(VideoError::Config("裁剪时长不能小于 0.5 秒".into()));
     }
 
-    // 尝试云端 ICE 方案
-    if let Some(cfg) = get_aliyun_config() {
-        if let Ok(r) = trim_via_ice(&cfg, &req).await {
-            return Ok(r);
-        }
-    }
-
-    // 降级到 ffmpeg sidecar
     trim_via_ffmpeg(&req).await
 }
 
@@ -382,19 +348,6 @@ fn ffmpeg_stderr_message(stderr: &[u8]) -> String {
         .or_else(|| lines.iter().rev().find(|line| !line.starts_with("frame=")) .copied())
         .unwrap_or("ffmpeg exit non-zero")
         .to_string()
-}
-
-async fn trim_via_ice(
-    cfg: &AliyunRuntimeConfig,
-    _req: &VideoTrimRequest,
-) -> Result<VideoTrimResult, VideoError> {
-    let _ = (cfg.access_key_id.as_str(), cfg.ims_region_id.as_ref());
-    // 真实接入阿里云 ICE 需要 aliyun-openapi-core SDK；
-    // 此处作为可运行骨架的占位（提交-轮询-下载链路在 .cargo 锁文件中已含 reqwest + serde）。
-    // 后续可在 domain/video_service.rs 内补全 SubmitMediaProducingJob / GetMediaProducingJob 调用。
-    Err(VideoError::Config(
-        "ICE SDK not yet wired in Rust skeleton".into(),
-    ))
 }
 
 async fn trim_via_ffmpeg(req: &VideoTrimRequest) -> Result<VideoTrimResult, VideoError> {

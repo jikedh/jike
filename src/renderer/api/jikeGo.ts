@@ -534,6 +534,28 @@ export function captureOssVideoFrame(data: CaptureOssVideoFrameRequest): any {
   });
 }
 
+export type TrimOssVideoRequest = {
+  source_url: string;
+  start_ms: number;
+  end_ms: number;
+};
+
+export type TrimOssVideoResponse = {
+  url: string;
+  task_id: string;
+  duration_ms: number;
+};
+
+export function trimOssVideo(data: TrimOssVideoRequest): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/oss/trim-video",
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
 // UploadOss 预签名上传：获取预签名 PUT URL
 export function getUploadOssPutUrl(data: UploadOssPutUrlRequest): any {
   return jikeingService({
