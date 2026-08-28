@@ -115,6 +115,12 @@ const isVideoModeKey = (value: unknown): value is VideoModeKey => {
 };
 
 const OVERSEAS_SEEDANCE_MODEL = "dreamina-seedance-2-0-260128";
+const KUAIZI_VIDEO_MODELS = new Set([
+  "seedance-2.0-fast",
+  "seedance-2.0-mini",
+  "seedance-2.0-pro",
+  "seedance-2.5",
+]);
 const WAN_REFERENCE_VOICES_KEY = "wanReferenceVoices";
 const WAN_REFERENCE_VOICES_MIGRATED_KEY = "wanReferenceVoicesMigrated";
 const WAN_REFERENCE_VOICE_MAX_SIZE = 15 * 1024 * 1024;
@@ -2313,7 +2319,10 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
                 确认生成视频
               </DialogTitle>
               <DialogDescription className="text-xs text-white/50">
-                确认后将进入 5 秒可停止窗口，窗口结束后才会创建任务并扣除积分。
+                {pendingGenerateContext &&
+                  KUAIZI_VIDEO_MODELS.has(pendingGenerateContext.fullRequest.model)
+                  ? "确认后将进入 5 秒可停止窗口；任务完成后将按实际用量扣除积分。"
+                  : "确认后将进入 5 秒可停止窗口，窗口结束后才会创建任务并扣除积分。"}
               </DialogDescription>
             </DialogHeader>
 
