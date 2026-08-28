@@ -93,7 +93,6 @@ pub fn run() {
             commands::debug_get_app_version,
             commands::debug_capture_page,
             commands::video_processing_trim,
-            commands::video_capture_frame,
             commands::video_split_mp4_by_seconds,
             commands::get_local_file_info,
             commands::upload_local_file_to_signed_url,

@@ -48,17 +48,6 @@ declare global {
         };
         error?: string;
       }>;
-      captureFrame: (request: {
-        videoUrl: string;
-        time: number;
-        mode: "current" | "start" | "end";
-        authToken?: string;
-        backendBaseUrl?: string;
-      }) => Promise<{
-        success: boolean;
-        data?: { url: string; format: "png"; method: "ffmpeg" };
-        error?: string;
-      }>;
     };
   }
 }

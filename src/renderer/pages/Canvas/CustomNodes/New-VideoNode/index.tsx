@@ -4,7 +4,7 @@ import {
   Position,
   useUpdateNodeInternals
 } from "@xyflow/react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { GenerationStatus } from "shared/constants/enum";
 import type { NewVideoNodeType } from "shared/types/flow";
 import { cn } from "shared/utils/utils";
@@ -36,7 +36,6 @@ const NewVideoNode = ({
   const [isGalleryExpanded, setIsGalleryExpanded] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
-  const primaryVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const duplicateNode = useCanvasFlowStore((state) => state.duplicateNode);
   const deleteNode = useCanvasFlowStore((state) => state.deleteNode);
@@ -221,7 +220,6 @@ const NewVideoNode = ({
               onDelete={handleDelete}
               isUploading={isUploading}
               onUploadingChange={setIsUploading}
-              primaryVideoRef={primaryVideoRef}
             />
           </div>
         )}
@@ -288,7 +286,6 @@ const NewVideoNode = ({
               isUploading={isUploading}
               forcePosterOnly={hasActiveVideoTool}
               frameSize={contentFrameSize}
-              primaryVideoRef={primaryVideoRef}
             />
           </div>
         </div>

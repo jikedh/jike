@@ -146,12 +146,6 @@ const videoProcessingApi = {
             data?: { url: string; format: "mp4"; duration: number; method: "cloud" | "ffmpeg"; jobId?: string };
             error?: string;
         }>("video_processing_trim", { request }),
-    captureFrame: (request: { videoUrl: string; time: number; mode: "current" | "start" | "end"; authToken?: string; backendBaseUrl?: string }) =>
-        invokeOrThrow<{
-            success: boolean;
-            data?: { url: string; format: "png"; method: "ffmpeg" };
-            error?: string;
-        }>("video_capture_frame", { request }),
 };
 
 // === notification ======================================================

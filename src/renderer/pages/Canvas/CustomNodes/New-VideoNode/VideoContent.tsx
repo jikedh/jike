@@ -1,4 +1,4 @@
-import { memo, type RefObject, useMemo } from "react";
+import { memo, useMemo } from "react";
 import { GenerationStatus } from "shared/constants/enum";
 import type { NewVideoGenerationNode } from "shared/types/flow";
 import { assignMissingMediaSequences } from "shared/utils/mediaSequence";
@@ -20,7 +20,6 @@ type VideoContentProps = {
     width: number;
     height: number;
   };
-  primaryVideoRef?: RefObject<HTMLVideoElement | null>;
 };
 
 export const VideoContent = memo(
@@ -33,7 +32,6 @@ export const VideoContent = memo(
     isUploading = false,
     forcePosterOnly = false,
     frameSize,
-    primaryVideoRef,
   }: VideoContentProps) => {
     const status = data.status ?? GenerationStatus.COMPLETED;
     const videos = useMemo(
@@ -115,7 +113,6 @@ export const VideoContent = memo(
             onExpandedChange={onGalleryExpandedChange}
             forcePosterOnly={forcePosterOnly}
             frameSize={frameSize}
-            primaryVideoRef={primaryVideoRef}
           />
         </div>
       );
