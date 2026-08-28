@@ -11,7 +11,7 @@ import {
   IconUpload,
   IconZoomIn,
 } from "@tabler/icons-react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, RefObject } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
@@ -30,6 +30,7 @@ import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
 import Video from "yet-another-react-lightbox/plugins/video";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import {
+  captureOssVideoFrame,
   createVideoEnhanceTask,
   createWuhenRemovalTask,
   getUploadOssPutUrl,
@@ -919,6 +920,7 @@ type VideoToolbarProps = {
   onDelete?: () => void;
   isUploading?: boolean;
   onUploadingChange?: (uploading: boolean) => void;
+  primaryVideoRef: RefObject<HTMLVideoElement | null>;
 };
 
 type ActionKey =
@@ -936,6 +938,7 @@ const SNAPSHOT_LABELS = {
   end: "截取尾帧",
 } as const;
 const SNAPSHOT_MODES = ["current", "start", "end"] as const;
+type SnapshotMode = (typeof SNAPSHOT_MODES)[number];
 
 /**
  * 新版视频节点工具栏
@@ -947,6 +950,7 @@ export const VideoToolbar = ({
   onDelete,
   isUploading = false,
   onUploadingChange,
+  primaryVideoRef,
 }: VideoToolbarProps) => {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -955,6 +959,7 @@ export const VideoToolbar = ({
   const [isSubtitlePanelOpen, setIsSubtitlePanelOpen] = useState(false);
   const [isSubmittingSubtitle, setIsSubmittingSubtitle] = useState(false);
   const [isEnhancePanelOpen, setIsEnhancePanelOpen] = useState(false);
+  const [isCapturingFrame, setIsCapturingFrame] = useState(false);
   const [previewVideoUrls, setPreviewVideoUrls] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const previewObjectUrlsRef = useRef<string[]>([]);
@@ -964,6 +969,9 @@ export const VideoToolbar = ({
   const onConnect = useCanvasFlowStore((state) => state.onConnect);
   const updateNewVideoNodeData = useCanvasFlowStore(
     (state) => state.updateNewVideoNodeData,
+  );
+  const updateImageNodeData = useCanvasFlowStore(
+    (state) => state.updateImageNodeData,
   );
   const setActiveVideoTool = useCanvasFlowStore(
     (state) => state.setActiveVideoTool,
@@ -1100,6 +1108,129 @@ export const VideoToolbar = ({
       event.target.value = "";
     }
   };
+
+  const handleCaptureFrame = useCallback(
+    async (mode: SnapshotMode) => {
+      if (isCapturingFrame) return;
+      if (!currentVideoUrl) {
+        toast.info("暂无可截帧视频");
+        return;
+      }
+
+      const video = primaryVideoRef.current;
+      const duration =
+        video && Number.isFinite(video.duration) && video.duration > 0
+          ? video.duration
+          : videoDuration;
+      const timeSeconds =
+        mode === "start"
+          ? 0
+          : mode === "end"
+            ? Math.max(0, duration - 0.2)
+            : Math.max(0, Math.min(video?.currentTime || 0, duration));
+
+      setIsCapturingFrame(true);
+      let childId: string | null = null;
+      try {
+        const sourceNode = useCanvasFlowStore
+          .getState()
+          .nodes.find((node) => node.id === nodeId);
+        if (!sourceNode) {
+          throw new Error("当前视频节点不存在");
+        }
+
+        childId = addNode("image", getProcessedVideoNodePosition(sourceNode));
+        if (!childId) {
+          throw new Error("截帧图片节点创建失败");
+        }
+
+        onConnect({
+          source: nodeId,
+          target: childId,
+          sourceHandle: "output",
+          targetHandle: "input",
+        });
+        updateImageNodeData(childId, {
+          badgeLabel: "视频截帧",
+          nickname: "截帧进行中",
+          processingLabel: "截帧进行中",
+          ...(data.aspect_ratio ? { size: data.aspect_ratio } : {}),
+          result: { type: "image", data: [] },
+          status: GenerationStatus.IN_PROGRESS,
+          progress: 0,
+          error: undefined,
+        });
+
+        const flowStore = useCanvasFlowStore.getState();
+        flowStore.requestHistorySave();
+        flowStore.saveGraph();
+
+        const response = await captureOssVideoFrame({
+          source_url: currentVideoUrl,
+          time_ms: Math.round(timeSeconds * 1000),
+        });
+        const captureResult = response?.data?.data ?? response?.data ?? response;
+        if (!captureResult?.url) {
+          throw new Error("IMM 截帧未返回图片地址");
+        }
+
+        updateImageNodeData(childId, {
+          badgeLabel: "视频截帧",
+          nickname: SNAPSHOT_LABELS[mode],
+          processingLabel: undefined,
+          isUpload: true,
+          ...(data.aspect_ratio ? { size: data.aspect_ratio } : {}),
+          image_urls: [captureResult.url],
+          result: {
+            type: "image",
+            data: [
+              withRemoteMediaRef({
+                url: captureResult.url,
+                remoteUrl: captureResult.url,
+              }),
+            ],
+          },
+          status: GenerationStatus.COMPLETED,
+          progress: 100,
+          error: undefined,
+        } as any);
+        flowStore.requestHistorySave();
+        flowStore.saveGraph();
+        toast.success(`${SNAPSHOT_LABELS[mode]}成功`);
+      } catch (error: any) {
+        if (childId) {
+          updateImageNodeData(childId, {
+            processingLabel: undefined,
+            isUpload: false,
+            status: GenerationStatus.FAILED,
+            progress: 0,
+            error: {
+              code: "VIDEO_FRAME_CAPTURE_FAILED",
+              message: error?.message || "视频截帧失败，请重试",
+            },
+          });
+          const flowStore = useCanvasFlowStore.getState();
+          flowStore.requestHistorySave();
+          flowStore.saveGraph();
+        }
+        console.error("视频截帧失败:", error);
+        toast.error(error?.message || "视频截帧失败，请重试");
+      } finally {
+        setIsCapturingFrame(false);
+      }
+    },
+    [
+      addNode,
+      currentVideoUrl,
+      data.aspect_ratio,
+      isCapturingFrame,
+      nodeId,
+      onConnect,
+      primaryVideoRef,
+      updateImageNodeData,
+      videoDuration,
+    ],
+  );
 
   const handleAction = async (actionKey: ActionKey) => {
     if (actionKey === "upload") {
@@ -1739,6 +1870,7 @@ export const VideoToolbar = ({
           const isDisabled =
             (item.key === "download" && isDownloading) ||
             (item.key === "upload" && isUploading) ||
+            (item.key === "snapshot" && isCapturingFrame) ||
             (item.key === "trim" && isTrimmingVideo) ||
             (item.key === "removeCaptions" && isSubmittingSubtitle);
 
@@ -1772,7 +1904,7 @@ export const VideoToolbar = ({
                       <DropdownMenuItem
                         key={mode}
                         onSelect={() => {
-                          toast.info("此功能正在开发中");
+                          void handleCaptureFrame(mode);
                         }}
                       >
                         {SNAPSHOT_LABELS[mode]}

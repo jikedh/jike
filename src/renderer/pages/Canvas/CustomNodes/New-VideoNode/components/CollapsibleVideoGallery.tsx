@@ -5,6 +5,7 @@ import {
 } from "@tabler/icons-react";
 import {
   memo,
+  type RefObject,
   useCallback,
   useEffect,
   useMemo,
@@ -46,6 +47,7 @@ type CollapsibleVideoGalleryProps = {
     width: number;
     height: number;
   };
+  primaryVideoRef?: RefObject<HTMLVideoElement | null>;
 };
 
 type ExpandedCardLayout = {
@@ -152,6 +154,7 @@ export const CollapsibleVideoGallery = memo(
     onExpandedChange,
     forcePosterOnly = false,
     frameSize,
+    primaryVideoRef,
   }: CollapsibleVideoGalleryProps) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -540,6 +543,7 @@ export const CollapsibleVideoGallery = memo(
                     </div>
                   ) : displayUrl && shouldRenderPlayer && !isBroken(index) ? (
                     <VideoPlayer
+                      ref={isPrimary ? primaryVideoRef : undefined}
                       src={displayUrl}
                       muted={!isPrimary}
                       loop={!isPrimary}
