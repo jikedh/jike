@@ -3,7 +3,10 @@ import { IconSparkles, IconWand } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createChatCompletion } from "@/api/ai";
 import { GenerationStatus } from "shared/constants/enum";
-import { getVideoGenerationPoints } from "shared/constants/model-points";
+import {
+  getSeedanceVideoGenerationPointsBreakdown,
+  getVideoGenerationPoints,
+} from "shared/constants/model-points";
 import type { NewVideoGenerationNode } from "shared/types/flow";
 import { getVideoDuration } from "shared/utils/getVideoDuration";
 import { toChineseNumber } from "shared/utils/utils";
@@ -106,6 +109,9 @@ type PendingVideoGenerateContext = {
     audio: number;
   };
   overseasReferenceDurationSeconds: number;
+  seedancePointsBreakdown: ReturnType<
+    typeof getSeedanceVideoGenerationPointsBreakdown
+  >;
 };
 
 const isVideoModeKey = (value: unknown): value is VideoModeKey => {
@@ -887,6 +893,10 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         .filter((url): url is string => Boolean(url)),
     [generationReferenceItems],
   );
+  const requiresReferenceVideoDuration =
+    (selectedModel === OVERSEAS_SEEDANCE_MODEL ||
+      KUAIZI_VIDEO_MODELS.has(selectedModel)) &&
+    generationVideoReferenceUrls.length > 0;
   const editorMentionItems = useMemo(() => {
     return generationReferenceItems.map((item) => ({
       id: item.mentionId ?? item.id,
@@ -1594,10 +1604,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   useEffect(() => {
     let cancelled = false;
 
-    if (
-      selectedModel !== OVERSEAS_SEEDANCE_MODEL ||
-      generationVideoReferenceUrls.length === 0
-    ) {
+    if (!requiresReferenceVideoDuration) {
       setOverseasReferenceDurationSeconds(0);
       setIsLoadingOverseasReferenceDuration(false);
       setOverseasReferenceDurationError(null);
@@ -1626,7 +1633,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         }
 
         setOverseasReferenceDurationSeconds(
-          durations.reduce((total, duration) => total + Math.ceil(duration!), 0),
+          Math.ceil(durations.reduce((total, duration) => total + duration!, 0)),
         );
         setOverseasReferenceDurationError(null);
       })
@@ -1647,8 +1654,26 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   }, [
     generationVideoReferenceUrls.length,
     overseasReferenceDurationKey,
-    selectedModel,
+    requiresReferenceVideoDuration,
   ]);
+
+  const seedancePointsBreakdown = useMemo(
+    () =>
+      getSeedanceVideoGenerationPointsBreakdown({
+        model: selectedModel,
+        duration: selectedParams.duration,
+        resolution: selectedParams.resolution,
+        hasVideoInput: generationVideoReferenceUrls.length > 0,
+        videoReferenceDuration: overseasReferenceDurationSeconds,
+      }),
+    [
+      generationVideoReferenceUrls.length,
+      overseasReferenceDurationSeconds,
+      selectedModel,
+      selectedParams.duration,
+      selectedParams.resolution,
+    ],
+  );
 
   const requiredPoints = useMemo(() => {
     const perTaskPoints = normalizeRequiredPoints(
@@ -2008,10 +2033,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         warning("请输入提示词");
         return;
       }
-      if (
-        request.model === OVERSEAS_SEEDANCE_MODEL &&
-        generationVideoReferenceUrls.length > 0
-      ) {
+      if (requiresReferenceVideoDuration) {
         if (isLoadingOverseasReferenceDuration) {
           warning("正在读取视频参考时长，请稍后");
           return;
@@ -2066,6 +2088,11 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
           fullRequest.model === OVERSEAS_SEEDANCE_MODEL
             ? overseasReferenceDurationSeconds
             : 0,
+        seedancePointsBreakdown:
+          KUAIZI_VIDEO_MODELS.has(fullRequest.model) &&
+            generationVideoReferenceUrls.length > 0
+            ? seedancePointsBreakdown
+            : null,
       });
     },
     [
@@ -2078,6 +2105,8 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       overseasReferenceDurationSeconds,
       parentNoteContents,
       requiredPoints,
+      requiresReferenceVideoDuration,
+      seedancePointsBreakdown,
       validateBalanceBeforeGenerate,
       videoModelOptions,
       wanReferenceVoiceByUrl,
@@ -2296,11 +2325,40 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
                 }}
               />
               {pointsEnabled ? (
-                <ModelPointsBadge
-                  totalPoints={totalPoints}
-                  requiredPoints={requiredPoints}
-                  title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
-                />
+                <div className="flex flex-col items-end gap-1">
+                  <ModelPointsBadge
+                    totalPoints={totalPoints}
+                    requiredPoints={requiredPoints}
+                    title={`当前模型预计消耗 ${requiredPoints} 积分，当前余额 ${totalPoints}`}
+                  />
+                  {requiresReferenceVideoDuration &&
+                    isLoadingOverseasReferenceDuration ? (
+                    <span className="text-[10px] text-white/45">
+                      正在读取参考视频时长…
+                    </span>
+                  ) : null}
+                  {requiresReferenceVideoDuration &&
+                    overseasReferenceDurationError ? (
+                    <span className="text-[10px] text-red-300">
+                      {overseasReferenceDurationError}
+                    </span>
+                  ) : null}
+                  {seedancePointsBreakdown &&
+                    generationVideoReferenceUrls.length > 0 ? (
+                    <span
+                      className={cn(
+                        "max-w-70 text-right text-[10px] leading-4",
+                        seedancePointsBreakdown.isReferenceDurationOverLimit
+                          ? "font-medium text-amber-300"
+                          : "text-white/45",
+                      )}
+                    >
+                      {seedancePointsBreakdown.isReferenceDurationOverLimit
+                        ? `参考视频时长超过15秒，将按最高标准计算积分（${requiredPoints} 积分）`
+                        : `基础模型积分 ${seedancePointsBreakdown.generationPoints} + 参考视频时长积分 ${seedancePointsBreakdown.referenceVideoPoints}`}
+                    </span>
+                  ) : null}
+                </div>
               ) : null}
             </>
           }
@@ -2380,6 +2438,23 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
                     海外 Seedance 视频参考计费：生成{" "}
                     {pendingGenerateContext.duration}s + 参考视频{" "}
                     {pendingGenerateContext.overseasReferenceDurationSeconds}s。
+                  </div>
+                ) : null}
+
+                {pendingGenerateContext.seedancePointsBreakdown ? (
+                  <div
+                    className={cn(
+                      "mt-2 rounded-lg border px-3 py-2 text-xs leading-5",
+                      pendingGenerateContext.seedancePointsBreakdown
+                        .isReferenceDurationOverLimit
+                        ? "border-amber-300/30 bg-amber-300/10 text-amber-100"
+                        : "border-[#B43FEB]/20 bg-[#B43FEB]/10 text-white/70",
+                    )}
+                  >
+                    {pendingGenerateContext.seedancePointsBreakdown
+                      .isReferenceDurationOverLimit
+                      ? `参考视频时长超过15秒，将按最高标准计算积分（${pendingGenerateContext.requiredPoints} 积分）。`
+                      : `积分依据：基础模型积分 ${pendingGenerateContext.seedancePointsBreakdown.generationPoints} + 参考视频时长积分 ${pendingGenerateContext.seedancePointsBreakdown.referenceVideoPoints}（参考视频 ${pendingGenerateContext.seedancePointsBreakdown.referenceDuration}s）。`}
                   </div>
                 ) : null}
               </div>

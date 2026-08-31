@@ -6,6 +6,7 @@ import {
 } from "./image";
 import {
   DEFAULT_VIDEO_GENERATION_POINTS,
+  getSeedanceVideoGenerationPointsBreakdown,
   getVideoGenerationPoints,
   VIDEO_MODEL_POINTS,
 } from "./video";
@@ -13,6 +14,7 @@ import {
 export {
   DEFAULT_IMAGE_GENERATION_POINTS,
   DEFAULT_VIDEO_GENERATION_POINTS,
+  getSeedanceVideoGenerationPointsBreakdown,
   getImageGenerationPoints,
   getVideoGenerationPoints,
   IMAGE_MODEL_POINTS,

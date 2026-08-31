@@ -17,6 +17,79 @@ export const VIDEO_MODEL_POINTS: Record<string, number> = {
 
 export const DEFAULT_VIDEO_GENERATION_POINTS = 60;
 
+const POINTS_PER_YUAN = 60;
+const MAX_SEEDANCE_REFERENCE_VIDEO_DURATION = 15;
+
+const SEEDANCE_YUAN_RATES: Record<
+  string,
+  Record<string, { noReference: number; reference: [number, number] }>
+> = {
+  "seedance-2.0-mini": {
+    "480p": { noReference: 0.23, reference: [0.25, 0.28] },
+    "720p": { noReference: 0.5, reference: [0.53, 0.6] },
+  },
+  "seedance-2.0-fast": {
+    "480p": { noReference: 0.37, reference: [0.38, 0.44] },
+    "720p": { noReference: 0.8, reference: [0.83, 0.95] },
+  },
+  "seedance-2.0-pro": {
+    "480p": { noReference: 0.46, reference: [0.49, 0.56] },
+    "720p": { noReference: 0.99, reference: [1.05, 1.2] },
+    "1080p": { noReference: 2.47, reference: [2.63, 3.01] },
+    "4k": { noReference: 5.05, reference: [5.44, 6.22] },
+  },
+  "seedance-2.5": {
+    "480p": { noReference: 0.67, reference: [0.72, 2.82] },
+    "720p": { noReference: 1.51, reference: [1.63, 6.35] },
+    "1080p": { noReference: 3.74, reference: [4, 15.65] },
+  },
+};
+
+export const getSeedanceVideoGenerationPointsBreakdown = ({
+  model,
+  duration = 5,
+  resolution = "720p",
+  hasVideoInput = false,
+  videoReferenceDuration = 0,
+}: {
+  model?: string;
+  duration?: number;
+  resolution?: string;
+  hasVideoInput?: boolean;
+  videoReferenceDuration?: number;
+}) => {
+  const modelRates = model ? SEEDANCE_YUAN_RATES[model] : undefined;
+  if (!modelRates) return null;
+
+  const rate =
+    modelRates[resolution.toLowerCase()] ?? modelRates["720p"];
+  const generationDuration = Math.max(0, duration);
+  const referenceDuration = hasVideoInput
+    ? Math.max(0, Math.ceil(videoReferenceDuration))
+    : 0;
+  const isReferenceDurationOverLimit =
+    referenceDuration > MAX_SEEDANCE_REFERENCE_VIDEO_DURATION;
+  const billedReferenceDuration = Math.min(
+    referenceDuration,
+    MAX_SEEDANCE_REFERENCE_VIDEO_DURATION,
+  );
+  const yuanPerSecond = hasVideoInput
+    ? rate.reference[isReferenceDurationOverLimit ? 1 : 0]
+    : rate.noReference;
+  const generationPoints = yuanPerSecond * generationDuration * POINTS_PER_YUAN;
+  const referenceVideoPoints =
+    yuanPerSecond * billedReferenceDuration * POINTS_PER_YUAN;
+
+  return {
+    totalPoints: Math.ceil(generationPoints + referenceVideoPoints),
+    generationPoints: Math.ceil(generationPoints),
+    referenceVideoPoints: Math.ceil(referenceVideoPoints),
+    referenceDuration,
+    billedReferenceDuration,
+    isReferenceDurationOverLimit,
+  };
+};
+
 export const getVideoGenerationPoints = ({
   model,
   duration = 5, // 默认通常是 5 秒
@@ -36,6 +109,17 @@ export const getVideoGenerationPoints = ({
 }) => {
   let basePointsPerSecond =
     (model ? VIDEO_MODEL_POINTS[model] : undefined) ?? fallback;
+
+  const seedanceBreakdown = getSeedanceVideoGenerationPointsBreakdown({
+    model,
+    duration,
+    resolution,
+    hasVideoInput,
+    videoReferenceDuration,
+  });
+  if (seedanceBreakdown) {
+    return seedanceBreakdown.totalPoints;
+  }
 
   // 特殊逻辑：海外 Seedance 2.0 Pro。只有视频参考触发复刻价格，并把参考视频秒数计入总计费秒数。
   if (model === "dreamina-seedance-2-0-260128") {
@@ -73,12 +157,8 @@ export const getVideoGenerationPoints = ({
     return Math.max(rate * duration, 1);
   }
 
-  // 特殊逻辑：Seedance 2.0 系列
-  if (
-    model?.startsWith("doubao-seedance-2.0") ||
-    model?.startsWith("seedance-2.0") ||
-    model === "seedance-2.5"
-  ) {
+  // 特殊逻辑：旧版豆包 Seedance 2.0 系列
+  if (model?.startsWith("doubao-seedance-2.0")) {
     const isFast = model.includes("-fast");
     const isMini = model.includes("-mini");
     const res = resolution.toLowerCase();
