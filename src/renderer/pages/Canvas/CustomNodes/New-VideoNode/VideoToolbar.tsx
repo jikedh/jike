@@ -1590,6 +1590,7 @@ export const VideoToolbar = ({
               durationMs: data?.duration_ms,
               outputResolution: data?.output_resolution,
               outputFps: data?.output_fps,
+              kuaiziBillingAmount: data?.billing_amount,
             });
 
             if (savedVideoUrl) {

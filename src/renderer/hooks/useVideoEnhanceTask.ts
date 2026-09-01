@@ -108,6 +108,7 @@ export function useVideoEnhanceTask() {
           output_resolution: data?.output_resolution,
           output_fps: data?.output_fps,
           tool_version: data?.tool_version,
+          billing_amount: data?.billing_amount,
         };
 
         setState((prev) => ({

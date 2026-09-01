@@ -69,6 +69,7 @@ export type VideoEnhanceTaskResponse = {
   output_resolution?: string;
   output_fps?: number;
   tool_version?: string;
+  billing_amount?: string;
   score_cost?: number;
   for_score_cost?: number;
   vip_score_cost?: number;

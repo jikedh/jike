@@ -48,6 +48,7 @@ export interface VideoEnhanceTrackData {
   status: VideoEnhanceTrackStatus;
   errorMessage?: string;
   scoreCost?: number;
+  kuaiziBillingAmount?: string;
   timestamp: number;
 }
 
@@ -101,6 +102,7 @@ class AIVideoEnhanceTrackingService {
           status: trackData.status,
           errorMessage: trackData.errorMessage,
           scoreCost: trackData.scoreCost,
+          kuaiziBillingAmount: trackData.kuaiziBillingAmount,
           createTime: trackData.timestamp,
         },
         headers: {
@@ -125,6 +127,7 @@ class AIVideoEnhanceTrackingService {
       durationMs?: number;
       outputResolution?: string;
       outputFps?: number;
+      kuaiziBillingAmount?: string;
     },
   ): Promise<void> {
     if (!taskId || status === "PENDING") {
@@ -144,6 +147,7 @@ class AIVideoEnhanceTrackingService {
           durationMs: result?.durationMs,
           outputResolution: result?.outputResolution,
           outputFps: result?.outputFps,
+          kuaiziBillingAmount: result?.kuaiziBillingAmount,
           updateTime: Date.now(),
         },
         headers: {
@@ -207,6 +211,7 @@ class AIVideoEnhanceTrackingService {
       durationMs?: number;
       outputResolution?: string;
       outputFps?: number;
+      kuaiziBillingAmount?: string;
     };
   } {
     const statusMap: Record<VideoEnhanceStatus, VideoEnhanceTrackStatus> = {
@@ -223,6 +228,7 @@ class AIVideoEnhanceTrackingService {
         durationMs: response.duration_ms,
         outputResolution: response.output_resolution,
         outputFps: response.output_fps,
+        kuaiziBillingAmount: response.billing_amount,
       },
     };
   }

@@ -544,6 +544,7 @@ const updateVideoTrackFinalStatus = async (
   status: "SUCCESS" | "FAIL",
   errorMessage?: string,
   generatedVideoUrl?: string,
+  kuaiziBillingAmount?: string,
 ) => {
   if (!taskId) {
     return;
@@ -553,7 +554,18 @@ const updateVideoTrackFinalStatus = async (
     status,
     errorMessage,
     generatedVideoUrl,
+    kuaiziBillingAmount,
   );
+};
+
+const extractKuaiziBillingAmount = (response: any) => {
+  const payload = response?.data ?? response;
+  const billingAmount =
+    payload?.output?.billing_amount ??
+    payload?.data?.billing_amount ??
+    payload?.billing_amount;
+
+  return typeof billingAmount === "string" ? billingAmount : undefined;
 };
 
 const NANO_BANANA_MODEL_MAPPING: Record<string, Record<string, string>> = {
@@ -1413,6 +1425,8 @@ const pollVideoTaskGeneration = async (
       }
 
       const normalized = normalizeVideoTaskResponse(response);
+      const kuaiziBillingAmount =
+        isSeedance20 ? extractKuaiziBillingAmount(response) : undefined;
       const normalizedTaskId = normalized.taskId ?? taskId;
 
       if (normalized.status === GenerationStatus.COMPLETED) {
@@ -1534,6 +1548,7 @@ const pollVideoTaskGeneration = async (
           "SUCCESS",
           undefined,
           processedResultData[0]?.url,
+          kuaiziBillingAmount,
         );
 
         await refreshBalanceAfterGeneration({
@@ -1689,6 +1704,10 @@ const pollNewVideoGeneration = async ({
                   : await getDashscopeVideoTaskStatus(taskId);
 
       const normalized = normalizeVideoTaskResponse(response);
+      const kuaiziBillingAmount =
+        videoProvider === "seedance" || isSeedance20
+          ? extractKuaiziBillingAmount(response)
+          : undefined;
       if (projectId && projectId !== getState().projectId) {
         stopVideoPollingInternal(nodeId);
         return;
@@ -1813,6 +1832,7 @@ const pollNewVideoGeneration = async ({
           "SUCCESS",
           undefined,
           processedResultData[0]?.url,
+          kuaiziBillingAmount,
         );
 
         await refreshBalanceAfterGeneration({

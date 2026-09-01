@@ -18,6 +18,7 @@ export interface AIVideoTrackData {
   status: "SUCCESS" | "FAIL" | "PENDING";
   timestamp: number;
   scoreCost?: number;
+  kuaiziBillingAmount?: string;
 }
 
 type AIVideoTrackStatus = AIVideoTrackData["status"];
@@ -70,6 +71,8 @@ class AIVideoTrackingService {
           reference_image_url: trackData.referenceImageUrls,
           createTime: trackData.timestamp,
           scoreCost: trackData.scoreCost,
+          billing_amount: trackData.kuaiziBillingAmount,
+          kuaizi_billing_amount: trackData.kuaiziBillingAmount,
         },
       });
 
@@ -89,6 +92,7 @@ class AIVideoTrackingService {
     status: AIVideoTrackStatus,
     errorMessage?: string,
     generatedVideoUrl?: string,
+    kuaiziBillingAmount?: string,
   ): Promise<{ generatedVideoUrl?: string } | void> {
     if (!taskId || status === "PENDING") {
       return;
@@ -103,6 +107,8 @@ class AIVideoTrackingService {
           status,
           errorMessage,
           generated_video_url: generatedVideoUrl,
+          billing_amount: kuaiziBillingAmount,
+          kuaizi_billing_amount: kuaiziBillingAmount,
           updateTime: Date.now(),
         },
       });
