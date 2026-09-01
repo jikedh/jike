@@ -13,7 +13,7 @@ import {
 } from "@tabler/icons-react";
 import type { ChangeEvent, RefObject } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { uploadFileToOSS } from "service/oss";
+import { copyMediaUrlToOss, uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
 import { normalizeRequiredPoints } from "shared/constants/points";
 import type { NewVideoGenerationNode } from "shared/types/flow";
@@ -1579,20 +1579,24 @@ export const VideoToolbar = ({
 
           if (status === "succeeded") {
             const resultUrl = data?.video_url || "";
+            const ossUrl = resultUrl
+              ? await copyMediaUrlToOss(resultUrl)
+              : null;
+            const savedVideoUrl = ossUrl || resultUrl;
 
             // 埋点：超清成功
             aiVideoEnhanceTrackingService.updateStatus(taskId, "SUCCESS", {
-              generatedVideoUrl: resultUrl || undefined,
+              generatedVideoUrl: savedVideoUrl || undefined,
               durationMs: data?.duration_ms,
               outputResolution: data?.output_resolution,
               outputFps: data?.output_fps,
             });
 
-            if (resultUrl) {
+            if (savedVideoUrl) {
               const resultItem = withRemoteMediaRef(
                 withVideoPosterFields({
-                  url: resultUrl,
-                  remoteUrl: resultUrl,
+                  url: savedVideoUrl,
+                  remoteUrl: savedVideoUrl,
                   format: "mp4",
                 }),
               );
@@ -1605,7 +1609,9 @@ export const VideoToolbar = ({
                 },
                 error: undefined,
               } as any);
-              toast.success("视频超清完成");
+              toast.success(
+                ossUrl ? "视频超清完成" : "视频超清完成",
+              );
             }
             await useUserStore.getState().fetchBalanceInfo();
             clearPolling();
