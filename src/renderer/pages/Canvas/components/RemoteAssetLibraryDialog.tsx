@@ -35,7 +35,7 @@ import {
     type MouseEvent,
 } from "react";
 import { toast } from "sonner";
-import { getAssetCategories, getAssetPersonCategories } from "@/api/assets";
+import { getAssetPersonCategories } from "@/api/assets";
 import {
     CANVAS_REMOTE_ASSET_DRAG_MIME,
     CANVAS_REMOTE_ASSET_DRAG_TYPE,
@@ -43,13 +43,12 @@ import {
 } from "shared/constants/canvasDrag";
 import type {
     AssetScope,
-    AssetCategory,
     MediaType,
     PersonCategory,
-    PrimaryCategory,
 } from "shared/types/api/assets";
 import { cn } from "shared/utils/utils";
 import { Button } from "@/components/ui/button";
+import { TagFilterPanel } from "@/pages/Assets/components/TagFilterPanel";
 import {
     Select,
     SelectContent,
@@ -60,7 +59,6 @@ import {
 } from "@/components/ui/select";
 import { useRemoteAssetLibrary } from "../hooks/useRemoteAssetLibrary";
 import {
-    CATEGORY_LABEL_MAP,
     formatFileSize,
     formatTimestamp,
     getRemoteAssetCategoryLabel,
@@ -69,7 +67,6 @@ import {
     SCOPE_LABEL_MAP,
     type RemoteAsset,
 } from "../utils/remoteAssets";
-import { AssetCategoryCascadeSelect } from "./AssetCategoryCascadeSelect";
 
 export interface RemoteAssetLibraryDialogProps {
     open: boolean;
@@ -127,25 +124,6 @@ const MEDIA_OPTIONS: Array<{ id: MediaType; label: string }> = [
     { id: "video", label: MEDIA_LABEL_MAP.video },
     { id: "audio", label: MEDIA_LABEL_MAP.audio },
 ];
-
-const FALLBACK_CATEGORY_OPTIONS: AssetCategory[] = [
-    { id: "character", code: "character", name: CATEGORY_LABEL_MAP.character, sort: 10, status: 1 },
-    { id: "scene", code: "scene", name: CATEGORY_LABEL_MAP.scene, sort: 20, status: 1 },
-    { id: "prop", code: "prop", name: CATEGORY_LABEL_MAP.prop, sort: 30, status: 1 },
-];
-
-const getCategoryValue = (category: AssetCategory): PrimaryCategory =>
-    category.code || String(category.id);
-
-const hasCategoryValue = (
-    categories: AssetCategory[],
-    value: PrimaryCategory,
-): boolean =>
-    categories.some(
-        (category) =>
-            getCategoryValue(category) === value ||
-            hasCategoryValue(category.children || [], value),
-    );
 
 const PAGE_SIZE = 24;
 
@@ -414,12 +392,9 @@ export const RemoteAssetLibraryDialog = ({
     );
     // 过滤条件
     const [activeMediaType, setActiveMediaType] = useState<MediaType>("image");
-    const [activeCategory, setActiveCategory] = useState<PrimaryCategory | "all">(
-        "all",
-    );
-    const [categoryOptions, setCategoryOptions] = useState<AssetCategory[]>(FALLBACK_CATEGORY_OPTIONS);
     const [keyword, setKeyword] = useState("");
     const [keywordInput, setKeywordInput] = useState("");
+    const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [personCategories, setPersonCategories] = useState<PersonCategory[]>([]);
     const [personCategoryCode, setPersonCategoryCode] = useState("");
     const [page, setPage] = useState(1);
@@ -443,19 +418,13 @@ export const RemoteAssetLibraryDialog = ({
         [projectId],
     );
 
-    // 仅图片/视频支持主分类（音频忽略）
-    const supportsCategory = activeMediaType !== "audio";
-
     const libraryOptions = useMemo(
         () => ({
             projectId: projectId || null,
             scope: activeScope,
             mediaType: activeMediaType,
-            primaryCategory:
-                supportsCategory && activeCategory !== "all"
-                    ? activeCategory
-                    : undefined,
             keyword,
+            tags: selectedTags,
             personCategoryCode: personCategoryCode || undefined,
             page,
             pageSize: PAGE_SIZE,
@@ -464,7 +433,6 @@ export const RemoteAssetLibraryDialog = ({
             refreshToken: refreshKey,
         }),
         [
-            activeCategory,
             activeMediaType,
             activeScope,
             keyword,
@@ -472,7 +440,7 @@ export const RemoteAssetLibraryDialog = ({
             personCategoryCode,
             projectId,
             refreshKey,
-            supportsCategory,
+            selectedTags,
         ],
     );
 
@@ -523,33 +491,12 @@ export const RemoteAssetLibraryDialog = ({
     }, [open]);
 
     useEffect(() => {
-        if (!open) return;
-        let cancelled = false;
-        void getAssetCategories()
-            .then((envelope) => {
-                if (cancelled) return;
-                if ((envelope.code === 0 || envelope.code === 200) && Array.isArray(envelope.data) && envelope.data.length > 0) {
-                    setCategoryOptions(envelope.data);
-                    setActiveCategory((current) =>
-                        current !== "all" && !hasCategoryValue(envelope.data, current)
-                            ? "all"
-                            : current,
-                    );
-                }
-            })
-            .catch(() => undefined);
-        return () => {
-            cancelled = true;
-        };
-    }, [open]);
-
-    useEffect(() => {
         // 切换条件时重置选择 / 翻页
         setSelectedIds([]);
         setPreviewAssetId(null);
         selectionAnchorRef.current = null;
         setPage(1);
-    }, [activeScope, activeMediaType, activeCategory, keyword, personCategoryCode]);
+    }, [activeScope, activeMediaType, keyword, personCategoryCode, selectedTags]);
 
     useEffect(() => {
         if (!contextMenu) return;
@@ -840,13 +787,13 @@ export const RemoteAssetLibraryDialog = ({
             role="dialog"
             aria-modal="true"
             aria-label="远程资产库"
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 px-6 py-8 backdrop-blur-sm"
+            className="fixed inset-0 z-70 flex bg-[#15151a]"
             onDragOver={handleOverlayDragOver}
             onDrop={handleOverlayDrop}
         >
             <div
                 ref={panelRef}
-                className="noflow nodrag nopan nowheel flex h-[min(820px,92vh)] w-[min(1240px,94vw)] flex-col overflow-hidden rounded-xl border border-white/8 bg-[#15151a] text-white shadow-2xl"
+                className="noflow nodrag nopan nowheel flex size-full flex-col overflow-hidden bg-[#15151a] text-white"
             >
                 {/* Header: scope tabs + 关闭 */}
                 <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/8 px-6">
@@ -909,18 +856,6 @@ export const RemoteAssetLibraryDialog = ({
                         ))}
                     </div>
 
-                    {supportsCategory ? (
-                        <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-white/35">分类</span>
-                            <AssetCategoryCascadeSelect
-                                categories={categoryOptions}
-                                value={activeCategory}
-                                onChange={setActiveCategory}
-                                includeAll
-                            />
-                        </div>
-                    ) : null}
-
                     <div className="flex items-center gap-1.5">
                         <span className="text-xs text-white/35">人员分类</span>
                         <Select
@@ -981,17 +916,57 @@ export const RemoteAssetLibraryDialog = ({
                     </form>
                 </div>
 
-                {/* Body: 网格 + 详情 */}
-                <div className="flex min-h-0 flex-1 gap-5 overflow-hidden px-6 py-5">
-                    <div className="asset-library-scrollbar min-w-0 flex-1 overflow-y-auto">
-                        {renderGrid()}
+                {/* Body: 标签筛选 + 网格 + 详情 */}
+                <div className="flex min-h-0 flex-1 overflow-hidden">
+                    <aside className="flex w-80 shrink-0 border-r border-white/8">
+                        <TagFilterPanel
+                            layout="sidebar"
+                            selectedTags={selectedTags}
+                            onTagsChange={setSelectedTags}
+                        />
+                    </aside>
+                    <div className="flex min-w-0 flex-1 gap-5 overflow-hidden px-6 py-5">
+                        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                            {selectedTags.length > 0 ? (
+                                <div className="mb-3 flex shrink-0 flex-wrap items-center gap-1.5">
+                                    <span className="mr-1 text-xs text-white/40">
+                                        已选标签
+                                    </span>
+                                    {selectedTags.map((tag) => (
+                                        <button
+                                            key={tag}
+                                            type="button"
+                                            onClick={() =>
+                                                setSelectedTags((current) =>
+                                                    current.filter((item) => item !== tag),
+                                                )
+                                            }
+                                            className="inline-flex items-center gap-1 rounded-md border border-[#B43FEB]/40 bg-[#B43FEB]/15 px-2 py-0.5 text-[11px] text-[#d486ff] hover:bg-[#B43FEB]/25"
+                                        >
+                                            {tag}
+                                            <IconX size={10} />
+                                        </button>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedTags([])}
+                                        className="ml-1 text-[11px] text-white/45 hover:text-white"
+                                    >
+                                        清空
+                                    </button>
+                                </div>
+                            ) : null}
+                            <div className="asset-library-scrollbar min-h-0 flex-1 overflow-y-auto">
+                                {renderGrid()}
+                            </div>
+                        </div>
+                        <AssetDetailPanel
+                            asset={previewAsset}
+                            currentUserId={currentUserId}
+                            onClose={() => setPreviewAssetId(null)}
+                            onRequestDelete={(asset) => requestDeleteAssets([asset])}
+                        />
                     </div>
-                    <AssetDetailPanel
-                        asset={previewAsset}
-                        currentUserId={currentUserId}
-                        onClose={() => setPreviewAssetId(null)}
-                        onRequestDelete={(asset) => requestDeleteAssets([asset])}
-                    />
                 </div>
 
                 {/* Footer: 分页 + 选择操作 */}

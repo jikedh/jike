@@ -26,6 +26,8 @@ interface TagFilterPanelProps {
     selectedTags: string[];
     /** 选中标签变化回调 */
     onTagsChange: (tags: string[]) => void;
+    /** 左侧栏布局仅展示标签体系，已选标签由资产列表区域展示 */
+    layout?: "horizontal" | "sidebar";
 }
 
 // ===================== 主组件 =====================
@@ -42,6 +44,7 @@ interface TagFilterPanelProps {
 export const TagFilterPanel = ({
     selectedTags,
     onTagsChange,
+    layout = "horizontal",
 }: TagFilterPanelProps) => {
     const [activeCategoryKey, setActiveCategoryKey] = useState(
         ASSET_TAG_TAXONOMY[0].key,
@@ -57,6 +60,7 @@ export const TagFilterPanel = ({
         ) ?? ASSET_TAG_TAXONOMY[0];
     const isOtherCategory = activeCategoryKey === OTHER_CATEGORY_KEY;
     const hasSelection = selectedTags.length > 0;
+    const isSidebar = layout === "sidebar";
 
     // 「其他」分类：聚合后端公共资产标签，排除内置静态标签后展示
     useEffect(() => {
@@ -96,7 +100,14 @@ export const TagFilterPanel = ({
     };
 
     return (
-        <section className="shrink-0 border-b border-white/8 px-6 py-3">
+        <section
+            className={cn(
+                "flex shrink-0 flex-col",
+                isSidebar
+                    ? "min-h-0 flex-1 px-5 py-5"
+                    : "border-b border-white/8 px-6 py-3",
+            )}
+        >
             {/* 头部：大类切换 + 操作区 */}
             <div className="flex flex-wrap items-center gap-2">
                 <span className="flex items-center gap-1.5 text-xs text-white/35">
@@ -135,24 +146,31 @@ export const TagFilterPanel = ({
                             </button>
                         </>
                     ) : null}
-                    <button
-                        type="button"
-                        onClick={() => setExpanded((current) => !current)}
-                        className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-white/55 transition-colors hover:bg-white/8 hover:text-white"
-                    >
-                        {expanded ? "收起" : "展开"}
-                        {expanded ? (
-                            <IconChevronUp size={12} />
-                        ) : (
-                            <IconChevronDown size={12} />
-                        )}
-                    </button>
+                    {!isSidebar ? (
+                        <button
+                            type="button"
+                            onClick={() => setExpanded((current) => !current)}
+                            className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-white/55 transition-colors hover:bg-white/8 hover:text-white"
+                        >
+                            {expanded ? "收起" : "展开"}
+                            {expanded ? (
+                                <IconChevronUp size={12} />
+                            ) : (
+                                <IconChevronDown size={12} />
+                            )}
+                        </button>
+                    ) : null}
                 </div>
             </div>
 
             {/* 标签分组：行内标签云；「其他」分类展示动态聚合标签 */}
-            {expanded ? (
-                <div className="asset-library-scrollbar mt-3 flex max-h-52 flex-col gap-2.5 overflow-y-auto pr-1">
+            {expanded || isSidebar ? (
+                <div
+                    className={cn(
+                        "asset-library-scrollbar mt-3 flex flex-col gap-2.5 overflow-y-auto pr-1",
+                        isSidebar ? "min-h-0 flex-1" : "max-h-52",
+                    )}
+                >
                     {isOtherCategory ? (
                         <div className="flex flex-wrap gap-1.5">
                             {otherTagsLoading ? (
@@ -217,7 +235,7 @@ export const TagFilterPanel = ({
             ) : null}
 
             {/* 已选标签回显 */}
-            {hasSelection ? (
+            {hasSelection && !isSidebar ? (
                 <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                     {selectedTags.map((tag) => (
                         <span
