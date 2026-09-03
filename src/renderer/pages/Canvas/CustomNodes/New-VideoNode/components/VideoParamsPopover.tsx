@@ -329,7 +329,7 @@ export const VideoParamsPopover = ({
         align="start"
         side="top"
         sideOffset={8}
-        className="w-80 border border-neutral-700 bg-neutral-900 p-4 shadow-xl"
+        className="z-10000 w-80 border border-neutral-700 bg-neutral-900 p-4 shadow-xl"
       >
         <div className="space-y-5">
           {config.aspectRatios ? (

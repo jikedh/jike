@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { cn } from "shared/utils/utils";
 
 import { PROMPT_PANEL_STYLES } from "../../shared/promptPanelStyles";
 import {
@@ -92,7 +93,12 @@ export const BottomParamsBar = ({
           <SelectTrigger size="sm" className={PROMPT_PANEL_STYLES.modelSelect}>
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
+          <SelectContent
+            className={cn(
+              PROMPT_PANEL_STYLES.modelSelectContent,
+              "z-10000",
+            )}
+          >
             {modelOptions.map((model) => (
               <SelectItem
                 key={model.value}

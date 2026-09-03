@@ -1,6 +1,12 @@
 import { arrayMove } from "@dnd-kit/sortable";
-import { IconSparkles, IconWand } from "@tabler/icons-react";
+import {
+  IconArrowsMaximize,
+  IconArrowsMinimize,
+  IconSparkles,
+  IconWand,
+} from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createChatCompletion } from "@/api/ai";
 import { GenerationStatus } from "shared/constants/enum";
 import {
@@ -45,6 +51,7 @@ import {
   type VideoGenerateRequest
 } from "./components/BottomParamsBar";
 import { ModeToggleBar } from "./components/ModeToggleBar";
+import { VideoPromptModal } from "./components/VideoPromptModal";
 import { ReferenceThumbnails } from "./components/ReferenceThumbnails";
 import {
   WanReferenceVoiceSlot,
@@ -511,6 +518,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     setPendingGenerateContext,
   ] = useState<PendingVideoGenerateContext | null>(null);
   const isGenerateConfirmOpen = pendingGenerateContext !== null;
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const storedOptimizeSystemPrompt = useMemo(() => {
     const value = (currentData?.metadata ?? {})[
@@ -539,6 +547,21 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       setDraftOptimizeSystemPrompt(storedOptimizeSystemPrompt);
     }
   }, [isPromptOptimizePopoverOpen, storedOptimizeSystemPrompt]);
+
+  useEffect(() => {
+    if (!isExpanded) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsExpanded(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isExpanded]);
 
   useEffect(() => {
     return () => {
@@ -2114,186 +2137,226 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     ],
   );
 
-  return (
-    <TooltipProvider>
-      <div className={PROMPT_PANEL_STYLES.container}>
-        <div className={PROMPT_PANEL_STYLES.inputArea}>
-          <div className="flex min-h-8 items-center gap-3 overflow-visible">
-            <ModeToggleBar
-              modeStates={modeStates}
-              activeMode={activeMode}
-              onModeChange={(key) => handleModeChange(key as VideoModeKey)}
-            />
-            {wan30ReferenceSummary ? (
-              <span className="ml-auto text-[11px] text-white/40">
-                {wan30ReferenceSummary}
-              </span>
-            ) : null}
-          </div>
+  const panelContent = (
+    <div
+      className={cn(
+        PROMPT_PANEL_STYLES.container,
+        isExpanded && "h-full min-h-0 min-w-0 overflow-hidden",
+      )}
+      style={isExpanded ? { width: "100%", height: "100%" } : undefined}
+    >
+      <div
+        className={cn(
+          PROMPT_PANEL_STYLES.inputArea,
+          isExpanded && "min-h-0 flex-1",
+        )}
+      >
+        <div className="flex min-h-8 items-center gap-3 overflow-visible pr-9">
+          <ModeToggleBar
+            modeStates={modeStates}
+            activeMode={activeMode}
+            onModeChange={(key) => handleModeChange(key as VideoModeKey)}
+          />
+          {wan30ReferenceSummary ? (
+            <span className="ml-auto text-[11px] text-white/40">
+              {wan30ReferenceSummary}
+            </span>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          aria-label={isExpanded ? "缩小提示词面板" : "放大提示词面板"}
+          title={isExpanded ? "缩小提示词面板" : "放大提示词面板"}
+          className="nodrag nopan nowheel absolute top-0 right-0 flex h-8 w-8 items-center justify-center rounded-lg border border-white/8 bg-white/4 text-white/55 transition-colors hover:border-[#B43FEB]/40 hover:bg-[#B43FEB]/15 hover:text-white"
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            setIsExpanded((current) => !current);
+          }}
+        >
+          {isExpanded ? (
+            <IconArrowsMinimize size={16} />
+          ) : (
+            <IconArrowsMaximize size={16} />
+          )}
+        </button>
 
-          <VideoReferenceAssetsBar
-            referenceImageUrls={localReferenceImageUrls}
-            referenceImageIndexes={localReferenceImageIndexes}
-            parentImageNodes={parentImageNodes}
-            parentAudioNodes={parentAudioNodes}
-            parentVideoNodes={parentVideoNodes}
-            expanded={isWanReferenceVoiceMode}
-            referenceContent={
-              displayReferenceItems.length > 0 ? (
-                <ReferenceThumbnails
-                  items={displayReferenceItems}
-                  onReorder={handleReferenceReorder}
-                  onRemove={handleSortableReferenceRemove}
-                  onHoverChange={handleSortableReferenceHoverChange}
-                  expanded={isWanReferenceVoiceMode}
-                  renderItemAccessory={(item) => {
-                    if (
-                      !isWanReferenceVoiceMode ||
-                      (item.type !== "image" && item.type !== "video")
-                    ) {
-                      return undefined;
-                    }
-                    const binding =
-                      effectiveWanReferenceVoiceBindings[item.id];
-                    return (
-                      <WanReferenceVoiceSlot
-                        binding={binding}
-                        isUploading={uploadingReferenceVoiceId === item.id}
-                        isPlaying={playingReferenceVoiceId === item.id}
-                        onUpload={(file) =>
-                          handleWanReferenceVoiceUpload(item.id, file)
-                        }
-                        onRemove={() =>
-                          removeWanReferenceVoiceBinding(item.id)
-                        }
-                        onPreview={() =>
-                          binding &&
-                          handleWanReferenceVoicePreview(item.id, binding)
-                        }
-                        onDownload={() =>
-                          binding &&
-                          handleWanReferenceVoiceDownload(binding)
-                        }
-                      />
-                    );
-                  }}
-                />
-              ) : undefined
+        <VideoReferenceAssetsBar
+          referenceImageUrls={localReferenceImageUrls}
+          referenceImageIndexes={localReferenceImageIndexes}
+          parentImageNodes={parentImageNodes}
+          parentAudioNodes={parentAudioNodes}
+          parentVideoNodes={parentVideoNodes}
+          expanded={isWanReferenceVoiceMode}
+          referenceContent={
+            displayReferenceItems.length > 0 ? (
+              <ReferenceThumbnails
+                items={displayReferenceItems}
+                onReorder={handleReferenceReorder}
+                onRemove={handleSortableReferenceRemove}
+                onHoverChange={handleSortableReferenceHoverChange}
+                expanded={isWanReferenceVoiceMode}
+                renderItemAccessory={(item) => {
+                  if (
+                    !isWanReferenceVoiceMode ||
+                    (item.type !== "image" && item.type !== "video")
+                  ) {
+                    return undefined;
+                  }
+                  const binding =
+                    effectiveWanReferenceVoiceBindings[item.id];
+                  return (
+                    <WanReferenceVoiceSlot
+                      binding={binding}
+                      isUploading={uploadingReferenceVoiceId === item.id}
+                      isPlaying={playingReferenceVoiceId === item.id}
+                      onUpload={(file) =>
+                        handleWanReferenceVoiceUpload(item.id, file)
+                      }
+                      onRemove={() =>
+                        removeWanReferenceVoiceBinding(item.id)
+                      }
+                      onPreview={() =>
+                        binding &&
+                        handleWanReferenceVoicePreview(item.id, binding)
+                      }
+                      onDownload={() =>
+                        binding &&
+                        handleWanReferenceVoiceDownload(binding)
+                      }
+                    />
+                  );
+                }}
+              />
+            ) : undefined
+          }
+          onDisconnectNode={handleDisconnectNode}
+          onRemoveReferenceImage={handleRemoveReferenceImage}
+          onReferenceHoverChange={handleReferenceHoverChange}
+        />
+
+        <div
+          className={cn(
+            PROMPT_PANEL_STYLES.textAreaWrap,
+            "relative",
+            isExpanded &&
+            "flex min-h-0 flex-1 flex-col [&>div]:min-h-0 [&>div]:flex-1 [&_.ProseMirror]:h-full [&_.ProseMirror]:max-h-none",
+          )}
+        >
+          <VideoPromptEditor
+            ref={editorRef}
+            promptDraftHtml={promptDraftHtml}
+            isEditable={!isOptimizingPrompt}
+            nodeId={nodeId}
+            projectId={projectId}
+            mentionItems={
+              editorMentionItems.length > 0
+                ? editorMentionItems
+                : videoMentionItems
             }
-            onDisconnectNode={handleDisconnectNode}
-            onRemoveReferenceImage={handleRemoveReferenceImage}
-            onReferenceHoverChange={handleReferenceHoverChange}
+            onDraftChange={handleDraftChange}
           />
 
-          <div className={cn(PROMPT_PANEL_STYLES.textAreaWrap, "relative")}>
-            <VideoPromptEditor
-              ref={editorRef}
-              promptDraftHtml={promptDraftHtml}
-              isEditable={!isOptimizingPrompt}
-              nodeId={nodeId}
-              projectId={projectId}
-              mentionItems={
-                editorMentionItems.length > 0
-                  ? editorMentionItems
-                  : videoMentionItems
-              }
-              onDraftChange={handleDraftChange}
-            />
+          <div
+            className="nodrag nopan nowheel pointer-events-auto absolute bottom-2 right-2 z-10"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="优化提示词"
+                title="左键：优化提示词；右键：编辑系统提示词"
+                disabled={isOptimizingPrompt}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (event.button === 2) return;
+                  void handleOptimizePrompt();
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsPromptOptimizePopoverOpen((prev) => !prev);
+                }}
+                className={cn(
+                  "flex h-8 w-8 items-center justify-center rounded-full border text-white/80 transition-colors",
+                  "border-white/8 bg-white/4 hover:border-[#B43FEB]/40 hover:bg-[#B43FEB]/15 hover:text-white",
+                  isOptimizingPrompt
+                    ? "cursor-wait opacity-60"
+                    : "active:scale-95",
+                )}
+              >
+                {isOptimizingPrompt ? (
+                  <IconSparkles
+                    size={14}
+                    className="animate-pulse text-[#B43FEB]"
+                  />
+                ) : (
+                  <IconWand size={14} />
+                )}
+              </button>
 
-            <div
-              className="nodrag nopan nowheel pointer-events-auto absolute bottom-2 right-2 z-10"
-              onMouseDown={(event) => event.stopPropagation()}
-            >
-              <div className="relative">
-                <button
-                  type="button"
-                  aria-label="优化提示词"
-                  title="左键：优化提示词；右键：编辑系统提示词"
-                  disabled={isOptimizingPrompt}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    if (event.button === 2) return;
-                    void handleOptimizePrompt();
-                  }}
-                  onContextMenu={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setIsPromptOptimizePopoverOpen((prev) => !prev);
-                  }}
-                  className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-full border text-white/80 transition-colors",
-                    "border-white/8 bg-white/4 hover:border-[#B43FEB]/40 hover:bg-[#B43FEB]/15 hover:text-white",
-                    isOptimizingPrompt
-                      ? "cursor-wait opacity-60"
-                      : "active:scale-95",
-                  )}
+              {isPromptOptimizePopoverOpen ? (
+                <div
+                  role="dialog"
+                  aria-label="优化系统提示词配置"
+                  className="nodrag nopan nowheel absolute bottom-12 right-0 z-9999 w-[320px] rounded-xl border border-white/8 bg-[#1e1e20] p-3 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
                 >
-                  {isOptimizingPrompt ? (
-                    <IconSparkles
-                      size={14}
-                      className="animate-pulse text-[#B43FEB]"
-                    />
-                  ) : (
-                    <IconWand size={14} />
-                  )}
-                </button>
-
-                {isPromptOptimizePopoverOpen ? (
-                  <div
-                    role="dialog"
-                    aria-label="优化系统提示词配置"
-                    className="nodrag nopan nowheel absolute bottom-12 right-0 z-9999 w-[320px] rounded-xl border border-white/8 bg-[#1e1e20] p-3 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]"
-                    onMouseDown={(event) => event.stopPropagation()}
+                  <div className="mb-2 text-xs font-medium text-white/80">
+                    优化系统提示词
+                  </div>
+                  <textarea
+                    className="nodrag nopan nowheel min-h-40 max-h-70 w-full resize-none rounded-lg border border-white/6 bg-white/2 p-2 text-xs leading-6 text-white/90 outline-none placeholder:text-white/30 focus:border-[#B43FEB]/40"
+                    value={draftOptimizeSystemPrompt}
+                    onChange={(event) =>
+                      setDraftOptimizeSystemPrompt(event.target.value)
+                    }
                     onClick={(event) => event.stopPropagation()}
-                  >
-                    <div className="mb-2 text-xs font-medium text-white/80">
-                      优化系统提示词
-                    </div>
-                    <textarea
-                      className="nodrag nopan nowheel min-h-40 max-h-70 w-full resize-none rounded-lg border border-white/6 bg-white/2 p-2 text-xs leading-6 text-white/90 outline-none placeholder:text-white/30 focus:border-[#B43FEB]/40"
-                      value={draftOptimizeSystemPrompt}
-                      onChange={(event) =>
-                        setDraftOptimizeSystemPrompt(event.target.value)
-                      }
-                      onClick={(event) => event.stopPropagation()}
-                      onMouseDown={(event) => event.stopPropagation()}
-                      placeholder="输入优化提示词时使用的系统提示词"
-                    />
-                    <div className="mt-2 flex items-center justify-between gap-2">
+                    onMouseDown={(event) => event.stopPropagation()}
+                    placeholder="输入优化提示词时使用的系统提示词"
+                  />
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={handleResetOptimizeSystemPrompt}
+                      className="text-[11px] text-white/50 transition-colors hover:text-white/80"
+                    >
+                      恢复默认
+                    </button>
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={handleResetOptimizeSystemPrompt}
-                        className="text-[11px] text-white/50 transition-colors hover:text-white/80"
+                        onClick={() => setIsPromptOptimizePopoverOpen(false)}
+                        className="rounded-md border border-white/8 bg-transparent px-3 py-1 text-[11px] text-white/60 transition-colors hover:border-white/20 hover:text-white"
                       >
-                        恢复默认
+                        取消
                       </button>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setIsPromptOptimizePopoverOpen(false)}
-                          className="rounded-md border border-white/8 bg-transparent px-3 py-1 text-[11px] text-white/60 transition-colors hover:border-white/20 hover:text-white"
-                        >
-                          取消
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleSaveOptimizeSystemPrompt}
-                          className="rounded-md border border-[#B43FEB]/40 bg-[#B43FEB] px-3 py-1 text-[11px] font-medium text-white transition-colors hover:bg-[#B43FEB]/80"
-                        >
-                          保存
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSaveOptimizeSystemPrompt}
+                        className="rounded-md border border-[#B43FEB]/40 bg-[#B43FEB] px-3 py-1 text-[11px] font-medium text-white transition-colors hover:bg-[#B43FEB]/80"
+                      >
+                        保存
+                      </button>
                     </div>
                   </div>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
+      </div>
 
-        <div className={PROMPT_PANEL_STYLES.divider} />
+      <div
+        className={cn(
+          PROMPT_PANEL_STYLES.divider,
+          isExpanded && "shrink-0",
+        )}
+      />
 
+      <div className={isExpanded ? "shrink-0" : undefined}>
         <BottomParamsBar
           selectedModel={selectedModel}
           modelOptions={videoModelOptions}
@@ -2363,126 +2426,140 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
             </>
           }
         />
-        <Dialog
-          open={isGenerateConfirmOpen}
-          onOpenChange={(open) => {
-            if (!open) {
-              setPendingGenerateContext(null);
-            }
-          }}
-        >
-          <DialogContent className="w-[min(520px,92vw)] rounded-lg border border-white/[0.08] bg-[#1e1e20] p-0 text-white shadow-[0_25px_80px_-30px_rgba(0,0,0,0.8)]">
-            <DialogHeader className="border-b border-white/[0.08] px-5 py-4">
-              <DialogTitle className="text-base font-medium text-white">
-                确认生成视频
-              </DialogTitle>
-              <DialogDescription className="text-xs text-white/50">
-                {pendingGenerateContext &&
-                  KUAIZI_VIDEO_MODELS.has(pendingGenerateContext.fullRequest.model)
-                  ? "确认后将进入 5 秒可停止窗口；任务完成后将按实际用量扣除积分。"
-                  : "确认后将进入 5 秒可停止窗口，窗口结束后才会创建任务并扣除积分。"}
-              </DialogDescription>
-            </DialogHeader>
-
-            {pendingGenerateContext ? (
-              <div className="px-5 py-4">
-                <div className="grid grid-cols-2 gap-x-5 gap-y-3 text-sm">
-                  <div>
-                    <div className="mb-1 text-xs text-white/40">模型</div>
-                    <div className="truncate text-white/90">
-                      {pendingGenerateContext.modelLabel}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="mb-1 text-xs text-white/40">模式</div>
-                    <div className="text-white/90">
-                      {pendingGenerateContext.modeLabel}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="mb-1 text-xs text-white/40">分辨率</div>
-                    <div className="text-white/90">
-                      {pendingGenerateContext.resolution ?? "-"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="mb-1 text-xs text-white/40">时长</div>
-                    <div className="text-white/90">
-                      {pendingGenerateContext.duration}s
-                    </div>
-                  </div>
-                  <div>
-                    <div className="mb-1 text-xs text-white/40">生成音频</div>
-                    <div className="text-white/90">
-                      {pendingGenerateContext.generateAudio ? "是" : "否"}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="mb-1 text-xs text-white/40">预计消耗</div>
-                    <div className="font-medium text-[#B43FEB]">
-                      {pendingGenerateContext.requiredPoints} 积分
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-white/65">
-                  参考素材：图片 {pendingGenerateContext.referenceCounts.image}，
-                  视频 {pendingGenerateContext.referenceCounts.video}，音频{" "}
-                  {pendingGenerateContext.referenceCounts.audio}
-                </div>
-
-                {pendingGenerateContext.fullRequest.model ===
-                  OVERSEAS_SEEDANCE_MODEL &&
-                  pendingGenerateContext.referenceCounts.video > 0 ? (
-                  <div className="mt-2 rounded-lg border border-[#B43FEB]/20 bg-[#B43FEB]/10 px-3 py-2 text-xs leading-5 text-white/70">
-                    海外 Seedance 视频参考计费：生成{" "}
-                    {pendingGenerateContext.duration}s + 参考视频{" "}
-                    {pendingGenerateContext.overseasReferenceDurationSeconds}s。
-                  </div>
-                ) : null}
-
-                {pendingGenerateContext.seedancePointsBreakdown ? (
-                  <div
-                    className={cn(
-                      "mt-2 rounded-lg border px-3 py-2 text-xs leading-5",
-                      pendingGenerateContext.seedancePointsBreakdown
-                        .isReferenceDurationOverLimit
-                        ? "border-amber-300/30 bg-amber-300/10 text-amber-100"
-                        : "border-[#B43FEB]/20 bg-[#B43FEB]/10 text-white/70",
-                    )}
-                  >
-                    {pendingGenerateContext.seedancePointsBreakdown
-                      .isReferenceDurationOverLimit
-                      ? `参考视频时长超过15秒，将按最高标准计算积分（${pendingGenerateContext.requiredPoints} 积分）。`
-                      : `积分依据：基础模型积分 ${pendingGenerateContext.seedancePointsBreakdown.generationPoints} + 参考视频时长积分 ${pendingGenerateContext.seedancePointsBreakdown.referenceVideoPoints}（参考视频 ${pendingGenerateContext.seedancePointsBreakdown.referenceDuration}s）。`}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            <DialogFooter className="mt-0 border-t border-white/[0.08] px-5 py-4">
-              <button
-                type="button"
-                onClick={() => setPendingGenerateContext(null)}
-                className="rounded-md border border-white/[0.08] bg-transparent px-4 py-2 text-sm text-white/65 transition-colors hover:border-white/20 hover:text-white"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (pendingGenerateContext) {
-                    void executeConfirmedGenerate(pendingGenerateContext);
-                  }
-                }}
-                className="rounded-md bg-[#B43FEB] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#9F35D4]"
-              >
-                确认生成
-              </button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
+      <Dialog
+        open={isGenerateConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingGenerateContext(null);
+          }
+        }}
+      >
+        <DialogContent
+          overlayClassName="z-10000"
+          className="z-10001 w-[min(520px,92vw)] rounded-lg border border-white/[0.08] bg-[#1e1e20] p-0 text-white shadow-[0_25px_80px_-30px_rgba(0,0,0,0.8)]"
+        >
+          <DialogHeader className="border-b border-white/[0.08] px-5 py-4">
+            <DialogTitle className="text-base font-medium text-white">
+              确认生成视频
+            </DialogTitle>
+            <DialogDescription className="text-xs text-white/50">
+              {pendingGenerateContext &&
+                KUAIZI_VIDEO_MODELS.has(pendingGenerateContext.fullRequest.model)
+                ? "确认后将进入 5 秒可停止窗口；任务完成后将按实际用量扣除积分。"
+                : "确认后将进入 5 秒可停止窗口，窗口结束后才会创建任务并扣除积分。"}
+            </DialogDescription>
+          </DialogHeader>
+
+          {pendingGenerateContext ? (
+            <div className="px-5 py-4">
+              <div className="grid grid-cols-2 gap-x-5 gap-y-3 text-sm">
+                <div>
+                  <div className="mb-1 text-xs text-white/40">模型</div>
+                  <div className="truncate text-white/90">
+                    {pendingGenerateContext.modelLabel}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 text-xs text-white/40">模式</div>
+                  <div className="text-white/90">
+                    {pendingGenerateContext.modeLabel}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 text-xs text-white/40">分辨率</div>
+                  <div className="text-white/90">
+                    {pendingGenerateContext.resolution ?? "-"}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 text-xs text-white/40">时长</div>
+                  <div className="text-white/90">
+                    {pendingGenerateContext.duration}s
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 text-xs text-white/40">生成音频</div>
+                  <div className="text-white/90">
+                    {pendingGenerateContext.generateAudio ? "是" : "否"}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 text-xs text-white/40">预计消耗</div>
+                  <div className="font-medium text-[#B43FEB]">
+                    {pendingGenerateContext.requiredPoints} 积分
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-xs text-white/65">
+                参考素材：图片 {pendingGenerateContext.referenceCounts.image}，
+                视频 {pendingGenerateContext.referenceCounts.video}，音频{" "}
+                {pendingGenerateContext.referenceCounts.audio}
+              </div>
+
+              {pendingGenerateContext.fullRequest.model ===
+                OVERSEAS_SEEDANCE_MODEL &&
+                pendingGenerateContext.referenceCounts.video > 0 ? (
+                <div className="mt-2 rounded-lg border border-[#B43FEB]/20 bg-[#B43FEB]/10 px-3 py-2 text-xs leading-5 text-white/70">
+                  海外 Seedance 视频参考计费：生成{" "}
+                  {pendingGenerateContext.duration}s + 参考视频{" "}
+                  {pendingGenerateContext.overseasReferenceDurationSeconds}s。
+                </div>
+              ) : null}
+
+              {pendingGenerateContext.seedancePointsBreakdown ? (
+                <div
+                  className={cn(
+                    "mt-2 rounded-lg border px-3 py-2 text-xs leading-5",
+                    pendingGenerateContext.seedancePointsBreakdown
+                      .isReferenceDurationOverLimit
+                      ? "border-amber-300/30 bg-amber-300/10 text-amber-100"
+                      : "border-[#B43FEB]/20 bg-[#B43FEB]/10 text-white/70",
+                  )}
+                >
+                  {pendingGenerateContext.seedancePointsBreakdown
+                    .isReferenceDurationOverLimit
+                    ? `参考视频时长超过15秒，将按最高标准计算积分（${pendingGenerateContext.requiredPoints} 积分）。`
+                    : `积分依据：基础模型积分 ${pendingGenerateContext.seedancePointsBreakdown.generationPoints} + 参考视频时长积分 ${pendingGenerateContext.seedancePointsBreakdown.referenceVideoPoints}（参考视频 ${pendingGenerateContext.seedancePointsBreakdown.referenceDuration}s）。`}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <DialogFooter className="mt-0 border-t border-white/[0.08] px-5 py-4">
+            <button
+              type="button"
+              onClick={() => setPendingGenerateContext(null)}
+              className="rounded-md border border-white/[0.08] bg-transparent px-4 py-2 text-sm text-white/65 transition-colors hover:border-white/20 hover:text-white"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (pendingGenerateContext) {
+                  void executeConfirmedGenerate(pendingGenerateContext);
+                }
+              }}
+              className="rounded-md bg-[#B43FEB] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#9F35D4]"
+            >
+              确认生成
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+
+  return (
+    <TooltipProvider>
+      {isExpanded
+        ? createPortal(
+          <VideoPromptModal>{panelContent}</VideoPromptModal>,
+          document.body,
+        )
+        : panelContent}
     </TooltipProvider>
   );
 };
