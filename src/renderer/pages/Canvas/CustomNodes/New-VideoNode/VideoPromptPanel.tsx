@@ -1916,6 +1916,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         return;
       }
       setPendingGenerateContext(null);
+      setIsExpanded(false);
       const { fullRequest, apiRequest } = context;
       updateNewVideoNodeData(nodeId, {
         model: fullRequest.model,
