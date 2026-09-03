@@ -1,5 +1,10 @@
 ﻿import { arrayMove } from "@dnd-kit/sortable";
-import { IconPhoto, IconX } from "@tabler/icons-react";
+import {
+  IconArrowsMaximize,
+  IconArrowsMinimize,
+  IconPhoto,
+  IconX,
+} from "@tabler/icons-react";
 import Mention from "@tiptap/extension-mention";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -39,6 +44,7 @@ import useMessage from "@/hooks/useMessage";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
 import { PROMPT_PANEL_STYLES } from "../shared/promptPanelStyles";
+import { ResizablePromptModal } from "../shared/ResizablePromptModal";
 import {
   GeminiParamsPanel,
   GEMINI_RESOLUTIONS,
@@ -175,6 +181,7 @@ type SupportedImageParams = {
 };
 
 export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
   // 图片生成数量选择
   const [imageCount, setImageCount] = useState<ImageCount>(1);
   // 正在生成的数量（用于显示进度提示）
@@ -404,6 +411,21 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     isRunningHubMidjourneyV81Model,
     isSeedreamModel,
   ]);
+
+  useEffect(() => {
+    if (!isExpanded) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsExpanded(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isExpanded]);
 
   useEffect(() => {
     if (!supportedImageParams) {
@@ -714,9 +736,9 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         isRunningHubMidjourneyV81Model
           ? "2K"
           : isNanoBananaParamsModel ||
-          isGptImage2Model
-          ? "4K"
-          : "3K",
+            isGptImage2Model
+            ? "4K"
+            : "3K",
     };
     const commandResolution = commandResolutionMap[selected.id];
     const targetResolution =
@@ -1398,6 +1420,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
 
   // 点击生成：根据数量多次调用接口创建任务
   const handleGenerate = async () => {
+    if (isExpanded) {
+      setIsExpanded(false);
+    }
+
     const promptText = editor?.getText().trim() ?? "";
     // 优先使用最新 store 中的便签内容，避免父级便签节点刚连接时 parentNoteNodes 缓存未刷新。
     const liveNoteContents = (() => {
@@ -1673,12 +1699,58 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     }
   };
 
-  return (
-    <div className={PROMPT_PANEL_STYLES.container}>
-      <div className={PROMPT_PANEL_STYLES.inputArea}>
-        <div className={PROMPT_PANEL_STYLES.textAreaWrap}>
+  const panelContent = (
+    <div
+      className={cn(
+        PROMPT_PANEL_STYLES.container,
+        isExpanded && "h-full min-h-0 min-w-0 overflow-hidden",
+      )}
+      style={isExpanded ? { width: "100%", height: "100%" } : undefined}
+    >
+      <div
+        className={cn(
+          PROMPT_PANEL_STYLES.inputArea,
+          isExpanded && "min-h-0 flex-1",
+        )}
+      >
+        {isExpanded && (
+          <div className="nodrag nopan nowheel flex shrink-0 gap-2 overflow-x-auto pb-1">
+            {generationReferenceItems.length > 0 && (
+              <ImageReferenceThumbnails
+                items={generationReferenceItems}
+                onReorder={handleReferenceReorder}
+                onRemove={handleReferenceRemove}
+                onHoverChange={handleReferenceHoverChange}
+              />
+            )}
+          </div>
+        )}
+        <div
+          className={cn(
+            PROMPT_PANEL_STYLES.textAreaWrap,
+            isExpanded &&
+            "relative flex min-h-0 flex-1 flex-col [&>div]:min-h-0 [&>div]:flex-1 [&_.ProseMirror]:h-full [&_.ProseMirror]:max-h-none",
+          )}
+        >
           <EditorContent editor={editor} />
         </div>
+        <button
+          type="button"
+          aria-label={isExpanded ? "缩小图片提示词面板" : "放大图片提示词面板"}
+          title={isExpanded ? "缩小图片提示词面板" : "放大图片提示词面板"}
+          className="nodrag nopan nowheel absolute top-2 right-2 z-10 flex h-8 w-8 items-center justify-center rounded-lg border border-white/8 bg-white/4 text-white/55 transition-colors hover:border-[#B43FEB]/40 hover:bg-[#B43FEB]/15 hover:text-white"
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            setIsExpanded((current) => !current);
+          }}
+        >
+          {isExpanded ? (
+            <IconArrowsMinimize size={16} />
+          ) : (
+            <IconArrowsMaximize size={16} />
+          )}
+        </button>
         {mentionPreview &&
           createPortal(
             <div
@@ -1700,17 +1772,19 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             document.body,
           )}
 
-        <div className="nodrag nopan nowheel flex gap-2 overflow-x-auto pb-1">
-          {/* 参考图列表（支持拖拽排序、hover 预览、删除） */}
-          {generationReferenceItems.length > 0 && (
-            <ImageReferenceThumbnails
-              items={generationReferenceItems}
-              onReorder={handleReferenceReorder}
-              onRemove={handleReferenceRemove}
-              onHoverChange={handleReferenceHoverChange}
-            />
-          )}
-        </div>
+        {!isExpanded && (
+          <div className="nodrag nopan nowheel flex gap-2 overflow-x-auto pb-1">
+            {/* 参考图列表（支持拖拽排序、hover 预览、删除） */}
+            {generationReferenceItems.length > 0 && (
+              <ImageReferenceThumbnails
+                items={generationReferenceItems}
+                onReorder={handleReferenceReorder}
+                onRemove={handleReferenceRemove}
+                onHoverChange={handleReferenceHoverChange}
+              />
+            )}
+          </div>
+        )}
         {/* @ mention 建议面板 */}
         {activeMode === "mention" && (
           <div
@@ -1822,9 +1896,19 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         )}
       </div>
 
-      <div className={PROMPT_PANEL_STYLES.divider} />
+      <div
+        className={cn(
+          PROMPT_PANEL_STYLES.divider,
+          isExpanded && "shrink-0",
+        )}
+      />
 
-      <div className={PROMPT_PANEL_STYLES.controlArea}>
+      <div
+        className={cn(
+          PROMPT_PANEL_STYLES.controlArea,
+          isExpanded && "shrink-0",
+        )}
+      >
         <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden">
           <ImageModelHelpTooltip modelId={model} />
           {/* 生成模型 - 始终在最左侧 */}
@@ -1857,7 +1941,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
             >
               <SelectValue placeholder="选择模型" />
             </SelectTrigger>
-            <SelectContent className={PROMPT_PANEL_STYLES.modelSelectContent}>
+            <SelectContent
+              className={cn(
+                PROMPT_PANEL_STYLES.modelSelectContent,
+                "z-10000",
+              )}
+            >
               {visibleImageModels.map((item) => (
                 <SelectItem
                   key={item.id}
@@ -2075,6 +2164,13 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       </div>
     </div>
   );
+
+  return isExpanded
+    ? createPortal(
+      <ResizablePromptModal>{panelContent}</ResizablePromptModal>,
+      document.body,
+    )
+    : panelContent;
 });
 
 ImagePromptPanel.displayName = "ImagePromptPanel";

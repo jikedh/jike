@@ -65,7 +65,7 @@ export const ImageParamsPopover = ({
         align="start"
         side="top"
         sideOffset={10}
-        className="w-[390px] overflow-hidden rounded-xl border border-white/[0.08] bg-[#121214] p-0 text-white shadow-[0_18px_48px_rgba(0,0,0,0.42)]"
+        className="z-10000 w-[390px] overflow-hidden rounded-xl border border-white/[0.08] bg-[#121214] p-0 text-white shadow-[0_18px_48px_rgba(0,0,0,0.42)]"
       >
         <div className="border-b border-white/[0.06] bg-[#18181b] px-4 py-3">
           <div className="text-xs font-semibold text-white/86">生成参数</div>

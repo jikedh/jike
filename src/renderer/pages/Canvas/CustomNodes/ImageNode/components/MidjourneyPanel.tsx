@@ -123,7 +123,7 @@ export const MidjourneyPanel = ({
                     <SelectTrigger className="w-32 shrink-0 border-white/10 bg-white/4 text-xs text-white/72">
                         <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="z-10001">
                         <SelectGroup>
                             <SelectItem value="1">标准质量</SelectItem>
                             <SelectItem value="4">高质量模式</SelectItem>
