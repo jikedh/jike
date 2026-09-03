@@ -27,11 +27,11 @@ export const CanvasGroupNameBadge = memo(
       <NodeNameBadge
         className={
           selected
-            ? "canvas-group-name-badge left-4 z-[12] max-w-[calc(100%-32px)] -translate-y-[calc(100%+5px)] gap-0 bg-[#1b101f]/90 py-1 text-[12px] leading-4 shadow-none"
-            : "canvas-group-name-badge left-4 z-[12] max-w-[calc(100%-32px)] -translate-y-[calc(100%+5px)] gap-0 bg-[#101114]/88 py-1 text-[12px] leading-4 text-white/78 shadow-none"
+            ? "canvas-group-name-badge left-4 z-12 max-w-[calc(100%-32px)] -translate-y-[calc(100%+5px)] cursor-text gap-0 border border-[#D873FF]/65 bg-[#351140]/95 px-3 py-1.5 text-[14px] font-semibold leading-5 text-white shadow-[0_0_16px_rgba(216,115,255,0.35)]"
+            : "canvas-group-name-badge left-4 z-12 max-w-[calc(100%-32px)] -translate-y-[calc(100%+5px)] gap-0 bg-[#101114]/88 py-1 text-[12px] leading-4 text-white/78 shadow-none"
         }
-        inputClassName="bg-[#17171b] text-[12px]"
-        measureClassName="text-[12px]"
+        inputClassName="bg-[#17171b] text-[14px] leading-5"
+        measureClassName="text-[14px] leading-5"
         isEditing={isEditing}
         maxInputWidth={360}
         minInputWidth={88}
