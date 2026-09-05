@@ -63,6 +63,8 @@ export interface MentionItem {
   primaryCategory?: string;
   /** 资产分类别名 */
   category?: string;
+  /** 项目素材库文件夹 ID */
+  folderId?: string;
   /** 真实媒体资源地址，优先于 thumbnail 用于归一化与请求体 */
   fileUrl?: string;
 }

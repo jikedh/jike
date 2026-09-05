@@ -146,6 +146,7 @@ export interface AssetListItem {
   userId: string;
   scope: AssetScope;
   projectId: string | null;
+  folderId?: string | null;
   personCategoryId?: string | null;
   name: string;
   mediaType: MediaType;
@@ -175,6 +176,7 @@ export interface AssetDetail {
   userAvatar?: string;
   scope: AssetScope;
   projectId: string | null;
+  folderId?: string | null;
   personCategoryId?: string | null;
   projectName?: string | null;
   name: string;
@@ -235,6 +237,7 @@ export interface CreateAssetRequest {
   /** 默认 personal；公司资产必须同时提供 personCategoryCode。 */
   scope?: AssetScope;
   projectId?: string | null;
+  folderId?: string | null;
   personCategoryCode?: string;
   conditions?: AssetConditions | null;
   description?: string | null;
@@ -257,6 +260,7 @@ export interface CreateAssetRequest {
 export interface AssetListParams {
   scope?: AssetScope;
   projectId?: string;
+  folderId?: string;
   userId?: string;
   personCategoryCode?: string;
   mediaType?: MediaType;
@@ -342,4 +346,25 @@ export interface AddProjectAssetRefResult {
 
 export interface AssetTagsRequest {
   tags: string[];
+}
+
+// ===================== 项目素材文件夹 =====================
+
+export interface AssetFolder {
+  id: string;
+  projectId: string;
+  name: string;
+  code: string;
+  isDefault: number;
+  sort: number;
+  assetCount: number;
+  createTime: number;
+}
+
+export interface CreateAssetFolderRequest {
+  name: string;
+}
+
+export interface RenameAssetFolderRequest {
+  name: string;
 }

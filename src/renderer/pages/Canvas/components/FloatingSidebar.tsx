@@ -1,6 +1,7 @@
 import {
   IconArchive,
   IconDeviceFloppy,
+  IconFolders,
   IconPlus,
   IconSettings,
   IconSparkles,
@@ -72,6 +73,11 @@ const DEFAULT_ITEMS: FloatingSidebarItem[] = [
     id: "asset-library",
     label: "资产库",
     icon: <IconArchive size={20} />,
+  },
+  {
+    id: "personal-asset-library",
+    label: "个人素材库",
+    icon: <IconFolders size={20} />,
   },
   {
     id: "save",

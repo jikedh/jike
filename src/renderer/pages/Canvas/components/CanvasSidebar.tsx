@@ -18,6 +18,7 @@ import { useUserStore } from "@/stores/useUserStore";
 import { insertRemoteAssetIntoCanvas } from "../utils/remoteAssetInsert";
 import type { RemoteAsset } from "../utils/remoteAssets";
 import { RemoteAssetLibraryDialog } from "./RemoteAssetLibraryDialog";
+import { ProjectAssetLibrary } from "./project-asset-library/ProjectAssetLibrary";
 import {
   RemoteCreateAssetDialog,
   type RemoteCreateAssetRequest,
@@ -135,6 +136,8 @@ export const CanvasSidebar = () => {
   }, [userInfo]);
 
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false);
+  const [personalAssetLibraryOpen, setPersonalAssetLibraryOpen] =
+    useState(false);
   const [createAssetRequest, setCreateAssetRequest] =
     useState<RemoteCreateAssetRequest | null>(null);
   const [assetRefreshKey, setAssetRefreshKey] = useState(0);
@@ -286,6 +289,9 @@ export const CanvasSidebar = () => {
         case "asset-library":
           openAssetLibrary();
           break;
+        case "personal-asset-library":
+          setPersonalAssetLibraryOpen(true);
+          break;
         case "save":
           saveGraph();
           toast.success("画布已保存");
@@ -309,6 +315,11 @@ export const CanvasSidebar = () => {
         onUseOne={handleUseOne}
         onUseMany={handleUseMany}
         onDropAsset={handleDropAsset}
+      />
+      <ProjectAssetLibrary
+        open={personalAssetLibraryOpen}
+        projectId={projectId}
+        onClose={() => setPersonalAssetLibraryOpen(false)}
       />
       <RemoteCreateAssetDialog
         open={createAssetDialogOpen}

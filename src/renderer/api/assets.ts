@@ -17,6 +17,7 @@ import type {
   ApiEnvelope,
   AssetCategory,
   AssetDetail,
+  AssetFolder,
   AssetListItem,
   AssetListParams,
   AssetSearchParams,
@@ -25,10 +26,12 @@ import type {
   PersonCategory,
   ChangeAssetScopeRequest,
   ChangeAssetScopeResult,
+  CreateAssetFolderRequest,
   CreateAssetRequest,
   DeleteAssetResult,
   PaginatedData,
   ProjectAssetRef,
+  RenameAssetFolderRequest,
   UpdateAssetRequest,
   UploadOssFileResult,
 } from "shared/types/api/assets";
@@ -287,5 +290,56 @@ export const setAssetTags = (id: string, data: AssetTagsRequest) =>
 export const removeAssetTag = (id: string, tagId: string) =>
   request<{ success: boolean } | null>({
     url: `/v1/assets/${encodeURIComponent(id)}/tags/${encodeURIComponent(tagId)}`,
+    method: "delete",
+  });
+
+// ===================== 项目素材文件夹 =====================
+
+/**
+ * 获取项目下的素材文件夹列表
+ * GET /v1/projects/:projectId/folders
+ */
+export const getProjectFolders = (projectId: string) =>
+  request<AssetFolder[]>({
+    url: `/v1/projects/${encodeURIComponent(projectId)}/folders`,
+    method: "get",
+  });
+
+/**
+ * 创建项目素材文件夹
+ * POST /v1/projects/:projectId/folders
+ */
+export const createProjectFolder = (
+  projectId: string,
+  data: CreateAssetFolderRequest,
+) =>
+  request<AssetFolder>({
+    url: `/v1/projects/${encodeURIComponent(projectId)}/folders`,
+    method: "post",
+    data,
+  });
+
+/**
+ * 重命名项目素材文件夹
+ * PUT /v1/projects/:projectId/folders/:folderId
+ */
+export const renameProjectFolder = (
+  projectId: string,
+  folderId: string,
+  data: RenameAssetFolderRequest,
+) =>
+  request<AssetFolder>({
+    url: `/v1/projects/${encodeURIComponent(projectId)}/folders/${encodeURIComponent(folderId)}`,
+    method: "put",
+    data,
+  });
+
+/**
+ * 删除项目素材文件夹（仅限空的自定义文件夹）
+ * DELETE /v1/projects/:projectId/folders/:folderId
+ */
+export const deleteProjectFolder = (projectId: string, folderId: string) =>
+  request<{ id: string } | null>({
+    url: `/v1/projects/${encodeURIComponent(projectId)}/folders/${encodeURIComponent(folderId)}`,
     method: "delete",
   });

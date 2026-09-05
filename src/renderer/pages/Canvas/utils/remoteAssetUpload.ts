@@ -357,6 +357,7 @@ export interface UploadAndCreateInput {
   primaryCategory: PrimaryCategory;
   scope: AssetScope;
   projectId?: string | null;
+  folderId?: string | null;
   personCategoryCode?: string;
   name: string;
   description?: string;
@@ -384,6 +385,7 @@ export const uploadAndCreateAsset = async (
     primaryCategory,
     scope,
     projectId,
+    folderId,
     personCategoryCode,
     name,
     description,
@@ -433,6 +435,8 @@ export const uploadAndCreateAsset = async (
       primaryCategory,
       scope,
       projectId: scope === "project" ? projectId || undefined : undefined,
+      folderId:
+        scope === "project" && folderId ? folderId : undefined,
       personCategoryCode:
         scope === "company" ? personCategoryCode.trim() : undefined,
       conditions: conditions || undefined,

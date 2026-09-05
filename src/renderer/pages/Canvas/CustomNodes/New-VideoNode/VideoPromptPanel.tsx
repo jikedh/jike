@@ -33,6 +33,7 @@ import { useGenerationPoints } from "@/hooks/useGenerationPoints";
 import useMessage from "@/hooks/useMessage";
 import type { VideoPromptEditorHandle } from "./components/VideoPromptEditor";
 import { VideoPromptEditor } from "./components/VideoPromptEditor";
+import type { RemoteAssetMentionPayload } from "./components/VideoPromptEditor";
 import { VideoReferenceAssetsBar } from "./components/VideoReferenceAssetsBar";
 import {
   getVideoLocalImageMentionId,
@@ -388,6 +389,23 @@ const orderReferenceItems = (
   return [...orderedItems, ...items.filter((item) => !usedIds.has(item.id))];
 };
 
+/** 从节点 metadata 读取已持久化的个人素材库引用项。 */
+const readRemoteReferenceItems = (metadata?: Record<string, unknown>): MentionItem[] => {
+  const raw = metadata?.[REMOTE_REFERENCE_ITEMS_KEY];
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((item): item is MentionItem => {
+    if (!item || typeof item !== "object") return false;
+    const record = item as Record<string, unknown>;
+    return (
+      typeof record.id === "string" &&
+      typeof record.fileUrl === "string" &&
+      (record.type === "image" ||
+        record.type === "video" ||
+        record.type === "audio")
+    );
+  });
+};
+
 const toStringRecord = (value: unknown): Record<string, string> => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -418,6 +436,7 @@ const areStringRecordsEqual = (
 
 const VIDEO_GENERATION_FAKE_REQUEST_DELAY_MS = 5000;
 const VIDEO_FAKE_REQUEST_PENDING_KEY = "fakeRequestPending";
+const REMOTE_REFERENCE_ITEMS_KEY = "remoteReferenceItems";
 const VIDEO_PROMPT_OPTIMIZE_SYSTEM_PROMPT_KEY =
   "promptOptimizeSystemPrompt";
 const videoFakeRequestTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -752,13 +771,66 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     ];
   }, [currentData?.audio_urls, parentAudioNodes]);
 
+  const remoteReferenceItems = useMemo(
+    () => readRemoteReferenceItems(currentData?.metadata),
+    [currentData?.metadata],
+  );
+
+  const handleSelectRemoteAsset = useCallback(
+    (payload: RemoteAssetMentionPayload) => {
+      const latestData = getCurrentNewVideoData(nodeId) ?? currentData;
+      const existing = readRemoteReferenceItems(latestData?.metadata);
+      const merged = existing.some((item) => item.id === payload.id)
+        ? existing
+        : [
+          ...existing,
+          {
+            id: payload.id,
+            mentionId: payload.id,
+            label: payload.label,
+            displayLabel: "",
+            value: payload.fileUrl,
+            thumbnail: payload.thumbnail,
+            url: payload.fileUrl,
+            fileUrl: payload.fileUrl,
+            type: payload.mediaType,
+            mediaType: payload.mediaType,
+            source: "remote-asset",
+            scope: payload.scope,
+            assetId: payload.assetId,
+            folderId: payload.folderId,
+            primaryCategory: payload.primaryCategory,
+            category: payload.category,
+            preserveLabel: true,
+          } satisfies MentionItem,
+        ];
+      const currentOrder = Array.isArray(latestData?.metadata?.referenceOrder)
+        ? (latestData.metadata.referenceOrder as string[])
+        : [];
+      const nextOrder = currentOrder.includes(payload.id)
+        ? currentOrder
+        : [...currentOrder, payload.id];
+      updateNewVideoNodeData(nodeId, {
+        metadata: {
+          ...(latestData?.metadata ?? {}),
+          [REMOTE_REFERENCE_ITEMS_KEY]: merged,
+          referenceOrder: nextOrder,
+        },
+      });
+    },
+    [currentData, nodeId, updateNewVideoNodeData],
+  );
+
   const generationReferenceItems = useMemo(() => {
     // 新版视频节点独立维护参考素材顺序：UI 缩略图可以是低清图，但传参始终使用 url 字段里的真实资源地址。
-    const items = buildOrderedReferenceItems(
-      imageReferenceSources,
-      videoReferenceSources,
-      audioReferenceSources,
-    );
+    const items = [
+      ...buildOrderedReferenceItems(
+        imageReferenceSources,
+        videoReferenceSources,
+        audioReferenceSources,
+      ),
+      ...remoteReferenceItems,
+    ];
     return relabelReferenceItemsByOrder(
       orderReferenceItems(items, currentData?.metadata?.referenceOrder),
     );
@@ -766,6 +838,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     currentData?.metadata?.referenceOrder,
     audioReferenceSources,
     imageReferenceSources,
+    remoteReferenceItems,
     videoReferenceSources,
   ]);
 
@@ -936,6 +1009,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       assetId: item.assetId,
       nodeId: item.nodeId,
       primaryCategory: item.primaryCategory,
+      folderId: item.folderId,
       type: item.type,
     }));
   }, [generationReferenceItems]);
@@ -1454,6 +1528,26 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         return;
       }
 
+      // 个人素材库引用：从节点 metadata 移除并同步清理正文 mention 与顺序。
+      if (item.source === "remote-asset" || item.id.startsWith("asset-")) {
+        const latestData = getCurrentNewVideoData(nodeId) ?? currentData;
+        const merged = readRemoteReferenceItems(latestData?.metadata).filter(
+          (reference) => reference.id !== item.id,
+        );
+        const currentOrder = Array.isArray(latestData?.metadata?.referenceOrder)
+          ? (latestData.metadata.referenceOrder as string[])
+          : [];
+        updateNewVideoNodeData(nodeId, {
+          metadata: {
+            ...(latestData?.metadata ?? {}),
+            [REMOTE_REFERENCE_ITEMS_KEY]: merged,
+            referenceOrder: currentOrder.filter((id) => id !== item.id),
+          },
+        });
+        removeReferenceMentions([{ ids: [item.id], type: item.type }]);
+        return;
+      }
+
       const localImageIndex = localReferenceImageUrls.findIndex(
         (url, index) => {
           return (
@@ -1486,11 +1580,15 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       }
     },
     [
+      currentData,
       handleDisconnectNode,
       handleRemoveReferenceImage,
       localReferenceImageIndexes,
       localReferenceImageUrls,
+      nodeId,
+      removeReferenceMentions,
       removeWanReferenceVoiceBinding,
+      updateNewVideoNodeData,
     ],
   );
 
@@ -2255,6 +2353,7 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
                 ? editorMentionItems
                 : videoMentionItems
             }
+            onSelectRemoteAsset={handleSelectRemoteAsset}
             onDraftChange={handleDraftChange}
           />
 
