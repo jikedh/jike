@@ -1,7 +1,6 @@
 import {
   BookOpenText,
   Clapperboard,
-  Folder,
   House,
   Settings,
   SquareDashedMousePointer,
@@ -119,12 +118,12 @@ export const SidebarCeBianLan = () => {
       label: "视频转剧本",
       path: "/video-to-script",
     },
-    {
-      id: "assets",
-      icon: <Folder size={24} />,
-      label: "资产库",
-      path: "/assets",
-    },
+    // {
+    //   id: "assets",
+    //   icon: <Folder size={24} />,
+    //   label: "资产库",
+    //   path: "/assets",
+    // },
     {
       id: "teams",
       icon: <UsersRound size={24} />,
