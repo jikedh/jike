@@ -146,6 +146,19 @@ const videoProcessingApi = {
             data?: { url: string; format: "mp4"; duration: number; method: "cloud" | "ffmpeg"; jobId?: string };
             error?: string;
         }>("video_processing_trim", { request }),
+    burnAnnotations: (request: {
+        videoUrl: string;
+        overlayUrl: string;
+        start: number;
+        end: number;
+        authToken?: string;
+        backendBaseUrl?: string;
+    }) =>
+        invokeOrThrow<{
+            success: boolean;
+            data?: { url: string; format: "mp4"; duration: number; method: "ffmpeg" };
+            error?: string;
+        }>("video_processing_burn_annotations", { request }),
 };
 
 // === notification ======================================================

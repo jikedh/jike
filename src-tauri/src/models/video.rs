@@ -27,6 +27,32 @@ pub struct VideoTrimResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VideoAnnotationBurnRequest {
+    #[serde(rename = "videoUrl")]
+    pub video_url: String,
+    #[serde(rename = "overlayUrl")]
+    pub overlay_url: String,
+    pub start: f64,
+    pub end: f64,
+    #[serde(rename = "authToken", skip_serializing_if = "Option::is_none", default)]
+    pub auth_token: Option<String>,
+    #[serde(
+        rename = "backendBaseUrl",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub backend_base_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VideoAnnotationBurnResult {
+    pub url: String,
+    pub format: String,
+    pub duration: f64,
+    pub method: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SplitMp4Request {
     #[serde(rename = "inputPath")]
     pub input_path: String,

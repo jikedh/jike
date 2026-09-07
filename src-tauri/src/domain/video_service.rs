@@ -4,15 +4,22 @@
 // 通过后端 /v1/oss/upload 上传。ffmpeg 方案降级为调用本地 ffmpeg 二进制。
 
 use crate::models::{
-    SplitMp4Request, SplitMp4Result, VideoTrimRequest, VideoTrimResult,
+    SplitMp4Request, SplitMp4Result, VideoAnnotationBurnRequest,
+    VideoAnnotationBurnResult, VideoTrimRequest, VideoTrimResult,
 };
 use reqwest::Client;
+use futures_util::StreamExt;
 use std::{
     path::{Path, PathBuf},
     process::Command,
+    time::Duration,
 };
+use tokio::io::AsyncWriteExt;
 
 const FFMPEG_PATH_ENV: &str = "JIKE_FFMPEG_PATH";
+const MAX_SOURCE_VIDEO_BYTES: u64 = 1024 * 1024 * 1024;
+const MAX_OVERLAY_BYTES: u64 = 32 * 1024 * 1024;
+const MAX_OUTPUT_VIDEO_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 #[derive(Debug, thiserror::Error)]
 pub enum VideoError {
@@ -47,6 +54,245 @@ pub async fn trim_video(req: VideoTrimRequest) -> Result<VideoTrimResult, VideoE
     }
 
     trim_via_ffmpeg(&req).await
+}
+
+pub async fn burn_annotations(
+    req: VideoAnnotationBurnRequest,
+) -> Result<VideoAnnotationBurnResult, VideoError> {
+    if req.video_url.trim().is_empty() || req.overlay_url.trim().is_empty() {
+        return Err(VideoError::Config("视频或标注图层地址不能为空".into()));
+    }
+    if !req.start.is_finite() || !req.end.is_finite() || req.start < 0.0 || req.end - req.start < 0.5 {
+        return Err(VideoError::Config("标注显示区间无效，最短为 0.5 秒".into()));
+    }
+
+    let temp_dir = std::env::temp_dir().join(format!("jike-video-annotation-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&temp_dir)?;
+
+    let result = async {
+        let source_path = temp_dir.join("source.mp4");
+        let overlay_path = temp_dir.join("annotation.png");
+        let output_path = temp_dir.join("annotated.mp4");
+
+        download_remote_file(
+            &req.video_url,
+            &source_path,
+            MAX_SOURCE_VIDEO_BYTES,
+            "video",
+        )
+        .await?;
+        download_remote_file(
+            &req.overlay_url,
+            &overlay_path,
+            MAX_OVERLAY_BYTES,
+            "image",
+        )
+        .await?;
+
+        let ffmpeg = resolve_ffmpeg_path(None)?;
+        let duration = probe_media_duration(&ffmpeg, &source_path).await?;
+        if req.end > duration + 0.05 {
+            return Err(VideoError::Config("标注结束时间超出视频时长".into()));
+        }
+
+        render_annotation_video(
+            &ffmpeg,
+            &source_path,
+            &overlay_path,
+            &output_path,
+            req.start,
+            req.end,
+        )
+        .await?;
+
+        let backend = resolve_backend(req.backend_base_url.as_deref());
+        let upload_api_url = format!("{backend}/v1/oss/upload");
+        let auth_token = req.auth_token.as_ref().map(|token| {
+            token
+                .trim()
+                .strip_prefix("Bearer ")
+                .unwrap_or(token.trim())
+                .to_string()
+        });
+        let uploaded = crate::domain::oss_service::upload_local_file_to_backend(
+            output_path.to_string_lossy().as_ref(),
+            &upload_api_url,
+            auth_token,
+            Some("video/mp4".to_string()),
+            MAX_OUTPUT_VIDEO_BYTES,
+        )
+        .await
+        .map_err(|error| VideoError::Http(error.to_string()))?;
+
+        Ok(VideoAnnotationBurnResult {
+            url: uploaded.url,
+            format: "mp4".to_string(),
+            duration,
+            method: "ffmpeg".to_string(),
+        })
+    }
+    .await;
+
+    let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+    result
+}
+
+async fn download_remote_file(
+    remote_url: &str,
+    destination: &Path,
+    max_bytes: u64,
+    expected_media_type: &str,
+) -> Result<(), VideoError> {
+    let url = crate::domain::oss_service::validate_remote_media_url(remote_url)
+        .map_err(|error| VideoError::Config(error.to_string()))?;
+    let client = Client::builder()
+        .connect_timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(600))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|error| VideoError::Http(error.to_string()))?;
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|error| VideoError::Http(error.to_string()))?;
+    if !response.status().is_success() {
+        return Err(VideoError::Http(format!("下载媒体失败：{}", response.status())));
+    }
+
+    if response.content_length().is_some_and(|length| length > max_bytes) {
+        return Err(VideoError::Config("媒体文件超过处理大小限制".into()));
+    }
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("")
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    if !content_type.is_empty()
+        && content_type != "application/octet-stream"
+        && !content_type.starts_with(expected_media_type)
+    {
+        return Err(VideoError::Config("媒体类型与处理请求不匹配".into()));
+    }
+
+    let mut file = tokio::fs::File::create(destination).await?;
+    let mut stream = response.bytes_stream();
+    let mut downloaded = 0u64;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|error| VideoError::Http(error.to_string()))?;
+        downloaded = downloaded.saturating_add(chunk.len() as u64);
+        if downloaded > max_bytes {
+            return Err(VideoError::Config("媒体文件超过处理大小限制".into()));
+        }
+        file.write_all(&chunk).await?;
+    }
+    file.flush().await?;
+    if downloaded == 0 {
+        return Err(VideoError::Http("媒体下载为空".into()));
+    }
+    Ok(())
+}
+
+async fn render_annotation_video(
+    ffmpeg: &Path,
+    source_path: &Path,
+    overlay_path: &Path,
+    output_path: &Path,
+    start: f64,
+    end: f64,
+) -> Result<(), VideoError> {
+    match run_annotation_render(
+        ffmpeg,
+        source_path,
+        overlay_path,
+        output_path,
+        start,
+        end,
+        "copy",
+    )
+    .await
+    {
+        Ok(()) => Ok(()),
+        Err(first_error) => run_annotation_render(
+            ffmpeg,
+            source_path,
+            overlay_path,
+            output_path,
+            start,
+            end,
+            "aac",
+        )
+            .await
+            .map_err(|fallback_error| VideoError::JobFailed(format!(
+                "{fallback_error}; 原始音频复制失败：{first_error}"
+            ))),
+    }
+}
+
+async fn run_annotation_render(
+    ffmpeg: &Path,
+    source_path: &Path,
+    overlay_path: &Path,
+    output_path: &Path,
+    start: f64,
+    end: f64,
+    audio_codec: &str,
+) -> Result<(), VideoError> {
+    let ffmpeg = ffmpeg.to_path_buf();
+    let source_path = source_path.to_path_buf();
+    let overlay_path = overlay_path.to_path_buf();
+    let output_path = output_path.to_path_buf();
+    let audio_codec = audio_codec.to_string();
+    let filter = format!(
+        "[1:v][0:v]scale2ref[overlay][base];[base][overlay]overlay=0:0:enable='between(t,{start:.3},{end:.3})'[video]"
+    );
+    let output = tokio::task::spawn_blocking(move || {
+        Command::new(ffmpeg)
+            .args([
+                "-y",
+                "-hide_banner",
+                "-i",
+                source_path.to_string_lossy().as_ref(),
+                "-loop",
+                "1",
+                "-i",
+                overlay_path.to_string_lossy().as_ref(),
+                "-filter_complex",
+                &filter,
+                "-map",
+                "[video]",
+                "-map",
+                "0:a?",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "18",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                &audio_codec,
+                "-movflags",
+                "+faststart",
+                "-shortest",
+                output_path.to_string_lossy().as_ref(),
+            ])
+            .output()
+    })
+    .await
+    .map_err(|error| VideoError::JobFailed(error.to_string()))?
+    .map_err(|error| VideoError::JobFailed(error.to_string()))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(VideoError::JobFailed(ffmpeg_stderr_message(&output.stderr)))
+    }
 }
 
 pub async fn split_mp4_by_seconds(req: SplitMp4Request) -> Result<SplitMp4Result, VideoError> {

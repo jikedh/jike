@@ -48,6 +48,23 @@ declare global {
         };
         error?: string;
       }>;
+      burnAnnotations: (request: {
+        videoUrl: string;
+        overlayUrl: string;
+        start: number;
+        end: number;
+        authToken?: string;
+        backendBaseUrl?: string;
+      }) => Promise<{
+        success: boolean;
+        data?: {
+          url: string;
+          format: "mp4";
+          duration: number;
+          method: "ffmpeg";
+        };
+        error?: string;
+      }>;
     };
   }
 }

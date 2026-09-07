@@ -2,6 +2,7 @@ import {
   IconArrowBigLeftLines,
   IconArrowBigRightLines,
   IconBolt,
+  IconBrush,
   IconDownload,
   IconEraser,
   IconPlayerPauseFilled,
@@ -61,6 +62,10 @@ import { useUserStore } from "@/stores/useUserStore";
 import { withRemoteMediaRef } from "../utils/localMedia";
 import type { VideoEnhanceParams } from "./components/VideoEnhancePanel";
 import { VideoEnhancePanel } from "./components/VideoEnhancePanel";
+import {
+  type VideoAnnotationPayload,
+  VideoAnnotationWorkspace,
+} from "./components/VideoAnnotationWorkspace";
 import { VideoTimeline } from "./components/VideoTimeline";
 import type { VideoTrimResult } from "./components/VideoTrimPanel";
 import { VideoTrimPanel } from "./components/VideoTrimPanel";
@@ -928,6 +933,7 @@ type ActionKey =
   | "download"
   | "preview"
   | "snapshot"
+  | "annotate"
   | "trim"
   | "removeCaptions"
   | "videoEnhance";
@@ -960,6 +966,9 @@ export const VideoToolbar = ({
   const [isSubmittingSubtitle, setIsSubmittingSubtitle] = useState(false);
   const [isEnhancePanelOpen, setIsEnhancePanelOpen] = useState(false);
   const [isCapturingFrame, setIsCapturingFrame] = useState(false);
+  const [isAnnotationOpen, setIsAnnotationOpen] = useState(false);
+  const [isBurningAnnotation, setIsBurningAnnotation] = useState(false);
+  const [annotationInitialTime, setAnnotationInitialTime] = useState(0);
   const [previewVideoUrls, setPreviewVideoUrls] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const previewObjectUrlsRef = useRef<string[]>([]);
@@ -1006,6 +1015,7 @@ export const VideoToolbar = ({
     () => [
       { key: "upload" as const, label: "上传", icon: IconUpload },
       { key: "snapshot" as const, label: "截帧", icon: IconScissors },
+      { key: "annotate" as const, label: "标注", icon: IconBrush },
       { key: "trim" as const, label: "视频裁剪", icon: IconScissors },
       {
         key: "removeCaptions" as const,
@@ -1289,6 +1299,20 @@ export const VideoToolbar = ({
       return;
     }
 
+    if (actionKey === "annotate") {
+      const video = primaryVideoRef.current;
+      if (!currentVideoUrl || !video) {
+        toast.info("暂无可标注视频");
+        return;
+      }
+
+      video.pause();
+      setAnnotationInitialTime(Math.max(0, video.currentTime || 0));
+      setActiveVideoTool({ nodeId, tool: "annotate" });
+      setIsAnnotationOpen(true);
+      return;
+    }
+
     if (actionKey === "removeCaptions") {
       if (!currentVideoUrl) {
         toast.info("暂无可用视频");
@@ -1335,6 +1359,166 @@ export const VideoToolbar = ({
     setPreviewVideoUrls([]);
     closeVideoTool();
   }, [closeVideoTool, revokePreviewObjectUrls]);
+
+  const closeAnnotationWorkspace = useCallback(() => {
+    if (isBurningAnnotation) return;
+    setIsAnnotationOpen(false);
+    closeVideoTool();
+  }, [closeVideoTool, isBurningAnnotation]);
+
+  const handleBurnVideoAnnotation = useCallback(
+    async (payload: VideoAnnotationPayload) => {
+      if (isBurningAnnotation || !currentVideoUrl) return;
+      if (!window.videoProcessing?.burnAnnotations) {
+        toast.error("当前桌面端不支持视频标注烧录");
+        return;
+      }
+
+      setIsBurningAnnotation(true);
+      let childId: string | null = null;
+      try {
+        const overlayUpload = await uploadFileToOSS(payload.overlayFile);
+        if (!overlayUpload.url) {
+          throw new Error("标注图层上传失败");
+        }
+
+        const sourceNode = useCanvasFlowStore
+          .getState()
+          .nodes.find((node) => node.id === nodeId);
+        if (!sourceNode) {
+          throw new Error("当前视频节点不存在");
+        }
+
+        childId = addNode(
+          "newVideo",
+          getProcessedVideoNodePosition(sourceNode),
+        );
+        onConnect({
+          source: nodeId,
+          target: childId,
+          sourceHandle: "output",
+          targetHandle: "input",
+        });
+
+        updateNewVideoNodeData(childId, {
+          badgeLabel: "视频标注",
+          nickname: "标注处理中",
+          processingLabel: "正在烧录标注",
+          isUpload: true,
+          aspect_ratio: data.aspect_ratio,
+          duration: videoDuration,
+          result: { type: "video", data: [] },
+          status: GenerationStatus.IN_PROGRESS,
+          progress: 0,
+          error: undefined,
+          metadata: {
+            ...(data.metadata ?? {}),
+            annotation: {
+              sourceNodeId: nodeId,
+              sourceVideoUrl: currentVideoUrl,
+              overlayUrl: overlayUpload.url,
+              startTime: payload.start,
+              endTime: payload.end,
+              frameTime: payload.frameTime,
+              sourceWidth: payload.sourceWidth,
+              sourceHeight: payload.sourceHeight,
+              strokeCount: payload.strokeCount,
+              status: "processing",
+            },
+          },
+        } as any);
+
+        const flowStore = useCanvasFlowStore.getState();
+        flowStore.requestHistorySave();
+        flowStore.saveGraph();
+        setIsAnnotationOpen(false);
+        closeVideoTool();
+
+        const response = await window.videoProcessing.burnAnnotations({
+          videoUrl: currentVideoUrl,
+          overlayUrl: overlayUpload.url,
+          start: payload.start,
+          end: payload.end,
+          authToken: getJikeingToken() || undefined,
+          backendBaseUrl:
+            import.meta.env.VITE_JIKE_GO_BASE_URL || "http://localhost:9181",
+        });
+        if (!response.success || !response.data?.url) {
+          throw new Error(response.error || "视频标注烧录失败");
+        }
+
+        const resultItem = withRemoteMediaRef(
+          withVideoPosterFields({
+            url: response.data.url,
+            remoteUrl: response.data.url,
+            format: response.data.format,
+          }),
+        );
+        updateNewVideoNodeData(childId, {
+          badgeLabel: "视频标注",
+          nickname: "视频标注",
+          processingLabel: undefined,
+          isUpload: true,
+          duration: response.data.duration,
+          result: { type: "video", data: [resultItem] },
+          status: GenerationStatus.COMPLETED,
+          progress: 100,
+          error: undefined,
+          metadata: {
+            ...(data.metadata ?? {}),
+            annotation: {
+              sourceNodeId: nodeId,
+              sourceVideoUrl: currentVideoUrl,
+              overlayUrl: overlayUpload.url,
+              startTime: payload.start,
+              endTime: payload.end,
+              frameTime: payload.frameTime,
+              sourceWidth: payload.sourceWidth,
+              sourceHeight: payload.sourceHeight,
+              strokeCount: payload.strokeCount,
+              status: "completed",
+            },
+          },
+        } as any);
+        flowStore.requestHistorySave();
+        flowStore.saveGraph();
+        toast.success("标注视频生成成功");
+      } catch (error: any) {
+        if (childId) {
+          updateNewVideoNodeData(childId, {
+            nickname: "视频标注失败",
+            processingLabel: undefined,
+            isUpload: false,
+            status: GenerationStatus.FAILED,
+            progress: 0,
+            error: {
+              code: "VIDEO_ANNOTATION_BURN_FAILED",
+              message: error?.message || "视频标注处理失败，请重试",
+            },
+          } as any);
+          const flowStore = useCanvasFlowStore.getState();
+          flowStore.requestHistorySave();
+          flowStore.saveGraph();
+        }
+        console.error("视频标注烧录失败:", error);
+        toast.error(error?.message || "视频标注处理失败，请重试");
+      } finally {
+        setIsBurningAnnotation(false);
+      }
+    },
+    [
+      addNode,
+      closeVideoTool,
+      currentVideoUrl,
+      data.aspect_ratio,
+      data.metadata,
+      isBurningAnnotation,
+      nodeId,
+      onConnect,
+      updateNewVideoNodeData,
+      videoDuration,
+    ],
+  );
 
   const isPreviewActive = isLightboxOpen;
 
@@ -1889,6 +2073,7 @@ export const VideoToolbar = ({
             (item.key === "download" && isDownloading) ||
             (item.key === "upload" && isUploading) ||
             (item.key === "snapshot" && isCapturingFrame) ||
+            (item.key === "annotate" && isBurningAnnotation) ||
             (item.key === "trim" && isTrimmingVideo) ||
             (item.key === "removeCaptions" && isSubmittingSubtitle);
 
@@ -1987,6 +2172,15 @@ export const VideoToolbar = ({
         videoUrl={currentVideoUrl || ""}
         onTrim={handleTrimVideo}
         isTrimming={isTrimmingVideo}
+      />
+
+      <VideoAnnotationWorkspace
+        open={isAnnotationOpen}
+        onClose={closeAnnotationWorkspace}
+        videoUrl={currentVideoUrl || ""}
+        initialTime={annotationInitialTime}
+        onSubmit={handleBurnVideoAnnotation}
+        isSubmitting={isBurningAnnotation}
       />
 
       <VideoEnhancePanel

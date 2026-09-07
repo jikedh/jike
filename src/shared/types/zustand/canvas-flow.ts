@@ -63,7 +63,7 @@ export type CanvasGroup = {
  */
 export type ActiveVideoTool = {
   nodeId: string;
-  tool: "preview" | "trim" | "removeCaptions" | "videoEnhance";
+  tool: "preview" | "trim" | "removeCaptions" | "videoEnhance" | "annotate";
 } | null;
 
 /**
