@@ -22,7 +22,6 @@ export interface WuhenAccessTokenResponse {
  */
 export interface VideoRemovalRequest {
   video_url: string;
-  upload_url?: string;
   model?: "video_removal_std" | "video_removal_pro";
   /** 可选：处理方式 */
   method?: "all_area" | "sel_area";
@@ -33,10 +32,6 @@ export interface VideoRemovalRequest {
     x2: number;
     y2: number;
   };
-
-  /** 上传时附带 headers（当 upload_url 存在时必须传递） */
-  upload_headers?: Record<string, string>;
-
   /** 可选：跟踪模式 */
   track_mode?: string;
 

@@ -30,6 +30,7 @@ type VideoItem = {
   localPath?: string;
   localName?: string;
   remoteUrl?: string;
+  displayUrl?: string;
   thumbnailUrl?: string;
   posterUrl?: string;
   coverUrl?: string;
@@ -349,6 +350,7 @@ export const CollapsibleVideoGallery = memo(
             ...newVideos[index],
             url: ossUrl,
             remoteUrl: ossUrl,
+            displayUrl: ossUrl,
           };
           newVideos[index] = withVideoPosterFields(newVideos[index]);
 

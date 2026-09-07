@@ -1,7 +1,7 @@
 import {
-  getUploadOssPutUrl,
+  copyOssMedia,
   uploadOssFile,
-  type UploadOssPutUrlResp,
+  type OssUploadResp,
 } from "@/api/jikeGo";
 import { getJikeingToken } from "shared/utils/utils";
 
@@ -270,16 +270,23 @@ export function generateVideoLastFrameUrl(
 
 // ===================== 文件上传 =====================
 
-export async function uploadFileToOSS(file: File) {
-  const response = await uploadOssFile(file);
-  const data = response?.data || response;
+export async function uploadFileToOSS(
+  file: File,
+  options?: {
+    onProgress?: (percent: number) => void;
+    signal?: AbortSignal;
+  },
+) {
+  const data = unwrapJikeGoData<OssUploadResp>(
+    await uploadOssFile(file, options),
+  );
 
   return {
     url: data?.url || "",
     name: data?.filename || file.name,
     key: data?.key || "",
     size: data?.size || file.size,
-    contentType: data?.content_type || data?.contentType || file.type,
+    contentType: data?.content_type || file.type,
   };
 }
 
@@ -314,10 +321,7 @@ export async function getLocalFileInfo(path: string): Promise<LocalOssFileInfo> 
   return invoke<LocalOssFileInfo>("get_local_file_info", { path });
 }
 
-/**
- * 使用服务端签发的 OSS PUT URL 上传本地文件。
- * 文件由 Rust 侧流式读取，渲染进程只持有路径和元信息。
- */
+/** 将本地文件流式提交给后端代理上传，不在前端申请预签名地址。 */
 export async function uploadLocalFilePathToOSS(options: {
   path: string;
   name: string;
@@ -331,59 +335,22 @@ export async function uploadLocalFilePathToOSS(options: {
     throw new Error("Tauri 文件上传不可用");
   }
 
-  const ext = options.name.split(".").pop()?.toLowerCase() || undefined;
-  const signed = unwrapJikeGoData<UploadOssPutUrlResp>(
-    await getUploadOssPutUrl({
-      blob_type: options.blobType,
-      ext,
-      content_type: options.contentType,
-    }),
-  );
-  if (!signed?.put_url || !signed.access_url) {
-    throw new Error("获取 OSS 直传地址失败");
-  }
-
-  const uploaded = await invoke<LocalOssFileInfo>(
-    "upload_local_file_to_signed_url",
-    {
-      path: options.path,
-      putUrl: signed.put_url,
-      headers: signed.headers || {},
-      maxSize: options.maxSize,
-    },
-  );
-
-  return {
-    name: uploaded.name || options.name,
-    size: uploaded.size || options.size,
-    url: signed.access_url,
-    key: signed.key || "",
+  return invoke<LocalOssUploadResult>("upload_local_file_to_backend", {
+    path: options.path,
+    uploadApiUrl: `${getJikeGoBaseUrl()}/v1/oss/upload`,
+    authToken: getJikeingToken() || null,
     contentType: options.contentType,
-  };
+    maxSize: options.maxSize,
+  });
 }
 
-/**
- * 将远程媒体 URL 转存到用户 OSS。
- * 远程 http(s) 资源走 Tauri 后端下载，避免 WebView CORS；非远程 URL 保留前端 fetch 兜底。
- */
+/** 将远程媒体 URL 交给后端下载并转存到用户 OSS。 */
 export async function copyMediaUrlToOss(mediaUrl: string): Promise<string | null> {
   try {
     if (/^https?:\/\//i.test(mediaUrl)) {
-      const invoke = getTauriInvoke();
-      if (!invoke) {
-        console.error("[OSS] Tauri invoke unavailable for media copy");
-        return null;
-      }
-
-      const result = await invoke<{ success?: boolean; url?: string }>(
-        "copy_media_url_to_oss",
-        {
-          mediaUrl,
-          uploadApiUrl: `${getJikeGoBaseUrl()}/v1/oss/upload`,
-          authToken: getJikeingToken() || null,
-        },
+      const result = unwrapJikeGoData<OssUploadResp>(
+        await copyOssMedia({ url: mediaUrl }),
       );
-
       return result?.url || null;
     }
 
@@ -434,4 +401,5 @@ const getJikeGoBaseUrl = () =>
     /\/$/,
     "",
   );
+
 

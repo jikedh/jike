@@ -17,6 +17,7 @@ import {
   loadVideoToScriptState,
   saveVideoToScriptState,
 } from "service/videoToScriptStorage";
+import { uploadFileToOSS } from "service/oss";
 import { createDashscopeChatCompletion } from "@/api/ai";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getUploadOssPutUrl, type UploadOssPutUrlResp } from "@/api/jikeGo";
 
 type VideoToScriptModel = "qwen3.7-flash" | "qwen3.7-plus";
 type UploadStatus = "idle" | "pending" | "success" | "error";
@@ -81,10 +81,9 @@ const VIDEO_TO_SCRIPT_MODELS: Array<{
   value: VideoToScriptModel;
   label: string;
 }> = [
-  { value: "qwen3.7-flash", label: "qwen3.7-flash" },
-  { value: "qwen3.7-plus", label: "qwen3.7-plus" },
-];
-const OSS_DIRECT_UPLOAD_TTL = 12 * 60 * 60;
+    { value: "qwen3.7-flash", label: "qwen3.7-flash" },
+    { value: "qwen3.7-plus", label: "qwen3.7-plus" },
+  ];
 const VIDEO_TO_SCRIPT_SYSTEM_PROMPT = `你是短剧成片拉片剧本整理师。你的任务是观看用户提供的单集短剧视频，只整理“剧情正文”，按短剧成片还原稿的方式整理本集内容。
 
 只输出剧情正文，不要输出剧情梗概、人物表、二创改写要点、分析说明、Markdown 标题、表格或项目符号。
@@ -170,80 +169,19 @@ const runWithOssUploadSlot = async <T,>(task: () => Promise<T>) => {
   }
 };
 
-const unwrapJikeGoData = <T,>(response: any): T => {
-  if (!response) {
-    throw new Error("请求无响应数据");
-  }
-  if (typeof response.code === "number") {
-    if (response.code !== 0 && response.code !== 200) {
-      throw new Error(response.msg || response.message || "请求失败");
-    }
-    return response.data as T;
-  }
-  return response as T;
-};
-
-const uploadBlobToSignedPutUrl = (
-  putUrl: string,
-  headers: Record<string, string> | undefined,
-  blob: Blob,
-  onProgress?: (percent: number) => void,
-) =>
-  new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", putUrl, true);
-
-    Object.entries(headers || {}).forEach(([key, value]) => {
-      if (value) {
-        xhr.setRequestHeader(key, value);
-      }
-    });
-
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable && onProgress) {
-        onProgress(Math.round((event.loaded / event.total) * 100));
-      }
-    };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
-        return;
-      }
-      reject(new Error(`OSS 直传失败：HTTP ${xhr.status}`));
-    };
-    xhr.onerror = () =>
-      reject(new Error("OSS 直传失败：网络异常或跨域配置错误"));
-    xhr.onabort = () => reject(new Error("OSS 直传已取消"));
-    xhr.send(blob.slice(0, blob.size, ""));
-  });
-
-const uploadVideoToOssDirect = async (
+const uploadVideoViaBackend = async (
   blob: Blob,
   fileName: string,
   onProgress?: (percent: number) => void,
 ) => {
-  const ext = fileName.split(".").pop()?.toLowerCase() || "mp4";
-  const signed = unwrapJikeGoData<UploadOssPutUrlResp>(
-    await getUploadOssPutUrl({
-      blob_type: "video",
-      ext,
-      content_type: "video/mp4",
-      ttl: OSS_DIRECT_UPLOAD_TTL,
-    }),
+  const uploaded = await uploadFileToOSS(
+    new File([blob], fileName, { type: "video/mp4" }),
+    { onProgress },
   );
-
-  if (!signed.put_url || !signed.access_url) {
-    throw new Error("获取 OSS 直传地址失败");
+  if (!uploaded.url) {
+    throw new Error("后端代理上传失败");
   }
-
-  await uploadBlobToSignedPutUrl(
-    signed.put_url,
-    signed.headers,
-    blob,
-    onProgress,
-  );
-
-  return { fileKey: signed.key, url: signed.access_url };
+  return { fileKey: uploaded.key, url: uploaded.url };
 };
 
 const sanitizeFileName = (value: string) => {
@@ -598,7 +536,7 @@ export default function VideoToScriptPage() {
     try {
       const bytes = await readFile(item.localMp4Path);
       const uploaded = await runWithOssUploadSlot(() =>
-        uploadVideoToOssDirect(
+        uploadVideoViaBackend(
           new Blob([bytes], { type: "video/mp4" }),
           getEpisodeFileName(item),
           (percent) =>

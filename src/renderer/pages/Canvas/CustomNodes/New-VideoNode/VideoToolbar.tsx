@@ -33,7 +33,6 @@ import {
   captureOssVideoFrame,
   createVideoEnhanceTask,
   createWuhenRemovalTask,
-  getUploadOssPutUrl,
   queryVideoEnhanceTask,
   queryWuhenRemovalTask,
   trimOssVideo,
@@ -1463,7 +1462,7 @@ export const VideoToolbar = ({
   );
 
   const startSubtitlePolling = useCallback(
-    (taskId: string, targetNodeId: string, accessUrl: string) => {
+    (taskId: string, targetNodeId: string, initialResultUrl: string) => {
       const existing = subtitlePollers[targetNodeId];
       if (existing) {
         window.clearInterval(existing);
@@ -1493,10 +1492,14 @@ export const VideoToolbar = ({
           const progress = Number(payload.progress ?? 0);
 
           if (["SUCCEEDED", "SUCCESS", "COMPLETED"].includes(taskStatus)) {
+            const resultVideoUrl = payload.video_url || initialResultUrl;
+            if (!resultVideoUrl) {
+              throw new Error("去字幕结果缺少视频地址");
+            }
             const resultItem = withRemoteMediaRef(
               withVideoPosterFields({
-                url: accessUrl,
-                remoteUrl: accessUrl,
+                url: resultVideoUrl,
+                remoteUrl: resultVideoUrl,
                 format: "mp4",
               }),
             );
@@ -1760,20 +1763,6 @@ export const VideoToolbar = ({
           .getState()
           .nodes.find((n) => n.id === nodeId);
 
-        const putUrlResponse = await getUploadOssPutUrl({
-          blob_type: "video",
-          ext: "mp4",
-          content_type: "video/mp4",
-          ttl: 43200,
-        });
-        const target = putUrlResponse?.data ?? putUrlResponse;
-        const accessUrl =
-          target?.access_url || target?.put_url?.split("?")[0] || "";
-
-        if (!target?.put_url) {
-          throw new Error("未获取到预签名上传地址");
-        }
-
         const newNodeId = addNode(
           "newVideo",
           getProcessedVideoNodePosition(sourceNode),
@@ -1790,7 +1779,7 @@ export const VideoToolbar = ({
           wuhen: {
             taskId: "",
             rect,
-            resultVideoUrl: accessUrl,
+            resultVideoUrl: "",
           },
         } as any);
 
@@ -1805,8 +1794,6 @@ export const VideoToolbar = ({
 
         const response: any = await createWuhenRemovalTask({
           video_url: currentVideoUrl,
-          upload_url: target.put_url,
-          upload_headers: target.headers,
           rect,
           model: "video_removal_std",
           method: "sel_area",
@@ -1815,14 +1802,17 @@ export const VideoToolbar = ({
 
         const payload = response?.data ?? response;
         const taskId = payload?.task_id || "";
+        const resultVideoUrl = payload?.video_url || "";
         const taskStatus = String(payload.status ?? "").trim().toUpperCase()
 
-        if (!taskId) {
+        if (!taskId || !resultVideoUrl) {
           updateNewVideoNodeData(newNodeId, {
             status: GenerationStatus.FAILED,
             error: {
               code: "WUHEI_CREATE_FAILED",
-              message: "创建去字幕任务失败",
+              message: !taskId
+                ? "创建去字幕任务失败"
+                : "去字幕任务缺少结果地址",
             },
           } as any);
           return;
@@ -1832,15 +1822,15 @@ export const VideoToolbar = ({
           wuhen: {
             taskId,
             rect,
-            resultVideoUrl: accessUrl,
+            resultVideoUrl,
           },
         } as any);
 
         if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
           const resultItem = withRemoteMediaRef(
             withVideoPosterFields({
-              url: accessUrl,
-              remoteUrl: accessUrl,
+              url: resultVideoUrl,
+              remoteUrl: resultVideoUrl,
               format: "mp4",
             }),
           );
@@ -1859,7 +1849,7 @@ export const VideoToolbar = ({
             status: GenerationStatus.IN_PROGRESS,
             progress: 0,
           } as any);
-          startSubtitlePolling(taskId, newNodeId, accessUrl);
+          startSubtitlePolling(taskId, newNodeId, resultVideoUrl);
         }
       } catch (error: any) {
         toast.error(error?.message || "去字幕失败");

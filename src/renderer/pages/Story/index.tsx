@@ -89,7 +89,6 @@ import {
 import {
   confirmDesktopProxyScore,
   createWuhenRemovalTask,
-  getUploadOssPutUrl,
   queryWuhenRemovalTask,
   refundDesktopProxyScore,
 } from "@/api/jikeGo";
@@ -6130,7 +6129,7 @@ const StoryAgentPage = ({
           ledgerBizId,
           "task creation failed: no task_id",
         )
-          .catch(() => {})
+          .catch(() => { })
           .finally(() => {
             void refreshBalanceInfo();
           });
@@ -6144,7 +6143,7 @@ const StoryAgentPage = ({
         void confirmDesktopProxyScore(ledgerBizId, "video", {
           scoreModel: model,
           scoreTaskId: String(taskId),
-        }).catch(() => {});
+        }).catch(() => { });
       }
       void refreshBalanceInfo();
       return videoUrl;
@@ -6159,7 +6158,7 @@ const StoryAgentPage = ({
             scoreTaskId: String(taskId),
           },
         )
-          .catch(() => {})
+          .catch(() => { })
           .finally(() => {
             void refreshBalanceInfo();
           });
@@ -6406,7 +6405,7 @@ const StoryAgentPage = ({
   const waitForSubtitleRemovalResult = async (
     taskId: string,
     shotId: string,
-    accessUrl: string,
+    initialResultUrl: string,
   ) => {
     for (let attempt = 0; attempt < 90; attempt += 1) {
       await wait(10000);
@@ -6417,9 +6416,13 @@ const StoryAgentPage = ({
         .toUpperCase();
 
       if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
+        const resultVideoUrl = payload.video_url || initialResultUrl;
+        if (!resultVideoUrl) {
+          throw new Error("去字幕结果缺少视频地址");
+        }
         await saveShotPatch(shotId, {
           videoStatus: "ready",
-          video: { url: accessUrl },
+          video: { url: resultVideoUrl },
         });
         await useUserStore.getState().fetchBalanceInfo();
         return;
@@ -6448,24 +6451,8 @@ const StoryAgentPage = ({
         throw new Error("当前分镜还没有视频素材");
       }
 
-      const putUrlResponse = await getUploadOssPutUrl({
-        blob_type: "video",
-        ext: "mp4",
-        content_type: "video/mp4",
-        ttl: 43200,
-      });
-      const target = putUrlResponse?.data ?? putUrlResponse;
-      const accessUrl =
-        target?.access_url || target?.put_url?.split("?")[0] || "";
-
-      if (!target?.put_url || !accessUrl) {
-        throw new Error("未获取到预签名上传地址");
-      }
-
       const response: any = await createWuhenRemovalTask({
         video_url: videoUrl,
-        upload_url: target.put_url,
-        upload_headers: target.headers,
         rect,
         model: "video_removal_std",
         method: "sel_area",
@@ -6474,23 +6461,26 @@ const StoryAgentPage = ({
 
       const payload = response?.data ?? response;
       const taskId = payload?.task_id || "";
+      const resultVideoUrl = payload?.video_url || "";
       const taskStatus = String(payload.status ?? "")
         .trim()
         .toUpperCase();
 
-      if (!taskId) {
-        throw new Error("创建去字幕任务失败");
+      if (!taskId || !resultVideoUrl) {
+        throw new Error(
+          !taskId ? "创建去字幕任务失败" : "去字幕任务缺少结果地址",
+        );
       }
 
       setRemovingSubtitleShot(null);
       if (["SUCCESS", "SUCCEEDED", "COMPLETED"].includes(taskStatus)) {
         await saveShotPatch(shot.id, {
           videoStatus: "ready",
-          video: { url: accessUrl },
+          video: { url: resultVideoUrl },
         });
         await useUserStore.getState().fetchBalanceInfo();
       } else {
-        await waitForSubtitleRemovalResult(taskId, shot.id, accessUrl);
+        await waitForSubtitleRemovalResult(taskId, shot.id, resultVideoUrl);
       }
       toast.success("去字幕结果已写回当前分镜");
     } catch (error) {
@@ -8912,9 +8902,9 @@ const ShotRow = ({
                 ? "等待生成，可停止"
                 : shot.videoStatus === "generating"
                   ? "视频生成中"
-                : shot.videoStatus === "ready"
-                  ? "视频已写回"
-                  : "生成失败"}
+                  : shot.videoStatus === "ready"
+                    ? "视频已写回"
+                    : "生成失败"}
             </div>
           )}
         </div>

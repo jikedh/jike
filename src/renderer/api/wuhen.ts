@@ -17,8 +17,6 @@ export type WuhenTaskStatus =
 
 export type CreateWuhenVideoRemovalTaskPayload = {
   sourceVideoUrl: string;
-  uploadUrl: string;
-  uploadHeaders?: Record<string, string>;
   resultVideoUrl: string;
   rect: WuhenRect;
   model?: "video_removal_std" | "video_removal_pro";
@@ -28,7 +26,6 @@ export type WuhenVideoRemovalTaskRecord = {
   taskId: string;
   sourceVideoUrl: string;
   resultVideoUrl: string;
-  uploadUrl: string;
   model: string;
   status: WuhenTaskStatus;
   progress: number;

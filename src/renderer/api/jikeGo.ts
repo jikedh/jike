@@ -134,32 +134,6 @@ export type DesktopChatCompletionsRequest = {
   [key: string]: any;
 };
 
-export type OssBlobType = "avatar" | "image" | "video";
-
-export type UploadOssBlobType = "image" | "video" | "audio";
-
-export type OssPutUrlRequest = {
-  blob_type: OssBlobType;
-  ext?: string;
-};
-
-export type UploadOssPutUrlRequest = {
-  blob_type: UploadOssBlobType;
-  ext?: string;
-  content_type?: string;
-  /** 预签名 URL 有效期（秒），默认 3600，最大 86400 */
-  ttl?: number;
-};
-
-export type UploadOssPutUrlResp = {
-  put_url: string;
-  headers: Record<string, string>;
-  access_url: string;
-  key: string;
-  /** 实际签名有效期（秒） */
-  ttl?: number;
-};
-
 export type OssUploadResp = {
   url: string;
   key: string;
@@ -493,17 +467,13 @@ export function getJikeGoScoreTransactions(params?: {
   });
 }
 
-export function getOssPutUrl(data: OssPutUrlRequest): any {
-  return jikeingService({
-    baseURL: JIKE_GO_BASE_URL,
-    url: "/v1/oss/put-url",
-    method: "post",
-    data,
-    headers: getJikeGoAuthHeaders(),
-  });
-}
-
-export function uploadOssFile(file: File): any {
+export function uploadOssFile(
+  file: File,
+  options?: {
+    onProgress?: (percent: number) => void;
+    signal?: AbortSignal;
+  },
+): any {
   const formData = new FormData();
   formData.append("file", file);
 
@@ -512,6 +482,30 @@ export function uploadOssFile(file: File): any {
     url: "/v1/oss/upload",
     method: "post",
     data: formData,
+    signal: options?.signal,
+    onUploadProgress: options?.onProgress
+      ? (event: any) => {
+        if (event.total) {
+          options.onProgress?.(
+            Math.round((event.loaded / event.total) * 100),
+          );
+        }
+      }
+      : undefined,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+export type CopyOssMediaRequest = {
+  url: string;
+};
+
+export function copyOssMedia(data: CopyOssMediaRequest): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/oss/copy-media",
+    method: "post",
+    data,
     headers: getJikeGoAuthHeaders(),
   });
 }
@@ -552,17 +546,6 @@ export function trimOssVideo(data: TrimOssVideoRequest): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
     url: "/v1/oss/trim-video",
-    method: "post",
-    data,
-    headers: getJikeGoAuthHeaders(),
-  });
-}
-
-// UploadOss 预签名上传：获取预签名 PUT URL
-export function getUploadOssPutUrl(data: UploadOssPutUrlRequest): any {
-  return jikeingService({
-    baseURL: JIKE_GO_BASE_URL,
-    url: "/v1/oss/upload-put-url",
     method: "post",
     data,
     headers: getJikeGoAuthHeaders(),
@@ -801,8 +784,6 @@ export type WuhenRemovalRect = {
 
 export type CreateWuhenRemovalRequest = {
   video_url: string;
-  upload_url: string;
-  upload_headers?: Record<string, string>;
   model?: "video_removal_std" | "video_removal_pro";
   method?: "all_area" | "sel_area";
   rect?: WuhenRemovalRect;
@@ -811,6 +792,7 @@ export type CreateWuhenRemovalRequest = {
 
 export type CreateWuhenRemovalResponse = {
   task_id: string;
+  video_url: string;
   score_cost: number;
   for_score_cost?: number;
   vip_score_cost?: number;

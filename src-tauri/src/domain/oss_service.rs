@@ -1,4 +1,4 @@
-use reqwest::{header, multipart, Body, Client, Url};
+use reqwest::{multipart, Body, Client, Url};
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::time::Duration;
@@ -32,6 +32,16 @@ pub struct LocalFileInfo {
     pub size: u64,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalUploadInfo {
+    pub name: String,
+    pub size: u64,
+    pub url: String,
+    pub key: String,
+    pub content_type: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct UploadEnvelope {
     code: Option<u16>,
@@ -43,6 +53,10 @@ struct UploadEnvelope {
 #[derive(Debug, Deserialize)]
 struct UploadData {
     url: Option<String>,
+    key: Option<String>,
+    filename: Option<String>,
+    size: Option<u64>,
+    content_type: Option<String>,
 }
 
 pub async fn copy_video_url_to_oss(
@@ -163,57 +177,89 @@ pub async fn get_local_file_info(path: &str) -> Result<LocalFileInfo, OssCopyErr
     })
 }
 
-/// 将本地文件作为 HTTP 流上传至由服务端签发的 OSS PUT URL。
-/// 文件数据始终保留在 Rust 流中，避免大文件占用 WebView 内存。
-pub async fn upload_local_file_to_signed_url(
+pub async fn upload_local_file_to_backend(
     path: &str,
-    put_url: &str,
-    headers: std::collections::HashMap<String, String>,
+    upload_api_url: &str,
+    auth_token: Option<String>,
+    content_type: Option<String>,
     max_size: u64,
-) -> Result<LocalFileInfo, OssCopyError> {
+) -> Result<LocalUploadInfo, OssCopyError> {
     let file_info = get_local_file_info(path).await?;
     if file_info.size > max_size {
         return Err(OssCopyError::FileTooLarge);
     }
 
-    let upload_url = validate_signed_oss_url(put_url)?;
+    let upload_url = validate_upload_api_url(upload_api_url)?;
     let file = tokio::fs::File::open(path)
         .await
         .map_err(|_| OssCopyError::InvalidLocalFile)?;
     let stream = ReaderStream::new(file);
-    let body = Body::wrap_stream(stream);
+    let media_type = content_type
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| {
+            mime_guess::from_path(path)
+                .first_or_octet_stream()
+                .to_string()
+        });
+    let part = multipart::Part::stream_with_length(
+        Body::wrap_stream(stream),
+        file_info.size,
+    )
+    .file_name(file_info.name.clone())
+    .mime_str(&media_type)
+    .map_err(|error| OssCopyError::Upload(error.to_string()))?;
+    let form = multipart::Form::new().part("file", part);
+
     let client = Client::builder()
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(600))
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|error| OssCopyError::Upload(error.to_string()))?;
-
-    let mut request = client.put(upload_url).header(header::CONTENT_LENGTH, file_info.size);
-    for (name, value) in headers {
-        let normalized = name.to_ascii_lowercase();
-        if normalized == "content-type" || normalized.starts_with("x-oss-") {
-            let header_name = header::HeaderName::from_bytes(normalized.as_bytes())
-                .map_err(|_| OssCopyError::Upload("invalid upload header".to_string()))?;
-            let header_value = header::HeaderValue::from_str(&value)
-                .map_err(|_| OssCopyError::Upload("invalid upload header".to_string()))?;
-            request = request.header(header_name, header_value);
-        }
+    let mut request = client.post(upload_url).multipart(form);
+    if let Some(token) = auth_token.filter(|token| !token.trim().is_empty()) {
+        request = request.bearer_auth(token);
     }
 
     let response = request
-        .body(body)
         .send()
         .await
         .map_err(|error| OssCopyError::Upload(error.to_string()))?;
-    if !response.status().is_success() {
+    let status = response.status();
+    let response_body = response
+        .text()
+        .await
+        .map_err(|error| OssCopyError::Upload(error.to_string()))?;
+    if !status.is_success() {
         return Err(OssCopyError::Upload(format!(
-            "http status {}",
-            response.status()
+            "http status {status}: {response_body}"
         )));
     }
 
-    Ok(file_info)
+    let envelope: UploadEnvelope = serde_json::from_str(&response_body)
+        .map_err(|error| OssCopyError::Upload(format!("invalid response: {error}")))?;
+    if let Some(code) = envelope.code {
+        if code >= 400 {
+            return Err(OssCopyError::Upload(
+                envelope
+                    .msg
+                    .unwrap_or_else(|| format!("server code {code}")),
+            ));
+        }
+    }
+    let data = envelope.data.ok_or(OssCopyError::MissingUrl)?;
+    let url = data
+        .url
+        .filter(|value| !value.is_empty())
+        .ok_or(OssCopyError::MissingUrl)?;
+
+    Ok(LocalUploadInfo {
+        name: data.filename.unwrap_or(file_info.name),
+        size: data.size.unwrap_or(file_info.size),
+        url,
+        key: data.key.unwrap_or_default(),
+        content_type: data.content_type.unwrap_or(media_type),
+    })
 }
 
 pub(crate) fn validate_remote_media_url(media_url: &str) -> Result<Url, OssCopyError> {
@@ -231,19 +277,6 @@ fn validate_upload_api_url(upload_api_url: &str) -> Result<Url, OssCopyError> {
         "http" | "https" => Ok(url),
         _ => Err(OssCopyError::UnsupportedProtocol),
     }
-}
-
-fn validate_signed_oss_url(put_url: &str) -> Result<Url, OssCopyError> {
-    let url = Url::parse(put_url).map_err(|_| OssCopyError::InvalidUrl)?;
-    if url.scheme() != "https" {
-        return Err(OssCopyError::UnsupportedProtocol);
-    }
-    let host = url.host_str().ok_or(OssCopyError::UnsafeHost)?;
-    let normalized = host.trim_end_matches('.').to_ascii_lowercase();
-    if normalized != "aliyuncs.com" && !normalized.ends_with(".aliyuncs.com") {
-        return Err(OssCopyError::UnsafeHost);
-    }
-    Ok(url)
 }
 
 fn validate_safe_host(url: &Url) -> Result<(), OssCopyError> {
