@@ -31,6 +31,7 @@ import Slideshow from "yet-another-react-lightbox/plugins/slideshow";
 import Video from "yet-another-react-lightbox/plugins/video";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import {
+  burnOssVideoAnnotation,
   captureOssVideoFrame,
   createVideoEnhanceTask,
   createWuhenRemovalTask,
@@ -1434,49 +1435,17 @@ export const VideoToolbar = ({
         setIsAnnotationOpen(false);
         closeVideoTool();
 
-        const response = await window.videoProcessing.burnAnnotations({
-          videoUrl: currentVideoUrl,
-          overlayUrl: overlayUpload.url,
-          start: payload.start,
-          end: payload.end,
-          authToken: getJikeingToken() || undefined,
-          backendBaseUrl:
-            import.meta.env.VITE_JIKE_GO_BASE_URL || "http://localhost:9181",
+        const annotationResponse = await burnOssVideoAnnotation({
+          source_url: currentVideoUrl,
+          overlay_url: overlayUpload.url,
+          start_ms: Math.round(payload.start * 1000),
+          end_ms: Math.round(payload.end * 1000),
         });
-        if (!response.success || !response.data) {
-          throw new Error(response.error || "视频标注烧录失败");
-        }
-
-        let generatedVideoUrl = response.data.url;
-        const fallbackPath = response.data.webviewFallbackPath;
-        if (fallbackPath) {
-          try {
-            const fileBytes = await window.storage.readAbsoluteFile(fallbackPath);
-            if (
-              response.data.webviewFallbackSize !== undefined &&
-              fileBytes.length !== response.data.webviewFallbackSize
-            ) {
-              throw new Error("标注视频临时文件大小不一致");
-            }
-            const fallbackUpload = await uploadFileToOSS(
-              new File([new Uint8Array(fileBytes)], "annotated.mp4", {
-                type: "video/mp4",
-              }),
-            );
-            generatedVideoUrl = fallbackUpload.url;
-            if (!generatedVideoUrl) {
-              throw new Error("标注视频上传失败");
-            }
-          } finally {
-            try {
-              await window.videoProcessing.cleanupAnnotationWebviewFallback(
-                fallbackPath,
-              );
-            } catch (cleanupError: any) {
-              console.warn("标注视频临时文件清理失败:", cleanupError);
-            }
-          }
-        }
+        const annotationResult =
+          annotationResponse?.data?.data ??
+          annotationResponse?.data ??
+          annotationResponse;
+        const generatedVideoUrl = annotationResult?.url;
         if (!generatedVideoUrl) {
           throw new Error("标注视频上传失败");
         }
@@ -1485,7 +1454,7 @@ export const VideoToolbar = ({
           withVideoPosterFields({
             url: generatedVideoUrl,
             remoteUrl: generatedVideoUrl,
-            format: response.data.format,
+            format: "mp4",
           }),
         );
         updateNewVideoNodeData(childId, {
@@ -1493,7 +1462,7 @@ export const VideoToolbar = ({
           nickname: "视频标注",
           processingLabel: undefined,
           isUpload: true,
-          duration: response.data.duration,
+          duration: videoDuration,
           result: { type: "video", data: [resultItem] },
           status: GenerationStatus.COMPLETED,
           progress: 100,

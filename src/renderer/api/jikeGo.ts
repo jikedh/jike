@@ -552,6 +552,30 @@ export function trimOssVideo(data: TrimOssVideoRequest): any {
   });
 }
 
+export type BurnOssVideoAnnotationRequest = {
+  source_url: string;
+  overlay_url: string;
+  start_ms: number;
+  end_ms: number;
+};
+
+export type BurnOssVideoAnnotationResponse = {
+  url: string;
+  duration_ms: number;
+};
+
+export function burnOssVideoAnnotation(
+  data: BurnOssVideoAnnotationRequest,
+): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/oss/burn-video-annotation",
+    method: "post",
+    data,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
 // ============== RunningHub 视频工作流 ==============
 
 export type RunningHubNodeInfo = {
