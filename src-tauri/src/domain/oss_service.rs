@@ -1,5 +1,6 @@
 use reqwest::{multipart, Body, Client, Url};
 use serde::{Deserialize, Serialize};
+use std::error::Error;
 use std::net::IpAddr;
 use std::time::Duration;
 use tokio_util::io::ReaderStream;
@@ -23,6 +24,27 @@ pub enum OssCopyError {
     InvalidLocalFile,
     #[error("local file is too large")]
     FileTooLarge,
+}
+
+fn describe_request_error(error: &reqwest::Error) -> String {
+    let category = if error.is_timeout() {
+        "network timeout"
+    } else if error.is_connect() {
+        "network connection failed"
+    } else if error.is_request() {
+        "request send failed"
+    } else {
+        "network request failed"
+    };
+
+    let mut causes = vec![error.to_string()];
+    let mut source = error.source();
+    while let Some(cause) = source {
+        causes.push(cause.to_string());
+        source = cause.source();
+    }
+
+    format!("{category}: {}", causes.join("; caused by: "))
 }
 
 #[derive(Debug, Serialize)]
@@ -224,7 +246,7 @@ pub async fn upload_local_file_to_backend(
     let response = request
         .send()
         .await
-        .map_err(|error| OssCopyError::Upload(error.to_string()))?;
+        .map_err(|error| OssCopyError::Upload(describe_request_error(&error)))?;
     let status = response.status();
     let response_body = response
         .text()

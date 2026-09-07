@@ -11,6 +11,7 @@ import {
 } from "shared/constants/fileDrop";
 import {
     getLocalFileInfo,
+    uploadFileToOSS,
     uploadLocalFilePathToOSS,
 } from "service/oss";
 import {
@@ -36,6 +37,7 @@ const INITIAL_DRAG_STATE: FileDragState = {
 };
 
 const PLACEHOLDER_OFFSET = { x: 140, y: 90 };
+const WEBVIEW_UPLOAD_FALLBACK_MAX_SIZE = 16 * 1024 * 1024;
 
 type TauriDragPayload = {
     type: "enter" | "over" | "drop" | "leave" | "cancelled";
@@ -100,6 +102,42 @@ const createPreviewFromPath = async (path: string): Promise<string> => {
         }
     } catch { /* 预览失败静默 */ }
     return "";
+};
+
+const isNativeNetworkError = (error: any) =>
+    /upload media failed: (network timeout|network connection failed|request send failed|network request failed)/i.test(
+        String(error?.message ?? error),
+    );
+
+const uploadDroppedFile = async ({
+    path,
+    fileInfo,
+    contentType,
+    mediaType,
+}: {
+    path: string;
+    fileInfo: { name: string; size: number };
+    contentType: string;
+    mediaType: Exclude<MediaFileType, "unknown">;
+}) => {
+    try {
+        return await uploadLocalFilePathToOSS({
+            path,
+            name: fileInfo.name,
+            size: fileInfo.size,
+            contentType,
+            blobType: mediaType,
+            maxSize: FILE_DROP_MAX_SIZE,
+        });
+    } catch (error: any) {
+        if (!isNativeNetworkError(error) || fileInfo.size > WEBVIEW_UPLOAD_FALLBACK_MAX_SIZE) {
+            throw error;
+        }
+
+        // 小文件可复用 WebView 网络栈，规避系统代理或证书差异。
+        console.warn("[useFileDrop] native upload failed; retrying through WebView", error);
+        return uploadFileToOSS(await readFileFromPath(path));
+    }
 };
 
 export function useFileDrop(
@@ -190,13 +228,11 @@ export function useFileDrop(
                             if (mediaType === "unknown") continue;
 
                             const contentType = inferMimeType(fileInfo.name);
-                            const uploadResult = await uploadLocalFilePathToOSS({
+                            const uploadResult = await uploadDroppedFile({
                                 path,
-                                name: fileInfo.name,
-                                size: fileInfo.size,
+                                fileInfo,
                                 contentType,
-                                blobType: mediaType,
-                                maxSize: FILE_DROP_MAX_SIZE,
+                                mediaType,
                             });
                             const nodeId = insertFileDropIntoCanvas(
                                 { ...fileInfo, contentType, mediaType },

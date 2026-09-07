@@ -1816,6 +1816,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "rustls",
+ "rustls-native-certs",
  "tokio",
  "tokio-rustls",
  "tower-service",
@@ -2122,7 +2123,7 @@ dependencies = [
 
 [[package]]
 name = "jike"
-version = "2.4.0"
+version = "2.4.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3464,6 +3465,7 @@ dependencies = [
  "pin-project-lite",
  "quinn",
  "rustls",
+ "rustls-native-certs",
  "rustls-pki-types",
  "serde",
  "serde_json",
