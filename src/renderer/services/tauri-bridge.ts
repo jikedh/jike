@@ -156,9 +156,18 @@ const videoProcessingApi = {
     }) =>
         invokeOrThrow<{
             success: boolean;
-            data?: { url: string; format: "mp4"; duration: number; method: "ffmpeg" };
+            data?: {
+                url: string;
+                format: "mp4";
+                duration: number;
+                method: "ffmpeg";
+                webviewFallbackPath?: string;
+                webviewFallbackSize?: number;
+            };
             error?: string;
         }>("video_processing_burn_annotations", { request }),
+    cleanupAnnotationWebviewFallback: (path: string) =>
+        invokeOrThrow<void>("video_processing_cleanup_annotation_webview_fallback", { path }),
 };
 
 // === notification ======================================================

@@ -62,9 +62,12 @@ declare global {
           format: "mp4";
           duration: number;
           method: "ffmpeg";
+          webviewFallbackPath?: string;
+          webviewFallbackSize?: number;
         };
         error?: string;
       }>;
+      cleanupAnnotationWebviewFallback: (path: string) => Promise<void>;
     };
   }
 }

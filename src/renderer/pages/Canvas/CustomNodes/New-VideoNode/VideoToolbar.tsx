@@ -1443,14 +1443,48 @@ export const VideoToolbar = ({
           backendBaseUrl:
             import.meta.env.VITE_JIKE_GO_BASE_URL || "http://localhost:9181",
         });
-        if (!response.success || !response.data?.url) {
+        if (!response.success || !response.data) {
           throw new Error(response.error || "视频标注烧录失败");
+        }
+
+        let generatedVideoUrl = response.data.url;
+        const fallbackPath = response.data.webviewFallbackPath;
+        if (fallbackPath) {
+          try {
+            const fileBytes = await window.storage.readAbsoluteFile(fallbackPath);
+            if (
+              response.data.webviewFallbackSize !== undefined &&
+              fileBytes.length !== response.data.webviewFallbackSize
+            ) {
+              throw new Error("标注视频临时文件大小不一致");
+            }
+            const fallbackUpload = await uploadFileToOSS(
+              new File([new Uint8Array(fileBytes)], "annotated.mp4", {
+                type: "video/mp4",
+              }),
+            );
+            generatedVideoUrl = fallbackUpload.url;
+            if (!generatedVideoUrl) {
+              throw new Error("标注视频上传失败");
+            }
+          } finally {
+            try {
+              await window.videoProcessing.cleanupAnnotationWebviewFallback(
+                fallbackPath,
+              );
+            } catch (cleanupError: any) {
+              console.warn("标注视频临时文件清理失败:", cleanupError);
+            }
+          }
+        }
+        if (!generatedVideoUrl) {
+          throw new Error("标注视频上传失败");
         }
 
         const resultItem = withRemoteMediaRef(
           withVideoPosterFields({
-            url: response.data.url,
-            remoteUrl: response.data.url,
+            url: generatedVideoUrl,
+            remoteUrl: generatedVideoUrl,
             format: response.data.format,
           }),
         );

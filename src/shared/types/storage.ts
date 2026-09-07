@@ -143,6 +143,7 @@ export type StorageApi = {
     projectId: string,
   ) => Promise<StoryboardAssetsPackageResult>;
   getDefaultPath: () => Promise<string>;
+  readAbsoluteFile: (path: string) => Promise<number[]>;
 
   // Legacy aliases retained for compatibility while the renderer migrates.
   ensureProjectDir: (

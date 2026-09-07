@@ -94,6 +94,7 @@ pub fn run() {
             commands::debug_capture_page,
             commands::video_processing_trim,
             commands::video_processing_burn_annotations,
+            commands::video_processing_cleanup_annotation_webview_fallback,
             commands::video_split_mp4_by_seconds,
             commands::get_local_file_info,
             commands::upload_local_file_to_backend,

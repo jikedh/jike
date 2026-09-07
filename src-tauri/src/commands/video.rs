@@ -20,6 +20,15 @@ pub async fn video_processing_burn_annotations(
 }
 
 #[tauri::command]
+pub async fn video_processing_cleanup_annotation_webview_fallback(
+    path: String,
+) -> Result<(), String> {
+    domain::cleanup_annotation_webview_fallback(&path)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub async fn video_split_mp4_by_seconds(
     request: SplitMp4Request,
 ) -> Result<serde_json::Value, String> {

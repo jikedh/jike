@@ -50,6 +50,10 @@ pub struct VideoAnnotationBurnResult {
     pub format: String,
     pub duration: f64,
     pub method: String,
+    #[serde(rename = "webviewFallbackPath", skip_serializing_if = "Option::is_none")]
+    pub webview_fallback_path: Option<String>,
+    #[serde(rename = "webviewFallbackSize", skip_serializing_if = "Option::is_none")]
+    pub webview_fallback_size: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

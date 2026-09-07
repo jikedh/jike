@@ -20,6 +20,7 @@ const FFMPEG_PATH_ENV: &str = "JIKE_FFMPEG_PATH";
 const MAX_SOURCE_VIDEO_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_OVERLAY_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_OUTPUT_VIDEO_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const WEBVIEW_UPLOAD_FALLBACK_MAX_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug, thiserror::Error)]
 pub enum VideoError {
@@ -114,27 +115,90 @@ pub async fn burn_annotations(
                 .unwrap_or(token.trim())
                 .to_string()
         });
-        let uploaded = crate::domain::oss_service::upload_local_file_to_backend(
+        let upload_result = crate::domain::oss_service::upload_local_file_to_backend(
             output_path.to_string_lossy().as_ref(),
             &upload_api_url,
             auth_token,
             Some("video/mp4".to_string()),
             MAX_OUTPUT_VIDEO_BYTES,
         )
-        .await
-        .map_err(|error| VideoError::Http(error.to_string()))?;
+        .await;
+        match upload_result {
+            Ok(uploaded) => Ok(VideoAnnotationBurnResult {
+                url: uploaded.url,
+                format: "mp4".to_string(),
+                duration,
+                method: "ffmpeg".to_string(),
+                webview_fallback_path: None,
+                webview_fallback_size: None,
+            }),
+            Err(error) if is_webview_upload_fallback_error(&error) => {
+                let output_size = tokio::fs::metadata(&output_path).await?.len();
+                if output_size > WEBVIEW_UPLOAD_FALLBACK_MAX_BYTES {
+                    return Err(VideoError::Http(format!(
+                        "{error}; 标注视频为 {} MB，超过 WebView 回退上传上限 {} MB",
+                        output_size / 1024 / 1024,
+                        WEBVIEW_UPLOAD_FALLBACK_MAX_BYTES / 1024 / 1024,
+                    )));
+                }
 
-        Ok(VideoAnnotationBurnResult {
-            url: uploaded.url,
-            format: "mp4".to_string(),
-            duration,
-            method: "ffmpeg".to_string(),
-        })
+                Ok(VideoAnnotationBurnResult {
+                    url: String::new(),
+                    format: "mp4".to_string(),
+                    duration,
+                    method: "ffmpeg".to_string(),
+                    webview_fallback_path: Some(output_path.to_string_lossy().to_string()),
+                    webview_fallback_size: Some(output_size),
+                })
+            }
+            Err(error) => Err(VideoError::Http(error.to_string())),
+        }
     }
     .await;
 
-    let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+    let preserve_temp_dir = result
+        .as_ref()
+        .ok()
+        .and_then(|value| value.webview_fallback_path.as_ref())
+        .is_some();
+    if !preserve_temp_dir {
+        let _ = tokio::fs::remove_dir_all(&temp_dir).await;
+    }
     result
+}
+
+fn is_webview_upload_fallback_error(error: &crate::domain::oss_service::OssCopyError) -> bool {
+    matches!(
+        error,
+        crate::domain::oss_service::OssCopyError::Upload(message)
+            if message.contains("network timeout")
+                || message.contains("network connection failed")
+                || message.contains("request send failed")
+                || message.contains("network request failed")
+    )
+}
+
+pub async fn cleanup_annotation_webview_fallback(path: &str) -> Result<(), VideoError> {
+    let output_path = PathBuf::from(path);
+    if output_path.file_name().and_then(|name| name.to_str()) != Some("annotated.mp4") {
+        return Err(VideoError::Config("无效的标注临时文件".into()));
+    }
+
+    let temp_root = std::env::temp_dir()
+        .canonicalize()
+        .map_err(|error| VideoError::Io(error))?;
+    let temp_dir = output_path
+        .parent()
+        .ok_or_else(|| VideoError::Config("无效的标注临时目录".into()))?
+        .canonicalize()
+        .map_err(|error| VideoError::Io(error))?;
+    let directory_name = temp_dir.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+    if temp_dir.parent() != Some(temp_root.as_path()) || !directory_name.starts_with("jike-video-annotation-") {
+        return Err(VideoError::Config("拒绝清理非标注临时目录".into()));
+    }
+
+    tokio::fs::remove_dir_all(temp_dir).await?;
+    Ok(())
 }
 
 async fn download_remote_file(
