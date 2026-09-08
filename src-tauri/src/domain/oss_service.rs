@@ -1,5 +1,6 @@
-use reqwest::{multipart, Body, Client, Url};
+use reqwest::{header::{HeaderName, HeaderValue}, multipart, Body, Client, Url};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::error::Error;
 use std::net::IpAddr;
 use std::time::Duration;
@@ -79,6 +80,21 @@ struct UploadData {
     filename: Option<String>,
     size: Option<u64>,
     content_type: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PresignedUploadEnvelope {
+    code: Option<u16>,
+    msg: Option<String>,
+    data: Option<PresignedUploadData>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PresignedUploadData {
+    put_url: String,
+    headers: HashMap<String, String>,
+    access_url: String,
+    key: String,
 }
 
 pub async fn copy_video_url_to_oss(
@@ -281,6 +297,94 @@ pub async fn upload_local_file_to_backend(
         url,
         key: data.key.unwrap_or_default(),
         content_type: data.content_type.unwrap_or(media_type),
+    })
+}
+
+pub async fn upload_local_file_with_presigned_url(
+    path: &str,
+    presign_api_url: &str,
+    auth_token: Option<String>,
+    content_type: Option<String>,
+    blob_type: &str,
+    max_size: u64,
+) -> Result<LocalUploadInfo, OssCopyError> {
+    let file_info = get_local_file_info(path).await?;
+    if file_info.size > max_size {
+        return Err(OssCopyError::FileTooLarge);
+    }
+
+    let presign_url = validate_upload_api_url(presign_api_url)?;
+    let media_type = content_type
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| mime_guess::from_path(path).first_or_octet_stream().to_string());
+    let extension = std::path::Path::new(&file_info.name)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    let client = Client::builder()
+        .connect_timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(600))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|error| OssCopyError::Upload(error.to_string()))?;
+    let mut request = client.post(presign_url).json(&serde_json::json!({
+        "blob_type": blob_type,
+        "ext": extension,
+        "content_type": media_type,
+    }));
+    if let Some(token) = auth_token.filter(|token| !token.trim().is_empty()) {
+        request = request.bearer_auth(token);
+    }
+    let response = request
+        .send()
+        .await
+        .map_err(|error| OssCopyError::Upload(describe_request_error(&error)))?;
+    let status = response.status();
+    let response_body = response
+        .text()
+        .await
+        .map_err(|error| OssCopyError::Upload(error.to_string()))?;
+    if !status.is_success() {
+        return Err(OssCopyError::Upload(format!("http status {status}: {response_body}")));
+    }
+    let envelope: PresignedUploadEnvelope = serde_json::from_str(&response_body)
+        .map_err(|error| OssCopyError::Upload(format!("invalid response: {error}")))?;
+    if let Some(code) = envelope.code {
+        if code != 0 && code != 200 {
+            return Err(OssCopyError::Upload(envelope.msg.unwrap_or_else(|| format!("server code {code}"))));
+        }
+    }
+    let signed = envelope.data.ok_or(OssCopyError::MissingUrl)?;
+    let put_url = Url::parse(&signed.put_url).map_err(|_| OssCopyError::InvalidUrl)?;
+    if put_url.scheme() != "https" {
+        return Err(OssCopyError::UnsupportedProtocol);
+    }
+
+    let file = tokio::fs::File::open(path)
+        .await
+        .map_err(|_| OssCopyError::InvalidLocalFile)?;
+    let mut upload_request = client.put(put_url).body(Body::wrap_stream(ReaderStream::new(file)));
+    for (name, value) in signed.headers {
+        let name = HeaderName::from_bytes(name.as_bytes())
+            .map_err(|error| OssCopyError::Upload(error.to_string()))?;
+        let value = HeaderValue::from_str(&value)
+            .map_err(|error| OssCopyError::Upload(error.to_string()))?;
+        upload_request = upload_request.header(name, value);
+    }
+    let upload_response = upload_request
+        .send()
+        .await
+        .map_err(|error| OssCopyError::Upload(describe_request_error(&error)))?;
+    if !upload_response.status().is_success() {
+        return Err(OssCopyError::Upload(format!("http status {}", upload_response.status())));
+    }
+
+    Ok(LocalUploadInfo {
+        name: file_info.name,
+        size: file_info.size,
+        url: signed.access_url,
+        key: signed.key,
+        content_type: media_type,
     })
 }
 

@@ -142,6 +142,14 @@ export type OssUploadResp = {
   content_type: string;
 };
 
+export type OssPresignedUploadResp = {
+  put_url: string;
+  headers: Record<string, string>;
+  access_url: string;
+  key: string;
+  ttl: number;
+};
+
 export function healthCheck(): any {
   return jikeingService({
     baseURL: JIKE_GO_BASE_URL,
@@ -492,6 +500,20 @@ export function uploadOssFile(
         }
       }
       : undefined,
+    headers: getJikeGoAuthHeaders(),
+  });
+}
+
+export function getOssPresignedUploadUrl(data: {
+  blob_type: "image" | "video" | "audio";
+  ext?: string;
+  content_type?: string;
+}): any {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/oss/upload-put-url",
+    method: "post",
+    data,
     headers: getJikeGoAuthHeaders(),
   });
 }

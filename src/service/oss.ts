@@ -1,7 +1,9 @@
 import {
   copyOssMedia,
+  getOssPresignedUploadUrl,
   uploadOssFile,
   type OssUploadResp,
+  type OssPresignedUploadResp,
 } from "@/api/jikeGo";
 import { getJikeingToken } from "shared/utils/utils";
 
@@ -290,6 +292,50 @@ export async function uploadFileToOSS(
   };
 }
 
+type PresignedUploadOptions = {
+  blobType: "image" | "video" | "audio";
+  signal?: AbortSignal;
+};
+
+const getFileExtension = (fileName: string) =>
+  fileName.split(".").pop()?.trim().toLowerCase() || undefined;
+
+/** 通过后端签发的 PUT URL 直接上传到 OSS。 */
+export async function uploadFileWithPresignedUrl(
+  file: File,
+  options: PresignedUploadOptions,
+) {
+  const data = unwrapJikeGoData<OssPresignedUploadResp>(
+    await getOssPresignedUploadUrl({
+      blob_type: options.blobType,
+      ext: getFileExtension(file.name),
+      content_type: file.type || undefined,
+    }),
+  );
+
+  if (!data?.put_url || !data.access_url || !data.key) {
+    throw new Error("获取预签名上传地址失败");
+  }
+
+  const response = await fetch(data.put_url, {
+    method: "PUT",
+    headers: data.headers,
+    body: file,
+    signal: options.signal,
+  });
+  if (!response.ok) {
+    throw new Error(`上传失败：${response.status}`);
+  }
+
+  return {
+    url: data.access_url,
+    name: file.name,
+    key: data.key,
+    size: file.size,
+    contentType: file.type || "application/octet-stream",
+  };
+}
+
 export type LocalOssFileInfo = {
   name: string;
   size: number;
@@ -340,6 +386,30 @@ export async function uploadLocalFilePathToOSS(options: {
     uploadApiUrl: `${getJikeGoBaseUrl()}/v1/oss/upload`,
     authToken: getJikeingToken() || null,
     contentType: options.contentType,
+    maxSize: options.maxSize,
+  });
+}
+
+/** 将本地文件流式直传至后端签发的 OSS 预签名地址。 */
+export async function uploadLocalFilePathWithPresignedUrl(options: {
+  path: string;
+  name: string;
+  size: number;
+  contentType: string;
+  blobType: "image" | "video" | "audio";
+  maxSize: number;
+}): Promise<LocalOssUploadResult> {
+  const invoke = getTauriInvoke();
+  if (!invoke) {
+    throw new Error("Tauri 文件上传不可用");
+  }
+
+  return invoke<LocalOssUploadResult>("upload_local_file_with_presigned_url", {
+    path: options.path,
+    presignApiUrl: `${getJikeGoBaseUrl()}/v1/oss/upload-put-url`,
+    authToken: getJikeingToken() || null,
+    contentType: options.contentType,
+    blobType: options.blobType,
     maxSize: options.maxSize,
   });
 }

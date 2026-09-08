@@ -11,8 +11,8 @@ import {
 } from "shared/constants/fileDrop";
 import {
     getLocalFileInfo,
-    uploadFileToOSS,
-    uploadLocalFilePathToOSS,
+    uploadFileWithPresignedUrl,
+    uploadLocalFilePathWithPresignedUrl,
 } from "service/oss";
 import {
     insertFileDropIntoCanvas,
@@ -121,7 +121,7 @@ const uploadDroppedFile = async ({
     mediaType: Exclude<MediaFileType, "unknown">;
 }) => {
     try {
-        return await uploadLocalFilePathToOSS({
+        return await uploadLocalFilePathWithPresignedUrl({
             path,
             name: fileInfo.name,
             size: fileInfo.size,
@@ -136,7 +136,9 @@ const uploadDroppedFile = async ({
 
         // 小文件可复用 WebView 网络栈，规避系统代理或证书差异。
         console.warn("[useFileDrop] native upload failed; retrying through WebView", error);
-        return uploadFileToOSS(await readFileFromPath(path));
+        return uploadFileWithPresignedUrl(await readFileFromPath(path), {
+            blobType: mediaType,
+        });
     }
 };
 

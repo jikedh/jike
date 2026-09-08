@@ -14,7 +14,11 @@ import {
 } from "@tabler/icons-react";
 import type { ChangeEvent, RefObject } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { copyMediaUrlToOss, uploadFileToOSS } from "service/oss";
+import {
+  copyMediaUrlToOss,
+  uploadFileToOSS,
+  uploadFileWithPresignedUrl,
+} from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
 import { normalizeRequiredPoints } from "shared/constants/points";
 import type { NewVideoGenerationNode } from "shared/types/flow";
@@ -1074,7 +1078,9 @@ export const VideoToolbar = ({
     onUploadingChange?.(true);
 
     try {
-      const result = await uploadFileToOSS(file);
+      const result = await uploadFileWithPresignedUrl(file, {
+        blobType: "video",
+      });
       const uploadedUrl = result.url;
 
       if (!uploadedUrl) {

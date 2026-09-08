@@ -15,7 +15,7 @@ import {
 } from "@tabler/icons-react";
 import type { ChangeEvent } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { uploadFileToOSS } from "service/oss";
+import { uploadFileToOSS, uploadFileWithPresignedUrl } from "service/oss";
 import {
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM
@@ -209,7 +209,9 @@ export const ImageToolbar = memo(
           fileToUpload = await compressImage(file);
         }
 
-        const result = await uploadFileToOSS(fileToUpload);
+        const result = await uploadFileWithPresignedUrl(fileToUpload, {
+          blobType: "image",
+        });
         const uploadedUrl = result.url;
 
         if (!uploadedUrl) {
