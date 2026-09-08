@@ -1376,17 +1376,21 @@ export const VideoToolbar = ({
   const handleBurnVideoAnnotation = useCallback(
     async (payload: VideoAnnotationPayload) => {
       if (isBurningAnnotation || !currentVideoUrl) return;
-      if (!window.videoProcessing?.burnAnnotations) {
-        toast.error("当前桌面端不支持视频标注烧录");
-        return;
-      }
 
       setIsBurningAnnotation(true);
       let childId: string | null = null;
       try {
-        const overlayUpload = await uploadFileToOSS(payload.overlayFile);
-        if (!overlayUpload.url) {
-          throw new Error("标注图层上传失败");
+        const uploadedLayers = await Promise.all(
+          payload.layers.map(async (layer) => {
+            const upload = await uploadFileToOSS(layer.overlayFile);
+            if (!upload.url) {
+              throw new Error(`${layer.name}上传失败`);
+            }
+            return { ...layer, overlayUrl: upload.url };
+          }),
+        );
+        if (uploadedLayers.length === 0) {
+          throw new Error("请至少绘制一个标注图层");
         }
 
         const sourceNode = useCanvasFlowStore
@@ -1423,9 +1427,14 @@ export const VideoToolbar = ({
             annotation: {
               sourceNodeId: nodeId,
               sourceVideoUrl: currentVideoUrl,
-              overlayUrl: overlayUpload.url,
-              startTime: payload.start,
-              endTime: payload.end,
+              layers: uploadedLayers.map((layer) => ({
+                id: layer.id,
+                name: layer.name,
+                overlayUrl: layer.overlayUrl,
+                startTime: layer.start,
+                endTime: layer.end,
+                strokeCount: layer.strokeCount,
+              })),
               frameTime: payload.frameTime,
               sourceWidth: payload.sourceWidth,
               sourceHeight: payload.sourceHeight,
@@ -1441,19 +1450,22 @@ export const VideoToolbar = ({
         setIsAnnotationOpen(false);
         closeVideoTool();
 
-        const annotationResponse = await burnOssVideoAnnotation({
-          source_url: currentVideoUrl,
-          overlay_url: overlayUpload.url,
-          start_ms: Math.round(payload.start * 1000),
-          end_ms: Math.round(payload.end * 1000),
-        });
-        const annotationResult =
-          annotationResponse?.data?.data ??
-          annotationResponse?.data ??
-          annotationResponse;
-        const generatedVideoUrl = annotationResult?.url;
-        if (!generatedVideoUrl) {
-          throw new Error("标注视频上传失败");
+        let generatedVideoUrl = currentVideoUrl;
+        for (const layer of [...uploadedLayers].reverse()) {
+          const annotationResponse = await burnOssVideoAnnotation({
+            source_url: generatedVideoUrl,
+            overlay_url: layer.overlayUrl,
+            start_ms: Math.round(layer.start * 1000),
+            end_ms: Math.round(layer.end * 1000),
+          });
+          const annotationResult =
+            annotationResponse?.data?.data ??
+            annotationResponse?.data ??
+            annotationResponse;
+          if (!annotationResult?.url) {
+            throw new Error(`${layer.name}烧录失败`);
+          }
+          generatedVideoUrl = annotationResult.url;
         }
 
         const resultItem = withRemoteMediaRef(
@@ -1478,9 +1490,14 @@ export const VideoToolbar = ({
             annotation: {
               sourceNodeId: nodeId,
               sourceVideoUrl: currentVideoUrl,
-              overlayUrl: overlayUpload.url,
-              startTime: payload.start,
-              endTime: payload.end,
+              layers: uploadedLayers.map((layer) => ({
+                id: layer.id,
+                name: layer.name,
+                overlayUrl: layer.overlayUrl,
+                startTime: layer.start,
+                endTime: layer.end,
+                strokeCount: layer.strokeCount,
+              })),
               frameTime: payload.frameTime,
               sourceWidth: payload.sourceWidth,
               sourceHeight: payload.sourceHeight,
