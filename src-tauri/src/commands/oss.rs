@@ -1,4 +1,5 @@
 use crate::domain;
+use std::collections::HashMap;
 
 #[tauri::command]
 pub async fn get_local_file_info(path: String) -> Result<serde_json::Value, String> {
@@ -43,6 +44,26 @@ pub async fn upload_local_file_with_presigned_url(
         auth_token,
         content_type,
         &blob_type,
+        max_size,
+    )
+    .await
+    .map(|file| serde_json::json!(file))
+    .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn upload_local_file_to_presigned_url(
+    path: String,
+    put_url: String,
+    headers: HashMap<String, String>,
+    content_type: Option<String>,
+    max_size: u64,
+) -> Result<serde_json::Value, String> {
+    domain::upload_local_file_to_presigned_url(
+        &path,
+        &put_url,
+        headers,
+        content_type,
         max_size,
     )
     .await

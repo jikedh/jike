@@ -404,14 +404,30 @@ export async function uploadLocalFilePathWithPresignedUrl(options: {
     throw new Error("Tauri 文件上传不可用");
   }
 
-  return invoke<LocalOssUploadResult>("upload_local_file_with_presigned_url", {
+  const signed = unwrapJikeGoData<OssPresignedUploadResp>(
+    await getOssPresignedUploadUrl({
+      blob_type: options.blobType,
+      ext: getFileExtension(options.name),
+      content_type: options.contentType || undefined,
+    }),
+  );
+  if (!signed?.put_url || !signed.access_url || !signed.key) {
+    throw new Error("获取预签名上传地址失败");
+  }
+
+  const result = await invoke<LocalOssUploadResult>("upload_local_file_to_presigned_url", {
     path: options.path,
-    presignApiUrl: `${getJikeGoBaseUrl()}/v1/oss/upload-put-url`,
-    authToken: getJikeingToken() || null,
+    putUrl: signed.put_url,
+    headers: signed.headers,
     contentType: options.contentType,
-    blobType: options.blobType,
     maxSize: options.maxSize,
   });
+
+  return {
+    ...result,
+    url: signed.access_url,
+    key: signed.key,
+  };
 }
 
 /** 将远程媒体 URL 交给后端下载并转存到用户 OSS。 */

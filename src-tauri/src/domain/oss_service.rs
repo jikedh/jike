@@ -388,6 +388,64 @@ pub async fn upload_local_file_with_presigned_url(
     })
 }
 
+pub async fn upload_local_file_to_presigned_url(
+    path: &str,
+    put_url: &str,
+    headers: HashMap<String, String>,
+    content_type: Option<String>,
+    max_size: u64,
+) -> Result<LocalUploadInfo, OssCopyError> {
+    let file_info = get_local_file_info(path).await?;
+    if file_info.size > max_size {
+        return Err(OssCopyError::FileTooLarge);
+    }
+
+    let put_url = Url::parse(put_url).map_err(|_| OssCopyError::InvalidUrl)?;
+    if put_url.scheme() != "https" {
+        return Err(OssCopyError::UnsupportedProtocol);
+    }
+    let host = put_url.host_str().ok_or(OssCopyError::InvalidUrl)?;
+    if !host.to_ascii_lowercase().ends_with(".aliyuncs.com") {
+        return Err(OssCopyError::UnsafeHost);
+    }
+
+    let media_type = content_type
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| mime_guess::from_path(path).first_or_octet_stream().to_string());
+    let file = tokio::fs::File::open(path)
+        .await
+        .map_err(|_| OssCopyError::InvalidLocalFile)?;
+    let client = Client::builder()
+        .connect_timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(600))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|error| OssCopyError::Upload(error.to_string()))?;
+    let mut upload_request = client.put(put_url).body(Body::wrap_stream(ReaderStream::new(file)));
+    for (name, value) in headers {
+        let name = HeaderName::from_bytes(name.as_bytes())
+            .map_err(|error| OssCopyError::Upload(error.to_string()))?;
+        let value = HeaderValue::from_str(&value)
+            .map_err(|error| OssCopyError::Upload(error.to_string()))?;
+        upload_request = upload_request.header(name, value);
+    }
+    let upload_response = upload_request
+        .send()
+        .await
+        .map_err(|error| OssCopyError::Upload(describe_request_error(&error)))?;
+    if !upload_response.status().is_success() {
+        return Err(OssCopyError::Upload(format!("http status {}", upload_response.status())));
+    }
+
+    Ok(LocalUploadInfo {
+        name: file_info.name,
+        size: file_info.size,
+        url: String::new(),
+        key: String::new(),
+        content_type: media_type,
+    })
+}
+
 pub(crate) fn validate_remote_media_url(media_url: &str) -> Result<Url, OssCopyError> {
     let url = Url::parse(media_url).map_err(|_| OssCopyError::InvalidUrl)?;
     if url.scheme() != "https" {

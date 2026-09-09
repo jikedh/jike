@@ -99,6 +99,7 @@ pub fn run() {
             commands::get_local_file_info,
             commands::upload_local_file_to_backend,
             commands::upload_local_file_with_presigned_url,
+            commands::upload_local_file_to_presigned_url,
             commands::copy_video_url_to_oss,
             commands::copy_media_url_to_oss,
             // 剧本Agent
