@@ -18,6 +18,7 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -34,21 +35,23 @@ export type VideoEnhanceParams = {
 // Radix SelectItem 不允许空字符串，使用占位值替代
 const SCENE_AUTO = "__auto__";
 const RESOLUTION_DEFAULT = "__default__";
+const FPS_SOURCE = "__source__";
+const FPS_CUSTOM = "__custom__";
 
 const SCENE_OPTIONS: { value: string; label: string }[] = [
   { value: SCENE_AUTO, label: "自动判定" },
-  { value: "aigc", label: "aigc - AI 生成视频超分" },
-  { value: "short_series", label: "short_series - 短剧增强" },
-  { value: "ugc", label: "ugc - UGC 失真修复" },
-  { value: "old_film", label: "old_film - 老片修复" },
+  { value: "aigc", label: "AI 生成视频" },
+  { value: "short_series", label: "短剧增强" },
+  { value: "ugc", label: "日常拍摄视频" },
+  { value: "old_film", label: "老片修复" },
 ];
 
 const TOOL_VERSION_OPTIONS: {
   value: VideoEnhanceToolVersion;
   label: string;
 }[] = [
-    { value: "standard", label: "standard - 性价比优先" },
-    { value: "professional", label: "professional - 效果优先" },
+    { value: "standard", label: "标准版（性价比优先）" },
+    { value: "professional", label: "专业版（效果优先）" },
   ];
 
 const RESOLUTION_OPTIONS: {
@@ -61,6 +64,16 @@ const RESOLUTION_OPTIONS: {
     { value: "2k", label: "2k" },
     { value: "4k", label: "4k" },
   ];
+
+const FPS_OPTIONS: { value: string; label: string }[] = [
+  { value: FPS_SOURCE, label: "与源视频一致" },
+  { value: "24", label: "24 帧/秒" },
+  { value: "25", label: "25 帧/秒" },
+  { value: "30", label: "30 帧/秒" },
+  { value: "50", label: "50 帧/秒" },
+  { value: "60", label: "60 帧/秒" },
+  { value: FPS_CUSTOM, label: "自定义" },
+];
 
 type VideoEnhancePanelProps = {
   open: boolean;
@@ -81,12 +94,14 @@ export const VideoEnhancePanel = ({
   const [toolVersion, setToolVersion] =
     useState<VideoEnhanceToolVersion>("standard");
   const [resolution, setResolution] = useState<string>(RESOLUTION_DEFAULT);
-  const [fps, setFps] = useState("");
+  const [fpsOption, setFpsOption] = useState(FPS_SOURCE);
+  const [customFps, setCustomFps] = useState("");
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [estimatedScore, setEstimatedScore] = useState<number | null>(null);
 
   const { totalPoints } = useGenerationPoints();
+  const fps = fpsOption === FPS_CUSTOM ? customFps : fpsOption === FPS_SOURCE ? "" : fpsOption;
 
   // 参数变化时实时查询预估积分
   useEffect(() => {
@@ -147,7 +162,8 @@ export const VideoEnhancePanel = ({
     setScene(SCENE_AUTO);
     setToolVersion("standard");
     setResolution(RESOLUTION_DEFAULT);
-    setFps("");
+    setFpsOption(FPS_SOURCE);
+    setCustomFps("");
     setErrors({});
   }, [scene, toolVersion, resolution, fps, validate, onSubmit]);
 
@@ -170,18 +186,20 @@ export const VideoEnhancePanel = ({
           {/* 场景预设 */}
           <div className="space-y-2">
             <label className="text-sm text-white/70">
-              场景预设 <span className="text-white/30">(scene)</span>
+              场景预设
             </label>
             <Select value={scene} onValueChange={(v) => setScene(v)}>
-              <SelectTrigger className="h-10 border-white/10 bg-white/5 text-white hover:bg-white/10">
+              <SelectTrigger className="h-10 w-full border-white/10 bg-white/5 text-white hover:bg-white/10">
                 <SelectValue placeholder="自动判定" />
               </SelectTrigger>
-              <SelectContent className="border-white/10 bg-[#1e1e22] text-white">
-                {SCENE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
+              <SelectContent className="w-(--radix-select-trigger-width) min-w-(--radix-select-trigger-width) max-w-(--radix-select-trigger-width) border-white/10 bg-[#1e1e22] text-white">
+                <SelectGroup>
+                  {SCENE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
             <p className="text-[11px] text-white/30">
@@ -192,7 +210,7 @@ export const VideoEnhancePanel = ({
           {/* 工具版本 */}
           <div className="space-y-2">
             <label className="text-sm text-white/70">
-              工具版本 <span className="text-white/30">(tool_version)</span>
+              工具版本
             </label>
             <Select
               value={toolVersion}
@@ -200,15 +218,17 @@ export const VideoEnhancePanel = ({
                 setToolVersion(v as VideoEnhanceToolVersion)
               }
             >
-              <SelectTrigger className="h-10 border-white/10 bg-white/5 text-white hover:bg-white/10">
+              <SelectTrigger className="h-10 w-full border-white/10 bg-white/5 text-white hover:bg-white/10">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="border-white/10 bg-[#1e1e22] text-white">
-                {TOOL_VERSION_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
+              <SelectContent className="w-(--radix-select-trigger-width) min-w-(--radix-select-trigger-width) max-w-(--radix-select-trigger-width) border-white/10 bg-[#1e1e22] text-white">
+                <SelectGroup>
+                  {TOOL_VERSION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
@@ -216,47 +236,73 @@ export const VideoEnhancePanel = ({
           {/* 输出分辨率 */}
           <div className="space-y-2">
             <label className="text-sm text-white/70">
-              输出分辨率 <span className="text-white/30">(resolution)</span>
+              输出分辨率
             </label>
             <Select value={resolution} onValueChange={(v) => setResolution(v)}>
-              <SelectTrigger className="h-10 border-white/10 bg-white/5 text-white hover:bg-white/10">
+              <SelectTrigger className="h-10 w-full border-white/10 bg-white/5 text-white hover:bg-white/10">
                 <SelectValue placeholder="与源视频一致" />
               </SelectTrigger>
-              <SelectContent className="border-white/10 bg-[#1e1e22] text-white">
-                {RESOLUTION_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
+              <SelectContent className="w-(--radix-select-trigger-width) min-w-(--radix-select-trigger-width) max-w-(--radix-select-trigger-width) border-white/10 bg-[#1e1e22] text-white">
+                <SelectGroup>
+                  {RESOLUTION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </div>
 
           {/* 输出帧率 */}
           <div className="space-y-2">
-            <label className="text-sm text-white/70">
-              输出帧率 <span className="text-white/30">(fps) [1 ~ 120]</span>
-            </label>
-            <input
-              type="number"
-              value={fps}
-              onChange={(e) => {
-                setFps(e.target.value);
-                if (e.target.value && errors.fps) {
-                  setErrors((prev) => {
-                    const next = { ...prev };
-                    delete next.fps;
-                    return next;
-                  });
-                }
+            <label className="text-sm text-white/70">输出帧率</label>
+            <Select
+              value={fpsOption}
+              onValueChange={(value) => {
+                setFpsOption(value);
+                setErrors((prev) => {
+                  const next = { ...prev };
+                  delete next.fps;
+                  return next;
+                });
               }}
-              placeholder="输出帧率，最高 120。高于源视频时触发智能插帧"
-              className={cn(
-                "w-full h-10 rounded-lg border bg-white/5 px-3 text-sm text-white placeholder:text-white/25",
-                "focus:outline-none focus:border-[#B43FEB]/50 focus:ring-1 focus:ring-[#B43FEB]/30",
-                errors.fps ? "border-red-500/50" : "border-white/10",
-              )}
-            />
+            >
+              <SelectTrigger className="h-10 w-full border-white/10 bg-white/5 text-white hover:bg-white/10">
+                <SelectValue placeholder="与源视频一致" />
+              </SelectTrigger>
+              <SelectContent className="w-(--radix-select-trigger-width) min-w-(--radix-select-trigger-width) max-w-(--radix-select-trigger-width) border-white/10 bg-[#1e1e22] text-white">
+                <SelectGroup>
+                  {FPS_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            {fpsOption === FPS_CUSTOM && (
+              <input
+                type="number"
+                value={customFps}
+                onChange={(e) => {
+                  setCustomFps(e.target.value);
+                  if (e.target.value && errors.fps) {
+                    setErrors((prev) => {
+                      const next = { ...prev };
+                      delete next.fps;
+                      return next;
+                    });
+                  }
+                }}
+                placeholder="请输入 1 至 120 的帧率"
+                className={cn(
+                  "h-10 w-full rounded-lg border bg-white/5 px-3 text-sm text-white placeholder:text-white/25",
+                  "focus:border-[#B43FEB]/50 focus:ring-1 focus:ring-[#B43FEB]/30 focus:outline-none",
+                  errors.fps ? "border-red-500/50" : "border-white/10",
+                )}
+              />
+            )}
             {errors.fps && (
               <p className="text-[11px] text-red-400">{errors.fps}</p>
             )}
