@@ -1,6 +1,6 @@
 [package]
 name = "jike"
-version = "2.4.6"
+version = "2.4.7"
 description = "即刻 - 视频工作流"
 authors = ["小明"]
 edition = "2021"
