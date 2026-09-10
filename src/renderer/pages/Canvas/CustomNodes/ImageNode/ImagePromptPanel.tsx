@@ -14,6 +14,10 @@ import { ImageReferenceThumbnails } from "./components/ImageReferenceThumbnails"
 import { ImageModelHelpTooltip } from "./components/ImageModelHelpTooltip";
 import {
   AGNES_IMAGE_21_FLASH_MODEL,
+  APIMART_FLUX_2_PRO_MODEL,
+  APIMART_GPT_IMAGE_25_MODEL,
+  APIMART_PLATFORM,
+  APIMART_QWEN_IMAGE_30_MODEL,
   IMAGE_NODE_MODELS,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM,
@@ -21,6 +25,7 @@ import {
   RUNNINGHUB_MIDJOURNEY_V81_MODEL,
   RUNNINGHUB_NANO_BANANA_PRO_MODEL,
   RUNNINGHUB_PLATFORM,
+  isAPIMartImageModel as isAPIMartImageModelId,
   isAgnesImageModel as isAgnesImageModelId
 } from "shared/constants/ai-models";
 import { GenerationStatus } from "shared/constants/enum";
@@ -170,6 +175,63 @@ const AGNES_IMAGE_21_RESOLUTION_OPTIONS = [
   { label: "3K", value: "3K", description: "高精细" },
   { label: "4K", value: "4K", description: "超清" },
 ];
+const APIMART_FLUX_SIZE_OPTIONS = GPTIMAGE2_SIZES.filter((item) =>
+  ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "21:9", "9:21"].includes(
+    item.value,
+  ),
+);
+const APIMART_FLUX_SIZE_VALUES = toOptionValueSet(APIMART_FLUX_SIZE_OPTIONS);
+const APIMART_FLUX_RESOLUTION_OPTIONS = [
+  { label: "1MP", value: "1MP", description: "标准" },
+  { label: "2MP", value: "2MP", description: "默认" },
+  { label: "3MP", value: "3MP", description: "高清" },
+  { label: "4MP", value: "4MP", description: "超清" },
+];
+const APIMART_FLUX_RESOLUTION_VALUES = toOptionValueSet(
+  APIMART_FLUX_RESOLUTION_OPTIONS,
+);
+const APIMART_GPT_IMAGE_25_SIZE_OPTIONS = [
+  ...GPTIMAGE2_SIZES,
+  { label: "3:1", value: "3:1", description: "超宽横图" },
+  { label: "1:3", value: "1:3", description: "超长竖图" },
+];
+const APIMART_GPT_IMAGE_25_SIZE_VALUES = toOptionValueSet(
+  APIMART_GPT_IMAGE_25_SIZE_OPTIONS,
+);
+const APIMART_GPT_IMAGE_25_RESOLUTION_OPTIONS = [
+  { label: "1K", value: "1K", description: "标准" },
+  { label: "2K", value: "2K", description: "高清" },
+  { label: "4K", value: "4K", description: "超清" },
+];
+const APIMART_GPT_IMAGE_25_RESOLUTION_VALUES = toOptionValueSet(
+  APIMART_GPT_IMAGE_25_RESOLUTION_OPTIONS,
+);
+const APIMART_GPT_IMAGE_25_QUALITY_OPTIONS = [
+  { label: "自动", value: "auto" },
+  { label: "低", value: "low" },
+  { label: "标准", value: "medium" },
+  { label: "高", value: "high" },
+  { label: "超高", value: "xhigh" },
+  { label: "最高", value: "max" },
+];
+const APIMART_GPT_IMAGE_25_QUALITY_VALUES = toOptionValueSet(
+  APIMART_GPT_IMAGE_25_QUALITY_OPTIONS,
+);
+const APIMART_QWEN_IMAGE_30_SIZE_OPTIONS = GPTIMAGE2_SIZES.filter((item) =>
+  ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3"].includes(
+    item.value,
+  ),
+);
+const APIMART_QWEN_IMAGE_30_SIZE_VALUES = toOptionValueSet(
+  APIMART_QWEN_IMAGE_30_SIZE_OPTIONS,
+);
+const APIMART_QWEN_IMAGE_30_RESOLUTION_OPTIONS = [
+  { label: "1K", value: "1K", description: "标准" },
+  { label: "2K", value: "2K", description: "高清" },
+];
+const APIMART_QWEN_IMAGE_30_RESOLUTION_VALUES = toOptionValueSet(
+  APIMART_QWEN_IMAGE_30_RESOLUTION_OPTIONS,
+);
 const SEEDREAM_SIZE_VALUES = toOptionValueSet(SEEDREAM_ASPECT_RATIOS);
 const SEEDREAM_RESOLUTION_VALUES = toOptionValueSet(SEEDREAM_RESOLUTIONS);
 
@@ -273,6 +335,11 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const midjourneyQuality: MidjourneyQuality =
     currentImageData?.quality === "4" ? "4" : "1";
   const raw = currentImageData?.raw ?? false;
+  const apimartQuality = APIMART_GPT_IMAGE_25_QUALITY_VALUES.has(
+    currentImageData?.quality ?? "",
+  )
+    ? currentImageData?.quality ?? "medium"
+    : "medium";
   const referenceImageUrls = currentImageData?.image_urls ?? [];
   const promptDraftHtml = currentImageData?.promptDraftHtml ?? "<p></p>";
 
@@ -328,6 +395,14 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   const isGptImage2Model = model === "gpt-image-2" || isRunningHubGptImage2Model;
   const isAgnesImageModel = isAgnesImageModelId(model);
   const isAgnesImage21Model = model === AGNES_IMAGE_21_FLASH_MODEL;
+  const isAPIMartImageModel =
+    isAPIMartImageModelId(model) && currentImageData?.platform === APIMART_PLATFORM;
+  const isAPIMartFluxModel =
+    isAPIMartImageModel && model === APIMART_FLUX_2_PRO_MODEL;
+  const isAPIMartGptImage25Model =
+    isAPIMartImageModel && model === APIMART_GPT_IMAGE_25_MODEL;
+  const isAPIMartQwenImage30Model =
+    isAPIMartImageModel && model === APIMART_QWEN_IMAGE_30_MODEL;
   // 判断是否为 Gemini 3 Pro 渠道二
   const isGeminiPro2Model = currentImageData?.platform === "google_pro2";
   const isLocalGeminiDirectModel =
@@ -399,6 +474,33 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       };
     }
 
+    if (isAPIMartFluxModel) {
+      return {
+        sizes: APIMART_FLUX_SIZE_VALUES,
+        resolutions: APIMART_FLUX_RESOLUTION_VALUES,
+        defaultSize: "1:1",
+        defaultResolution: "2MP",
+      };
+    }
+
+    if (isAPIMartGptImage25Model) {
+      return {
+        sizes: APIMART_GPT_IMAGE_25_SIZE_VALUES,
+        resolutions: APIMART_GPT_IMAGE_25_RESOLUTION_VALUES,
+        defaultSize: "1:1",
+        defaultResolution: "1K",
+      };
+    }
+
+    if (isAPIMartQwenImage30Model) {
+      return {
+        sizes: APIMART_QWEN_IMAGE_30_SIZE_VALUES,
+        resolutions: APIMART_QWEN_IMAGE_30_RESOLUTION_VALUES,
+        defaultSize: "1:1",
+        defaultResolution: "1K",
+      };
+    }
+
     return null;
   }, [
     isGeminiModel,
@@ -406,6 +508,9 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
     isGptImage2Model,
     isAgnesImage21Model,
     isAgnesImageModel,
+    isAPIMartFluxModel,
+    isAPIMartGptImage25Model,
+    isAPIMartQwenImage30Model,
     isLocalGeminiDirectModel,
     isNanoBananaParamsModel,
     isRunningHubMidjourneyV81Model,
@@ -464,6 +569,8 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       getImageGenerationPoints({
         model,
         platform,
+        resolution,
+        quality: isAPIMartGptImage25Model ? apimartQuality : undefined,
         count: imageCount,
         fallback: fallbackAIGenPrice,
       }),
@@ -471,9 +578,12 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
   }, [
     fallbackAIGenPrice,
     imageCount,
+    isAPIMartGptImage25Model,
     model,
     normalizeRequiredPoints,
     platform,
+    resolution,
+    apimartQuality,
   ]);
 
   const resetSuggestionState = () => {
@@ -1530,6 +1640,7 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
       const basePayload: any = {
         model,
         originalModel: model,
+        platform: currentImageData?.platform,
         prompt: finalPrompt,
         resolution,
         n: 1,
@@ -1571,6 +1682,10 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
         basePayload.chaos = currentImageData?.chaos ?? 0;
         basePayload.stylize = currentImageData?.stylize ?? 0;
         basePayload.iw = currentImageData?.iw ?? 1;
+      }
+
+      if (isAPIMartGptImage25Model) {
+        basePayload.quality = apimartQuality;
       }
 
       return basePayload;
@@ -2091,6 +2206,59 @@ export const ImagePromptPanel = memo(({ nodeId }: { nodeId: string }) => {
                   ? AGNES_IMAGE_21_RESOLUTION_OPTIONS
                   : AGNES_IMAGE_RESOLUTION_OPTIONS
               }
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
+            />
+          )}
+          {isAPIMartFluxModel && (
+            <GptImage2ParamsPanel
+              size={size}
+              resolution={resolution}
+              sizeOptions={APIMART_FLUX_SIZE_OPTIONS}
+              resolutionOptions={APIMART_FLUX_RESOLUTION_OPTIONS}
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
+            />
+          )}
+          {isAPIMartGptImage25Model && (
+            <GptImage2ParamsPanel
+              size={size}
+              resolution={resolution}
+              sizeOptions={APIMART_GPT_IMAGE_25_SIZE_OPTIONS}
+              resolutionOptions={APIMART_GPT_IMAGE_25_RESOLUTION_OPTIONS}
+              quality={apimartQuality}
+              qualityOptions={APIMART_GPT_IMAGE_25_QUALITY_OPTIONS}
+              onSizeChange={(value) => {
+                persistImageDefaultPreset({ size: value });
+                updateImageNodeData(nodeId, { size: value });
+              }}
+              onResolutionChange={(value) => {
+                persistImageDefaultPreset({ resolution: value });
+                updateImageNodeData(nodeId, { resolution: value });
+              }}
+              onQualityChange={(value) => {
+                updateImageNodeData(nodeId, { quality: value });
+              }}
+            />
+          )}
+          {isAPIMartQwenImage30Model && (
+            <GptImage2ParamsPanel
+              size={size}
+              resolution={resolution}
+              sizeOptions={APIMART_QWEN_IMAGE_30_SIZE_OPTIONS}
+              resolutionOptions={APIMART_QWEN_IMAGE_30_RESOLUTION_OPTIONS}
               onSizeChange={(value) => {
                 persistImageDefaultPreset({ size: value });
                 updateImageNodeData(nodeId, { size: value });

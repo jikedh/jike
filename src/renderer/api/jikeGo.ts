@@ -37,6 +37,7 @@ export type DesktopProxyPlatform =
   | "toapi"
   | "yunwu"
   | "agnes"
+  | "apimart"
   | "minimax";
 
 // ===================== 画质增强相关 =====================

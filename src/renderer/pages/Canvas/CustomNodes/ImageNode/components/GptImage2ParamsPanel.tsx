@@ -1,5 +1,12 @@
 import { ImageParamsPopover } from "./ImageParamsPopover";
 import type { ImageParamOption } from "./ImageParamsPopover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const GPTIMAGE2_SIZES = [
   { label: "1:1", value: "1:1", description: "正方形" },
@@ -22,8 +29,11 @@ type GptImage2ParamsPanelProps = {
   resolution: string;
   sizeOptions?: ImageParamOption[];
   resolutionOptions?: ImageParamOption[];
+  quality?: string;
+  qualityOptions?: ImageParamOption[];
   onSizeChange: (value: string) => void;
   onResolutionChange: (value: string) => void;
+  onQualityChange?: (value: string) => void;
 };
 
 export const GptImage2ParamsPanel = ({
@@ -35,8 +45,11 @@ export const GptImage2ParamsPanel = ({
     { label: "2K", value: "2K", description: "高清" },
     { label: "4K", value: "4K", description: "超清" },
   ],
+  quality,
+  qualityOptions,
   onSizeChange,
   onResolutionChange,
+  onQualityChange,
 }: GptImage2ParamsPanelProps) => {
   return (
     <ImageParamsPopover
@@ -48,6 +61,29 @@ export const GptImage2ParamsPanel = ({
       resolutionLabel="分辨率"
       onSizeChange={onSizeChange}
       onResolutionChange={onResolutionChange}
-    />
+    >
+      {quality && qualityOptions?.length && onQualityChange ? (
+        <div className="flex items-center justify-between gap-4 border-t border-white/6 pt-4">
+          <div className="min-w-0">
+            <div className="text-xs font-medium text-white/68">图片质量</div>
+            <div className="mt-0.5 text-[10px] leading-4 text-white/36">
+              质量越高，生成耗时和资源消耗通常越高。
+            </div>
+          </div>
+          <Select value={quality} onValueChange={onQualityChange}>
+            <SelectTrigger className="w-32 shrink-0 border-white/10 bg-white/4 text-xs text-white/72">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="z-10001">
+              {qualityOptions.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
+    </ImageParamsPopover>
   );
 };

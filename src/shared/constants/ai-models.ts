@@ -141,6 +141,17 @@ export const RUNNINGHUB_MIDJOURNEY_V81_MODEL = "runninghub-midjourney-v8.1";
 export const AGNES_PLATFORM = "agnes";
 export const AGNES_IMAGE_2_FLASH_MODEL = "agnes-image-2.0-flash";
 export const AGNES_IMAGE_21_FLASH_MODEL = "agnes-image-2.1-flash";
+export const APIMART_PLATFORM = "apimart";
+export const APIMART_FLUX_2_PRO_MODEL = "flux-2-pro";
+export const APIMART_GPT_IMAGE_25_MODEL = "gpt-image-2.5-flare";
+export const APIMART_QWEN_IMAGE_30_MODEL = "qwen-image-3.0";
+export const APIMART_IMAGE_MODELS = new Set([
+  APIMART_FLUX_2_PRO_MODEL,
+  APIMART_GPT_IMAGE_25_MODEL,
+  APIMART_QWEN_IMAGE_30_MODEL,
+]);
+export const isAPIMartImageModel = (model?: string) =>
+  Boolean(model && APIMART_IMAGE_MODELS.has(model));
 export const AGNES_IMAGE_MODELS = new Set([
   AGNES_IMAGE_2_FLASH_MODEL,
   AGNES_IMAGE_21_FLASH_MODEL,
@@ -210,6 +221,24 @@ export const IMAGE_NODE_MODELS = [
     name: "Midjourney-v8.1（RunningHub版本）",
     model: RUNNINGHUB_MIDJOURNEY_V81_MODEL,
     platform: RUNNINGHUB_PLATFORM,
+  },
+  {
+    id: 24,
+    name: "Flux 2.0（APIMart渠道）",
+    model: APIMART_FLUX_2_PRO_MODEL,
+    platform: APIMART_PLATFORM,
+  },
+  {
+    id: 25,
+    name: "GPT-Image-2.5（APIMart渠道）",
+    model: APIMART_GPT_IMAGE_25_MODEL,
+    platform: APIMART_PLATFORM,
+  },
+  {
+    id: 26,
+    name: "Qwen Image 3.0（APIMart渠道）",
+    model: APIMART_QWEN_IMAGE_30_MODEL,
+    platform: APIMART_PLATFORM,
   },
 ];
 

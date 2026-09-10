@@ -1,6 +1,7 @@
 ﻿import { addEdge, applyEdgeChanges, applyNodeChanges } from "@xyflow/react";
 import { copyMediaUrlToOss, copyVideoUrlToOss } from "service/oss";
 import {
+  APIMART_PLATFORM,
   DEFAULT_IMAGE_MODEL,
   DEFAULT_IMAGE_PLATFORM,
   IMAGE_NODE_MODELS,
@@ -85,6 +86,7 @@ import { withVideoPosterFields } from "shared/utils/videoPoster";
 import { toast } from "sonner";
 import { create } from "zustand";
 import {
+  createAPIMartImageGeneration,
   createAgnesImageGeneration,
   createAgnesVideoTask,
   createDashscopeVideoSynthesis,
@@ -94,6 +96,7 @@ import {
   createMiniMaxH3VideoTask,
   createOverseasSeedanceVideoTask,
   generateGeminiContent,
+  getAPIMartImageTaskStatus,
   getAgnesVideoTaskStatus,
   getDashscopeVideoTaskStatus,
   getImageTaskStatus,
@@ -305,6 +308,11 @@ const removeImagePendingTask = (
     task_ledger_biz_ids: ledgerBizIds,
   };
 };
+
+type ImageTaskProvider = "toapi" | "apimart";
+
+const resolveImageTaskProvider = (platform?: unknown): ImageTaskProvider =>
+  platform === APIMART_PLATFORM ? "apimart" : "toapi";
 
 type VideoTaskProvider =
   | "seedance"
@@ -1112,6 +1120,7 @@ const pollImageGeneration = async (
   getState: () => CanvasFlowStoreType,
   totalTaskCount: number,
   ledgerBizId?: string,
+  imageProvider: ImageTaskProvider = "toapi",
   projectId?: string,
   pollImmediately = false,
 ) => {
@@ -1136,7 +1145,9 @@ const pollImageGeneration = async (
       }
 
       // 调用轮询接口获取任务状态
-      const response: any = await getImageTaskStatus(taskId);
+      const response: any = imageProvider === "apimart"
+        ? await getAPIMartImageTaskStatus(taskId, signal)
+        : await getImageTaskStatus(taskId, signal);
       const responseData = response?.data ?? response;
 
       const currentNode = getState().nodes.find((node) => node.id === nodeId);
@@ -1166,7 +1177,7 @@ const pollImageGeneration = async (
         response?.result?.data ??
         response?.data?.data ??
         [];
-      const images: string[] = (Array.isArray(resultData) ? resultData : [])
+      const standardImages: string[] = (Array.isArray(resultData) ? resultData : [])
         .map((item: any) => {
           if (typeof item === "string") {
             return item;
@@ -1174,6 +1185,18 @@ const pollImageGeneration = async (
           return item?.url || item?.image_url || "";
         })
         .filter(Boolean);
+      const apimartResultImages =
+        responseData?.result?.images ?? response?.data?.result?.images ?? [];
+      const apimartImages = (Array.isArray(apimartResultImages)
+        ? apimartResultImages
+        : [])
+        .flatMap((item: any) => {
+          const urls = item?.url;
+          return Array.isArray(urls) ? urls : [urls];
+        })
+        .map((url: unknown) => String(url ?? "").trim())
+        .filter(Boolean);
+      const images = Array.from(new Set([...standardImages, ...apimartImages]));
 
       const progressValue = Number(
         responseData?.progress ??
@@ -1289,6 +1312,8 @@ const pollImageGeneration = async (
               data.result?.data?.filter((item) => item?.url).length ?? 0;
             const hasSuccessfulImages = successCount > 0;
             const message =
+              responseData?.error?.message ||
+              response?.error?.message ||
               response?.message ||
               response?.data?.message ||
               "生成失败，请稍后再试";
@@ -1347,6 +1372,8 @@ const pollImageGeneration = async (
       const isQueued =
         taskStatus === "queued" ||
         taskStatus === "in_progress" ||
+        taskStatus === "pending" ||
+        taskStatus === "submitted" ||
         taskStatus === "PENDING" ||
         taskStatus === "QUEUED" ||
         taskStatus === "NOT_START" ||
@@ -2322,6 +2349,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             (data.completedCount ?? 0) + taskIds.length,
             1,
           );
+          const imageProvider = resolveImageTaskProvider(data.platform);
 
           taskIds.forEach((taskId) => {
             if (imagePollingControllers.has(taskId)) return;
@@ -2336,6 +2364,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               get,
               totalTaskCount,
               data.task_ledger_biz_ids?.[taskId],
+              imageProvider,
               projectId,
               true,
             );
@@ -3257,12 +3286,13 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       }));
 
       const scoreCost = Number(payload.requiredPoints ?? 0) || undefined;
+      const imageProvider = resolveImageTaskProvider(payload.platform);
 
       try {
         let taskId: string;
         let ledgerBizId: string | undefined;
 
-        // RunningHub 专属模型走低价->官方回退，其它模型直接走 ToAPI。
+        // RunningHub 专属模型走低价->官方回退，其它异步模型按节点平台调用。
         const payloadOriginalModel = payload.originalModel ?? payload.model;
         if (isAgnesImageModel(payloadOriginalModel)) {
           set((state) => ({
@@ -3454,13 +3484,17 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
         }
 
         // 非 RunningHub：创建图片生成任务，获取 task_id 后启动轮询
-        const response: any = await createImageGeneration(payload, scoreCost);
+        const response: any = imageProvider === "apimart"
+          ? await createAPIMartImageGeneration(payload, scoreCost)
+          : await createImageGeneration(payload, scoreCost);
         ledgerBizId = response?.ledgerBizId;
 
         // 从响应中提取 task_id（兼容多种返回结构）
         taskId =
           response?.data?.task_id ??
+          response?.data?.[0]?.task_id ??
           response?.result?.task_id ??
+          response?.result?.[0]?.task_id ??
           response?.task_id ??
           response?.data?.taskId ??
           response?.result?.taskId ??
@@ -3521,6 +3555,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
           get,
           totalTaskCount,
           ledgerBizId,
+          imageProvider,
           get().projectId ?? undefined,
         );
       } catch (startError) {

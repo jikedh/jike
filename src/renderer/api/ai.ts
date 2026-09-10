@@ -11,6 +11,9 @@ import type { ToApiImageGenerationRequest } from "shared/types/detail/ToApi/imag
 import {
   AGNES_IMAGE_2_FLASH_MODEL,
   AGNES_IMAGE_21_FLASH_MODEL,
+  APIMART_FLUX_2_PRO_MODEL,
+  APIMART_GPT_IMAGE_25_MODEL,
+  APIMART_QWEN_IMAGE_30_MODEL,
   isAgnesImageModel,
 } from "shared/constants/ai-models";
 import { getJikeingToken } from "shared/utils/utils";
@@ -18,7 +21,7 @@ import { aiVideoTrackingService } from "@/services/aiVideoTracking";
 import {
   createDesktopChatCompletions,
   createDesktopProxyTask,
-  queryDesktopProxyTask
+  queryDesktopProxyTask,
 } from "./jikeGo";
 
 type OverseasSeedance20Request = {
@@ -392,6 +395,55 @@ export async function createImageGeneration(
   return ledgerBizId ? { ...responseData, ledgerBizId } : responseData;
 }
 
+export async function createAPIMartImageGeneration(
+  data: Record<string, any>,
+  scoreCost?: number,
+  signal?: AbortSignal,
+) {
+  const model = String(data.model ?? "").trim();
+  const imageUrls = normalizeAgnesImageInput(data.image_urls);
+  const body: Record<string, any> = {
+    model,
+    prompt: String(data.prompt ?? "").trim(),
+    size: String(data.size ?? "1:1"),
+    n: 1,
+  };
+
+  if (model === APIMART_FLUX_2_PRO_MODEL) {
+    body.resolution = String(data.resolution ?? "2MP").toUpperCase();
+    body.image_urls = imageUrls.slice(0, 8);
+  } else if (model === APIMART_GPT_IMAGE_25_MODEL) {
+    body.resolution = String(data.resolution ?? "1K").toLowerCase();
+    body.quality = String(data.quality ?? "medium").toLowerCase();
+    body.image_urls = imageUrls.slice(0, 16);
+  } else if (model === APIMART_QWEN_IMAGE_30_MODEL) {
+    body.resolution = String(data.resolution ?? "1K").toUpperCase();
+    body.image_urls = imageUrls.slice(0, 3);
+  } else {
+    throw new Error("不支持的 APIMart 图片模型");
+  }
+
+  if (body.image_urls.length === 0) {
+    delete body.image_urls;
+  }
+
+  const response = await createDesktopProxyTask({
+    platform: "apimart",
+    upstreamPath: "/images/generations",
+    method: "POST",
+    body,
+    scoreCost,
+    scoreBizType: "image",
+    scoreModel: model,
+    scoreSource: "apimart",
+    scoreSourceLabel: "APIMart",
+  }, signal);
+
+  const rawData = unwrapDesktopProxyData(response);
+  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
+  return ledgerBizId ? { ...responseData, ledgerBizId } : responseData;
+}
+
 export async function createAgnesImageGeneration(
   data: Record<string, any>,
   scoreCost?: number,
@@ -471,6 +523,19 @@ export async function getImageTaskStatus(id: string, signal?: AbortSignal) {
   const response = await queryDesktopProxyTask({
     platform: "toapi",
     upstreamPath: `/v1/images/generations/${id}`,
+    method: "GET",
+  }, signal);
+
+  return unwrapDesktopProxyData(response);
+}
+
+export async function getAPIMartImageTaskStatus(
+  id: string,
+  signal?: AbortSignal,
+) {
+  const response = await queryDesktopProxyTask({
+    platform: "apimart",
+    upstreamPath: `/tasks/${encodeURIComponent(id)}`,
     method: "GET",
   }, signal);
 
