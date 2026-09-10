@@ -41,6 +41,10 @@ interface ReferenceThumbnailsProps {
   onHoverChange?: (item: ReferenceItem, isHovering: boolean) => void;
   expanded?: boolean;
   renderItemAccessory?: (item: ReferenceItem) => ReactNode;
+  getItemBadgeLabel?: (
+    item: ReferenceItem,
+    displayIndex: number,
+  ) => string | undefined;
 }
 
 const TYPE_LABELS: Record<ReferenceItemType, string> = {
@@ -52,12 +56,14 @@ const TYPE_LABELS: Record<ReferenceItemType, string> = {
 
 const MediaBadge = ({
   index,
+  label,
 }: {
   index: number;
+  label?: string;
 }) => (
   <div className="pointer-events-none absolute left-1 top-1">
     <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-black/65 px-1 text-[10px] font-medium text-white">
-      {index + 1}
+      {label ?? index + 1}
     </span>
   </div>
 );
@@ -166,9 +172,11 @@ const VideoThumbnail = ({ url, label }: { url: string; label?: string }) => {
 const ReferenceCard = ({
   item,
   index,
+  badgeLabel,
 }: {
   item: ReferenceItem;
   index: number;
+  badgeLabel?: string;
 }) => {
   const card = (
     <div
@@ -198,7 +206,7 @@ const ReferenceCard = ({
       ) : (
         <Placeholder type="audio" label={item.label} />
       )}
-      <MediaBadge index={index} />
+      <MediaBadge index={index} label={badgeLabel} />
     </div>
   );
 
@@ -240,6 +248,7 @@ const SortableReferenceItem = ({
   onRemove,
   onHoverChange,
   accessory,
+  badgeLabel,
 }: {
   item: ReferenceItem;
   index: number;
@@ -247,6 +256,7 @@ const SortableReferenceItem = ({
   onRemove?: (item: ReferenceItem) => void;
   onHoverChange?: (item: ReferenceItem, isHovering: boolean) => void;
   accessory?: ReactNode;
+  badgeLabel?: string;
 }) => {
   const {
     attributes,
@@ -283,7 +293,11 @@ const SortableReferenceItem = ({
       onMouseLeave={() => onHoverChange?.(item, false)}
     >
       <div className={cn(accessory && "flex w-15 flex-col gap-1")}>
-        <ReferenceCard item={item} index={displayIndex} />
+        <ReferenceCard
+          item={item}
+          index={displayIndex}
+          badgeLabel={badgeLabel}
+        />
         {accessory}
       </div>
       {onRemove ? (
@@ -322,6 +336,7 @@ const StaticReferenceItem = ({
   onRemove,
   onHoverChange,
   accessory,
+  badgeLabel,
 }: {
   item: ReferenceItem;
   index: number;
@@ -329,6 +344,7 @@ const StaticReferenceItem = ({
   onRemove?: (item: ReferenceItem) => void;
   onHoverChange?: (item: ReferenceItem, isHovering: boolean) => void;
   accessory?: ReactNode;
+  badgeLabel?: string;
 }) => {
   return (
     <div
@@ -337,7 +353,11 @@ const StaticReferenceItem = ({
       onMouseLeave={() => onHoverChange?.(item, false)}
     >
       <div className={cn(accessory && "flex w-15 flex-col gap-1")}>
-        <ReferenceCard item={item} index={displayIndex} />
+        <ReferenceCard
+          item={item}
+          index={displayIndex}
+          badgeLabel={badgeLabel}
+        />
         {accessory}
       </div>
       {onRemove ? (
@@ -364,6 +384,7 @@ export const ReferenceThumbnails = ({
   onHoverChange,
   expanded = false,
   renderItemAccessory,
+  getItemBadgeLabel,
 }: ReferenceThumbnailsProps) => {
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -411,6 +432,7 @@ export const ReferenceThumbnails = ({
             onRemove={onRemove}
             onHoverChange={onHoverChange}
             accessory={renderItemAccessory?.(item)}
+            badgeLabel={getItemBadgeLabel?.(item, displayIndex)}
           />
         ))}
       </div>
@@ -468,6 +490,7 @@ export const ReferenceThumbnails = ({
               onRemove={onRemove}
               onHoverChange={onHoverChange}
               accessory={renderItemAccessory?.(item)}
+              badgeLabel={getItemBadgeLabel?.(item, displayIndex)}
             />
           ))}
         </div>

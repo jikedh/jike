@@ -2295,6 +2295,17 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
                 onRemove={handleSortableReferenceRemove}
                 onHoverChange={handleSortableReferenceHoverChange}
                 expanded={isWanReferenceVoiceMode}
+                getItemBadgeLabel={(item, displayIndex) => {
+                  if (
+                    activeMode !== "first-last-frame" ||
+                    item.type !== "image" ||
+                    referenceImages.length !== 2
+                  ) {
+                    return undefined;
+                  }
+
+                  return displayIndex === 0 ? "首帧" : "尾帧";
+                }}
                 renderItemAccessory={(item) => {
                   if (
                     !isWanReferenceVoiceMode ||
