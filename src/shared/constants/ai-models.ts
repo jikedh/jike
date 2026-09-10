@@ -155,19 +155,19 @@ export const IMAGE_MODELS = [
   // { id: 2, name: 'doubao-seedream-4-5', model: 'doubao-seedream-4-5', platform: 'Seedream' },
   {
     id: 7,
-    name: "GPT-Image-2",
+    name: "GPT-Image-2（ToAPI 版本）",
     model: "gpt-image-2",
     platform: "openai",
   },
   {
     id: 3,
-    name: "谷歌 Gemini 3 Pro",
+    name: "谷歌 Gemini 3 Pro（ToAPI 版本）",
     model: "gemini-3-pro-image-preview",
     platform: "google",
   },
   {
     id: 4,
-    name: "豆包 Seedream 5.0",
+    name: "豆包 Seedream 5.0（ToAPI 版本）",
     model: "doubao-seedream-5-0",
     platform: "Seedream",
   },
