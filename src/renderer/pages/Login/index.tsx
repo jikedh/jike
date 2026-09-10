@@ -6,6 +6,7 @@ import {
   getDigitalCaptcha,
   getSceneQrcode,
   loginByUsername,
+  registerByUsername,
 } from "@/api/jikeGo";
 import iconImg from "@/assets/icon.png";
 import logoImg from "@/assets/logo.png";
@@ -19,7 +20,7 @@ const RETRY_DELAY = 10000;
 const REDIRECT_DELAY = 500;
 
 // 登录模式
-type LoginMode = "qrcode" | "password";
+type LoginMode = "qrcode" | "password" | "register";
 
 // 扫码登录状态
 type QrcodeStatus =
@@ -68,11 +69,13 @@ const LoginPage = () => {
   // ===================== 账号密码登录状态 =====================
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [captchaId, setCaptchaId] = useState("");
   const [captchaImage, setCaptchaImage] = useState("");
   const [captchaAnswer, setCaptchaAnswer] = useState("");
   const [pwdLoading, setPwdLoading] = useState(false);
   const [pwdError, setPwdError] = useState("");
+  const [registerSuccess, setRegisterSuccess] = useState(false);
 
   // ===================== 扫码登录逻辑 =====================
   const handlePollingSuccess = useCallback(
@@ -137,6 +140,7 @@ const LoginPage = () => {
         rawPic.startsWith("data:image") ? rawPic : `data:image/png;base64,${rawPic}`,
       );
     } catch {
+      setRegisterSuccess(false);
       setPwdError("获取验证码失败");
     }
   }, []);
@@ -154,6 +158,7 @@ const LoginPage = () => {
 
     setPwdLoading(true);
     setPwdError("");
+    setRegisterSuccess(false);
 
     try {
       const res = await loginByUsername({
@@ -188,11 +193,61 @@ const LoginPage = () => {
     }
   }, [username, password, captchaId, captchaAnswer, navigate, fetchCaptcha]);
 
+  // ===================== 账号注册 =====================
+  const handleRegister = useCallback(async () => {
+    if (!username.trim() || !password.trim()) {
+      setPwdError("请输入用户名和密码");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setPwdError("两次输入的密码不一致");
+      return;
+    }
+    if (!captchaAnswer.trim()) {
+      setPwdError("请输入验证码");
+      return;
+    }
+
+    setPwdLoading(true);
+    setPwdError("");
+    setRegisterSuccess(false);
+
+    try {
+      await registerByUsername({
+        username: username.trim(),
+        password,
+        captcha_id: captchaId,
+        captcha_answer: captchaAnswer.trim(),
+      });
+      setPassword("");
+      setConfirmPassword("");
+      setCaptchaAnswer("");
+      setLoginMode("password");
+      setRegisterSuccess(true);
+      setPwdError("注册成功，请登录");
+      fetchCaptcha();
+    } catch (error: any) {
+      const msg =
+        error?.response?.data?.msg ||
+        error?.message ||
+        "注册失败，请重试";
+      setPwdError(msg);
+      setRegisterSuccess(false);
+      setCaptchaAnswer("");
+      fetchCaptcha();
+    } finally {
+      setPwdLoading(false);
+    }
+  }, [username, password, confirmPassword, captchaId, captchaAnswer, fetchCaptcha]);
+
   // 切换登录模式
   const handleSwitchMode = useCallback(
     (mode: LoginMode) => {
       setLoginMode(mode);
       setPwdError("");
+      setRegisterSuccess(false);
+      setCaptchaAnswer("");
+      setConfirmPassword("");
       if (mode === "qrcode") {
         stopPolling();
         fetchQrcode();
@@ -226,6 +281,7 @@ const LoginPage = () => {
   // ===================== 渲染 =====================
   const isQrcodeError = qrcodeStatus === "expired" || qrcodeStatus === "error";
   const isQrcode = loginMode === "qrcode";
+  const isRegister = loginMode === "register";
 
   return (
     <div className="relative min-h-screen overflow-hidden">
@@ -241,7 +297,7 @@ const LoginPage = () => {
         <div
           className="w-[440px] relative overflow-hidden rounded-lg"
           style={{
-            minHeight: isQrcode ? "620px" : "680px",
+            minHeight: isQrcode ? "620px" : isRegister ? "730px" : "680px",
             background: `radial-gradient(circle at 50% 0%, rgba(45, 52, 102, 0.5) 0%, transparent 60%),
                         linear-gradient(180deg, #0f1123 0%, #04050b 100%)`,
             boxShadow:
@@ -285,19 +341,34 @@ const LoginPage = () => {
                   onClick={() => handleSwitchMode("password")}
                   className="px-5 py-1.5 rounded-md text-sm transition-colors"
                   style={{
-                    background: !isQrcode
+                    background: loginMode === "password"
                       ? "linear-gradient(90deg, #a053db 0%, #4c62fb 100%)"
                       : "transparent",
-                    color: !isQrcode ? "#fff" : "rgba(255,255,255,0.5)",
+                    color:
+                      loginMode === "password"
+                        ? "#fff"
+                        : "rgba(255,255,255,0.5)",
                   }}
                 >
                   账号登录
+                </button>
+                <button
+                  onClick={() => handleSwitchMode("register")}
+                  className="px-5 py-1.5 rounded-md text-sm transition-colors"
+                  style={{
+                    background: isRegister
+                      ? "linear-gradient(90deg, #a053db 0%, #4c62fb 100%)"
+                      : "transparent",
+                    color: isRegister ? "#fff" : "rgba(255,255,255,0.5)",
+                  }}
+                >
+                  账号注册
                 </button>
               </div>
 
               {/* 标题 */}
               <div className="text-white text-base font-medium mb-[35px] relative pb-2 tracking-wider">
-                {isQrcode ? "微信登录" : "账号登录"}
+                {isQrcode ? "微信登录" : isRegister ? "账号注册" : "账号登录"}
                 <div
                   className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-[2px] rounded"
                   style={titleDecorationStyle}
@@ -373,7 +444,10 @@ const LoginPage = () => {
                     placeholder="用户名 / UUID"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handlePasswordLogin()}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" &&
+                      (isRegister ? handleRegister() : handlePasswordLogin())
+                    }
                     className="w-full h-[42px] px-3 rounded-lg text-sm placeholder-gray-500"
                     style={inputStyle}
                   />
@@ -384,10 +458,25 @@ const LoginPage = () => {
                     placeholder="密码"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handlePasswordLogin()}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" &&
+                      (isRegister ? handleRegister() : handlePasswordLogin())
+                    }
                     className="w-full h-[42px] px-3 rounded-lg text-sm placeholder-gray-500"
                     style={inputStyle}
                   />
+
+                  {isRegister && (
+                    <input
+                      type="password"
+                      placeholder="确认密码"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleRegister()}
+                      className="w-full h-[42px] px-3 rounded-lg text-sm placeholder-gray-500"
+                      style={inputStyle}
+                    />
+                  )}
 
                   {/* 验证码 */}
                   <div className="flex gap-2">
@@ -396,7 +485,10 @@ const LoginPage = () => {
                       placeholder="验证码"
                       value={captchaAnswer}
                       onChange={(e) => setCaptchaAnswer(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handlePasswordLogin()}
+                      onKeyDown={(e) =>
+                        e.key === "Enter" &&
+                        (isRegister ? handleRegister() : handlePasswordLogin())
+                      }
                       className="flex-1 h-[42px] px-3 rounded-lg text-sm placeholder-gray-500"
                       style={inputStyle}
                     />
@@ -421,14 +513,17 @@ const LoginPage = () => {
 
                   {/* 错误提示 */}
                   {pwdError && (
-                    <div className="text-sm text-red-400 text-center">
+                    <div
+                      className={`text-sm text-center ${registerSuccess ? "text-green-400" : "text-red-400"
+                        }`}
+                    >
                       {pwdError}
                     </div>
                   )}
 
                   {/* 登录按钮 */}
                   <button
-                    onClick={handlePasswordLogin}
+                    onClick={isRegister ? handleRegister : handlePasswordLogin}
                     disabled={pwdLoading}
                     className="w-full h-[42px] rounded-lg text-white text-sm font-medium transition-opacity disabled:opacity-50"
                     style={{
@@ -436,7 +531,13 @@ const LoginPage = () => {
                         "linear-gradient(90deg, #a053db 0%, #4c62fb 100%)",
                     }}
                   >
-                    {pwdLoading ? "登录中..." : "登 录"}
+                    {pwdLoading
+                      ? isRegister
+                        ? "注册中..."
+                        : "登录中..."
+                      : isRegister
+                        ? "注 册"
+                        : "登 录"}
                   </button>
                 </div>
               )}
