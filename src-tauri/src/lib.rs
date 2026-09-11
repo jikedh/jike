@@ -102,16 +102,6 @@ pub fn run() {
             commands::upload_local_file_to_presigned_url,
             commands::copy_video_url_to_oss,
             commands::copy_media_url_to_oss,
-            // 剧本Agent
-            commands::script_agent_create_session,
-            commands::script_agent_list_sessions,
-            commands::script_agent_delete_session,
-            commands::script_agent_rename_session,
-            commands::script_agent_get_messages,
-            commands::script_agent_send_message,
-            commands::script_agent_list_memories,
-            commands::script_agent_upsert_memory,
-            commands::script_agent_delete_memory,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
