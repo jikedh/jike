@@ -146,8 +146,8 @@ export const APIMART_FLUX_2_PRO_MODEL = "flux-2-pro";
 export const APIMART_GPT_IMAGE_25_MODEL = "gpt-image-2.5-flare";
 export const APIMART_QWEN_IMAGE_30_MODEL = "qwen-image-3.0";
 export const APIMART_IMAGE_MODELS = new Set([
-  APIMART_FLUX_2_PRO_MODEL,
   APIMART_GPT_IMAGE_25_MODEL,
+  APIMART_FLUX_2_PRO_MODEL,
   APIMART_QWEN_IMAGE_30_MODEL,
 ]);
 export const isAPIMartImageModel = (model?: string) =>
@@ -158,10 +158,56 @@ export const AGNES_IMAGE_MODELS = new Set([
 ]);
 export const isAgnesImageModel = (model?: string) =>
   Boolean(model && AGNES_IMAGE_MODELS.has(model));
-export const DEFAULT_IMAGE_MODEL = "gemini-3-pro-image-preview";
-export const DEFAULT_IMAGE_PLATFORM = "google";
+export const DEFAULT_IMAGE_MODEL = APIMART_GPT_IMAGE_25_MODEL;
+export const DEFAULT_IMAGE_PLATFORM = APIMART_PLATFORM;
 
-export const IMAGE_MODELS = [
+const APIMART_IMAGE_NODE_MODELS = [
+  {
+    id: 25,
+    name: "GPT-Image-2.5（APIMart渠道）",
+    model: APIMART_GPT_IMAGE_25_MODEL,
+    platform: APIMART_PLATFORM,
+  },
+  {
+    id: 24,
+    name: "Flux 2.0（APIMart渠道）",
+    model: APIMART_FLUX_2_PRO_MODEL,
+    platform: APIMART_PLATFORM,
+  },
+  {
+    id: 26,
+    name: "Qwen Image 3.0（APIMart渠道）",
+    model: APIMART_QWEN_IMAGE_30_MODEL,
+    platform: APIMART_PLATFORM,
+  },
+];
+
+const RUNNINGHUB_IMAGE_MODELS = [
+  {
+    id: 19,
+    name: "GPT-Image-2（RunningHub版本）",
+    model: RUNNINGHUB_GPT_IMAGE2_MODEL,
+    platform: RUNNINGHUB_PLATFORM,
+  },
+  {
+    id: 20,
+    name: "Nano Banana Pro（RunningHub版本）",
+    model: RUNNINGHUB_NANO_BANANA_PRO_MODEL,
+    platform: RUNNINGHUB_PLATFORM,
+  },
+];
+
+const RUNNINGHUB_IMAGE_NODE_MODELS = [
+  ...RUNNINGHUB_IMAGE_MODELS,
+  {
+    id: 23,
+    name: "Midjourney-v8.1（RunningHub版本）",
+    model: RUNNINGHUB_MIDJOURNEY_V81_MODEL,
+    platform: RUNNINGHUB_PLATFORM,
+  },
+];
+
+const TOAPI_IMAGE_MODELS = [
   // { id: 1, name: 'doubao-seedream-4-0', model: 'doubao-seedream-4-0', platform: 'Seedream' },
   // { id: 2, name: 'doubao-seedream-4-5', model: 'doubao-seedream-4-5', platform: 'Seedream' },
   {
@@ -182,18 +228,9 @@ export const IMAGE_MODELS = [
     model: "doubao-seedream-5-0",
     platform: "Seedream",
   },
-  {
-    id: 19,
-    name: "GPT-Image-2（RunningHub版本）",
-    model: RUNNINGHUB_GPT_IMAGE2_MODEL,
-    platform: RUNNINGHUB_PLATFORM,
-  },
-  {
-    id: 20,
-    name: "Nano Banana Pro（RunningHub版本）",
-    model: RUNNINGHUB_NANO_BANANA_PRO_MODEL,
-    platform: RUNNINGHUB_PLATFORM,
-  },
+];
+
+const AGNES_IMAGE_MODEL_OPTIONS = [
   {
     id: 21,
     name: "Agnes Image 2.0 Flash",
@@ -206,40 +243,19 @@ export const IMAGE_MODELS = [
     model: AGNES_IMAGE_21_FLASH_MODEL,
     platform: AGNES_PLATFORM,
   },
-  // {
-  //   id: 10,
-  //   name: "谷歌 Gemini 3 Pro 渠道二",
-  //   model: "gemini-3-pro-image-preview",
-  //   platform: "google_pro2",
-  // },
+];
+
+export const IMAGE_MODELS = [
+  ...RUNNINGHUB_IMAGE_MODELS,
+  ...TOAPI_IMAGE_MODELS,
+  ...AGNES_IMAGE_MODEL_OPTIONS,
 ];
 
 export const IMAGE_NODE_MODELS = [
-  ...IMAGE_MODELS,
-  {
-    id: 23,
-    name: "Midjourney-v8.1（RunningHub版本）",
-    model: RUNNINGHUB_MIDJOURNEY_V81_MODEL,
-    platform: RUNNINGHUB_PLATFORM,
-  },
-  {
-    id: 24,
-    name: "Flux 2.0（APIMart渠道）",
-    model: APIMART_FLUX_2_PRO_MODEL,
-    platform: APIMART_PLATFORM,
-  },
-  {
-    id: 25,
-    name: "GPT-Image-2.5（APIMart渠道）",
-    model: APIMART_GPT_IMAGE_25_MODEL,
-    platform: APIMART_PLATFORM,
-  },
-  {
-    id: 26,
-    name: "Qwen Image 3.0（APIMart渠道）",
-    model: APIMART_QWEN_IMAGE_30_MODEL,
-    platform: APIMART_PLATFORM,
-  },
+  ...APIMART_IMAGE_NODE_MODELS,
+  ...RUNNINGHUB_IMAGE_NODE_MODELS,
+  ...TOAPI_IMAGE_MODELS,
+  ...AGNES_IMAGE_MODEL_OPTIONS,
 ];
 
 export const RUNNINGHUB_IMAGE_MODEL_IDS = new Set([
