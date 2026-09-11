@@ -29,10 +29,10 @@ export const PROMPT_PANEL_STYLES = {
     "bg-white/5 hover:bg-white/10 border border-transparent hover:border-[#B43FEB]/30 px-4 py-2.5 rounded-xl text-xs text-white/80 font-medium flex items-center gap-2 transition-all cursor-pointer group shadow-sm h-auto w-45",
 
   modelSelectContent:
-    "bg-[#1a1a1d] border border-white/[0.08] rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.4)] overflow-hidden",
+    "w-[260px] min-w-[260px] max-w-[260px] bg-[#1a1a1d] border border-white/[0.08] rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.4)] overflow-hidden",
 
   modelSelectItem:
-    "text-white/80 text-xs px-3 py-2 cursor-pointer transition-colors focus:bg-[#B43FEB]/10 focus:text-white data-[state=checked]:bg-[#B43FEB]/15 data-[state=checked]:text-[#B43FEB] hover:bg-white/[0.04] hover:text-white",
+    "whitespace-nowrap text-white/80 text-xs px-3 py-2 cursor-pointer transition-colors hover:bg-[#B43FEB]/12 hover:!text-white hover:**:!text-white focus:bg-[#B43FEB]/12 focus:!text-white focus:**:!text-white data-[highlighted]:bg-[#B43FEB]/12 data-[highlighted]:!text-white data-[highlighted]:**:!text-white data-[state=checked]:bg-[#B43FEB]/15 data-[state=checked]:text-[#d793ff]",
 
   paramsButton:
     "flex h-8 items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 text-xs text-neutral-300 transition-colors hover:border-neutral-500 hover:text-neutral-100",
