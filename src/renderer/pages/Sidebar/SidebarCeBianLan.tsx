@@ -14,7 +14,6 @@ import { useNavigate } from "react-router-dom";
 import { getJikeingToken, getJikeingUserId } from "shared/utils/utils";
 import iconImg from "@/assets/icon.png";
 import { SettingsModal } from "@/pages/Canvas/components/SettingsModal";
-import { FeedbackDialog } from "@/components/FeedbackDialog";
 import { UserAvatarDropdown } from "@/pages/Sidebar/components/UserAvatarDropdown";
 import { useUserStore } from "@/stores/useUserStore";
 import { SidebarFooter } from "./components/SidebarFooter";
@@ -27,7 +26,6 @@ export const SidebarCeBianLan = () => {
   const userId = getJikeingUserId();
   const token = getJikeingToken();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [appVersion, setAppVersion] = useState("");
 
   const {
@@ -199,7 +197,7 @@ export const SidebarCeBianLan = () => {
 
         <SidebarFooter classNames={{ root: "pt-4" }}>
           <UserAvatarDropdown userId={userId} balanceInfo={balanceInfo} />
-          <FeedbackButton onClick={() => setIsFeedbackOpen(true)} />
+          <FeedbackButton onClick={() => handleNavClick("/feedback")} />
           <SettingsButton onClick={handleSettingsClick} />
         </SidebarFooter>
       </SidebarRoot>
@@ -207,10 +205,6 @@ export const SidebarCeBianLan = () => {
       <SettingsModal
         open={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-      />
-      <FeedbackDialog
-        open={isFeedbackOpen}
-        onOpenChange={setIsFeedbackOpen}
       />
     </>
   );

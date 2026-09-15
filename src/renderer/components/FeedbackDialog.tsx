@@ -6,6 +6,7 @@ import {
     type FeedbackCategory,
     uploadFeedbackAttachment,
 } from "@/api/feedback";
+import { FeedbackHistory } from "@/components/FeedbackHistory";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -57,6 +58,7 @@ type Attachment = {
 type FeedbackDialogProps = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onSubmitted?: () => void;
 };
 
 const hasSuccessCode = (code?: number) => code === 0 || code === 200;
@@ -72,6 +74,7 @@ const getFileExtension = (fileName: string) => {
 export const FeedbackDialog = ({
     open,
     onOpenChange,
+    onSubmitted,
 }: FeedbackDialogProps) => {
     const [category, setCategory] = useState<FeedbackCategory | "">("");
     const [title, setTitle] = useState("");
@@ -83,12 +86,15 @@ export const FeedbackDialog = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadedCount, setUploadedCount] = useState(0);
+    const [activeTab, setActiveTab] = useState<"create" | "history">("create");
+    const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (!open) {
             return;
         }
+        setActiveTab("create");
         window.debug
             ?.getAppVersion()
             .then((version) => setAppVersion(version || ""))
@@ -209,7 +215,10 @@ export const FeedbackDialog = ({
                 throw new Error(response.msg || response.message || "提交失败");
             }
             toast.success("反馈已提交，我们会尽快处理");
-            handleOpenChange(false);
+            resetForm();
+            setHistoryRefreshToken((current) => current + 1);
+            setActiveTab("history");
+            onSubmitted?.();
         } catch (error) {
             toast.error(getErrorMessage(error));
         } finally {
@@ -236,116 +245,140 @@ export const FeedbackDialog = ({
                 </DialogHeader>
 
                 <div className="flex flex-col gap-5 overflow-y-auto px-6 py-5">
-                    <div className="flex flex-col gap-2">
-                        <label className="text-sm text-white/75">反馈分类</label>
-                        <Select value={category} onValueChange={(value) => setCategory(value as FeedbackCategory)}>
-                            <SelectTrigger className="h-10 w-full border-white/10 bg-white/5 text-white">
-                                <SelectValue placeholder="请选择反馈分类" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectGroup>
-                                    {CATEGORY_OPTIONS.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectGroup>
-                            </SelectContent>
-                        </Select>
+                    <div className="flex gap-1 rounded-lg bg-white/5 p-1">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab("create")}
+                            className={`flex-1 rounded-md px-3 py-2 text-sm transition-colors ${activeTab === "create" ? "bg-[#B43FEB] text-white" : "text-white/50 hover:text-white/80"}`}
+                        >
+                            提交反馈
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab("history")}
+                            className={`flex-1 rounded-md px-3 py-2 text-sm transition-colors ${activeTab === "history" ? "bg-[#B43FEB] text-white" : "text-white/50 hover:text-white/80"}`}
+                        >
+                            历史反馈
+                        </button>
                     </div>
+                    {activeTab === "create" ? (
+                        <>
+                            <div className="flex flex-col gap-2">
+                                <label className="text-sm text-white/75">反馈分类</label>
+                                <Select value={category} onValueChange={(value) => setCategory(value as FeedbackCategory)}>
+                                    <SelectTrigger className="h-10 w-full border-white/10 bg-white/5 text-white">
+                                        <SelectValue placeholder="请选择反馈分类" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectGroup>
+                                            {CATEGORY_OPTIONS.map((option) => (
+                                                <SelectItem key={option.value} value={option.value}>
+                                                    {option.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectGroup>
+                                    </SelectContent>
+                                </Select>
+                            </div>
 
-                    <div className="flex flex-col gap-2">
-                        <label className="text-sm text-white/75">标题</label>
-                        <Input
-                            value={title}
-                            maxLength={100}
-                            onChange={(event) => setTitle(event.target.value)}
-                            placeholder="请简要描述你遇到的问题或建议"
-                            className="h-10 border-white/10 bg-white/5 text-white placeholder:text-white/30"
-                        />
-                    </div>
+                            <div className="flex flex-col gap-2">
+                                <label className="text-sm text-white/75">标题</label>
+                                <Input
+                                    value={title}
+                                    maxLength={100}
+                                    onChange={(event) => setTitle(event.target.value)}
+                                    placeholder="请简要描述你遇到的问题或建议"
+                                    className="h-10 border-white/10 bg-white/5 text-white placeholder:text-white/30"
+                                />
+                            </div>
 
-                    <div className="flex flex-col gap-2">
-                        <label className="text-sm text-white/75">详情</label>
-                        <Textarea
-                            value={content}
-                            maxLength={5000}
-                            onChange={(event) => setContent(event.target.value)}
-                            placeholder="请尽可能说明发生场景、期望结果和实际结果"
-                            className="min-h-32 border-white/10 bg-white/5 text-white placeholder:text-white/30"
-                        />
-                        <span className="text-right text-xs text-white/35">{content.length}/5000</span>
-                    </div>
+                            <div className="flex flex-col gap-2">
+                                <label className="text-sm text-white/75">详情</label>
+                                <Textarea
+                                    value={content}
+                                    maxLength={5000}
+                                    onChange={(event) => setContent(event.target.value)}
+                                    placeholder="请尽可能说明发生场景、期望结果和实际结果"
+                                    className="min-h-32 border-white/10 bg-white/5 text-white placeholder:text-white/30"
+                                />
+                                <span className="text-right text-xs text-white/35">{content.length}/5000</span>
+                            </div>
 
-                    <div className="flex flex-col gap-2">
-                        <label className="text-sm text-white/75">联系方式（选填）</label>
-                        <Input
-                            value={contact}
-                            maxLength={255}
-                            onChange={(event) => setContact(event.target.value)}
-                            placeholder="请输入手机号、邮箱或其他联系方式"
-                            className="h-10 border-white/10 bg-white/5 text-white placeholder:text-white/30"
-                        />
-                    </div>
+                            <div className="flex flex-col gap-2">
+                                <label className="text-sm text-white/75">联系方式（选填）</label>
+                                <Input
+                                    value={contact}
+                                    maxLength={255}
+                                    onChange={(event) => setContact(event.target.value)}
+                                    placeholder="请输入手机号、邮箱或其他联系方式"
+                                    className="h-10 border-white/10 bg-white/5 text-white placeholder:text-white/30"
+                                />
+                            </div>
 
-                    <div className="flex flex-col gap-2">
-                        <div className="flex items-center justify-between">
-                            <label className="text-sm text-white/75">图片附件（选填）</label>
-                            <span className="text-xs text-white/35">最多 9 张，单张不超过 50MB</span>
-                        </div>
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
-                            multiple
-                            className="hidden"
-                            onChange={handleFileChange}
-                        />
-                        <div className="flex flex-wrap gap-3">
-                            {attachments.map((attachment, index) => (
-                                <div key={attachment.previewURL} className="group relative size-20 overflow-hidden rounded-lg border border-white/10 bg-white/5">
-                                    <img src={attachment.previewURL} alt={attachment.file.name} className="size-full object-cover" />
-                                    <button
-                                        type="button"
-                                        onClick={() => removeAttachment(index)}
-                                        className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white opacity-0 group-hover:opacity-100"
-                                    >
-                                        <X size={14} />
-                                    </button>
+                            <div className="flex flex-col gap-2">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm text-white/75">图片附件（选填）</label>
+                                    <span className="text-xs text-white/35">最多 9 张，单张不超过 50MB</span>
                                 </div>
-                            ))}
-                            {attachments.length < MAX_ATTACHMENT_COUNT ? (
-                                <button
-                                    type="button"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="flex size-20 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-white/20 text-xs text-white/45 hover:border-[#d68cf6] hover:text-[#d68cf6]"
-                                >
-                                    <ImagePlus size={20} />
-                                    添加图片
-                                </button>
-                            ) : null}
-                        </div>
-                    </div>
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
+                                    multiple
+                                    className="hidden"
+                                    onChange={handleFileChange}
+                                />
+                                <div className="flex flex-wrap gap-3">
+                                    {attachments.map((attachment, index) => (
+                                        <div key={attachment.previewURL} className="group relative size-20 overflow-hidden rounded-lg border border-white/10 bg-white/5">
+                                            <img src={attachment.previewURL} alt={attachment.file.name} className="size-full object-cover" />
+                                            <button
+                                                type="button"
+                                                onClick={() => removeAttachment(index)}
+                                                className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white opacity-0 group-hover:opacity-100"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {attachments.length < MAX_ATTACHMENT_COUNT ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="flex size-20 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-white/20 text-xs text-white/45 hover:border-[#d68cf6] hover:text-[#d68cf6]"
+                                        >
+                                            <ImagePlus size={20} />
+                                            添加图片
+                                        </button>
+                                    ) : null}
+                                </div>
+                            </div>
 
-                    <label className="flex items-start gap-2 text-xs leading-5 text-white/50">
-                        <input
-                            type="checkbox"
-                            checked={diagnosticConsent}
-                            onChange={(event) => setDiagnosticConsent(event.target.checked)}
-                            className="mt-1 size-3.5 accent-[#B43FEB]"
-                        />
-                        我同意随反馈上传应用版本、系统版本与当前页面，用于定位问题。
-                    </label>
+                            <label className="flex items-start gap-2 text-xs leading-5 text-white/50">
+                                <input
+                                    type="checkbox"
+                                    checked={diagnosticConsent}
+                                    onChange={(event) => setDiagnosticConsent(event.target.checked)}
+                                    className="mt-1 size-3.5 accent-[#B43FEB]"
+                                />
+                                我同意随反馈上传应用版本、系统版本与当前页面，用于定位问题。
+                            </label>
+                        </>
+                    ) : (
+                        <FeedbackHistory refreshToken={historyRefreshToken} />
+                    )}
                 </div>
 
-                <DialogFooter className="flex-row justify-end gap-3 border-t border-white/10 px-6 py-4">
-                    <Button variant="ghost" onClick={() => handleOpenChange(false)} disabled={isSubmitting}>
-                        取消
-                    </Button>
-                    <Button variant="blue" loading={isSubmitting} onClick={handleSubmit} disabled={isSubmitting}>
-                        {submitLabel}
-                    </Button>
-                </DialogFooter>
+                {activeTab === "create" ? (
+                    <DialogFooter className="flex-row justify-end gap-3 border-t border-white/10 px-6 py-4">
+                        <Button variant="ghost" onClick={() => handleOpenChange(false)} disabled={isSubmitting}>
+                            取消
+                        </Button>
+                        <Button variant="blue" loading={isSubmitting} onClick={handleSubmit} disabled={isSubmitting}>
+                            {submitLabel}
+                        </Button>
+                    </DialogFooter>
+                ) : null}
             </DialogContent>
         </Dialog>
     );

@@ -36,6 +36,42 @@ export type FeedbackAttachmentUpload = {
     contentType: string;
 };
 
+export type FeedbackHistoryItem = {
+    id: string;
+    category: FeedbackCategory;
+    title: string;
+    status: "pending" | "processing" | "resolved" | "closed";
+    replyContent?: string | null;
+    resolutionContent?: string | null;
+    closeReason: string;
+    createdAt: number;
+    updatedAt: number;
+};
+
+export type FeedbackAttachment = {
+    id: string;
+    url: string;
+    filename: string;
+    mimeType: string;
+    fileSize: number;
+};
+
+export type FeedbackDetail = FeedbackHistoryItem & {
+    content: string;
+    contact: string;
+    attachments: FeedbackAttachment[];
+};
+
+export type FeedbackHistoryResponse = {
+    list: FeedbackHistoryItem[];
+    pagination: {
+        page: number;
+        pageSize: number;
+        total: number;
+        totalPages: number;
+    };
+};
+
 const request = async <T>(config: Parameters<typeof jikeingService.request>[0]) => {
     return (await jikeingService.request({
         baseURL: JIKE_GO_BASE_URL,
@@ -58,4 +94,17 @@ export const createFeedback = (data: CreateFeedbackRequest) =>
         url: "/v1/feedbacks",
         method: "post",
         data,
+    });
+
+export const getMyFeedbackHistory = (page: number) =>
+    request<FeedbackHistoryResponse>({
+        url: "/v1/feedbacks",
+        method: "get",
+        params: { page },
+    });
+
+export const getMyFeedbackDetail = (id: string) =>
+    request<FeedbackDetail>({
+        url: `/v1/feedbacks/${encodeURIComponent(id)}`,
+        method: "get",
     });
