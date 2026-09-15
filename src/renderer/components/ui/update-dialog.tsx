@@ -171,7 +171,7 @@ export function UpdateDialog({
                 <DialogHeader
                     className={cn(
                         "px-6 pt-6 pb-4 border-b border-white/5",
-                        "bg-gradient-to-br from-[#B43FEB]/8 via-transparent to-transparent",
+                        "bg-linear-to-br from-[#B43FEB]/8 via-transparent to-transparent",
                     )}
                 >
                     <div className="flex items-start gap-4">
@@ -218,7 +218,7 @@ export function UpdateDialog({
                     </div>
                 </DialogHeader>
 
-                <div className="px-6 py-5 space-y-4 min-h-[120px]">
+                <div className="min-h-30 px-6 py-5 space-y-4">
                     {state === "idle" && (
                         <div className="rounded-lg border border-dashed border-white/10 p-6 text-center">
                             <p className="text-sm text-white/50">
@@ -243,6 +243,9 @@ export function UpdateDialog({
 
                     {state === "available" && updateInfo && (
                         <div className="space-y-3">
+                            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-xs leading-relaxed text-yellow-100/80">
+                                安装包托管在 GitHub，建议开启代理后更新，下载速度更快。
+                            </div>
                             {updateInfo.releaseNotes ? (
                                 <>
                                     <div className="flex items-center gap-2 text-xs font-medium text-white/70">
@@ -417,7 +420,7 @@ export function UpdateDialog({
                             {state === "available" && (
                                 <div className="flex flex-col-reverse sm:flex-row gap-2 w-full sm:w-auto">
                                     <Button size="sm" onClick={() => onOpenChange(false)}>
-                                        稍后
+                                        取消更新
                                     </Button>
                                     <Button
                                         size="sm"
@@ -425,7 +428,7 @@ export function UpdateDialog({
                                         onClick={() => void onStartUpdate()}
                                     >
                                         <IconDownload size={14} />
-                                        立即更新
+                                        确认更新
                                     </Button>
                                 </div>
                             )}

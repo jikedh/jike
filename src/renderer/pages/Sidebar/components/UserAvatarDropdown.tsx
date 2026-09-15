@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useUserStore } from "@/stores/useUserStore";
+import { useUpdateStore } from "@/stores/updateStore";
 
 interface UserAvatarDropdownProps {
   userId?: string;
@@ -48,6 +49,12 @@ export const UserAvatarDropdown = ({
     (balanceInfo?.forScore ?? 0) + (balanceInfo?.vipScore ?? 0);
   const navigate = useNavigate();
   const logout = useUserStore((state) => state.logout);
+  const hasAvailableUpdate = useUpdateStore(
+    (state) => state.hasAvailableUpdate,
+  );
+  const setUpdateDialogOpen = useUpdateStore(
+    (state) => state.setUpdateDialogOpen,
+  );
 
   // 读取登录态 token，决定是展示头像下拉还是跳转登录入口
   const token = getJikeingToken();
@@ -90,6 +97,15 @@ export const UserAvatarDropdown = ({
 
   return (
     <div className="flex flex-col items-center gap-2">
+      {hasAvailableUpdate ? (
+        <button
+          type="button"
+          className="rounded-full bg-[#B43FEB]/15 px-2 py-0.5 text-[10px] font-medium text-[#d68cf6] transition-colors hover:bg-[#B43FEB]/25"
+          onClick={() => setUpdateDialogOpen(true)}
+        >
+          有新版本
+        </button>
+      ) : null}
       {POINTS_FEATURE_ENABLED ? (
         <button
           type="button"

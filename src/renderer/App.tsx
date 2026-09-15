@@ -1,4 +1,5 @@
 import ToastContainer from "@/components/ui/toastContainer";
+import { UpdateManager } from "@/components/UpdateManager";
 import AppRouter from "@/router";
 import { useUserStore } from "@/stores/useUserStore";
 import "@xyflow/react/dist/style.css";
@@ -22,6 +23,7 @@ function App() {
   return (
     <>
       <AppRouter />
+      <UpdateManager />
       <ToastContainer />
     </>
   );
