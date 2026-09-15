@@ -49,7 +49,6 @@ export function PointsView() {
 
     const balanceInfo = useUserStore((state) => state.balanceInfo);
     const fetchBalanceInfo = useUserStore((state) => state.fetchBalanceInfo);
-    const setBalanceInfo = useUserStore((state) => state.setBalanceInfo);
 
     const fetchRecords = useCallback(async (page = 1) => {
         setRecordsLoading(true);
@@ -229,13 +228,7 @@ export function PointsView() {
                             userId,
                             vipScoreDelta: selectedPackage.points,
                         });
-                        if (balanceInfo) {
-                            setBalanceInfo({
-                                ...balanceInfo,
-                                forScore: balanceInfo.forScore + selectedPackage.points,
-                            });
-                        }
-                        void fetchBalanceInfo();
+                        await fetchBalanceInfo();
                         void fetchRecords(1);
                         void fetchTransactions(1);
                         toast.success("充值成功，积分已到账");
@@ -278,13 +271,11 @@ export function PointsView() {
             }
         };
     }, [
-        balanceInfo,
         fetchBalanceInfo,
         fetchRecords,
         fetchTransactions,
         nativePayOrder?.orderId,
         selectedPackage,
-        setBalanceInfo,
         userId,
     ]);
 

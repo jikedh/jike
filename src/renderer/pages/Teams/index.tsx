@@ -62,6 +62,7 @@ const EMPTY_SUMMARY: TeamCreditSummary = {
 
 function TeamsPage() {
     const userInfo = useUserStore((s) => s.userInfo);
+    const fetchBalanceInfo = useUserStore((s) => s.fetchBalanceInfo);
     const currentUserId = String(userInfo?.id ?? "");
     const navigate = useNavigate();
 
@@ -263,7 +264,7 @@ function TeamsPage() {
                 requestKey: `allocate-${currentTeamId}-${memberUserId}-${Date.now()}`,
             });
             toast.success(res.data?.message ?? `已分配 ${amount.toLocaleString("zh-CN")} 积分`);
-            await loadTeamData(currentTeamId);
+            await Promise.all([loadTeamData(currentTeamId), fetchBalanceInfo()]);
         } catch {
             toast.error("积分分配失败");
         }
