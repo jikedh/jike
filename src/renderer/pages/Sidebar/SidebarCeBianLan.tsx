@@ -2,6 +2,7 @@ import {
   BookOpenText,
   Clapperboard,
   House,
+  MessageSquareText,
   Settings,
   SquareDashedMousePointer,
   TextQuote,
@@ -13,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { getJikeingToken, getJikeingUserId } from "shared/utils/utils";
 import iconImg from "@/assets/icon.png";
 import { SettingsModal } from "@/pages/Canvas/components/SettingsModal";
+import { FeedbackDialog } from "@/components/FeedbackDialog";
 import { UserAvatarDropdown } from "@/pages/Sidebar/components/UserAvatarDropdown";
 import { useUserStore } from "@/stores/useUserStore";
 import { SidebarFooter } from "./components/SidebarFooter";
@@ -25,6 +27,7 @@ export const SidebarCeBianLan = () => {
   const userId = getJikeingUserId();
   const token = getJikeingToken();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [appVersion, setAppVersion] = useState("");
 
   const {
@@ -196,6 +199,7 @@ export const SidebarCeBianLan = () => {
 
         <SidebarFooter classNames={{ root: "pt-4" }}>
           <UserAvatarDropdown userId={userId} balanceInfo={balanceInfo} />
+          <FeedbackButton onClick={() => setIsFeedbackOpen(true)} />
           <SettingsButton onClick={handleSettingsClick} />
         </SidebarFooter>
       </SidebarRoot>
@@ -203,6 +207,10 @@ export const SidebarCeBianLan = () => {
       <SettingsModal
         open={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+      />
+      <FeedbackDialog
+        open={isFeedbackOpen}
+        onOpenChange={setIsFeedbackOpen}
       />
     </>
   );
@@ -219,5 +227,16 @@ const SettingsButton = ({ onClick }: SettingsButtonProps) => (
   >
     <Settings className="w-5 h-5" />
     <span className="text-[10px] text-white/30 mt-0.5">设置</span>
+  </button>
+);
+
+const FeedbackButton = ({ onClick }: SettingsButtonProps) => (
+  <button
+    type="button"
+    className="flex flex-col items-center justify-center rounded-xl px-2 py-2 text-white/50 transition-all hover:bg-white/5 hover:text-white/90"
+    onClick={onClick}
+  >
+    <MessageSquareText className="w-5 h-5" />
+    <span className="text-[10px] text-white/30 mt-0.5">反馈</span>
   </button>
 );
