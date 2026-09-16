@@ -2111,7 +2111,7 @@ dependencies = [
 
 [[package]]
 name = "jike"
-version = "2.5.1"
+version = "2.5.2"
 dependencies = [
  "anyhow",
  "async-trait",
