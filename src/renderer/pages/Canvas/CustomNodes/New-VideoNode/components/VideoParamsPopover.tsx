@@ -254,6 +254,7 @@ export const VideoParamsPopover = ({
   const config = getVideoParamConfig(modelId, mode);
   const followsSourceDuration =
     modelId === "seedance-2.5" && mode === "video-edit";
+  const isAutoDuration = Boolean(config.autoDuration && value.autoDuration);
   const durationConfig =
     config.duration.type === "slider" && durationMaxOverride !== undefined
       ? {
@@ -280,7 +281,7 @@ export const VideoParamsPopover = ({
     if (generationMode) parts.push(generationMode);
     if (followsSourceDuration) {
       parts.push("跟随原视频");
-    } else if (value.autoDuration) {
+    } else if (isAutoDuration) {
       parts.push("自动");
     } else if (value.duration) {
       parts.push(`${value.duration}s`);
@@ -302,7 +303,7 @@ export const VideoParamsPopover = ({
     }
 
     return parts;
-  }, [config, value, modelId, followsSourceDuration]);
+  }, [config, value, modelId, followsSourceDuration, isAutoDuration]);
 
   const patch = (patchValue: Partial<VideoParamState>) => {
     onChange({ ...value, ...patchValue });
@@ -450,7 +451,7 @@ export const VideoParamsPopover = ({
               <span className="font-semibold text-[#B43FEB]">
                 {followsSourceDuration
                   ? "跟随原视频"
-                  : value.autoDuration
+                  : isAutoDuration
                     ? "自动"
                     : `${value.duration}s`}
               </span>
@@ -462,7 +463,7 @@ export const VideoParamsPopover = ({
                   {config.autoDuration.label}
                 </span>
                 <Switch
-                  checked={value.autoDuration ?? false}
+                  checked={isAutoDuration}
                   onCheckedChange={(checked) =>
                     patch({ autoDuration: checked })
                   }
@@ -471,7 +472,7 @@ export const VideoParamsPopover = ({
             ) : null}
 
             {followsSourceDuration ? null : durationConfig.type === "slider" ? (
-              <div className={cn("space-y-2", value.autoDuration && "pointer-events-none opacity-40")}>
+              <div className={cn("space-y-2", isAutoDuration && "pointer-events-none opacity-40")}>
                 <Slider
                   value={[value.duration]}
                   min={durationConfig.min}

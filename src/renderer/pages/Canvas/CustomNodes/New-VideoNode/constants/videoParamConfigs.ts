@@ -823,6 +823,10 @@ export const normalizeVideoParams = (
 
   if (modelId === "seedance-2.5" && mode === "video-edit") {
     next.autoDuration = true;
+  } else if (!config.autoDuration) {
+    next.autoDuration = undefined;
+  } else {
+    next.autoDuration = Boolean(next.autoDuration);
   }
 
   if (!optionContains(config.aspectRatios, next.aspectRatio)) {
