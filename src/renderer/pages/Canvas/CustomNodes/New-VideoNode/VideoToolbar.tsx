@@ -1597,6 +1597,12 @@ export const VideoToolbar = ({
           trimResult = response.data;
         }
 
+        const persistedVideoUrl = await copyMediaUrlToOss(trimResult.url);
+        if (!persistedVideoUrl) {
+          throw new Error("裁剪完成但转存到 OSS 失败，请重新裁剪");
+        }
+        trimResult = { ...trimResult, url: persistedVideoUrl };
+
         const sourceNode = useCanvasFlowStore
           .getState()
           .nodes.find((node) => node.id === nodeId);
@@ -1648,8 +1654,8 @@ export const VideoToolbar = ({
         flowStore.saveGraph();
         toast.success(
           trimResult.method === "imm"
-            ? "IMM 云端裁剪成功"
-            : "本地 ffmpeg 裁剪成功",
+            ? "IMM 云端裁剪并转存成功"
+            : "本地 ffmpeg 裁剪并转存成功",
         );
         return trimResult;
       } catch (error: any) {
