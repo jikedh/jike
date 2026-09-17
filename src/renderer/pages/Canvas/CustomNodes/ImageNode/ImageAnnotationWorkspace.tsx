@@ -180,8 +180,8 @@ const MIN_STROKE_WIDTH = 4;
 const MAX_STROKE_WIDTH = 160;
 const DEFAULT_STROKE_WIDTH = 10;
 const DEFAULT_ERASER_STROKE_WIDTH = 56;
-const ERASE_IMAGE_COUNT_OPTIONS = [1, 2, 4] as const;
-type EraseImageCount = (typeof ERASE_IMAGE_COUNT_OPTIONS)[number];
+const GENERATION_IMAGE_COUNT_OPTIONS = [1, 2, 4] as const;
+type GenerationImageCount = (typeof GENERATION_IMAGE_COUNT_OPTIONS)[number];
 const DEFAULT_NANO_BANANA_SIZE = "1:1";
 const NANO_BANANA_SIZE_VALUES = new Set(
   NANO_BANANA_LOCAL_SIZES.map((item) => item.value),
@@ -536,9 +536,10 @@ export const ImageAnnotationWorkspace = ({
     useState<PendingTextDraft | null>(null);
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [erasePrompt, setErasePrompt] = useState("");
-  const [eraseImageCount, setEraseImageCount] = useState<EraseImageCount>(1);
-  const [isEraseGenerating, setIsEraseGenerating] = useState(false);
+  const [generationPrompt, setGenerationPrompt] = useState("");
+  const [generationImageCount, setGenerationImageCount] =
+    useState<GenerationImageCount>(1);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const nodes = useCanvasFlowStore((state) => state.nodes);
   const addNode = useCanvasFlowStore((state) => state.addNode);
@@ -1517,97 +1518,114 @@ export const ImageAnnotationWorkspace = ({
     [getCanvasPoint],
   );
 
-  const handleSave = useCallback(async () => {
-    if (!sourceNodeId || !loadedImage || !imageNaturalSize.width || !imageUrl) {
-      return;
+  const createOutputCanvas = useCallback(() => {
+    if (!loadedImage || !imageNaturalSize.width || !imageNaturalSize.height) {
+      throw new Error("图片尚未加载完成");
     }
 
-    setIsSaving(true);
+    const outputCanvas = document.createElement("canvas");
+    outputCanvas.width = imageNaturalSize.width;
+    outputCanvas.height = imageNaturalSize.height;
 
-    try {
-      const outputCanvas = document.createElement("canvas");
-      outputCanvas.width = imageNaturalSize.width;
-      outputCanvas.height = imageNaturalSize.height;
+    const outputCtx = outputCanvas.getContext("2d");
+    if (!outputCtx) {
+      throw new Error("无法创建导出画布");
+    }
 
-      const outputCtx = outputCanvas.getContext("2d");
-      if (!outputCtx) {
-        throw new Error("无法创建导出画布");
-      }
+    const drawingCanvas = drawingCanvasRef.current;
 
-      const drawingCanvas = drawingCanvasRef.current;
+    if (isEraseMode && drawingCanvas) {
+      outputCtx.drawImage(drawingCanvas, 0, 0);
+    } else {
+      outputCtx.drawImage(
+        loadedImage,
+        0,
+        0,
+        outputCanvas.width,
+        outputCanvas.height,
+      );
+    }
 
-      if (isEraseMode && drawingCanvas) {
-        outputCtx.drawImage(drawingCanvas, 0, 0);
-      } else {
-        outputCtx.drawImage(
-          loadedImage,
-          0,
-          0,
-          outputCanvas.width,
-          outputCanvas.height,
-        );
-      }
+    if (!isEraseMode && drawingCanvas) {
+      outputCtx.drawImage(drawingCanvas, 0, 0);
+    }
 
-      if (!isEraseMode && drawingCanvas) {
-        outputCtx.drawImage(drawingCanvas, 0, 0);
-      }
+    shapeItems.forEach((shape) => {
+      outputCtx.save();
+      outputCtx.strokeStyle = shape.color;
+      outputCtx.lineJoin = "round";
+      outputCtx.lineCap = "round";
+      outputCtx.lineWidth = shape.strokeWidth;
 
-      shapeItems.forEach((shape) => {
-        outputCtx.save();
-        outputCtx.strokeStyle = shape.color;
-        outputCtx.lineJoin = "round";
-        outputCtx.lineCap = "round";
-        outputCtx.lineWidth = shape.strokeWidth;
-
-        if (shape.type === "rect") {
-          outputCtx.strokeRect(shape.x, shape.y, shape.width, shape.height);
-        } else if (shape.type === "brushGroup") {
-          shape.strokes.forEach((stroke) => {
-            if (stroke.length === 0) {
-              return;
-            }
-            outputCtx.beginPath();
-            stroke.forEach((point, index) => {
-              if (index === 0) {
-                outputCtx.moveTo(point.x, point.y);
-              } else {
-                outputCtx.lineTo(point.x, point.y);
-              }
-            });
-            if (stroke.length === 1) {
-              outputCtx.lineTo(stroke[0].x, stroke[0].y);
-            }
-            outputCtx.stroke();
-          });
-        } else if (shape.points.length > 0) {
+      if (shape.type === "rect") {
+        outputCtx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+      } else if (shape.type === "brushGroup") {
+        shape.strokes.forEach((stroke) => {
+          if (stroke.length === 0) {
+            return;
+          }
           outputCtx.beginPath();
-          shape.points.forEach((point, index) => {
+          stroke.forEach((point, index) => {
             if (index === 0) {
               outputCtx.moveTo(point.x, point.y);
             } else {
               outputCtx.lineTo(point.x, point.y);
             }
           });
-          if (shape.points.length === 1) {
-            outputCtx.lineTo(shape.points[0].x, shape.points[0].y);
+          if (stroke.length === 1) {
+            outputCtx.lineTo(stroke[0].x, stroke[0].y);
           }
           outputCtx.stroke();
-        }
-
-        outputCtx.restore();
-      });
-
-      textItems.forEach((item) => {
-        const metrics = getTextMetrics(item.text, item.scale);
-        outputCtx.save();
-        outputCtx.fillStyle = item.color;
-        outputCtx.font = `600 ${metrics.fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
-        outputCtx.textBaseline = "top";
-        metrics.lines.forEach((line, index) => {
-          outputCtx.fillText(line, item.x, item.y + index * metrics.lineHeight);
         });
-        outputCtx.restore();
+      } else if (shape.points.length > 0) {
+        outputCtx.beginPath();
+        shape.points.forEach((point, index) => {
+          if (index === 0) {
+            outputCtx.moveTo(point.x, point.y);
+          } else {
+            outputCtx.lineTo(point.x, point.y);
+          }
+        });
+        if (shape.points.length === 1) {
+          outputCtx.lineTo(shape.points[0].x, shape.points[0].y);
+        }
+        outputCtx.stroke();
+      }
+
+      outputCtx.restore();
+    });
+
+    textItems.forEach((item) => {
+      const metrics = getTextMetrics(item.text, item.scale);
+      outputCtx.save();
+      outputCtx.fillStyle = item.color;
+      outputCtx.font = `600 ${metrics.fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
+      outputCtx.textBaseline = "top";
+      metrics.lines.forEach((line, index) => {
+        outputCtx.fillText(line, item.x, item.y + index * metrics.lineHeight);
       });
+      outputCtx.restore();
+    });
+
+    return outputCanvas;
+  }, [
+    imageNaturalSize.height,
+    imageNaturalSize.width,
+    isEraseMode,
+    loadedImage,
+    shapeItems,
+    textItems,
+  ]);
+
+  const handleSave = useCallback(async () => {
+    if (!sourceNodeId || !imageUrl) {
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const outputCanvas = createOutputCanvas();
 
       const blob = await new Promise<Blob | null>((resolve) => {
         outputCanvas.toBlob((value) => resolve(value), "image/png");
@@ -1680,39 +1698,43 @@ export const ImageAnnotationWorkspace = ({
     }
   }, [
     addNode,
-    imageNaturalSize.height,
-    imageNaturalSize.width,
+    createOutputCanvas,
     imageUrl,
     isEraseMode,
-    loadedImage,
     onClose,
     onConnect,
     projectId,
     sourceNodeId,
-    shapeItems,
-    textItems,
     updateImageNodeData,
   ]);
 
-  const handleEraseGenerate = useCallback(async () => {
-    const prompt = erasePrompt.trim();
+  const handleGenerate = useCallback(async () => {
+    const prompt = generationPrompt.trim();
     if (!prompt) {
       toast.warning("请输入提示词");
       return;
     }
 
-    const drawingCanvas = drawingCanvasRef.current;
-    if (!drawingCanvas || !sourceImageNode || !sourceNodeId) {
+    if (!sourceImageNode || !sourceNodeId) {
       toast.error("当前图片节点不存在");
       return;
     }
 
-    setIsEraseGenerating(true);
+    const generationLabel = isEraseMode ? "擦除" : "标注";
+
+    setIsGenerating(true);
 
     try {
+      const referenceCanvas = isEraseMode
+        ? drawingCanvasRef.current
+        : createOutputCanvas();
+      if (!referenceCanvas) {
+        throw new Error("生成参考图不存在");
+      }
+
       let file = await getCanvasPngFile(
-        drawingCanvas,
-        `erase-reference-${Date.now()}.png`,
+        referenceCanvas,
+        `${isEraseMode ? "erase" : "annotation"}-reference-${Date.now()}.png`,
       );
       if (file.size > MAX_IMAGE_SIZE_MB) {
         file = await compressImage(file);
@@ -1720,7 +1742,7 @@ export const ImageAnnotationWorkspace = ({
 
       const uploadResult = await uploadFileToOSS(file);
       if (!uploadResult.url) {
-        throw new Error("擦除参考图上传失败");
+        throw new Error(`${generationLabel}参考图上传失败`);
       }
 
       const childPosition = {
@@ -1736,7 +1758,7 @@ export const ImageAnnotationWorkspace = ({
         targetHandle: "input",
       });
 
-      const count = eraseImageCount;
+      const count = generationImageCount;
       const basePrompt = prompt;
       const finalPrompt = isEraseGeminiPro2Model
         ? `${basePrompt} [尺寸:${eraseSize}] [分辨率:${eraseResolution}]`
@@ -1761,6 +1783,7 @@ export const ImageAnnotationWorkspace = ({
       };
 
       updateImageNodeData(childId, {
+        badgeLabel: `${generationLabel}生成`,
         model: eraseModel,
         originalModel: eraseModel,
         platform: erasePlatform,
@@ -1786,7 +1809,7 @@ export const ImageAnnotationWorkspace = ({
             await startGeminiPro2Generation(childId, buildPayload());
             successCount++;
           } catch (error) {
-            console.error("擦除生成失败:", error);
+            console.error(`${generationLabel}生成失败:`, error);
             failCount++;
           }
         }
@@ -1794,7 +1817,7 @@ export const ImageAnnotationWorkspace = ({
         if (successCount > 0 && failCount > 0) {
           toast.warning(`已生成 ${successCount} 张图片，${failCount} 张失败`);
         } else if (successCount === 0 && failCount > 0) {
-          toast.error("擦除生成失败，请重试");
+          toast.error(`${generationLabel}生成失败，请重试`);
         }
       };
 
@@ -1812,7 +1835,7 @@ export const ImageAnnotationWorkspace = ({
           await startImageGeneration(childId, buildPayload());
           successCount++;
         } catch (error) {
-          console.error("擦除生成失败:", error);
+          console.error(`${generationLabel}生成失败:`, error);
           failCount++;
         }
       }
@@ -1824,20 +1847,22 @@ export const ImageAnnotationWorkspace = ({
         throw new Error(failCount > 0 ? "创建生成任务失败" : "未提交生成任务");
       }
     } catch (error: any) {
-      console.error("擦除生成失败:", error);
-      toast.error(error?.message || "擦除生成失败，请重试");
+      console.error(`${generationLabel}生成失败:`, error);
+      toast.error(error?.message || `${generationLabel}生成失败，请重试`);
     } finally {
-      setIsEraseGenerating(false);
+      setIsGenerating(false);
     }
   }, [
     addNode,
-    eraseImageCount,
+    createOutputCanvas,
     eraseModel,
     erasePlatform,
-    erasePrompt,
     eraseResolution,
     eraseSize,
+    generationImageCount,
+    generationPrompt,
     isEraseGeminiPro2Model,
+    isEraseMode,
     onClose,
     onConnect,
     sourceImageNode,
@@ -2630,172 +2655,176 @@ export const ImageAnnotationWorkspace = ({
             </div>
           </div>
 
-          {isEraseMode ? (
-            <div className="nodrag nopan nowheel flex w-full max-w-[720px] flex-col gap-3 rounded-3xl border border-white/5 bg-[#1e1e20]/95 p-4 shadow-2xl pointer-events-auto">
-              <div className="w-full rounded-xl border border-white/[0.05] bg-white/[0.02] shadow-inner transition-all focus-within:border-[#B43FEB]/50 focus-within:shadow-[0_0_15px_rgba(180,63,235,0.15)]">
-                <textarea
-                  value={erasePrompt}
-                  onChange={(event) => setErasePrompt(event.target.value)}
-                  rows={3}
-                  className="nodrag nopan nowheel min-h-[92px] w-full resize-none bg-transparent p-4 text-sm text-white/90 outline-none placeholder:text-white/28"
-                  placeholder="输入擦除后重新生成的提示词"
-                />
-              </div>
+          <div className="nodrag nopan nowheel flex w-full max-w-[720px] flex-col gap-3 rounded-3xl border border-white/5 bg-[#1e1e20]/95 p-4 shadow-2xl pointer-events-auto">
+            <div className="w-full rounded-xl border border-white/[0.05] bg-white/[0.02] shadow-inner transition-all focus-within:border-[#B43FEB]/50 focus-within:shadow-[0_0_15px_rgba(180,63,235,0.15)]">
+              <textarea
+                value={generationPrompt}
+                onChange={(event) => setGenerationPrompt(event.target.value)}
+                rows={3}
+                className="nodrag nopan nowheel min-h-[92px] w-full resize-none bg-transparent p-4 text-sm text-white/90 outline-none placeholder:text-white/28"
+                placeholder={
+                  isEraseMode
+                    ? "输入擦除后重新生成的提示词"
+                    : "输入标注后重新生成的提示词"
+                }
+              />
+            </div>
 
-              <div className={PROMPT_PANEL_STYLES.divider} />
+            <div className={PROMPT_PANEL_STYLES.divider} />
 
-              <div className="flex w-full flex-wrap items-center gap-3">
-                <Select
-                  value={String(eraseCurrentModelId)}
-                  onValueChange={(value) => {
-                    const selectedModel = visibleImageModels.find(
-                      (item) => item.id === Number(value),
-                    );
-                    const apimartDefaults = APIMART_ERASE_MODEL_DEFAULTS.get(
-                      selectedModel?.model ?? "",
-                    );
-                    const shouldResetNanoBananaSize =
-                      (selectedModel?.model === NANO_BANANA_LOCAL_MODEL &&
-                        selectedModel?.platform === NANO_BANANA_LOCAL_PLATFORM) &&
-                      !NANO_BANANA_SIZE_VALUES.has(eraseSize);
-                    const size = apimartDefaults?.size ??
-                      (shouldResetNanoBananaSize ? DEFAULT_NANO_BANANA_SIZE : undefined);
-                    const resolution = apimartDefaults?.resolution;
+            <div className="flex w-full flex-wrap items-center gap-3">
+              <Select
+                value={String(eraseCurrentModelId)}
+                onValueChange={(value) => {
+                  const selectedModel = visibleImageModels.find(
+                    (item) => item.id === Number(value),
+                  );
+                  const apimartDefaults = APIMART_ERASE_MODEL_DEFAULTS.get(
+                    selectedModel?.model ?? "",
+                  );
+                  const shouldResetNanoBananaSize =
+                    (selectedModel?.model === NANO_BANANA_LOCAL_MODEL &&
+                      selectedModel?.platform === NANO_BANANA_LOCAL_PLATFORM) &&
+                    !NANO_BANANA_SIZE_VALUES.has(eraseSize);
+                  const size = apimartDefaults?.size ??
+                    (shouldResetNanoBananaSize ? DEFAULT_NANO_BANANA_SIZE : undefined);
+                  const resolution = apimartDefaults?.resolution;
 
-                    persistEraseImageDefaultPreset({
-                      model: selectedModel?.model ?? value,
-                      platform: selectedModel?.platform,
-                      size,
-                      resolution,
-                    });
-                    updateEraseImageParams({
-                      model: selectedModel?.model ?? value,
-                      platform: selectedModel?.platform,
-                      ...(size ? { size } : {}),
-                      ...(resolution ? { resolution } : {}),
-                    });
-                  }}
+                  persistEraseImageDefaultPreset({
+                    model: selectedModel?.model ?? value,
+                    platform: selectedModel?.platform,
+                    size,
+                    resolution,
+                  });
+                  updateEraseImageParams({
+                    model: selectedModel?.model ?? value,
+                    platform: selectedModel?.platform,
+                    ...(size ? { size } : {}),
+                    ...(resolution ? { resolution } : {}),
+                  });
+                }}
+              >
+                <SelectTrigger className={PROMPT_PANEL_STYLES.modelSelect}>
+                  <SelectValue placeholder="选择模型" />
+                </SelectTrigger>
+                <SelectContent
+                  className={PROMPT_PANEL_STYLES.modelSelectContent}
                 >
-                  <SelectTrigger className={PROMPT_PANEL_STYLES.modelSelect}>
-                    <SelectValue placeholder="选择模型" />
-                  </SelectTrigger>
-                  <SelectContent
-                    className={PROMPT_PANEL_STYLES.modelSelectContent}
-                  >
-                    {visibleImageModels.map((item) => (
-                      <SelectItem
-                        key={item.id}
-                        value={String(item.id)}
-                        className={PROMPT_PANEL_STYLES.modelSelectItem}
-                      >
-                        {item.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  {visibleImageModels.map((item) => (
+                    <SelectItem
+                      key={item.id}
+                      value={String(item.id)}
+                      className={PROMPT_PANEL_STYLES.modelSelectItem}
+                    >
+                      {item.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-                {isEraseSeedreamModel ? (
-                  <SeedreamParamsPanel
-                    size={eraseSize}
-                    resolution={eraseResolution}
-                    onSizeChange={(value) => {
-                      persistEraseImageDefaultPreset({ size: value });
-                      updateEraseImageParams({ size: value });
-                    }}
-                    onResolutionChange={(value) => {
-                      persistEraseImageDefaultPreset({ resolution: value });
-                      updateEraseImageParams({ resolution: value });
-                    }}
-                  />
-                ) : null}
+              {isEraseSeedreamModel ? (
+                <SeedreamParamsPanel
+                  size={eraseSize}
+                  resolution={eraseResolution}
+                  onSizeChange={(value) => {
+                    persistEraseImageDefaultPreset({ size: value });
+                    updateEraseImageParams({ size: value });
+                  }}
+                  onResolutionChange={(value) => {
+                    persistEraseImageDefaultPreset({ resolution: value });
+                    updateEraseImageParams({ resolution: value });
+                  }}
+                />
+              ) : null}
 
-                {(isEraseGeminiModel || isEraseGeminiPro2Model) ? (
-                  <GeminiParamsPanel
-                    size={eraseSize}
-                    resolution={eraseResolution}
-                    onSizeChange={(value) => {
-                      persistEraseImageDefaultPreset({ size: value });
-                      updateEraseImageParams({ size: value });
-                    }}
-                    onResolutionChange={(value) => {
-                      persistEraseImageDefaultPreset({ resolution: value });
-                      updateEraseImageParams({ resolution: value });
-                    }}
-                  />
-                ) : null}
+              {(isEraseGeminiModel || isEraseGeminiPro2Model) ? (
+                <GeminiParamsPanel
+                  size={eraseSize}
+                  resolution={eraseResolution}
+                  onSizeChange={(value) => {
+                    persistEraseImageDefaultPreset({ size: value });
+                    updateEraseImageParams({ size: value });
+                  }}
+                  onResolutionChange={(value) => {
+                    persistEraseImageDefaultPreset({ resolution: value });
+                    updateEraseImageParams({ resolution: value });
+                  }}
+                />
+              ) : null}
 
-                {isEraseNanoBananaLocalModel ? (
-                  <GeminiParamsPanel
-                    size={eraseSize}
-                    resolution={eraseResolution}
-                    sizeOptions={NANO_BANANA_LOCAL_SIZES}
-                    resolutionOptions={NANO_BANANA_RESOLUTIONS}
-                    onSizeChange={(value) => {
-                      persistEraseImageDefaultPreset({ size: value });
-                      updateEraseImageParams({ size: value });
-                    }}
-                    onResolutionChange={(value) => {
-                      persistEraseImageDefaultPreset({ resolution: value });
-                      updateEraseImageParams({ resolution: value });
-                    }}
-                  />
-                ) : null}
+              {isEraseNanoBananaLocalModel ? (
+                <GeminiParamsPanel
+                  size={eraseSize}
+                  resolution={eraseResolution}
+                  sizeOptions={NANO_BANANA_LOCAL_SIZES}
+                  resolutionOptions={NANO_BANANA_RESOLUTIONS}
+                  onSizeChange={(value) => {
+                    persistEraseImageDefaultPreset({ size: value });
+                    updateEraseImageParams({ size: value });
+                  }}
+                  onResolutionChange={(value) => {
+                    persistEraseImageDefaultPreset({ resolution: value });
+                    updateEraseImageParams({ resolution: value });
+                  }}
+                />
+              ) : null}
 
-                {isEraseGptImage2Model ? (
-                  <GptImage2ParamsPanel
-                    size={eraseSize}
-                    resolution={eraseResolution}
-                    sizeOptions={undefined}
-                    resolutionOptions={GPTIMAGE2_RESOLUTION_OPTIONS}
-                    onSizeChange={(value) => {
-                      persistEraseImageDefaultPreset({ size: value });
-                      updateEraseImageParams({ size: value });
-                    }}
-                    onResolutionChange={(value) => {
-                      persistEraseImageDefaultPreset({ resolution: value });
-                      updateEraseImageParams({ resolution: value });
-                    }}
-                  />
-                ) : null}
+              {isEraseGptImage2Model ? (
+                <GptImage2ParamsPanel
+                  size={eraseSize}
+                  resolution={eraseResolution}
+                  sizeOptions={undefined}
+                  resolutionOptions={GPTIMAGE2_RESOLUTION_OPTIONS}
+                  onSizeChange={(value) => {
+                    persistEraseImageDefaultPreset({ size: value });
+                    updateEraseImageParams({ size: value });
+                  }}
+                  onResolutionChange={(value) => {
+                    persistEraseImageDefaultPreset({ resolution: value });
+                    updateEraseImageParams({ resolution: value });
+                  }}
+                />
+              ) : null}
 
-                <div className="ml-auto flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const currentIndex =
-                        ERASE_IMAGE_COUNT_OPTIONS.indexOf(eraseImageCount);
-                      const nextIndex =
-                        (currentIndex + 1) %
-                        ERASE_IMAGE_COUNT_OPTIONS.length;
-                      setEraseImageCount(ERASE_IMAGE_COUNT_OPTIONS[nextIndex]);
-                    }}
-                    disabled={isEraseGenerating}
-                    className={cn(
-                      PROMPT_PANEL_STYLES.countButton,
-                      isEraseGenerating && "cursor-not-allowed opacity-50",
-                    )}
-                    title={`当前生成 ${eraseImageCount} 张图片，点击切换`}
-                  >
-                    <span>x</span>
-                    <span>{eraseImageCount}</span>
-                  </button>
+              <div className="ml-auto flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentIndex =
+                      GENERATION_IMAGE_COUNT_OPTIONS.indexOf(generationImageCount);
+                    const nextIndex =
+                      (currentIndex + 1) %
+                      GENERATION_IMAGE_COUNT_OPTIONS.length;
+                    setGenerationImageCount(
+                      GENERATION_IMAGE_COUNT_OPTIONS[nextIndex],
+                    );
+                  }}
+                  disabled={isGenerating}
+                  className={cn(
+                    PROMPT_PANEL_STYLES.countButton,
+                    isGenerating && "cursor-not-allowed opacity-50",
+                  )}
+                  title={`当前生成 ${generationImageCount} 张图片，点击切换`}
+                >
+                  <span>x</span>
+                  <span>{generationImageCount}</span>
+                </button>
 
-                  <Button
-                    type="button"
-                    unstyled
-                    className={PROMPT_PANEL_STYLES.generateButton}
-                    loading={isEraseGenerating}
-                    onClick={handleEraseGenerate}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <IconSparkles size={16} />
-                      生成
-                    </span>
-                  </Button>
-                </div>
+                <Button
+                  type="button"
+                  unstyled
+                  className={PROMPT_PANEL_STYLES.generateButton}
+                  loading={isGenerating}
+                  onClick={handleGenerate}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <IconSparkles size={16} />
+                    生成
+                  </span>
+                </Button>
               </div>
             </div>
-          ) : null}
+          </div>
 
         </div>
       </div>
