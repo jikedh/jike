@@ -10,7 +10,10 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { uploadFileToOSS } from "service/oss";
 import {
-  IMAGE_MODELS,
+  APIMART_FLUX_2_PRO_MODEL,
+  APIMART_GPT_IMAGE_25_MODEL,
+  APIMART_QWEN_IMAGE_30_MODEL,
+  IMAGE_NODE_MODELS,
   NANO_BANANA_LOCAL_MODEL,
   NANO_BANANA_LOCAL_PLATFORM
 } from "shared/constants/ai-models";
@@ -183,6 +186,11 @@ const DEFAULT_NANO_BANANA_SIZE = "1:1";
 const NANO_BANANA_SIZE_VALUES = new Set(
   NANO_BANANA_LOCAL_SIZES.map((item) => item.value),
 );
+const APIMART_ERASE_MODEL_DEFAULTS = new Map([
+  [APIMART_FLUX_2_PRO_MODEL, { size: "1:1", resolution: "2MP" }],
+  [APIMART_GPT_IMAGE_25_MODEL, { size: "1:1", resolution: "1K" }],
+  [APIMART_QWEN_IMAGE_30_MODEL, { size: "1:1", resolution: "1K" }],
+]);
 const GPTIMAGE2_RESOLUTION_OPTIONS = [
   { label: "1K", value: "1K", description: "标准" },
   { label: "2K", value: "2K", description: "高清" },
@@ -549,7 +557,7 @@ export const ImageAnnotationWorkspace = ({
     (state) => state.setDefaultImagePreset,
   );
   const visibleImageModels = useMemo(
-    () => IMAGE_MODELS,
+    () => IMAGE_NODE_MODELS,
     [],
   );
 
@@ -571,7 +579,7 @@ export const ImageAnnotationWorkspace = ({
   const eraseSize = sourceImageData?.size ?? "1:1";
   const eraseResolution = sourceImageData?.resolution ?? "2K";
   const eraseCurrentModelId = useMemo(() => {
-    const matched = IMAGE_MODELS.find(
+    const matched = IMAGE_NODE_MODELS.find(
       (item) => item.model === eraseModel && item.platform === erasePlatform,
     );
     if (matched) {
@@ -579,8 +587,8 @@ export const ImageAnnotationWorkspace = ({
     }
 
     return (
-      IMAGE_MODELS.find((item) => item.model === eraseModel)?.id ??
-      IMAGE_MODELS[0]?.id ??
+      IMAGE_NODE_MODELS.find((item) => item.model === eraseModel)?.id ??
+      IMAGE_NODE_MODELS[0]?.id ??
       3
     );
   }, [eraseModel, erasePlatform]);
@@ -1648,7 +1656,7 @@ export const ImageAnnotationWorkspace = ({
       });
 
       updateImageNodeData(childId, {
-        badgeLabel: "标注",
+        badgeLabel: isEraseMode ? "擦除" : "标注",
         image_urls: [imageUrl],
         size: sourceNode.data?.size,
         result: {
@@ -2063,17 +2071,15 @@ export const ImageAnnotationWorkspace = ({
                 </>
               ) : null}
 
-              {!isEraseMode ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-10 rounded-xl bg-white px-5 text-sm font-semibold text-black hover:bg-white/90"
-                  loading={isSaving}
-                  onClick={handleSave}
-                >
-                  保存
-                </Button>
-              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                className="h-10 rounded-xl bg-white px-5 text-sm font-semibold text-black hover:bg-white/90"
+                loading={isSaving}
+                onClick={handleSave}
+              >
+                保存
+              </Button>
             </div>
           </div>
 
@@ -2645,21 +2651,28 @@ export const ImageAnnotationWorkspace = ({
                     const selectedModel = visibleImageModels.find(
                       (item) => item.id === Number(value),
                     );
+                    const apimartDefaults = APIMART_ERASE_MODEL_DEFAULTS.get(
+                      selectedModel?.model ?? "",
+                    );
                     const shouldResetNanoBananaSize =
-                      ((selectedModel?.model === NANO_BANANA_LOCAL_MODEL &&
-                        selectedModel?.platform === NANO_BANANA_LOCAL_PLATFORM) ||
-                        !NANO_BANANA_SIZE_VALUES.has(eraseSize));
+                      (selectedModel?.model === NANO_BANANA_LOCAL_MODEL &&
+                        selectedModel?.platform === NANO_BANANA_LOCAL_PLATFORM) &&
+                      !NANO_BANANA_SIZE_VALUES.has(eraseSize);
+                    const size = apimartDefaults?.size ??
+                      (shouldResetNanoBananaSize ? DEFAULT_NANO_BANANA_SIZE : undefined);
+                    const resolution = apimartDefaults?.resolution;
 
                     persistEraseImageDefaultPreset({
                       model: selectedModel?.model ?? value,
                       platform: selectedModel?.platform,
-                      size: shouldResetNanoBananaSize ? DEFAULT_NANO_BANANA_SIZE : undefined,
-                      resolution: undefined,
+                      size,
+                      resolution,
                     });
                     updateEraseImageParams({
                       model: selectedModel?.model ?? value,
                       platform: selectedModel?.platform,
-                      ...(shouldResetNanoBananaSize ? { size: DEFAULT_NANO_BANANA_SIZE } : {}),
+                      ...(size ? { size } : {}),
+                      ...(resolution ? { resolution } : {}),
                     });
                   }}
                 >
