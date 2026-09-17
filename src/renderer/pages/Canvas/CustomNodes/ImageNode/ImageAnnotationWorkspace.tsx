@@ -500,6 +500,7 @@ export const ImageAnnotationWorkspace = ({
   onClose,
 }: ImageAnnotationWorkspaceProps) => {
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const previewContainerRef = useRef<HTMLDivElement | null>(null);
   const drawingCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const dragTextRef = useRef<DragTextState | null>(null);
@@ -518,6 +519,7 @@ export const ImageAnnotationWorkspace = ({
     width: typeof window !== "undefined" ? window.innerWidth : 1440,
     height: typeof window !== "undefined" ? window.innerHeight : 900,
   });
+  const [previewHeight, setPreviewHeight] = useState(0);
   const [tool, setTool] = useState<AnnotationTool>("idle");
   const [currentColor, setCurrentColor] = useState<string>(COLOR_OPTIONS[0]);
   const [strokeWidth, setStrokeWidth] = useState(DEFAULT_STROKE_WIDTH);
@@ -609,8 +611,12 @@ export const ImageAnnotationWorkspace = ({
       return 1;
     }
 
+    if (!isEraseMode && previewHeight > 0) {
+      return previewHeight / imageNaturalSize.height;
+    }
+
     const maxWidth = viewportSize.width * (isEraseMode ? 0.64 : 0.72);
-    const maxHeight = viewportSize.height * (isEraseMode ? 0.52 : 0.7);
+    const maxHeight = viewportSize.height * (isEraseMode ? 0.52 : 0.5);
     return Math.max(
       0.2,
       Math.min(
@@ -623,6 +629,7 @@ export const ImageAnnotationWorkspace = ({
     imageNaturalSize.height,
     imageNaturalSize.width,
     isEraseMode,
+    previewHeight,
     viewportSize.height,
     viewportSize.width,
   ]);
@@ -936,6 +943,26 @@ export const ImageAnnotationWorkspace = ({
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [open]);
+
+  useEffect(() => {
+    if (!open || isEraseMode) {
+      return;
+    }
+
+    const previewContainer = previewContainerRef.current;
+    if (!previewContainer) {
+      return;
+    }
+
+    const updatePreviewSize = () => {
+      setPreviewHeight(previewContainer.clientHeight);
+    };
+
+    updatePreviewSize();
+    const observer = new ResizeObserver(updatePreviewSize);
+    observer.observe(previewContainer);
+    return () => observer.disconnect();
+  }, [isEraseMode, open]);
 
   useEffect(() => {
     if (!open) {
@@ -1884,18 +1911,28 @@ export const ImageAnnotationWorkspace = ({
   }
 
   return (
-    <div className="fixed inset-0 z-[80] overflow-y-auto overflow-x-hidden bg-[radial-gradient(circle_at_50%_30%,rgba(92,34,163,0.08)_0%,rgba(11,11,14,0.14)_28%,rgba(6,6,8,0.64)_100%)] backdrop-blur-[3px]">
+    <div
+      className={cn(
+        "fixed inset-0 z-[80] overflow-x-hidden bg-[radial-gradient(circle_at_50%_30%,rgba(92,34,163,0.08)_0%,rgba(11,11,14,0.14)_28%,rgba(6,6,8,0.64)_100%)] backdrop-blur-[3px]",
+        isEraseMode ? "overflow-y-auto" : "overflow-hidden",
+      )}
+    >
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0%,rgba(255,255,255,0.01)_18%,rgba(0,0,0,0)_34%,rgba(0,0,0,0.18)_100%)]" />
       <div className="pointer-events-none absolute left-1/2 top-[18%] h-[42vh] w-[42vw] -translate-x-1/2 rounded-full bg-[#B43FEB]/[0.07] blur-[120px]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[linear-gradient(180deg,rgba(0,0,0,0.42)_0%,rgba(0,0,0,0)_100%)]" />
-      <div className="min-h-full flex items-start justify-center px-8 pt-6 pb-8">
+      <div
+        className={cn(
+          "flex items-start justify-center px-8 pt-6 pb-8",
+          isEraseMode ? "min-h-full" : "h-full min-h-0",
+        )}
+      >
         <div
           className={cn(
             "flex w-full max-w-[1400px] flex-col items-center",
-            isEraseMode ? "gap-3 pb-4" : "gap-4",
+            isEraseMode ? "gap-3 pb-4" : "h-full min-h-0 gap-4",
           )}
         >
-          <div className="flex w-full max-w-[1100px] items-center justify-between rounded-2xl border border-white/10 bg-[#1f1f22]/95 px-4 py-3 shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
+          <div className="flex w-full max-w-[1100px] shrink-0 items-center justify-between rounded-2xl border border-white/10 bg-[#1f1f22]/95 px-4 py-3 shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -2108,7 +2145,10 @@ export const ImageAnnotationWorkspace = ({
             </div>
           </div>
 
-          <div className="flex w-full flex-1 items-center justify-center overflow-hidden rounded-[28px]">
+          <div
+            ref={previewContainerRef}
+            className="flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden rounded-[28px]"
+          >
             <div className="relative">
               <div className="pointer-events-none absolute inset-[-26px] rounded-[36px] bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.12)_0%,rgba(180,63,235,0.08)_20%,rgba(180,63,235,0.03)_40%,rgba(0,0,0,0)_72%)] blur-2xl" />
               <div
@@ -2655,7 +2695,7 @@ export const ImageAnnotationWorkspace = ({
             </div>
           </div>
 
-          <div className="nodrag nopan nowheel flex w-full max-w-[720px] flex-col gap-3 rounded-3xl border border-white/5 bg-[#1e1e20]/95 p-4 shadow-2xl pointer-events-auto">
+          <div className="nodrag nopan nowheel flex w-full max-w-[720px] shrink-0 flex-col gap-3 rounded-3xl border border-white/5 bg-[#1e1e20]/95 p-4 shadow-2xl pointer-events-auto">
             <div className="w-full rounded-xl border border-white/[0.05] bg-white/[0.02] shadow-inner transition-all focus-within:border-[#B43FEB]/50 focus-within:shadow-[0_0_15px_rgba(180,63,235,0.15)]">
               <textarea
                 value={generationPrompt}
@@ -2704,11 +2744,23 @@ export const ImageAnnotationWorkspace = ({
                   });
                 }}
               >
-                <SelectTrigger className={PROMPT_PANEL_STYLES.modelSelect}>
+                <SelectTrigger
+                  className={PROMPT_PANEL_STYLES.modelSelect}
+                  style={{
+                    width: "fit-content",
+                    minWidth: 230,
+                    maxWidth: "none",
+                  }}
+                >
                   <SelectValue placeholder="选择模型" />
                 </SelectTrigger>
                 <SelectContent
                   className={PROMPT_PANEL_STYLES.modelSelectContent}
+                  style={{
+                    width: "var(--radix-select-trigger-width)",
+                    minWidth: 230,
+                    maxWidth: "none",
+                  }}
                 >
                   {visibleImageModels.map((item) => (
                     <SelectItem
