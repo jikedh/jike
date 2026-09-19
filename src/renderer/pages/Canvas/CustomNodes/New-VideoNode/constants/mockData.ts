@@ -52,7 +52,11 @@ export interface MentionItem {
   /** 与 type 等价的别名，便于编辑器兼容字段传递 */
   mediaType?: "image" | "video" | "audio";
   /** 资产来源（TipTap mention 携带）：连接节点 / 远程资产 */
-  source?: "connected-node" | "remote-asset" | "local-upload";
+  source?:
+  | "connected-node"
+  | "remote-asset"
+  | "local-upload"
+  | "video-frame-annotation";
   /** 资产作用域 */
   scope?: string;
   /** 远程资产 ID */
@@ -67,4 +71,6 @@ export interface MentionItem {
   folderId?: string;
   /** 真实媒体资源地址，优先于 thumbnail 用于归一化与请求体 */
   fileUrl?: string;
+  /** 视频帧标注所在的视频时间点（秒） */
+  frameTime?: number;
 }

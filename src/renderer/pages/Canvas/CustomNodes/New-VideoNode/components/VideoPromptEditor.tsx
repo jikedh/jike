@@ -32,6 +32,7 @@ export interface VideoPromptEditorHandle {
   /** 获取 TipTap ProseMirror doc 的 JSON 结构，供归一化系统读取 mention 节点 */
   getDocumentJSON: () => unknown | null;
   insertContent: (content: string) => void;
+  insertMention: (item: VideoPromptEditorMentionItem, prefix: string) => void;
   removeReferenceMentions: (
     matchers: Array<{
       ids?: string[];
@@ -66,30 +67,32 @@ export interface VideoPromptEditorHandle {
   replaceTextPreservingMentions: (nextText: string) => void;
 }
 
+export type VideoPromptEditorMentionItem = {
+  id: string;
+  label: string;
+  originalLabel?: string;
+  value: string;
+  thumbnail: string;
+  type: "image" | "video" | "audio";
+  mediaType?: "image" | "video" | "audio";
+  url?: string;
+  fileUrl?: string;
+  source?: string;
+  scope?: string;
+  category?: string;
+  primaryCategory?: string;
+  assetId?: string;
+  nodeId?: string;
+  folderId?: string;
+};
+
 export interface VideoPromptEditorProps {
   promptDraftHtml: string;
   /** 优化提示词等异步操作期间，锁定正文以避免回写覆盖用户输入。 */
   isEditable?: boolean;
   nodeId?: string;
   projectId?: string | null;
-  mentionItems: {
-    id: string;
-    label: string;
-    originalLabel?: string;
-    value: string;
-    thumbnail: string;
-    type: "image" | "video" | "audio";
-    mediaType?: "image" | "video" | "audio";
-    url?: string;
-    fileUrl?: string;
-    source?: string;
-    scope?: string;
-    category?: string;
-    primaryCategory?: string;
-    assetId?: string;
-    nodeId?: string;
-    folderId?: string;
-  }[];
+  mentionItems: VideoPromptEditorMentionItem[];
   /** 选中个人素材库素材时回调，用于把远程素材持久化为节点参考项。 */
   onSelectRemoteAsset?: (payload: RemoteAssetMentionPayload) => void;
   onDraftChange: (payload: { text: string; html: string }) => void;
@@ -611,6 +614,23 @@ export const VideoPromptEditor = forwardRef<
           if (!editor) return;
           const { from } = editor.state.selection;
           editor.commands.insertContentAt(from, content);
+        },
+        insertMention: (item, prefix) => {
+          if (!editor) return;
+          editor
+            .chain()
+            .focus()
+            .insertContent(prefix)
+            .insertContent({
+              type: "mention",
+              attrs: {
+                ...item,
+                displayLabel: item.label,
+                mediaType: item.mediaType ?? item.type,
+              },
+            })
+            .insertContent(" ")
+            .run();
         },
         removeReferenceMentions: (matchers) => {
           if (!editor || !matchers.length) {

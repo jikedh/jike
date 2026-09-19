@@ -71,9 +71,18 @@ import {
   type VideoAnnotationPayload,
   VideoAnnotationWorkspace,
 } from "./components/VideoAnnotationWorkspace";
+import {
+  VideoFrameAnnotationWorkspace,
+  type VideoFrameAnnotationPayload,
+} from "./components/VideoFrameAnnotationWorkspace";
 import { VideoTimeline } from "./components/VideoTimeline";
 import type { VideoTrimResult } from "./components/VideoTrimPanel";
 import { VideoTrimPanel } from "./components/VideoTrimPanel";
+import {
+  PENDING_VIDEO_FRAME_ANNOTATION_MENTION_KEY,
+  VIDEO_FRAME_ANNOTATION_REFERENCES_KEY,
+  type VideoFrameAnnotationReference,
+} from "./constants/videoFrameAnnotations";
 import {
   getVideoItemsFromNodeData,
   getVideoUrlsFromNodeData,
@@ -102,6 +111,199 @@ const SUBTITLE_REMOVAL_POINTS_PER_SECOND = 0.5;
 const WUHEI_MAX_RECT_AREA = 480_000;
 const PROCESSED_VIDEO_NODE_GAP = 48;
 const subtitlePollers: Record<string, number> = {};
+
+const isLightAnnotationColor = (color?: string) =>
+  color === "#eab308" || color === "#ffffff";
+
+const createAnnotatedFrameFile = async (
+  frameUrl: string,
+  payload: VideoFrameAnnotationPayload,
+) => {
+  const response = await fetch(frameUrl);
+  if (!response.ok) {
+    throw new Error("读取视频帧图片失败");
+  }
+
+  const imageUrl = URL.createObjectURL(await response.blob());
+  const image = new Image();
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("加载视频帧图片失败"));
+      image.src = imageUrl;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("创建标注图片失败");
+    }
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const strokeWidth = Math.max(3, Math.round(Math.min(width, height) * 0.008));
+    context.drawImage(image, 0, 0, width, height);
+    context.strokeStyle = "#B43FEB";
+    context.fillStyle = "#B43FEB";
+    context.lineWidth = strokeWidth;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+
+    payload.annotations.forEach((annotation) => {
+      const { rect } = annotation;
+      const x = rect.x * width;
+      const y = rect.y * height;
+      const rectWidth = rect.width * width;
+      const rectHeight = rect.height * height;
+
+      if (annotation.tool === "brush") {
+        const points = annotation.points ?? [];
+        context.strokeStyle = annotation.color ?? "#ef4444";
+        context.fillStyle = annotation.color ?? "#ef4444";
+        if (points.length === 1) {
+          context.beginPath();
+          context.arc(points[0].x * width, points[0].y * height, strokeWidth / 2, 0, Math.PI * 2);
+          context.fill();
+          return;
+        }
+        if (points.length > 1) {
+          context.beginPath();
+          context.moveTo(points[0].x * width, points[0].y * height);
+          points.slice(1).forEach((point) => {
+            context.lineTo(point.x * width, point.y * height);
+          });
+          context.stroke();
+        }
+        return;
+      }
+
+      if (annotation.tool === "arrow") {
+        const fallbackStart = { x: rect.x, y: rect.y + rect.height };
+        const fallbackEnd = { x: rect.x + rect.width, y: rect.y };
+        const [start = fallbackStart, end = fallbackEnd] = annotation.points ?? [];
+        const startX = start.x * width;
+        const startY = start.y * height;
+        const endX = end.x * width;
+        const endY = end.y * height;
+        const distance = Math.hypot(endX - startX, endY - startY);
+        if (distance <= 1) {
+          return;
+        }
+        const arrowSize = Math.max(strokeWidth * 4, Math.min(width, height) * 0.02);
+        const angle = Math.atan2(endY - startY, endX - startX);
+        const directionX = Math.cos(angle);
+        const directionY = Math.sin(angle);
+        const perpendicularX = -directionY;
+        const perpendicularY = directionX;
+        const baseX = endX - directionX * arrowSize;
+        const baseY = endY - directionY * arrowSize;
+        const halfWidth = arrowSize * 0.48;
+        const leftX = baseX + perpendicularX * halfWidth;
+        const leftY = baseY + perpendicularY * halfWidth;
+        const rightX = baseX - perpendicularX * halfWidth;
+        const rightY = baseY - perpendicularY * halfWidth;
+        const padding = Math.max(strokeWidth, 4);
+        const minX = Math.min(endX, leftX, rightX);
+        const maxX = Math.max(endX, leftX, rightX);
+        const minY = Math.min(endY, leftY, rightY);
+        const maxY = Math.max(endY, leftY, rightY);
+        const shiftX = minX < padding ? padding - minX : maxX > width - padding ? width - padding - maxX : 0;
+        const shiftY = minY < padding ? padding - minY : maxY > height - padding ? height - padding - maxY : 0;
+        context.strokeStyle = annotation.color ?? "#ef4444";
+        context.fillStyle = annotation.color ?? "#ef4444";
+        context.beginPath();
+        context.moveTo(startX, startY);
+        context.lineTo(baseX + shiftX, baseY + shiftY);
+        context.stroke();
+        context.beginPath();
+        context.moveTo(leftX + shiftX, leftY + shiftY);
+        context.lineTo(endX + shiftX, endY + shiftY);
+        context.lineTo(rightX + shiftX, rightY + shiftY);
+        context.closePath();
+        context.fill();
+        return;
+      }
+
+      if (annotation.tool === "pin") {
+        const tipX = x + rectWidth / 2;
+        const tipY = y + rectHeight / 2;
+        const radius = Math.max(strokeWidth * 2.5, Math.min(width, height) * 0.024);
+        const centerY = tipY - radius * 1.1;
+        context.fillStyle = annotation.color ?? "#ef4444";
+        context.beginPath();
+        context.moveTo(tipX, tipY);
+        context.bezierCurveTo(
+          tipX - radius * 0.9,
+          tipY - radius * 0.85,
+          tipX - radius,
+          centerY + radius * 0.35,
+          tipX - radius,
+          centerY,
+        );
+        context.bezierCurveTo(
+          tipX - radius,
+          centerY - radius,
+          tipX - radius * 0.55,
+          centerY - radius,
+          tipX,
+          centerY - radius,
+        );
+        context.bezierCurveTo(
+          tipX + radius * 0.55,
+          centerY - radius,
+          tipX + radius,
+          centerY - radius,
+          tipX + radius,
+          centerY,
+        );
+        context.bezierCurveTo(
+          tipX + radius,
+          centerY + radius * 0.35,
+          tipX + radius * 0.9,
+          tipY - radius * 0.85,
+          tipX,
+          tipY,
+        );
+        context.closePath();
+        context.fill();
+        context.fillStyle = isLightAnnotationColor(annotation.color)
+          ? "#000000"
+          : "#ffffff";
+        context.font = `700 ${Math.max(14, Math.round(radius * 1.2))}px sans-serif`;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText(String(annotation.markerNumber ?? 1), tipX, centerY);
+        context.textAlign = "start";
+        context.textBaseline = "alphabetic";
+        context.fillStyle = "#B43FEB";
+        return;
+      }
+
+      context.strokeStyle = annotation.color ?? "#ef4444";
+      context.setLineDash(annotation.tool === "select" ? [strokeWidth * 3, strokeWidth * 2] : []);
+      context.strokeRect(x, y, rectWidth, rectHeight);
+      context.setLineDash([]);
+      context.fillStyle = "#B43FEB";
+    });
+
+    const imageBlob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error("生成标注图片失败"))),
+        "image/png",
+      );
+    });
+    return new File(
+      [imageBlob],
+      `video-frame-annotation-${Date.now()}.png`,
+      { type: "image/png" },
+    );
+  } finally {
+    URL.revokeObjectURL(imageUrl);
+  }
+};
 
 const getProcessedVideoNodePosition = (sourceNode: any) => {
   const basePosition = sourceNode?.position ?? { x: 0, y: 0 };
@@ -974,6 +1176,9 @@ export const VideoToolbar = ({
   const [isAnnotationOpen, setIsAnnotationOpen] = useState(false);
   const [isBurningAnnotation, setIsBurningAnnotation] = useState(false);
   const [annotationInitialTime, setAnnotationInitialTime] = useState(0);
+  const [isFrameAnnotationOpen, setIsFrameAnnotationOpen] = useState(false);
+  const [isSavingFrameAnnotation, setIsSavingFrameAnnotation] = useState(false);
+  const [frameAnnotationInitialTime, setFrameAnnotationInitialTime] = useState(0);
   const [previewVideoUrls, setPreviewVideoUrls] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const previewObjectUrlsRef = useRef<string[]>([]);
@@ -1306,20 +1511,6 @@ export const VideoToolbar = ({
       return;
     }
 
-    if (actionKey === "annotate") {
-      const video = primaryVideoRef.current;
-      if (!currentVideoUrl || !video) {
-        toast.info("暂无可标注视频");
-        return;
-      }
-
-      video.pause();
-      setAnnotationInitialTime(Math.max(0, video.currentTime || 0));
-      setActiveVideoTool({ nodeId, tool: "annotate" });
-      setIsAnnotationOpen(true);
-      return;
-    }
-
     if (actionKey === "removeCaptions") {
       if (!currentVideoUrl) {
         toast.info("暂无可用视频");
@@ -1372,6 +1563,112 @@ export const VideoToolbar = ({
     setIsAnnotationOpen(false);
     closeVideoTool();
   }, [closeVideoTool, isBurningAnnotation]);
+
+  const closeFrameAnnotationWorkspace = useCallback(() => {
+    if (isSavingFrameAnnotation) return;
+    setIsFrameAnnotationOpen(false);
+    closeVideoTool();
+  }, [closeVideoTool, isSavingFrameAnnotation]);
+
+  const handleAddFrameAnnotation = useCallback(
+    async (payload: VideoFrameAnnotationPayload) => {
+      if (isSavingFrameAnnotation || !currentVideoUrl) return;
+
+      setIsSavingFrameAnnotation(true);
+      try {
+        const response = await captureOssVideoFrame({
+          source_url: currentVideoUrl,
+          time_ms: Math.round(payload.frameTime * 1000),
+        });
+        const captureResult = response?.data?.data ?? response?.data ?? response;
+        if (!captureResult?.url) {
+          throw new Error("视频帧标注未返回图片地址");
+        }
+        const annotation = payload.annotations.at(-1);
+        if (!annotation) {
+          throw new Error("请先完成视频帧标注");
+        }
+        const annotatedFrame = await uploadFileToOSS(
+          await createAnnotatedFrameFile(captureResult.url, payload),
+        );
+        if (!annotatedFrame.url) {
+          throw new Error("上传标注图片失败");
+        }
+
+        const latestData =
+          (useCanvasFlowStore
+            .getState()
+            .nodes.find(
+              (node) => node.id === nodeId && node.type === "newVideoNode",
+            )?.data as NewVideoGenerationNode | undefined) ?? data;
+        const metadata = (latestData.metadata ?? {}) as Record<string, unknown>;
+        const references = Array.isArray(
+          metadata[VIDEO_FRAME_ANNOTATION_REFERENCES_KEY],
+        )
+          ? (metadata[
+            VIDEO_FRAME_ANNOTATION_REFERENCES_KEY
+          ] as VideoFrameAnnotationReference[])
+          : [];
+        const referenceId =
+          typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? `video-frame-annotation-${crypto.randomUUID()}`
+            : `video-frame-annotation-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const milliseconds = Math.max(0, Math.round(payload.frameTime * 1000));
+        const label = `视频帧标注 ${String(Math.floor(milliseconds / 60_000)).padStart(2, "0")}:${String(Math.floor((milliseconds % 60_000) / 1000)).padStart(2, "0")}.${String(milliseconds % 1000).padStart(3, "0")}`;
+        const reference: VideoFrameAnnotationReference = {
+          id: referenceId,
+          mentionId: referenceId,
+          label,
+          displayLabel: "",
+          value: annotatedFrame.url,
+          thumbnail: annotatedFrame.url,
+          url: annotatedFrame.url,
+          fileUrl: annotatedFrame.url,
+          type: "image",
+          mediaType: "image",
+          source: "video-frame-annotation",
+          preserveLabel: true,
+          frameTime: payload.frameTime,
+          rect: annotation.rect,
+          tool: annotation.tool,
+        };
+        const referenceOrder = Array.isArray(metadata.referenceOrder)
+          ? (metadata.referenceOrder as string[])
+          : [];
+
+        updateNewVideoNodeData(nodeId, {
+          metadata: {
+            ...metadata,
+            [VIDEO_FRAME_ANNOTATION_REFERENCES_KEY]: [
+              ...references,
+              reference,
+            ],
+            referenceOrder: [...referenceOrder, referenceId],
+            [PENDING_VIDEO_FRAME_ANNOTATION_MENTION_KEY]: referenceId,
+          },
+        } as any);
+        const flowStore = useCanvasFlowStore.getState();
+        flowStore.requestHistorySave();
+        flowStore.saveGraph();
+        setIsFrameAnnotationOpen(false);
+        closeVideoTool();
+        toast.success("视频帧标注图片已添加到参考列表");
+      } catch (error: any) {
+        console.error("视频帧标注添加失败:", error);
+        toast.error(error?.message || "视频帧标注添加失败，请重试");
+      } finally {
+        setIsSavingFrameAnnotation(false);
+      }
+    },
+    [
+      closeVideoTool,
+      currentVideoUrl,
+      data,
+      isSavingFrameAnnotation,
+      nodeId,
+      updateNewVideoNodeData,
+    ],
+  );
 
   const handleBurnVideoAnnotation = useCallback(
     async (payload: VideoAnnotationPayload) => {
@@ -2105,7 +2402,8 @@ export const VideoToolbar = ({
             (item.key === "download" && isDownloading) ||
             (item.key === "upload" && isUploading) ||
             (item.key === "snapshot" && isCapturingFrame) ||
-            (item.key === "annotate" && isBurningAnnotation) ||
+            (item.key === "annotate" &&
+              (isBurningAnnotation || isSavingFrameAnnotation)) ||
             (item.key === "trim" && isTrimmingVideo) ||
             (item.key === "removeCaptions" && isSubmittingSubtitle);
 
@@ -2145,6 +2443,70 @@ export const VideoToolbar = ({
                         {SNAPSHOT_LABELS[mode]}
                       </DropdownMenuItem>
                     ))}
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            );
+          }
+
+          if (item.key === "annotate") {
+            return (
+              <DropdownMenu key={item.key}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={isDisabled}
+                    className={cn(
+                      "flex min-w-11 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-xs transition-colors cursor-pointer",
+                      isDisabled
+                        ? "text-white/30 cursor-not-allowed"
+                        : "text-white/60 hover:text-white hover:bg-white/5",
+                    )}
+                    title={item.label}
+                  >
+                    <Icon size={16} stroke={1.5} />
+                    <span className="text-[10px] whitespace-nowrap">
+                      {item.label}
+                    </span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="center"
+                  className="min-w-32 border-white/10 bg-[#121214] text-white"
+                >
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        const video = primaryVideoRef.current;
+                        if (!currentVideoUrl || !video) {
+                          toast.info("暂无可标注视频");
+                          return;
+                        }
+                        video.pause();
+                        setAnnotationInitialTime(Math.max(0, video.currentTime || 0));
+                        setActiveVideoTool({ nodeId, tool: "annotate" });
+                        setIsAnnotationOpen(true);
+                      }}
+                    >
+                      视频标注
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        const video = primaryVideoRef.current;
+                        if (!currentVideoUrl || !video) {
+                          toast.info("暂无可标注视频");
+                          return;
+                        }
+                        video.pause();
+                        setFrameAnnotationInitialTime(
+                          Math.max(0, video.currentTime || 0),
+                        );
+                        setActiveVideoTool({ nodeId, tool: "annotate" });
+                        setIsFrameAnnotationOpen(true);
+                      }}
+                    >
+                      视频帧标注
+                    </DropdownMenuItem>
                   </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -2213,6 +2575,15 @@ export const VideoToolbar = ({
         initialTime={annotationInitialTime}
         onSubmit={handleBurnVideoAnnotation}
         isSubmitting={isBurningAnnotation}
+      />
+
+      <VideoFrameAnnotationWorkspace
+        open={isFrameAnnotationOpen}
+        onClose={closeFrameAnnotationWorkspace}
+        videoUrl={currentVideoUrl || ""}
+        initialTime={frameAnnotationInitialTime}
+        onSubmit={handleAddFrameAnnotation}
+        isSubmitting={isSavingFrameAnnotation}
       />
 
       <VideoEnhancePanel
