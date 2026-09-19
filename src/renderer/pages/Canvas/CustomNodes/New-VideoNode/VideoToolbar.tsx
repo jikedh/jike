@@ -79,11 +79,6 @@ import { VideoTimeline } from "./components/VideoTimeline";
 import type { VideoTrimResult } from "./components/VideoTrimPanel";
 import { VideoTrimPanel } from "./components/VideoTrimPanel";
 import {
-  PENDING_VIDEO_FRAME_ANNOTATION_MENTION_KEY,
-  VIDEO_FRAME_ANNOTATION_REFERENCES_KEY,
-  type VideoFrameAnnotationReference,
-} from "./constants/videoFrameAnnotations";
-import {
   getVideoItemsFromNodeData,
   getVideoUrlsFromNodeData,
 } from "./utils/video-url";
@@ -1575,7 +1570,45 @@ export const VideoToolbar = ({
       if (isSavingFrameAnnotation || !currentVideoUrl) return;
 
       setIsSavingFrameAnnotation(true);
+      let childId: string | null = null;
       try {
+        const flowStore = useCanvasFlowStore.getState();
+        const sourceNode = flowStore.nodes.find((node) => node.id === nodeId);
+        if (!sourceNode) {
+          throw new Error("当前视频节点不存在");
+        }
+
+        const basePosition = getProcessedVideoNodePosition(sourceNode);
+        const childCount = flowStore.edges.filter(
+          (edge) => edge.source === nodeId,
+        ).length;
+        childId = addNode("image", {
+          x: basePosition.x,
+          y: basePosition.y + childCount * 280,
+        });
+        if (!childId) {
+          throw new Error("视频帧标注图片节点创建失败");
+        }
+
+        onConnect({
+          source: nodeId,
+          target: childId,
+          sourceHandle: "output",
+          targetHandle: "input",
+        });
+        updateImageNodeData(childId, {
+          badgeLabel: "视频帧标注",
+          nickname: "标注图片生成中",
+          processingLabel: "正在生成标注图片",
+          ...(data.aspect_ratio ? { size: data.aspect_ratio } : {}),
+          result: { type: "image", data: [] },
+          status: GenerationStatus.IN_PROGRESS,
+          progress: 0,
+          error: undefined,
+        });
+        flowStore.requestHistorySave();
+        flowStore.saveGraph();
+
         const response = await captureOssVideoFrame({
           source_url: currentVideoUrl,
           time_ms: Math.round(payload.frameTime * 1000),
@@ -1595,78 +1628,63 @@ export const VideoToolbar = ({
           throw new Error("上传标注图片失败");
         }
 
-        const latestData =
-          (useCanvasFlowStore
-            .getState()
-            .nodes.find(
-              (node) => node.id === nodeId && node.type === "newVideoNode",
-            )?.data as NewVideoGenerationNode | undefined) ?? data;
-        const metadata = (latestData.metadata ?? {}) as Record<string, unknown>;
-        const references = Array.isArray(
-          metadata[VIDEO_FRAME_ANNOTATION_REFERENCES_KEY],
-        )
-          ? (metadata[
-            VIDEO_FRAME_ANNOTATION_REFERENCES_KEY
-          ] as VideoFrameAnnotationReference[])
-          : [];
-        const referenceId =
-          typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-            ? `video-frame-annotation-${crypto.randomUUID()}`
-            : `video-frame-annotation-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const milliseconds = Math.max(0, Math.round(payload.frameTime * 1000));
-        const label = `视频帧标注 ${String(Math.floor(milliseconds / 60_000)).padStart(2, "0")}:${String(Math.floor((milliseconds % 60_000) / 1000)).padStart(2, "0")}.${String(milliseconds % 1000).padStart(3, "0")}`;
-        const reference: VideoFrameAnnotationReference = {
-          id: referenceId,
-          mentionId: referenceId,
-          label,
-          displayLabel: "",
-          value: annotatedFrame.url,
-          thumbnail: annotatedFrame.url,
-          url: annotatedFrame.url,
-          fileUrl: annotatedFrame.url,
-          type: "image",
-          mediaType: "image",
-          source: "video-frame-annotation",
-          preserveLabel: true,
-          frameTime: payload.frameTime,
-          rect: annotation.rect,
-          tool: annotation.tool,
-        };
-        const referenceOrder = Array.isArray(metadata.referenceOrder)
-          ? (metadata.referenceOrder as string[])
-          : [];
-
-        updateNewVideoNodeData(nodeId, {
-          metadata: {
-            ...metadata,
-            [VIDEO_FRAME_ANNOTATION_REFERENCES_KEY]: [
-              ...references,
-              reference,
+        updateImageNodeData(childId, {
+          badgeLabel: "视频帧标注",
+          nickname: "视频帧标注",
+          processingLabel: undefined,
+          isUpload: true,
+          ...(data.aspect_ratio ? { size: data.aspect_ratio } : {}),
+          image_urls: [annotatedFrame.url],
+          result: {
+            type: "image",
+            data: [
+              withRemoteMediaRef({
+                url: annotatedFrame.url,
+                remoteUrl: annotatedFrame.url,
+              }),
             ],
-            referenceOrder: [...referenceOrder, referenceId],
-            [PENDING_VIDEO_FRAME_ANNOTATION_MENTION_KEY]: referenceId,
           },
-        } as any);
-        const flowStore = useCanvasFlowStore.getState();
+          status: GenerationStatus.COMPLETED,
+          progress: 100,
+          error: undefined,
+        });
         flowStore.requestHistorySave();
         flowStore.saveGraph();
         setIsFrameAnnotationOpen(false);
         closeVideoTool();
-        toast.success("视频帧标注图片已添加到参考列表");
+        toast.success("视频帧标注图片节点已生成");
       } catch (error: any) {
+        if (childId) {
+          updateImageNodeData(childId, {
+            nickname: "视频帧标注失败",
+            processingLabel: undefined,
+            isUpload: false,
+            status: GenerationStatus.FAILED,
+            progress: 0,
+            error: {
+              code: "VIDEO_FRAME_ANNOTATION_FAILED",
+              message: error?.message || "视频帧标注图片生成失败，请重试",
+            },
+          });
+          const flowStore = useCanvasFlowStore.getState();
+          flowStore.requestHistorySave();
+          flowStore.saveGraph();
+        }
         console.error("视频帧标注添加失败:", error);
-        toast.error(error?.message || "视频帧标注添加失败，请重试");
+        toast.error(error?.message || "视频帧标注图片生成失败，请重试");
       } finally {
         setIsSavingFrameAnnotation(false);
       }
     },
     [
+      addNode,
       closeVideoTool,
       currentVideoUrl,
-      data,
+      data.aspect_ratio,
       isSavingFrameAnnotation,
       nodeId,
-      updateNewVideoNodeData,
+      onConnect,
+      updateImageNodeData,
     ],
   );
 

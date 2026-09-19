@@ -213,17 +213,7 @@ export const VideoAssetMentionMenu = forwardRef<
             connectedOptions.filter(
                 (option): option is FlatOption & { kind: "connected" } =>
                     option.kind === "connected" &&
-                    option.item.source !== "remote-asset" &&
-                    option.item.source !== "video-frame-annotation",
-            ),
-        [connectedOptions],
-    );
-    const frameAnnotationGroup = useMemo(
-        () =>
-            connectedOptions.filter(
-                (option): option is FlatOption & { kind: "connected" } =>
-                    option.kind === "connected" &&
-                    option.item.source === "video-frame-annotation",
+                    option.item.source !== "remote-asset",
             ),
         [connectedOptions],
     );
@@ -405,14 +395,6 @@ export const VideoAssetMentionMenu = forwardRef<
                                         已连接节点
                                     </div>
                                     {connectedGroup.map(renderConnectedRow)}
-                                </div>
-                            ) : null}
-                            {frameAnnotationGroup.length > 0 ? (
-                                <div className="mb-1">
-                                    <div className="px-1 py-1 text-[10px] text-white/42">
-                                        视频帧标注
-                                    </div>
-                                    {frameAnnotationGroup.map(renderConnectedRow)}
                                 </div>
                             ) : null}
                             {remoteGroup.length > 0 ? (

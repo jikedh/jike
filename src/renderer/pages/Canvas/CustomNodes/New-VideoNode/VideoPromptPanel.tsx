@@ -66,11 +66,6 @@ import {
   VIDEO_MODEL_OPTIONS,
   getVideoModelOptions
 } from "./constants/mockData";
-import {
-  PENDING_VIDEO_FRAME_ANNOTATION_MENTION_KEY,
-  VIDEO_FRAME_ANNOTATION_REFERENCES_KEY,
-  type VideoFrameAnnotationReference,
-} from "./constants/videoFrameAnnotations";
 
 // 视频节点参考缩略图统一类型：独立于 MentionItem，方便承载便签扩展字段
 // （MentionItem.type 严格限定为 image/video/audio，不能反向扩展为 note）。
@@ -84,7 +79,6 @@ export type VideoReferenceDisplayItem = {
   mentionId?: string;
   preserveLabel?: boolean;
   source?: MentionItem["source"];
-  frameTime?: number;
   type: "image" | "video" | "audio" | "note";
   content?: string;
 };
@@ -354,13 +348,6 @@ const relabelReferenceItemsByOrder = (items: MentionItem[]) => {
     audio: "音频",
   };
 
-  const formatFrameAnnotationTime = (frameTime?: number) => {
-    const totalSeconds = Math.max(0, Math.floor(frameTime ?? 0));
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-  };
-
   return items.map((item) => {
     counters[item.type] += 1;
     // displayLabel 始终按"添加顺序"分配为"图片一/图片二/图片三…"，
@@ -368,19 +355,14 @@ const relabelReferenceItemsByOrder = (items: MentionItem[]) => {
     const baseLabel = `${labelPrefix[item.type]}${toChineseNumber(
       counters[item.type],
     )}`;
-    const nextDisplayLabel =
-      item.source === "video-frame-annotation"
-        ? `${baseLabel} 视频帧标注 ${formatFrameAnnotationTime(item.frameTime)}`
-        : baseLabel;
-
     return {
       ...item,
-      displayLabel: nextDisplayLabel,
+      displayLabel: baseLabel,
       // 保留原始名称以供 UI 使用（缩略图悬浮 tooltip 等）。
       label:
         item.preserveLabel && item.label.trim()
           ? item.label
-          : nextDisplayLabel,
+          : baseLabel,
     };
   });
 };
@@ -424,68 +406,6 @@ const readRemoteReferenceItems = (metadata?: Record<string, unknown>): MentionIt
         record.type === "video" ||
         record.type === "audio")
     );
-  });
-};
-
-const readVideoFrameAnnotationReferenceItems = (
-  metadata?: Record<string, unknown>,
-): VideoFrameAnnotationReference[] => {
-  const raw = metadata?.[VIDEO_FRAME_ANNOTATION_REFERENCES_KEY];
-  if (!Array.isArray(raw)) return [];
-
-  return raw.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const record = item as Record<string, unknown>;
-    const rect = record.rect as Record<string, unknown> | undefined;
-    if (
-      typeof record.id !== "string" ||
-      typeof record.url !== "string" ||
-      !rect ||
-      typeof rect.x !== "number" ||
-      typeof rect.y !== "number" ||
-      typeof rect.width !== "number" ||
-      typeof rect.height !== "number"
-    ) {
-      return [];
-    }
-
-    return [{
-      id: record.id,
-      mentionId:
-        typeof record.mentionId === "string" ? record.mentionId : record.id,
-      label:
-        typeof record.label === "string" ? record.label : "视频帧标注",
-      displayLabel:
-        typeof record.displayLabel === "string" ? record.displayLabel : "",
-      value:
-        typeof record.value === "string" ? record.value : record.url,
-      thumbnail:
-        typeof record.thumbnail === "string"
-          ? record.thumbnail
-          : record.url,
-      url: record.url,
-      fileUrl:
-        typeof record.fileUrl === "string" ? record.fileUrl : record.url,
-      type: "image",
-      mediaType: "image",
-      source: "video-frame-annotation",
-      preserveLabel: true,
-      frameTime:
-        typeof record.frameTime === "number" ? record.frameTime : 0,
-      rect: {
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height,
-      },
-      tool:
-        record.tool === "brush" ||
-          record.tool === "arrow" ||
-          record.tool === "shape" ||
-          record.tool === "pin"
-          ? record.tool
-          : "select",
-    } satisfies VideoFrameAnnotationReference];
   });
 };
 
@@ -858,10 +778,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     () => readRemoteReferenceItems(currentData?.metadata),
     [currentData?.metadata],
   );
-  const videoFrameAnnotationReferenceItems = useMemo(
-    () => readVideoFrameAnnotationReferenceItems(currentData?.metadata),
-    [currentData?.metadata],
-  );
 
   const handleSelectRemoteAsset = useCallback(
     (payload: RemoteAssetMentionPayload) => {
@@ -917,7 +833,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         audioReferenceSources,
       ),
       ...remoteReferenceItems,
-      ...videoFrameAnnotationReferenceItems,
     ];
     return relabelReferenceItemsByOrder(
       orderReferenceItems(items, currentData?.metadata?.referenceOrder),
@@ -927,7 +842,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
     audioReferenceSources,
     imageReferenceSources,
     remoteReferenceItems,
-    videoFrameAnnotationReferenceItems,
     videoReferenceSources,
   ]);
 
@@ -1015,7 +929,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
         mentionId: item.mentionId,
         preserveLabel: item.preserveLabel,
         source: item.source,
-        frameTime: item.frameTime,
         type: item.type,
       }));
 
@@ -1108,32 +1021,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
   useEffect(() => {
     editorRef.current?.updateReferenceMentions(editorMentionItems);
   }, [editorMentionItems]);
-
-  useEffect(() => {
-    const pendingId = currentData?.metadata?.[
-      PENDING_VIDEO_FRAME_ANNOTATION_MENTION_KEY
-    ];
-    if (typeof pendingId !== "string" || !pendingId) return;
-
-    const mention = editorMentionItems.find((item) => item.id === pendingId);
-    if (!mention || !editorRef.current) return;
-
-    editorRef.current.insertMention(mention, "");
-
-    const latestData = getCurrentNewVideoData(nodeId) ?? currentData;
-    updateNewVideoNodeData(nodeId, {
-      metadata: {
-        ...(latestData?.metadata ?? {}),
-        [PENDING_VIDEO_FRAME_ANNOTATION_MENTION_KEY]: undefined,
-      },
-    } as Partial<NewVideoGenerationNode>);
-  }, [
-    currentData,
-    editorMentionItems,
-    nodeId,
-    updateNewVideoNodeData,
-    videoFrameAnnotationReferenceItems,
-  ]);
 
   const referenceImages = useMemo(
     () =>
@@ -1642,25 +1529,6 @@ export const VideoPromptPanel = ({ nodeId }: VideoPromptPanelProps) => {
       if (item.id.startsWith("parent-note-")) {
         const noteId = item.id.slice("parent-note-".length);
         handleDisconnectNode(noteId);
-        return;
-      }
-
-      if (item.source === "video-frame-annotation") {
-        const latestData = getCurrentNewVideoData(nodeId) ?? currentData;
-        const references = readVideoFrameAnnotationReferenceItems(
-          latestData?.metadata,
-        ).filter((reference) => reference.id !== item.id);
-        const currentOrder = Array.isArray(latestData?.metadata?.referenceOrder)
-          ? (latestData.metadata.referenceOrder as string[])
-          : [];
-        updateNewVideoNodeData(nodeId, {
-          metadata: {
-            ...(latestData?.metadata ?? {}),
-            [VIDEO_FRAME_ANNOTATION_REFERENCES_KEY]: references,
-            referenceOrder: currentOrder.filter((id) => id !== item.id),
-          },
-        });
-        removeReferenceMentions([{ ids: [item.mentionId ?? item.id], type: "image" }]);
         return;
       }
 

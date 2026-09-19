@@ -55,8 +55,7 @@ export interface MentionItem {
   source?:
   | "connected-node"
   | "remote-asset"
-  | "local-upload"
-  | "video-frame-annotation";
+  | "local-upload";
   /** 资产作用域 */
   scope?: string;
   /** 远程资产 ID */
@@ -71,6 +70,4 @@ export interface MentionItem {
   folderId?: string;
   /** 真实媒体资源地址，优先于 thumbnail 用于归一化与请求体 */
   fileUrl?: string;
-  /** 视频帧标注所在的视频时间点（秒） */
-  frameTime?: number;
 }

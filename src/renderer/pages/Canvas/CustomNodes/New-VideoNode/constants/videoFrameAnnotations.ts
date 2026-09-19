@@ -24,26 +24,3 @@ export type VideoFrameAnnotationPayload = {
     frameTime: number;
     annotations: VideoFrameAnnotation[];
 };
-
-export type VideoFrameAnnotationReference = {
-    id: string;
-    mentionId: string;
-    label: string;
-    displayLabel: string;
-    value: string;
-    thumbnail: string;
-    url: string;
-    fileUrl: string;
-    type: "image";
-    mediaType: "image";
-    source: "video-frame-annotation";
-    preserveLabel: true;
-    frameTime: number;
-    rect: VideoFrameAnnotationRect;
-    tool: VideoFrameAnnotationTool;
-};
-
-export const VIDEO_FRAME_ANNOTATION_REFERENCES_KEY =
-    "videoFrameAnnotationReferences";
-export const PENDING_VIDEO_FRAME_ANNOTATION_MENTION_KEY =
-    "pendingVideoFrameAnnotationMentionId";

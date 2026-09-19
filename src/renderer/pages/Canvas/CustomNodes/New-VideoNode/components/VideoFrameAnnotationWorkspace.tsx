@@ -21,7 +21,6 @@ import { cn } from "shared/utils/utils";
 import type {
     VideoFrameAnnotation,
     VideoFrameAnnotationPayload,
-    VideoFrameAnnotationRect,
     VideoFrameAnnotationTool,
 } from "../constants/videoFrameAnnotations";
 
@@ -562,7 +561,7 @@ export const VideoFrameAnnotationWorkspace = ({
                                         className="bg-[#B43FEB] text-white hover:bg-[#C45BF0]"
                                     >
                                         <IconPencil data-icon="inline-start" />
-                                        {isSubmitting ? "添加中..." : "添加至输入框"}
+                                        {isSubmitting ? "生成中..." : "生成图片节点"}
                                     </Button>
                                 </div>
                             ) : null}
