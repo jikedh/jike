@@ -451,10 +451,12 @@ export const VideoFrameAnnotationWorkspace = ({
                 overlayClassName="bg-black/88"
                 className="nodrag nopan nowheel left-0 top-0 flex h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 flex-col overflow-hidden rounded-none border-0 bg-[#101012] p-0 text-white shadow-none data-open:fade-in-0 data-open:zoom-in-100 duration-300"
             >
-                <DialogHeader className="shrink-0 border-b border-white/10 bg-[#161619] px-6 py-4">
-                    <DialogTitle className="flex items-center justify-between text-white">
+                <DialogHeader className="relative shrink-0 border-b border-white/10 bg-[#161619] px-6 py-4">
+                    <DialogTitle className="text-white">
                         <span className="text-base font-semibold">视频帧标注</span>
-                        <span className="text-xs font-normal text-white/45">当前帧 {formatTime(frameTime)}</span>
+                        <span className="absolute left-1/2 -translate-x-1/2 text-xs font-normal text-white/45">
+                            当前帧 {formatTime(frameTime)}
+                        </span>
                     </DialogTitle>
                 </DialogHeader>
 
