@@ -461,10 +461,10 @@ function DefaultVideoControls({
           value={[currentTime]}
           min={0}
           max={Math.max(safeDuration, 0.01)}
-          step={0.1}
+          step={0.01}
           disabled={!isReady || safeDuration <= 0}
           onValueChange={([nextTime = 0]) => seek(nextTime)}
-          className="min-w-0 flex-none **:data-[slot=slider-track]:h-1 **:data-[slot=slider-track]:bg-white/20 **:data-[slot=slider-range]:bg-[#B43FEB] **:data-[slot=slider-thumb]:size-2.5 **:data-[slot=slider-thumb]:border-[#f1d2ff] **:data-[slot=slider-thumb]:bg-[#B43FEB] **:data-[slot=slider-thumb]:ring-[#B43FEB]/45"
+          className="min-w-0 flex-none cursor-pointer **:data-[slot=slider-track]:h-1 **:data-[slot=slider-track]:bg-white/20 **:data-[slot=slider-range]:bg-[#B43FEB] **:data-[slot=slider-thumb]:size-2.5 **:data-[slot=slider-thumb]:border-[#f1d2ff] **:data-[slot=slider-thumb]:bg-[#B43FEB] **:data-[slot=slider-thumb]:ring-[#B43FEB]/45"
         />
       </div>
     </div>

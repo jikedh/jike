@@ -1571,6 +1571,8 @@ export const VideoToolbar = ({
 
       setIsSavingFrameAnnotation(true);
       let childId: string | null = null;
+      const hasAnnotations = payload.annotations.length > 0;
+      const nodeLabel = hasAnnotations ? "视频帧标注" : "视频截帧";
       try {
         const flowStore = useCanvasFlowStore.getState();
         const sourceNode = flowStore.nodes.find((node) => node.id === nodeId);
@@ -1597,9 +1599,9 @@ export const VideoToolbar = ({
           targetHandle: "input",
         });
         updateImageNodeData(childId, {
-          badgeLabel: "视频帧标注",
-          nickname: "标注图片生成中",
-          processingLabel: "正在生成标注图片",
+          badgeLabel: nodeLabel,
+          nickname: `${nodeLabel}生成中`,
+          processingLabel: `正在生成${nodeLabel}`,
           ...(data.aspect_ratio ? { size: data.aspect_ratio } : {}),
           result: { type: "image", data: [] },
           status: GenerationStatus.IN_PROGRESS,
@@ -1617,30 +1619,28 @@ export const VideoToolbar = ({
         if (!captureResult?.url) {
           throw new Error("视频帧标注未返回图片地址");
         }
-        const annotation = payload.annotations.at(-1);
-        if (!annotation) {
-          throw new Error("请先完成视频帧标注");
-        }
-        const annotatedFrame = await uploadFileToOSS(
-          await createAnnotatedFrameFile(captureResult.url, payload),
-        );
-        if (!annotatedFrame.url) {
+        const imageUrl = hasAnnotations
+          ? (await uploadFileToOSS(
+            await createAnnotatedFrameFile(captureResult.url, payload),
+          )).url
+          : captureResult.url;
+        if (!imageUrl) {
           throw new Error("上传标注图片失败");
         }
 
         updateImageNodeData(childId, {
-          badgeLabel: "视频帧标注",
-          nickname: "视频帧标注",
+          badgeLabel: nodeLabel,
+          nickname: nodeLabel,
           processingLabel: undefined,
           isUpload: true,
           ...(data.aspect_ratio ? { size: data.aspect_ratio } : {}),
-          image_urls: [annotatedFrame.url],
+          image_urls: [imageUrl],
           result: {
             type: "image",
             data: [
               withRemoteMediaRef({
-                url: annotatedFrame.url,
-                remoteUrl: annotatedFrame.url,
+                url: imageUrl,
+                remoteUrl: imageUrl,
               }),
             ],
           },
@@ -1652,7 +1652,7 @@ export const VideoToolbar = ({
         flowStore.saveGraph();
         setIsFrameAnnotationOpen(false);
         closeVideoTool();
-        toast.success("视频帧标注图片节点已生成");
+        toast.success(`${nodeLabel}图片节点已生成`);
       } catch (error: any) {
         if (childId) {
           updateImageNodeData(childId, {

@@ -431,7 +431,6 @@ export const VideoFrameAnnotationWorkspace = ({
     }, [setCurrentAnnotations]);
 
     const handleSubmit = useCallback(async () => {
-        if (!annotations.length) return;
         await onSubmit({
             frameTime,
             annotations: annotations.map((annotation) => ({
@@ -507,7 +506,7 @@ export const VideoFrameAnnotationWorkspace = ({
                             <AnnotationOverlay annotations={annotations} />
                             {!activeTool ? (
                                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/15 text-sm text-white/72">
-                                    选择工具后在视频帧上标注
+                                    选择工具后在视频帧上标注，不选择即为截帧
                                 </div>
                             ) : null}
                         </div>
@@ -543,8 +542,8 @@ export const VideoFrameAnnotationWorkspace = ({
                                 />
                             </div>
 
-                            {activeTool ? (
-                                <div className="flex shrink-0 items-center gap-2 border-l border-white/10 pl-3">
+                            <div className="flex shrink-0 items-center gap-2 border-l border-white/10 pl-3">
+                                {activeTool ? (
                                     <Button
                                         type="button"
                                         variant="ghost"
@@ -554,17 +553,17 @@ export const VideoFrameAnnotationWorkspace = ({
                                     >
                                         取消
                                     </Button>
-                                    <Button
-                                        type="button"
-                                        disabled={isSubmitting || annotations.length === 0}
-                                        onClick={() => void handleSubmit()}
-                                        className="bg-[#B43FEB] text-white hover:bg-[#C45BF0]"
-                                    >
-                                        <IconPencil data-icon="inline-start" />
-                                        {isSubmitting ? "生成中..." : "生成图片节点"}
-                                    </Button>
-                                </div>
-                            ) : null}
+                                ) : null}
+                                <Button
+                                    type="button"
+                                    disabled={isSubmitting}
+                                    onClick={() => void handleSubmit()}
+                                    className="bg-[#B43FEB] text-white hover:bg-[#C45BF0]"
+                                >
+                                    <IconPencil data-icon="inline-start" />
+                                    {isSubmitting ? "生成中..." : "生成图片节点"}
+                                </Button>
+                            </div>
                         </div>
 
                         {activeTool ? (
