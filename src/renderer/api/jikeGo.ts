@@ -107,6 +107,10 @@ export type DesktopProxyRequest = {
   query?: Record<string, any>;
   headers?: Record<string, string>;
   body?: any;
+  projectId?: string;
+  nodeId?: string;
+  clientTaskId?: string;
+  taskSource?: string;
   scoreCost?: number;
   scoreBizType?: DesktopProxyScoreBizType;
   scoreModel?: string;
@@ -638,6 +642,10 @@ export type RunningHubTextToImageRequest = {
   aspectRatio?: string;
   resolution?: string;
   quality?: string;
+  projectId?: string;
+  nodeId?: string;
+  clientTaskId?: string;
+  taskSource?: string;
   /** 本次操作预计消耗的积分值，传入后将由后端进行积分扣减 */
   scoreCost?: number;
 };

@@ -696,6 +696,7 @@ const buildRunningHubImageRequest = ({
   imageWeight,
   route,
   scoreCost,
+  trackingContext,
 }: {
   prompt?: string;
   imageUrls: string[];
@@ -708,6 +709,12 @@ const buildRunningHubImageRequest = ({
   imageWeight?: number;
   route: RunningHubImageRoute;
   scoreCost?: number;
+  trackingContext?: {
+    projectId?: string;
+    nodeId?: string;
+    clientTaskId?: string;
+    taskSource?: string;
+  };
 }) => {
   if (route.model === "midjourney-v8.1") {
     return {
@@ -721,6 +728,7 @@ const buildRunningHubImageRequest = ({
       iw: imageWeight ?? 1,
       ...(imageUrls[0] ? { imageUrl: imageUrls[0] } : {}),
       ...(scoreCost != null ? { scoreCost } : {}),
+      ...trackingContext,
     };
   }
 
@@ -730,6 +738,7 @@ const buildRunningHubImageRequest = ({
     resolution: normalizeRunningHubResolution(resolution),
     ...(route.model === "gpt-image-2" ? { quality: "medium" } : {}),
     ...(scoreCost != null ? { scoreCost } : {}),
+    ...trackingContext,
   };
   return imageUrls.length > 0
     ? { ...baseRequest, imageUrls: imageUrls.slice(0, 10) }
@@ -800,6 +809,7 @@ const submitRunningHubImageTask = async ({
   stylize,
   imageWeight,
   scoreCost,
+  trackingContext,
 }: {
   route: RunningHubImageRoute;
   prompt?: string;
@@ -812,6 +822,12 @@ const submitRunningHubImageTask = async ({
   stylize?: number;
   imageWeight?: number;
   scoreCost?: number;
+  trackingContext?: {
+    projectId?: string;
+    nodeId?: string;
+    clientTaskId?: string;
+    taskSource?: string;
+  };
 }) => {
   const request = buildRunningHubImageRequest({
     route,
@@ -825,6 +841,7 @@ const submitRunningHubImageTask = async ({
     stylize,
     imageWeight,
     scoreCost,
+    trackingContext,
   });
   const response =
     imageUrls.length > 0
@@ -879,6 +896,7 @@ const generateRunningHubImageWithFallback = async ({
   stylize,
   imageWeight,
   scoreCost,
+  trackingContext,
 }: {
   model?: string;
   prompt?: string;
@@ -891,6 +909,12 @@ const generateRunningHubImageWithFallback = async ({
   stylize?: number;
   imageWeight?: number;
   scoreCost?: number;
+  trackingContext?: {
+    projectId?: string;
+    nodeId?: string;
+    clientTaskId?: string;
+    taskSource?: string;
+  };
 }) => {
   const routes = resolveRunningHubImageRoutes(model);
   if (!routes) {
@@ -909,6 +933,7 @@ const generateRunningHubImageWithFallback = async ({
       stylize,
       imageWeight,
       scoreCost,
+      trackingContext,
     });
   } catch (lowCostError) {
     if (!routes.official) {
@@ -927,6 +952,7 @@ const generateRunningHubImageWithFallback = async ({
       stylize,
       imageWeight,
       scoreCost,
+      trackingContext,
     });
   }
 };
@@ -3287,6 +3313,12 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
       const scoreCost = Number(payload.requiredPoints ?? 0) || undefined;
       const imageProvider = resolveImageTaskProvider(payload.platform);
+      const trackingContext = {
+        projectId: get().projectId ?? undefined,
+        nodeId,
+        clientTaskId: `${nodeId}:${Date.now()}:${currentCount}`,
+        taskSource: "canvas",
+      };
 
       try {
         let taskId: string;
@@ -3307,6 +3339,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             const response = await createAgnesImageGeneration(
               payload,
               scoreCost,
+              undefined,
+              trackingContext,
             );
             ledgerBizId = response?.ledgerBizId;
 
@@ -3358,7 +3392,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               );
             }
             if (ledgerBizId) {
-              confirmDesktopProxyScore(ledgerBizId, "agnes").catch(() => { });
+              confirmDesktopProxyScore(ledgerBizId, "image").catch(() => { });
             }
             await refreshBalanceAfterGeneration({
               scene: "image",
@@ -3377,7 +3411,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               refundDesktopProxyScore(
                 ledgerBizId,
                 getRequestErrorMessage(agnesError) || "Agnes image failed",
-                "agnes",
+                "image",
               ).catch(() => { });
             }
             throw agnesError;
@@ -3409,6 +3443,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
               stylize: payload.stylize,
               imageWeight: payload.iw,
               scoreCost,
+              trackingContext,
             });
 
             const rawResultData = resultUrls.map((url) => ({ url }));
@@ -3485,8 +3520,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
 
         // 非 RunningHub：创建图片生成任务，获取 task_id 后启动轮询
         const response: any = imageProvider === "apimart"
-          ? await createAPIMartImageGeneration(payload, scoreCost)
-          : await createImageGeneration(payload, scoreCost);
+          ? await createAPIMartImageGeneration(payload, scoreCost, undefined, trackingContext)
+          : await createImageGeneration(payload, scoreCost, undefined, trackingContext);
         ledgerBizId = response?.ledgerBizId;
 
         // 从响应中提取 task_id（兼容多种返回结构）

@@ -164,7 +164,7 @@ const getStoryboardDownloadFilename = (imageUrl: string) => {
     if (filename && filename.includes(".")) {
       return filename;
     }
-  } catch {}
+  } catch { }
 
   return `storyboard-${Date.now()}.jpg`;
 };
@@ -632,8 +632,8 @@ const TableBody = memo(
               );
               const rawSketchUrl = String(
                 rowRecord[STORYBOARD_RAW_SKETCH_FIELD] ??
-                  rowRecord[STORYBOARD_SKETCH_COLUMN] ??
-                  "",
+                rowRecord[STORYBOARD_SKETCH_COLUMN] ??
+                "",
               ).trim();
               const canRefreshCard = isImageSource(rawSketchUrl);
               const isCardStale =
@@ -649,7 +649,7 @@ const TableBody = memo(
                   className={cn(
                     "relative px-3 py-2 border-b border-r border-white/[0.06] text-[#8D8D8E] text-xs align-top",
                     isActionColumn &&
-                      "text-center align-middle whitespace-nowrap",
+                    "text-center align-middle whitespace-nowrap",
                     cellClassName,
                   )}
                 >
@@ -821,7 +821,7 @@ export const TableNode = memo(
     const storyboardImageCache = useMemo<StoryboardImageCacheMap>(
       () =>
         data.storyboardImageCache &&
-        typeof data.storyboardImageCache === "object"
+          typeof data.storyboardImageCache === "object"
           ? data.storyboardImageCache
           : {},
       [data.storyboardImageCache],
@@ -845,10 +845,10 @@ export const TableNode = memo(
             return captureTimeMs == null
               ? null
               : {
-                  row,
-                  rowIndex,
-                  captureTimeMs,
-                };
+                row,
+                rowIndex,
+                captureTimeMs,
+              };
           })
           .filter((item): item is StoryboardCaptureRow => item != null),
       [rows],
@@ -862,9 +862,9 @@ export const TableNode = memo(
             ).trim();
             return isImageSource(referenceImageUrl)
               ? {
-                  rowIndex,
-                  referenceImageUrl,
-                }
+                rowIndex,
+                referenceImageUrl,
+              }
               : null;
           })
           .filter((item): item is StoryboardSketchRow => item != null),
@@ -962,8 +962,8 @@ export const TableNode = memo(
           const currentRow = newRows[rowIndex] || {};
           const rawSketchUrl = String(
             currentRow[STORYBOARD_RAW_SKETCH_FIELD] ??
-              currentRow[STORYBOARD_SKETCH_COLUMN] ??
-              "",
+            currentRow[STORYBOARD_SKETCH_COLUMN] ??
+            "",
           ).trim();
           const shouldMarkCardStale =
             isStoryboardCardField(column) && isImageSource(rawSketchUrl);
@@ -1130,6 +1130,8 @@ export const TableNode = memo(
               prompt: buildStoryboardSketchPrompt(
                 storyboardSketchPromptTemplate,
               ),
+              projectId: projectId ?? undefined,
+              nodeId: id,
               size: storyboardSketchSize,
               resolution: storyboardSketchResolution,
               referenceImageUrls: [referenceImageUrl],
@@ -1347,7 +1349,7 @@ export const TableNode = memo(
             updateTableNodeData(id, ((prevData: any) => {
               const prevCache =
                 prevData.storyboardImageCache &&
-                typeof prevData.storyboardImageCache === "object"
+                  typeof prevData.storyboardImageCache === "object"
                   ? prevData.storyboardImageCache
                   : {};
               return {
@@ -1645,8 +1647,8 @@ export const TableNode = memo(
         const row = getCurrentStoryboardRow(rowIndex);
         const rawSketchUrl = String(
           row[STORYBOARD_RAW_SKETCH_FIELD] ??
-            row[STORYBOARD_SKETCH_COLUMN] ??
-            "",
+          row[STORYBOARD_SKETCH_COLUMN] ??
+          "",
         ).trim();
         if (!isImageSource(rawSketchUrl)) {
           warning("没有可用于刷新的原始分镜草图");
@@ -1973,12 +1975,11 @@ export const TableNode = memo(
                 <div
                   className="h-full bg-[#B43FEB] transition-all"
                   style={{
-                    width: `${
-                      storyboardProgress.total
+                    width: `${storyboardProgress.total
                         ? (storyboardProgress.done / storyboardProgress.total) *
-                          100
+                        100
                         : 0
-                    }%`,
+                      }%`,
                   }}
                 />
               </div>

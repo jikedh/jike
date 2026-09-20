@@ -295,15 +295,6 @@ const AGNES_IMAGE_SIZE_BY_RATIO: Record<string, string> = {
   "4:5": "819x1024",
 };
 
-const getAgnesImageApiBaseUrl = () =>
-  String(
-    (import.meta as any).env?.VITE_AGNES_API_BASE_URL ||
-    "https://apihub.agnes-ai.com",
-  ).replace(/\/+$/, "");
-
-const getAgnesImageApiKey = () =>
-  String((import.meta as any).env?.VITE_AGNES_API_KEY || "").trim();
-
 const normalizeAgnesImageSize = (size: unknown) => {
   const rawSize = typeof size === "string" ? size.trim() : "";
   if (/^\d{2,5}x\d{2,5}$/i.test(rawSize)) {
@@ -371,11 +362,19 @@ export const extractAgnesImageUrls = (response: any): string[] => {
     .filter(Boolean);
 };
 
+export type ImageTaskTrackingContext = {
+  projectId?: string;
+  nodeId?: string;
+  clientTaskId?: string;
+  taskSource?: string;
+};
+
 // 创建图片生成任务
 export async function createImageGeneration(
   data: ToApiImageGenerationRequest,
   scoreCost?: number,
   signal?: AbortSignal,
+  tracking?: ImageTaskTrackingContext,
 ) {
   const response = await createDesktopProxyTask({
     platform: "toapi",
@@ -388,6 +387,7 @@ export async function createImageGeneration(
     scoreSource: "toapi",
     // scoreSourceLabel: "ToAPI 图片生成",
     scoreSourceLabel: data.model,
+    ...tracking,
   }, signal);
 
   const rawData = unwrapDesktopProxyData(response);
@@ -399,6 +399,7 @@ export async function createAPIMartImageGeneration(
   data: Record<string, any>,
   scoreCost?: number,
   signal?: AbortSignal,
+  tracking?: ImageTaskTrackingContext,
 ) {
   const model = String(data.model ?? "").trim();
   const imageUrls = normalizeAgnesImageInput(data.image_urls);
@@ -437,6 +438,7 @@ export async function createAPIMartImageGeneration(
     scoreModel: model,
     scoreSource: "apimart",
     scoreSourceLabel: "APIMart",
+    ...tracking,
   }, signal);
 
   const rawData = unwrapDesktopProxyData(response);
@@ -448,9 +450,8 @@ export async function createAgnesImageGeneration(
   data: Record<string, any>,
   scoreCost?: number,
   signal?: AbortSignal,
+  tracking?: ImageTaskTrackingContext,
 ) {
-  void scoreCost;
-
   const requestedModel = String(data.originalModel ?? data.model ?? "").trim();
   const model = isAgnesImageModel(requestedModel)
     ? requestedModel
@@ -484,38 +485,22 @@ export async function createAgnesImageGeneration(
     }
   }
 
-  const apiKey = getAgnesImageApiKey();
-  if (!apiKey) {
-    throw new Error("缺少 Agnes API Key，请配置 VITE_AGNES_API_KEY");
-  }
-
-  const response = await fetch(`${getAgnesImageApiBaseUrl()}/v1/images/generations`, {
+  const response = await createDesktopProxyTask({
+    platform: "agnes",
+    upstreamPath: "/v1/images/generations",
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-    signal,
-  });
+    body,
+    scoreCost,
+    scoreBizType: "image",
+    scoreModel: model,
+    scoreSource: "agnes",
+    scoreSourceLabel: "Agnes",
+    ...tracking,
+  }, signal);
 
-  const responseText = await response.text();
-  let responseData: any = null;
-  try {
-    responseData = responseText ? JSON.parse(responseText) : {};
-  } catch {
-    responseData = { message: responseText };
-  }
-
-  if (!response.ok) {
-    const message =
-      responseData?.error?.message ||
-      responseData?.message ||
-      `Agnes 图片生成失败（HTTP ${response.status}）`;
-    throw new Error(message);
-  }
-
-  return responseData;
+  const rawData = unwrapDesktopProxyData(response);
+  const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
+  return ledgerBizId ? { ...responseData, ledgerBizId } : responseData;
 }
 
 // 获取图片生成任务状态

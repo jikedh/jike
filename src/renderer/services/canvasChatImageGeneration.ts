@@ -36,6 +36,7 @@ type ChatImageModelConfig = NonNullable<
 type GenerateCanvasChatImagesOptions = {
   model: string;
   prompt: string;
+  projectId?: string;
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
 };
@@ -558,6 +559,7 @@ const generateGeminiPro2Images = async (
 export const generateCanvasChatImages = async ({
   model,
   prompt,
+  projectId,
   signal,
   onProgress,
 }: GenerateCanvasChatImagesOptions): Promise<GenerateCanvasChatImagesResult> => {
@@ -582,8 +584,12 @@ export const generateCanvasChatImages = async ({
   const payload = buildBasePayload(config, normalizedPrompt);
   let images: NoteGenerationImage[] = [];
   let ledgerBizId: string | undefined;
-  const scoreBizType =
-    isAgnesImageModel(config.imageModel) ? "agnes" : "image";
+  const scoreBizType = "image";
+  const trackingContext = {
+    projectId,
+    clientTaskId: `canvas-chat:${Date.now()}`,
+    taskSource: "canvas_chat",
+  };
 
   try {
     if (isAgnesImageModel(config.imageModel)) {
@@ -592,6 +598,7 @@ export const generateCanvasChatImages = async ({
         payload,
         requiredPoints,
         signal,
+        trackingContext,
       );
       ledgerBizId = response?.ledgerBizId;
       throwIfAborted(signal);
@@ -614,7 +621,7 @@ export const generateCanvasChatImages = async ({
       ledgerBizId = result.ledgerBizId;
     } else {
       onProgress?.("已提交图片任务，正在生成图片...");
-      const response: any = await createImageGeneration(payload, requiredPoints);
+      const response: any = await createImageGeneration(payload, requiredPoints, signal, trackingContext);
       ledgerBizId = response?.ledgerBizId;
       throwIfAborted(signal);
 

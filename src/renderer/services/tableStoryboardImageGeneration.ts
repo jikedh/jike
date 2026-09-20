@@ -28,6 +28,8 @@ type GenerateStoryboardImageOptions = {
   model: string;
   platform?: string;
   prompt: string;
+  projectId?: string;
+  nodeId?: string;
   size: string;
   resolution?: string;
   referenceImageUrls?: string[];
@@ -215,6 +217,8 @@ const generateRunningHubImage = async ({
   referenceImageUrls,
   requiredPoints,
   signal,
+  projectId,
+  nodeId,
 }: GenerateStoryboardImageOptions) => {
   const imageUrls = referenceImageUrls?.filter(Boolean) ?? [];
   const request = {
@@ -224,6 +228,10 @@ const generateRunningHubImage = async ({
     ...(model === RUNNINGHUB_GPT_IMAGE2_MODEL ? { quality: "medium" } : {}),
     ...(imageUrls.length > 0 ? { imageUrls } : {}),
     ...(requiredPoints != null ? { scoreCost: requiredPoints } : {}),
+    projectId,
+    nodeId,
+    clientTaskId: `table-storyboard:${nodeId || "unknown"}:${Date.now()}`,
+    taskSource: "table_storyboard",
   };
 
   const routes: Array<(data: any, signal?: AbortSignal) => any> =
@@ -300,6 +308,12 @@ export const generateTableStoryboardImage = async (
 ) => {
   const scoreCost = Number(options.requiredPoints ?? 0) || undefined;
   const referenceImageUrls = options.referenceImageUrls?.filter(Boolean) ?? [];
+  const trackingContext = {
+    projectId: options.projectId,
+    nodeId: options.nodeId,
+    clientTaskId: `table-storyboard:${options.nodeId || "unknown"}:${Date.now()}`,
+    taskSource: "table_storyboard",
+  };
   throwIfAborted(options.signal);
 
   if (isAgnesImageModel(options.model)) {
@@ -315,6 +329,7 @@ export const generateTableStoryboardImage = async (
       },
       scoreCost,
       options.signal,
+      trackingContext,
     );
     const resultUrl = extractAgnesImageUrls(response)[0];
     if (!resultUrl) {
@@ -342,6 +357,7 @@ export const generateTableStoryboardImage = async (
     } as any,
     scoreCost,
     options.signal,
+    trackingContext,
   );
   const ledgerBizId = response?.ledgerBizId;
   const taskId = extractTaskId(response);

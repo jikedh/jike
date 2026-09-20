@@ -21,6 +21,7 @@ import {
 } from "shared/constants/chat-personas";
 import useMessage from "@/hooks/useMessage";
 import { generateCanvasChatImages } from "@/services/canvasChatImageGeneration";
+import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import type {
   ChatPersonaId,
   NoteGenerationMessage,
@@ -78,8 +79,8 @@ const attachPartialContent = (
     chatError instanceof Error
       ? (chatError as ChatRequestError)
       : (new Error(
-          String(chatError ?? "生成出现了点问题，请稍后再试"),
-        ) as ChatRequestError);
+        String(chatError ?? "生成出现了点问题，请稍后再试"),
+      ) as ChatRequestError);
   requestError.partialContent = partialContent;
   return requestError;
 };
@@ -150,6 +151,7 @@ const buildRequestMessages = (
  * - `clearLocalMessages`：清空当前内存态。
  */
 export const useCanvasChat = () => {
+  const projectId = useCanvasFlowStore((state) => state.projectId);
   /** 当前会话消息列表（仅前端内存态）。 */
   const [messages, setMessages] = useState<NoteGenerationMessage[]>([]);
   /** 消息发送中的加载状态，避免重复提交。 */
@@ -215,6 +217,7 @@ export const useCanvasChat = () => {
       const result = await generateCanvasChatImages({
         model,
         prompt: content,
+        projectId: projectId ?? undefined,
         signal: controller.signal,
         onProgress: (progressMessage) => {
           updateAssistantMessage(assistantMessageIndex, (assistantMessage) => ({

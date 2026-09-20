@@ -5347,16 +5347,26 @@ const StoryAgentPage = ({
     aspectRatio: string;
     resolution?: string;
   }) => {
+    const trackingContext = {
+      projectId,
+      clientTaskId: `story:${Date.now()}`,
+      taskSource: "story",
+    };
     if (isAgnesImageModel(input.model)) {
-      const response: any = await createAgnesImageGeneration({
-        model: input.model,
-        prompt: input.prompt,
-        size: input.aspectRatio,
-        resolution: input.resolution,
-        n: 1,
-        image_urls: [],
-        metadata: { resolution: input.resolution },
-      });
+      const response: any = await createAgnesImageGeneration(
+        {
+          model: input.model,
+          prompt: input.prompt,
+          size: input.aspectRatio,
+          resolution: input.resolution,
+          n: 1,
+          image_urls: [],
+          metadata: { resolution: input.resolution },
+        },
+        undefined,
+        undefined,
+        trackingContext,
+      );
       const imageUrl = extractAgnesImageUrls(response)[0];
       if (!imageUrl) {
         throw new Error("Agnes image generation completed but missing url");
@@ -5364,15 +5374,20 @@ const StoryAgentPage = ({
       return imageUrl;
     }
 
-    const response: any = await createImageGeneration({
-      model: input.model,
-      prompt: input.prompt,
-      size: input.aspectRatio,
-      resolution: input.resolution,
-      n: 1,
-      image_urls: [],
-      metadata: { resolution: input.resolution },
-    } as any);
+    const response: any = await createImageGeneration(
+      {
+        model: input.model,
+        prompt: input.prompt,
+        size: input.aspectRatio,
+        resolution: input.resolution,
+        n: 1,
+        image_urls: [],
+        metadata: { resolution: input.resolution },
+      } as any,
+      undefined,
+      undefined,
+      trackingContext,
+    );
     const taskId =
       response?.data?.task_id ??
       response?.result?.task_id ??
