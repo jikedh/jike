@@ -4319,6 +4319,8 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       const isOverseasSeedance20 =
         model === "dreamina-seedance-2-0-260128";
       const isMiniMaxH3 = model === "MiniMax-H3";
+      const projectId = get().projectId ?? undefined;
+      const trackingContext = { projectId };
 
       set((state) => ({
         nodes: updateNewVideoNodeInList(state.nodes, nodeId, (data) => ({
@@ -4357,24 +4359,32 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             response = await createOverseasSeedanceVideoTask(
               requestPayload,
               requiredPoints,
+              trackingContext,
             );
           } else if (isSeedance20) {
-            response = await createLzVideoTask(requestPayload, requiredPoints);
+            response = await createLzVideoTask(
+              requestPayload,
+              requiredPoints,
+              trackingContext,
+            );
           } else if (model === "agnes-video-v2.0") {
             // Agnes 走独立桌面代理通道，避免被误归类为 dashscope / kuaizi。
             response = await createAgnesVideoTask(
               requestPayload,
               requiredPoints,
+              trackingContext,
             );
           } else if (isMiniMaxH3) {
             response = await createMiniMaxH3VideoTask(
               requestPayload,
               requiredPoints,
+              trackingContext,
             );
           } else {
             response = await createDashscopeVideoSynthesis(
               requestPayload,
               requiredPoints,
+              trackingContext,
             );
           }
           // 通用 taskId 提取：兼容 dashscope/kuaizi 的 data/output 嵌套，
@@ -4449,7 +4459,7 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
             totalTasks,
             ledgerBizId,
             videoProvider,
-            projectId: get().projectId ?? undefined,
+            projectId,
           });
         });
       } catch (startError) {

@@ -369,6 +369,10 @@ export type ImageTaskTrackingContext = {
   taskSource?: string;
 };
 
+export type VideoTaskTrackingContext = {
+  projectId?: string;
+};
+
 // 创建图片生成任务
 export async function createImageGeneration(
   data: ToApiImageGenerationRequest,
@@ -627,6 +631,7 @@ export async function analyzeLightingReferenceImage(
 export async function createLzVideoTask(
   data: Seedance20Request,
   scoreCost?: number,
+  tracking?: VideoTaskTrackingContext,
 ) {
   const scoreModel = getSeedance20Model(data);
   const response = await createDesktopProxyTask({
@@ -639,6 +644,7 @@ export async function createLzVideoTask(
     scoreSource: "kuaizi",
     scoreSourceLabel:
       scoreModel === "seedance-2.5" ? "Seedance 2.5" : "快手可灵",
+    ...tracking,
   });
   const rawData = unwrapDesktopProxyData(response);
   const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
@@ -661,6 +667,7 @@ export async function createLzVideoTask(
     requestParams: data as unknown as Record<string, unknown>,
     status: taskId ? "PENDING" : "FAIL",
     scoreCost,
+    ...tracking,
   });
 
   return { ...responseData, ledgerBizId };
@@ -804,6 +811,7 @@ export async function createDashscopeChatCompletion(
 export async function createDashscopeVideoSynthesis(
   data: BailianVideoGenerationRequest,
   scoreCost?: number,
+  tracking?: VideoTaskTrackingContext,
 ) {
   const response = await createDesktopProxyTask({
     platform: "dashscope",
@@ -818,6 +826,7 @@ export async function createDashscopeVideoSynthesis(
     scoreModel: data.model,
     scoreSource: "dashscope",
     scoreSourceLabel: "阿里云百炼",
+    ...tracking,
   });
   const rawData = unwrapDesktopProxyData(response);
   const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
@@ -851,6 +860,7 @@ export async function createDashscopeVideoSynthesis(
     requestParams: trackData,
     status: taskStatus === "FAILED" || !taskId ? "FAIL" : "PENDING",
     scoreCost,
+    ...tracking,
   });
 
   return { ...responseData, ledgerBizId };
@@ -883,6 +893,7 @@ export async function getDashscopeVideoTaskStatus(taskId: string) {
 export async function createAgnesVideoTask(
   data: Record<string, any>,
   scoreCost?: number,
+  tracking?: VideoTaskTrackingContext,
 ) {
   const response = await createDesktopProxyTask({
     platform: "agnes",
@@ -894,6 +905,7 @@ export async function createAgnesVideoTask(
     scoreModel: data.model,
     scoreSource: "agnes",
     scoreSourceLabel: "Agnes 视频生成",
+    ...tracking,
   });
 
   const rawData = unwrapDesktopProxyData(response);
@@ -915,6 +927,7 @@ export async function createAgnesVideoTask(
     requestParams: data,
     status: responseData?.video_id || responseData?.id ? "PENDING" : "FAIL",
     scoreCost,
+    ...tracking,
   });
 
   return { ...responseData, ledgerBizId };
@@ -938,6 +951,7 @@ export async function getAgnesVideoTaskStatus(videoId: string) {
 export async function createMiniMaxH3VideoTask(
   data: MiniMaxH3Request,
   scoreCost?: number,
+  tracking?: VideoTaskTrackingContext,
 ): Promise<MiniMaxH3Response & { ledgerBizId?: string }> {
   const response = await createDesktopProxyTask({
     platform: "minimax",
@@ -950,6 +964,7 @@ export async function createMiniMaxH3VideoTask(
     scoreSource: "minimax",
     scoreSourceLabel: "MiniMax官方平台",
     coreSourceLabel: "MiniMax官方平台",
+    ...tracking,
   });
   const rawData = unwrapDesktopProxyData(response);
   const { responseData, ledgerBizId } = extractLedgerBizId(rawData);
@@ -967,6 +982,7 @@ export async function createMiniMaxH3VideoTask(
     requestParams: data as unknown as Record<string, unknown>,
     status: responseData?.task_id ? "PENDING" : "FAIL",
     scoreCost,
+    ...tracking,
   });
 
   return ledgerBizId ? { ...responseData, ledgerBizId } : responseData;
@@ -992,6 +1008,7 @@ const OVERSEAS_SEEDANCE_CREATE_PATH =
 export async function createOverseasSeedanceVideoTask(
   data: OverseasSeedance20Request,
   scoreCost?: number,
+  tracking?: VideoTaskTrackingContext,
 ) {
   const response = await createDesktopProxyTask({
     platform: "kuaizi_global",
@@ -1003,6 +1020,7 @@ export async function createOverseasSeedanceVideoTask(
     scoreModel: data.model,
     scoreSource: "kuaizi_global",
     scoreSourceLabel: "海外 Seedance 2.0 Pro",
+    ...tracking,
   });
 
   const rawData = unwrapDesktopProxyData(response);
@@ -1026,6 +1044,7 @@ export async function createOverseasSeedanceVideoTask(
     requestParams: data as unknown as Record<string, unknown>,
     status: status === "failed" || !taskId ? "FAIL" : "PENDING",
     scoreCost,
+    ...tracking,
   });
 
   return { ...responseData, ledgerBizId };

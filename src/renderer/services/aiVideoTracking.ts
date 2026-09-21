@@ -4,6 +4,7 @@ import { getJikeingUserId, getJikeingUserInfo } from "shared/utils/utils";
 export interface AIVideoTrackData {
   userId: string;
   userUuid?: string;
+  projectId?: string;
   apiName: string;
   model: string;
   taskId: string;
@@ -55,6 +56,7 @@ class AIVideoTrackingService {
         data: {
           userId: trackData.userId,
           userUuid: trackData.userUuid,
+          projectId: trackData.projectId,
           apiName: trackData.apiName,
           model: trackData.model,
           taskId: trackData.taskId,
