@@ -2,12 +2,14 @@ import {
     IconArrowLeft,
     IconChevronLeft,
     IconChevronRight,
+    IconPlayerPlayFilled,
     IconRefresh,
     IconVideo,
+    IconX,
 } from "@tabler/icons-react";
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
-import { cn } from "shared/utils/utils";
+import { cn, getVideoThumbnail } from "shared/utils/utils";
+import { getVideoPosterUrl } from "shared/utils/videoPoster";
 import {
     getImageModelTaskList,
     getVideoModelTaskList,
@@ -18,6 +20,10 @@ import {
 
 type ModelTaskListType = "video" | "image";
 type TaskItem = ImageModelTask | VideoModelTask;
+type PreviewMedia = {
+    type: "image" | "video";
+    url: string;
+};
 
 type ModelTaskListOverlayProps = {
     open: boolean;
@@ -77,7 +83,7 @@ const ModelTaskListOverlay = ({
     const [loading, setLoading] = useState(false);
     const [errorText, setErrorText] = useState("");
     const [refreshIndex, setRefreshIndex] = useState(0);
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [previewMedia, setPreviewMedia] = useState<PreviewMedia | null>(null);
 
     useEffect(() => {
         setPage(1);
@@ -190,7 +196,8 @@ const ModelTaskListOverlay = ({
                             tasks={data.list}
                             type={type}
                             loading={loading}
-                            onPreviewImage={setPreviewUrl}
+                            onPreviewImage={(url) => setPreviewMedia({ type: "image", url })}
+                            onPreviewVideo={(url) => setPreviewMedia({ type: "video", url })}
                         />
                     )}
                 </div>
@@ -220,18 +227,38 @@ const ModelTaskListOverlay = ({
                 </footer>
             </div>
 
-            {previewUrl ? (
-                <button
-                    type="button"
+            {previewMedia ? (
+                <div
                     className="fixed inset-0 z-91 flex items-center justify-center bg-black/85 p-8"
-                    onClick={() => setPreviewUrl(null)}
+                    onClick={() => setPreviewMedia(null)}
                 >
-                    <img
-                        src={previewUrl}
-                        alt="任务图片预览"
-                        className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
-                    />
-                </button>
+                    <button
+                        type="button"
+                        className="absolute right-6 top-6 flex size-10 items-center justify-center rounded-full border border-white/15 bg-black/55 text-white/80 hover:bg-black/75 hover:text-white"
+                        onClick={() => setPreviewMedia(null)}
+                    >
+                        <IconX size={20} />
+                    </button>
+                    <div
+                        className="flex max-h-full max-w-full items-center justify-center"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        {previewMedia.type === "video" ? (
+                            <video
+                                src={previewMedia.url}
+                                className="max-h-[calc(100vh-4rem)] max-w-[calc(100vw-4rem)] rounded-xl bg-black shadow-2xl"
+                                controls
+                                autoPlay
+                            />
+                        ) : (
+                            <img
+                                src={previewMedia.url}
+                                alt="任务图片预览"
+                                className="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+                            />
+                        )}
+                    </div>
+                </div>
             ) : null}
         </div>
     );
@@ -242,11 +269,13 @@ const TaskTable = ({
     type,
     loading,
     onPreviewImage,
+    onPreviewVideo,
 }: {
     tasks: TaskItem[];
     type: ModelTaskListType;
     loading: boolean;
     onPreviewImage: (url: string) => void;
+    onPreviewVideo: (url: string) => void;
 }) => {
     if (loading && tasks.length === 0) {
         return <div className="flex min-h-64 items-center justify-center text-sm text-white/45">正在加载任务…</div>;
@@ -257,11 +286,11 @@ const TaskTable = ({
 
     return (
         <div className="min-w-260 overflow-hidden rounded-2xl border border-white/10 bg-white/2.5">
-            <div className="grid grid-cols-[130px_180px_minmax(260px,1fr)_180px_160px_120px_150px] border-b border-white/10 bg-white/[0.035] px-4 py-3 text-xs font-medium text-white/48">
+            <div className="grid grid-cols-[130px_180px_minmax(260px,1fr)_240px_180px_120px_150px] border-b border-white/10 bg-white/[0.035] px-4 py-3 text-xs font-medium text-white/48">
                 <span>状态</span>
                 <span>模型 / 服务商</span>
                 <span>提示词</span>
-                <span>参考图</span>
+                <span>参考信息</span>
                 <span>{type === "image" ? "结果图片" : "生成视频"}</span>
                 <span>积分消耗</span>
                 <span>创建时间</span>
@@ -269,7 +298,7 @@ const TaskTable = ({
             {tasks.map((task) => (
                 <div
                     key={task.id}
-                    className="grid grid-cols-[130px_180px_minmax(260px,1fr)_180px_160px_120px_150px] items-center border-b border-white/6 px-4 py-3.5 text-sm last:border-b-0"
+                    className="grid grid-cols-[130px_180px_minmax(260px,1fr)_240px_180px_120px_150px] items-center border-b border-white/6 px-4 py-3.5 text-sm last:border-b-0"
                 >
                     <div className="space-y-1.5">
                         <TaskStatus status={task.status} />
@@ -281,16 +310,53 @@ const TaskTable = ({
                         {isImageTask(task) ? <p className="mt-1 text-xs text-violet-200/70">{TASK_TYPE_TEXT[task.taskType] || task.taskType}</p> : null}
                     </div>
                     <p className="line-clamp-2 pr-4 text-sm leading-5 text-white/65">{task.prompt || "-"}</p>
-                    <ImageStrip urls={task.referenceImageUrls} onPreviewImage={onPreviewImage} />
+                    <TaskReferenceInfo task={task} onPreviewImage={onPreviewImage} />
                     {isImageTask(task) ? (
                         <ImageStrip urls={task.resultImageUrls} onPreviewImage={onPreviewImage} />
                     ) : (
-                        <VideoResult url={task.generatedVideoUrl} />
+                        <VideoResult url={task.generatedVideoUrl} onPreviewVideo={onPreviewVideo} />
                     )}
                     <span className="text-sm text-white/70">{task.score > 0 ? task.score : "-"}</span>
                     <span className="text-xs leading-5 text-white/48">{task.createTime || "-"}</span>
                 </div>
             ))}
+        </div>
+    );
+};
+
+const TaskReferenceInfo = ({
+    task,
+    onPreviewImage,
+}: {
+    task: TaskItem;
+    onPreviewImage: (url: string) => void;
+}) => {
+    const details = isImageTask(task)
+        ? [task.aspectRatio, task.resolution, task.quality]
+        : [task.duration > 0 ? `${task.duration} 秒` : "", task.ratio, task.resolution];
+    const visibleDetails = details.filter(Boolean);
+
+    if (task.referenceImageUrls.length === 0 && visibleDetails.length === 0) {
+        return <span className="text-xs text-white/35">-</span>;
+    }
+
+    return (
+        <div className="space-y-2 pr-3">
+            {task.referenceImageUrls.length > 0 ? (
+                <ImageStrip urls={task.referenceImageUrls} onPreviewImage={onPreviewImage} />
+            ) : null}
+            {visibleDetails.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                    {visibleDetails.map((detail) => (
+                        <span
+                            key={detail}
+                            className="rounded border border-white/8 bg-white/5 px-1.5 py-0.5 text-[11px] text-white/48"
+                        >
+                            {detail}
+                        </span>
+                    ))}
+                </div>
+            ) : null}
         </div>
     );
 };
@@ -331,15 +397,65 @@ const ImageStrip = ({
     );
 };
 
-const VideoResult = ({ url }: { url: string }) => {
+const VideoResult = ({
+    url,
+    onPreviewVideo,
+}: {
+    url: string;
+    onPreviewVideo: (url: string) => void;
+}) => {
+    const posterUrl = getVideoPosterUrl({ url });
+    const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(posterUrl || null);
+
+    useEffect(() => {
+        let cancelled = false;
+        setThumbnailUrl(posterUrl || null);
+
+        if (!url || posterUrl) {
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        getVideoThumbnail(url)
+            .then((thumbnail) => {
+                if (!cancelled) setThumbnailUrl(thumbnail);
+            })
+            .catch(() => { });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [posterUrl, url]);
+
     if (!url) {
         return <span className="text-xs text-white/35">-</span>;
     }
+
     return (
-        <span className="inline-flex items-center gap-1.5 text-xs text-violet-200/80">
-            <IconVideo size={16} />
-            已生成
-        </span>
+        <button
+            type="button"
+            className="group relative h-16 w-28 overflow-hidden rounded-lg border border-white/10 bg-white/5"
+            onClick={() => onPreviewVideo(url)}
+        >
+            {thumbnailUrl ? (
+                <img
+                    src={thumbnailUrl}
+                    alt="生成视频缩略图"
+                    className="size-full object-cover"
+                    loading="lazy"
+                />
+            ) : (
+                <div className="flex size-full items-center justify-center text-violet-200/70">
+                    <IconVideo size={22} />
+                </div>
+            )}
+            <span className="absolute inset-0 flex items-center justify-center bg-black/20">
+                <span className="flex size-7 items-center justify-center rounded-full bg-black/65 text-white/90">
+                    <IconPlayerPlayFilled size={13} />
+                </span>
+            </span>
+        </button>
     );
 };
 
