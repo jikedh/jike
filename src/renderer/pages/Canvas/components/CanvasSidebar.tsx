@@ -18,6 +18,7 @@ import { useUserStore } from "@/stores/useUserStore";
 import { insertRemoteAssetIntoCanvas } from "../utils/remoteAssetInsert";
 import type { RemoteAsset } from "../utils/remoteAssets";
 import { RemoteAssetLibraryDialog } from "./RemoteAssetLibraryDialog";
+import ModelTaskListOverlay from "./ModelTaskListOverlay";
 import { ProjectAssetLibrary } from "./project-asset-library/ProjectAssetLibrary";
 import {
   RemoteCreateAssetDialog,
@@ -141,6 +142,7 @@ export const CanvasSidebar = () => {
   const [createAssetRequest, setCreateAssetRequest] =
     useState<RemoteCreateAssetRequest | null>(null);
   const [assetRefreshKey, setAssetRefreshKey] = useState(0);
+  const [taskListType, setTaskListType] = useState<"video" | "image" | null>(null);
   const { screenToFlowPosition } = useReactFlow<AllNodeType, EdgeType>();
 
   const centerFlowPosition = useCallback(
@@ -292,6 +294,20 @@ export const CanvasSidebar = () => {
         case "personal-asset-library":
           setPersonalAssetLibraryOpen(true);
           break;
+        case "video-model-tasks":
+          if (!projectId) {
+            toast.warning("请先保存并进入一个项目画布");
+            break;
+          }
+          setTaskListType("video");
+          break;
+        case "image-model-tasks":
+          if (!projectId) {
+            toast.warning("请先保存并进入一个项目画布");
+            break;
+          }
+          setTaskListType("image");
+          break;
         case "save":
           saveGraph();
           toast.success("画布已保存");
@@ -300,7 +316,7 @@ export const CanvasSidebar = () => {
           break;
       }
     },
-    [addNode, centerFlowPosition, openAssetLibrary, saveGraph],
+    [addNode, centerFlowPosition, openAssetLibrary, projectId, saveGraph],
   );
 
   return (
@@ -321,6 +337,14 @@ export const CanvasSidebar = () => {
         projectId={projectId}
         onClose={() => setPersonalAssetLibraryOpen(false)}
       />
+      {taskListType ? (
+        <ModelTaskListOverlay
+          open
+          projectId={projectId}
+          type={taskListType}
+          onClose={() => setTaskListType(null)}
+        />
+      ) : null}
       <RemoteCreateAssetDialog
         open={createAssetDialogOpen}
         request={createAssetRequest}

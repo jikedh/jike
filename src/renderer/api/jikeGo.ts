@@ -121,6 +121,63 @@ export type DesktopProxyRequest = {
   kuaiziBillingMode?: "actual";
 };
 
+export type ModelTaskQuery = {
+  projectId: string;
+  page?: number;
+  pageSize?: number;
+  status?: string;
+  model?: string;
+};
+
+export type ModelTaskPage<T> = {
+  list: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type ImageModelTask = {
+  id: string;
+  projectId: string;
+  provider: string;
+  model: string;
+  taskType: string;
+  prompt: string;
+  aspectRatio: string;
+  resolution: string;
+  quality: string;
+  referenceImageUrls: string[];
+  resultImageUrls: string[];
+  status: string;
+  errorMessage: string;
+  score: number;
+  createTime: string;
+  finishTime: string;
+};
+
+export type VideoModelTask = {
+  id: string;
+  projectId: string;
+  provider: string;
+  model: string;
+  prompt: string;
+  duration: number;
+  ratio: string;
+  resolution: string;
+  referenceImageUrls: string[];
+  generatedVideoUrl: string;
+  status: string;
+  errorMessage: string;
+  score: number;
+  createTime: string;
+};
+
+export type JikeGoEnvelope<T> = {
+  code: number;
+  msg?: string;
+  data?: T;
+};
+
 export type DesktopChatCompletionsRequest = {
   platform: Extract<DesktopProxyPlatform, "dashscope" | "toapi">;
   upstreamPath?: string;
@@ -253,6 +310,30 @@ export function queryDesktopProxyTask(
     signal,
     headers: getJikeGoAiProxyHeaders(),
   });
+}
+
+export function getImageModelTaskList(
+  params: ModelTaskQuery,
+): Promise<JikeGoEnvelope<ModelTaskPage<ImageModelTask>>> {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/ai/model-tasks/images",
+    method: "get",
+    params,
+    headers: getJikeGoAuthHeaders(),
+  }) as Promise<JikeGoEnvelope<ModelTaskPage<ImageModelTask>>>;
+}
+
+export function getVideoModelTaskList(
+  params: ModelTaskQuery,
+): Promise<JikeGoEnvelope<ModelTaskPage<VideoModelTask>>> {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/ai/model-tasks/videos",
+    method: "get",
+    params,
+    headers: getJikeGoAuthHeaders(),
+  }) as Promise<JikeGoEnvelope<ModelTaskPage<VideoModelTask>>>;
 }
 
 // 聊天用的接口

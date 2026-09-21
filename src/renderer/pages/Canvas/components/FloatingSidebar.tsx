@@ -2,6 +2,7 @@ import {
   IconArchive,
   IconDeviceFloppy,
   IconFolders,
+  IconList,
   IconPlus,
   IconSettings,
   IconSparkles,
@@ -67,6 +68,15 @@ const DEFAULT_ITEMS: FloatingSidebarItem[] = [
       { id: "storyboard-breakdown", label: "分镜图拆解" },
       { id: "storyboard-video", label: "分镜视频生成" },
       { id: "drama-analysis", label: "剧目分析" },
+    ],
+  },
+  {
+    id: "model-tasks",
+    label: "模型任务列表",
+    icon: <IconList size={20} />,
+    children: [
+      { id: "video-model-tasks", label: "视频模型任务列表" },
+      { id: "image-model-tasks", label: "图片模型任务列表" },
     ],
   },
   {
