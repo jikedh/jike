@@ -231,6 +231,6 @@ const FeedbackButton = ({ onClick }: SettingsButtonProps) => (
     onClick={onClick}
   >
     <MessageSquareText className="w-5 h-5" />
-    <span className="text-[10px] text-white/30 mt-0.5">反馈</span>
+    <span className="text-[10px] text-white/30 mt-0.5">客服</span>
   </button>
 );

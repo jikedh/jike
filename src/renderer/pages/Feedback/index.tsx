@@ -24,6 +24,11 @@ const FeedbackPage = () => {
                 <div className="rounded-2xl border border-white/10 bg-[#121214] p-5 shadow-xl">
                     <FeedbackHistory refreshToken={historyRefreshToken} />
                 </div>
+                <img
+                    src="https://jikedh.oss-cn-hangzhou.aliyuncs.com/upload/2063944232192495616/20260922/bp1Qp4nT8Rl9FkeatxbY69cE.png"
+                    alt="客服微信二维码"
+                    className="mx-auto size-56 rounded-2xl object-contain"
+                />
             </div>
             <FeedbackDialog
                 open={isDialogOpen}
