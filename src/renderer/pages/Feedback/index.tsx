@@ -1,5 +1,6 @@
 import { MessageSquarePlus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getFeedbackSettings } from "@/api/feedback";
 import { FeedbackDialog } from "@/components/FeedbackDialog";
 import { FeedbackHistory } from "@/components/FeedbackHistory";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,20 @@ import { Button } from "@/components/ui/button";
 const FeedbackPage = () => {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [historyRefreshToken, setHistoryRefreshToken] = useState(0);
+    const [customerServiceQrUrl, setCustomerServiceQrUrl] = useState("");
+    const [qrError, setQrError] = useState(false);
+
+    useEffect(() => {
+        let active = true;
+        getFeedbackSettings().then(response => {
+            if (active) {
+                setCustomerServiceQrUrl(response.code === 0 || response.code === 200 ? response.data?.customerServiceQrUrl || "" : "");
+            }
+        }).catch(() => {
+            if (active) setCustomerServiceQrUrl("");
+        });
+        return () => { active = false; };
+    }, []);
 
     return (
         <main className="min-h-full bg-[#0b0b0d] px-6 py-8 text-white md:px-10">
@@ -24,11 +39,16 @@ const FeedbackPage = () => {
                 <div className="rounded-2xl border border-white/10 bg-[#121214] p-5 shadow-xl">
                     <FeedbackHistory refreshToken={historyRefreshToken} />
                 </div>
-                <img
-                    src="https://jikedh.oss-cn-hangzhou.aliyuncs.com/upload/2063944232192495616/20260922/bp1Qp4nT8Rl9FkeatxbY69cE.png"
-                    alt="客服微信二维码"
-                    className="mx-auto size-56 rounded-2xl object-contain"
-                />
+                {customerServiceQrUrl && !qrError ? (
+                    <img
+                        src={customerServiceQrUrl}
+                        alt="客服微信二维码"
+                        className="mx-auto size-56 rounded-2xl object-contain"
+                        onError={() => setQrError(true)}
+                    />
+                ) : (
+                    <p className="text-center text-sm text-white/50">客服二维码暂不可用，请通过反馈表单联系我们。</p>
+                )}
             </div>
             <FeedbackDialog
                 open={isDialogOpen}

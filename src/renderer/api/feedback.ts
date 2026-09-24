@@ -103,6 +103,12 @@ export const getMyFeedbackHistory = (page: number) =>
         params: { page },
     });
 
+export const getFeedbackSettings = () =>
+    request<{ customerServiceQrUrl: string }>({
+        url: "/v1/feedbacks/settings",
+        method: "get",
+    });
+
 export const getMyFeedbackDetail = (id: string) =>
     request<FeedbackDetail>({
         url: `/v1/feedbacks/${encodeURIComponent(id)}`,
