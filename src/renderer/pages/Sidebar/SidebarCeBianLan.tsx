@@ -188,7 +188,9 @@ export const SidebarCeBianLan = () => {
             .filter(
               (item) =>
                 isInternalUser ||
-                (item.id !== "story" && item.id !== "video-to-script"),
+                (item.id !== "story" &&
+                  item.id !== "video-to-script" &&
+                  item.id !== "video-tasks"),
             )
             .map((item) => (
               <SidebarNavItem
