@@ -95,6 +95,12 @@ export const SidebarCeBianLan = () => {
       label: "项目",
       path: "/canvas",
     },
+    {
+      id: "video-tasks",
+      icon: <Clapperboard size={24} />,
+      label: "视频任务",
+      path: "/video-tasks",
+    },
     // {
     //   id: "script",
     //   icon: <Type size={24} />,

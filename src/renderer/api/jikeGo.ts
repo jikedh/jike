@@ -172,6 +172,30 @@ export type VideoModelTask = {
   createTime: string;
 };
 
+export type MyVideoTask = Omit<VideoModelTask, "createTime"> & {
+  taskId: string;
+  responseTaskId: string;
+  apiName: string;
+  modelVersion: string;
+  createTime: number;
+};
+
+export type MyVideoTaskPage = ModelTaskPage<MyVideoTask> & {
+  totalDuration: number;
+};
+
+export type MyVideoTaskQuery = {
+  page?: number;
+  pageSize?: number;
+  status?: string;
+  sortBy?: "createTime" | "score" | "duration";
+  sortOrder?: "asc" | "desc";
+  videoId?: string;
+  projectId?: string;
+  startTime?: number;
+  endTime?: number;
+};
+
 export type JikeGoEnvelope<T> = {
   code: number;
   msg?: string;
@@ -334,6 +358,18 @@ export function getVideoModelTaskList(
     params,
     headers: getJikeGoAuthHeaders(),
   }) as Promise<JikeGoEnvelope<ModelTaskPage<VideoModelTask>>>;
+}
+
+export function getMyVideoTasks(
+  params: MyVideoTaskQuery,
+): Promise<JikeGoEnvelope<MyVideoTaskPage>> {
+  return jikeingService({
+    baseURL: JIKE_GO_BASE_URL,
+    url: "/v1/ai/model-tasks/videos/mine",
+    method: "get",
+    params,
+    headers: getJikeGoAuthHeaders(),
+  }) as Promise<JikeGoEnvelope<MyVideoTaskPage>>;
 }
 
 // 聊天用的接口

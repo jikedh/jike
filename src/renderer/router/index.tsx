@@ -20,6 +20,7 @@ const ScriptPage = lazy(() => import("@/pages/Script"));
 const AssetsPage = lazy(() => import("@/pages/Assets"));
 const VoicePage = lazy(() => import("@/pages/Voice"));
 const VideoPage = lazy(() => import("@/pages/Video"));
+const VideoTasksPage = lazy(() => import("@/pages/VideoTasks"));
 const VideoToScriptPage = lazy(() => import("@/pages/VideoToScript"));
 const ShortDramaCommentaryPage = lazy(
   () => import("@/pages/ShortDramaCommentary"),
@@ -46,6 +47,9 @@ const PageLoader = () => (
 const CanvasRouteLoader = () => (
   <CinematicProjectLoader fixed title="" subtitle="" />
 );
+
+const AuthRoute = ({ children }: { children: ReactNode }) =>
+  getJikeingToken() ? children : <Navigate to="/login" replace />;
 
 const InternalOnlyRoute = ({ children }: { children: ReactNode }) => {
   const isInternalUser = useUserStore((state) => state.isInternalUser);
@@ -141,6 +145,10 @@ const router = createHashRouter([
       {
         path: "/video",
         element: <VideoPage />,
+      },
+      {
+        path: "/video-tasks",
+        element: <AuthRoute><VideoTasksPage /></AuthRoute>,
       },
       {
         path: "/video-to-script",
