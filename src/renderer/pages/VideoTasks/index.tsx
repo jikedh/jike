@@ -4,6 +4,13 @@ import { cn } from "shared/utils/utils";
 import { getMyVideoTasks, type MyVideoTaskPage, type MyVideoTaskQuery } from "@/api/jikeGo";
 
 const PAGE_SIZE = 20;
+const getDefaultRange = () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 18);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18);
+    const localValue = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+    return { startAt: localValue(start), endAt: localValue(end), startTime: start.getTime(), endTime: end.getTime() + 59_999 };
+};
 const STATUS_LABELS: Record<string, string> = {
     PENDING: "等待中",
     RUNNING: "处理中",
@@ -35,15 +42,16 @@ const TruncatedText = ({ value, className }: { value: string; className?: string
 );
 
 const VideoTasksPage = () => {
+    const [initialRange] = useState(getDefaultRange);
     const [page, setPage] = useState(1);
     const [status, setStatus] = useState("");
     const [sortBy, setSortBy] = useState<NonNullable<MyVideoTaskQuery["sortBy"]>>("createTime");
     const [sortOrder, setSortOrder] = useState<NonNullable<MyVideoTaskQuery["sortOrder"]>>("desc");
-    const [startAt, setStartAt] = useState("");
-    const [endAt, setEndAt] = useState("");
+    const [startAt, setStartAt] = useState(initialRange.startAt);
+    const [endAt, setEndAt] = useState(initialRange.endAt);
     const [videoId, setVideoId] = useState("");
     const [projectId, setProjectId] = useState("");
-    const [filters, setFilters] = useState<Pick<MyVideoTaskQuery, "startTime" | "endTime" | "videoId" | "projectId">>({});
+    const [filters, setFilters] = useState<Pick<MyVideoTaskQuery, "startTime" | "endTime" | "videoId" | "projectId">>({ startTime: initialRange.startTime, endTime: initialRange.endTime });
     const [filterError, setFilterError] = useState("");
     const [refresh, setRefresh] = useState(0);
     const [data, setData] = useState<MyVideoTaskPage>({ list: [], total: 0, totalDuration: 0, page: 1, pageSize: PAGE_SIZE });
@@ -104,8 +112,9 @@ const VideoTasksPage = () => {
     };
 
     const reset = () => {
-        setStartAt("");
-        setEndAt("");
+        const range = getDefaultRange();
+        setStartAt(range.startAt);
+        setEndAt(range.endAt);
         setVideoId("");
         setProjectId("");
         setStatus("");
@@ -113,7 +122,7 @@ const VideoTasksPage = () => {
         setSortOrder("desc");
         setFilterError("");
         setPage(1);
-        setFilters({});
+        setFilters({ startTime: range.startTime, endTime: range.endTime });
     };
 
     return (
