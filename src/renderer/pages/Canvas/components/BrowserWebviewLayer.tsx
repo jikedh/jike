@@ -149,6 +149,16 @@ export const BrowserWebviewLayer = ({ interacting }: { interacting: boolean }) =
             nodeInteractionRef.current = Boolean((event as CustomEvent<{ resizing?: boolean }>).detail.resizing);
             scheduleSync(!nodeInteractionRef.current);
         };
+        const navigateHistory = async (event: Event, direction: "back" | "forward") => {
+            const { nodeId } = (event as CustomEvent<{ nodeId: string }>).detail;
+            const active = activeRef.current;
+            if (!active || active.nodeId !== nodeId) return;
+            try {
+                await (direction === "back" ? browserWebviewService.goBack(active.key) : browserWebviewService.goForward(active.key));
+            } catch (error: any) {
+                publishBrowserRuntime({ nodeId, active: true, visible: true, error: error?.message || "网页历史导航失败" });
+            }
+        };
         const layout = (event: Event) => scheduleSync(Boolean((event as CustomEvent<{ afterCommit?: boolean }>).detail.afterCommit));
         const capture = async (event: Event) => {
             const { nodeId } = (event as CustomEvent<{ nodeId: string }>).detail;
@@ -174,8 +184,10 @@ export const BrowserWebviewLayer = ({ interacting }: { interacting: boolean }) =
                 if (activeRef.current?.key.sessionId === active.key.sessionId) publishBrowserRuntime({ nodeId, active: true, visible: true, capturing: false });
             }
         };
-        window.addEventListener("canvas:browser-open", open); window.addEventListener("canvas:browser-close", close); window.addEventListener("canvas:browser-resize", resize); window.addEventListener("canvas:browser-layout", layout); window.addEventListener("canvas:browser-capture", capture);
-        return () => { window.removeEventListener("canvas:browser-open", open); window.removeEventListener("canvas:browser-close", close); window.removeEventListener("canvas:browser-resize", resize); window.removeEventListener("canvas:browser-layout", layout); window.removeEventListener("canvas:browser-capture", capture); void closeActive(); };
+        const back = (event: Event) => void navigateHistory(event, "back");
+        const forward = (event: Event) => void navigateHistory(event, "forward");
+        window.addEventListener("canvas:browser-open", open); window.addEventListener("canvas:browser-close", close); window.addEventListener("canvas:browser-resize", resize); window.addEventListener("canvas:browser-layout", layout); window.addEventListener("canvas:browser-capture", capture); window.addEventListener("canvas:browser-back", back); window.addEventListener("canvas:browser-forward", forward);
+        return () => { window.removeEventListener("canvas:browser-open", open); window.removeEventListener("canvas:browser-close", close); window.removeEventListener("canvas:browser-resize", resize); window.removeEventListener("canvas:browser-layout", layout); window.removeEventListener("canvas:browser-capture", capture); window.removeEventListener("canvas:browser-back", back); window.removeEventListener("canvas:browser-forward", forward); void closeActive(); };
     }, []);
 
     useEffect(() => {

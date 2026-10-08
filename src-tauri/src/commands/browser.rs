@@ -17,6 +17,16 @@ pub async fn browser_close(webview: Webview, key: BrowserKey) -> Result<(), Stri
 }
 
 #[tauri::command]
+pub async fn browser_go_back(webview: Webview, key: BrowserKey) -> Result<(), String> {
+    super::browser_native::go_back(webview, key).await
+}
+
+#[tauri::command]
+pub async fn browser_go_forward(webview: Webview, key: BrowserKey) -> Result<(), String> {
+    super::browser_native::go_forward(webview, key).await
+}
+
+#[tauri::command]
 pub async fn browser_capture(webview: Webview, key: BrowserKey) -> Result<BrowserCapture, String> {
     super::browser_native::capture(webview, key).await
 }

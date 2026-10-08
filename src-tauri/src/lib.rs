@@ -57,6 +57,8 @@ pub fn run() {
             commands::browser_open,
             commands::browser_sync,
             commands::browser_close,
+            commands::browser_go_back,
+            commands::browser_go_forward,
             commands::browser_capture,
             commands::storage_select_directory,
             commands::storage_ensure_project,

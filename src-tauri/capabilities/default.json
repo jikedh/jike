@@ -10,6 +10,8 @@
     "allow-browser-open",
     "allow-browser-sync",
     "allow-browser-close",
+    "allow-browser-go-back",
+    "allow-browser-go-forward",
     "allow-browser-capture",
     "core:default",
     "core:window:default",

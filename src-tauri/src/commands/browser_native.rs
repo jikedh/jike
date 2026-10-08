@@ -145,6 +145,34 @@ pub async fn close(webview: Webview, key: BrowserKey) -> Result<(), String> {
     Ok(())
 }
 
+pub async fn go_back(webview: Webview, key: BrowserKey) -> Result<(), String> {
+    navigate_history(webview, key, false).await
+}
+
+pub async fn go_forward(webview: Webview, key: BrowserKey) -> Result<(), String> {
+    navigate_history(webview, key, true).await
+}
+
+async fn navigate_history(webview: Webview, key: BrowserKey, forward: bool) -> Result<(), String> {
+    let session = get_session(&webview, &key)?;
+    #[cfg(not(windows))]
+    { let _ = session; let _ = forward; Err("浏览器节点仅支持 Windows 桌面端".into()) }
+    #[cfg(windows)]
+    {
+        let child = webview.app_handle().get_webview(&session.label).ok_or("网页已关闭")?;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        child.with_webview(move |platform| {
+            let result = (|| unsafe {
+                let core = platform.controller().CoreWebView2()?;
+                if forward { core.GoForward()?; } else { core.GoBack()?; }
+                Ok::<(), windows::core::Error>(())
+            })().map_err(|e| e.to_string());
+            let _ = tx.send(result);
+        }).map_err(|e| e.to_string())?;
+        rx.await.map_err(|_| "网页历史导航已取消")?
+    }
+}
+
 #[cfg(windows)]
 async fn apply_layout(child: &Webview, layout: &BrowserLayout) -> Result<(), String> {
     if !layout.visible { return child.hide().map_err(|e| e.to_string()); }

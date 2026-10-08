@@ -1,7 +1,7 @@
 import { memo, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { NodeResizer, Position, type NodeProps } from "@xyflow/react";
-import { Camera, Globe, Maximize2, Minimize2, RefreshCw, X } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, Globe, Maximize2, Minimize2, RefreshCw, X } from "lucide-react";
 import type { BrowserNodeType } from "shared/types/flow";
 import { normalizeBrowserUrl } from "shared/utils/browserUrl";
 import { cn } from "shared/utils/utils";
@@ -83,6 +83,8 @@ export const BrowserNode = memo(({ id, data, selected, dragging, width, height }
                 <span>{runtime.loading ? "加载中" : data.collapsed ? "已收起" : runtime.active ? "当前网页" : "预览"}</span>
             </div>
             <form className="nodrag nopan nodelete nowheel flex shrink-0 items-center gap-2 px-2 pb-2" onSubmit={(event) => { event.preventDefault(); navigate(); }}>
+                <Button type="button" size="sm" disabled={!supported || !runtime.active || runtime.loading} title="后退" onClick={() => dispatchBrowserAction("back", { nodeId: id })}><ChevronLeft data-icon="inline-start" /></Button>
+                <Button type="button" size="sm" disabled={!supported || !runtime.active || runtime.loading} title="前进" onClick={() => dispatchBrowserAction("forward", { nodeId: id })}><ChevronRight data-icon="inline-start" /></Button>
                 <Input className="min-w-0 flex-1" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="输入网址，例如 example.com" disabled={!supported} />
                 <Button size="sm" disabled={!supported} title={isFullscreen ? "退出全屏" : "全屏浏览"} onClick={enlarge}>{isFullscreen ? <Minimize2 data-icon="inline-start" /> : <Maximize2 data-icon="inline-start" />}</Button>
                 <Button type="submit" size="sm" disabled={!supported} title="打开或重新加载网页"><RefreshCw data-icon="inline-start" /></Button>

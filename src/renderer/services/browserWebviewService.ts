@@ -24,7 +24,7 @@ export type BrowserNativeState = BrowserKey & {
 export type BrowserAction = { nodeId: string; url?: string; resizing?: boolean };
 
 export const browserSupported = () => isTauri() && /Windows/i.test(navigator.userAgent);
-export const dispatchBrowserAction = (action: "open" | "close" | "capture" | "resize", detail: BrowserAction) => {
+export const dispatchBrowserAction = (action: "open" | "close" | "capture" | "resize" | "back" | "forward", detail: BrowserAction) => {
     window.dispatchEvent(new CustomEvent(`canvas:browser-${action}`, { detail }));
 };
 export const requestBrowserLayoutSync = (afterCommit = false) => {
@@ -37,5 +37,7 @@ export const browserWebviewService = {
     open: (layout: BrowserLayout, url: string) => invoke<void>("browser_open", { request: { layout, url } }),
     sync: (request: BrowserLayout) => invoke<void>("browser_sync", { request }),
     close: (key: BrowserKey) => invoke<void>("browser_close", { key }),
+    goBack: (key: BrowserKey) => invoke<void>("browser_go_back", { key }),
+    goForward: (key: BrowserKey) => invoke<void>("browser_go_forward", { key }),
     capture: (key: BrowserKey) => invoke<{ dataUrl: string; width: number; height: number }>("browser_capture", { key }),
 };
