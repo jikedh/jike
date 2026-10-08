@@ -1,5 +1,6 @@
 import {
   IconBrain,
+  IconWorld,
   IconEye,
   IconLayersLinked,
   IconMusic,
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/context-menu";
 
 export type CanvasNodeType =
+  | "browser"
   | "note"
   | "image"
   | "newVideo"
@@ -51,6 +53,10 @@ export const CanvasContextMenu = ({
           创建节点
         </ContextMenuLabel>
         <ContextMenuSeparator className="h-px bg-white/5" />
+        <ContextMenuItem onSelect={() => onCreateNode("browser")}>
+          <IconWorld size={16} />
+          新建浏览器节点
+        </ContextMenuItem>
         <ContextMenuItem
           className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-white/80 transition-colors hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB]"
           onSelect={() => onCreateNode("note")}

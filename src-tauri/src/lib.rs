@@ -17,6 +17,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(tray::AppLifecycle::new())
+        .manage(commands::browser_native::BrowserRegistry::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
@@ -43,12 +44,20 @@ pub fn run() {
                 // 关闭窗口时不退出，仅隐藏（与原 Electron window-all-closed 行为一致）
                 let lifecycle = window.state::<tray::AppLifecycle>();
                 if window.label() == "main" && !lifecycle.is_exiting() {
+                    commands::browser_native::cleanup(window.app_handle(), window.label());
                     let _ = window.hide();
                     api.prevent_close();
                 }
             }
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                commands::browser_native::cleanup(window.app_handle(), window.label());
+            }
         })
         .invoke_handler(tauri::generate_handler![
+            commands::browser_open,
+            commands::browser_sync,
+            commands::browser_close,
+            commands::browser_capture,
             commands::storage_select_directory,
             commands::storage_ensure_project,
             commands::storage_list_projects,

@@ -27,6 +27,7 @@ export const resolveNodeTypeForCopyCounter = (
 ): NodeType => {
   const nodeTypeMap: Partial<Record<AllNodeType["type"], NodeType>> = {
     noteNode: "note",
+    browserNode: "browser",
     imageNode: "image",
     agentNode: "agent",
     panoramaNode: "panorama",

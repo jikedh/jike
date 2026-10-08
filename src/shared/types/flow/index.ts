@@ -241,6 +241,14 @@ export interface PanoramaNodeData {
  * 导演台入口节点数据。
  * 编辑器的运行时状态完全位于独立 iframe，画布只持久化节点创建时间。
  */
+export interface BrowserNodeData extends Record<string, unknown> {
+  url: string;
+  title?: string;
+  collapsed: boolean;
+  screenshotUrl?: string;
+  createdAt: number;
+}
+
 export interface DirectorDeskNodeData {
   createdAt?: number;
   /** 独立导演台的版本化场景快照，随当前画布项目保存。 */
@@ -411,6 +419,7 @@ export type VideoAgentNodeType = Node<VideoAgentNodeData, "videoAgentNode">;
 // 全景图节点
 export type PanoramaNodeType = Node<PanoramaNodeData, "panoramaNode">;
 export type DirectorDeskNodeType = Node<DirectorDeskNodeData, "directorDeskNode">;
+export type BrowserNodeType = Node<BrowserNodeData, "browserNode">;
 // 音频节点
 export type AudioNodeType = Node<AudioGenerationNode, "audioNode">;
 // 表格节点
@@ -430,6 +439,7 @@ export type AllNodeType =
   | VideoAgentNodeType
   | PanoramaNodeType
   | DirectorDeskNodeType
+  | BrowserNodeType
   | AudioNodeType
   | TableNodeType
   | DefaultNodeType

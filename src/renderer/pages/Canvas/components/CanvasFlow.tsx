@@ -80,6 +80,8 @@ import { DIRECTOR_DESK_OPEN_EVENT } from "../CustomNodes/DirectorDeskNode";
 import { DirectorDeskWorkspace } from "./DirectorDeskWorkspace";
 import { CanvasGroupNameBadge } from "./CanvasGroupNameBadge";
 import { MultiSelectQuickCreate } from "./MultiSelectQuickCreate";
+import { BrowserWebviewLayer } from "./BrowserWebviewLayer";
+import { requestBrowserLayoutSync } from "@/services/browserWebviewService";
 
 const FALLBACK_NODE_WIDTH = 175;
 const FALLBACK_NODE_HEIGHT = 175;
@@ -1312,6 +1314,7 @@ export const CanvasFlow = ({
   const pendingViewportRef = useRef(reactFlowInstance.getViewport());
   const viewportRafRef = useRef<number | null>(null);
   const [isViewportInteracting, setIsViewportInteracting] = useState(false);
+  const [isNodeDragInteracting, setIsNodeDragInteracting] = useState(false);
   const viewportInteractionEndTimerRef = useRef<number | null>(null);
   const latestStoreNodesRef = useRef(useCanvasFlowStore.getState().nodes);
   const latestStoreEdgesRef = useRef(useCanvasFlowStore.getState().edges);
@@ -1894,6 +1897,8 @@ export const CanvasFlow = ({
 
       flushPendingNodeChangeWork();
       isDraggingRef.current = true;
+      setIsNodeDragInteracting(true);
+      requestBrowserLayoutSync();
       const draggedNodes = nodes.length > 0 ? nodes : [node];
       draggingNodeIdsRef.current = draggedNodes.map((item) => item.id);
       nodeDragPreviewStateRef.current =
@@ -1987,6 +1992,7 @@ export const CanvasFlow = ({
         });
       });
       scheduleNodeDragPreview();
+      requestBrowserLayoutSync();
     },
     [scheduleNodeDragPreview],
   );
@@ -2012,6 +2018,8 @@ export const CanvasFlow = ({
       flushPendingNodeChangeWork();
 
       isDraggingRef.current = false;
+      setIsNodeDragInteracting(false);
+      requestBrowserLayoutSync(true);
 
       if (!dragState) {
         draggingNodeIdsRef.current = [];
@@ -3838,6 +3846,7 @@ export const CanvasFlow = ({
       };
       markViewportInteracting();
       finishViewportInteracting();
+      requestBrowserLayoutSync();
 
       if (!shouldTrackViewport) {
         return;
@@ -3856,6 +3865,7 @@ export const CanvasFlow = ({
   const handleViewportMoveStart = useCallback(
     (event?: unknown) => {
       markViewportInteracting();
+      requestBrowserLayoutSync();
 
       const nativeEvent = event as
         | MouseEvent
@@ -3917,6 +3927,7 @@ export const CanvasFlow = ({
       viewportPanStateRef.current = createIdleViewportPanState();
       syncViewportStateNow();
       finishViewportInteracting(120);
+      requestBrowserLayoutSync(true);
     },
     [
       finishViewportInteracting,
@@ -5254,6 +5265,13 @@ export const CanvasFlow = ({
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
+                  onSelect={() => handleCreateNodeFromQuickAddMenu("browser")}
+                >
+                  <IconEye size={16} />
+                  新建浏览器节点
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-white/80 hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] rounded-lg px-3 py-2.5 text-sm flex items-center gap-3 cursor-pointer"
                   onSelect={() => handleCreateNodeFromQuickAddMenu("image")}
                 >
                   <IconPhoto size={16} />
@@ -5345,6 +5363,7 @@ export const CanvasFlow = ({
           onStateChange={handleDirectorDeskState}
         />
       ) : null}
+      <BrowserWebviewLayer interacting={isViewportInteracting || isNodeDragInteracting || annotationWorkspace.open} />
 
       {/* 确认退出对话框 */}
       <Dialog open={showExitDialog} onOpenChange={setShowExitDialog}>

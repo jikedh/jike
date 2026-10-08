@@ -287,6 +287,14 @@ type NodeFactory = (
 ) => AllNodeType;
 
 export const nodeFactoryMap: Record<NodeType, NodeFactory> = {
+  browser: (id, position, options) => ({
+    id,
+    type: "browserNode",
+    position,
+    width: options?.initialWidth ?? 800,
+    height: options?.initialHeight ?? 520,
+    data: { url: "", collapsed: true, createdAt: Date.now() },
+  }),
   note: createNoteNode,
   image: createImageNode,
   agent: createAgentNode,

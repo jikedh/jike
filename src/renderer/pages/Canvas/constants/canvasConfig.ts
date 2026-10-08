@@ -1,5 +1,6 @@
 import { CustomEdge } from "../CustomEdge/CustomEdge";
 import { AgentNode } from "../CustomNodes/AgentNode";
+import { BrowserNode } from "@/pages/Canvas/CustomNodes/BrowserNode";
 import { AudioNode } from "../CustomNodes/AudioNode";
 import { DirectorDeskNode } from "../CustomNodes/DirectorDeskNode";
 import { ImageAgentNode } from "../CustomNodes/ImageAgentNode";
@@ -13,6 +14,7 @@ import NewVideoNode from "../CustomNodes/New-VideoNode";
 
 // 画布节点及其小地图使用同一套类型颜色；新增节点类型时仅需在此补充颜色。
 export const CANVAS_NODE_COLORS: Record<string, string> = {
+  browserNode: "#34D399",
   imageNode: "#38BDF8",
   newVideoNode: "#FB7185",
   audioNode: "#A78BFA",
@@ -47,6 +49,7 @@ export const getCanvasNodeColor = (node: {
 };
 
 export const nodeTypes = {
+  browserNode: BrowserNode,
   noteNode: NoteNode,
   imageNode: ImageNode,
   newVideoNode: NewVideoNode,

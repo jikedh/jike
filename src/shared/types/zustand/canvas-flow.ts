@@ -2,6 +2,7 @@ import type { Connection, EdgeChange, NodeChange } from "@xyflow/react";
 import type { AgentPresetId } from "shared/constants/agent-presets";
 import type {
   AllNodeType,
+  BrowserNodeData,
   AudioGenerationNode,
   DirectorDeskNodeData,
   EdgeType,
@@ -19,6 +20,7 @@ export type NodeType =
   | "agent"
   | "panorama"
   | "directorDesk"
+  | "browser"
   | "audio"
   | "textAgent"
   | "imageAgent"
@@ -209,6 +211,7 @@ export type CanvasFlowStoreType = {
     nodeId: string,
     patch: Partial<DirectorDeskNodeData>,
   ) => void;
+  updateBrowserNodeData: (nodeId: string, patch: Partial<BrowserNodeData>) => void;
   updateNewVideoNodeData: (
     nodeId: string,
     patch: Partial<NewVideoGenerationNode>,

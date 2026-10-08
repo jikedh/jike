@@ -14,7 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.5.3", features = [] }
 
 [dependencies]
-tauri = { version = "2.9.5", features = ["protocol-asset", "image-png", "devtools", "tray-icon"] }
+tauri = { version = "2.9.5", features = ["protocol-asset", "image-png", "devtools", "tray-icon", "unstable"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-http = { version = "2", features = ["unsafe-headers"] }
@@ -44,6 +44,10 @@ env_logger = "0.11"
 futures-util = "0.3"
 async-trait = "0.1"
 mime_guess = "2"
+
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.38.2"
+windows = { version = "0.61.3", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Com_StructuredStorage"] }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

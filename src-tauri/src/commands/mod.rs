@@ -1,6 +1,8 @@
 // Tauri 命令层 - 与前端 @tauri-apps/api invoke 一一对应
 // 命令通过 tauri::generate_handler! 在 lib.rs 集中注册
 pub mod debug;
+pub mod browser;
+pub(crate) mod browser_native;
 pub mod download;
 pub mod notification;
 pub mod oss;
@@ -9,6 +11,7 @@ pub mod tracking;
 pub mod video;
 
 pub use debug::*;
+pub use browser::*;
 pub use download::*;
 pub use notification::*;
 pub use oss::*;

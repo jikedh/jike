@@ -1,5 +1,6 @@
 // 领域服务层 - 不依赖 Tauri 框架，便于单元测试
 pub mod download_service;
+pub mod browser_service;
 pub mod oss_service;
 pub mod storage_service;
 pub mod tracking_service;

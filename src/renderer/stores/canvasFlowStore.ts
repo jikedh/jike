@@ -210,6 +210,7 @@ export const normalizeCanvasNodesForPersistence = (
   });
 
 const EMPTY_NODE_ID_COUNTERS = {
+  browser: 1,
   note: 1,
   image: 1,
   newVideo: 1,
@@ -227,6 +228,8 @@ const EMPTY_NODE_ID_COUNTERS = {
 
 const getNodeCounterKey = (node: AllNodeType): NodeType => {
   switch (node.type) {
+    case "browserNode":
+      return "browser";
     case "noteNode":
       return "note";
     case "imageNode":
@@ -3272,6 +3275,16 @@ export const useCanvasFlowStore = create<CanvasFlowStoreType>((set, get) => {
       set((state) => ({
         nodes: state.nodes.map((node) =>
           node.id === nodeId && node.type === "directorDeskNode"
+            ? { ...node, data: { ...node.data, ...patch } }
+            : node,
+        ),
+      }));
+    },
+
+    updateBrowserNodeData: (nodeId, patch) => {
+      set((state) => ({
+        nodes: state.nodes.map((node) =>
+          node.id === nodeId && node.type === "browserNode"
             ? { ...node, data: { ...node.data, ...patch } }
             : node,
         ),
