@@ -8,10 +8,10 @@ import { browserSupported, browserWebviewService, publishBrowserRuntime, type Br
 
 const makeSessionId = () => crypto.randomUUID();
 
-const hasBlockingOverlay = () =>
+const hasBlockingOverlay = (fullscreen = false) =>
     Boolean(
         document.querySelector(
-            '[data-slot="dialog-content"], [data-slot="drawer-content"], #panorama-root, .yarl__root, [role="menu"], .canvas-batch-toolbar',
+            '[data-slot="dialog-content"], [data-slot="drawer-content"], #panorama-root, .yarl__root, [role="menu"]' + (fullscreen ? '' : ', .canvas-batch-toolbar'),
         ),
     );
 
@@ -43,13 +43,14 @@ export const BrowserWebviewLayer = ({ interacting }: { interacting: boolean }) =
         const flow = document.querySelector<HTMLElement>(".react-flow");
         if (!node || !target || !flow || node.data.collapsed) { await closeActive(active.nodeId); return; }
         const rect = target.getBoundingClientRect();
-        const flowRect = flow.getBoundingClientRect();
+        const fullscreen = Boolean(target.closest("[data-browser-fullscreen]"));
+        const flowRect = fullscreen ? { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight } : flow.getBoundingClientRect();
         const viewport = document.querySelector<HTMLElement>(".react-flow__viewport");
         const transform = viewport ? new DOMMatrixReadOnly(getComputedStyle(viewport).transform) : new DOMMatrixReadOnly();
-        const zoom = transform.a || 1;
+        const zoom = fullscreen ? 1 : transform.a || 1;
         const fullyVisible = rect.left >= flowRect.left && rect.top >= flowRect.top && rect.right <= flowRect.right && rect.bottom <= flowRect.bottom;
-        const visible = !interactingRef.current && !nodeInteractionRef.current && !hasBlockingOverlay() && fullyVisible && zoom >= 0.5 && zoom <= 1.6;
-        const layout: BrowserLayout = { key: active.key, bounds: { x: rect.left - flowRect.left, y: rect.top - flowRect.top, width: rect.width, height: rect.height }, zoom, visible };
+        const visible = (fullscreen || !interactingRef.current) && !nodeInteractionRef.current && !hasBlockingOverlay(fullscreen) && fullyVisible && zoom >= 0.5 && zoom <= 1.6;
+        const layout: BrowserLayout = { key: active.key, bounds: { x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: rect.width, height: rect.height }, zoom, visible };
         syncInFlightRef.current = true;
         try {
             await browserWebviewService.sync(layout);
@@ -127,8 +128,8 @@ export const BrowserWebviewLayer = ({ interacting }: { interacting: boolean }) =
                 const target = document.querySelector<HTMLElement>(`[data-browser-node-content="${CSS.escape(nodeId)}"]`);
                 const flow = document.querySelector<HTMLElement>(".react-flow");
                 if (!target || !flow) throw new Error("浏览器节点尚未准备完成");
-                const rect = target.getBoundingClientRect(); const flowRect = flow.getBoundingClientRect();
-                await browserWebviewService.open({ key, bounds: { x: Math.max(0, rect.left - flowRect.left), y: Math.max(0, rect.top - flowRect.top), width: Math.max(1, rect.width), height: Math.max(1, rect.height) }, zoom: 1, visible: false }, normalized);
+                const rect = target.getBoundingClientRect();
+                await browserWebviewService.open({ key, bounds: { x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: Math.max(1, rect.width), height: Math.max(1, rect.height) }, zoom: 1, visible: false }, normalized);
                 publishBrowserRuntime({ nodeId, active: true, visible: false, loading: true });
                 scheduleSync();
             } catch (error: any) {
