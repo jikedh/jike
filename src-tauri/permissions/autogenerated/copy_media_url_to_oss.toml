@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-copy-media-url-to-oss"
+description = "Enables the copy_media_url_to_oss command without any pre-configured scope."
+commands.allow = ["copy_media_url_to_oss"]
+
+[[permission]]
+identifier = "deny-copy-media-url-to-oss"
+description = "Denies the copy_media_url_to_oss command without any pre-configured scope."
+commands.deny = ["copy_media_url_to_oss"]

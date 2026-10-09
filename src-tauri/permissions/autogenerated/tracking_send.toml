@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tracking-send"
+description = "Enables the tracking_send command without any pre-configured scope."
+commands.allow = ["tracking_send"]
+
+[[permission]]
+identifier = "deny-tracking-send"
+description = "Denies the tracking_send command without any pre-configured scope."
+commands.deny = ["tracking_send"]

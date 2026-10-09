@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-copy-video-url-to-oss"
+description = "Enables the copy_video_url_to_oss command without any pre-configured scope."
+commands.allow = ["copy_video_url_to_oss"]
+
+[[permission]]
+identifier = "deny-copy-video-url-to-oss"
+description = "Denies the copy_video_url_to_oss command without any pre-configured scope."
+commands.deny = ["copy_video_url_to_oss"]

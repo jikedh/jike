@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-storage-get-default-path"
+description = "Enables the storage_get_default_path command without any pre-configured scope."
+commands.allow = ["storage_get_default_path"]
+
+[[permission]]
+identifier = "deny-storage-get-default-path"
+description = "Denies the storage_get_default_path command without any pre-configured scope."
+commands.deny = ["storage_get_default_path"]

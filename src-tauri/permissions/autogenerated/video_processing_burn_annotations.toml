@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-video-processing-burn-annotations"
+description = "Enables the video_processing_burn_annotations command without any pre-configured scope."
+commands.allow = ["video_processing_burn_annotations"]
+
+[[permission]]
+identifier = "deny-video-processing-burn-annotations"
+description = "Denies the video_processing_burn_annotations command without any pre-configured scope."
+commands.deny = ["video_processing_burn_annotations"]

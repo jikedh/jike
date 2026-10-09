@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-debug-toggle-dev-tools"
+description = "Enables the debug_toggle_dev_tools command without any pre-configured scope."
+commands.allow = ["debug_toggle_dev_tools"]
+
+[[permission]]
+identifier = "deny-debug-toggle-dev-tools"
+description = "Denies the debug_toggle_dev_tools command without any pre-configured scope."
+commands.deny = ["debug_toggle_dev_tools"]

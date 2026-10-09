@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-storage-import-project"
+description = "Enables the storage_import_project command without any pre-configured scope."
+commands.allow = ["storage_import_project"]
+
+[[permission]]
+identifier = "deny-storage-import-project"
+description = "Denies the storage_import_project command without any pre-configured scope."
+commands.deny = ["storage_import_project"]

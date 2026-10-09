@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-storage-scan-asset-library"
+description = "Enables the storage_scan_asset_library command without any pre-configured scope."
+commands.allow = ["storage_scan_asset_library"]
+
+[[permission]]
+identifier = "deny-storage-scan-asset-library"
+description = "Denies the storage_scan_asset_library command without any pre-configured scope."
+commands.deny = ["storage_scan_asset_library"]

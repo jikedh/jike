@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-upload-local-file-to-presigned-url"
+description = "Enables the upload_local_file_to_presigned_url command without any pre-configured scope."
+commands.allow = ["upload_local_file_to_presigned_url"]
+
+[[permission]]
+identifier = "deny-upload-local-file-to-presigned-url"
+description = "Denies the upload_local_file_to_presigned_url command without any pre-configured scope."
+commands.deny = ["upload_local_file_to_presigned_url"]

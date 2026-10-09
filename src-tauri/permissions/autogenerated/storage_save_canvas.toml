@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-storage-save-canvas"
+description = "Enables the storage_save_canvas command without any pre-configured scope."
+commands.allow = ["storage_save_canvas"]
+
+[[permission]]
+identifier = "deny-storage-save-canvas"
+description = "Denies the storage_save_canvas command without any pre-configured scope."
+commands.deny = ["storage_save_canvas"]

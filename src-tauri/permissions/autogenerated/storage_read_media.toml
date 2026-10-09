@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-storage-read-media"
+description = "Enables the storage_read_media command without any pre-configured scope."
+commands.allow = ["storage_read_media"]
+
+[[permission]]
+identifier = "deny-storage-read-media"
+description = "Denies the storage_read_media command without any pre-configured scope."
+commands.deny = ["storage_read_media"]
