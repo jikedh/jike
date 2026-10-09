@@ -244,6 +244,8 @@ export interface PanoramaNodeData {
 export interface BrowserNodeData extends Record<string, unknown> {
   url: string;
   title?: string;
+  tabs?: { id: string; url: string; title?: string }[];
+  activeTabId?: string;
   collapsed: boolean;
   screenshotUrl?: string;
   createdAt: number;

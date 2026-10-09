@@ -3,8 +3,9 @@ import { listen } from "@tauri-apps/api/event";
 import { uploadFileToOSS } from "service/oss";
 import { GenerationStatus } from "shared/constants/enum";
 import { normalizeBrowserUrl } from "shared/utils/browserUrl";
+import type { BrowserNodeData } from "shared/types/flow";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
-import { browserSupported, browserWebviewService, publishBrowserRuntime, type BrowserKey, type BrowserLayout, type BrowserNativeState } from "@/services/browserWebviewService";
+import { browserSupported, browserWebviewService, dispatchBrowserAction, publishBrowserRuntime, type BrowserAction, type BrowserKey, type BrowserLayout, type BrowserNativeState } from "@/services/browserWebviewService";
 
 const makeSessionId = () => crypto.randomUUID();
 
@@ -16,7 +17,10 @@ const hasBlockingOverlay = (fullscreen = false) =>
     );
 
 export const BrowserWebviewLayer = ({ interacting }: { interacting: boolean }) => {
-    const activeRef = useRef<{ nodeId: string; key: BrowserKey } | null>(null);
+    const activeRef = useRef<{ nodeId: string; tabId: string; key: BrowserKey } | null>(null);
+    const sessionsRef = useRef(new Map<string, { nodeId: string; tabId: string; key: BrowserKey; loading: boolean; error?: string }>());
+    const operationRef = useRef(Promise.resolve());
+    const disposedRef = useRef(false);
     const rafRef = useRef<number | null>(null);
     const pendingRef = useRef(false);
     const syncInFlightRef = useRef(false);
@@ -30,7 +34,18 @@ export const BrowserWebviewLayer = ({ interacting }: { interacting: boolean }) =
         if (!active || (nodeId && active.nodeId !== nodeId)) return;
         activeRef.current = null;
         publishBrowserRuntime({ nodeId: active.nodeId, active: false, visible: false });
-        await browserWebviewService.close(active.key).catch(() => undefined);
+        await browserWebviewService.sync({ key: active.key, bounds: { x: 0, y: 0, width: 1, height: 1 }, zoom: 1, visible: false }).catch(() => undefined);
+    };
+
+    const disposeSession = async (sessionId: string) => {
+        const session = sessionsRef.current.get(sessionId);
+        if (!session) return;
+        sessionsRef.current.delete(sessionId);
+        if (activeRef.current?.key.sessionId === sessionId) {
+            activeRef.current = null;
+            publishBrowserRuntime({ nodeId: session.nodeId, active: false, visible: false, loading: false, capturing: false });
+        }
+        await browserWebviewService.close(session.key).catch(() => undefined);
     };
 
     const sync = async () => {
@@ -58,8 +73,8 @@ export const BrowserWebviewLayer = ({ interacting }: { interacting: boolean }) =
             publishBrowserRuntime({ nodeId: active.nodeId, active: true, visible });
         } catch (error: any) {
             if (activeRef.current?.key.sessionId !== active.key.sessionId) return;
+            await disposeSession(active.key.sessionId);
             publishBrowserRuntime({ nodeId: active.nodeId, active: false, visible: false, error: error?.message || "网页布局同步失败" });
-            await closeActive(active.nodeId);
         } finally {
             syncInFlightRef.current = false;
             if (pendingRef.current) scheduleSync();
@@ -99,51 +114,130 @@ export const BrowserWebviewLayer = ({ interacting }: { interacting: boolean }) =
 
     useEffect(() => {
         if (!browserSupported()) return;
-        let unsubscribe: (() => void) | undefined;
-        void listen<BrowserNativeState>("browser:state", (event) => {
+        let disposed = false;
+        const unsubscribes: (() => void)[] = [];
+        const register = (promise: Promise<() => void>) => void promise.then((dispose) => { if (disposed) dispose(); else unsubscribes.push(dispose); });
+        register(listen<BrowserNativeState>("browser:state", (event) => {
             const active = activeRef.current;
             const state = event.payload;
-            if (!active || active.key.nodeId !== state.nodeId || active.key.sessionId !== state.sessionId) return;
-            useCanvasFlowStore.getState().updateBrowserNodeData(state.nodeId, { url: state.url, title: state.title });
-            publishBrowserRuntime({ nodeId: state.nodeId, active: true, visible: !interactingRef.current, loading: state.loading, error: state.error });
-        }).then((dispose) => { unsubscribe = dispose; });
-        return () => unsubscribe?.();
+            const session = sessionsRef.current.get(state.sessionId);
+            const store = useCanvasFlowStore.getState();
+            if (!session || session.nodeId !== state.nodeId || session.key.projectId !== state.projectId || store.projectId !== state.projectId) return;
+            session.loading = state.loading;
+            session.error = state.error;
+            const node = store.nodes.find((item) => item.id === state.nodeId && item.type === "browserNode");
+            if (!node) return;
+            const data = node.data as BrowserNodeData;
+            const tabs = data.tabs?.map((tab) => tab.id === session.tabId ? { ...tab, url: state.url, title: state.title ?? tab.title } : tab);
+            const selected = data.activeTabId === session.tabId;
+            store.updateBrowserNodeData(state.nodeId, { tabs, ...(selected ? { url: state.url, title: tabs?.find((tab) => tab.id === session.tabId)?.title } : {}) });
+            if (!state.loading) store.saveGraph();
+            if (active?.key.sessionId === state.sessionId) publishBrowserRuntime({ nodeId: state.nodeId, tabId: session.tabId, active: true, loading: state.loading, error: state.error });
+        }));
+        register(listen<BrowserNativeState>("browser:new-tab", (event) => {
+            const state = event.payload;
+            const session = sessionsRef.current.get(state.sessionId);
+            if (!session || session.nodeId !== state.nodeId || session.key.projectId !== state.projectId || useCanvasFlowStore.getState().projectId !== state.projectId) return;
+            dispatchBrowserAction("new-tab", { nodeId: state.nodeId, url: state.url });
+        }));
+        return () => { disposed = true; unsubscribes.forEach((dispose) => dispose()); };
     }, []);
 
     useEffect(() => {
+        disposedRef.current = false;
+        const queue = (action: () => Promise<void>) => {
+            operationRef.current = operationRef.current.then(async () => { if (!disposedRef.current) await action(); }).catch(() => undefined);
+        };
         const open = async (event: Event) => {
             if (!browserSupported()) return;
-            const { nodeId, url } = (event as CustomEvent<{ nodeId: string; url: string }>).detail;
+            const { nodeId, url, tabId } = (event as CustomEvent<BrowserAction>).detail;
+            let session: { nodeId: string; tabId: string; key: BrowserKey; loading: boolean; error?: string } | undefined;
             try {
-                const normalized = normalizeBrowserUrl(url);
-                await closeActive();
-                const projectId = useCanvasFlowStore.getState().projectId;
-                if (!projectId) throw new Error("请先保存并进入一个项目画布");
-                const key = { projectId, nodeId, sessionId: makeSessionId() };
-                activeRef.current = { nodeId, key };
                 const store = useCanvasFlowStore.getState();
-                store.updateBrowserNodeData(nodeId, { url: normalized, collapsed: false });
+                const node = store.nodes.find((item) => item.id === nodeId && item.type === "browserNode");
+                if (!node) return;
+                const data = node.data as BrowserNodeData;
+                const tabs = data.tabs?.length ? data.tabs.map((tab) => ({ ...tab })) : [{ id: makeSessionId(), url: data.url, title: data.title }];
+                const tab = tabs.find((item) => item.id === (tabId ?? data.activeTabId)) ?? tabs[0];
+                if (!tab) return;
+                const normalized = url !== undefined ? normalizeBrowserUrl(url) : tab.url ? normalizeBrowserUrl(tab.url) : "";
+                const projectId = store.projectId;
+                if (!projectId) throw new Error("请先保存并进入一个项目画布");
+                session = [...sessionsRef.current.values()].find((item) => item.nodeId === nodeId && item.tabId === tab.id && item.key.projectId === projectId);
+                if (activeRef.current?.key.sessionId !== session?.key.sessionId) await closeActive();
+                tab.url = normalized;
+                if (url !== undefined) tab.title = undefined;
+                store.updateBrowserNodeData(nodeId, { tabs, activeTabId: tab.id, url: normalized, title: tab.title, collapsed: false });
                 store.requestHistorySave();
                 store.saveGraph();
+                if (!normalized) {
+                    await closeActive();
+                    publishBrowserRuntime({ nodeId, tabId: tab.id, active: false, visible: false, loading: false, capturing: false, error: "" });
+                    return;
+                }
                 const target = document.querySelector<HTMLElement>(`[data-browser-node-content="${CSS.escape(nodeId)}"]`);
                 const flow = document.querySelector<HTMLElement>(".react-flow");
                 if (!target || !flow) throw new Error("浏览器节点尚未准备完成");
                 const rect = target.getBoundingClientRect();
-                await browserWebviewService.open({ key, bounds: { x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: Math.max(1, rect.width), height: Math.max(1, rect.height) }, zoom: 1, visible: false }, normalized);
-                publishBrowserRuntime({ nodeId, active: true, visible: false, loading: true });
-                scheduleSync();
+                const existing = Boolean(session);
+                if (!session) {
+                    session = { nodeId, tabId: tab.id, key: { projectId, nodeId, sessionId: makeSessionId() }, loading: true };
+                    sessionsRef.current.set(session.key.sessionId, session);
+                }
+                activeRef.current = { nodeId, tabId: tab.id, key: session.key };
+                publishBrowserRuntime({ nodeId, tabId: tab.id, active: true, visible: false, loading: url !== undefined || session.loading, capturing: false, error: url !== undefined ? "" : session.error ?? "" });
+                if (!existing || url !== undefined) await browserWebviewService.open({ key: session.key, bounds: { x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: Math.max(1, rect.width), height: Math.max(1, rect.height) }, zoom: 1, visible: false }, normalized);
+                if (disposedRef.current || useCanvasFlowStore.getState().projectId !== projectId || sessionsRef.current.get(session.key.sessionId) !== session) {
+                    sessionsRef.current.delete(session.key.sessionId);
+                    await browserWebviewService.close(session.key).catch(() => undefined);
+                    return;
+                }
+                scheduleSync(true);
             } catch (error: any) {
                 const message = error?.message || "打开网页失败";
+                if (session) await disposeSession(session.key.sessionId);
                 publishBrowserRuntime({ nodeId, active: false, error: message });
-                await closeActive(nodeId);
             }
         };
-        const close = (event: Event) => {
+        const newTab = async (event: Event) => {
+            const { nodeId, url } = (event as CustomEvent<BrowserAction>).detail;
+            const store = useCanvasFlowStore.getState();
+            const node = store.nodes.find((item) => item.id === nodeId && item.type === "browserNode");
+            if (!node) return;
+            const data = node.data as BrowserNodeData;
+            const tabs = data.tabs?.length ? data.tabs : [{ id: makeSessionId(), url: data.url, title: data.title }];
+            if (tabs.length >= 20) { publishBrowserRuntime({ nodeId, active: activeRef.current?.nodeId === nodeId, error: "最多打开 20 个标签，请先关闭部分标签" }); return; }
+            let normalized = "";
+            try { normalized = url ? normalizeBrowserUrl(url) : ""; }
+            catch (error: any) { publishBrowserRuntime({ nodeId, active: activeRef.current?.nodeId === nodeId, error: error?.message || "新标签网址无效" }); return; }
+            const tab = { id: makeSessionId(), url: normalized };
+            store.updateBrowserNodeData(nodeId, { tabs: [...tabs, tab], activeTabId: tab.id });
+            await open(new CustomEvent("open", { detail: { nodeId, tabId: tab.id } }));
+        };
+        const closeTab = async (event: Event) => {
+            const { nodeId, tabId } = (event as CustomEvent<BrowserAction>).detail;
+            const store = useCanvasFlowStore.getState();
+            const node = store.nodes.find((item) => item.id === nodeId && item.type === "browserNode");
+            if (!node) return;
+            const data = node.data as BrowserNodeData;
+            const index = data.tabs?.findIndex((tab) => tab.id === tabId) ?? -1;
+            if (index < 0) return;
+            const tabs = data.tabs!.filter((tab) => tab.id !== tabId);
+            for (const session of sessionsRef.current.values()) {
+                if (session.nodeId === nodeId && session.tabId === tabId) await disposeSession(session.key.sessionId);
+            }
+            if (!tabs.length) tabs.push({ id: makeSessionId(), url: "" });
+            const next = tabs.find((tab) => tab.id === data.activeTabId) ?? tabs[Math.min(index, tabs.length - 1)];
+            store.updateBrowserNodeData(nodeId, { tabs, activeTabId: next.id, url: next.url, title: next.title });
+            store.requestHistorySave(); store.saveGraph();
+            if (data.activeTabId === tabId) await open(new CustomEvent("open", { detail: { nodeId, tabId: next.id } }));
+        };
+        const close = async (event: Event) => {
             const { nodeId } = (event as CustomEvent<{ nodeId: string }>).detail;
             useCanvasFlowStore.getState().updateBrowserNodeData(nodeId, { collapsed: true });
             useCanvasFlowStore.getState().requestHistorySave();
             useCanvasFlowStore.getState().saveGraph();
-            void closeActive(nodeId);
+            await closeActive(nodeId);
         };
         const resize = (event: Event) => {
             nodeInteractionRef.current = Boolean((event as CustomEvent<{ resizing?: boolean }>).detail.resizing);
@@ -156,6 +250,7 @@ export const BrowserWebviewLayer = ({ interacting }: { interacting: boolean }) =
             try {
                 await (direction === "back" ? browserWebviewService.goBack(active.key) : browserWebviewService.goForward(active.key));
             } catch (error: any) {
+                if (activeRef.current?.key.sessionId !== active.key.sessionId) return;
                 publishBrowserRuntime({ nodeId, active: true, visible: true, error: error?.message || "网页历史导航失败" });
             }
         };
@@ -179,6 +274,7 @@ export const BrowserWebviewLayer = ({ interacting }: { interacting: boolean }) =
                 store.onConnect({ source: nodeId, sourceHandle: "output", target: imageId, targetHandle: "input" });
                 store.requestHistorySave(); store.saveGraph();
             } catch (error: any) {
+                if (activeRef.current?.key.sessionId !== active.key.sessionId) return;
                 publishBrowserRuntime({ nodeId, active: true, visible: true, error: error?.message || "网页截图失败" });
             } finally {
                 if (activeRef.current?.key.sessionId === active.key.sessionId) publishBrowserRuntime({ nodeId, active: true, visible: true, capturing: false });
@@ -186,14 +282,29 @@ export const BrowserWebviewLayer = ({ interacting }: { interacting: boolean }) =
         };
         const back = (event: Event) => void navigateHistory(event, "back");
         const forward = (event: Event) => void navigateHistory(event, "forward");
-        window.addEventListener("canvas:browser-open", open); window.addEventListener("canvas:browser-close", close); window.addEventListener("canvas:browser-resize", resize); window.addEventListener("canvas:browser-layout", layout); window.addEventListener("canvas:browser-capture", capture); window.addEventListener("canvas:browser-back", back); window.addEventListener("canvas:browser-forward", forward);
-        return () => { window.removeEventListener("canvas:browser-open", open); window.removeEventListener("canvas:browser-close", close); window.removeEventListener("canvas:browser-resize", resize); window.removeEventListener("canvas:browser-layout", layout); window.removeEventListener("canvas:browser-capture", capture); window.removeEventListener("canvas:browser-back", back); window.removeEventListener("canvas:browser-forward", forward); void closeActive(); };
+        const actions: Record<string, (event: Event) => void> = {
+            open: (event) => queue(() => open(event)),
+            "select-tab": (event) => queue(() => open(event)),
+            "new-tab": (event) => queue(() => newTab(event)),
+            "close-tab": (event) => queue(() => closeTab(event)),
+            close: (event) => queue(() => close(event)), resize, layout, capture, back, forward,
+        };
+        for (const [action, handler] of Object.entries(actions)) window.addEventListener(`canvas:browser-${action}`, handler);
+        return () => {
+            disposedRef.current = true;
+            for (const [action, handler] of Object.entries(actions)) window.removeEventListener(`canvas:browser-${action}`, handler);
+            if (rafRef.current !== null) window.cancelAnimationFrame(rafRef.current);
+            rafRef.current = null;
+            for (const sessionId of sessionsRef.current.keys()) void disposeSession(sessionId);
+        };
     }, []);
 
     useEffect(() => {
         const unsubscribe = useCanvasFlowStore.subscribe((state) => {
-            const active = activeRef.current;
-            if (active && !state.nodes.some((node) => node.id === active.nodeId && node.type === "browserNode")) void closeActive(active.nodeId);
+            for (const session of sessionsRef.current.values()) {
+                const node = state.nodes.find((node) => node.id === session.nodeId && node.type === "browserNode");
+                if (state.projectId !== session.key.projectId || !node || !(node.data as BrowserNodeData).tabs?.some((tab) => tab.id === session.tabId)) void disposeSession(session.key.sessionId);
+            }
         });
         return unsubscribe;
     }, []);

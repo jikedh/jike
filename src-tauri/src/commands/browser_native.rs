@@ -13,7 +13,7 @@ struct Session {
 
 #[derive(Default)]
 pub struct BrowserRegistry {
-    sessions: Mutex<HashMap<String, Session>>,
+    sessions: Mutex<HashMap<String, HashMap<String, Session>>>,
     operation: tokio::sync::Mutex<()>,
 }
 
@@ -38,7 +38,7 @@ fn get_session(webview: &Webview, key: &BrowserKey) -> Result<Session, String> {
     validate_key(key)?;
     let registry = webview.state::<BrowserRegistry>();
     let sessions = registry.sessions.lock().map_err(|_| "浏览器状态不可用")?;
-    sessions.get(webview.label()).filter(|s| same_key(&s.key, key)).cloned().ok_or_else(|| "浏览器会话已关闭或变更".into())
+    sessions.get(webview.label()).and_then(|tabs| tabs.get(&key.session_id)).filter(|s| same_key(&s.key, key)).cloned().ok_or_else(|| "浏览器会话已关闭或变更".into())
 }
 
 #[cfg(windows)]
@@ -46,7 +46,7 @@ fn publish(app: &tauri::AppHandle, owner: &str, key: &BrowserKey, url: Option<St
     use tauri::Emitter;
     let registry = app.state::<BrowserRegistry>();
     let Ok(mut sessions) = registry.sessions.lock() else { return; };
-    let Some(session) = sessions.get_mut(owner).filter(|s| same_key(&s.key, key)) else { return; };
+    let Some(session) = sessions.get_mut(owner).and_then(|tabs| tabs.get_mut(&key.session_id)).filter(|s| same_key(&s.key, key)) else { return; };
     if let Some(url) = url { session.url = url; }
     if let Some(loading) = loading { session.loading = loading; }
     let payload = BrowserEvent { project_id: key.project_id.clone(), node_id: key.node_id.clone(), session_id: key.session_id.clone(), url: session.url.clone(), loading: session.loading, title, error };
@@ -57,6 +57,20 @@ fn publish(app: &tauri::AppHandle, owner: &str, key: &BrowserKey, url: Option<St
 pub fn cleanup(app: &tauri::AppHandle, owner: &str) {
     let registry = app.state::<BrowserRegistry>();
     let session = registry.sessions.lock().ok().and_then(|mut sessions| sessions.remove(owner));
+    if let Some(tabs) = session {
+        for session in tabs.into_values() {
+            if let Some(view) = app.get_webview(&session.label) { let _ = view.close(); }
+        }
+    }
+}
+
+fn close_session(app: &tauri::AppHandle, owner: &str, key: &BrowserKey) {
+    let registry = app.state::<BrowserRegistry>();
+    let session = registry.sessions.lock().ok().and_then(|mut sessions| {
+        let tabs = sessions.get_mut(owner)?;
+        if !tabs.get(&key.session_id).is_some_and(|s| same_key(&s.key, key)) { return None; }
+        tabs.remove(&key.session_id)
+    });
     if let Some(session) = session {
         if let Some(view) = app.get_webview(&session.label) { let _ = view.close(); }
     }
@@ -74,14 +88,25 @@ pub async fn open(webview: Webview, request: BrowserOpen) -> Result<(), String> 
         let registry = webview.state::<BrowserRegistry>();
         let _operation = registry.operation.lock().await;
         let owner = webview.label().to_string();
-        cleanup(webview.app_handle(), &owner);
+        if let Ok(session) = get_session(&webview, &request.layout.key) {
+            let child = webview.app_handle().get_webview(&session.label).ok_or("网页已关闭")?;
+            if session.url == url.as_str() { child.eval("window.location.reload()").map_err(|e| e.to_string())?; }
+            else { child.navigate(url).map_err(|e| e.to_string())?; }
+            return Ok(());
+        }
         let key = request.layout.key.clone();
         let label = format!("browser-{}", uuid::Uuid::new_v4());
-        registry.sessions.lock().map_err(|_| "浏览器状态不可用")?.insert(owner.clone(), Session { key: key.clone(), label: label.clone(), url: url.to_string(), loading: true, visible: false });
+        {
+            let mut sessions = registry.sessions.lock().map_err(|_| "浏览器状态不可用")?;
+            let tabs = sessions.entry(owner.clone()).or_default();
+            if tabs.len() >= 20 { return Err("最多同时打开 20 个网页标签，请先关闭部分标签".into()); }
+            tabs.insert(key.session_id.clone(), Session { key: key.clone(), label: label.clone(), url: url.to_string(), loading: true, visible: false });
+        }
         let app = webview.app_handle().clone();
         let nav_app = app.clone(); let nav_owner = owner.clone(); let nav_key = key.clone();
         let load_app = app.clone(); let load_owner = owner.clone(); let load_key = key.clone();
         let title_app = app.clone(); let title_owner = owner.clone(); let title_key = key.clone();
+        let popup_origin = origin.clone();
         let directory = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("browser-profile");
         std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
         let builder = WebviewBuilder::new(&label, WebviewUrl::External(url))
@@ -105,15 +130,15 @@ pub async fn open(webview: Webview, request: BrowserOpen) -> Result<(), String> 
         // 子 WebView 创建会等待 UI 线程，因此只能从异步命令调用。
         let child = match webview.window().add_child(builder, LogicalPosition::new(-10000.0, -10000.0), LogicalSize::new(request.layout.bounds.width, request.layout.bounds.height)) {
             Ok(child) => child,
-            Err(error) => { cleanup(&app, &owner); return Err(error.to_string()); }
+            Err(error) => { close_session(&app, &owner, &key); return Err(error.to_string()); }
         };
         child.hide().map_err(|e| e.to_string())?;
-        if let Err(error) = configure(&child, app.clone(), owner.clone(), key.clone(), request.layout.zoom).await {
-            cleanup(&app, &owner); return Err(error);
+        if let Err(error) = configure(&child, app.clone(), owner.clone(), key.clone(), request.layout.zoom, popup_origin).await {
+            close_session(&app, &owner, &key); return Err(error);
         }
         apply_layout(&child, &request.layout).await?;
         if let Ok(mut sessions) = registry.sessions.lock() {
-            if let Some(session) = sessions.get_mut(&owner) { session.visible = request.layout.visible; }
+            if let Some(session) = sessions.get_mut(&owner).and_then(|tabs| tabs.get_mut(&key.session_id)) { session.visible = request.layout.visible; }
         }
         Ok(())
     }
@@ -127,9 +152,19 @@ pub async fn sync(webview: Webview, request: BrowserLayout) -> Result<(), String
     #[cfg(windows)]
     {
         let child = webview.app_handle().get_webview(&session.label).ok_or("网页已关闭")?;
+        if request.visible {
+            let siblings = registry.sessions.lock().map_err(|_| "浏览器状态不可用")?
+                .get_mut(webview.label()).map(|tabs| tabs.values_mut().filter(|s| s.key.session_id != request.key.session_id).map(|s| {
+                    s.visible = false;
+                    s.label.clone()
+                }).collect::<Vec<_>>()).unwrap_or_default();
+            for label in siblings {
+                if let Some(view) = webview.app_handle().get_webview(&label) { view.hide().map_err(|e| e.to_string())?; }
+            }
+        }
         apply_layout(&child, &request).await?;
         if let Ok(mut sessions) = registry.sessions.lock() {
-            if let Some(current) = sessions.get_mut(webview.label()).filter(|s| same_key(&s.key, &request.key)) { current.visible = request.visible; }
+            if let Some(current) = sessions.get_mut(webview.label()).and_then(|tabs| tabs.get_mut(&request.key.session_id)).filter(|s| same_key(&s.key, &request.key)) { current.visible = request.visible; }
         }
         Ok(())
     }
@@ -141,7 +176,7 @@ pub async fn close(webview: Webview, key: BrowserKey) -> Result<(), String> {
     trusted(&webview)?; validate_key(&key)?;
     let registry = webview.state::<BrowserRegistry>();
     let _operation = registry.operation.lock().await;
-    if get_session(&webview, &key).is_ok() { cleanup(webview.app_handle(), webview.label()); }
+    close_session(webview.app_handle(), webview.label(), &key);
     Ok(())
 }
 
@@ -190,8 +225,8 @@ async fn apply_layout(child: &Webview, layout: &BrowserLayout) -> Result<(), Str
 }
 
 #[cfg(windows)]
-async fn configure(child: &Webview, app: tauri::AppHandle, owner: String, key: BrowserKey, zoom: f64) -> Result<(), String> {
-    use webview2_com::{PermissionRequestedEventHandler, NavigationCompletedEventHandler, Microsoft::Web::WebView2::Win32::COREWEBVIEW2_PERMISSION_STATE_DENY};
+async fn configure(child: &Webview, app: tauri::AppHandle, owner: String, key: BrowserKey, zoom: f64, origin: url::Url) -> Result<(), String> {
+    use webview2_com::{PermissionRequestedEventHandler, NavigationCompletedEventHandler, NewWindowRequestedEventHandler, Microsoft::Web::WebView2::Win32::COREWEBVIEW2_PERMISSION_STATE_DENY};
     let (tx, rx) = tokio::sync::oneshot::channel();
     child.with_webview(move |platform| {
         let result = (|| unsafe {
@@ -202,6 +237,24 @@ async fn configure(child: &Webview, app: tauri::AppHandle, owner: String, key: B
             settings.SetAreDevToolsEnabled(false)?;
             settings.SetAreDefaultContextMenusEnabled(false)?;
             let mut token = 0;
+            let popup_app = app.clone(); let popup_owner = owner.clone(); let popup_key = key.clone();
+            core.add_NewWindowRequested(&NewWindowRequestedEventHandler::create(Box::new(move |_, args| {
+                use tauri::Emitter;
+                let Some(args) = args else { return Ok(()); };
+                args.SetHandled(true)?;
+                let mut uri = windows::core::PWSTR::null();
+                args.Uri(&mut uri)?;
+                let url = webview2_com::take_pwstr(uri);
+                if validate_url(&url, &origin).is_ok() {
+                    let _ = popup_app.emit_to(tauri::EventTarget::webview(&popup_owner), "browser:new-tab", BrowserEvent {
+                        project_id: popup_key.project_id.clone(), node_id: popup_key.node_id.clone(), session_id: popup_key.session_id.clone(),
+                        url, loading: false, title: None, error: None,
+                    });
+                } else {
+                    publish(&popup_app, &popup_owner, &popup_key, None, None, None, Some("无法打开新标签：仅支持有效的 HTTP / HTTPS 目标地址，不支持先打开空窗口再写入内容".into()));
+                }
+                Ok(())
+            })), &mut token)?;
             core.add_PermissionRequested(&PermissionRequestedEventHandler::create(Box::new(|_, args| {
                 if let Some(args) = args { args.SetState(COREWEBVIEW2_PERMISSION_STATE_DENY)?; }
                 Ok(())
