@@ -69,6 +69,7 @@ import {
 } from "@/pages/Canvas/utils/deleteConfirm";
 import { useCanvasFlowStore } from "@/stores/canvasFlowStore";
 import { useChatSettingsStore } from "@/stores/chatSettingsStore";
+import type { AddNodeOptions } from "shared/types/zustand/canvas-flow";
 import {
   edgeTypes,
   getCanvasNodeColor,
@@ -4312,14 +4313,14 @@ export const CanvasFlow = ({
   );
 
   const handleCreateNodeFromMenu = useCallback(
-    (nodeType: CanvasNodeType) => {
+    (nodeType: CanvasNodeType, options?: AddNodeOptions) => {
       if (annotationWorkspace.open) {
         setConnectionGhost(null);
         return;
       }
 
       const flowPosition = screenToFlowPosition(menuScreenPosition);
-      const newNodeId = addNode(nodeType, flowPosition);
+      const newNodeId = addNode(nodeType, flowPosition, options);
       const allNodes = useCanvasFlowStore.getState().nodes;
       const sourceNodeById = new Map(allNodes.map((node) => [node.id, node]));
 

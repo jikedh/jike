@@ -10,12 +10,15 @@ import {
   IconVideo,
 } from "@tabler/icons-react";
 import type { PropsWithChildren } from "react";
+import type { AddNodeOptions } from "shared/types/zustand/canvas-flow";
 
 import {
   ContextMenu,
   ContextMenuContent,
+  ContextMenuGroup,
   ContextMenuItem,
   ContextMenuLabel,
+  ContextMenuPortal,
   ContextMenuSeparator,
   ContextMenuSub,
   ContextMenuSubContent,
@@ -36,7 +39,7 @@ export type CanvasNodeType =
   | "videoAgent";
 
 type CanvasContextMenuProps = PropsWithChildren<{
-  onCreateNode: (nodeType: CanvasNodeType) => void;
+  onCreateNode: (nodeType: CanvasNodeType, options?: AddNodeOptions) => void;
   onOpenChange?: (open: boolean) => void;
 }>;
 
@@ -124,13 +127,43 @@ export const CanvasContextMenu = ({
           <IconLayersLinked size={16} />
           导演台节点
         </ContextMenuItem>
-        <ContextMenuItem
-          className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-white/80 transition-colors hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB]"
-          onSelect={() => onCreateNode("browser")}
-        >
-          <IconWorld size={16} />
-          新建浏览器节点
-        </ContextMenuItem>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-white/80 transition-colors hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB]">
+            <IconWorld size={16} />
+            新建浏览器节点
+          </ContextMenuSubTrigger>
+          <ContextMenuPortal>
+            <ContextMenuSubContent className="w-44 overflow-hidden rounded-xl border border-white/10 bg-[#121214] p-1 shadow-2xl">
+              <ContextMenuGroup>
+                {[
+                  { title: "Pavo 节点", url: "https://app.pavo-ai.work/" },
+                  { title: "LibTV 节点", url: "https://www.liblib.tv/" },
+                ].map(({ title, url }) => (
+                  <ContextMenuItem
+                    key={url}
+                    className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-white/80 transition-colors hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB]"
+                    onSelect={() =>
+                      onCreateNode("browser", {
+                        browserUrl: url,
+                        browserTitle: title,
+                      })
+                    }
+                  >
+                    <IconWorld size={16} />
+                    {title}
+                  </ContextMenuItem>
+                ))}
+                <ContextMenuItem
+                  className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-white/80 transition-colors hover:bg-[#B43FEB]/10 hover:text-[#B43FEB] focus:bg-[#B43FEB]/10 focus:text-[#B43FEB]"
+                  onSelect={() => onCreateNode("browser")}
+                >
+                  <IconWorld size={16} />
+                  自定义浏览器
+                </ContextMenuItem>
+              </ContextMenuGroup>
+            </ContextMenuSubContent>
+          </ContextMenuPortal>
+        </ContextMenuSub>
       </ContextMenuContent>
     </ContextMenu>
   );

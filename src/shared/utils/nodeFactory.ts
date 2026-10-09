@@ -293,7 +293,12 @@ export const nodeFactoryMap: Record<NodeType, NodeFactory> = {
     position,
     width: options?.initialWidth ?? 800,
     height: options?.initialHeight ?? 520,
-    data: { url: "", collapsed: true, createdAt: Date.now() },
+    data: {
+      url: options?.browserUrl ?? "",
+      title: options?.browserTitle,
+      collapsed: true,
+      createdAt: Date.now(),
+    },
   }),
   note: createNoteNode,
   image: createImageNode,

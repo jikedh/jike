@@ -81,6 +81,8 @@ export type NodePosition = {
  */
 export type AddNodeOptions = {
   agentPresetId?: AgentPresetId;
+  browserUrl?: string;
+  browserTitle?: string;
   initialWidth?: number;
   initialHeight?: number;
   initialContent?: string;
