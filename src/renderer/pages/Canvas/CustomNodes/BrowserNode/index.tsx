@@ -87,7 +87,7 @@ export const BrowserNode = memo(({ id, data, selected, dragging, width, height }
             <div className="nodrag nopan nodelete nowheel flex shrink-0 items-center gap-1 px-2 pb-2">
                 <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
                     {tabs.map((tab) => (
-                        <div key={tab.id} className={cn("flex shrink-0 items-center rounded-md border", tab.id === activeTab.id ? "border-primary" : "border-border")}>
+                        <div key={tab.id} className={cn("flex shrink-0 items-center rounded-md border", tab.id === activeTab.id ? "border-white" : "border-white/10")}>
                             <Button type="button" variant={tab.id === activeTab.id ? "default" : "ghost"} size="sm" className="max-w-40 min-w-20" disabled={!supported} title={tab.url || "新标签页"} onClick={() => dispatchBrowserAction("select-tab", { nodeId: id, tabId: tab.id === "legacy" ? undefined : tab.id })}>
                                 <span className="truncate">{tab.title || tab.url || "新标签页"}</span>
                             </Button>
