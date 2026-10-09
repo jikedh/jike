@@ -8,6 +8,8 @@ import { useUserStore } from "@/stores/useUserStore";
 import type { ProjectListItem, ProjectType } from "shared/types/api/projects";
 
 const COVER_ACCEPT = "image/jpeg,image/png,image/webp,image/gif,image/svg+xml";
+const isSuccessResponseCode = (code: number) =>
+  code === 0 || code === 200 || code === 10000;
 
 interface ProjectDialogProps {
   isOpen: boolean;
@@ -161,6 +163,9 @@ export default function ProjectDialog({
           cover_url: coverUrl || undefined,
           cover_source: coverUrl ? "manual" : undefined,
         });
+        if (!isSuccessResponseCode(result.code) || !result.data) {
+          throw new Error(result.msg || "保存项目失败");
+        }
         onSuccess?.(String(result.data.id));
       } else {
         const result = await createProject({
@@ -169,14 +174,22 @@ export default function ProjectDialog({
           type,
           cover_url: coverUrl || undefined,
         });
+        if (!isSuccessResponseCode(result.code) || !result.data) {
+          throw new Error(result.msg || "创建项目失败");
+        }
         onSuccess?.(String(result.data.id));
       }
 
       setIsProcessing(false);
       handleClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save project:", error);
-      toast.error(isEdit ? "保存项目失败" : "创建项目失败");
+      const message =
+        error?.response?.data?.msg ||
+        error?.msg ||
+        error?.message ||
+        (isEdit ? "保存项目失败" : "创建项目失败");
+      toast.error(message);
       setIsProcessing(false);
     }
   };
